@@ -1,10 +1,10 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./docs/assets/pharn-logo-dark-transparent.svg" />
-  <source media="(prefers-color-scheme: light)" srcset="./docs/assets/pharn-logo-light-transparent.svg" />
-  <img alt="Pharn" src="./docs/assets/pharn-logo-light-transparent.svg" width="320" />
-</picture>
+<p align="center">
+  <img src="./docs/assets/pharn-logo.svg" alt="Pharn OSS" width="96">
+</p>
+
+<h1 align="center">Pharn OSS</h1>
 
 **Get features shipped right with Claude Code.**
 
