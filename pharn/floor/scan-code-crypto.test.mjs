@@ -368,9 +368,11 @@ test("✧ SWAP PIN: dropping the `i` flag did NOT narrow the RNG conjunct — ev
 
 test("✧ COST PIN: a 20 KB worst-case line COMPLETES under a subprocess timeout (membership, not a stopwatch)", () => {
   // RNG present so the first lookahead succeeds; NO security-material segment anywhere, so the second
-  // lookahead fails at every start index — the shape that maximizes the quadratic re-scan. The verdict is
-  // "the process finished", never a duration compared to a threshold; the timeout is also what keeps a
-  // regression TERMINATING rather than hanging the suite.
+  // lookahead fails. Through 6.58.0 the unanchored pattern retried both lookaheads from every start index, and
+  // this was its worst case (quadratic). Since 6.58.1 the multiline `^` scans the line once, and the ★ ReDoS
+  // tests below pin the same shape at 200 KB. The verdict is "the process finished", never a duration
+  // compared to a threshold; the timeout is also what keeps a regression TERMINATING rather than hanging the
+  // suite.
   const body = `const x = Math.floor(Math.random() * n); ` + "abcdefgh".repeat(2500) + `\n`;
   withCode(body, (p) => {
     const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: 10_000 });
@@ -378,6 +380,64 @@ test("✧ COST PIN: a 20 KB worst-case line COMPLETES under a subprocess timeout
     assert.equal(r.status, 0);
     assert.deepEqual(JSON.parse(r.stdout), CLEAN);
   });
+});
+
+// --- ★ ReDoS REGRESSION (TST-1, 2026-10-12 review) ------------------------------
+//
+// Through 6.58.0 `insecure-random` was `(?=.*RNG)(?=.*SECMAT)` with no anchor. Both `.*` lookaheads were
+// retried from every start index, so a line with no hit cost O(n²): ~1 s at 40 KB, and every 200 KB fixture
+// of the review was killed at 20 s. One minified or generated line in a /pharn-review set hung the
+// insecure-crypto lens, which runs this scanner from Bash with no timeout. 6.58.1 anchors the pattern with a
+// multiline `^` (the scanner's COST paragraph). Each shape below is ONE 200 KB line, on which the unanchored
+// form runs for tens of seconds. The review also named `ecb-mode` on a long alnum run before `-ecb`; timed
+// alone it is linear, and it is pinned here so it stays that way.
+//
+// WHY A SUBPROCESS TIMEOUT AND NOT A STOPWATCH (the same reasoning as scan-code-injection.test.mjs's ★ ReDoS
+// test): the verdict is a MEMBERSHIP test, the scan COMPLETED or the OS killed it, never a measured duration
+// compared to a threshold. That is also why a red TERMINATES instead of hanging `npm test`.
+const REDOS_TIMEOUT_MS = 5000;
+const REDOS_LINE = 200_000;
+const ECB_HIT = { found: true, hits: [{ line: 1, kind: "ecb-mode" }] };
+const REDOS_SHAPES = [
+  { n: "`a.b.b.b…` (the review's shape that every scanner choked on)", line: "a" + ".b".repeat(REDOS_LINE / 2), want: CLEAN },
+  {
+    n: "Math.random() and no security material (the second lookahead fails)",
+    line: "const x = Math.floor(Math.random() * n); " + "abcdefgh".repeat(REDOS_LINE / 8),
+    want: CLEAN,
+  },
+  { n: "a long alnum run before `-ecbx` (the ecb-mode shape, no hit)", line: "a".repeat(REDOS_LINE) + "-ecbx", want: CLEAN },
+  // The two TRUE-POSITIVE twins: the speed was not bought by narrowing detection.
+  { n: "a long alnum run before `-ecb` (the ecb-mode shape, a hit)", line: "a".repeat(REDOS_LINE) + "-ecb", want: ECB_HIT },
+  {
+    n: "200 KB of filler, then `key = Math.random()` on the same line (an insecure-random hit)",
+    line: "abcdefgh ".repeat(REDOS_LINE / 9) + "const key = Math.random();",
+    want: HIT,
+  },
+];
+for (const s of REDOS_SHAPES) {
+  test(`★ ReDoS: one 200 KB line, ${s.n} → the scan COMPLETES (not killed)`, () => {
+    withCode(s.line + "\n", (p) => {
+      const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: REDOS_TIMEOUT_MS });
+      assert.equal(r.signal, null, `scan did not terminate within ${REDOS_TIMEOUT_MS}ms — a pattern is super-linear again`);
+      assert.equal(r.status, 0);
+      assert.deepEqual(JSON.parse(r.stdout), s.want);
+    });
+  });
+}
+
+// ✧ The anchor kept the old per-segment semantics. The scanner splits lines on `\r?\n` only, and `.` stops at
+// a lone `\r`, U+2028 and U+2029. So an RNG call and a security-material word on opposite sides of one never
+// matched together, and still do not. In one run AFTER it they still match: that is what the `m` flag keeps,
+// because a bare `^` would look only at the first run and lose the second case for all three terminators.
+const LS = String.fromCharCode(0x2028);
+const PS = String.fromCharCode(0x2029);
+test("✧ ANCHOR KEPT THE SEGMENT SEMANTICS: RNG and key split by a lone CR / U+2028 / U+2029 do not fire; joined after one, they do", () => {
+  for (const t of ["\r", LS, PS]) {
+    const split = `const key = 1;${t}x = Math.random();\n`;
+    withCode(split, (p) => assert.deepEqual(json(run(p)), CLEAN, JSON.stringify(split)));
+    const after = `let a = 1;${t}const key = Math.random();\n`;
+    withCode(after, (p) => assert.deepEqual(json(run(p)), HIT, JSON.stringify(after)));
+  }
 });
 
 // --- hardcoded-iv-salt ------------------------------------------------------
