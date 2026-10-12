@@ -48,6 +48,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Not covered (ADVISORY): the review also called the `ecb-mode` pattern quadratic on long alphanumeric runs.
     Timed alone it is linear (800 KB in a few ms), so it is unchanged, and the new tests pin that shape. The
     review's long-line findings in the injection and N+1 scanners (TST-2, TST-3) are not fixed here.
+- 2026-10-13: **`main` is green again: this file has one `[Unreleased]` section, and `CLAUDE.md` says what branch
+  protection actually enforces.**
+  - What changed: the entry above had opened a second `## [Unreleased]` heading. Its entry now sits in the one
+    `[Unreleased]` section, unchanged. `CLAUDE.md` hard constraint 1 no longer says a `CODEOWNERS` change "cannot be
+    merged without the human owner's approval". It now says the owner's account bypasses the ruleset and
+    `enforce_admins` is off, so any merge made with the owner's credentials skips the review and the required checks.
+    That includes an agent running `gh pr merge --admin` with the owner's token.
+  - Why: the duplicate heading turned `npm run lint:md` (MD024), `npm run check:changelog` (`UNRELEASED_NOT_FIRST`) and
+    two tests in `.dev/floor/check-skills-version-recorded.test.mjs` red, and CI's `check` and `floor` jobs failed on
+    `main`. The branch-protection sentence was found by the 2026-10-12 review (SEC-2) against the live settings.
+  - Not changed (human-only): the ruleset's bypass actor, `enforce_admins`, a release tag, and the matching sentences in
+    `THREAT-MODEL.md` §4 and `pharn/floor/reconcile-ignore.json`.
 
 ## [6.58.0] - 2026-10-12
 

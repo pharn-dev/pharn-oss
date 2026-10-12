@@ -101,8 +101,10 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    and will deny any Write/Edit/MultiEdit/NotebookEdit to them (exit 2). Do not try to edit them or work around the
    hook — if a change is genuinely needed, say so and let a human edit them outside the agent loop.
    The same hook also protects `CODEOWNERS` (the GitHub-layer write-guard itself — "guarding the
-   guard"), and `main` carries GitHub branch protection requiring Code-Owner review, so a `CODEOWNERS`
-   change cannot be merged without the human owner's approval. **It also protects the two guards' own
+   guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks, but it binds
+   other contributors only: the owner's account is the ruleset's bypass actor and `enforce_admins` is off, so any
+   merge made with the owner's credentials skips both — including an agent running `gh pr merge --admin` with the
+   owner's token. **It also protects the two guards' own
    control surface** — **both** settings files that wire the hooks (`.claude/settings.json` and
    `.claude/settings.local.json`, which is loaded too and can wire or override the same hooks), the
    four hook scripts (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`,
