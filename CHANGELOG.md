@@ -23,6 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.58.0] - 2026-10-12
+
+### Changed
+
+- **`/pharn-loop` no longer stops to ask you anything from Claude Code: it pre-approves its own commands, and in plan
+  mode it stops at once instead of asking to leave it.**
+  - What changed: `.claude/commands/pharn-loop.md` (0.12.0) gains an `allowed-tools` frontmatter list. Claude Code
+    pre-approves those tools for the turn that runs the command, which is the whole unattended run: the file tools,
+    Agent, Skill, and the shell lines the loop, its two parts and the inline `/pharn-grill` pin
+    (`node pharn/floor/*`, `node .claude/hooks/*`, a few read-only `git`, `mkdir -p .pharn/*`, `cat .pharn/*`,
+    `echo`). A run started in plan mode now ends before writing anything, with one line telling you to leave plan
+    mode and run it again. It no longer asks you to approve leaving plan mode.
+  - Why: on 2026-10-12 a `/pharn-loop --quick` run started in plan mode waited on its user to approve leaving it.
+    An earlier run left a "don't ask again" grant for the loop's own `mark-phase.mjs` line, so it had stopped on a
+    permission prompt too.
+  - Checked by: `.dev/floor/command-hygiene.test.mjs` now checks that every shell line the run pins is covered by a
+    grant, and that every grant is used by some line. It pins the plan-mode stop line before Step 1a. Its
+    no-ask-tool rule now covers the plan-exit tool too.
+  - Not covered (ADVISORY): whether Claude Code honors the grant is harness behavior, outside PHARN's floor, and a
+    deny or ask rule of yours still wins. Claude Code's docs do not say whether the grant reaches a stage agent. A
+    stage agent running your project's own gates follows your session's permission mode, so for a run nobody
+    watches, use auto mode or allow rules. The write guards still judge every Write and Edit. A Bash write stays
+    outside both, as before.
+
 ## [6.57.0] - 2026-10-11
 
 ### Changed
