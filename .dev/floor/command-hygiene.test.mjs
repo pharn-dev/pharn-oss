@@ -1744,7 +1744,9 @@ const COMMIT_OUTCOMES = [
   "not committed: commit failed",
 ];
 
-const ASK_TOKEN_RE = /\bAsk(?:User)?Question\b/;
+// 6.58.0 (loop-no-prompts): `ExitPlanMode` joined the set — it is the tool behind the observed ask (a /pharn-loop run in
+// plan mode waited on a person to approve leaving it), and it asks exactly as the question tools do.
+const ASK_TOKEN_RE = /\b(?:Ask(?:User)?Question|ExitPlanMode)\b/;
 const LOOP_COMMIT_HEADING = "### Step 6c";
 // 6.44.0 (loop-closeout-script): the scope re-derivation, the staging list, the branch, add and commit moved into ONE
 // pinned line, `pharn/floor/loop-closeout.mjs`. What these pins hold now: the close part carries that line exactly
@@ -2006,6 +2008,7 @@ test("✧ the /pharn-loop rules DISCRIMINATE — each fails on a mutant of the r
 
   const asks = `${real}\nCall \`AskUserQuestion\` here.\n`;
   assert.match(asks, ASK_TOKEN_RE, "the ask-token matcher must fire on an inserted tool name");
+  assert.match(`${real}\nCall \`ExitPlanMode\` first.\n`, ASK_TOKEN_RE, "the matcher fires on the plan-mode exit tool too");
 
   const variant = real.replace("`blocked: no-slug`", "`blocked: no_slug`");
   assert.notEqual(variant, real, "precondition: the mutation must change the body (L34)");
@@ -5465,4 +5468,114 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
     planDeletionOffenders({ "pharn-build.md": build.replace(/^## Step 3\b/m, "## Stage 3") }).length > 0,
     "an unfound anchor fails"
   );
+});
+
+// ── 6.58.0 (loop-no-prompts) — /pharn-loop pre-approves exactly the shell lines its run pins ──────────────────
+// The observed failure: a /pharn-loop run waited on a person — an `ExitPlanMode` approval (the session was in plan
+// mode) and a Bash permission prompt on the loop's own `mark-phase.mjs` line. The command now carries an
+// `allowed-tools` grant (Claude Code pre-approves those tools for the turn that runs the command, which is the whole
+// loop). The SET it must range over (L29) is every fenced shell line the run itself executes: the command, its two
+// parts, and the inline `/pharn-grill`. Coverage (each subcommand matches a grant) and closure (each Bash grant is
+// used by some line, L36) are both asserted, so the grant can neither fall short of the pins nor drift wider.
+// FLOOR: string/regex membership over the committed text. NOT claimed: that Claude Code honors the grant, matches a
+// compound line or a trailing comment the way this split does, or passes it to a stage agent — harness behavior,
+// stated ADVISORY in the command.
+const LOOP_RUN_FILES = ["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md", "pharn-grill.md"];
+const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill"];
+
+/** The `allowed-tools` flow list from a command's frontmatter, or null when absent. */
+function allowedTools(text) {
+  const fm = text.match(/^---\n([\s\S]*?)\n---\n/);
+  const m = fm && fm[1].match(/^allowed-tools:\s*\[([\s\S]*?)\]/m);
+  return m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : null;
+}
+
+/** `Bash(<spec>)` → a whole-line regex; `*` matches any text, spaces included (Claude Code's rule syntax). */
+function bashGrantRe(grant) {
+  const spec = grant.match(/^Bash\((.*)\)$/)[1];
+  return new RegExp(
+    `^${spec
+      .split("*")
+      .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join(".*")}$`
+  );
+}
+
+/** A pinned line's subcommands: a trailing ` # comment` dropped, then split on && || ; |. */
+function subcommands(line) {
+  return line
+    .replace(/\s+#\s.*$/, "")
+    .split(/\s*(?:&&|\|\||;|\|)\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Offenders: a subcommand no Bash grant covers, or a Bash grant no subcommand uses. */
+function loopGrantOffenders(grants, lines) {
+  const res = grants.filter((g) => g.startsWith("Bash(")).map((g) => [g, bashGrantRe(g)]);
+  const used = new Set();
+  const out = [];
+  for (const { file, line, text } of lines) {
+    for (const sub of subcommands(text)) {
+      const hit = res.filter(([, re]) => re.test(sub));
+      hit.forEach(([g]) => used.add(g));
+      if (hit.length === 0) out.push(`${file}:${line}: no allowed-tools grant covers \`${sub}\``);
+    }
+  }
+  for (const [g] of res) if (!used.has(g)) out.push(`allowed-tools grant ${g} is used by no pinned line`);
+  return out;
+}
+
+const loopRunLines = () =>
+  LOOP_RUN_FILES.flatMap((file) =>
+    shellLines(readFileSync(join(COMMANDS_DIR, file), "utf8"))
+      .filter((l) => l.kind === "fence")
+      .map((l) => ({ file, ...l }))
+  );
+
+test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line of its run, and no grant is unused", () => {
+  const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
+  assert.ok(Array.isArray(grants), "pharn-loop.md declares allowed-tools");
+  const lines = loopRunLines();
+  for (const f of LOOP_RUN_FILES)
+    assert.ok(
+      lines.some((l) => l.file === f),
+      `non-vacuous: ${f} pins at least one line`
+    );
+  assert.deepEqual(loopGrantOffenders(grants, lines), []);
+  // The non-Bash grants are a closed set: a new tool in the grant is a reviewed change, not a drift.
+  assert.deepEqual(
+    grants.filter((g) => !g.startsWith("Bash(")),
+    LOOP_NON_BASH_GRANTS
+  );
+  // Only the loop carries a grant: the gated /pharn-ship keeps its prompts, and no part declares its own.
+  for (const f of productCommandFiles().filter((x) => x !== "pharn-loop.md"))
+    assert.equal(allowedTools(readFileSync(join(COMMANDS_DIR, f), "utf8")), null, `${f} declares no allowed-tools`);
+});
+
+test("✧ loop-no-prompts: the grant rule DISCRIMINATES — uncovered lines and unused grants fail, compounds split", () => {
+  const grants = ["Bash(node pharn/floor/*)", "Bash(git status *)", "Bash(echo *)"];
+  const at = (text) => [{ file: "x.md", line: 1, text }];
+  assert.deepEqual(
+    loopGrantOffenders(grants, [...at("node pharn/floor/a.mjs --x   # note"), ...at("git status --short || echo none")]),
+    []
+  );
+  assert.ok(loopGrantOffenders(grants, at("node pharn/floor/a.mjs && rm -rf .pharn")).some((o) => o.includes("rm -rf")));
+  assert.ok(
+    loopGrantOffenders(grants, at("node pharn/floorx/a.mjs")).some((o) => o.includes("floorx")),
+    "a near-miss path fails"
+  );
+  assert.ok(
+    loopGrantOffenders(grants, at("node pharn/floor/a.mjs")).some((o) => o.includes("is used by no")),
+    "an unused grant fails"
+  );
+});
+
+test("✧ loop-no-prompts: /pharn-loop stops in plan mode before Step 1a (the ask tools stay unnamed — ASK_TOKEN_RE above)", () => {
+  const text = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
+  const stop = "pharn-loop: not started — the session is in plan mode; leave plan mode (Shift+Tab) and run /pharn-loop again.";
+  const at = text.indexOf(stop);
+  assert.ok(at > 0, "the plan-mode stop line is pinned");
+  assert.ok(at < text.search(/^### Step 1a\b/m), "the plan-mode stop precedes Step 1a");
+  assert.ok(at < text.search(/^## Quick mode\b/m), "the plan-mode stop precedes the quick part's load rule");
 });

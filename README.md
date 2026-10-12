@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.57.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.58.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -139,7 +139,10 @@ in the background on the tree it started from (6.42.0). If one is already red, t
 writes anything (`blocked: gates-red-at-entry`); pass `--allow-red-entry` when fixing that gate is the feature.
 `/pharn-ship` runs the same check and asks you whether to stop or continue. When it reaches a point that needs a human decision, it stops and
 says what it needs instead of guessing. On any stop other than a committed green result it reverts its
-own spec approval — a procedural step, so an aborted run can skip it.
+own spec approval — a procedural step, so an aborted run can skip it. Start it outside plan mode: in plan mode it stops
+at once and asks you nothing (6.58.0). It pre-approves its own commands for the run, but its stage agents run your
+project's gates under your session's permission mode, so when nobody will be watching, use one that does not prompt
+for them (auto mode, or allow rules).
 
 The test stage needs your project's test runner and its per-test results: a `test` script (and a `test:e2e` or
 `e2e` script for end-to-end criteria) whose reporter writes JSON to the path PHARN passes

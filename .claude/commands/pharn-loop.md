@@ -48,8 +48,26 @@ reads:
     "pharn/floor/validate.mjs",
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
+allowed-tools:
+  [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Agent",
+    "Skill",
+    "Bash(node pharn/floor/*)",
+    "Bash(node .claude/hooks/*)",
+    "Bash(git rev-parse *)",
+    "Bash(git symbolic-ref *)",
+    "Bash(git status *)",
+    "Bash(mkdir -p .pharn/*)",
+    "Bash(cat .pharn/*)",
+    "Bash(echo *)",
+  ]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.11.1"
+version: "0.12.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -86,6 +104,15 @@ Load the trusted prefix and obey it:
   stop commits nothing, leaves the changes in the working tree, and **reverts a model-approved SPEC to
   `Draft`** — an agent-performed step (advisory), so an aborted run can skip it. A SPEC the run never approved
   (a clarification stop, S6b) simply stays a `Draft`.
+- **No prompt from Claude Code either (6.58.0).** Never use a tool that puts a question or a plan approval to the person during a run. The
+  frontmatter `allowed-tools` pre-approves, for this run's one turn, every shell line this command, its two parts and
+  the inline `/pharn-grill` pin, plus the file, Agent and Skill tools, so Claude Code does not stop to ask permission
+  for them. **ADVISORY (P0):** that the grant is honored is Claude Code's behavior, not PHARN's floor, and a deny or
+  ask rule of the person's still wins. Claude Code's docs do not say whether the grant reaches a stage agent, so a
+  stage agent running the project's own commands (its test runner, its build) follows the session's permission mode:
+  when nobody will be there, run the loop in a mode that does not prompt for those (auto mode, or allow rules). The
+  grant does not widen what the run may write — the two write guards still judge every Write and Edit (fix #2,
+  fix #7), and a Bash write stays outside both, as before (`LIMITS.md §6`).
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the
   working tree) and decides what to merge.
 - **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (the project's suite at HEAD, and a
@@ -101,6 +128,18 @@ Step 4's entry read then goes on past a red gate instead of stopping at S14. It 
 (after `--quick`), never inside the description — ADVISORY, an instruction to you, like `--quick`'s rule.
 `/pharn-loop --quick [--max-iter N] <increment description>` (6.28.0) is the quick form — load its quick part
 before Step 1a, as `## Quick mode` below says; every step not named there runs as written.
+
+**Plan mode first (6.58.0).** If the session is in plan mode, stop here — before the quick part is read and before
+Step 1a writes anything. Plan mode blocks every write until a person approves a plan, and no command can leave it on
+its own, so leaving it would ask the person to approve a plan: the one thing this command must not do. End with exactly
+this line and nothing else:
+
+```text
+pharn-loop: not started — the session is in plan mode; leave plan mode (Shift+Tab) and run /pharn-loop again.
+```
+
+Nothing is written — no feature directory, marker, scope or record — so the Stop guard (inert in plan mode anyway)
+holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells you; nothing on the floor detects it.
 
 ### Step 1a — the fixed-rule entry steps (S1, S2, S3) and the pre-run snapshot
 
