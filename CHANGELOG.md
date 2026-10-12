@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- 2026-10-12: **Refresh the README hero to the new Pharn OSS mark and simplify the project header.**
+  - What changed: the landing page now uses the single `pharn-logo.svg` asset and a cleaner centered header instead of the separate light/dark SVG variants.
+  - Why: the project brand is now expressed as one shared mark while keeping the README copy focused on the product promise.
+
+## [Unreleased]
+
 <!-- Keep a Changelog groups by TYPE within a release, and markdownlint MD024 is `siblings_only`, so
      this section carries exactly ONE heading per type. A new entry joins its existing group at that
      group's top — it does not open a second `### Added`.
