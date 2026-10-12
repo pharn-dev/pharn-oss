@@ -8,14 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Changed
-
-- 2026-10-12: **Refresh the README hero to the new Pharn OSS mark and simplify the project header.**
-  - What changed: the landing page now uses the single `pharn-logo.svg` asset and a cleaner centered header instead of the separate light/dark SVG variants.
-  - Why: the project brand is now expressed as one shared mark while keeping the README copy focused on the product promise.
-
-## [Unreleased]
-
 <!-- Keep a Changelog groups by TYPE within a release, and markdownlint MD024 is `siblings_only`, so
      this section carries exactly ONE heading per type. A new entry joins its existing group at that
      group's top — it does not open a second `### Added`.
@@ -30,6 +22,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      may stay or be removed.
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
+
+### Changed
+
+- 2026-10-12: **Refresh the README hero to the new Pharn OSS mark and simplify the project header.**
+  - What changed: the landing page now uses the single `pharn-logo.svg` asset and a cleaner centered header instead of the separate light/dark SVG variants.
+  - Why: the project brand is now expressed as one shared mark while keeping the README copy focused on the product promise.
+
+### Fixed
+
+- 2026-10-13: **`main` is green again: this file has one `[Unreleased]` section, and `CLAUDE.md` says what branch
+  protection actually enforces.**
+  - What changed: the entry above had opened a second `## [Unreleased]` heading. Its entry now sits in the one
+    `[Unreleased]` section, unchanged. `CLAUDE.md` hard constraint 1 no longer says a `CODEOWNERS` change "cannot be
+    merged without the human owner's approval". It now says the owner's account bypasses the ruleset and
+    `enforce_admins` is off, so any merge made with the owner's credentials skips the review and the required checks.
+    That includes an agent running `gh pr merge --admin` with the owner's token.
+  - Why: the duplicate heading turned `npm run lint:md` (MD024), `npm run check:changelog` (`UNRELEASED_NOT_FIRST`) and
+    two tests in `.dev/floor/check-skills-version-recorded.test.mjs` red, and CI's `check` and `floor` jobs failed on
+    `main`. The branch-protection sentence was found by the 2026-10-12 review (SEC-2) against the live settings.
+  - Not changed (human-only): the ruleset's bypass actor, `enforce_admins`, a release tag, and the matching sentences in
+    `THREAT-MODEL.md` §4 and `pharn/floor/reconcile-ignore.json`.
 
 ## [6.58.0] - 2026-10-12
 
