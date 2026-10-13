@@ -309,12 +309,12 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
   }
 });
 
-// ── FENCED CODE (6.60.0, loop-scope-hardening — review finding ENF-1) ─────────────────────────────────────────
+// ── FENCED CODE (6.61.0, loop-scope-hardening — review finding ENF-1) ─────────────────────────────────────────
 // Neither `## Files` parser tracked code fences: F3 (a fenced "illustrative" list under `## Files`) scoped the fenced
 // paths, and F3b (a fenced `## Files` before the real one) made the fenced list THE list and dropped the real one.
 // FENCE_FIXTURES is the ONE list both parsers range over (L29/L31): for each, the setter's scope and this checker's
 // `declared` must agree with each other AND with `want` — a path list, or `REFUSED` (setter exit 1 + checker
-// INCONCLUSIVE exit 2, the dual reading disagreeing). Negative control, run once against the pre-6.60.0 core and
+// INCONCLUSIVE exit 2, the dual reading disagreeing). Negative control, run once against the pre-6.61.0 core and
 // setter: F3 read 3 paths and F3b read ["pharn/floor/validate.mjs"], so both `want`s failed there.
 const REFUSED = "REFUSED";
 const FENCE_FIXTURES = [

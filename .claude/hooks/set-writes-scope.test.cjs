@@ -244,7 +244,7 @@ test("the case fold refuses only the control surface: ordinary mixed-case paths 
 
 test("--allow-claude-dir opts back in: the same PLAN succeeds and the entry survives in scope", () => {
   const cwd = tmp();
-  // 6.60.0: the operator flag goes BEFORE the mode (OPERATOR FLAGS in the setter's header); after it, it is refused.
+  // 6.61.0: the operator flag goes BEFORE the mode (OPERATOR FLAGS in the setter's header); after it, it is refused.
   const r = setter(cwd, "--allow-claude-dir", "--from-plan", planWith(cwd, ".claude/settings.json", "src/legit.ts"));
   assert.equal(r.status, 0);
   const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
@@ -639,7 +639,7 @@ test("--clear surfaces a non-ENOENT unlink failure as an error, never as a silen
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
-// 6.60.0 (loop-scope-hardening — review findings SEC-1, SEC-3, ENF-1 of 2026-10-12). Four additions to the setter,
+// 6.61.0 (loop-scope-hardening — review findings SEC-1, SEC-3, ENF-1 of 2026-10-12). Four additions to the setter,
 // each pinned here: (1) OPERATOR FLAGS precede the mode; (2) an INSTALLED project's `--from-plan` scope refuses
 // PHARN's own surface unless --allow-pharn-surface; (3) a PROMOTION-origin scope is refused while a /pharn-loop
 // marker is open; (4) the `## Files` reader skips fenced code (the shared fixture list lives in
@@ -651,7 +651,7 @@ const scopeOf = (cwd) => {
   return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")).scope : null;
 };
 
-function seedInstalled(cwd, skillsVersion = "6.60.0") {
+function seedInstalled(cwd, skillsVersion = "6.61.0") {
   fs.writeFileSync(join(cwd, "pharn.config.json"), JSON.stringify({ skillsVersion }) + "\n");
   return cwd;
 }
@@ -751,7 +751,7 @@ test("the dev checkout and an unsignalled tree are UNCHANGED: the same plan is s
 
 test("a pharn.config.json that is a symlink, a directory, or not JSON is not an install (enforce's own reading)", () => {
   const targets = tmp();
-  fs.writeFileSync(join(targets, "real.json"), JSON.stringify({ skillsVersion: "6.60.0" }));
+  fs.writeFileSync(join(targets, "real.json"), JSON.stringify({ skillsVersion: "6.61.0" }));
   for (const seed of [
     (d) => fs.symlinkSync(join(targets, "real.json"), join(d, "pharn.config.json")),
     (d) => fs.mkdirSync(join(d, "pharn.config.json")),

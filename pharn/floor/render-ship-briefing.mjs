@@ -133,7 +133,7 @@ export function readHeaderField(text, field) {
 
 // Extract the body of the FIRST section whose heading line matches `headingTest(line)`, up to (not
 // including) the next heading of any level. Fenced blocks are tracked so a heading-looking line inside a
-// code block never starts or ends a section (L6). Since 6.60.0 (loop-scope-hardening) the fence rule is
+// code block never starts or ends a section (L6). Since 6.61.0 (loop-scope-hardening) the fence rule is
 // plan-files-core.mjs's `fenceStates` — the rule the writes-scope is parsed with, top-level reading — instead
 // of this file's own open/close toggle, so the `## Files` section the human reads here is fenced exactly where
 // the scope's is (a ``` line inside a ~~~ block no longer closes it). A plan whose two readings differ never

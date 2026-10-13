@@ -199,7 +199,7 @@ applied_lessons: none | [L1, L2] # MANDATORY — floor-checked (Step 4b); `none`
 > heading) — **never** inline as ``- `path` — not touched`` (an inline-marked item still enters
 > scope). Fenced code is never read as the list, and in an installed project the setter refuses a plan that
 > names PHARN's own files (`pharn/**` but `pharn/features/**`, `.claude/**`, `pharn.config.json`), so never name them
-> (6.60.0). **Caveat:** a bare, non-blockquote prose line under `## Files` that reads like an exclusion
+> (6.61.0). **Caveat:** a bare, non-blockquote prose line under `## Files` that reads like an exclusion
 > (wording such as _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off
 > limits_) is treated by the setter as a head-less exclusion intro and **truncates the authorized list
 > right there** — every path after it silently falls out of scope. Keep narrative in a **blockquote**

@@ -184,7 +184,7 @@ Load the trusted prefix and obey it:
   frontmatter `allowed-tools` pre-approves, for this run's one turn, exactly the shell lines this command, its two
   parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`, `/pharn-plan`, `/pharn-test`,
   `/pharn-build`) pin — each `<placeholder>` a `*` — plus the file, Agent and Skill tools, so Claude Code does not
-  stop to ask permission for them (6.60.0: no prefix grant; the seam-config `node -e` line of `/pharn-build` is left
+  stop to ask permission for them (6.61.0: no prefix grant; the seam-config `node -e` line of `/pharn-build` is left
   out and may prompt). **ADVISORY (P0):** that the grant is honored is Claude Code's behavior, not PHARN's floor, and
   a deny or ask rule of the person's still wins. Claude Code's docs do not say whether the grant reaches a stage
   agent, so a stage agent running the project's own commands (its test runner, its build) follows the session's

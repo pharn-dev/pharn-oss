@@ -306,9 +306,14 @@ both headers.
   flag order, and the fence rule, beside the existing control-surface refusal. — layer: product floor doc
 - `.dev/guides/writes-scope.md` — "The setter refuses to scope the guards themselves" section extended with the two
   new refusals, the flag, and the fence rule. — layer: dev guide
-- `SKILLS_VERSION` — 6.58.0 → 6.59.0 (provisional; renumbered at push if main moved).
-- `CHANGELOG.md` — one new 6.59.0 entry, including the correction of CHANGELOG [6.58.0]'s "does not widen" claim.
+- `SKILLS_VERSION` — → 6.61.0 (provisional; 6.59.0 went to #345 and 6.60.0 to grill-griller-trim; renumbered by
+  diff at push if main moved again).
+- `CHANGELOG.md` — one new 6.61.0 entry, including the correction of CHANGELOG [6.58.0]'s "does not widen" claim.
 - `README.md` — the version badge.
+- `.dev/floor/installed-skills-consumers.test.mjs` — (fix-loop pass, regress RED) its "no other product command runs
+  either skill helper" scan strips the frontmatter `allowed-tools` list before reading, as `command-hygiene.test.mjs`
+  does: the loop's exact grant names `catalogue-installed-skills.mjs`, which is a permission, not a run. — layer: dev
+  floor test
 
 ### Human-applied (NOT in the build's scope — hook-protected, applied by a human before the anchor)
 
@@ -338,6 +343,17 @@ Per GRILL.md (8 advisory concerns, 0 blocking-severity):
 - P2 raw entries in refusal messages → pre-existing pattern, noted as a residual, not widened.
 - Cost → the measured grant bytes and the ceiling raise are reported at GATE 2.
 - P5 briefing heading regex → follow-up `briefing-files-heading`, not this increment.
+
+## Fix-loop pass 1 (after the regress RED) — delegated decision
+
+`/pharn-dev-regress` returned `regressions` (`tests` 0 → 1): `.dev/floor/installed-skills-consumers.test.mjs:120`
+reads each product command's raw text, and the loop's exact grant names `catalogue-installed-skills.mjs`. Decision
+(delegated: decided by the orchestrating model under the maintainer's 2026-10-13 delegation, not a human approval):
+FIX through a fresh `/pharn-dev-build` pass — the test joins `## Files` above, Step 0 re-sets the scope and re-anchors
+from this amended plan, and the test strips the grant list before reading, as `command-hygiene.test.mjs` does. The
+grant stays as it is. The second failing test (`stage-regress.test.mjs:2207`, a 16 s timing case) passed alone and
+is re-checked at the re-run regress. The version moves to 6.61.0 (see `## Files`). The hook header's version
+mentions are removed by a second human patch prepared at GATE 2.
 
 ## Sequencing (L68)
 
@@ -402,7 +418,7 @@ ambiguous case ends in a refusal that names the remedy (ask the author), never a
 
 ## Version (proposed)
 
-Minor: 6.58.0 → 6.59.0 — the setter gains two refusals and a new operator flag (a newly shipped behaviour that can
+Minor: → 6.61.0 (provisional, see `## Files`) — the setter gains two refusals and a new operator flag (a newly shipped behaviour that can
 stop a product build at Step 0); the grant narrowing and the fence fix are corrections that ride along.
 
 ## GATE 1 — approved (delegated)

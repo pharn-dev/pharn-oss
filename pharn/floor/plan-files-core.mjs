@@ -49,8 +49,8 @@
 // item is a path-item to BOTH parsers, so it is treated as DECLARED, not excluded. The section-level
 // `### Explicitly not touched` heading is the form that actually excludes.
 //
-// ── FENCED CODE (6.60.0, loop-scope-hardening — review finding ENF-1) ────────────────────────────────
-// Before 6.60.0 neither this reader nor the setter tracked code fences: a fenced "illustrative" list under
+// ── FENCED CODE (6.61.0, loop-scope-hardening — review finding ENF-1) ────────────────────────────────
+// Before 6.61.0 neither this reader nor the setter tracked code fences: a fenced "illustrative" list under
 // `## Files` entered the scope, and a fenced `## Files` earlier in the file became the list while the real one
 // was ignored (both reproduced by fixture). Now a fence line and every line inside an open fence are skipped
 // entirely — never the heading, never an item, never a heading break, never an exclusion cue — except that a
@@ -63,7 +63,7 @@
 // 0–3 spaces (CommonMark's top-level rule); `nested: true` counts it at any indentation, and a bare closer
 // indented LESS than its opener ends that block and opens another (what happens when a list item ends under a
 // fence) — and REFUSES when the two lists differ. Measured over the 281 committed PLAN.md / AC-TESTS.md files
-// at 6.60.0: every one reads identically both ways, and identically to the pre-6.60.0 reader.
+// at 6.61.0: every one reads identically both ways, and identically to the pre-6.61.0 reader.
 // BOUND (P0): this is NOT a CommonMark parser. An indented code block (a 4+-space item line after a paragraph
 // and a blank line), an HTML block or comment holding a fence line, a setext heading and a `*`/`+` bullet are
 // read as their lines look, not as a renderer shows them. The rule is held across the copy-pair by ★ PARITY

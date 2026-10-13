@@ -57,7 +57,7 @@ const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathnam
 // `.dev/floor/command-family.test.mjs` holds the rules about WHERE a line must live.
 const PART_FILES = new Set(allParts(COMMANDS_DIR).map((p) => p.file));
 /** A command's text: its file plus its parts. A file with no parts reads as itself. */
-// The frontmatter `allowed-tools` list is a PERMISSION grant, not a line a run executes; since 6.60.0
+// The frontmatter `allowed-tools` list is a PERMISSION grant, not a line a run executes; since 6.61.0
 // (loop-scope-hardening) /pharn-loop's grant spells its pinned lines out in full, so every scanner that reads a command
 // for the lines it RUNS reads it without that list. The grant has its own tests (LOOP_RUN_FILES, below).
 const GRANT_LIST_RE = /^allowed-tools:\s*\[[\s\S]*?\n[ \t]*\]\n/m;
@@ -4737,20 +4737,20 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 const COMMAND_BYTE_CEILINGS = Object.freeze({
   // build-gate-bounded: Step 4 pins build-gate.mjs's two lines and their exit mapping — 22,148 bytes measured at the
   // build, 132 over the old 22,016; raised by the rule (+10%, up to a multiple of 512). 22,722 after the review fixes.
-  // loop-scope-hardening (6.60.0): Step 3's setter-exit sentence names the setter's printed reason — 24,590 bytes
+  // loop-scope-hardening (6.61.0): Step 3's setter-exit sentence names the setter's printed reason — 24,590 bytes
   // measured, 14 over 24,576; raised by the rule (+10%, up to a multiple of 512).
   "pharn-build.md": 27136,
   "pharn-grill.md": 23040,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 47,664 bytes measured, 48 over 47,616 (the GATE-2
   // review's R1/R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
-  // loop-scope-hardening (6.60.0): the `allowed-tools` grant became the 84 exact pinned lines of the loop's run and of
+  // loop-scope-hardening (6.61.0): the `allowed-tools` grant became the 84 exact pinned lines of the loop's run and of
   // the four stages it may run inline, plus the reworded grant bullet — 58,663 bytes measured after merging 6.59.0,
   // 5,927 over 52,736; raised by the rule (+10%, up to a multiple of 512).
   "pharn-loop.md": 65024,
   "pharn-loop-close.md": 34816,
   "pharn-loop-quick.md": 12288,
   "pharn-memory-promote.md": 27648,
-  // loop-scope-hardening (6.60.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —
+  // loop-scope-hardening (6.61.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —
   // 24,152 bytes measured, 88 over 24,064; raised by the rule (+10%, up to a multiple of 512).
   "pharn-plan.md": 26624,
   "pharn-regress.md": 23040, // 6.49.0 entry-run-as-base-evidence: 20699 B measured + 10% → next 512 (was 20480)
@@ -5493,7 +5493,7 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
 // compound line or a trailing comment the way this split does, or passes it to a stage agent — harness behavior,
 // stated ADVISORY in the command.
 //
-// 6.60.0 (loop-scope-hardening — review findings SEC-1/SEC-3 of 2026-10-12): the grant is no longer a set of PREFIX
+// 6.61.0 (loop-scope-hardening — review findings SEC-1/SEC-3 of 2026-10-12): the grant is no longer a set of PREFIX
 // rules (`Bash(node pharn/floor/*)` pre-approved any file a model-written plan scoped under pharn/floor/, and
 // `Bash(node .claude/hooks/*)` the promotion-origin setter line that unlocks a canon write). Each Bash grant is now
 // EXACTLY one pinned subcommand with its `<placeholder>`s turned into `*` (`grantFor`), and the set is DERIVED: the
@@ -5583,7 +5583,7 @@ test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line 
       `non-vacuous: ${f} pins at least one line`
     );
   assert.deepEqual(loopGrantOffenders(grants, lines), []);
-  // 6.60.0 closure (L36): the Bash grants ARE the derived exact set — no prefix rule, nothing wider, nothing missing.
+  // 6.61.0 closure (L36): the Bash grants ARE the derived exact set — no prefix rule, nothing wider, nothing missing.
   assert.deepEqual([...grants.filter((g) => g.startsWith("Bash("))].sort(), derivedLoopGrants(lines));
   // The exclusion is real and names exactly one pinned line (non-vacuous, L34/L60).
   const excluded = LOOP_GRANT_EXCLUDED.flatMap(({ file }) =>
