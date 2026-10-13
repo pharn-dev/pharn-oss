@@ -58,7 +58,7 @@
 
 import "./runtime-floor.mjs";
 import { spawnSync } from "node:child_process";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -223,26 +223,32 @@ export function extractGrillers(repo = ".", { counter = join(HERE, "count-grille
     const why = pathReason(p);
     if (why) return { ok: false, reason: why };
     const abs = join(repo, p);
-    let st;
-    try {
-      st = lstatSync(abs);
-    } catch {
-      return { ok: false, reason: `griller ${shown(p)} cannot be lstat-ed` };
-    }
-    if (st.isSymbolicLink()) return { ok: false, reason: `griller ${shown(p)} is a symlink` };
-    if (!st.isFile()) return { ok: false, reason: `griller ${shown(p)} is not a regular file` };
     let real;
     try {
       real = realpathSync(abs);
-    } catch {
+    } catch (e) {
+      if (e && e.code === "ENOENT") return { ok: false, reason: `griller ${shown(p)} cannot be found` };
       return { ok: false, reason: `griller ${shown(p)} cannot be resolved` };
     }
     if (!real.startsWith(root + sep)) return { ok: false, reason: `griller ${shown(p)} resolves outside the repo` };
+    // ONE descriptor from here on (6.60.1, CodeQL js/file-system-race): the checks below and the read see the same
+    // file, so the path cannot be swapped between them. O_NOFOLLOW refuses a symlink at the final component (ELOOP);
+    // O_NONBLOCK keeps a FIFO from blocking the open, and fstat then refuses it as not a regular file.
+    let fd;
+    try {
+      fd = openSync(abs, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    } catch (e) {
+      if (e && e.code === "ELOOP") return { ok: false, reason: `griller ${shown(p)} is a symlink` };
+      return { ok: false, reason: `griller ${shown(p)} cannot be opened` };
+    }
     let text;
     try {
-      text = readFileSync(abs, "utf8");
+      if (!fstatSync(fd).isFile()) return { ok: false, reason: `griller ${shown(p)} is not a regular file` };
+      text = readFileSync(fd, "utf8");
     } catch {
       return { ok: false, reason: `griller ${shown(p)} is unreadable` };
+    } finally {
+      closeSync(fd);
     }
     if (holdsFrameLine(text)) return { ok: false, reason: `griller ${shown(p)} holds a frame line` };
     entries.push({ path: p, bytes: Buffer.byteLength(text), trimmed: trimGriller(text) });
