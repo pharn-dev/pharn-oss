@@ -111,7 +111,7 @@ allowed-tools:
     "Bash(node pharn/floor/check-plan-spec-agree.mjs pharn/features/*/PLAN.md pharn/features/*/SPEC.md)",
     "Bash(node pharn/floor/check-plan-lessons.mjs pharn/features/*/PLAN.md memory-bank/lessons-learned.md)",
     "Bash(node pharn/floor/catalogue-installed-skills.mjs .)",
-    "Bash(node pharn/floor/count-grillers.mjs .)",
+    "Bash(node pharn/floor/griller-extract.mjs .)",
     "Bash(node pharn/floor/feature-name.mjs)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/*/SPEC.md)",
     "Bash(node pharn/floor/check-spec.mjs --resolve-template-ref)",

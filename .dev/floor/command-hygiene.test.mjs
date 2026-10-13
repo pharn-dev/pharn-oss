@@ -2478,6 +2478,36 @@ test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, 
   assert.match(body, /`scans: NOT run \(grill-scan\.mjs exit <n>\)`/);
 });
 
+// grill-griller-trim (6.60.0, review CTX-1): the full grill loads its grillers through ONE pinned extract line, falls back
+// to the whole files on any other exit, and records which happened in GRILL.md. Pinned, never described (L22).
+const GRILLER_EXTRACT_LINE = "node pharn/floor/griller-extract.mjs .";
+const GRILLER_FALLBACK_LITERAL = "`grillers: extract NOT run (griller-extract.mjs exit <n>)`";
+
+/** Why a pharn-grill.md body fails the griller-extract wiring, or [] when it holds. */
+function grillerExtractReasons(body) {
+  const reasons = [];
+  const pinned = fencedLines(body).filter((f) => f.text.trim() === GRILLER_EXTRACT_LINE);
+  if (pinned.length !== 1) reasons.push(`the extract line is pinned ${pinned.length} times, not once`);
+  if (!body.includes(GRILLER_FALLBACK_LITERAL)) reasons.push("the fallback record literal is missing");
+  if (!/Any other exit → read in full every file\s+`node pharn\/floor\/count-grillers\.mjs \.` lists/.test(body)) {
+    reasons.push("the whole-file fallback is missing");
+  }
+  if (!/Every registered griller still runs; only two sections a grill never uses are left out of each/.test(body)) {
+    reasons.push("the every-griller-still-runs sentence is missing");
+  }
+  if (!/Step 3's `skills:` line and Step 3b's `grillers:` line;/.test(body)) reasons.push("GRILL.md's grillers: line is missing");
+  return reasons;
+}
+
+test("✧ GRILLER EXTRACT: pharn-grill.md pins the extract line once, its whole-file fallback, and GRILL.md's grillers: line", () => {
+  const body = commandBody("pharn-grill.md");
+  assert.deepEqual(grillerExtractReasons(body), []);
+  // CONTROLS (L60): the pinned line removed, the fallback removed, and a duplicate pin each fail.
+  assert.match(grillerExtractReasons(body.replace(`  ${GRILLER_EXTRACT_LINE}\n`, "")).join("\n"), /pinned 0 times/);
+  assert.match(grillerExtractReasons(body.replace(GRILLER_FALLBACK_LITERAL, "")).join("\n"), /fallback record literal/);
+  assert.match(grillerExtractReasons(`${body}\n\`\`\`bash\n${GRILLER_EXTRACT_LINE}\n\`\`\`\n`).join("\n"), /pinned 2 times/);
+});
+
 test("✧ FLOOR-ONLY GRILL: pharn-loop.md invokes --floor-only inline and runs neither grill checker itself (one read)", () => {
   const body = commandBody(LOOP_FILE);
   assert.match(body, /invoke `\/pharn-grill <name> --floor-only` yourself/);
@@ -4740,7 +4770,9 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // loop-scope-hardening (6.61.0): Step 3's setter-exit sentence names the setter's printed reason — 24,590 bytes
   // measured, 14 over 24,576; raised by the rule (+10%, up to a multiple of 512).
   "pharn-build.md": 27136,
-  "pharn-grill.md": 23040,
+  // grill-griller-trim (6.60.0): Step 3b pins griller-extract.mjs, its whole-file fallback and the every-griller-still-runs
+  // sentence — 23,796 bytes measured, 756 over 23,040; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-grill.md": 26624,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 47,664 bytes measured, 48 over 47,616 (the GATE-2
   // review's R1/R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
   // loop-scope-hardening (6.61.0): the `allowed-tools` grant became the 84 exact pinned lines of the loop's run and of
