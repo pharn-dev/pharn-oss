@@ -68,6 +68,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       (`LIMITS.md` §3e), it runs on pull requests only, it is skipped by an admin merge, and a per-PR budget does not
       bound growth spread over many PRs.
 
+## [6.60.1] - 2026-10-13
+
+### Fixed
+
+- **`pharn/floor/griller-extract.mjs` (6.60.0) reads each griller through the one descriptor it checked, so the file
+  cannot be swapped between the check and the read.**
+  - What changed: it used to check a griller path with `lstat`, then read it again by path. It now resolves the path,
+    opens it once without following a symlink, checks that open file is a regular file, and reads from it. A symlinked
+    griller and one resolving outside the repo are still refused. A griller path that does not exist now reads
+    "cannot be found" (it said "cannot be lstat-ed"), and a FIFO is refused without blocking the open.
+  - Why: CodeQL reported `js/file-system-race` (high) on the read in 6.60.0. PR #346 was merged with that check
+    failing, and this is the correction.
+  - Checked by: `pharn/floor/griller-extract.test.mjs`, 30 tests, including a new one for the FIFO. The printed extract
+    is unchanged: 13 grillers, 141,332 B.
+
 ## [6.60.0] - 2026-10-13
 
 ### Changed
