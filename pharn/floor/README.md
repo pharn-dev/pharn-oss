@@ -174,7 +174,7 @@ symmetric) — the guard never parses a marker's contents.
 
 The **setter** (`set-writes-scope.cjs`) is separate from both hooks: it refuses to _authorize_ those
 same control-surface paths at scope-set time — exits non-zero and writes nothing if the parsed scope names
-one, unless the operator passes `--allow-claude-dir`. Since 6.59.0 it also refuses, in an installed project, a
+one, unless the operator passes `--allow-claude-dir`. Since 6.60.0 it also refuses, in an installed project, a
 `--from-plan` scope naming PHARN's own surface (`pharn/**` except `pharn/features/**`, `.claude/**`,
 `pharn.config.json`) unless the operator passes `--allow-pharn-surface`, and a scope whose origin is a
 memory-promote command while a `/pharn-loop` run marker is open; it honors either opt-in only before the mode, and

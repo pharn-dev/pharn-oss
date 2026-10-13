@@ -439,10 +439,10 @@ test("no `## Files` / `## Contracts satisfied` sections -> honest placeholder te
   }
 });
 
-// 6.59.0 (loop-scope-hardening): the section extractor uses plan-files-core.mjs's fence rule, the one the writes-scope
+// 6.60.0 (loop-scope-hardening): the section extractor uses plan-files-core.mjs's fence rule, the one the writes-scope
 // is parsed with. Under the old open/close toggle a ``` line inside a ~~~ block "closed" it, so the `## Example`
 // line after it ended the `## Files` section and the real item below the block was cut from the briefing while the
-// setter still scoped it. Negative control, run once against the pre-6.59.0 renderer: this test fails there
+// setter still scoped it. Negative control, run once against the pre-6.60.0 renderer: this test fails there
 // (the `src/after.ts` assertion), and passes here.
 test("★ the `## Files` section is fenced by the scope's own rule — a ``` line inside a ~~~ block does not close it", () => {
   const base = scratchDir();

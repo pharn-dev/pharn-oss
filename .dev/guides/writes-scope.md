@@ -166,7 +166,7 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   guard; it is an argv flag, so no declared file can set it for itself. The check is **lexical** (it
   normalizes `./` and `a/../`, but does not resolve symlinks) — it is the loud early failure, not the
   last line of defense.
-- **Three more refusals and a flag order (6.59.0, loop-scope-hardening — review SEC-1, SEC-3, ENF-1).** Each
+- **Three more refusals and a flag order (6.60.0, loop-scope-hardening — review SEC-1, SEC-3, ENF-1).** Each
   writes nothing and exits 1:
   - **PHARN's own installed surface, from a plan.** In an installed project (`pharn.config.json` at the setter's
     cwd carries a non-empty `skillsVersion`), a `--from-plan` scope naming `pharn/**` except `pharn/features/**`,

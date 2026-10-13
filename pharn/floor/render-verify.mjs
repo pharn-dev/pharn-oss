@@ -34,14 +34,15 @@
 //
 // LOAD GRAPH: `quote-core.mjs` (→ `loop-record-core.mjs`) for the fences, `stage-exit-core.mjs` (which imports
 // nothing) for the refusal code's membership test, and `gate-run-core.mjs` (which imports nothing) for the ALLOWLIST
-// membership test the gate-exclusion line (6.36.0) renders an id after, and `reconcile-detail-core.mjs` (which imports
+// membership test the gate-exclusion line (6.36.0) renders an id after and the UNMEASURED_CAUSES test the NOT MEASURED
+// block (6.59.0) renders a cause after, and `reconcile-detail-core.mjs` (which imports
 // only `quote-core.mjs`) for the `## Reconcile` section (6.55.0): the escapes' files, guards, closed reasons and scope
 // labels, and the merged count, rendered from the report's `reconcile_detail` block — ONE renderer shared with
 // RUN-REPORT.md (L35), whose own header states its trust rules.
 
 import { quoteData, dataText } from "./quote-core.mjs";
 import { isReasonCode } from "./stage-exit-core.mjs";
-import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
+import { ALLOWLIST, EXCLUSION_DECLARED_IN, UNMEASURED_CAUSES } from "./gate-run-core.mjs";
 import { headInstallLine } from "./install-drift-core.mjs";
 import { reconcileDetailLines, wantsReconcileSection } from "./reconcile-detail-core.mjs";
 
@@ -137,6 +138,33 @@ function exclusionLines(run) {
   ];
 }
 
+/** What each closed cause means, rendered inline only after membership in gate-run-core.mjs UNMEASURED_CAUSES. */
+const CAUSE_TEXT = Object.freeze({
+  "timed-out": "timed out — the runner killed it at --timeout-ms",
+  "not-started": "not started — it could not be started (exit 126 or 127)",
+});
+
+/** 6.59.0 — the gates the runner did NOT measure (the report's `unmeasured_gates`, check-verify.mjs's stamp path), under
+ *  the verdict line, so an INCONCLUSIVE over a hung or unstartable gate is never read as a red one. A gate id is
+ *  untrusted (fenced); a cause renders as its fixed text only after a membership test, else a fixed phrase. No key, or an
+ *  empty list → no block, so every other report renders as before. */
+function unmeasuredLines(report) {
+  const list = Array.isArray(report.unmeasured_gates) ? report.unmeasured_gates.filter(isObject) : [];
+  if (list.length === 0) return [];
+  const lines = list.map((u) => {
+    const cause =
+      typeof u.cause === "string" && UNMEASURED_CAUSES.includes(u.cause) ? CAUSE_TEXT[u.cause] : "(cause not a member of its closed set)";
+    return `${dataText(u.id)}  ${cause}`;
+  });
+  return [
+    `**${list.length} gate(s) NOT MEASURED** — an unmeasured gate is neither a pass nor a fail, so no verdict was reached ` +
+      "over this gate set; a measured red stays listed under `## Gates`. Fix the timeout or the runner, then verify again.",
+    "",
+    quoteData("gate id, then why it was not measured — quoted as DATA:", lines.join("\n")),
+    "",
+  ];
+}
+
 function verdictSection(report) {
   const out = [];
   const v = report.verdict;
@@ -148,6 +176,7 @@ function verdictSection(report) {
     out.push(quoteData("failing gate ids, quoted as DATA:", failing.length ? failing.map(dataText).join("\n") : "(none recorded)"), "");
   }
   if (v === "INCONCLUSIVE") {
+    out.push(...unmeasuredLines(report));
     const lines = [];
     if (report.reason_code !== undefined) lines.push(`reason_code: ${dataText(report.reason_code)}`);
     lines.push(`reason: ${report.reason === undefined ? "(none recorded)" : dataText(report.reason)}`);

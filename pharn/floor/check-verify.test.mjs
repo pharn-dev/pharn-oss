@@ -1,7 +1,8 @@
 // pharn/floor/check-verify.test.mjs — hermetic tests for the deterministic verify-verdict core.
 //
-// NO `claude -p`, NO git, NO network. The verdict reads ONE small { gate-id: exit-code } results map we
-// compose in an os.tmpdir() scratch dir. We assert the public surface (exit code + stdout JSON) by
+// NO `claude -p`, NO network, and no git EXCEPT one test: the 6.59.0 live GATE-1 pin initialises a scratch git
+// repository in os.tmpdir() and drives the real run-gates.mjs there. The verdict reads ONE small
+// { gate-id: exit-code } results map we compose in an os.tmpdir() scratch dir. We assert the public surface (exit code + stdout JSON) by
 // subprocess, mirroring check-regress.test.mjs / check-variance.test.mjs / check-structural.test.mjs.
 //
 // The ★ tests are load-bearing — they are the whole reason /verify's verdict is FLOOR, not judgment:
@@ -16,7 +17,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -257,7 +258,9 @@ function withStamp(stamp, fn) {
 
 test("★ EQUIVALENCE — a stamp yields the IDENTICAL verdict to the flag-less run, over EVERY fixture map", () => {
   // Quantified over the whole set of interesting maps, not one (L52): the point is that the stamp path
-  // changed where the map comes from and NOTHING about the decision table.
+  // changed where the map comes from and NOTHING about the decision table. Since 6.59.0 ONE row exists only on the
+  // stamp path — a run the runner did not measure (timed out, or exit 126/127) — so these maps hold no such run; that
+  // divergence is pinned by the 6.59.0 tests at the end of this file.
   const maps = [
     { test: 0 },
     { test: 0, lint: 0, reconcile: 0 },
@@ -408,5 +411,206 @@ test("★ a fail-closed completeness reason NAMES ITS REAL SOURCE, not a flag th
     assert.match(json(r).reason, /--complete "2"/, "the flag-less path must still attribute to --complete");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ===================================================================================================
+// 6.59.0 — a gate the runner did NOT measure (unmeasured-gates-inconclusive; the 2026-10-12 review's LOOP-1).
+// A run killed at --timeout-ms (`timed_out: true`, whatever exit) or unable to start (exit 126/127) makes the stamp-path
+// verdict INCONCLUSIVE `gate-not-measured`, FIRST in the precedence. Every property has a control that keeps today's
+// verdict (L34); the cause set is iterated, never one member (L29).
+// ===================================================================================================
+
+/** mkStamp, with the named runs recorded as killed by the runner. */
+function mkTimedOutStamp(gates, timedOut, over = {}) {
+  const s = mkStamp(gates, over);
+  for (const r of s.runs) if (timedOut.includes(r.id)) r.timed_out = true;
+  return s;
+}
+
+/** Each unmeasured shape: [label, gates, timed-out ids, the expected unmeasured_gates]. */
+const UNMEASURED_WORLDS = [
+  ["timed out, exit 124 (the group signal ended it)", { test: 124, lint: 0 }, ["test"], [{ id: "test", cause: "timed-out" }]],
+  ["timed out, exit 1 (node's runner on the group signal)", { test: 1, lint: 0 }, ["test"], [{ id: "test", cause: "timed-out" }]],
+  [
+    "timed out, exit 0 (a gate that traps SIGTERM — a PASS before 6.59.0)",
+    { test: 0, lint: 0 },
+    ["test"],
+    [{ id: "test", cause: "timed-out" }],
+  ],
+  ["not started, exit 127 (ENOENT / command not found)", { test: 127, lint: 0 }, [], [{ id: "test", cause: "not-started" }]],
+  ["not started, exit 126 (EACCES / not executable)", { test: 0, lint: 126 }, [], [{ id: "lint", cause: "not-started" }]],
+];
+
+test("★ 6.59.0 — EVERY unmeasured shape is INCONCLUSIVE `gate-not-measured`, exit 2, the gate named, `gates` kept", () => {
+  const causes = new Set();
+  for (const [label, gates, timedOut, want] of UNMEASURED_WORLDS) {
+    withStamp(mkTimedOutStamp(gates, timedOut), (p) => {
+      const r = run(["--stamp", p, "--feature", "demo"]);
+      assert.equal(r.status, 2, `${label}: ${r.stdout}`);
+      const j = json(r);
+      assert.equal(j.verdict, "INCONCLUSIVE", label);
+      assert.equal(j.reason_code, "gate-not-measured", label);
+      assert.deepEqual(j.unmeasured_gates, want, label);
+      assert.deepEqual(j.failing_gates, [], `${label}: an unmeasured gate is never a failing gate`);
+      assert.deepEqual(j.gates, gates, `${label}: the recorded exits stay visible`);
+      assert.ok(j.gate_run, `${label}: the provenance block stays`);
+      assert.match(j.reason, /not measured/, label);
+      for (const u of want) causes.add(u.cause);
+    });
+  }
+  assert.deepEqual([...causes].sort(), ["not-started", "timed-out"], "every cause was produced (non-vacuous — L34)");
+});
+
+test("★ GATE-1 pin — a timed-out gate that EXITED 0 is INCONCLUSIVE, not PASS; the same stamp without the kill is PASS", () => {
+  // The false green the plan's probe found: a gate that traps the runner's SIGTERM and exits 0 is recorded
+  // `exit 0, timed_out: true`, and every exit in the stamp is 0. Before 6.59.0 that read PASS.
+  const gates = { test: 0, lint: 0, reconcile: 0 };
+  withStamp(mkTimedOutStamp(gates, ["test"]), (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 2);
+    assert.equal(json(r).verdict, "INCONCLUSIVE");
+    assert.deepEqual(json(r).unmeasured_gates, [{ id: "test", cause: "timed-out" }]);
+  });
+  withStamp(mkTimedOutStamp(gates, []), (p) => {
+    const r = run(["--stamp", p, "--feature", "demo"]);
+    assert.equal(r.status, 0, "CONTROL: the same exits, run to completion, are a PASS");
+    assert.equal(json(r).verdict, "PASS");
+    assert.equal(Object.hasOwn(json(r), "unmeasured_gates"), false, "no key when every gate was measured (byte-identical)");
+  });
+});
+
+test("★ 6.59.0 PRECEDENCE — an unmeasured gate wins over a measured red, a reconcile red and INCOMPLETE (first)", () => {
+  const cases = [
+    ["beside a measured red", { test: 124, lint: 1 }, ["test"], {}],
+    ["beside a reconcile red", { test: 0, lint: 127, reconcile: 1 }, [], {}],
+    ["over an incomplete build", { test: 124, lint: 0 }, ["test"], { aux: { completeness: 1 } }],
+    ["over an inconclusive completeness", { test: 127 }, [], { aux: { completeness: 2 } }],
+  ];
+  for (const [label, gates, timedOut, over] of cases) {
+    withStamp(mkTimedOutStamp(gates, timedOut, over), (p) => {
+      const r = run(["--stamp", p, "--feature", "demo"]);
+      assert.equal(r.status, 2, label);
+      const j = json(r);
+      assert.equal(j.verdict, "INCONCLUSIVE", label);
+      assert.equal(j.reason_code, "gate-not-measured", label);
+      assert.deepEqual(j.failing_gates, [], `${label}: the measured reds stay in gates, not failing_gates`);
+      assert.deepEqual(j.gates, gates, label);
+    });
+  }
+  // CONTROLS: the same reds with every gate measured keep today's verdicts.
+  withStamp(mkTimedOutStamp({ test: 1, lint: 1 }, []), (p) => assert.equal(json(run(["--stamp", p, "--feature", "demo"])).verdict, "FAIL"));
+  withStamp(mkTimedOutStamp({ test: 0 }, [], { aux: { completeness: 1 } }), (p) =>
+    assert.equal(json(run(["--stamp", p, "--feature", "demo"])).verdict, "INCOMPLETE")
+  );
+});
+
+test("★ 6.59.0 — a signal exit the runner did NOT cause, and exits 2/125, stay a MEASURED failure (Q1)", () => {
+  for (const exit of [2, 125, 128, 134, 137, 139, 143]) {
+    withStamp(mkTimedOutStamp({ test: exit, lint: 0 }, []), (p) => {
+      const r = run(["--stamp", p, "--feature", "demo"]);
+      assert.equal(r.status, 1, `exit ${exit}`);
+      assert.equal(json(r).verdict, "FAIL", `exit ${exit}`);
+      assert.deepEqual(json(r).failing_gates, ["test"], `exit ${exit}`);
+      assert.equal(Object.hasOwn(json(r), "unmeasured_gates"), false, `exit ${exit}`);
+    });
+  }
+});
+
+test("★ 6.59.0 — the POSITIONAL map keeps its table: 124/126/127 are plain failures there (the dev twin is unchanged)", () => {
+  // The positional map carries exits alone — nothing says how a run ended — so the new row never fires there, and
+  // /pharn-dev-verify (which types the map) and check-ship.mjs see byte-identical output.
+  withResults({ test: 124, lint: 127, build: 126 }, (p) => {
+    const r = run([p, "--feature", "demo"]);
+    assert.equal(r.status, 1);
+    assert.deepEqual(json(r), {
+      feature: "demo",
+      gates: { build: 126, lint: 127, test: 124 },
+      verdict: "FAIL",
+      failing_gates: ["build", "lint", "test"],
+    });
+  });
+});
+
+test("★ GATE-1 pin, live — the REAL runner records a gate that handles SIGTERM as exit 0 + timed_out, and the verdict is INCONCLUSIVE; check-loop then stops STOP_TERMINAL (never CONTINUE)", () => {
+  // The plan's probe, as a test. It needs git and /bin/sh (POSIX, like run-gates.mjs itself). The runner injects
+  // `instruction-growth` and `reconcile`, which read red in a scratch repo, so this half cannot show "was PASS" — the
+  // hand-built pin above does; this one shows the runner really writes the stamp shape that pin reads.
+  // PLATFORM-INDEPENDENT BY CONSTRUCTION (CI, PR #345): the first cut used `sh -c 'trap "exit 0" TERM; sleep 30 & wait'`,
+  // which exited 0 on darwin but 124 on ubuntu-latest, where the runner's own `/bin/sh -c '<token> "$@"'` wrapper is dash.
+  // The mechanism, measured on darwin by forcing a wrapper that cannot exec its command (`true; <token>`): bash and
+  // macOS sh then record that old token as 124 — the wrapper shell, which no trap governs, is in the group when the group
+  // SIGTERM lands and ends by it — and the new token as 0 (Ubuntu itself was not run locally). The handler is now a node
+  // process the token `exec`s into — `exec` replaces the wrapper shell on every POSIX shell, so node is the only process
+  // in the group and decides the exit itself, having installed its handler long before a 3000 ms kill. A plain
+  // `sleep 30` gate beside it is the timed-out row that needs no premise about any shell (the group signal ends it: 124).
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "cv-live-")));
+  try {
+    const sh = (cmd, args) => spawnSync(cmd, args, { cwd: root, encoding: "utf8" });
+    sh("git", ["init", "-q"]);
+    mkdirSync(join(root, "pharn/features/demo"), { recursive: true });
+    writeFileSync(join(root, "a.txt"), "x\n");
+    writeFileSync(join(root, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(root, "pharn/features/demo/PLAN.md"), "---\nspec_id: demo\n---\n# PLAN\n\n## Files\n\n- a.txt — x\n");
+    // A file, not `node -e`: `--gates` splits on commas, and the handler needs one.
+    writeFileSync(join(root, "on-term-exit-0.mjs"), 'process.on("SIGTERM", () => process.exit(0));\nsetInterval(() => {}, 1000);\n');
+    sh("git", ["add", "-A"]);
+    sh("git", ["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "init"]);
+    const RG = join(here, "run-gates.mjs");
+    assert.ok(
+      !process.execPath.includes(",") && !process.execPath.includes('"'),
+      "fixture: the node path must survive the --gates grammar"
+    );
+    const gates = [
+      `exec "${process.execPath}" on-term-exit-0.mjs::trapzero`,
+      "sleep 30::hang",
+      "nosuchbinary_pharn_xyz::missing",
+      "true::ok",
+    ].join(",");
+    const init = sh(process.execPath, [RG, "init", "--stage", "verify", "--feature", "demo", "--out", ".pharn/v", "--gates", gates]);
+    assert.equal(init.status, 0, init.stdout + init.stderr);
+    for (let i = 0; i < 10; i++) {
+      // 3000 ms (GATE-2 review F1): wide enough that a loaded machine's /bin/sh has installed its trap before the
+      // group SIGTERM lands, so the premise below is never a load artifact.
+      const r = sh(process.execPath, [RG, "run", "--next", "--out", ".pharn/v", "--timeout-ms", "3000"]);
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      if (JSON.parse(r.stdout).finalized) break;
+    }
+    const stamp = JSON.parse(readFileSync(join(root, ".pharn/v/stamp.json"), "utf8"));
+    const byId = Object.fromEntries(stamp.runs.map((r) => [r.id, r]));
+    assert.equal(byId.trapzero.exit, 0, "the premise: the gate that handles SIGTERM exited 0");
+    assert.equal(byId.trapzero.timed_out, true, "the premise: the runner recorded its kill");
+    assert.equal(byId.hang.exit, 124, "the premise: a hang the group signal ended is 124");
+    assert.equal(byId.hang.timed_out, true);
+    assert.equal(byId.missing.exit, 127, "the premise: an unstartable command is 127");
+    assert.equal(byId.ok.timed_out, false);
+    const cv = sh(process.execPath, [CV, "--stamp", ".pharn/v/stamp.json", "--feature", "demo"]);
+    assert.equal(cv.status, 2, cv.stdout);
+    const report = JSON.parse(cv.stdout);
+    assert.equal(report.verdict, "INCONCLUSIVE");
+    assert.equal(report.reason_code, "gate-not-measured");
+    assert.deepEqual(report.unmeasured_gates, [
+      { id: "trapzero", cause: "timed-out" },
+      { id: "hang", cause: "timed-out" },
+      { id: "missing", cause: "not-started" },
+    ]);
+    // The review's reproduction, end to end: the report the runner's stamp yields stops the loop terminally.
+    mkdirSync(join(root, "f"));
+    writeFileSync(join(root, "f/verify-report.json"), cv.stdout);
+    writeFileSync(join(root, "f/regression-report.json"), JSON.stringify({ verdict: "no-regressions" }));
+    const cl = sh(process.execPath, [
+      join(here, "check-loop.mjs"),
+      "f/verify-report.json",
+      "f/regression-report.json",
+      "--iter",
+      "1",
+      "--cap",
+      "3",
+    ]);
+    assert.equal(cl.status, 4, cl.stdout);
+    assert.equal(JSON.parse(cl.stdout).decision, "STOP_TERMINAL");
+    assert.equal(JSON.parse(cl.stdout).terminal_cause, "unmeasured");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

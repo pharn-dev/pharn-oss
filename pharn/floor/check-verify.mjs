@@ -39,7 +39,9 @@
 //   PASS          iff EVERY gate exit code === 0 AND completeness is complete-or-not-supplied.
 //   INCONCLUSIVE  iff the results map is missing / empty / not a { "<gate-id>": <int> } object, OR the
 //                 completeness input is inconclusive / malformed (`--complete 2` or a non-recognized
-//                 value) — FAIL-CLOSED (P5), never a silent pass.
+//                 value) — FAIL-CLOSED (P5), never a silent pass. With `--stamp` (6.59.0) ALSO iff any gate
+//                 was NOT MEASURED — the runner killed it at --timeout-ms or it could not start (126/127) —
+//                 and that row comes FIRST, before every row above (`gate-not-measured`; the stamp section below).
 //
 // THE OPTIONAL `--complete <int>` INPUT (ship-completion-retry increment):
 //   /verify runs pharn/floor/check-build-complete.mjs over the PLAN's `## Files` and passes ITS exit code here
@@ -53,14 +55,17 @@
 //   its VERIFY_VERDICTS set would treat it as unknown → INCONCLUSIVE, fail-closed — bounded, not silent.)
 //
 // HONEST SCOPE (P0/P7): the verdict is a deterministic function of the gate exit codes its caller
-// captures — and, with `--ac-gate`, of the AC gate's reading of the per-test records and the lock. "verified"
+// captures — on the `--stamp` path (6.59.0) also of each run's `timed_out` flag, since a run the runner killed or
+// could not start is not measured — and, with `--ac-gate`, of the AC gate's reading of the per-test records and the
+// lock. "verified"
 // therefore means EXACTLY "the named gates passed" (plus, with `--ac-gate` over a test-first SPEC, "every AC's
 // locked, once-red test passed") — NOT "the feature is correct."
 // Correctness beyond what those gates check is the ADVISORY verifier layer's concern, and that layer
 // never gates this number. Said plainly, not hidden.
 //
 // TRUST (P2): without `--ac-gate`, every operand is produced by deterministic tooling — gate-ids (strings) and
-// exit codes (ints): the enum-gated / floor-verifiable class. The `--feature` value is a path/name string. NO
+// exit codes (ints), plus, on the `--stamp` path (6.59.0), each run's `timed_out` boolean the runner recorded: the
+// enum-gated / floor-verifiable class. The `--feature` value is a path/name string. NO
 // verifier finding (`problem`/`evidence`) is ever read — the helper's INPUT cannot even carry one. Inputs are
 // JSON.parsed and used ONLY as string/int operands — never eval'd, executed, spawned, imported, or sent anywhere.
 // No child process, no network. WITH `--ac-gate` (6.20.0) that is no longer the whole input, and saying otherwise
@@ -73,7 +78,8 @@
 // It adds an `ac_gate` block and, when red, one or two RESERVED ids to failing_gates (gate-run-core.mjs RESERVED_IDS —
 // they never enter `gates`, which stays the runner's map): `ac-evidence` (the AC evidence is changed or missing —
 // check-loop.mjs stops on it) and `ac-delivery` (an AC is not delivered yet — the loop iterates). Precedence (the full
-// seven-step order is at the verdict code in main()):
+// order is at the verdict code in main(); since 6.59.0 its step 0, a gate the runner did not measure, comes before all
+// of these):
 //   1. any real gate red → FAIL (a real gate failure BEATS an unmeasurable AC gate, for the reason it beats INCOMPLETE —
 //      the red gate is the actionable fact, and FAIL can never reach a green stop); the AC ids are named beside it;
 //   2. else any AC EVIDENCE reason → FAIL (a rebuild cannot restore evidence taken before it, so it beats INCOMPLETE);
@@ -92,7 +98,18 @@
 //   the command assembled. With `--stamp <gate-run-record>` it reads the SAME map out of a stamp that
 //   pharn/floor/run-gates.mjs produced, so neither the map's KEYS nor its VALUES were typed by a model
 //   (lessons-learned L5: a floor verdict is only as trustworthy as the orchestration that captures its
-//   inputs). The VERDICT TABLE IS UNCHANGED — this is a provenance change, not a semantics change (P3).
+//   inputs). When it was added the verdict table was unchanged — a provenance change, not a semantics change (P3).
+//
+//   ONE ROW EXISTS ONLY ON THIS PATH (6.59.0, unmeasured-gates-inconclusive — the 2026-10-12 review's LOOP-1): a stamp
+//   records HOW each run ended, and a run the runner killed at --timeout-ms (`timed_out: true`, whatever exit the kill
+//   left — measured: a gate trapping the group SIGTERM exits 0 or 1, `sleep` exits 124) or could not start (exit 126/127)
+//   is not a measurement. Before 6.59.0 such a run was a non-zero exit like any other — FAIL, and /pharn-loop rebuilt up
+//   to its cap "fixing" a hang — or, exiting 0, a PASS. Now it is INCONCLUSIVE `gate-not-measured`, first in the
+//   precedence, with `unmeasured_gates: [{id, cause}]` (cause ∈ gate-run-core.mjs UNMEASURED_CAUSES) and
+//   `failing_gates: []`, the measured exits still in `gates`. The positional map carries exits alone, so this row never
+//   fires there (the dev twin /pharn-dev-verify is byte-identical). BOUNDS, stated: `timed_out` means the runner's clock
+//   ran out — a real hang, a slow machine and a too-small --timeout-ms look the same; a gate that exits 126/127 of its
+//   own accord reads as not started; a signal exit (>= 128) the runner did not cause stays a measured FAIL.
 //
 //   Build-completeness stays OUT of the map. With `--stamp` it is read from the stamp's `aux.completeness`
 //   — a SIBLING of `runs[]` — and fed onto this file's EXISTING `--complete` path. Folding it into the
@@ -118,14 +135,14 @@
 //     --complete   : OPTIONAL — the exit code of pharn/floor/check-build-complete.mjs (0/1/2). Omit for the
 //                    legacy 3-valued behavior.
 //
-// Exit: 0 PASS · 1 FAIL (>=1 gate non-zero, or with --ac-gate an AC failing id) · 2 INCONCLUSIVE / bad input —
-//       FAIL-CLOSED (P5) ·
+// Exit: 0 PASS · 1 FAIL (>=1 measured gate non-zero, or with --ac-gate an AC failing id) · 2 INCONCLUSIVE / bad input,
+//       or (--stamp) a gate not measured — FAIL-CLOSED (P5) ·
 //       3 INCOMPLETE (gates green but the build is incomplete; only reachable WITH `--complete 1`).
 
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
-import { validateStamp, stampToMap, completenessFromStamp, gateRunBlock } from "./gate-run-core.mjs";
+import { validateStamp, stampToMap, completenessFromStamp, gateRunBlock, unmeasuredRuns } from "./gate-run-core.mjs";
 import { DELIVERY_REASONS, EVIDENCE_REASONS, FAILING_IDS, evaluateAcGate } from "./ac-gate-core.mjs";
 
 // --- emit one JSON document to stdout, then END. The command captures this verbatim. ---
@@ -213,6 +230,7 @@ function main() {
   let stampMap = null;
   let gate_run = null;
   let ac_gate = null;
+  let unmeasured = []; // stamp path only (6.59.0): the runs the runner did not measure — the positional map carries exits alone
   if (acGate && stampPath === undefined) {
     emit(
       {
@@ -318,6 +336,7 @@ function main() {
     completeStatus = auxComplete === 0 ? "complete" : auxComplete === 1 ? "incomplete" : "inconclusive";
     completeSource = `stamp.aux.completeness ${auxComplete} (${stampPath})`;
     stampMap = stampToMap(parsed);
+    unmeasured = unmeasuredRuns(parsed);
     gate_run = gateRunBlock(parsed, createHash("sha256").update(raw).digest("hex"));
     if (acGate) ac_gate = evaluateAcGate({ feature, stamp: parsed, outDir: dirname(stampPath), root: process.cwd() });
   }
@@ -339,6 +358,13 @@ function main() {
   }
 
   // Verdict precedence (P0/P5) — each emit() ends the run, so these read as guarded branches:
+  //   0. (--stamp only, 6.59.0) ANY gate the runner did not measure — killed at --timeout-ms, or unable to start (exit
+  //      126/127; gate-run-core.mjs unmeasuredRuns, the one owner) → INCONCLUSIVE `gate-not-measured`, with the gates
+  //      named in `unmeasured_gates` and `failing_gates: []`. FIRST, before a real red gate, an AC id and INCOMPLETE:
+  //      no verdict over a set with an unmeasured member is reached — a FAIL beside it would send /pharn-loop's rebuild
+  //      back into the same hang, and check-loop.mjs already ranks "nothing was measured" above every other cause. The
+  //      measured reds stay visible in `gates`. Without --stamp nothing is known about how a run ended, so this branch
+  //      is dead and the positional output is byte-identical.
   //   1. ANY real gate red → FAIL (a real failure ALWAYS beats incompleteness — an INCOMPLETE, retryable
   //      verdict is never emitted while a real gate is red, so /ship never rebuilds over a real bug). The AC gate's
   //      failing ids, when it has any, are named beside the red gates.
@@ -365,6 +391,27 @@ function main() {
     const reasons = [...ac_gate.evidence.map((e) => e.reason), ...ac_gate.acs.map((a) => a.reason).filter((r) => r !== null)];
     if (reasons.some((r) => EVIDENCE_REASONS.includes(r))) acIds.push(FAILING_IDS.evidence);
     if (reasons.some((r) => DELIVERY_REASONS.includes(r))) acIds.push(FAILING_IDS.delivery);
+  }
+  if (unmeasured.length) {
+    const why = unmeasured
+      .map(
+        (u) =>
+          `${JSON.stringify(u.id)} ${u.cause === "timed-out" ? "timed out (the runner killed it at --timeout-ms)" : `could not be started (exit ${res.value[u.id]})`}`
+      )
+      .join("; ");
+    emit(
+      {
+        feature,
+        gates,
+        verdict: "INCONCLUSIVE",
+        failing_gates: [],
+        unmeasured_gates: unmeasured,
+        reason: `gate(s) not measured — ${why}; an unmeasured gate is neither a pass nor a fail, so no verdict over this gate set is reached`,
+        reason_code: "gate-not-measured",
+        ...extra,
+      },
+      2
+    );
   }
   if (failing.length) {
     emit({ feature, gates, verdict: "FAIL", failing_gates: [...failing, ...acIds].sort(), ...extra }, 1);

@@ -711,6 +711,67 @@ test("★ P2-C — a timed-out BASE run whose head is red makes the verdict inco
   });
 });
 
+test("★ 6.59.0 — a timed-out HEAD run over a base that is not a measured red is inconclusive (head-timed-out), never OK or a regression", () => {
+  const verdictOf = (b, h) => {
+    const r = run(["verdict", "--base-stamp", b, "--head-stamp", h, "--base", SHA]);
+    return { status: r.status, j: JSON.parse(r.stdout) };
+  };
+  // Every head exit a kill can leave (124, a runner's own 1, a trapping gate's 0), over a GREEN base.
+  for (const headExit of [124, 1, 0]) {
+    withPair(mkRegressStamp({ test: 0, lint: 0 }, "base"), mkTimedOut({ test: headExit, lint: 0 }, "head", ["test"]), (b, h) => {
+      const { status, j } = verdictOf(b, h);
+      assert.equal(status, 2, `head exit ${headExit}: ${JSON.stringify(j)}`);
+      assert.equal(j.verdict, "inconclusive");
+      assert.equal(j.reason_code, "head-timed-out");
+      assert.deepEqual(j.head_timed_out, ["test"]);
+      assert.equal(Object.hasOwn(j, "base_timed_out"), false);
+      assert.deepEqual(j.outside_gates.test, { base: 0, head: headExit }, "the table is still reported");
+      assert.ok(j.gate_run);
+    });
+    // CONTROL (L34): the same exits run to completion keep today's verdict.
+    withPair(mkRegressStamp({ test: 0, lint: 0 }, "base"), mkRegressStamp({ test: headExit, lint: 0 }, "head"), (b, h) => {
+      const { j } = verdictOf(b, h);
+      assert.equal(j.verdict, headExit === 0 ? "no-regressions" : "regressions", `CONTROL head exit ${headExit}`);
+      assert.equal(Object.hasOwn(j, "head_timed_out"), false, "no key when nothing timed out (older reports keep their bytes)");
+    });
+  }
+  // Over a base that ALSO timed out (exit 0 at head, so the base rule does not fire): still not a head result.
+  withPair(mkTimedOut({ test: 1 }, "base", ["test"]), mkTimedOut({ test: 0 }, "head", ["test"]), (b, h) => {
+    const { j } = verdictOf(b, h);
+    assert.equal(j.verdict, "inconclusive");
+    assert.equal(j.reason_code, "head-timed-out");
+    assert.deepEqual(j.base_timed_out, ["test"]);
+    assert.deepEqual(j.head_timed_out, ["test"]);
+  });
+  // Over a MEASURED red base: nothing is masked — the gate is pre_existing whatever head did, and the verdict stands.
+  withPair(mkRegressStamp({ test: 1 }, "base"), mkTimedOut({ test: 124 }, "head", ["test"]), (b, h) => {
+    const { status, j } = verdictOf(b, h);
+    assert.equal(status, 0);
+    assert.equal(j.verdict, "no-regressions");
+    assert.deepEqual(j.pre_existing, ["test"]);
+    assert.deepEqual(j.head_timed_out, ["test"], "the timeout is still named");
+  });
+  // An unclassifiable head wins over a regression elsewhere, as a masked base does.
+  withPair(mkRegressStamp({ test: 0, lint: 0 }, "base"), mkTimedOut({ test: 124, lint: 1 }, "head", ["test"]), (b, h) => {
+    const { j } = verdictOf(b, h);
+    assert.equal(j.verdict, "inconclusive");
+    // The table is reported as computed — `test` included, exactly as a masked base stays in `pre_existing` — and the
+    // verdict refuses to read it; `head_timed_out` names the row no reader may take as a regression.
+    assert.deepEqual(j.regressions, ["lint", "test"], "the table is still reported");
+    assert.deepEqual(j.head_timed_out, ["test"]);
+  });
+  // The base rule comes FIRST, so a base-timed-out report keeps its code when both fire.
+  withPair(mkTimedOut({ test: 1, lint: 0 }, "base", ["test"]), mkTimedOut({ test: 1, lint: 124 }, "head", ["lint"]), (b, h) => {
+    const { j } = verdictOf(b, h);
+    assert.equal(j.reason_code, "base-timed-out");
+    assert.deepEqual(j.head_timed_out, ["lint"]);
+  });
+  // Q3's bound: 126/127 at regress is compared as before — a head-only 127 over a green base is a regression.
+  withPair(mkRegressStamp({ test: 0 }, "base"), mkRegressStamp({ test: 127 }, "head"), (b, h) => {
+    assert.equal(verdictOf(b, h).j.verdict, "regressions");
+  });
+});
+
 test("P2-C — the positional maps carry exits only, so they keep the plain table (the stamp path is the one stage-regress uses)", () => {
   withResults({ test: 1 }, { test: 1 }, (b, h) => {
     const j = JSON.parse(run(["verdict", b, h]).stdout);

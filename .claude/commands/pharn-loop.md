@@ -184,7 +184,7 @@ Load the trusted prefix and obey it:
   frontmatter `allowed-tools` pre-approves, for this run's one turn, exactly the shell lines this command, its two
   parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`, `/pharn-plan`, `/pharn-test`,
   `/pharn-build`) pin — each `<placeholder>` a `*` — plus the file, Agent and Skill tools, so Claude Code does not
-  stop to ask permission for them (6.59.0: no prefix grant; the seam-config `node -e` line of `/pharn-build` is left
+  stop to ask permission for them (6.60.0: no prefix grant; the seam-config `node -e` line of `/pharn-build` is left
   out and may prompt). **ADVISORY (P0):** that the grant is honored is Claude Code's behavior, not PHARN's floor, and
   a deny or ask rule of the person's still wins. Claude Code's docs do not say whether the grant reaches a stage
   agent, so a stage agent running the project's own commands (its test runner, its build) follows the session's
@@ -763,7 +763,9 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
      regression) and `N < M`.
      `N++`, back to 1.
    - **`1` `STOP_CAP`** — a measurable red at `N >= M`. Go to Step 6.
-   - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind), an
+   - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind — a gate the
+     runner timed out or could not start included: verify `.unmeasured_gates[]`, regress `.head_timed_out[]` /
+     `.base_timed_out[]`, each a gate never measured, never a red one), an
      **AC-evidence red**, or a **reconcile red** (a retry would re-anchor the baseline and erase the detected Bash
      escape). The JSON's closed `terminal_cause` says which: **`ac-evidence` is S13** (`blocked: ac-evidence-invalid`)
      — a blocked stop, recorded as Step 2 says; `unmeasured` and `reconcile` go to Step 6 with the decision as
