@@ -52,12 +52,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Bounds: "timed out" means the runner's clock ran out. A real hang, a slow machine and a too-small `--timeout-ms`
     look the same. A gate that exits 126 or 127 on its own reads as not started. A stale coded report is still re-run
     once inside the iteration, so a hang can cost one more stage timeout before the stop.
+
+## [6.58.1] - 2026-10-13
+
+### Changed
+
 - 2026-10-12: **Refresh the README hero to the new Pharn OSS mark and simplify the project header.**
   - What changed: the landing page now uses the single `pharn-logo.svg` asset and a cleaner centered header instead of the separate light/dark SVG variants.
   - Why: the project brand is now expressed as one shared mark while keeping the README copy focused on the product promise.
 
 ### Fixed
 
+- **The `insecure-crypto` lens's scanner no longer hangs on one long line.**
+  - What changed: `pharn/floor/scan-code-crypto.mjs` anchors its `insecure-random` pattern with a multiline `^`.
+    Without the anchor, both `.*` lookaheads were retried from every start index, so a line with no hit cost
+    O(n²): 40 KB took about 1 s, and a 200 KB line took 25 s or more. A line now costs O(n), and a 200 KB line
+    finishes in about 30 ms, process start included. The scanner matches the same lines as before.
+  - Why: the 2026-10-12 review (TST-1) found that one minified or generated line in a `/pharn-review` set hung
+    the lens, which runs this scanner from Bash with no timeout.
+  - Checked by: new ★ ReDoS tests in `pharn/floor/scan-code-crypto.test.mjs` spawn the scanner over 200 KB lines
+    under a 5 s timeout. The 6.58.0 scanner is killed on four of them. A ✧ test pins that a hit after a lone CR,
+    U+2028 or U+2029 still fires, which a `^` without the `m` flag would lose. A one-time comparison, not a
+    maintained check, found identical output before and after over the lens's evals, every tracked file in this
+    repo and 60,000 fuzzed lines.
+  - Not covered (ADVISORY): the review also called the `ecb-mode` pattern quadratic on long alphanumeric runs.
+    Timed alone it is linear (800 KB in a few ms), so it is unchanged, and the new tests pin that shape. The
+    review's long-line findings in the injection and N+1 scanners (TST-2, TST-3) are not fixed here.
 - 2026-10-13: **`main` is green again: this file has one `[Unreleased]` section, and `CLAUDE.md` says what branch
   protection actually enforces.**
   - What changed: the entry above had opened a second `## [Unreleased]` heading. Its entry now sits in the one
