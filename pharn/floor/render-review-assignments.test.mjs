@@ -757,6 +757,57 @@ test("a directory whose every file is skipped is REFUSED with the reasons and th
     assert.match(out.reason, /every path found was skipped \(2 binary\)/);
     assert.match(out.reason, /Name a file with --target/);
     assert.match(out.reason, /no resolvable review target/, "the original refusal still stands");
+    assert.match(out.reason, /ASK THE HUMAN/);
+    assert.doesNotMatch(out.reason, /no --target paths/, "a --target WAS given, so the refusal must not say otherwise");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- review findings on the first build pass, each pinned with the case that exposed it --------------------------
+
+test("a directory inside a NESTED repository lists that repository's files, under its own ignore rules", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-emit-nested-"));
+  const git = (cwd, ...a) => execFileSync("git", a, { cwd, stdio: "pipe", encoding: "utf8" });
+  try {
+    git(dir, "init", "-q", ".");
+    mkdirSync(join(dir, "inner/src"), { recursive: true });
+    git(join(dir, "inner"), "init", "-q", ".");
+    writeFileSync(join(dir, "inner/.gitignore"), "*.log\n");
+    writeFileSync(join(dir, "inner/src/h.js"), "h\n");
+    writeFileSync(join(dir, "inner/src/x.log"), "l\n");
+    // Asked from the outer repository's root, git lists nothing for this path, and before the fix both sets were
+    // empty: the files vanished from target AND skipped.
+    assert.deepEqual(resolveTarget(dir, ["inner/src"]), {
+      target: ["inner/src/h.js"],
+      skipped: [{ path: "inner/src/x.log", reason: "git-ignored" }],
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a directory the user NAMES is reviewed as named, even `node_modules/<pkg>`; exclusion applies only below it", () => {
+  const dir = kindsRepo();
+  try {
+    mkdirSync(join(dir, "src/node_modules/pkg/node_modules/dep"), { recursive: true });
+    writeFileSync(join(dir, "src/node_modules/pkg/node_modules/dep/d.js"), "d\n");
+    assert.deepEqual(resolveTarget(dir, ["src/node_modules/pkg"]), {
+      target: ["src/node_modules/pkg/i.js"],
+      skipped: [{ path: "src/node_modules/pkg/node_modules/", reason: "excluded-name" }],
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a NAMED symlinked directory is followed as named, the same way inside and outside a git work tree", () => {
+  const dir = kindsRepo();
+  try {
+    const expected = { target: ["src/link-dir/[id]/page.js"], skipped: [] };
+    assert.deepEqual(resolveTarget(dir, ["src/link-dir"]), expected, "git route");
+    rmSync(join(dir, ".git"), { recursive: true, force: true });
+    assert.deepEqual(resolveTarget(dir, ["src/link-dir"]), expected, "walk route");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

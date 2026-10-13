@@ -1,0 +1,55 @@
+{
+  "base": "f37eabe441cf4c3b0a2d8322af3c1bf0ca446a8b",
+  "inside": [
+    ".claude/commands/pharn-review.md",
+    ".dev/features/review-fanout/GRILL.md",
+    ".dev/features/review-fanout/MEASUREMENTS.md",
+    ".dev/features/review-fanout/PLAN.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-review-assignments.mjs",
+    "pharn/floor/check-review-assignments.test.mjs",
+    "pharn/floor/cli-stdout-flush.test.mjs",
+    "pharn/floor/code-scanner-cli.mjs",
+    "pharn/floor/code-scanner-cli.test.mjs",
+    "pharn/floor/render-review-assignments.mjs",
+    "pharn/floor/render-review-assignments.test.mjs",
+    "pharn/floor/scan-code-copy-paste-drift.mjs",
+    "pharn/floor/scan-code-crypto.mjs",
+    "pharn/floor/scan-code-deserialization.mjs",
+    "pharn/floor/scan-code-duplicated-logic.mjs",
+    "pharn/floor/scan-code-injection.mjs",
+    "pharn/floor/scan-code-magic-values.mjs",
+    "pharn/floor/scan-code-missing-await.mjs",
+    "pharn/floor/scan-code-missing-error-handling.mjs",
+    "pharn/floor/scan-code-missing-timeout.mjs",
+    "pharn/floor/scan-code-n-plus-one.mjs",
+    "pharn/floor/scan-code-null-deref.mjs",
+    "pharn/floor/scan-code-off-by-one.mjs",
+    "pharn/floor/scan-code-path-traversal.mjs",
+    "pharn/floor/scan-code-placeholder.mjs",
+    "pharn/floor/scan-code-resource-leak.mjs",
+    "pharn/floor/scan-code-secrets.mjs",
+    "pharn/floor/scan-code-ssrf.mjs",
+    "pharn/floor/scan-code-swallowed-exception.mjs",
+    "pharn/floor/stage-runtime.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

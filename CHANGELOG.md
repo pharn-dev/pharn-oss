@@ -31,7 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   file.**
   - What changed:
     - Every `pharn/floor/scan-code-*.mjs` scanner takes `--files <list | ->`, a NUL-separated path list, and prints
-      one `{"results":[…]}` document with one entry per path. The single-file mode is unchanged.
+      one `{"results":[…]}` document with one entry per path. In single-file mode stdout and the exit codes are
+      unchanged. The usage line now names `--files`, and, like every gated floor CLI, a scanner refuses on Node
+      older than 24.2 (exit 2).
     - The new `pharn/floor/code-scanner-cli.mjs` serves both modes for all 18 scanners. Each scanner keeps its
       detection in `scanText(text)`; no regex changed.
     - Each scanner now ends through `process.exitCode`, because a batch document far past 64 KiB is cut at 65,536
@@ -56,6 +58,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       set-equal to disk, each batch entry must equal that file's real single-file run. The corpus is 113 files: the
       75 lens eval cases, each scanner's source and tests, and a missing path. Every scanner must hit at least one
       file and miss at least one.
+    - **"Single-file unchanged" does not rest on that test**, which compares against the new single-file mode. It
+      rests on two other checks:
+      - the 18 per-scanner suites (446 tests), untouched by this change and green;
+      - a whitespace-insensitive diff of the scanners that shows no detection line changed — only the read, the
+        print and the wrapping in `scanText`.
     - **Its negative control:** a scanner that keeps its hit list at module level must be caught.
       `scan-code-placeholder.mjs` had exactly that shape until this change.
     - **★ one spawn, timeout, error** tests in `render-review-assignments.test.mjs`. The timeout test has a control:
@@ -75,13 +82,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       line can stall the injection, SSRF and path-traversal scanners in turn.
     - The time limit stops a hung scanner from stalling the prefilter. It does not stop a lens subagent that runs
       a scanner itself (TST-2 / TST-3 are not fixed here).
+    - The time limit is wall-clock. On a loaded machine the same tree can yield a different record, and the
+      difference is always toward review.
+    - One file whose scan throws ends that scanner's whole batch. The lens then gets a `scanner_failures` `error`
+      and every file in its review set. Per-file spawns lost only that file. No scanner has been seen to throw; the
+      loss is granularity, in the direction of more review.
 - **A directory review target skips git-ignored, binary, oversized and non-regular files, and the record lists each
   one.**
   - What changed: `render-review-assignments.mjs` now builds the target as follows.
     - **A named directory** expands, inside a git work tree, to what
-      `git --literal-pathspecs ls-files --cached --others --exclude-standard` lists. Outside one, it uses a walk
-      that never follows a symlink.
-    - **Paths under `.git` or `node_modules`** are dropped, as before.
+      `git --literal-pathspecs ls-files --cached --others --exclude-standard` lists. git is asked from that
+      directory, so a nested repository or a submodule answers with its own files and its own ignore rules.
+      Outside a work tree it uses a walk.
+    - **The named directory itself is followed as named.** No symlink below it is followed.
+    - **Paths under `.git` or `node_modules` below the named directory** are dropped, as before.
     - **Every file it finds**, from a directory and from the merge-base diff alike, is checked with `lstat`. It is
       skipped if it is not a regular file, larger than 512 KiB, or has a NUL byte in its first 8,000 bytes.
     - **A file named on the command line** is kept as named, which is how a user overrides a skip.
@@ -99,12 +113,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - binary, oversized and at-the-cap files;
     - a path with a space;
     - a directory named `[id]`;
-    - a non-git tree.
+    - a non-git tree;
+    - a directory inside a nested repository;
+    - a named `node_modules/<pkg>`;
+    - a named symlinked directory, by both routes.
 
     Mutants that judged files by following symlinks (`stat` instead of `lstat`), or that dropped
     `--literal-pathspecs`, each turn a test red.
 
-  - Not a claim: the skip rules are git's ignore rules and git's binary sniff. A skipped file is not judged safe.
+  - Not a claim:
+    - The skip rules are git's ignore rules and a NUL-byte sniff of the first 8,000 bytes. `.gitattributes` is not
+      read. A skipped file is not judged safe.
+    - The merge-base diff is still split on newlines, as before, so a path git prints quoted (a non-ASCII name)
+      never reaches the rules. Follow-up: `review-diff-nul`.
 
 ### Fixed
 

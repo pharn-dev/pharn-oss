@@ -306,7 +306,7 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
 - **Floor:** the lens→scanner map is consistent with disk — `lens-scanner-map.test.mjs`. **NARROWED:** it certifies
   the mapped scanner **file exists on disk** — never that it runs, matches, or works.
 - **Floor, when the record is the EMITTER'S OUTPUT:** which slice was ASSIGNED to which lens, which target
-  files no scanner-bound lens reached, which paths were skipped and why (git's ignore rules and binary sniff,
+  files no scanner-bound lens reached, which paths were skipped and why (git's ignore rules and a NUL-byte sniff,
   never a judgment that a skipped file is safe), and which scanner spawns failed — `render-review-assignments.mjs`,
   plus shape and internal consistency (`check-review-assignments.mjs`). **NOT VERIFIED:** that a record's values came from the emitter — nothing binds a
   record to its producer, and a record fabricated **consistently** satisfies every invariant — measured: a

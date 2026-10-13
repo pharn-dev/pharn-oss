@@ -42,17 +42,24 @@
 // then hands that lens its errored files to review (fail toward reviewing). The bound: the limits of the
 // scanners that hang ADD UP, because the spawns run one after another.
 //
-// WHAT A DIRECTORY TARGET EXPANDS TO (review-fanout). Inside a git work tree, the files
-// `git ls-files --cached --others --exclude-standard` lists for it — what the repository's ignore rules
-// drop is listed in `skipped` as `git-ignored` (an ignored directory once, with its trailing `/`).
-// Outside one (no git, or a path git refuses), a `readdirSync` walk that never follows a symlink. In both,
-// a path under a `.git` or `node_modules` directory is dropped and listed as `excluded-name`. Every
-// DISCOVERED file — from a directory, and from the merge-base diff — is then judged on the path itself
+// WHAT A DIRECTORY TARGET EXPANDS TO (review-fanout). Inside a git work tree — asked from the named directory, so a
+// nested repository or a submodule answers for itself — the files `git ls-files --cached --others
+// --exclude-standard` lists for it; what that repository's ignore rules drop is listed in `skipped` as `git-ignored`
+// (an ignored directory once, with its trailing `/`). Outside one (no git, or a directory git refuses), a
+// `readdirSync` walk. A path under a `.git` or `node_modules` directory BELOW the named one is dropped and listed as
+// `excluded-name`. The named directory itself is followed as named; nothing below it that is a symlink is followed.
+// Every DISCOVERED file — from a directory, and from the merge-base diff — is then judged on the path itself
 // (`lstatSync`, never a follow-call, L59): not a regular file → `not-a-regular-file`; larger than
-// MAX_TARGET_FILE_BYTES → `over-size-cap`; a NUL byte in its first BINARY_SNIFF_BYTES (git's own binary
-// heuristic) → `binary`. A path the user names as a FILE is kept as named, unfiltered: that is how a file
-// the rules above would drop gets reviewed. The rules are git's and git's sniff, not a judgment that a
-// skipped file holds nothing worth reviewing.
+// MAX_TARGET_FILE_BYTES → `over-size-cap`; a NUL byte in its first BINARY_SNIFF_BYTES → `binary` (git's
+// content heuristic and window; git's `.gitattributes` are NOT read, so a file an attribute marks binary, or
+// marks text despite a NUL, can be judged differently here). A path the user names as a FILE is kept as named,
+// unfiltered: that is how a file the rules above would drop gets reviewed. The rules are git's ignore rules and a
+// byte sniff, not a judgment that a skipped file holds nothing worth reviewing.
+//
+// NOT DETERMINISTIC IN ONE RESPECT, stated because the paragraphs above call every field derivable: the per-spawn
+// time limit is wall-clock, so on a loaded machine a scanner that finishes on a quiet one can time out, and the same
+// tree can then yield a different record. The difference always falls toward review (`scanner_failures`, every file
+// errored for that lens), never toward a narrower slice.
 //
 // FAIL-CLOSED, BOTH EDGES (P5 — the terminal fallback is refuse/ask, never a guess):
 //   - No resolvable target -> exit non-zero, WRITE NOTHING. /pharn-review's Step 1 third branch is "ask
@@ -110,8 +117,8 @@ export const SCANNER_FAILURE_ENUM = Object.freeze(["error", "timeout"]);
 // the 836 KB CHANGELOG.md (prose) and keeps the largest code file (a 347 KB test). A lens reads its files whole.
 export const MAX_TARGET_FILE_BYTES = 512 * 1024;
 
-// A discovered file with a NUL byte in its first this-many bytes is skipped (`binary`) — git's own heuristic and
-// its own window (FIRST_FEW_BYTES in git's xdiff), so a file git shows as binary is binary here.
+// A discovered file with a NUL byte in its first this-many bytes is skipped (`binary`) — git's content heuristic and
+// its window (FIRST_FEW_BYTES in git's xdiff). `.gitattributes` are not read, so it can disagree with git there.
 export const BINARY_SNIFF_BYTES = 8000;
 
 // The per-spawn time limit: BASE + PER_KIB × the target's size in KiB. Measured on 2026-10-13: the slowest scanner
@@ -162,23 +169,25 @@ export function readRegisteredLenses(repoDir) {
 
 const toPosix = (p) => p.split(sep).join("/");
 
-// The listed form of the first `.git` / `node_modules` segment of a repo-relative POSIX path — the directory, with
-// its trailing `/` — or null when the path has none. A last segment so named is the entry itself (a worktree's
-// `.git` FILE), listed without the slash.
-function excludedPrefix(rel) {
-  const segs = rel.split("/");
+// The listed form of the first `.git` / `node_modules` segment of a path RELATIVE TO THE NAMED DIRECTORY — the
+// directory, with its trailing `/` — or null when the path has none. Only segments BELOW the named directory count:
+// a directory the user names is reviewed as named, even one called `node_modules`. A last segment so named is the
+// entry itself (a worktree's `.git` FILE), listed without the slash.
+function excludedPrefix(below) {
+  const segs = below.split("/");
   for (let i = 0; i < segs.length; i++) {
     if (EXCLUDED_NAMES.includes(segs[i])) return segs.slice(0, i + 1).join("/") + (i < segs.length - 1 ? "/" : "");
   }
   return null;
 }
 
-// Is `repoDir` inside a git work tree? A failure of the question itself — git absent, not a repository — is "no",
-// which lands on the readdir walk: never an empty or a crashed resolution.
-function insideGitWorkTree(repoDir) {
+// Is `dir` inside a git work tree? Asked FROM the named directory, so a nested repository or a submodule answers for
+// itself. A failure of the question itself — git absent, not a repository — is "no", which lands on the readdir
+// walk: never an empty or a crashed resolution.
+function insideGitWorkTree(dir) {
   try {
     const out = execFileSync("git", ["rev-parse", "--is-inside-work-tree"], {
-      cwd: repoDir,
+      cwd: dir,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -188,11 +197,11 @@ function insideGitWorkTree(repoDir) {
   }
 }
 
-// `git ls-files -z <args>` from `repoDir`, as repo-relative paths. `--literal-pathspecs`: a target named
-// `app/[id]` is a directory, never a glob. Throws on any git failure; the caller falls back to the walk.
-function gitListFiles(repoDir, args) {
+// `git ls-files -z <args>` run FROM `cwd`, as paths relative to it. `--literal-pathspecs`: no pathspec is ever read
+// as a glob. Throws on any git failure; the caller falls back to the walk.
+function gitListFiles(cwd, args) {
   const out = execFileSync("git", ["--literal-pathspecs", "ls-files", "-z", ...args], {
-    cwd: repoDir,
+    cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
     maxBuffer: MAX_BUFFER,
@@ -202,30 +211,38 @@ function gitListFiles(repoDir, args) {
 
 // Expand a DIRECTORY target to the repo-relative POSIX paths under it, pushing what the expansion itself drops into
 // `skipped` (git-ignored, excluded-name). The files returned are still to be classified (classifyPath).
+//
+// git runs FROM the named directory with the pathspec `.`, so the repository that answers is the one that owns that
+// directory: a nested repository or a submodule lists its own files under its own ignore rules. Asked from the outer
+// repository's root instead, git lists nothing for a path inside a nested repository, and the files vanished from
+// both `target` and `skipped` (found by this increment's review). The named directory itself is followed as named,
+// like a named file; nothing BELOW it that is a symlink is followed (classifyPath lists such a path).
 function expandDirectory(repoDir, entry, skipped) {
+  const absEntry = join(repoDir, entry);
+  const entryRel = toPosix(relative(repoDir, absEntry));
+  const fromEntry = (p) => (entryRel === "" ? p : `${entryRel}/${p}`);
   const fromGit = (() => {
-    if (!insideGitWorkTree(repoDir)) return null;
+    if (!insideGitWorkTree(absEntry)) return null;
     try {
       return {
-        files: gitListFiles(repoDir, ["--cached", "--others", "--exclude-standard", "--", entry]),
-        ignored: gitListFiles(repoDir, ["--others", "--ignored", "--exclude-standard", "--directory", "--", entry]),
+        files: gitListFiles(absEntry, ["--cached", "--others", "--exclude-standard", "--", "."]),
+        ignored: gitListFiles(absEntry, ["--others", "--ignored", "--exclude-standard", "--directory", "--", "."]),
       };
     } catch {
-      return null; // a path git refuses (outside the repository, say) — the walk below decides it
+      return null; // git refused the directory — the walk below decides it
     }
   })();
   const kept = [];
-  const excludeOrKeep = (rel) => {
-    const prefix = excludedPrefix(rel);
-    if (prefix === null) kept.push(rel);
-    else skipped.push({ path: prefix, reason: "excluded-name" });
-  };
   if (fromGit !== null) {
     for (const p of fromGit.ignored) {
       const prefix = excludedPrefix(p);
-      skipped.push(prefix === null ? { path: p, reason: "git-ignored" } : { path: prefix, reason: "excluded-name" });
+      skipped.push(prefix === null ? { path: fromEntry(p), reason: "git-ignored" } : { path: fromEntry(prefix), reason: "excluded-name" });
     }
-    for (const p of fromGit.files) excludeOrKeep(p);
+    for (const p of fromGit.files) {
+      const prefix = excludedPrefix(p);
+      if (prefix === null) kept.push(fromEntry(p));
+      else skipped.push({ path: fromEntry(prefix), reason: "excluded-name" });
+    }
     return kept;
   }
   const walk = (abs) => {
@@ -246,10 +263,10 @@ function expandDirectory(repoDir, entry, skipped) {
       }
       if (EXCLUDED_NAMES.includes(nm)) skipped.push({ path: rel + (st.isDirectory() ? "/" : ""), reason: "excluded-name" });
       else if (st.isDirectory()) walk(p);
-      else excludeOrKeep(rel); // a symlink is an entry here, never followed — classifyPath lists it
+      else kept.push(rel); // a symlink is an entry here, never followed — classifyPath lists it
     }
   };
-  walk(join(repoDir, entry));
+  walk(absEntry);
   return kept;
 }
 
@@ -483,16 +500,16 @@ export function unassignedScannerBound(target, assignments) {
 // The refusal when nothing resolved. When files WERE found and every one was skipped, it says so by reason and
 // names the override, so the person who named a directory is not left with "nothing found".
 function emptyTargetReason(skipped) {
-  const base =
-    "no resolvable review target (no --target paths, and the git merge-base diff yielded nothing). " +
+  const refusal =
     "Refusing to emit an empty-target record: /pharn-review Step 1's third branch is ASK THE HUMAN, " +
     "which this emitter structurally cannot do (P5).";
-  if (skipped.length === 0) return base;
+  if (skipped.length === 0) {
+    return `no resolvable review target (no --target paths, and the git merge-base diff yielded nothing). ${refusal}`;
+  }
   const counts = SKIP_REASON_ENUM.map((r) => [r, skipped.filter((s) => s.reason === r).length]).filter(([, n]) => n > 0);
   return (
-    `no reviewable file in the target: every path found was skipped (${counts.map(([r, n]) => `${n} ${r}`).join(", ")}). ` +
-    "Name a file with --target to review it as named, or ask the human for another target. " +
-    base
+    `no resolvable review target: every path found was skipped (${counts.map(([r, n]) => `${n} ${r}`).join(", ")}). ` +
+    `Name a file with --target to review it as named, or ask the human for another target. ${refusal}`
   );
 }
 
@@ -517,8 +534,10 @@ export function renderAssignments(name, opts = {}) {
     feature: name,
     generated_by: "pharn/floor/render-review-assignments.mjs",
     target,
-    // Every path the resolution found and did not assign, with why (SKIP_REASON_ENUM). Empty is the normal state
-    // for a diff of source files; a directory target usually lists its ignored directories here.
+    // Every path the resolution judged and did not assign, with why (SKIP_REASON_ENUM). Empty is the normal state
+    // for a diff of source files; a directory target usually lists its ignored directories here. NOT listed: a path
+    // the merge-base diff names that no longer exists, and one `git diff --name-only` prints quoted (a non-ASCII
+    // name) — that listing is newline-split, as before this change, so such a path never reaches the judging.
     skipped,
     lenses_registered: lenses,
     assignments,
