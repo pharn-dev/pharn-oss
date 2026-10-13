@@ -18,10 +18,11 @@ reads:
     "pharn/floor/check-spec.mjs",
     "pharn/floor/check-plan-lessons.mjs",
     "pharn/floor/grill-scan.mjs",
+    "pharn/floor/griller-extract.mjs",
   ]
 writes: ["pharn/features/<name>/GRILL.md"]
 constitution_refs: ["P0", "P1", "P2", "P4", "P5", "P6", "P7"]
-version: "0.3.1"
+version: "0.4.0"
 ---
 
 # /pharn-grill — re-verify the spec→plan chain, then interrogate the plan
@@ -224,17 +225,21 @@ Beyond the interrogation axes above, `/pharn-grill` discovers and runs **griller
 `role: griller` capabilities that each interrogate the plan along **one axis** (testability,
 architecture, security, …) — only on a GREEN chain (after Step 2).
 
-- **Discover by deterministic membership (P5), never a prose grep:**
+- **Load every registered griller (P5 membership via `count-grillers.mjs`, never a prose grep):**
 
   ```bash
-  node pharn/floor/count-grillers.mjs .
+  node pharn/floor/griller-extract.mjs .
   ```
 
-  It reads `role: griller` from `---`-fenced frontmatter only and prints
-  `{"registered":<int>,"grillers":[<path>,...]}`.
+  Every registered griller still runs; only two sections a grill never uses are left out of each, its
+  `## Guarantee audit` and `## Machine-readable emission` (188,978 → 141,332 B over the 13 grillers at 6.59.0). Choosing
+  grillers per plan from scanner hits was measured and rejected (the CLI's header). Exit 0 → its first line is
+  `GRILL.md`'s `grillers:` line; read nothing else of the grillers. Any other exit → read in full every file
+  `node pharn/floor/count-grillers.mjs .` lists, and record `grillers: extract NOT run (griller-extract.mjs exit <n>)`.
 
-- **Run each registered griller** over `pharn/features/<name>/PLAN.md` — apply its procedure inline — and fold its
-  findings (the `finding-shape` objects, split honored) into the grill-log (Step 4), grouped by axis.
+- **Run each griller** over `pharn/features/<name>/PLAN.md` — apply its procedure inline — and fold its findings (the
+  `finding-shape` objects, split honored) into the grill-log (Step 4), grouped by axis. A griller's findings, or none,
+  never mean the plan is secure, private, accessible or otherwise sound on that axis.
 - **Grillers gate nothing:** griller findings never flip either deterministic stop.
 
 ## Finding output (the enum-gated / free-text split — `finding-shape.md`, cited not restated, P4)
@@ -279,7 +284,7 @@ makes **no** claim about the plan's quality. (Then **HALT**, as that step direct
 
 - a one-line **header** — which plan, and **both FLOOR results**: `chain: GREEN (verified by
 pharn/floor/check-plan-spec-agree.mjs) · lessons: GREEN (verified by pharn/floor/check-plan-lessons.mjs)`;
-- Step 3's `skills:` line;
+- Step 3's `skills:` line and Step 3b's `grillers:` line;
 - the **findings** (the YAML objects above, grouped by axis), each with the split honored — or an explicit
   "no findings" if the plan is clean;
 - a **prose summary** of the concerns; and
@@ -327,7 +332,8 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
 - **Floor:** it writes only `pharn/features/<name>/GRILL.md` — the fix #7 hook.
 - **Floor-grade enumeration that gates nothing:** the installed-skill catalogue (`catalogue-installed-skills.mjs`;
   which bodies are read is advisory) and the
-  registered grillers (`count-grillers.mjs`); under `--floor-only`, each `scan-plan-*` verdict (a fixed regex set),
+  registered grillers (`count-grillers.mjs`), each printed by `griller-extract.mjs` less a closed set of sections
+  (that those sections hold nothing a grill needs is advisory); under `--floor-only`, each `scan-plan-*` verdict (a fixed regex set),
   read and shape-checked by `grill-scan.mjs` — its findings advisory, and never "the plan is secure".
 - **Advisory:** invoking each checker and obeying its exit code (the verdict is floor; the act is orchestration);
   the interrogation, the installed-skills consideration and every griller — model judgment that never gates. Whether

@@ -1,0 +1,33 @@
+{
+  "base": "791d20537314989c25f4f1e4a04193626087d59b",
+  "inside": [
+    ".claude/commands/pharn-grill.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    ".dev/features/grill-griller-trim/GRILL.md",
+    ".dev/features/grill-griller-trim/MEASUREMENTS.md",
+    ".dev/features/grill-griller-trim/PLAN.md",
+    ".dev/features/grill-griller-trim/measure.mjs",
+    "pharn/floor/griller-extract.mjs",
+    "pharn/floor/griller-extract.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
