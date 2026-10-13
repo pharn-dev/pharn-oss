@@ -55,14 +55,17 @@
 //   its VERIFY_VERDICTS set would treat it as unknown → INCONCLUSIVE, fail-closed — bounded, not silent.)
 //
 // HONEST SCOPE (P0/P7): the verdict is a deterministic function of the gate exit codes its caller
-// captures — and, with `--ac-gate`, of the AC gate's reading of the per-test records and the lock. "verified"
+// captures — on the `--stamp` path (6.59.0) also of each run's `timed_out` flag, since a run the runner killed or
+// could not start is not measured — and, with `--ac-gate`, of the AC gate's reading of the per-test records and the
+// lock. "verified"
 // therefore means EXACTLY "the named gates passed" (plus, with `--ac-gate` over a test-first SPEC, "every AC's
 // locked, once-red test passed") — NOT "the feature is correct."
 // Correctness beyond what those gates check is the ADVISORY verifier layer's concern, and that layer
 // never gates this number. Said plainly, not hidden.
 //
 // TRUST (P2): without `--ac-gate`, every operand is produced by deterministic tooling — gate-ids (strings) and
-// exit codes (ints): the enum-gated / floor-verifiable class. The `--feature` value is a path/name string. NO
+// exit codes (ints), plus, on the `--stamp` path (6.59.0), each run's `timed_out` boolean the runner recorded: the
+// enum-gated / floor-verifiable class. The `--feature` value is a path/name string. NO
 // verifier finding (`problem`/`evidence`) is ever read — the helper's INPUT cannot even carry one. Inputs are
 // JSON.parsed and used ONLY as string/int operands — never eval'd, executed, spawned, imported, or sent anywhere.
 // No child process, no network. WITH `--ac-gate` (6.20.0) that is no longer the whole input, and saying otherwise

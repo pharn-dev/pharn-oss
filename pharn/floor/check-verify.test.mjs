@@ -1,7 +1,8 @@
 // pharn/floor/check-verify.test.mjs — hermetic tests for the deterministic verify-verdict core.
 //
-// NO `claude -p`, NO git, NO network. The verdict reads ONE small { gate-id: exit-code } results map we
-// compose in an os.tmpdir() scratch dir. We assert the public surface (exit code + stdout JSON) by
+// NO `claude -p`, NO network, and no git EXCEPT one test: the 6.59.0 live GATE-1 pin initialises a scratch git
+// repository in os.tmpdir() and drives the real run-gates.mjs there. The verdict reads ONE small
+// { gate-id: exit-code } results map we compose in an os.tmpdir() scratch dir. We assert the public surface (exit code + stdout JSON) by
 // subprocess, mirroring check-regress.test.mjs / check-variance.test.mjs / check-structural.test.mjs.
 //
 // The ★ tests are load-bearing — they are the whole reason /verify's verdict is FLOOR, not judgment:
@@ -550,7 +551,9 @@ test("★ GATE-1 pin, live — the REAL runner records a SIGTERM-trapping gate a
     const init = sh(process.execPath, [RG, "init", "--stage", "verify", "--feature", "demo", "--out", ".pharn/v", "--gates", gates]);
     assert.equal(init.status, 0, init.stdout + init.stderr);
     for (let i = 0; i < 10; i++) {
-      const r = sh(process.execPath, [RG, "run", "--next", "--out", ".pharn/v", "--timeout-ms", "1000"]);
+      // 3000 ms (GATE-2 review F1): wide enough that a loaded machine's /bin/sh has installed its trap before the
+      // group SIGTERM lands, so the premise below is never a load artifact.
+      const r = sh(process.execPath, [RG, "run", "--next", "--out", ".pharn/v", "--timeout-ms", "3000"]);
       assert.equal(r.status, 0, r.stdout + r.stderr);
       if (JSON.parse(r.stdout).finalized) break;
     }
