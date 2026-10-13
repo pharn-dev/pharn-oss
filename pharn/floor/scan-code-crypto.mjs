@@ -98,17 +98,23 @@ if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
 //       every word the same treatment: `iv` gains the camelCase reach the other ten always had.
 //       `myIv = Math.random()` is precisely what this kind exists to catch, so the widening is the point.
 //
-// COST, re-derived for THIS form and measured, never inherited from the form it replaced: the pattern is
-// `(?=.*RNG)(?=.*SECMAT)`, and `(?=.*X)` re-scans from every start index, so the per-line cost is
-// QUADRATIC in line length — a property the pattern already had before this anchoring, unchanged by it.
-// There is no exponential path: the branches are literal-prefixed and disjoint, each carries at most one
-// `s?`, and no quantifier nests over an ambiguous alternation. The durable claim is the RATIO: on the
-// worst-case line (RNG present so the first lookahead succeeds, no security-material segment so the
-// second fails at every start index) the 4x branch growth costs ~1.2x, not 4x. The absolute figures
-// behind that ratio — 203.9 ms -> 251.2 ms at 20 KB — are a ONE-MACHINE OBSERVATION taken 2026-08-20,
-// not a maintained bound: nothing re-measures them and hardware drift will falsify them silently. What
-// IS pinned is a MEMBERSHIP test (completed vs. killed under a subprocess timeout), never a stopwatch
-// compared to a threshold — the timeout is also what keeps a red TERMINATING rather than hanging.
+// COST, re-derived for THIS form (6.58.1), never inherited from the form it replaced. The pattern is
+// `^(?=.*RNG)(?=.*SECMAT)` under the `m` flag. Through 6.58.0 it had no `^`, and `(?=.*X)` re-scanned from
+// EVERY start index, so a line with no hit cost O(n²): 40 KB of `a.b.b.b…` took ~1 s, and every 200 KB
+// fixture of the 2026-10-12 review was killed at 20 s (TST-1). With the anchor the lookaheads run
+// only where multiline `^` holds, at index 0 and right after a line terminator. Each run between
+// terminators is scanned once per lookahead, so a line costs O(n). It still has no exponential path:
+// the branches are literal-prefixed and disjoint, each carries at most one `s?`, and no quantifier nests
+// over an ambiguous alternation. The 2026-08-20 figures (the 4x branch growth cost ~1.2x, 203.9 ms ->
+// 251.2 ms at 20 KB) measured the superseded unanchored form and say nothing about this one.
+// SAME LINES MATCH, and why: `.` excludes exactly the four line terminators (\n, \r, U+2028, U+2029),
+// and multiline `^` holds exactly at index 0 and after one of those four. So the old form succeeded at
+// a start `i` iff it succeeds at the start of i's terminator-free run. A start ON a terminator never
+// succeeded, because both conjuncts begin with a letter. The lookbehinds and `\b` read the whole string,
+// whatever the start. A bare `^` WITHOUT `m` is not equivalent: it would drop a hit after a lone `\r` or a
+// U+2028 inside one split line. What IS pinned is a MEMBERSHIP test (completed vs. killed under a
+// subprocess timeout, the ★ ReDoS test), never a stopwatch compared to a threshold. The timeout is also
+// what keeps a red TERMINATING rather than hanging.
 //
 // DELIBERATE DIVERGENCE, stated so a later reader does not read it as drift: `hardcoded-iv-salt` below
 // keeps its own `\b(?:iv|salt|nonce)\b` anchoring and does NOT use this matcher. It matches an ASSIGNMENT
@@ -164,10 +170,15 @@ const PATTERNS = [
   // blocks `Cipher\(`. Flags the API misuse regardless of the algorithm string.
   { kind: "deprecated-createcipher", re: /\bcreate(?:Cipher|Decipher)\(/ },
   // ECB block-cipher mode (semantically insecure regardless of cipher): `aes-256-ecb`, `.../ECB/...`, MODE_ECB.
+  // Linear as written: `\b` holds only at a word's edges, so `[a-z0-9]+` starts at most once per word. Timed
+  // alone on 2026-10-13, 800 KB alnum runs took a few ms; the ★ ReDoS test pins a long run before `-ecb`.
   { kind: "ecb-mode", re: /\b[a-z0-9]+-ecb\b|["'][A-Za-z0-9]+\/ECB\//i },
   // Non-crypto RNG used for SECURITY MATERIAL: Math.random() on a line ALSO naming a token/secret/key/etc
-  // as an identifier SEGMENT (see SECMAT above). No `i` flag — the segment branches read case.
-  { kind: "insecure-random", re: new RegExp(`(?=.*\\b${ci("Math")}\\.${ci("random")}\\s*\\()(?=.*${SECMAT})`) },
+  // as an identifier SEGMENT (see SECMAT above). No `i` flag — the segment branches read case. The
+  // leading `^` keeps it linear in line length; the `m` flag keeps it matching the same lines (see COST
+  // above). Without `^` the lookaheads run from every index again; without `m` a hit after a lone `\r` or
+  // a U+2028 is lost.
+  { kind: "insecure-random", re: new RegExp(`^(?=.*\\b${ci("Math")}\\.${ci("random")}\\s*\\()(?=.*${SECMAT})`, "m") },
   // Hardcoded IV / salt / nonce: an iv|salt|nonce-named field assigned a LITERAL (quoted string, a
   // Buffer.from("...") over a quoted literal, a new Uint8Array([...]) byte array, or a `[0x..]` array) —
   // rather than a freshly generated value (crypto.randomBytes(...) is a TRUE-NEGATIVE, not flagged).
