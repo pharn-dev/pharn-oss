@@ -244,7 +244,8 @@ test("the case fold refuses only the control surface: ordinary mixed-case paths 
 
 test("--allow-claude-dir opts back in: the same PLAN succeeds and the entry survives in scope", () => {
   const cwd = tmp();
-  const r = setter(cwd, "--from-plan", planWith(cwd, ".claude/settings.json", "src/legit.ts"), "--allow-claude-dir");
+  // 6.59.0: the operator flag goes BEFORE the mode (OPERATOR FLAGS in the setter's header); after it, it is refused.
+  const r = setter(cwd, "--allow-claude-dir", "--from-plan", planWith(cwd, ".claude/settings.json", "src/legit.ts"));
   assert.equal(r.status, 0);
   const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, [".claude/settings.json", "src/legit.ts"]);
@@ -635,4 +636,330 @@ test("--clear surfaces a non-ENOENT unlink failure as an error, never as a silen
   assert.notEqual(r.status, 0, "a non-ENOENT failure must not report success");
   assert.match(r.stderr, /could not clear \.pharn\/writes-scope\.json/);
   assert.doesNotMatch(r.stdout, /writes-scope cleared/, "it must not claim to have cleared anything");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// 6.59.0 (loop-scope-hardening — review findings SEC-1, SEC-3, ENF-1 of 2026-10-12). Four additions to the setter,
+// each pinned here: (1) OPERATOR FLAGS precede the mode; (2) an INSTALLED project's `--from-plan` scope refuses
+// PHARN's own surface unless --allow-pharn-surface; (3) a PROMOTION-origin scope is refused while a /pharn-loop
+// marker is open; (4) the `## Files` reader skips fenced code (the shared fixture list lives in
+// pharn/floor/check-build-complete.test.mjs's ★ PARITY case; F3/F3b are repeated here against the setter alone).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+const scopeOf = (cwd) => {
+  const f = join(cwd, ".pharn", "writes-scope.json");
+  return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")).scope : null;
+};
+
+function seedInstalled(cwd, skillsVersion = "6.59.0") {
+  fs.writeFileSync(join(cwd, "pharn.config.json"), JSON.stringify({ skillsVersion }) + "\n");
+  return cwd;
+}
+
+// (1) OPERATOR FLAGS — both opt-ins, after the mode, in both modes: refused, nothing written.
+for (const flag of ["--allow-claude-dir", "--allow-pharn-surface"]) {
+  test(`${flag} AFTER the mode is REFUSED and writes nothing (a granted line's trailing * cannot carry it)`, () => {
+    const cwd = tmp();
+    const r = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts"), flag);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, new RegExp(`${flag} must come BEFORE the mode`));
+    assert.equal(scopeOf(cwd), null);
+    const before = setter(cwd, flag, "--from-plan", planWith(cwd, "src/a.ts"));
+    assert.equal(before.status, 0, `control: the same flag BEFORE the mode is accepted: ${before.stderr}`);
+  });
+}
+
+test("the usage line advertises --allow-pharn-surface, both opt-ins before the mode", () => {
+  const r = setter(tmp());
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /usage: set-writes-scope\.cjs \[--allow-claude-dir\] \[--allow-pharn-surface\] \(--from-frontmatter/);
+});
+
+// (2) PHARN'S OWN INSTALLED SURFACE — the members enforce-writes-scope.cjs's isReserved() names, re-spellings
+// included, and the controls on each side of the boundary.
+const RESERVED_MEMBERS = [
+  "pharn/floor/x.mjs",
+  "pharn/floor/check-loop.mjs",
+  "pharn/pharn-core/x.md",
+  "pharn/CONSTITUTION.md",
+  ".claude/commands/x.md",
+  ".claude/skills/x/SKILL.md",
+  "pharn.config.json",
+  "PHARN/Floor/x.mjs",
+  "pharn/floor./x.mjs",
+  "pharn/features./x.md",
+  "./pharn/floor/x.mjs",
+];
+for (const p of RESERVED_MEMBERS) {
+  test(`installed project: --from-plan naming ${p} is REFUSED and writes nothing`, () => {
+    const cwd = seedInstalled(tmp());
+    const r = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts", p));
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stderr, /refusing to scope PHARN's own installed files from a plan/);
+    assert.ok(r.stderr.includes(p), "the offending entry is named");
+    assert.equal(scopeOf(cwd), null);
+  });
+}
+
+test("installed project: the refusal names how a person proceeds — a hand edit or the flag BEFORE the mode, never Bash", () => {
+  const cwd = seedInstalled(tmp());
+  const r = setter(cwd, "--from-plan", planWith(cwd, ".claude/skills/x/SKILL.md"));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /your own \.claude\/ commands or skills included/);
+  assert.match(r.stderr, /edit it yourself, outside the agent/);
+  assert.match(r.stderr, /--allow-pharn-surface placed BEFORE --from-plan/);
+  assert.match(r.stderr, /pharn update/);
+  assert.doesNotMatch(r.stderr, /Bash/);
+});
+
+test("installed project: pharn/features/** and ordinary source are NOT refused", () => {
+  const cwd = seedInstalled(tmp());
+  const r = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts", "pharn/features/feat/notes.md", "pharnx/y.md", "lib/pharn/z.md"));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(scopeOf(cwd), ["src/a.ts", "pharn/features/feat/notes.md", "pharnx/y.md", "lib/pharn/z.md"]);
+});
+
+test("installed project: --allow-pharn-surface (before the mode) opts back in, and the entry survives in scope", () => {
+  const cwd = seedInstalled(tmp());
+  const r = setter(
+    cwd,
+    "--allow-pharn-surface",
+    "--from-plan",
+    planWith(cwd, "src/a.ts", "pharn/floor/x.mjs", ".claude/skills/x/SKILL.md")
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(scopeOf(cwd), ["src/a.ts", "pharn/floor/x.mjs", ".claude/skills/x/SKILL.md"]);
+});
+
+test("installed project: --allow-pharn-surface does NOT open the control surface — --allow-claude-dir still governs it", () => {
+  const cwd = seedInstalled(tmp());
+  const r = setter(cwd, "--allow-pharn-surface", "--from-plan", planWith(cwd, ".claude/settings.json"));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /refusing to scope the write-guards' own control surface/);
+  const both = setter(cwd, "--allow-claude-dir", "--allow-pharn-surface", "--from-plan", planWith(cwd, ".claude/settings.json"));
+  assert.equal(both.status, 0, both.stderr);
+});
+
+test("the dev checkout and an unsignalled tree are UNCHANGED: the same plan is scoped as before", () => {
+  for (const seed of [(d) => seedDevRepo(d), (d) => d, (d) => seedInstalled(d, "")]) {
+    const cwd = seed(tmp());
+    const r = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts", "pharn/floor/x.mjs", ".claude/commands/x.md"));
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(scopeOf(cwd), ["src/a.ts", "pharn/floor/x.mjs", ".claude/commands/x.md"]);
+  }
+});
+
+test("a pharn.config.json that is a symlink, a directory, or not JSON is not an install (enforce's own reading)", () => {
+  const targets = tmp();
+  fs.writeFileSync(join(targets, "real.json"), JSON.stringify({ skillsVersion: "6.59.0" }));
+  for (const seed of [
+    (d) => fs.symlinkSync(join(targets, "real.json"), join(d, "pharn.config.json")),
+    (d) => fs.mkdirSync(join(d, "pharn.config.json")),
+    (d) => fs.writeFileSync(join(d, "pharn.config.json"), "{ not json"),
+  ]) {
+    const cwd = tmp();
+    seed(cwd);
+    const r = setter(cwd, "--from-plan", planWith(cwd, "pharn/floor/x.mjs"));
+    assert.equal(r.status, 0, r.stderr);
+  }
+});
+
+test("--from-frontmatter is unchanged in an installed project (the refusal is --from-plan's)", () => {
+  const cwd = seedInstalled(tmp());
+  const cap = join(cwd, "cap.md");
+  fs.writeFileSync(cap, ["---", 'writes: [".claude/commands/x.md"]', "---", ""].join("\n"));
+  const r = setter(cwd, "--from-frontmatter", cap);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(scopeOf(cwd), [".claude/commands/x.md"]);
+});
+
+// (3) PROMOTION ORIGIN WHILE A /pharn-loop RUN IS OPEN — every marker state enforce's scanRuns() distinguishes.
+const PROMOTE_PRODUCT = join(__dirname, "..", "commands", "pharn-memory-promote.md");
+
+function promoteTree() {
+  const cwd = tmp();
+  fs.mkdirSync(join(cwd, ".claude", "commands"), { recursive: true });
+  fs.copyFileSync(PROMOTE_PRODUCT, join(cwd, ".claude", "commands", "pharn-memory-promote.md"));
+  fs.copyFileSync(
+    join(__dirname, "..", "commands", "pharn-dev-memory-promote.md"),
+    join(cwd, ".claude", "commands", "pharn-dev-memory-promote.md")
+  );
+  return cwd;
+}
+function openLoopMarker(cwd, name = "feat", ageMs = 0) {
+  const dir = join(cwd, ".pharn", "pharn-loop", name);
+  fs.mkdirSync(dir, { recursive: true });
+  const f = join(dir, "active.json");
+  fs.writeFileSync(f, "{}\n");
+  if (ageMs) {
+    const t = new Date(Date.now() - ageMs);
+    fs.utimesSync(f, t, t);
+  }
+}
+const promote = (cwd, file = ".claude/commands/pharn-memory-promote.md", target = "memory-bank/lessons-learned.md") =>
+  setter(cwd, "--from-frontmatter", file, "--target", target);
+
+test("promotion origin with a FRESH /pharn-loop marker is REFUSED; the message names the marker and its close command", () => {
+  const cwd = promoteTree();
+  openLoopMarker(cwd, "feat");
+  const r = promote(cwd);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /refusing a memory-bank promotion scope while a \/pharn-loop run is open/);
+  assert.match(r.stderr, /\.pharn\/pharn-loop\/feat\/active\.json/);
+  assert.match(r.stderr, /node \.claude\/hooks\/require-loop-record\.cjs --close feat/);
+  assert.equal(scopeOf(cwd), null);
+});
+
+test("promotion origin: no marker, or one older than 24 h, is NOT a run — the promotion scope is set (controls)", () => {
+  const none = promoteTree();
+  assert.equal(promote(none).status, 0);
+  assert.deepEqual(scopeOf(none), ["memory-bank/lessons-learned.md"]);
+  const stale = promoteTree();
+  openLoopMarker(stale, "old", 26 * 3600 * 1000);
+  const r = promote(stale);
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("promotion origin: a FILE planted where .pharn/pharn-loop belongs keeps the refusal standing (cannot rule a run out)", () => {
+  const cwd = promoteTree();
+  fs.mkdirSync(join(cwd, ".pharn"), { recursive: true });
+  fs.writeFileSync(join(cwd, ".pharn", "pharn-loop"), "x");
+  const r = promote(cwd);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /\.pharn\/pharn-loop — not a readable run-state entry/);
+});
+
+test("promotion origin: a non-slug marker directory is never rendered by name", () => {
+  const cwd = promoteTree();
+  openLoopMarker(cwd, "Evil Name");
+  const r = promote(cwd);
+  assert.equal(r.status, 1);
+  assert.doesNotMatch(r.stderr, /Evil Name/);
+  assert.match(r.stderr, /whose directory name is not a plain slug/);
+});
+
+test("promotion origin: BOTH promote commands, and a re-spelled one, are refused during a loop", () => {
+  for (const file of [
+    ".claude/commands/pharn-memory-promote.md",
+    ".claude/commands/pharn-dev-memory-promote.md",
+    "./.claude/commands/pharn-memory-promote.md",
+  ]) {
+    const cwd = promoteTree();
+    openLoopMarker(cwd);
+    const target = file.includes("dev") ? ".dev/memory-bank/lessons-learned.md" : "memory-bank/lessons-learned.md";
+    const r = promote(cwd, file, target);
+    assert.equal(r.status, 1, `${file}: ${r.stdout}`);
+    assert.match(r.stderr, /while a \/pharn-loop run is open/);
+  }
+});
+
+test("a NON-promotion origin is unaffected by an open loop marker (the loop's own lines keep working)", () => {
+  const cwd = promoteTree();
+  openLoopMarker(cwd);
+  const r = setter(cwd, "--from-frontmatter", PLAN_PRODUCT_CMD, "--target", "pharn/features/feat/PLAN.md");
+  assert.equal(r.status, 0, r.stderr);
+  const p = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts"));
+  assert.equal(p.status, 0, p.stderr);
+});
+
+// SEC-3 end to end — the refusal exists only because protect-trusted-paths.cjs unlocks canon on a promote-origin record.
+test("★ SEC-3 composition: a refused promotion leaves no record, so the canon Write is denied; without a loop it is allowed", () => {
+  const sb = promoteTree();
+  fs.mkdirSync(join(sb, ".claude", "hooks"), { recursive: true });
+  fs.symlinkSync(PROTECT_HOOK, join(sb, ".claude", "hooks", "protect-trusted-paths.cjs"));
+  fs.mkdirSync(join(sb, "memory-bank"), { recursive: true });
+  fs.writeFileSync(join(sb, "memory-bank", "lessons-learned.md"), "# canon\n");
+  const write = () =>
+    spawnSync(process.execPath, [join(sb, ".claude", "hooks", "protect-trusted-paths.cjs")], {
+      cwd: sb,
+      encoding: "utf8",
+      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "memory-bank/lessons-learned.md" } }),
+    });
+  openLoopMarker(sb);
+  assert.equal(promote(sb).status, 1, "the setter refuses during the loop");
+  const denied = write();
+  assert.equal(denied.status, 2, "no promote-origin record exists, so canon stays denied");
+  assert.match(denied.stderr, /memory-bank CANON/);
+  fs.rmSync(join(sb, ".pharn", "pharn-loop"), { recursive: true, force: true });
+  assert.equal(promote(sb).status, 0, "control: with no loop open the promotion scope is set");
+  assert.equal(write().status, 0, "control: and the canon Write it authorizes passes the hook");
+});
+
+// (4) FENCED CODE — F3 / F3b against the setter alone (the shared list: check-build-complete.test.mjs).
+test("F3: a fenced example list under ## Files is not scoped", () => {
+  const cwd = tmp();
+  const plan = join(cwd, "PLAN.md");
+  fs.writeFileSync(
+    plan,
+    [
+      "## Files",
+      "- `src/a.ts` — the only file",
+      "",
+      "```text",
+      "- `pharn/floor/validate.mjs` — example",
+      "- `.claude/commands/pharn-build.md` — example",
+      "```",
+      "",
+    ].join("\n")
+  );
+  const r = setter(cwd, "--from-plan", plan);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(scopeOf(cwd), ["src/a.ts"]);
+});
+
+test("F3b: a fenced ## Files before the real one is not the list", () => {
+  const cwd = tmp();
+  const plan = join(cwd, "PLAN.md");
+  fs.writeFileSync(
+    plan,
+    [
+      "## Context",
+      "",
+      "```markdown",
+      "## Files",
+      "- `pharn/floor/validate.mjs`",
+      "```",
+      "",
+      "## Files",
+      "- `src/a.ts` — the real one",
+      "",
+    ].join("\n")
+  );
+  const r = setter(cwd, "--from-plan", plan);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(scopeOf(cwd), ["src/a.ts"]);
+});
+
+test("a nesting-dependent fence is REFUSED with the remedy, and nothing is written", () => {
+  const cwd = tmp();
+  const plan = join(cwd, "PLAN.md");
+  fs.writeFileSync(plan, ["## Files", "- `src/a.ts`", "  - sub:", "    ```", "    - `pharn/floor/evil.mjs`", "    ```", ""].join("\n"));
+  const r = setter(cwd, "--from-plan", plan);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /indent each fence's opening and\s+closing lines alike, at most three spaces/);
+  assert.equal(scopeOf(cwd), null);
+});
+
+// ✧ PINS — the copies this setter carries (L31): toKey()/isReserved() byte-equal to enforce-writes-scope.cjs's,
+// PROMOTE_COMMANDS set-equal to protect-trusted-paths.cjs's.
+function fnSource(file, name) {
+  const m = fs.readFileSync(file, "utf8").match(new RegExp(`^function ${name}\\(rel\\) \\{[\\s\\S]*?\\n\\}`, "m"));
+  assert.ok(m, `${file} must declare a top-level \`function ${name}(rel) { … }\``);
+  return m[0];
+}
+test("✧ PIN: the setter's toKey() and isReserved() are byte-equal to enforce-writes-scope.cjs's", () => {
+  for (const name of ["toKey", "isReserved"]) {
+    assert.equal(fnSource(SETTER, name), fnSource(ENFORCE, name), `${name}() has drifted — update both copies (L31)`);
+  }
+});
+test("✧ PIN: the setter's PROMOTE_COMMANDS equal protect-trusted-paths.cjs's (the origins the canon escape trusts)", () => {
+  // Both declare it on ONE line, so arrayEntries()'s multi-line form does not apply.
+  const entries = (file) => {
+    const m = fs.readFileSync(file, "utf8").match(/^const PROMOTE_COMMANDS = \[([^\]]*)\];/m);
+    assert.ok(m, `${file} must declare a top-level \`const PROMOTE_COMMANDS = [ … ];\``);
+    return (m[1].match(/"([^"]*)"/g) || []).map((s) => s.slice(1, -1));
+  };
+  const mine = entries(SETTER);
+  assert.equal(mine.length, 2, "non-vacuous: both promote commands");
+  assert.deepEqual([...mine].sort(), [...entries(PROTECT_HOOK)].sort());
 });

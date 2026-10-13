@@ -49,6 +49,27 @@
 // item is a path-item to BOTH parsers, so it is treated as DECLARED, not excluded. The section-level
 // `### Explicitly not touched` heading is the form that actually excludes.
 //
+// ── FENCED CODE (6.59.0, loop-scope-hardening — review finding ENF-1) ────────────────────────────────
+// Before 6.59.0 neither this reader nor the setter tracked code fences: a fenced "illustrative" list under
+// `## Files` entered the scope, and a fenced `## Files` earlier in the file became the list while the real one
+// was ignored (both reproduced by fixture). Now a fence line and every line inside an open fence are skipped
+// entirely — never the heading, never an item, never a heading break, never an exclusion cue — except that a
+// blank fenced line still closes an open item body, so the wrapped-continuation exemption never widens.
+// A FENCE LINE is optional leading spaces/tabs, a run of three or more backticks or tildes, then the rest; a
+// backtick run whose rest holds a backtick is inline code, never a fence (CommonMark). A closer is a fence
+// line of the opener's character, at least as long, with a blank rest.
+// THE DUAL READING. Whether a fence line indented four or more columns is a fence depends on list nesting,
+// which this reader does not track. So it reads the plan twice — `nested: false` counts a fence line only at
+// 0–3 spaces (CommonMark's top-level rule); `nested: true` counts it at any indentation, and a bare closer
+// indented LESS than its opener ends that block and opens another (what happens when a list item ends under a
+// fence) — and REFUSES when the two lists differ. Measured over the 281 committed PLAN.md / AC-TESTS.md files
+// at 6.59.0: every one reads identically both ways, and identically to the pre-6.59.0 reader.
+// BOUND (P0): this is NOT a CommonMark parser. An indented code block (a 4+-space item line after a paragraph
+// and a blank line), an HTML block or comment holding a fence line, a setext heading and a `*`/`+` bullet are
+// read as their lines look, not as a renderer shows them. The rule is held across the copy-pair by ★ PARITY
+// fixtures, not by a differential test against a renderer. `fenceStates` is exported so a second reader of a
+// PLAN section (render-ship-briefing.mjs) uses the same rule rather than its own toggle.
+//
 // ── NO CROSS-TREE IMPORT (P3) ────────────────────────────────────────────────────────────────────────
 // Nothing here imports from `.dev/`. That tree is the build apparatus, excluded wholesale at packaging
 // ("ship root minus .dev/"), so a product-floor module importing from it would be GREEN in this repo and
@@ -129,13 +150,68 @@ export const DELETE_NEAR_MISS_RE = /^\s*-\s+`[^`]+`[ \t]*\(\s*delete[sd]?\s*\)/i
  */
 export function pathsFromPlanFiles(text) {
   const lines = text.split(/\r?\n/);
-  const start = lines.findIndex((l) => /^##\s+Files\b/.test(l));
-  if (start === -1) return { ok: false, reason: "no `## Files` heading" };
+  const top = readPlanFiles(lines, false);
+  const nested = readPlanFiles(lines, true);
+  // The comparison is the setter's own: the heading's index and the path list, in order.
+  if (JSON.stringify([top.start, top.out]) !== JSON.stringify([nested.start, nested.out])) {
+    return { ok: false, reason: AMBIGUOUS_FENCE_REASON };
+  }
+  if (top.start === -1) return { ok: false, reason: "no `## Files` heading" };
+  return { ok: true, value: top.out, entries: top.entries };
+}
+
+/** The refusal when the two readings differ (see FENCED CODE in the header). */
+export const AMBIGUOUS_FENCE_REASON =
+  "the `## Files` list reads differently depending on whether a code fence sits inside a list item (a fence line indented four or more columns, or a closing fence indented less than its opening one) — indent each fence's opening and closing lines alike, at most three spaces, in and before `## Files`";
+
+/** A fence line: indentation, a run of 3+ backticks or tildes, the rest (see FENCED CODE in the header). */
+const FENCE_LINE_RE = /^([ \t]*)(`{3,}|~{3,})(.*)$/;
+
+/**
+ * Per line, whether it is fenced code — a fence line itself, or a line inside an open fence — under one of the
+ * two readings (see FENCED CODE in the header). The same transitions as set-writes-scope.cjs's `readPlanFiles`.
+ * @param {string[]} lines
+ * @param {boolean} [nested]  false: a fence line counts only at 0–3 spaces; true: at any indentation, and a bare
+ *   closer indented less than its opener ends that block and opens another
+ * @returns {boolean[]}
+ */
+export function fenceStates(lines, nested = false) {
+  const fenced = [];
+  let fence = null; // { char, len, indent } while a fenced block is open
+  for (const line of lines) {
+    const f = line.match(FENCE_LINE_RE);
+    if (f && !(f[2][0] === "`" && f[3].includes("`")) && (nested || /^ {0,3}$/.test(f[1]))) {
+      const char = f[2][0];
+      const closes = fence !== null && char === fence.char && f[2].length >= fence.len && f[3].trim() === "";
+      if (fence === null) fence = { char, len: f[2].length, indent: f[1].length };
+      else if (closes && (!nested || f[1].length >= fence.indent)) fence = null;
+      else if (closes) fence = { char, len: f[2].length, indent: f[1].length }; // a list item ended; a new block opens
+      fenced.push(true);
+      continue;
+    }
+    fenced.push(fence !== null);
+  }
+  return fenced;
+}
+
+/** ONE reading of the `## Files` list: the heading's index (-1 when absent), the paths, and their entries. */
+function readPlanFiles(lines, nested) {
+  const fenced = fenceStates(lines, nested);
+  let start = -1;
   const out = [];
   const entries = [];
   let inPathItemBody = false;
-  for (let i = start + 1; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (fenced[i]) {
+      // Fenced code is never a heading, an item or a cue — but a blank line still closes an item's body.
+      if (start !== -1 && !line.trim()) inPathItemBody = false;
+      continue;
+    }
+    if (start === -1) {
+      if (/^##\s+Files\b/.test(line)) start = i;
+      continue;
+    }
     // Boundary 1 — STRUCTURAL.
     if (/^\s{0,3}#{1,6}\s/.test(line)) break;
     // Boundary 2 — CUE fallback, with the path-item, blockquote and wrapped-continuation exemptions (the
@@ -160,5 +236,5 @@ export function pathsFromPlanFiles(text) {
       entries.push({ path: m[1].trim(), line, delete: del, deleteNearMiss: !del && DELETE_NEAR_MISS_RE.test(line) });
     }
   }
-  return { ok: true, value: out, entries };
+  return { start, out, entries };
 }

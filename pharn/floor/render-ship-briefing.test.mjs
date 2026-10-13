@@ -439,6 +439,47 @@ test("no `## Files` / `## Contracts satisfied` sections -> honest placeholder te
   }
 });
 
+// 6.59.0 (loop-scope-hardening): the section extractor uses plan-files-core.mjs's fence rule, the one the writes-scope
+// is parsed with. Under the old open/close toggle a ``` line inside a ~~~ block "closed" it, so the `## Example`
+// line after it ended the `## Files` section and the real item below the block was cut from the briefing while the
+// setter still scoped it. Negative control, run once against the pre-6.59.0 renderer: this test fails there
+// (the `src/after.ts` assertion), and passes here.
+test("★ the `## Files` section is fenced by the scope's own rule — a ``` line inside a ~~~ block does not close it", () => {
+  const base = scratchDir();
+  try {
+    const plan = [
+      "# PLAN — feat",
+      "",
+      "- spec_content_hash: abc",
+      "",
+      "## Files",
+      "",
+      "- `src/before.ts` — first",
+      "",
+      "~~~markdown",
+      "```",
+      "## Example",
+      "- `not/a/path.ts` — quoted",
+      "```",
+      "~~~",
+      "",
+      "- `src/after.ts` — after the block",
+      "",
+      "## Contracts satisfied",
+      "",
+      "- none",
+      "",
+    ].join("\n");
+    writeFeature(base, "feat", { "PLAN.md": plan });
+    const r = renderBriefing("feat", { base });
+    assert.equal(r.ok, true);
+    assert.match(r.markdown, /src\/before\.ts/);
+    assert.match(r.markdown, /src\/after\.ts/, "the item after the fenced block belongs to the section");
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("ADVISORY_HEADING is exported with its exact contracted string (pharn-contracts/ship-briefing.md)", () => {
   assert.equal(ADVISORY_HEADING, "## Why this design (ADVISORY — model-synthesized, not floor-verified; see PLAN.md/GRILL.md)");
 });

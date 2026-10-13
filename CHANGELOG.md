@@ -23,6 +23,70 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.59.0] - 2026-10-13
+
+### Security
+
+- **An unattended `/pharn-loop` can no longer run a script its own plan wrote into PHARN's floor without a prompt,
+  and can no longer open the memory-bank canon write through a pre-approved line.**
+  - What changed:
+    - `.claude/commands/pharn-loop.md` (0.13.0): the `allowed-tools` grant is now the 84 exact shell lines the
+      loop, its two parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`,
+      `/pharn-plan`, `/pharn-test`, `/pharn-build`) pin, each placeholder a `*`. The prefix grants
+      `Bash(node pharn/floor/*)` and `Bash(node .claude/hooks/*)` are gone, and so are `echo *`, `cat .pharn/*`,
+      `git rev-parse *`, `git symbolic-ref *`, `git status *` and `mkdir -p .pharn/*`, whose wildcards let an agent
+      choose a redirection's content and target.
+    - `.claude/hooks/set-writes-scope.cjs` (human-applied): in an installed project (`pharn.config.json` has a
+      `skillsVersion`), a `--from-plan` scope naming PHARN's own files — `pharn/**` except `pharn/features/**`,
+      `.claude/**`, `pharn.config.json` — is refused unless the operator passes the new `--allow-pharn-surface`.
+      A scope whose origin is a memory-promote command is refused while a `/pharn-loop` run marker is open. Both
+      opt-in flags are honored only before the mode, so a pre-approved line's trailing `*` cannot carry one.
+  - Why: the 2026-10-12 review (SEC-1, SEC-3). A model-written PLAN could scope `pharn/floor/<anything>.mjs`, both
+    write guards allowed the Write, reconcile reported it in scope, and the 6.58.0 grant ran it with no prompt.
+    The same grant pre-approved the setter line whose argv unlocks a canon write in `protect-trusted-paths.cjs`.
+  - Corrects CHANGELOG [6.58.0]: "the grant does not widen what the run may write" was true and missed what it
+    widened — what the run may execute. The loop's grant bullet now says what the grant widens.
+  - Checked by: `.dev/floor/command-hygiene.test.mjs` requires the Bash grants to EQUAL the set derived from the
+    pinned lines (both directions), and checks that a new floor script, the promote setter line, a flag after the
+    mode, `reconcile-baseline.mjs --anchor` without `--by pharn-build`, and `echo` / `cat` / `git` redirections
+    into the floor are covered by no grant. `.claude/hooks/set-writes-scope.test.cjs` covers each refused member,
+    re-spellings included, the controls, the flag order, every marker state, and the canon write end to end
+    through `protect-trusted-paths.cjs`. ✧ tests pin the setter's copies of `toKey()` / `isReserved()` and
+    `PROMOTE_COMMANDS` to the hooks that own them.
+  - Not covered (ADVISORY):
+    - The loop still runs code the build wrote, with no prompt: its pinned gate lines run your project's tests.
+      Run an unattended loop only where that is acceptable (a sandbox, a container, a throwaway checkout).
+    - A `*` matches any text, so a pinned script runs with any arguments — including the inline build's exact
+      `reconcile-baseline.mjs --anchor --by pharn-build`, which can re-open the epoch (6.58.0 pre-approved it too).
+      A redirection on a granted line writes that script's output where Claude Code's Edit rules allow, outside
+      both PHARN guards. Whether Claude Code honors the grant, and whether it reaches a stage agent, is harness
+      behavior.
+    - `/pharn-build`'s seam-config `node -e` line is not in the grant and may prompt in an inline build, as under
+      6.58.0.
+    - The setter's refusals read argv and marker files: an agent holding Bash can pass an opt-in, delete a marker,
+      or write the scope record itself. Its tests are lexical (no symlink resolution). A tree whose
+      `pharn.config.json` is missing, malformed or a symlink is not an installed project to either guard.
+    - Refusal messages quote a plan's entries as written, control characters included.
+
+### Fixed
+
+- **A plan's `## Files` list no longer reads fenced code as paths.**
+  - What changed: `pharn/floor/plan-files-core.mjs` and the setter skip a fenced block: a fenced `## Files` before
+    the real one is not the list, and a fenced example under the list is not scope. The reader does not track list
+    nesting, so it reads the plan two ways — fence lines at 0–3 spaces only, or at any indentation — and refuses
+    when the two lists differ (setter exit 1, `check-build-complete.mjs` INCONCLUSIVE), naming the fix.
+    `pharn/floor/render-ship-briefing.mjs` now takes its fence rule from the core, so the briefing quotes the same
+    `## Files` lines the scope reads. `/pharn-plan` and `/pharn-build` say so in one sentence each.
+  - Why: review finding ENF-1. A fenced illustrative list scoped `pharn/floor/validate.mjs` and
+    `.claude/commands/pharn-build.md`; a fenced `## Files` earlier in the file dropped the real `src/a.ts`.
+  - Checked by: ★ PARITY fixtures in `pharn/floor/check-build-complete.test.mjs` run the checker and the real setter
+    over one fixture list, both refusing shapes included. All 283 committed PLAN.md / AC-TESTS.md files read
+    exactly as before.
+  - Not covered (ADVISORY): the reader is not a CommonMark parser. An indented code block, an HTML block or
+    comment holding a fence line, a setext heading and a `*`/`+` bullet are read as their lines look. The rule is
+    held by fixtures and a one-time markdown-it probe, not by a differential test. `render-ship-briefing.mjs` still
+    finds the section with its own heading pattern (`## Files` exactly, where the scope also accepts `## Files …`).
+
 ## [6.58.1] - 2026-10-13
 
 ### Changed

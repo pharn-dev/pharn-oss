@@ -166,6 +166,28 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   guard; it is an argv flag, so no declared file can set it for itself. The check is **lexical** (it
   normalizes `./` and `a/../`, but does not resolve symlinks) — it is the loud early failure, not the
   last line of defense.
+- **Three more refusals and a flag order (6.59.0, loop-scope-hardening — review SEC-1, SEC-3, ENF-1).** Each
+  writes nothing and exits 1:
+  - **PHARN's own installed surface, from a plan.** In an installed project (`pharn.config.json` at the setter's
+    cwd carries a non-empty `skillsVersion`), a `--from-plan` scope naming `pharn/**` except `pharn/features/**`,
+    `.claude/**` or `pharn.config.json` is refused — the set `enforce-writes-scope.cjs` reserves outside a run,
+    matched by byte-equal copies of its `toKey()` / `isReserved()` (✧-pinned). `--allow-pharn-surface` opts back in
+    (independent of `--allow-claude-dir`; a guard file needs that one too). The trigger: `/pharn-loop`'s 6.58.0
+    `Bash(node pharn/floor/*)` grant ran whatever a model-written plan scoped there. This dev checkout (no
+    `skillsVersion`) and an unsignalled tree are unchanged, so `/pharn-dev-build` scopes `pharn/floor/**` as before.
+  - **A promotion-origin scope while a `/pharn-loop` run is open.** `protect-trusted-paths.cjs` unlocks a canon
+    write for a record whose `set_by` folds to a promote command, and `set_by` is the setter's argv. While
+    `.pharn/pharn-loop/<name>/active.json` is present and under 24 h old (enforce's `scanRuns()` test, read-only;
+    an unreadable state dir counts as open), that origin is refused in every mode — the message names each marker
+    and its `require-loop-record.cjs --close <name>`.
+  - **Fenced code in `## Files`.** Fenced lines are never the heading, an item, a heading break or a cue. The
+    reader reads the plan twice (fence lines at 0–3 spaces only; or at any indent, a less-indented bare closer
+    reopening) and refuses when the two lists differ. `pharn/floor/plan-files-core.mjs` holds the same rule
+    (★ PARITY fixtures in `check-build-complete.test.mjs`). Not a CommonMark parser: indented code blocks, HTML
+    blocks/comments, setext headings and `*`/`+` bullets are read as their lines look.
+  - **Operator flags precede the mode.** `--allow-claude-dir` / `--allow-pharn-surface` after
+    `--from-plan` / `--from-frontmatter` is refused, so a pre-approved line ending in `*` cannot carry an opt-in.
+    Pass them first: `node .claude/hooks/set-writes-scope.cjs --allow-claude-dir --from-plan <PLAN.md>`.
 
 ## What under `.pharn/` is load-bearing
 
