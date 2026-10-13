@@ -23,6 +23,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-13: **Each product stage's load set now has a byte ceiling that `npm test` checks, and CI checks each pull
+  request's `CLAUDE.md` growth** (no `SKILLS_VERSION` bump: only `.dev/**`, CI, `package.json`, `CONTRIBUTING.md` and
+  this file change).
+  - Why: the 2026-10-12 review (CTX-2) found PHARN's own instruction load unbudgeted. Re-measured, half of that was
+    already covered: `COMMAND_BYTE_CEILINGS` caps every product command file, parts included. Two parts were not
+    covered:
+    - **What a stage reads beyond its file.** Full `/pharn-grill` applies 13 grillers (188,978 B, 258,995 B in
+      all), `/pharn-review` hands 22 lenses to subagents (341,324 B), `/pharn-ship` runs `/pharn-spec` inline
+      (147,718 B), and every stage reads the Constitution. Any of those files could grow, and a new "Read `X`" step
+      could be added, with every gate green.
+    - **This repo's own `CLAUDE.md`.** It went from 189 KB to 28 KB at 6.46.1, and nothing kept it there:
+      `check-instruction-files.mjs --growth` ran only inside a user's `/pharn-verify`.
+  - What changed:
+    - **New test.** `.dev/floor/stage-load-budget.test.mjs` sums each stage's load set:
+      - its command and parts;
+      - the PHARN files its text tells the model to read or follow (table `STAGE_LOADS`);
+      - every registered griller or lens;
+      - the stages its `ROUTE_POLICY` row runs inline.
+
+      Each total is held to `STAGE_LOAD_CEILINGS` (measured + 10%, rounded up to 512). A regex rule makes a new
+      "read / follow / load `pharn/…md`" step name its file in the table. Every failure names the row to add or the
+      ceiling to raise.
+
+    - **New CI step.** The **Instruction-growth check** step runs
+      `node pharn/floor/check-instruction-files.mjs --growth --base HEAD^1` on pull requests, with the 2,048 B
+      default budget read at the base.
+    - **New local script.** `npm run check:instruction-growth` runs the same check with `--base-rule`. It is not
+      part of `npm run check`.
+  - Not covered:
+    - What a model actually reads: a contract a step only cites, a `reads:` target, a part re-read after compaction,
+      repetition across subagents, and the project's own files are outside the numbers.
+    - Growth inside the 10% headroom (26–34 KB on the grill and review rows).
+    - A read the regex does not see, such as "Read the contract" or "each registered griller".
+    - The `pharn-dev-*` commands (follow-up `dev-command-slim`).
+    - Growth beyond what the instruction-growth gate measures: it is a verdict over its model of the loader
+      (`LIMITS.md` §3e), it runs on pull requests only, it is skipped by an admin merge, and a per-PR budget does not
+      bound growth spread over many PRs.
+
 ### Changed
 
 - 2026-10-12: **Refresh the README hero to the new Pharn OSS mark and simplify the project header.**

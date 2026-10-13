@@ -56,7 +56,24 @@ Since 6.32.0, `/pharn-loop` and `/pharn-ship` each keep text a run needs at only
 
 The test checks presence and limits, not whether a claim is true. If an increment genuinely needs a larger command, **raise the ceiling in the same PR** by editing `COMMAND_BYTE_CEILINGS`: take the command's measured byte size, add 10%, round up to the next multiple of 512 — never a quiet edit to turn a red test green. Rationale and bounds live in [`.dev/guides/product-commands.md`](./.dev/guides/product-commands.md) ("A product command keeps what a run executes…").
 
+A second budget, [`.dev/floor/stage-load-budget.test.mjs`](./.dev/floor/stage-load-budget.test.mjs), caps what each product **stage loads**, not just its file. A stage's load set is:
+
+- its command and parts;
+- every PHARN file its text tells the model to read, load or follow (the trusted docs, a contract, a core procedure), listed per stage in the test's `STAGE_LOADS` table;
+- the grillers or lenses it applies (every registered one);
+- for `/pharn-ship`, the `/pharn-spec` stage it runs inline.
+
+Each stage's total must stay at or below its row in `STAGE_LOAD_CEILINGS`, by the same rule (measured + 10%, rounded up to 512). A new "Read `pharn/…`" step, a grown contract, griller or lens, or a trusted-doc edit can turn it red. The failure message names the exact `STAGE_LOADS` or `STAGE_LOAD_CEILINGS` row to add or raise in your PR. It bounds the bytes PHARN's text instructs, never the bytes a run actually loads, and it sees only the read phrasings its header lists.
+
 `AGENTS.md` at the repo root is **gitignored** (a local Codex copy). It does not ship; if you use Codex here, regenerate it from `CLAUDE.md` when the latter moves. Since 6.46.1 the root `CLAUDE.md` is a short bootstrap whose index points at focused guides under [`.dev/guides/`](./.dev/guides/); an import of it carries those pointers, not the guides' text.
+
+### Growing `CLAUDE.md`
+
+`CLAUDE.md` is attached to every session in this repo, so CI limits how much one pull request may add to it. The **Instruction-growth check** step runs `node pharn/floor/check-instruction-files.mjs --growth --base HEAD^1` on every pull request. It counts the bytes your PR adds to the always-loaded set (here, `CLAUDE.md`; removals do not offset additions) and fails above `budget.instructionGrowthBytes` in `pharn.config.json` as it stood at the base, 2,048 bytes when unset, so a PR cannot raise its own budget.
+
+Locally, `npm run check:instruction-growth` runs the same check with `--base-rule`: a dirty tree is compared with `HEAD` (uncommitted growth only), a clean one with its merge-base with `origin/main`. It is **not** in `npm run check`, because without an `origin/main` it cannot pick a base and exits 2.
+
+The verdict is over the checker's model of what Claude Code loads, not over the loader itself ([`LIMITS.md`](./LIMITS.md) §3e). A per-PR budget does not bound growth spread over many PRs. It is also subject to the same CI bounds as the per-PR CHANGELOG check below (no direct pushes, admin merges, the PR's own copy of the checker).
 
 ### CHANGELOG entries
 

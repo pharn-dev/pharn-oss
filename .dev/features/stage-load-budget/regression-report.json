@@ -1,0 +1,31 @@
+{
+  "base": "8fe73d19d9108e089b35a4405b2ce552c2922ffc",
+  "inside": [
+    ".dev/guides/floor-gates.md",
+    ".dev/guides/product-commands.md",
+    ".github/workflows/ci.yml",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "package.json",
+    ".dev/features/stage-load-budget/GRILL.md",
+    ".dev/features/stage-load-budget/PLAN.md",
+    ".dev/floor/stage-load-budget.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
