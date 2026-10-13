@@ -18,7 +18,7 @@ reads:
   ]
 writes: ["<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>", "pharn/features/<name>/BUILD.md"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.2.2"
+version: "0.2.3"
 ---
 
 # /pharn-build — build the user's code from an Approved, un-drifted plan, within the plan's scope
@@ -96,9 +96,10 @@ Load the trusted prefix and obey it for the whole run:
    `/pharn-verify` later judges this build's writes against (`pharn/pharn-contracts/reconciliation-record.md`).
 
    - **HALT on a non-zero exit from EITHER line, BEFORE any write (fail-closed).** A non-zero exit from the
-     setter means it wrote **no scope** — the plan declares **no parseable `## Files`** (e.g. a malformed or
-     hand-written plan lacking `## Files` back-tick paths — see the note). **REFUSE:** tell the user the plan
-     declares no parseable writable scope and must be re-planned with a `## Files` section of back-tick paths.
+     setter means it wrote **no scope**, for the reason it printed: no parseable `## Files` (e.g. a malformed or
+     hand-written plan lacking `## Files` back-tick paths — see the note), a code fence it cannot read, or a path it
+     refuses (6.61.0: in an installed project, PHARN's own files). **REFUSE:** relay that reason; the plan must be
+     re-planned.
      A non-zero exit from the **anchor** (`--anchor`) means it found no usable scope to snapshot (D6, 6.24.0)
      — the same refuse applies, since the setter's own write did not leave a usable record for it to read. Do
      **not** proceed in either case — a leftover `.pharn/writes-scope.json` from an earlier command must never

@@ -309,6 +309,128 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
   }
 });
 
+// ── FENCED CODE (6.61.0, loop-scope-hardening — review finding ENF-1) ─────────────────────────────────────────
+// Neither `## Files` parser tracked code fences: F3 (a fenced "illustrative" list under `## Files`) scoped the fenced
+// paths, and F3b (a fenced `## Files` before the real one) made the fenced list THE list and dropped the real one.
+// FENCE_FIXTURES is the ONE list both parsers range over (L29/L31): for each, the setter's scope and this checker's
+// `declared` must agree with each other AND with `want` — a path list, or `REFUSED` (setter exit 1 + checker
+// INCONCLUSIVE exit 2, the dual reading disagreeing). Negative control, run once against the pre-6.61.0 core and
+// setter: F3 read 3 paths and F3b read ["pharn/floor/validate.mjs"], so both `want`s failed there.
+const REFUSED = "REFUSED";
+const FENCE_FIXTURES = [
+  {
+    name: "F3 — a fenced example list under ## Files is not scope",
+    plan: [
+      "## Files",
+      "- `src/a.ts` — the only file",
+      "",
+      "Example (illustrative only):",
+      "",
+      "```text",
+      "- `pharn/floor/validate.mjs` — example",
+      "- `.claude/commands/pharn-build.md` — example",
+      "```",
+      "",
+    ],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "F3b — a fenced ## Files before the real one is not the list",
+    plan: [
+      "---",
+      "spec_id: FEAT-1",
+      "---",
+      "## Context",
+      "",
+      "```markdown",
+      "## Files",
+      "- `pharn/floor/validate.mjs`",
+      "```",
+      "",
+      "## Files",
+      "- `src/a.ts` — the only real file",
+      "",
+    ],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a ``` line inside a ~~~ block does not close it",
+    plan: ["## Files", "- `src/a.ts`", "~~~", "```", "- `pharn/floor/evil.mjs`", "```", "~~~", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a four-backtick fence holds a three-backtick one",
+    plan: ["## Files", "- `src/a.ts`", "````md", "```", "- `pharn/floor/evil.mjs`", "```", "````", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "an unclosed fence hides the rest of the file",
+    plan: ["## Files", "- `src/a.ts`", "```", "- `pharn/floor/evil.mjs`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "an inline ```x``` line is code, not a fence",
+    plan: ["## Files", "- `src/a.ts`", "```x``` is inline code", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a fence inside a list item (two spaces) is still a fence",
+    plan: ["## Files", "- `src/a.ts` — shaped like:", "", "  ```ts", "  - `not/a/path.ts`", "  ```", "", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a fence nested four spaces deep is refused (its reading depends on list nesting)",
+    plan: [
+      "## Files",
+      "- `src/a.ts` — real",
+      "  - sub-item:",
+      "    ```text",
+      "    - `pharn/floor/evil.mjs`",
+      "    ```",
+      "- `src/b.ts`",
+      "",
+    ],
+    want: REFUSED,
+  },
+  {
+    name: "a closer indented less than its opener is refused",
+    plan: ["## Files", "- `src/a.ts` — real", "  ```", "  x", "```", "- `pharn/floor/evil.mjs`", "```", ""],
+    want: REFUSED,
+  },
+  {
+    name: "a 4-space fence line outside any list, read both ways alike, is not refused",
+    plan: ["## Context", "", "    ```", "```", "## Files", "- `pharn/floor/evil.mjs`", "```", "## Files", "- `src/a.ts`", "```", ""],
+    want: ["src/a.ts"],
+  },
+];
+
+test("★ PARITY: FENCE_FIXTURES — the setter's scope and the checker's `declared` agree, fixture by fixture (ENF-1)", () => {
+  assert.ok(FENCE_FIXTURES.length >= 10 && FENCE_FIXTURES.some((f) => f.want === REFUSED), "non-vacuous: both outcomes are exercised");
+  for (const fx of FENCE_FIXTURES) {
+    const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+    try {
+      const plan = join(root, "PLAN.md");
+      writeFileSync(plan, fx.plan.join("\n"));
+      const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+      const c = run([plan, root]);
+      if (fx.want === REFUSED) {
+        assert.equal(s.status, 1, `${fx.name}: the setter must refuse`);
+        assert.match(s.stderr, /reads differently depending on whether a code fence sits inside a list item/, fx.name);
+        assert.equal(c.status, 2, `${fx.name}: the checker must be INCONCLUSIVE`);
+        assert.equal(json(c).verdict, "inconclusive", fx.name);
+        assert.match(json(c).reason, /reads differently depending on whether a code fence sits inside a list item/, fx.name);
+      } else {
+        assert.equal(s.status, 0, `${fx.name}: setter failed: ${s.stderr}`);
+        const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+        assert.deepEqual(scope, fx.want, `${fx.name}: setter scope`);
+        assert.deepEqual(json(c).declared, fx.want, `${fx.name}: checker declared`);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 // ── PLAN-DECLARED DELETIONS (6.56.0, plan-declared-deletions) ─────────────────────────────────────────────
 // An item marked ``- `path` (delete)`` must be ABSENT after the build (lstat ENOENT — L54); unmarked items must
 // still exist. Every output keeps the capture shape stage-verify-core.mjs's checkCompleteness requires (GRILL G2).

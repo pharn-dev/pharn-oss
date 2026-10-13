@@ -57,7 +57,12 @@ const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathnam
 // `.dev/floor/command-family.test.mjs` holds the rules about WHERE a line must live.
 const PART_FILES = new Set(allParts(COMMANDS_DIR).map((p) => p.file));
 /** A command's text: its file plus its parts. A file with no parts reads as itself. */
-const commandText = (file) => commandFamilyText(COMMANDS_DIR, file);
+// The frontmatter `allowed-tools` list is a PERMISSION grant, not a line a run executes; since 6.61.0
+// (loop-scope-hardening) /pharn-loop's grant spells its pinned lines out in full, so every scanner that reads a command
+// for the lines it RUNS reads it without that list. The grant has its own tests (LOOP_RUN_FILES, below).
+const GRANT_LIST_RE = /^allowed-tools:\s*\[[\s\S]*?\n[ \t]*\]\n/m;
+const withoutGrant = (text) => text.replace(GRANT_LIST_RE, "");
+const commandText = (file) => withoutGrant(commandFamilyText(COMMANDS_DIR, file));
 
 // A region a command may mark to quote a rejected form for the historical record without tripping this
 // guard. Same mechanism as the `TYPE-ENUM:BEGIN/END` block in pharn-dev-memory-promote.md — the house
@@ -3926,7 +3931,7 @@ test("★ EXECUTED — every `--from-frontmatter … --target …` line in the c
   for (const file of readdirSync(COMMANDS_DIR)
     .filter((f) => f.endsWith(".md"))
     .sort()) {
-    const text = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    const text = withoutGrant(readFileSync(join(COMMANDS_DIR, file), "utf8")); // a grant's `*` is not a line to run
     // `<canon-file>` (the two memory-promote commands) is a member of that command's own `writes:` prefix; the
     // lessons file is the concrete member both promote to.
     const canon = file === "pharn-dev-memory-promote.md" ? ".dev/memory-bank/lessons-learned.md" : "memory-bank/lessons-learned.md";
@@ -4762,17 +4767,24 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 const COMMAND_BYTE_CEILINGS = Object.freeze({
   // build-gate-bounded: Step 4 pins build-gate.mjs's two lines and their exit mapping — 22,148 bytes measured at the
   // build, 132 over the old 22,016; raised by the rule (+10%, up to a multiple of 512). 22,722 after the review fixes.
-  "pharn-build.md": 24576,
+  // loop-scope-hardening (6.61.0): Step 3's setter-exit sentence names the setter's printed reason — 24,590 bytes
+  // measured, 14 over 24,576; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-build.md": 27136,
   // grill-griller-trim (6.60.0): Step 3b pins griller-extract.mjs, its whole-file fallback and the every-griller-still-runs
   // sentence — 23,796 bytes measured, 756 over 23,040; raised by the rule (+10%, up to a multiple of 512).
   "pharn-grill.md": 26624,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 47,664 bytes measured, 48 over 47,616 (the GATE-2
   // review's R1/R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
-  "pharn-loop.md": 52736,
+  // loop-scope-hardening (6.61.0): the `allowed-tools` grant became the 84 exact pinned lines of the loop's run and of
+  // the four stages it may run inline, plus the reworded grant bullet — 58,663 bytes measured after merging 6.59.0,
+  // 5,927 over 52,736; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-loop.md": 65024,
   "pharn-loop-close.md": 34816,
   "pharn-loop-quick.md": 12288,
   "pharn-memory-promote.md": 27648,
-  "pharn-plan.md": 24064,
+  // loop-scope-hardening (6.61.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —
+  // 24,152 bytes measured, 88 over 24,064; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-plan.md": 26624,
   "pharn-regress.md": 23040, // 6.49.0 entry-run-as-base-evidence: 20699 B measured + 10% → next 512 (was 20480)
   "pharn-review.md": 24064,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 40,551 bytes measured, 615 over 39,936 (the GATE-2
@@ -5512,14 +5524,37 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
 // FLOOR: string/regex membership over the committed text. NOT claimed: that Claude Code honors the grant, matches a
 // compound line or a trailing comment the way this split does, or passes it to a stage agent — harness behavior,
 // stated ADVISORY in the command.
+//
+// 6.61.0 (loop-scope-hardening — review findings SEC-1/SEC-3 of 2026-10-12): the grant is no longer a set of PREFIX
+// rules (`Bash(node pharn/floor/*)` pre-approved any file a model-written plan scoped under pharn/floor/, and
+// `Bash(node .claude/hooks/*)` the promotion-origin setter line that unlocks a canon write). Each Bash grant is now
+// EXACTLY one pinned subcommand with its `<placeholder>`s turned into `*` (`grantFor`), and the set is DERIVED: the
+// Bash grants must EQUAL the derived set (closure both ways, L36). The domain also gained the four stages the loop
+// may run INLINE in its own turn when routing falls back (`stage-agent.mjs start` exits 3) — their lines run in the
+// grant's turn, so leaving them out would stall an unattended run. One line is excluded by name (LOOP_GRANT_EXCLUDED).
 const LOOP_RUN_FILES = ["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md", "pharn-grill.md"];
+const LOOP_INLINE_STAGE_FILES = ["pharn-spec.md", "pharn-plan.md", "pharn-test.md", "pharn-build.md"];
 const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill"];
+// `/pharn-build`'s seam-config line: quoted JavaScript holding `;` and `|`, which the subcommand split reads as
+// separators; a `node -e` grant with a wildcard would pre-approve arbitrary code, and 6.58.0's prefix grants did not
+// cover it either. It may prompt in an inline build — stated in the command.
+const LOOP_GRANT_EXCLUDED = [{ file: "pharn-build.md", prefix: 'node -e "const fs=require(' }];
 
-/** The `allowed-tools` flow list from a command's frontmatter, or null when absent. */
+/** The `allowed-tools` flow list from a command's frontmatter, or null when absent. Entries are YAML scalars, double-
+ *  quoted (JSON escapes) or single-quoted (`''` escapes) — Prettier picks single quotes for an entry holding `"`. */
 function allowedTools(text) {
   const fm = text.match(/^---\n([\s\S]*?)\n---\n/);
-  const m = fm && fm[1].match(/^allowed-tools:\s*\[([\s\S]*?)\]/m);
-  return m ? [...m[1].matchAll(/"([^"]*)"/g)].map((x) => x[1]) : null;
+  const m = fm && fm[1].match(/^allowed-tools:\s*\[([\s\S]*?)\n\s*\]/m);
+  return m
+    ? [...m[1].matchAll(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'/g)].map((x) =>
+        x[0][0] === '"' ? JSON.parse(x[0]) : x[0].slice(1, -1).replace(/''/g, "'")
+      )
+    : null;
+}
+
+/** A pinned subcommand → its exact grant: each `'<placeholder>'` or `<placeholder>` becomes `*`, nothing else moves. */
+function grantFor(sub) {
+  return `Bash(${sub.replace(/'<[^>]+>'|<[^>]+>/g, "*")})`;
 }
 
 /** `Bash(<spec>)` → a whole-line regex; `*` matches any text, spaces included (Claude Code's rule syntax). */
@@ -5558,23 +5593,39 @@ function loopGrantOffenders(grants, lines) {
   return out;
 }
 
+const isExcludedLoopLine = (file, text) => LOOP_GRANT_EXCLUDED.some((x) => x.file === file && text.startsWith(x.prefix));
+
 const loopRunLines = () =>
-  LOOP_RUN_FILES.flatMap((file) =>
+  [...LOOP_RUN_FILES, ...LOOP_INLINE_STAGE_FILES].flatMap((file) =>
     shellLines(readFileSync(join(COMMANDS_DIR, file), "utf8"))
-      .filter((l) => l.kind === "fence")
+      .filter((l) => l.kind === "fence" && !isExcludedLoopLine(file, l.text))
       .map((l) => ({ file, ...l }))
   );
+
+/** The exact grant set the pinned lines derive (see grantFor). */
+const derivedLoopGrants = (lines) => [...new Set(lines.flatMap((l) => subcommands(l.text).map(grantFor)))].sort();
 
 test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line of its run, and no grant is unused", () => {
   const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
   assert.ok(Array.isArray(grants), "pharn-loop.md declares allowed-tools");
   const lines = loopRunLines();
-  for (const f of LOOP_RUN_FILES)
+  for (const f of [...LOOP_RUN_FILES, ...LOOP_INLINE_STAGE_FILES])
     assert.ok(
       lines.some((l) => l.file === f),
       `non-vacuous: ${f} pins at least one line`
     );
   assert.deepEqual(loopGrantOffenders(grants, lines), []);
+  // 6.61.0 closure (L36): the Bash grants ARE the derived exact set — no prefix rule, nothing wider, nothing missing.
+  assert.deepEqual([...grants.filter((g) => g.startsWith("Bash("))].sort(), derivedLoopGrants(lines));
+  // The exclusion is real and names exactly one pinned line (non-vacuous, L34/L60).
+  const excluded = LOOP_GRANT_EXCLUDED.flatMap(({ file }) =>
+    shellLines(readFileSync(join(COMMANDS_DIR, file), "utf8")).filter((l) => l.kind === "fence" && isExcludedLoopLine(file, l.text))
+  );
+  assert.equal(excluded.length, LOOP_GRANT_EXCLUDED.length, "each LOOP_GRANT_EXCLUDED entry matches exactly one pinned line");
+  // The scanners' view (withoutGrant, top of file) really drops the grant and nothing else of the frontmatter.
+  const raw = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
+  assert.equal(allowedTools(withoutGrant(raw)), null, "withoutGrant removes the allowed-tools list");
+  assert.match(withoutGrant(raw), /^writes: \[/m, "and keeps the rest of the frontmatter");
   // The non-Bash grants are a closed set: a new tool in the grant is a reviewed change, not a drift.
   assert.deepEqual(
     grants.filter((g) => !g.startsWith("Bash(")),
@@ -5601,6 +5652,33 @@ test("✧ loop-no-prompts: the grant rule DISCRIMINATES — uncovered lines and 
     loopGrantOffenders(grants, at("node pharn/floor/a.mjs")).some((o) => o.includes("is used by no")),
     "an unused grant fails"
   );
+});
+
+test("✧ loop-scope-hardening: the live grant pre-approves NO line outside the pinned set (SEC-1/SEC-3 negative controls)", () => {
+  const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
+  const res = grants.filter((g) => g.startsWith("Bash(")).map(bashGrantRe);
+  const covered = (line) => subcommands(line).every((sub) => res.some((re) => re.test(sub)));
+  // Each of these must stay a prompt (or the session's mode): none is a line the run pins.
+  for (const line of [
+    "node pharn/floor/new-script.mjs", // a floor file a model-written plan scoped
+    "node pharn/floor/x.mjs --feature a", // the same, with arguments shaped like a pinned line's
+    "node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-memory-promote.md --target memory-bank/lessons-learned.md",
+    "node .claude/hooks/set-writes-scope.cjs --allow-pharn-surface --from-plan pharn/features/x/PLAN.md",
+    "node .claude/hooks/enforce-writes-scope.cjs",
+    "node pharn/floor/reconcile-baseline.mjs --anchor",
+    "echo x > pharn/floor/check-loop.mjs",
+    "cat .pharn/x > pharn/floor/check-loop.mjs",
+    "git rev-parse HEAD > pharn/floor/check-loop.mjs",
+  ]) {
+    assert.equal(covered(line), false, `pre-approved but not pinned: ${line}`);
+  }
+  // Controls (L60): the same check covers real pinned lines, so the negatives above are not vacuous.
+  assert.ok(
+    covered("node pharn/floor/check-loop.mjs pharn/features/a/verify-report.json pharn/features/a/regression-report.json --iter 1 --cap 3")
+  );
+  assert.ok(covered("node .claude/hooks/set-writes-scope.cjs --clear"));
+  // And the 6.58.0 prefix grant WOULD have covered the first negative — the reason this test exists.
+  assert.ok(bashGrantRe("Bash(node pharn/floor/*)").test("node pharn/floor/new-script.mjs"));
 });
 
 test("✧ loop-no-prompts: /pharn-loop stops in plan mode before Step 1a (the ask tools stay unnamed — ASK_TOKEN_RE above)", () => {
