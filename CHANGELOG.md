@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.61.0] - 2026-10-13
+## [6.62.0] - 2026-10-13
 
 ### Added
 
@@ -137,6 +137,115 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     exactly as if it had found nothing. A timeout now makes that case reachable.
   - Not a claim (ADVISORY): spawning is orchestration, and nothing on the floor forces the spawn. The record
     (`scanner_failures`, I9) and the merge's `scanner-errored` label make a skipped spawn visible.
+
+## [6.61.0] - 2026-10-13
+
+### Security
+
+- **An unattended `/pharn-loop` can no longer run a script its own plan wrote into PHARN's floor without a prompt,
+  and can no longer open the memory-bank canon write through a pre-approved line.**
+  - What changed:
+    - `.claude/commands/pharn-loop.md` (0.13.0): the `allowed-tools` grant is now the 84 exact shell lines the
+      loop, its two parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`,
+      `/pharn-plan`, `/pharn-test`, `/pharn-build`) pin, each placeholder a `*`. The prefix grants
+      `Bash(node pharn/floor/*)` and `Bash(node .claude/hooks/*)` are gone, and so are `echo *`, `cat .pharn/*`,
+      `git rev-parse *`, `git symbolic-ref *`, `git status *` and `mkdir -p .pharn/*`, whose wildcards let an agent
+      choose a redirection's content and target.
+    - `.claude/hooks/set-writes-scope.cjs` (human-applied): in an installed project (`pharn.config.json` has a
+      `skillsVersion`), a `--from-plan` scope naming PHARN's own files — `pharn/**` except `pharn/features/**`,
+      `.claude/**`, `pharn.config.json` — is refused unless the operator passes the new `--allow-pharn-surface`.
+      A scope whose origin is a memory-promote command is refused while a `/pharn-loop` run marker is open. Both
+      opt-in flags are honored only before the mode, so a pre-approved line's trailing `*` cannot carry one.
+  - Why: the 2026-10-12 review (SEC-1, SEC-3). A model-written PLAN could scope `pharn/floor/<anything>.mjs`, both
+    write guards allowed the Write, reconcile reported it in scope, and the 6.58.0 grant ran it with no prompt.
+    The same grant pre-approved the setter line whose argv unlocks a canon write in `protect-trusted-paths.cjs`.
+  - Corrects CHANGELOG [6.58.0]: "the grant does not widen what the run may write" was true and missed what it
+    widened — what the run may execute. The loop's grant bullet now says what the grant widens.
+  - Checked by: `.dev/floor/command-hygiene.test.mjs` requires the Bash grants to EQUAL the set derived from the
+    pinned lines (both directions), and checks that a new floor script, the promote setter line, a flag after the
+    mode, `reconcile-baseline.mjs --anchor` without `--by pharn-build`, and `echo` / `cat` / `git` redirections
+    into the floor are covered by no grant. `.claude/hooks/set-writes-scope.test.cjs` covers each refused member,
+    re-spellings included, the controls, the flag order, every marker state, and the canon write end to end
+    through `protect-trusted-paths.cjs`. ✧ tests pin the setter's copies of `toKey()` / `isReserved()` and
+    `PROMOTE_COMMANDS` to the hooks that own them.
+  - Not covered (ADVISORY):
+    - The loop still runs code the build wrote, with no prompt: its pinned gate lines run your project's tests.
+      Run an unattended loop only where that is acceptable (a sandbox, a container, a throwaway checkout).
+    - A `*` matches any text, so a pinned script runs with any arguments — including the inline build's exact
+      `reconcile-baseline.mjs --anchor --by pharn-build`, which can re-open the epoch (6.58.0 pre-approved it too).
+      A redirection on a granted line writes that script's output where Claude Code's Edit rules allow, outside
+      both PHARN guards. Whether Claude Code honors the grant, and whether it reaches a stage agent, is harness
+      behavior.
+    - `/pharn-build`'s seam-config `node -e` line is not in the grant and may prompt in an inline build, as under
+      6.58.0.
+    - The setter's refusals read argv and marker files: an agent holding Bash can pass an opt-in, delete a marker,
+      or write the scope record itself. Its tests are lexical (no symlink resolution). A tree whose
+      `pharn.config.json` is missing, malformed or a symlink is not an installed project to either guard.
+    - Refusal messages quote a plan's entries as written, control characters included.
+
+### Fixed
+
+- **A plan's `## Files` list no longer reads fenced code as paths.**
+  - What changed: `pharn/floor/plan-files-core.mjs` and the setter skip a fenced block: a fenced `## Files` before
+    the real one is not the list, and a fenced example under the list is not scope. The reader does not track list
+    nesting, so it reads the plan two ways — fence lines at 0–3 spaces only, or at any indentation — and refuses
+    when the two lists differ (setter exit 1, `check-build-complete.mjs` INCONCLUSIVE), naming the fix.
+    `pharn/floor/render-ship-briefing.mjs` now takes its fence rule from the core, so the briefing quotes the same
+    `## Files` lines the scope reads. `/pharn-plan` and `/pharn-build` say so in one sentence each.
+  - Why: review finding ENF-1. A fenced illustrative list scoped `pharn/floor/validate.mjs` and
+    `.claude/commands/pharn-build.md`; a fenced `## Files` earlier in the file dropped the real `src/a.ts`.
+  - Checked by: ★ PARITY fixtures in `pharn/floor/check-build-complete.test.mjs` run the checker and the real setter
+    over one fixture list, both refusing shapes included. All 283 committed PLAN.md / AC-TESTS.md files read
+    exactly as before.
+  - Not covered (ADVISORY): the reader is not a CommonMark parser. An indented code block, an HTML block or
+    comment holding a fence line, a setext heading and a `*`/`+` bullet are read as their lines look. The rule is
+    held by fixtures and a one-time markdown-it probe, not by a differential test. `render-ship-briefing.mjs` still
+    finds the section with its own heading pattern (`## Files` exactly, where the scope also accepts `## Files …`).
+
+### Added
+
+- 2026-10-13: **Each product stage's load set now has a byte ceiling that `npm test` checks, and CI checks each pull
+  request's `CLAUDE.md` growth** (no `SKILLS_VERSION` bump: only `.dev/**`, CI, `package.json`, `CONTRIBUTING.md` and
+  this file change).
+  - Why: the 2026-10-12 review (CTX-2) found PHARN's own instruction load unbudgeted. Re-measured, half of that was
+    already covered: `COMMAND_BYTE_CEILINGS` caps every product command file, parts included. Two parts were not
+    covered:
+    - **What a stage reads beyond its file.** Full `/pharn-grill` applies 13 grillers (188,978 B, 258,995 B in
+      all), `/pharn-review` hands 22 lenses to subagents (341,324 B), `/pharn-ship` runs `/pharn-spec` inline
+      (147,718 B), and every stage reads the Constitution. Any of those files could grow, and a new "Read `X`" step
+      could be added, with every gate green.
+    - **This repo's own `CLAUDE.md`.** It went from 189 KB to 28 KB at 6.46.1, and nothing kept it there:
+      `check-instruction-files.mjs --growth` ran only inside a user's `/pharn-verify`.
+  - What changed:
+    - **New test.** `.dev/floor/stage-load-budget.test.mjs` sums each stage's load set:
+      - its command and parts;
+      - the PHARN files its text tells the model to read or follow (table `STAGE_LOADS`);
+      - every registered griller or lens;
+      - the stages its `ROUTE_POLICY` row runs inline.
+
+      Each total is held to `STAGE_LOAD_CEILINGS` (measured + 10%, rounded up to 512). A regex rule makes a new
+      "read / follow / load `pharn/…md`" step name its file in the table. Four of its six rules (L1 closure, L3
+      anchor, L4 budget, L5 read closure) print the exact `STAGE_LOADS` or `STAGE_LOAD_CEILINGS` row to add, edit or
+      raise. L2 (a listed file is missing) names the row only, and L6 (inline stages read from `ROUTE_POLICY`) names
+      the policy cell instead.
+
+    - **New CI step.** The **Instruction-growth check** step runs
+      `node pharn/floor/check-instruction-files.mjs --growth --base HEAD^1` on pull requests, with the 2,048 B
+      default budget read at the base. `.dev/floor/instruction-growth-wiring.test.mjs` pins the step and the npm
+      script, and runs the step's `node` line in a fixture repository.
+    - **New local script.** `npm run check:instruction-growth` runs the same check with `--base-rule`. It is not
+      part of `npm run check`.
+  - Not covered:
+    - What a model actually reads: a contract a step only cites, a `reads:` target, a part re-read after compaction,
+      repetition across subagents, and the project's own files are outside the numbers.
+    - Growth inside the 10% headroom (26–34 KB on the grill and review rows).
+    - A read the regex does not see, such as "Read the contract" or "each registered griller".
+    - That `loadSet` counts each path once: the dedupe control exercises a `Set`, so a regression there would
+      over-count, which is the safe direction.
+    - The `pharn-dev-*` commands (follow-up `dev-command-slim`).
+    - Growth beyond what the instruction-growth gate measures: it is a verdict over its model of the loader
+      (`LIMITS.md` §3e), it runs on pull requests only, it is skipped by an admin merge, and a per-PR budget does not
+      bound growth spread over many PRs.
 
 ## [6.60.1] - 2026-10-13
 

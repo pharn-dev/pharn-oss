@@ -61,6 +61,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { fenceStates } from "./plan-files-core.mjs";
 
 // The sentinel line emitted in `## Why this design` when the heading-scan finds nothing. A caller may
 // replace this EXACT string with a generated paragraph; tests and `check-ship-briefing.mjs` both key off
@@ -132,22 +133,18 @@ export function readHeaderField(text, field) {
 
 // Extract the body of the FIRST section whose heading line matches `headingTest(line)`, up to (not
 // including) the next heading of any level. Fenced blocks are tracked so a heading-looking line inside a
-// code block never starts or ends a section (L6) — a simple open/close TOGGLE (not full CommonMark
-// nesting-length pairing like check-loop-record.mjs's fenceOpens/fenceCloses): PLAN.md bodies in this
-// corpus do not nest mismatched fence lengths, and a full pairing implementation would be scope beyond
-// what this generator's inputs need (a deliberate, smaller-scope choice, not an oversight).
+// code block never starts or ends a section (L6). Since 6.61.0 (loop-scope-hardening) the fence rule is
+// plan-files-core.mjs's `fenceStates` — the rule the writes-scope is parsed with, top-level reading — instead
+// of this file's own open/close toggle, so the `## Files` section the human reads here is fenced exactly where
+// the scope's is (a ``` line inside a ~~~ block no longer closes it). A plan whose two readings differ never
+// reaches this renderer with a scope: the setter refuses it at build Step 0.
 function extractSection(body, headingTest) {
   const lines = body.split(/\r?\n/);
-  let inFence = false;
+  const fenced = fenceStates(lines);
   let collecting = false;
   const out = [];
-  for (const line of lines) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      if (collecting) out.push(line);
-      continue;
-    }
-    if (inFence) {
+  for (const [i, line] of lines.entries()) {
+    if (fenced[i]) {
       if (collecting) out.push(line);
       continue;
     }

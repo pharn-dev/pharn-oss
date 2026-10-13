@@ -292,8 +292,8 @@ mode exists.
 - `SKILLS_VERSION` — **EDIT.** One minor bump over main (a new shipped capability — the scanners' batch mode, the
   record's two fields, target filtering).
   - Planned as `6.58.1` → `6.59.0`.
-  - Main then took 6.59.0 (#345), 6.60.0 (#346) and 6.60.1 (#348), so at push this increment is `6.60.1` →
-    `6.61.0`.
+  - Main then took 6.59.0 (#345), 6.60.0 (#346), 6.60.1 (#348) and 6.61.0 (#349), so at push this increment is
+    `6.61.0` → `6.62.0`.
   - It is renumbered by diff, and again if main moves before merge.
 - `README.md` — **EDIT.** The version badge, and the generated `## Current state` floor-checker count (135 → 136,
   `npm run docs:generate`, a Bash write declared here).

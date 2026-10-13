@@ -122,7 +122,10 @@ test("✧ no other product command runs either skill helper or cites the selecti
   const offenders = [];
   for (const f of readdirSync(CMDS).filter((n) => n.startsWith("pharn-") && !n.startsWith("pharn-dev-") && n.endsWith(".md"))) {
     if (allowed.has(f)) continue;
-    const t = read(f);
+    // The frontmatter `allowed-tools` list is a permission, not a line the command runs: since 6.61.0 /pharn-loop's
+    // grant spells out the pinned lines of the stages it may run inline (/pharn-build's catalogue line among them).
+    // Stripped exactly as command-hygiene.test.mjs's withoutGrant does; the prose and fenced lines are still read.
+    const t = read(f).replace(/^allowed-tools:\s*\[[\s\S]*?\n[ \t]*\]\n/m, "");
     if (t.includes("catalogue-installed-skills") || t.includes("scan-installed-skills") || t.includes(SKILL)) offenders.push(f);
   }
   assert.deepEqual(offenders, []);
