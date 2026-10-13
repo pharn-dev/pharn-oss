@@ -16,7 +16,7 @@ reads:
   ]
 writes: [".pharn/pharn-verify/stage.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.6.0"
+version: "0.6.1"
 ---
 
 # /pharn-verify — did the feature get built CORRECTLY, in the user's codebase?
@@ -202,6 +202,10 @@ either way.
 - **Completeness** is captured by the runner (`check-build-complete.mjs`) outside the gate map, so an incomplete
   build is `INCOMPLETE` (exit-3-as-verdict, `/pharn-ship` Step 2b's one retry), never a red gate. A crashed
   completeness checker is `unusable child-crashed` before any gate runs.
+- **A gate the runner did not measure** (6.59.0) — killed at `--timeout-ms`, or unable to start (exit 126/127) — makes
+  the verdict `INCONCLUSIVE` (`reason_code` `gate-not-measured`, the gates named in `unmeasured_gates`), first in the
+  precedence: never a red gate, never a pass. Rule and bounds: the verify-report contract, "A gate that was not
+  measured".
 - **The runner injects `reconcile` last**, with the fixed argv `check-bash-reconcile.mjs --base . --require-baseline`,
   so it judges any tree write an earlier gate made; a detected escape makes the verdict `FAIL`. Its bounds are the
   contract's (`pharn/pharn-contracts/reconciliation-record.md`): git-ignored paths are outside the reconciled set,

@@ -47,7 +47,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.11.1"
+version: "0.11.2"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
@@ -544,7 +544,8 @@ GATE 2. `"INCOMPLETE"` (all gates green and no AC evidence red, but a plan-decla
 marked `(delete)` is still present — `.completeness.missing[]` / `.undeleted[]` names it; an AC not delivered yet, or an AC gate that could not measure the partial tree,
 rides along in `.ac_gate`) → **the single build-completion retry (Step 2b), EXACTLY once**. `"FAIL"` (a real gate
 red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so this is **never** retried) or
-`"INCONCLUSIVE"` (fail-closed — e.g. a stamp the checker refused, or an AC gate that could not measure) → **STOP**,
+`"INCONCLUSIVE"` (fail-closed — e.g. a stamp the checker refused, an AC gate that could not measure, or a gate the
+runner timed out or could not start, named in `.unmeasured_gates[]`) → **STOP**,
 present, hand to the human. The advisory `verifiers` block is **NOT** a proceed input — a verifier finding never
 flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 

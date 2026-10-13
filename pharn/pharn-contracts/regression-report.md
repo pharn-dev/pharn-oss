@@ -64,17 +64,18 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
 
 ## Field shape + trust classes
 
-| field            | shape                                                                       | class                                      |
-| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------ |
-| `base`           | the git ref the baseline was captured at, or `null`                         | ADVISORY — no floor op reads it            |
-| `inside`         | array of repo-relative paths counted as inside the feature                  | ADVISORY — no floor op reads it            |
-| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                         | ADVISORY — no floor op reads it            |
-| `regressions`    | array of gate-ids that were `0` at base and non-zero at head                | ADVISORY — no floor op reads it            |
-| `pre_existing`   | array of gate-ids already non-zero at base                                  | ADVISORY — no floor op reads it            |
-| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `reason`         | a diagnostic sentence, present only on `inconclusive`                       | ADVISORY — no floor op reads it            |
-| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty | ADVISORY — the verdict already reflects it |
-| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)   | ADVISORY — no floor op reads it            |
+| field            | shape                                                                                | class                                      |
+| ---------------- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `base`           | the git ref the baseline was captured at, or `null`                                  | ADVISORY — no floor op reads it            |
+| `inside`         | array of repo-relative paths counted as inside the feature                           | ADVISORY — no floor op reads it            |
+| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                                  | ADVISORY — no floor op reads it            |
+| `regressions`    | array of gate-ids that were `0` at base and non-zero at head                         | ADVISORY — no floor op reads it            |
+| `pre_existing`   | array of gate-ids already non-zero at base                                           | ADVISORY — no floor op reads it            |
+| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                         | **FLOOR-RELEVANT** — enum-gated by 4 sites |
+| `reason`         | a diagnostic sentence, present only on `inconclusive`                                | ADVISORY — no floor op reads it            |
+| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty          | ADVISORY — the verdict already reflects it |
+| `head_timed_out` | gate-ids whose HEAD run timed out (6.59.0) — stamp path, present only when non-empty | ADVISORY — the verdict already reflects it |
+| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)            | ADVISORY — no floor op reads it            |
 
 **`regressions` being empty is not the guarantee — `verdict` is.** The two always agree in emitter
 output, but only one of them is read, so a hand-edited report with `regressions: []` beside
@@ -451,6 +452,21 @@ stage REFUSAL, which writes no report at all (`pharn/pharn-contracts/stage-exit.
   `base_timed_out` lists every timed-out base run whenever there is one (stamp path only; absent otherwise, so older
   reports keep their bytes). One owner of the predicate: `gate-run-core.mjs` `timedOutRunIds`, which the reuse rule
   calls too.
+- **`head_timed_out`, and `inconclusive` / `head-timed-out`** (verdict, 6.59.0 — the HEAD twin) — a head run the
+  runner killed at `--timeout-ms` is not a head result either, whatever exit the kill left (`124`, a runner's `1`, or
+  `0` from a gate that traps SIGTERM). Over a base that is green, or itself timed out, the gate is neither OK nor a
+  regression, so the verdict is `inconclusive`, `reason_code` `head-timed-out`, exit 2, with the table still reported
+  (the gate may sit in `regressions` there, exactly as a masked base sits in `pre_existing` — the verdict refuses to
+  read that row). Over a **measured** red base nothing is masked: the gate is `pre_existing` whatever head did, and the
+  verdict stands. `head_timed_out` lists every timed-out head run whenever there is one. Precedence: `base-timed-out`
+  first (its reports keep their bytes), then `head-timed-out`, then the plain table — an unclassifiable gate wins over a
+  regression elsewhere. Before 6.59.0 a hung head over a green base read `regressions` and `/pharn-loop` rebuilt toward
+  the hang. **Both codes are verdicts, not refusals:** `check-loop-fresh.mjs` check B passes them through and
+  `check-loop.mjs` stops `STOP_TERMINAL` / `unmeasured` (before 6.59.0 `base-timed-out` stopped at check B, which
+  `/pharn-loop` recorded as S11 "stale-evidence"). **A stated bound (Q3 of the 6.59.0 plan):** exit 126/127 is compared
+  as before at both sides — a head-only `127` after a build that removed a binary is a real regression, and a `127` at
+  both sides is `pre_existing`; the verify stage, which runs the same gates at head, reads 126/127 as not measured
+  (`verify-report.md`, "A gate that was not measured").
 - **`base-install-unreliable`** (refusal) — the BASE checkout lives in the temp root, outside the project
   (`pharn/floor/base-worktree.mjs`), so its gates no longer resolve the HEAD tree's `node_modules` or `.bin`. A base
   produced by this invocation with an install that was skipped over something to install, or that failed or timed out,

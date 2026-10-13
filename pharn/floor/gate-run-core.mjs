@@ -185,6 +185,8 @@ export const REASON_CODES = Object.freeze([
   "entry-not-run",
   "feature-mismatch",
   "front-stage-red",
+  "gate-not-measured",
+  "head-timed-out",
   "ledger-malformed",
   "lock-busy",
   "output-hash-mismatch",
@@ -224,6 +226,25 @@ export const LAPSE_CODES = Object.freeze([
   "stamp-unfinalized",
   "tree-changed-between-gates",
 ]);
+
+/** The NOT-MEASURED subset (6.59.0, unmeasured-gates-inconclusive): a report carrying one of these is an inconclusive
+ *  VERDICT the checker computed from a stamp it accepted — a gate run the runner killed at `--timeout-ms` or could not
+ *  start — never a refusal and never stale evidence. `check-loop-fresh.mjs` check B therefore passes it through (the
+ *  remaining checks run as for any report) and `check-loop.mjs` reads the stop from the verdict, `STOP_TERMINAL` /
+ *  `unmeasured`. Disjoint from LAPSE_CODES (a re-run would not change it). `base-timed-out` was routed to a freshness
+ *  STOP until 6.59.0 (a `/pharn-loop` S11 "stale-evidence" record — a mislabel). */
+export const UNMEASURED_CODES = Object.freeze(["base-timed-out", "gate-not-measured", "head-timed-out"]);
+
+/** Why a run in a stamp was NOT a measurement (6.59.0), a closed set: `timed-out` — the runner killed it at
+ *  `--timeout-ms` (`timed_out: true`, whatever exit the kill left: 124, or a gate's own exit on the group signal, 0
+ *  included); `not-started` — it could not be started (exit 126 or 127: the runner's EACCES/ENOENT codes and a shell's
+ *  own "not executable" / "command not found"). Sorted. */
+export const UNMEASURED_CAUSES = Object.freeze(["not-started", "timed-out"]);
+
+/** The exits that mean "could not be started" — `run-gates.mjs` `spawnGate` maps EACCES to 126 and ENOENT to 127, the
+ *  shell's own conventions. A spawn failure of any other kind never reaches a stamp: the runner stops the drain
+ *  `usage-error` instead. Above MAX_REUSABLE_EXIT, so no reused run carries one. */
+export const NOT_STARTED_EXITS = Object.freeze([126, 127]);
 
 /** Members kept in the vocabulary with NO emitter, each with its reason. The reverse closure test requires
  *  every member to have an emitter or an entry here, so an orphan cannot sit unnoticed (the shape
@@ -1110,6 +1131,22 @@ export function stampToMap(stamp) {
  *  signal — node's test runner exits 1, measured), never a finished verdict of the gate. */
 export function timedOutRunIds(stamp) {
   return stamp.runs.filter((r) => r.timed_out === true).map((r) => r.id);
+}
+
+/** The runs of a VALIDATED stamp that are NOT a measurement (6.59.0, unmeasured-gates-inconclusive), in run order, as
+ *  `{ id, cause }` with `cause` ∈ UNMEASURED_CAUSES: `timed-out` when the runner recorded `timed_out: true` (WHATEVER the
+ *  exit — a gate that traps the group's SIGTERM can exit 0, which read as a pass before 6.59.0), else `not-started` when
+ *  the exit is in NOT_STARTED_EXITS. A signal exit (>= 128) the runner did not cause is a MEASURED failure — the runner
+ *  records nothing for a harness signal it forwarded, so a signal in a stamp came from inside the gate's group or the
+ *  kernel (a segfault, an abort, an OOM kill). The ONE owner of this predicate: check-verify.mjs's stamp path reads it;
+ *  check-regress.mjs reads `timedOutRunIds` alone (its 126/127 handling is unchanged — the regression-report contract). */
+export function unmeasuredRuns(stamp) {
+  const out = [];
+  for (const r of stamp.runs) {
+    if (r.timed_out === true) out.push({ id: r.id, cause: "timed-out" });
+    else if (NOT_STARTED_EXITS.includes(r.exit)) out.push({ id: r.id, cause: "not-started" });
+  }
+  return out;
 }
 
 /** verify only: the `--complete` integer, read from `aux`, NEVER from `runs[]` (GRILL R1). */

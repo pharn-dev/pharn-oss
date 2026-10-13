@@ -46,6 +46,10 @@ import {
   validateStamp,
   stampToMap,
   timedOutRunIds,
+  unmeasuredRuns,
+  UNMEASURED_CAUSES,
+  UNMEASURED_CODES,
+  NOT_STARTED_EXITS,
   completenessFromStamp,
   gateRunBlock,
   REUSED_REASON,
@@ -675,6 +679,69 @@ test("timedOutRunIds (regress-base-integrity): the ids of runs recorded timed_ou
     const src = read(rel);
     assert.match(src, /timedOutRunIds\(/, `${rel} calls the shared predicate`);
     assert.doesNotMatch(src, /\.timed_out === true/, `${rel} must not restate the predicate (L35)`);
+  }
+});
+
+test("★ 6.59.0 unmeasuredRuns: EVERY cause, each with a control that stays measured (L29/L34), in run order", () => {
+  assert.deepEqual([...UNMEASURED_CAUSES].sort(), [...UNMEASURED_CAUSES], "sorted");
+  assert.deepEqual(unmeasuredRuns(goodStamp()), [], "CONTROL: a stamp whose every run finished is fully measured");
+  // timed-out — whatever exit the kill left (measured at plan time: 0 and 1 for a gate trapping SIGTERM, 124 for one
+  // the group signal ended). The exit 0 row is the false green 6.59.0 closes.
+  for (const exit of [0, 1, 124, 137]) {
+    const s = goodStamp();
+    Object.assign(s.runs[0], { exit, timed_out: true });
+    assert.deepEqual(unmeasuredRuns(s), [{ id: s.runs[0].id, cause: "timed-out" }], `timed out, exit ${exit}`);
+    const control = goodStamp();
+    Object.assign(control.runs[0], { exit, timed_out: false });
+    assert.deepEqual(unmeasuredRuns(control), [], `CONTROL: exit ${exit} without the runner's kill is measured`);
+  }
+  // not-started — every member of NOT_STARTED_EXITS, and only those.
+  for (const exit of NOT_STARTED_EXITS) {
+    const s = goodStamp();
+    s.runs[0].exit = exit;
+    assert.deepEqual(unmeasuredRuns(s), [{ id: s.runs[0].id, cause: "not-started" }], `exit ${exit}`);
+  }
+  for (const exit of [2, 125, 128, 134, 139, 143]) {
+    const s = goodStamp();
+    s.runs[0].exit = exit;
+    assert.deepEqual(unmeasuredRuns(s), [], `CONTROL: exit ${exit} is a MEASURED failure (a signal the runner did not cause included)`);
+  }
+  // A timed-out run that also exited 127 is ONE entry, `timed-out` (the runner's kill is the cause).
+  const both = goodStamp();
+  Object.assign(both.runs[0], { exit: 127, timed_out: true });
+  assert.deepEqual(unmeasuredRuns(both), [{ id: both.runs[0].id, cause: "timed-out" }]);
+  // Run order, and every cause produced (non-vacuous over the set — L34).
+  const two = goodStamp();
+  two.runs[0].exit = 126;
+  two.runs[1].timed_out = true;
+  const got = unmeasuredRuns(two);
+  assert.deepEqual(got, [
+    { id: two.runs[0].id, cause: "not-started" },
+    { id: two.runs[1].id, cause: "timed-out" },
+  ]);
+  assert.deepEqual([...new Set(got.map((u) => u.cause))].sort(), [...UNMEASURED_CAUSES], "every cause was produced");
+  // Never a reusable exit (a reused run cannot be unmeasured by construction).
+  for (const exit of NOT_STARTED_EXITS) assert.ok(exit > MAX_REUSABLE_EXIT, `${exit} is above MAX_REUSABLE_EXIT`);
+  // One owner (L35): check-verify.mjs calls it and restates neither half of the predicate.
+  const src = read("pharn/floor/check-verify.mjs");
+  assert.match(src, /unmeasuredRuns\(/);
+  assert.doesNotMatch(src, /\.timed_out ===|=== 12[67]\b|\[126, ?127\]/, "check-verify.mjs must not restate the predicate");
+});
+
+test("★ 6.59.0 UNMEASURED_CODES: a sorted subset of REASON_CODES, disjoint from LAPSE_CODES, each with an emitter (L36)", () => {
+  assert.deepEqual([...UNMEASURED_CODES].sort(), [...UNMEASURED_CODES]);
+  for (const c of UNMEASURED_CODES) {
+    assert.ok(isReasonCode(c), `${c} is a member`);
+    assert.ok(!LAPSE_CODES.includes(c), `${c} must not be a lapse — a re-run would not change it`);
+  }
+  assert.deepEqual(UNMEASURED_CODES, ["base-timed-out", "gate-not-measured", "head-timed-out"]);
+  const emitters = {
+    "base-timed-out": "check-regress.mjs",
+    "head-timed-out": "check-regress.mjs",
+    "gate-not-measured": "check-verify.mjs",
+  };
+  for (const c of UNMEASURED_CODES) {
+    assert.match(read(`pharn/floor/${emitters[c]}`), new RegExp(`reason_code: "${c}"`), `${emitters[c]} emits ${c}`);
   }
 });
 
