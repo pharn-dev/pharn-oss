@@ -146,6 +146,15 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # `head` == --base, and the two sides' SPECS agree. Both reports gain an ADDITIVE, ADVISORY `gate_run` block
 # and a `reason_code` on fail-closed exits — verified safe by READING all seven consumers, none of which
 # validates a closed top-level key set.
+# ONE ROW EXISTS ONLY ON THE STAMP PATH (6.59.0, unmeasured-gates-inconclusive — the 2026-10-12 review's LOOP-1): a run
+# the runner did not measure — `timed_out: true` whatever its exit (measured: 124, a runner's own 1, and 0 from a gate
+# trapping SIGTERM, which read PASS before), or exit 126/127 (could not start) — makes check-verify INCONCLUSIVE
+# `gate-not-measured`, FIRST in the precedence (before a red gate, an AC id and INCOMPLETE), with `unmeasured_gates:
+# [{id, cause}]` and `failing_gates: []`; gate-run-core.mjs `unmeasuredRuns` is the one owner. A signal exit (>= 128) the
+# runner did not cause stays a measured FAIL. check-regress gains the HEAD twin of the base rule (`head-timed-out`,
+# `head_timed_out`; 126/127 at regress are compared as before — a stated bound). The three codes are gate-run-core.mjs
+# UNMEASURED_CODES, which check-loop-fresh B passes through to check-loop.mjs (STOP_TERMINAL / unmeasured). The
+# positional map is unchanged (it carries no `timed_out`), so the dev twins are byte-identical.
 # THE FLUSH RULE (6.20.4): check-verify, check-regress, check-loop and check-red-run END by setting
 # process.exitCode (the first three unwind with a module-private sentinel only their top-level catch swallows) —
 # never by an immediate exit, which dropped queued stdout: on darwin a piped verdict was cut at 64 KiB, and
@@ -217,7 +226,9 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # partition refuses `no-change-under-test` when nothing but this feature's artifacts or a trusted doc changed since the
 # base (check-regress.mjs changedUnderTest) — a committed build under either implicit rule. (3) check-regress.mjs verdict
 # reads a timed-out BASE run (gate-run-core.mjs timedOutRunIds, also the reuse rule's) as `inconclusive`/`base-timed-out`
-# when its head is red, and lists `base_timed_out`; stamp-only, so check-loop-fresh E agrees. (4) The BASE checkout is a
+# when its head is red, and lists `base_timed_out`; stamp-only, so check-loop-fresh E agrees (6.59.0: the HEAD twin,
+# `head-timed-out` over a base that is not a measured red, and check-loop-fresh B passes both codes through to
+# check-loop.mjs instead of stopping S11). (4) The BASE checkout is a
 # temp-root mkdtemp directory OUTSIDE the project (pharn/floor/base-worktree.mjs: name bound to the project's realpath,
 # prefix clear that unlinks links and skips foreign entries, resume validation, path redaction in REGRESSION.md;
 # `base-worktree-unplaceable` when TMPDIR points into the project) — so base gates no longer resolve HEAD's

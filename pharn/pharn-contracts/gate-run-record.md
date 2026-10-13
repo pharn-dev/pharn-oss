@@ -298,7 +298,15 @@ a terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`)
   contract always named), plus `entry-not-run` (a runner that stopped mid-drain; `validateStamp` names it
   apart from the malformed class for this routing) and `lock-busy` (two runner invocations contended). A
   report or stamp carrying one of these is re-run, under `/pharn-loop`'s counted budget. Every other
-  member is a stop: a stamp that exists and is **wrong** is evidence to stop on, never to paper over.
+  member but the `UNMEASURED_CODES` below is a stop: a stamp that exists and is **wrong** is evidence to stop on, never
+  to paper over.
+- **`UNMEASURED_CODES`** (6.59.0) — `base-timed-out`, `gate-not-measured`, `head-timed-out`: an inconclusive VERDICT a
+  checker computed from stamps it accepted, because a run was not measured (killed at `--timeout-ms`, or, for
+  `gate-not-measured`, exit 126/127; `verify-report.md`, `regression-report.md`). Not a refusal and not stale evidence:
+  check B lets a report carrying one through, the remaining checks run as for any report, and `check-loop.mjs` stops
+  `STOP_TERMINAL` / `unmeasured`. A coded report that is also stale is still re-run at F/G, once, inside the budget —
+  so a hang can cost one more stage timeout before the stop. Disjoint from `LAPSE_CODES`. Before 6.59.0
+  `base-timed-out` stopped at check B, which `/pharn-loop` recorded as S11 "stale-evidence".
 - **`RESERVED_REASON_CODES`** — members kept with no emitter, each with its reason. It is **empty** today.
 - **`ac-evidence-invalid`** (6.20.0) is `check-loop-fresh.mjs` check I's code for a test stage whose gate returned a
   RED verdict (exit 1, a `RED` token) — so `/pharn-loop` maps it to stuck point S13, not S11. The three other front

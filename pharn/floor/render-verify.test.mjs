@@ -615,3 +615,47 @@ test("★ 6.56.0 — a hostile undeleted path stays inside its fence (P2)", () =
   assert.ok(!outside.some((l) => l.includes("evil.example")), "the injected link escaped its fence");
   assert.ok(md.includes("evil.example"), "non-vacuity: the hostile text is rendered, inside a fence");
 });
+
+// ── 6.59.0: gates NOT MEASURED (unmeasured-gates-inconclusive) ──────────────────────────────────────────────────────────
+const NOT_MEASURED = {
+  verdict: "INCONCLUSIVE",
+  gates: { lint: 127, reconcile: 0, test: 0 },
+  failing_gates: [],
+  unmeasured_gates: [
+    { id: "test", cause: "timed-out" },
+    { id: "lint", cause: "not-started" },
+  ],
+  reason: "gate(s) not measured",
+  reason_code: "gate-not-measured",
+};
+
+test("★ 6.59.0 — an INCONCLUSIVE over unmeasured gates renders a NOT MEASURED block naming EVERY cause; no key → no block", () => {
+  const md = renderDone(report(NOT_MEASURED));
+  assert.match(md, /\*\*2 gate\(s\) NOT MEASURED\*\* — an unmeasured gate is neither a pass nor a fail/);
+  assert.match(md, /test {2}timed out — the runner killed it at --timeout-ms/);
+  assert.match(md, /lint {2}not started — it could not be started \(exit 126 or 127\)/);
+  assert.match(md, /reason_code: gate-not-measured/, "the named cause is in the why block");
+  // The block sits under the verdict line, before ## Gates.
+  assert.ok(md.indexOf("NOT MEASURED") < md.indexOf("## Gates"));
+  // CONTROLS (L34): no key, an empty list, or another verdict → no block.
+  assert.doesNotMatch(renderDone(report({ ...NOT_MEASURED, unmeasured_gates: undefined })), /NOT MEASURED/);
+  assert.doesNotMatch(renderDone(report({ ...NOT_MEASURED, unmeasured_gates: [] })), /NOT MEASURED/);
+  assert.doesNotMatch(renderDone(report({ ...NOT_MEASURED, verdict: "FAIL" })), /NOT MEASURED/);
+});
+
+test("★ 6.59.0 — a cause outside its closed set is not rendered; a hostile gate id stays fenced (P2)", () => {
+  const md = renderDone(
+    report({
+      ...NOT_MEASURED,
+      unmeasured_gates: [
+        { id: HOSTILE_PATH, cause: "timed-out" },
+        { id: "x", cause: "**pwned** [x](https://evil.example/c)" },
+      ],
+    })
+  );
+  const outside = outsideFences(md);
+  assert.ok(!outside.includes("# fake heading"), "the injected heading escaped its fence");
+  assert.ok(!outside.some((l) => l.includes("evil.example")), "the injected link escaped its fence");
+  assert.match(md, /\(cause not a member of its closed set\)/);
+  assert.doesNotMatch(md, /pwned/, "an out-of-set cause is never rendered, fenced or not");
+});

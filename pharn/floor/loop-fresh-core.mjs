@@ -42,6 +42,8 @@
 //
 //   A  both reports exist and parse, with a verdict in their stage's enum     → RERUN · report-missing / report-malformed
 //   B  a report's `reason_code`, when present, is a member and a LAPSE        → lapse RERUN · empty-source-set STOP (S4)
+//                                                                               · UNMEASURED_CODES pass (6.59.0: a
+//                                                                               verdict, read by check-loop.mjs)
 //                                                                               · other member STOP with that code
 //                                                                               · non-member RERUN report-malformed
 //   C  each stamp exists and validateStamp passes for its stage/side/feature  → missing / lapse RERUN · otherwise STOP
@@ -148,6 +150,7 @@ import {
   FEATURE_SLUG_RE,
   SHA_RE,
   LAPSE_CODES,
+  UNMEASURED_CODES,
   AC_RESERVED_IDS,
   isReasonCode,
   validateStamp,
@@ -210,6 +213,7 @@ export const EXIT = Object.freeze({ FRESH: 0, RERUN: 1, INCONCLUSIVE: 2, STOP: 4
 const VERIFY_VERDICTS = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 const REGRESS_VERDICTS = new Set(["no-regressions", "regressions", "inconclusive"]);
 const LAPSE_SET = new Set(LAPSE_CODES);
+const UNMEASURED_SET = new Set(UNMEASURED_CODES);
 
 /** The report fields each live re-derivation must reproduce: what check-loop.mjs reads (`failing_gates`
  *  decides a reconcile or an AC-evidence red) plus the verbatim spine the stage copies from its checker — for verify
@@ -428,6 +432,12 @@ function checkB(ctx) {
         reason: `${r.file} carries a reason_code outside the closed vocabulary`,
       });
     }
+    // 6.59.0 — a NOT-MEASURED verdict (gate-run-core.mjs UNMEASURED_CODES: a gate the runner killed or could not start)
+    // is a verdict the checker computed, not a refusal and not stale evidence: B lets it through, the remaining checks
+    // run as for any report (so a stale one is still re-run at F/G, once, inside the budget), and check-loop.mjs stops
+    // on the inconclusive verdict — STOP_TERMINAL / unmeasured. Before 6.59.0 `base-timed-out` fell to the STOP below,
+    // which /pharn-loop recorded as S11 "stale-evidence".
+    if (UNMEASURED_SET.has(code)) continue;
     if (LAPSE_SET.has(code)) {
       return failure({
         check: "B",
