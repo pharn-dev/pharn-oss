@@ -2473,7 +2473,7 @@ test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, 
   assert.match(body, /`scans: NOT run \(grill-scan\.mjs exit <n>\)`/);
 });
 
-// grill-griller-trim (6.59.0, review CTX-1): the full grill loads its grillers through ONE pinned extract line, falls back
+// grill-griller-trim (6.60.0, review CTX-1): the full grill loads its grillers through ONE pinned extract line, falls back
 // to the whole files on any other exit, and records which happened in GRILL.md. Pinned, never described (L22).
 const GRILLER_EXTRACT_LINE = "node pharn/floor/griller-extract.mjs .";
 const GRILLER_FALLBACK_LITERAL = "`grillers: extract NOT run (griller-extract.mjs exit <n>)`";
@@ -4763,7 +4763,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // build-gate-bounded: Step 4 pins build-gate.mjs's two lines and their exit mapping — 22,148 bytes measured at the
   // build, 132 over the old 22,016; raised by the rule (+10%, up to a multiple of 512). 22,722 after the review fixes.
   "pharn-build.md": 24576,
-  // grill-griller-trim (6.59.0): Step 3b pins griller-extract.mjs, its whole-file fallback and the every-griller-still-runs
+  // grill-griller-trim (6.60.0): Step 3b pins griller-extract.mjs, its whole-file fallback and the every-griller-still-runs
   // sentence — 23,796 bytes measured, 756 over 23,040; raised by the rule (+10%, up to a multiple of 512).
   "pharn-grill.md": 26624,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 47,664 bytes measured, 48 over 47,616 (the GATE-2

@@ -613,3 +613,49 @@ test("✧ CLOSURE (L36) — the source assigns exactly five decisions, and INCON
   // Every assigned token is reachable (non-vacuous): CONTINUE, STOP_CAP, STOP_GREEN, STOP_TERMINAL above, and:
   assert.equal(json(decide(PASS, null, 1, 3, QUICK_SPEC)).decision, "STOP_GREEN_QUICK");
 });
+
+// ── 6.59.0 — an UNMEASURED gate stops the loop terminally (the 2026-10-12 review's LOOP-1) ────────────────────────────
+// check-loop.mjs is UNCHANGED: the fix is upstream, in what check-verify.mjs / check-regress.mjs emit for a run the runner
+// did not measure. These pin that the reports they now emit hit the existing `unmeasured` row, in both tables, at every
+// iteration under the cap — never CONTINUE — and keep the review's own reproduction as the control.
+
+/** verify-report.json as check-verify.mjs --stamp emits it for a timed-out `test` gate beside a measured red `lint`. */
+const V_NOT_MEASURED = {
+  feature: "x",
+  gates: { lint: 1, test: 124 },
+  verdict: "INCONCLUSIVE",
+  failing_gates: [],
+  unmeasured_gates: [{ id: "test", cause: "timed-out" }],
+  reason: "gate(s) not measured",
+  reason_code: "gate-not-measured",
+};
+/** regression-report.json as check-regress.mjs emits it for a timed-out head over a green base. */
+const R_HEAD_TIMED_OUT = {
+  verdict: "inconclusive",
+  regressions: ["test"],
+  pre_existing: [],
+  head_timed_out: ["test"],
+  reason_code: "head-timed-out",
+};
+
+test("★ 6.59.0 — an unmeasured verify gate or a timed-out regress head is STOP_TERMINAL / unmeasured, never CONTINUE", () => {
+  const regressOk = { verdict: "no-regressions", regressions: [], pre_existing: [] };
+  for (const [label, v, r, spec] of [
+    ["verify gate-not-measured (full)", V_NOT_MEASURED, regressOk, FEATURE_SPEC],
+    ["regress head-timed-out (full)", PASS, R_HEAD_TIMED_OUT, FEATURE_SPEC],
+    ["both (full)", V_NOT_MEASURED, R_HEAD_TIMED_OUT, FEATURE_SPEC],
+    ["verify gate-not-measured (quick)", V_NOT_MEASURED, null, QUICK_SPEC],
+  ]) {
+    for (const iter of [1, 2]) {
+      const res = decide(v, r, iter, 3, spec);
+      assert.equal(res.status, 4, `${label} @${iter}: ${res.stdout}`);
+      assert.equal(json(res).decision, "STOP_TERMINAL", label);
+      assert.equal(json(res).terminal_cause, "unmeasured", label);
+    }
+  }
+  // CONTROL — the review's reproduction: the SAME hang as the pre-6.59.0 checker reported it (a FAIL naming `test`,
+  // exit 124) is a measurable red, so it CONTINUEs. This table still says so; what changed is that check-verify.mjs no
+  // longer emits that report for a run the runner killed.
+  const before = decide({ feature: "x", gates: { test: 124 }, verdict: "FAIL", failing_gates: ["test"] }, regressOk, 1, 999, FEATURE_SPEC);
+  assert.equal(json(before).decision, "CONTINUE");
+});

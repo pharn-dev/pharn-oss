@@ -1,4 +1,4 @@
-// pharn/floor/griller-extract.test.mjs — tests for the full grill's griller extract (6.59.0, grill-griller-trim).
+// pharn/floor/griller-extract.test.mjs — tests for the full grill's griller extract (6.60.0, grill-griller-trim).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

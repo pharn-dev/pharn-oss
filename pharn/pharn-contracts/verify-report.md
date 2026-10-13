@@ -78,10 +78,11 @@ them in its command prose.
 | `feature`          | the increment's slug, or `null`                                                                                                                                                                                                                                                     | `check-verify.mjs` (from `--feature`)                                                                  | ADVISORY — no floor op reads it            |
 | `gates`            | flat `{ "<gate-id>": <int exit code> }`, keys sorted                                                                                                                                                                                                                                | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
 | `verdict`          | **enum** — see the table below                                                                                                                                                                                                                                                      | `check-verify.mjs`                                                                                     | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `failing_gates`    | array of the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`)                                                                                                                              | `check-verify.mjs`                                                                                     | read by `check-loop.mjs` on a FAIL (below) |
+| `failing_gates`    | on `FAIL`, the `gates` keys whose value is non-zero, plus `ac-delivery` / `ac-evidence` when the AC gate is red (6.20.0 — these two never enter `gates`); `[]` on every other verdict — since 6.59.0 also on the `INCONCLUSIVE` of an unmeasured gate beside a measured red one     | `check-verify.mjs`                                                                                     | read by `check-loop.mjs` on a FAIL (below) |
 | `completeness`     | `{ declared: [], skipped: [], missing: [], deletions: [], undeleted: [], complete: bool, verdict: str, note: str }`, OPTIONAL — members vary by emitter; treat any subset as valid. `deletions` / `undeleted` (6.56.0): the PLAN's `(delete)`-marked paths, and those still present | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/check-build-complete.mjs`'s stdout   | ADVISORY — no floor op reads it            |
 | `verifiers`        | `{ registered: <int>, findings: [], note: str }`, OPTIONAL — `findings` and `note` are each optional; zero verifiers ship today, so no committed report exercises a non-empty `findings`                                                                                            | `stage-verify.mjs` (product) / the dev command, from `pharn/floor/count-verifiers.mjs` + each verifier | ADVISORY — no floor op reads it            |
 | `reason`           | a diagnostic sentence, present only on `INCONCLUSIVE`                                                                                                                                                                                                                               | `check-verify.mjs`                                                                                     | ADVISORY — no floor op reads it            |
+| `unmeasured_gates` | `[{ id, cause }]`, `cause` ∈ `{not-started, timed-out}`, in run order — present only on the `INCONCLUSIVE` an unmeasured gate produces (6.59.0, "A gate that was not measured", below)                                                                                              | `check-verify.mjs` (`--stamp`)                                                                         | ADVISORY — no floor op reads it            |
 | `ac_gate`          | the AC gate's block, OPTIONAL — present when `check-verify.mjs` ran with `--ac-gate` (below)                                                                                                                                                                                        | `check-verify.mjs` (`ac-gate-core.mjs`)                                                                | compared by `check-loop-fresh.mjs` check E |
 | `gate_reuse`       | `{ reused: [{ id, stage, side, seq }] }`, OPTIONAL — since 6.34.0 `stage-verify.mjs` always writes it (below)                                                                                                                                                                       | `stage-verify.mjs`, from its own verify stamp                                                          | ADVISORY — no floor op reads it            |
 | `head_install`     | `{ state, why, family, lockfile, counts }` or `null`, OPTIONAL — since 6.40.0 `stage-verify.mjs` always writes it (below)                                                                                                                                                           | `stage-verify.mjs`, from `install-drift.mjs`                                                           | ADVISORY — no floor op reads it            |
@@ -207,6 +208,44 @@ reader can re-derive it, and it must **never** be read as an invariant the repo 
   shape. Should a real failure surface, that is the trigger to give it a floor check, and this section is
   where the change would be recorded.
 
+## A gate that was not measured (6.59.0)
+
+On the stamp path (`check-verify.mjs --stamp`, which `/pharn-verify` always uses), a run the gate runner did **not
+measure** makes the verdict `INCONCLUSIVE`, exit 2, with `reason_code` **`gate-not-measured`**, `failing_gates: []` and
+`unmeasured_gates` naming each such gate:
+
+```json
+{
+  "verdict": "INCONCLUSIVE",
+  "failing_gates": [],
+  "unmeasured_gates": [{ "id": "test", "cause": "timed-out" }],
+  "reason": "gate(s) not measured — …",
+  "reason_code": "gate-not-measured"
+}
+```
+
+- **What counts** (`pharn/floor/gate-run-core.mjs` `unmeasuredRuns`, the one owner): `timed-out` — the runner killed the
+  gate at `--timeout-ms` (the stamp's `timed_out: true`), **whatever exit the kill left**: `124`, a test runner's own
+  `1`, or `0` from a gate that traps the runner's SIGTERM, which before 6.59.0 read as a pass; `not-started` — exit
+  `126` or `127`, the runner's EACCES/ENOENT codes and a shell's own "not executable" / "command not found".
+- **What does not:** a signal exit (≥ 128) the runner did not cause — a segfault, an abort, an OOM kill — is a measured
+  `FAIL`: the runner records nothing for a harness signal it forwarded, so a signal in a stamp came from inside the
+  gate's group or the kernel. Exits 2 and 125 are measured failures too.
+- **Precedence: it comes FIRST**, before a red gate, an AC id and `INCOMPLETE`. No verdict over a gate set with an
+  unmeasured member is reached, and the measured exits stay visible in `gates`. Over an incomplete build a hung or
+  unstartable gate therefore reads `INCONCLUSIVE` (before 6.59.0: `FAIL`); `/pharn-ship` Step 2b's retry stays
+  unreachable for it either way, since it fires only on `INCOMPLETE`.
+- **Who reads it:** `check-loop.mjs` reads the verdict alone and stops `STOP_TERMINAL` / `unmeasured` — before 6.59.0 a
+  hung gate was a measurable red and `/pharn-loop` rebuilt up to its cap toward the same hang. `check-loop-fresh.mjs`
+  check B passes `gate-not-measured` through (`gate-run-record.md`, "The closed `reason_code` vocabulary"). `VERIFY.md`
+  and `RUN-REPORT.md` name the gates; their ids are untrusted and fenced. No floor op reads `unmeasured_gates` itself.
+- **The positional map is unchanged.** It carries exits alone, so nothing says how a run ended; the dev twin
+  `/pharn-dev-verify`, which types that map, sees byte-identical output.
+- **Bounds, stated (P0).** `timed_out` means the runner's clock ran out — a real hang, a slow machine and a too-small
+  `--timeout-ms` look the same, so the report says "not measured", never "hung". A gate that exits 126 or 127 of its own
+  accord reads as not started. Like every stamp reading, this certifies internal consistency, never provenance: a stamp
+  forged to `timed_out: false` reads as before (L43).
+
 ## Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`)
 
 `verifiers.findings[]` and `completeness.missing[]` / `.undeleted[]` carry untrusted free text into a committed artifact
@@ -239,7 +278,8 @@ additionally carries:
   `render-run-report.mjs`, `ship-outcome-core.mjs` — none validates a closed top-level key set.
 - `reason_code` is a member of the closed vocabulary in `gate-run-record.md`; it appears **only** on a
   fail-closed exit, and `check-loop-fresh.mjs` routes a member of its `LAPSE_CODES` subset to "re-run
-  `/pharn-verify`" rather than to a stop.
+  `/pharn-verify`" rather than to a stop — and, since 6.59.0, passes `gate-not-measured` through to `check-loop.mjs`
+  (an `UNMEASURED_CODES` member: a verdict, not a refusal).
 - **Build-completeness is NOT in the gate map.** It reaches the verdict from the stamp's
   `aux.completeness`, which is what keeps the `INCOMPLETE` verdict reachable. See `gate-run-record.md`.
 - **`gate_run.excluded` (6.36.0, optional).** `{ "declared_in": "pharn.config.json#gates.exclude", "ids": [...] }`,

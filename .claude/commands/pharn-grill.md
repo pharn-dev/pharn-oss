@@ -232,7 +232,7 @@ architecture, security, …) — only on a GREEN chain (after Step 2).
   ```
 
   Every registered griller still runs; only two sections a grill never uses are left out of each, its
-  `## Guarantee audit` and `## Machine-readable emission` (188,978 → 141,332 B over the 13 grillers at 6.59.0). Choosing
+  `## Guarantee audit` and `## Machine-readable emission` (188,978 → 141,332 B over the 13 grillers at 6.60.0). Choosing
   grillers per plan from scanner hits was measured and rejected (the CLI's header). Exit 0 → its first line is
   `GRILL.md`'s `grillers:` line; read nothing else of the grillers. Any other exit → read in full every file
   `node pharn/floor/count-grillers.mjs .` lists, and record `grillers: extract NOT run (griller-extract.mjs exit <n>)`.

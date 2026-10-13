@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/griller-extract.mjs — print every registered griller for a full `/pharn-grill`, without the two
-// sections a grill never uses (6.59.0, grill-griller-trim, review finding CTX-1).
+// sections a grill never uses (6.60.0, grill-griller-trim, review finding CTX-1).
 //
 // WHY (P7 — a measured cost, not a hypothetical). A full `/pharn-grill` Step 3b read all 13 griller files, 188,978 B,
 // into ONE context; the 2026-10-05 measured grill agent then made 41 requests whose context grew from 302k to 425k
@@ -11,7 +11,7 @@
 //     the plan is secure / private / accessible on that axis).
 //   - `## Machine-readable emission` — the standalone `findings.json` path, which every griller says is finalized only
 //     when a live griller runner lands; inline, the grill folds findings into GRILL.md.
-// Measured over the 13 grillers at 6.59.0: 188,978 B of files → 141,332 B of griller text printed (−25.2%; 143,786 B of
+// Measured over the 13 grillers at 6.60.0: 188,978 B of files → 141,332 B of griller text printed (−25.2%; 143,786 B of
 // stdout with the summary and frame lines), the same for every plan.
 //
 // EVERY GRILLER STILL RUNS. The review proposed SELECTING grillers per plan from the `scan-plan-*` scanner hits. That was
