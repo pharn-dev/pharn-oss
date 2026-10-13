@@ -160,7 +160,11 @@ regression. From 6.0.0 a `FAIL` or a regression is retried, and `STOP_TERMINAL` 
 verdict or a reconcile red. From 6.20.0 `check-loop.mjs` also stops terminally on an **AC-evidence red** (verify's
 AC gate found the AC tests, their lock or their test infrastructure changed after `/pharn-test`) and names which
 predicate fired in a closed `terminal_cause` — but `/pharn-loop` records THAT stop as the blocked stop S13 (below),
-so no record carries `STOP_TERMINAL` for it. Nothing branches on a prior record's `decision` (a later run reads only
+so no record carries `STOP_TERMINAL` for it. From 6.59.0 a gate the runner did not measure — killed at `--timeout-ms`,
+or (at verify) unable to start — makes the stage's verdict inconclusive, so a run that hit one records
+`STOP_TERMINAL` (`terminal_cause: unmeasured`) where an earlier one recorded `STOP_CAP` after rebuilding toward the
+hang, or — for a timed-out regress BASE — the blocked stop S11 `stale-evidence` (`verify-report.md`, "A gate that was
+not measured"; `regression-report.md`). Nothing branches on a prior record's `decision` (a later run reads only
 its `## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
 
 **`commit` — `unknown` is an honest absence, not a value.** `/pharn-loop` captures the SHA with

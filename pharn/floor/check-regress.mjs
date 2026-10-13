@@ -22,8 +22,10 @@
 //                                          on the feature, mirroring check-variance's errored-exclusion).
 //             base == 0 && head != 0    → REGRESSION (a pass→fail flip OUTSIDE the feature).
 //             base == 0 && head == 0    → OK.
-//           ONE override, on the stamp path only (regress-base-integrity): a gate whose BASE run timed out and whose head is
-//           red makes the whole verdict INCONCLUSIVE (`base-timed-out`) — a killed base is not a base result.
+//           TWO overrides, on the stamp path only: a gate whose BASE run timed out and whose head is red makes the whole
+//           verdict INCONCLUSIVE (`base-timed-out`, regress-base-integrity) — a killed base is not a base result; and
+//           (6.59.0) a gate whose HEAD run timed out over a base that is not a measured red makes it INCONCLUSIVE
+//           (`head-timed-out`) — a killed head is not a head result.
 //           A model detects regressions UNRELIABLY; this exit-code comparison detects them RELIABLY —
 //           that is the entire reason /regress has ZERO LLM-judge in its core.
 //
@@ -573,6 +575,7 @@ function runVerdict(positional, args) {
   let head;
   let gate_run = null;
   let baseTimedOut = []; // stamp path only: the positional maps carry exits alone
+  let headTimedOut = []; // the same, for the HEAD side (6.59.0)
 
   if (baseStampPath !== undefined || headStampPath !== undefined) {
     if (baseStampPath === undefined || headStampPath === undefined) {
@@ -641,6 +644,7 @@ function runVerdict(positional, args) {
     base = { ok: true, value: stampToMap(b.stamp) };
     head = { ok: true, value: stampToMap(h.stamp) };
     baseTimedOut = timedOutRunIds(b.stamp);
+    headTimedOut = timedOutRunIds(h.stamp);
     gate_run = { base: gateRunBlock(b.stamp, b.sha256), head: gateRunBlock(h.stamp, h.sha256) };
   } else {
     base = readResultsMap(basePath, "base-results.json");
@@ -695,7 +699,10 @@ function runVerdict(positional, args) {
   // check E, which re-derives this verdict from the two stamps, reaches the same answer. Precedence: a masked gate wins
   // over a regression elsewhere — the run is not a clean measurement, and it stops either way.
   const masked = baseTimedOut.filter((id) => Object.hasOwn(head.value, id) && head.value[id] !== 0);
-  const timedOutBlock = baseTimedOut.length ? { base_timed_out: baseTimedOut } : {};
+  const timedOutBlock = {
+    ...(baseTimedOut.length ? { base_timed_out: baseTimedOut } : {}),
+    ...(headTimedOut.length ? { head_timed_out: headTimedOut } : {}),
+  };
   if (masked.length) {
     emit(
       {
@@ -708,6 +715,35 @@ function runVerdict(positional, args) {
         verdict: "inconclusive",
         reason: `the base run of ${masked.map((id) => JSON.stringify(id)).join(", ")} timed out, and the same gate is red at head — a timed-out base is not a base result, so it cannot be classified pre_existing`,
         reason_code: "base-timed-out",
+        ...(gate_run ? { gate_run } : {}),
+      },
+      2
+    );
+  }
+
+  // A TIMED-OUT HEAD RUN IS NOT A HEAD RESULT EITHER (6.59.0, unmeasured-gates-inconclusive — the 2026-10-12 review's
+  // LOOP-1: the base rule above had no head twin, so a head killed at --timeout-ms over a green base read `regressions`
+  // and /pharn-loop rebuilt toward a hang, and one that trapped the group signal and exited 0 read OK). A gate whose HEAD
+  // run timed out can be classified only when its BASE is a MEASURED red — then it is `pre_existing` whatever head did,
+  // and nothing is masked. Over a base that is green, or itself timed out, the head says neither OK nor regression, so
+  // the verdict is `inconclusive` (`head-timed-out`, exit 2), the table still reported. After the base rule, so a
+  // base-timed-out report keeps its bytes; before the plain table, so it wins over a regression elsewhere, as the base
+  // rule does. Read from the two STAMPS alone, so check-loop-fresh.mjs check E re-derives the same verdict. Exit 126/127
+  // at either side is compared as before — a head-only 127 after a build that removed a binary is a real regression
+  // (stated in the regression-report contract).
+  const unclassified = headTimedOut.filter((id) => Object.hasOwn(base.value, id) && (base.value[id] === 0 || baseTimedOut.includes(id)));
+  if (unclassified.length) {
+    emit(
+      {
+        base: baseRef !== undefined ? baseRef : null,
+        inside,
+        outside_gates: outsideGates,
+        regressions,
+        pre_existing: preExisting,
+        ...timedOutBlock,
+        verdict: "inconclusive",
+        reason: `the head run of ${unclassified.map((id) => JSON.stringify(id)).join(", ")} timed out over a base that is not a measured red — a timed-out head is not a head result, so it is neither OK nor a regression`,
+        reason_code: "head-timed-out",
         ...(gate_run ? { gate_run } : {}),
       },
       2

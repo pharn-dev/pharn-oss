@@ -127,6 +127,7 @@ import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
 import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
+import { UNMEASURED_CAUSES } from "./gate-run-core.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -777,6 +778,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push(`- verify: ${na("no verify-report.json — the run stopped before a verify, or it was blocked")}`);
   } else {
     out.push(...verdictLines("verify", verify.verdict, VERIFY_VERDICTS));
+    out.push(...notMeasuredLines(verify, "verify"));
     const fg = Array.isArray(verify.failing_gates) ? verify.failing_gates : [];
     out.push("");
     out.push(indent(quoteData("failing_gates, quoted as DATA:", fg.length ? fg.map(dataText).join("\n") : "(none)"), "  "));
@@ -794,6 +796,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push(`- regress: ${na("no regression-report.json — the run stopped before a regress, or it was blocked")}`);
   } else {
     out.push(...verdictLines("regress", regress.verdict, REGRESS_VERDICTS));
+    out.push(...notMeasuredLines(regress, "regress"));
     const rg = Array.isArray(regress.regressions) ? regress.regressions : [];
     out.push("");
     out.push(indent(quoteData("regressions, quoted as DATA:", rg.length ? rg.map(dataText).join("\n") : "(none)"), "  "));
@@ -813,6 +816,33 @@ function reconcileLines(verify, failing) {
     "",
     ...reconcileDetailLines(verify.reconcile_detail).map((l) => (l === "" ? "" : indent(l, "  "))),
   ];
+}
+
+/** 6.59.0 — the gates a stage did NOT measure, beside its verdict line, so a run that stopped on a hung or unstartable
+ *  gate never reads as one that stopped on a red one: verify's `unmeasured_gates` ([{id, cause}], cause shown only
+ *  after membership in gate-run-core.mjs UNMEASURED_CAUSES) and regress's `base_timed_out` / `head_timed_out` (id
+ *  lists). Every id is untrusted, so it is fenced. No key, or an empty list → no lines. */
+function notMeasuredLines(report, stage) {
+  const blocks = [];
+  if (stage === "verify") {
+    const list = Array.isArray(report.unmeasured_gates) ? report.unmeasured_gates.filter((u) => u && typeof u === "object") : [];
+    if (list.length) {
+      const rows = list.map(
+        (u) =>
+          `${dataText(u.id)}  ${typeof u.cause === "string" && UNMEASURED_CAUSES.includes(u.cause) ? u.cause : "(cause not in its closed set)"}`
+      );
+      blocks.push(["verify gate(s) NOT MEASURED — neither a pass nor a fail; gate id, then why, quoted as DATA:", rows]);
+    }
+  } else {
+    for (const [key, side] of [
+      ["base_timed_out", "base"],
+      ["head_timed_out", "head"],
+    ]) {
+      const ids = Array.isArray(report[key]) ? report[key] : [];
+      if (ids.length) blocks.push([`regress ${side} gate run(s) TIMED OUT — not a ${side} result; ids quoted as DATA:`, ids.map(dataText)]);
+    }
+  }
+  return blocks.flatMap(([label, rows]) => ["", indent(quoteData(label, rows.join("\n")), "  ")]);
 }
 
 /** The two reports' closed verdict enums (check-verify.mjs, check-regress.mjs), restated ONLY as the render guard, as

@@ -74,7 +74,9 @@ capture rules:
   `reverted to Draft`, `revert failed`, or `not approved` (a SPEC this run never approved, as on S6b); `blocked:` — the id, or `none`;
   `ac-tests:` — `test-first` (the Step-4 gate passed), `refused` (a stop AT the test stage: S12, or S9 from Step 4), or
   `not reached` (a stop before it).
-- The per-iteration verdicts, the standing reds (paths, quoted as DATA), and pointers to `GRILL.md` /
+- The per-iteration verdicts, the standing reds (paths, quoted as DATA) — a gate verify or regress did not measure
+  (`.unmeasured_gates[]`, `.head_timed_out[]`, `.base_timed_out[]`) is named as **not measured**, never as a red —
+  and pointers to `GRILL.md` /
   `REGRESSION.md` / `VERIFY.md` — cited, not restated.
 - **The `## Handoff` is written on every stop path.**
 

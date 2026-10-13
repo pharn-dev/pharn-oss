@@ -68,6 +68,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       (`LIMITS.md` §3e), it runs on pull requests only, it is skipped by an admin merge, and a per-PR budget does not
       bound growth spread over many PRs.
 
+## [6.59.0] - 2026-10-13
+
+### Changed
+
+- **A gate that was never measured no longer reads as a failing gate, or as a passing one: a timed-out or unstartable
+  gate makes verify and regress inconclusive, and `/pharn-loop` stops instead of rebuilding toward a hang.**
+  - What changed: `pharn/floor/check-verify.mjs` (the stamp path `/pharn-verify` uses) reads how each gate run ended.
+    A run the gate runner killed at `--timeout-ms`, or one that could not start (exit 126 or 127), makes the verdict
+    `INCONCLUSIVE` with `reason_code` `gate-not-measured`, before any other rule. The report names those gates in a new
+    `unmeasured_gates` list, and keeps every recorded exit in `gates`. `pharn/floor/check-regress.mjs` now treats a
+    timed-out HEAD run the way it already treated a timed-out BASE run. Over a base that is green, the verdict is
+    `inconclusive` with `head-timed-out`, and the new `head_timed_out` list names the gate. `check-loop-fresh.mjs` no
+    longer stops on these three codes (`base-timed-out` included). `check-loop.mjs` reads them and stops
+    `STOP_TERMINAL` / `unmeasured`. VERIFY.md, REGRESSION.md and RUN-REPORT.md name the gates as not measured. So does
+    the `/pharn-loop` record rule.
+  - Why: the 2026-10-12 review (LOOP-1) found that a hung gate was an ordinary red. `/pharn-loop` rebuilt up to its
+    cap trying to fix a hang, waiting out both timeouts every iteration, while its fix list said the test failed. Its
+    planning probe found a worse case: a gate that catches the runner's SIGTERM and exits 0 was recorded `exit 0`,
+    `timed_out: true` and read as a **PASS**. A test now pins that stamp as `INCONCLUSIVE`. The same stamp, run to
+    completion, still reads `PASS`.
+  - Changed for existing runs: a timed-out regress BASE used to end a `/pharn-loop` run at blocked stop S11
+    (`stale-evidence`). It now ends `STOP_TERMINAL` / `unmeasured`. A verify over an incomplete build with a hung gate
+    reads `INCONCLUSIVE`, where it used to read `FAIL`.
+  - Not changed: a signal exit (128 or above) the runner did not cause, such as a segfault or an OOM kill, is still
+    a measured `FAIL`. Exit 126/127 at regress is still compared on both sides. The positional map
+    `/pharn-dev-verify` types is unchanged.
+  - Bounds: "timed out" means the runner's clock ran out. A real hang, a slow machine and a too-small `--timeout-ms`
+    look the same. A gate that exits 126 or 127 on its own reads as not started. A stale coded report is still re-run
+    once inside the iteration, so a hang can cost one more stage timeout before the stop.
+
 ## [6.58.1] - 2026-10-13
 
 ### Changed

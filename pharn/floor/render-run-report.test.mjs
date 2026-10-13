@@ -674,6 +674,45 @@ test("6.55.0 — a stop on the reconcile terminal cause names the reconcile reas
   }
 });
 
+test("★ 6.59.0 — a stop on an UNMEASURED gate names it beside the verdict: verify's unmeasured_gates, regress's timed-out sides", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": {
+        verdict: "INCONCLUSIVE",
+        failing_gates: [],
+        reason_code: "gate-not-measured",
+        unmeasured_gates: [
+          { id: "test", cause: "timed-out" },
+          { id: "e2e", cause: "not-started" },
+          { id: "odd", cause: "forged | cause" },
+        ],
+      },
+      "regression-report.json": { verdict: "inconclusive", regressions: ["test"], head_timed_out: ["test"], reason_code: "head-timed-out" },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- verify: `INCONCLUSIVE`/);
+    assert.match(md, /verify gate\(s\) NOT MEASURED — neither a pass nor a fail/);
+    assert.match(md, /test {2}timed-out/);
+    assert.match(md, /e2e {2}not-started/);
+    assert.match(md, /odd {2}\(cause not in its closed set\)/);
+    assert.doesNotMatch(md, /forged \| cause/, "an out-of-set cause is never rendered");
+    assert.match(md, /regress head gate run\(s\) TIMED OUT — not a head result/);
+    assert.doesNotMatch(md, /regress base gate run\(s\) TIMED OUT/, "only the side that timed out");
+    assert.deepEqual(headings(md), [...SECTIONS]);
+    // CONTROL: the same verdicts without the keys render no such lines.
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "INCONCLUSIVE", failing_gates: [] },
+      "regression-report.json": { verdict: "inconclusive", regressions: [] },
+    });
+    assert.doesNotMatch(renderRunReport("feat", { repo: root }), /NOT MEASURED|TIMED OUT/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Verdicts: the per-AC table (6.20.0) is the report's ac_gate, FENCED — a pipe or back-tick in a test id cannot break out", () => {
   const root = scratch();
   try {
@@ -827,6 +866,8 @@ const domainInputs = () => ({
   "verify-report.json": {
     verdict: "FAIL",
     failing_gates: ["ac-delivery", "test", "reconcile"],
+    // 6.59.0 — rendered whenever present (the renderer reads no verdict for it), so the closure walks its nodes too
+    unmeasured_gates: [{ id: "slow", cause: "timed-out" }],
     // 6.55.0 — the reconcile detail block, so the closure walks every node the reconcile lines render
     reconcile_detail: {
       state: "parsed",
@@ -851,7 +892,12 @@ const domainInputs = () => ({
       evidence: [{ reason: "ac-never-red", detail: "no red run" }],
     },
   },
-  "regression-report.json": { verdict: "regressions", regressions: ["format:check", { gate: "test", was: 0, now: 1 }] },
+  "regression-report.json": {
+    verdict: "regressions",
+    regressions: ["format:check", { gate: "test", was: 0, now: 1 }],
+    base_timed_out: ["b1"],
+    head_timed_out: ["h1"],
+  },
 });
 
 /** Every node below the root, as a key/index path. */
@@ -932,6 +978,10 @@ test('★ DOMAIN CLOSURE: every node of the three JSON inputs, replaced by `null
       /and 2 more escape/,
       /2 path\(s\) classified `merged`/,
       /checker note/,
+      // 6.59.0 — the not-measured lines, so the closure walks every node they render
+      /slow {2}timed-out/,
+      /regress base gate run\(s\) TIMED OUT/,
+      /regress head gate run\(s\) TIMED OUT/,
     ]) {
       assert.match(control, re);
     }

@@ -43,7 +43,9 @@ node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --
 # I run as in full mode, and stale regress evidence on disk is never opened; the document gains `mode` (last key; null
 # on a usage error or checker-crashed). THE CHECKS, first failure decides, fabrication (J/E/H) before staleness (F/G):
 #   A reports exist + parse (RERUN report-missing|report-malformed) · B a report reason_code in LAPSE_CODES
-#   (RERUN; empty-source-set → STOP, the command maps it to S4; any other member → STOP) · C each of the three
+#   (RERUN; empty-source-set → STOP, the command maps it to S4; an UNMEASURED_CODES member — base-timed-out,
+#   gate-not-measured, head-timed-out, 6.59.0 — passes, a verdict check-loop.mjs stops STOP_TERMINAL; any other
+#   member → STOP) · C each of the three
 #   stamps validates (missing/lapse RERUN, else STOP) · D report.gate_run.stamp_sha256 == sha256(stamp bytes)
 #   (RERUN report-stamp-unbound) · J every recorded stdout/stderr sha256 == its log on disk (STOP
 #   output-hash-mismatch — that member's FIRST emitter) · E a LIVE spawnSync re-run of check-verify.mjs

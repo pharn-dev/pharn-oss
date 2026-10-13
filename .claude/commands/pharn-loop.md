@@ -67,7 +67,7 @@ allowed-tools:
     "Bash(echo *)",
   ]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.12.0"
+version: "0.12.1"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -679,7 +679,9 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
      regression) and `N < M`.
      `N++`, back to 1.
    - **`1` `STOP_CAP`** — a measurable red at `N >= M`. Go to Step 6.
-   - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind), an
+   - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind — a gate the
+     runner timed out or could not start included: verify `.unmeasured_gates[]`, regress `.head_timed_out[]` /
+     `.base_timed_out[]`, each a gate never measured, never a red one), an
      **AC-evidence red**, or a **reconcile red** (a retry would re-anchor the baseline and erase the detected Bash
      escape). The JSON's closed `terminal_cause` says which: **`ac-evidence` is S13** (`blocked: ac-evidence-invalid`)
      — a blocked stop, recorded as Step 2 says; `unmeasured` and `reconcile` go to Step 6 with the decision as
