@@ -36,32 +36,23 @@
 // strongest form of the trust-fence discipline. (See the ★ tests in scan-code-deserialization.test.mjs — they are
 // the whole reason this is FLOOR, not judgment.)
 //
-// Single-file by contract (v0.1.0): scans ONE code file, mirroring scan-code-injection.mjs's <code-file> arg.
-// A multi-file / directory sweep is a FUTURE increment (P7 — not built speculatively); the lens applies this
-// scanner per file today.
+// Per-file by contract: every verdict is about ONE file's text, mirroring scan-code-injection.mjs. The scanner
+// takes one `<code-file>`, or many through `--files` (review-fanout) — the batch mode `/pharn-review`'s
+// prefilter spawns once per review — and each file's verdict is the same either way
+// (pharn/floor/code-scanner-cli.mjs owns both modes). A cross-file / directory sweep is a FUTURE increment.
 //
 // Non-LLM, stdlib-only, fail-closed. MIRRORS the fail-closed contract of scan-code-injection.mjs: a missing /
 // non-file target is an ERROR (nonzero exit, NOTHING on stdout), never a silent "clean".
 //
 // Usage:  node pharn/floor/scan-code-deserialization.mjs <code-file>
+//         node pharn/floor/scan-code-deserialization.mjs --files <nul-separated-list | ->
 // Output: {"found":<bool>,"hits":[{"line":<int>,"kind":"<pattern-kind>"},...]} on stdout; exit 0 on a
 //         successful scan (whatever the result). `found` === (hits.length > 0); hits sorted by line, then kind.
 //         Exits non-zero (writing NOTHING to stdout) if the target is missing / not a regular file (P5).
+//         With --files: one {"results":[…]} document, one entry per listed path (code-scanner-cli.mjs).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
-
-const TARGET = process.argv[2];
-
-function fail(msg) {
-  process.stderr.write("scan-code-deserialization: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-deserialization.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
 // The fixed detection set — one entry per dangerous sink KIND. Each `re` is a recognized dangerous callee
 // (membership over a fixed name set, P5). `unsafe-yaml-load` alone carries an `unless` negative guard: a
@@ -82,22 +73,18 @@ const PATTERNS = [
   { kind: "unsafe-yaml-load", re: /\byaml\.load\s*\(/, unless: /SafeLoader/ },
 ];
 
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
-
-const hits = [];
-const lines = text.split(/\r?\n/);
-for (let i = 0; i < lines.length; i++) {
-  for (const { kind, re, unless } of PATTERNS) {
-    if (re.test(lines[i]) && !(unless && unless.test(lines[i]))) hits.push({ line: i + 1, kind });
+/** The hits for one file's text. Keeps nothing between calls: no PATTERNS regex carries a `g`/`y` flag. */
+export function scanText(text) {
+  const hits = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    for (const { kind, re, unless } of PATTERNS) {
+      if (re.test(lines[i]) && !(unless && unless.test(lines[i]))) hits.push({ line: i + 1, kind });
+    }
   }
+  // Deterministic order: by line, then by kind (a line matching >1 pattern yields >1 hit, stably ordered).
+  hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
+  return hits;
 }
-// Deterministic order: by line, then by kind (a line matching >1 pattern yields >1 hit, stably ordered).
-hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
 
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-deserialization", scanText, process.argv.slice(2));

@@ -56,33 +56,17 @@
 // shape (empty, prose, or clean code) is a SUCCESSFUL scan → {"found":false,"hits":[]} on stdout, exit 0.
 //
 // Usage:  node pharn/floor/scan-code-n-plus-one.mjs <code-file>
+//         node pharn/floor/scan-code-n-plus-one.mjs --files <nul-separated-list | ->   (review-fanout: the batch mode
+//         /pharn-review's prefilter spawns once per review — one {"results":[…]} document, one entry per listed path,
+//         each the per-file verdict below; pharn/floor/code-scanner-cli.mjs owns both modes)
 // Output: {"found":<bool>,"hits":[{"line":<int>,"expr":"<receiver.verb>"}]} on stdout; exit 0 on a successful scan
 //         (whatever the result). `line` = the 1-based ORIGINAL line where the query call begins; `expr` = the matched
 //         `<receiver>.<verb>` (CODE text — untrusted; the LENS renders it only in free-text evidence, never an enum-gated
 //         field). `found` === hits.length > 0. hits sorted by line, then expr. Exits non-zero (writing NOTHING to
 //         stdout) if the target is missing / not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
-
-const TARGET = process.argv[2];
-
-function fail(msg) {
-  process.stderr.write("scan-code-n-plus-one: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-n-plus-one.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
 // --- Comment/string MASK ------------------------------------------------------------------------------------
 // Verbatim reuse of the scan-code-off-by-one.mjs / scan-code-copy-paste-drift.mjs mask (family idiom; consolidation of a
@@ -137,100 +121,106 @@ function mask(src) {
   return out.join("");
 }
 
-const masked = mask(text);
+/**
+ * The hits for one file's text. Keeps nothing between calls: everything below — the loop intervals, the `g` query
+ * regex, the line index — is created inside this function, once per file. The regexes' bytes are unchanged.
+ */
+export function scanText(text) {
+  const masked = mask(text);
 
-// --- Loop-body interval detection (deterministic lexical scan — P5; NO parser/AST) --------------------------
-// Walk the masked text once, tracking a brace stack and a paren stack plus the `header` = the code since the last
-// statement boundary (a `{`, a `}`, or a `;` at paren-depth 0). Two loop-body interval kinds are recorded:
-//   (a) BRACE bodies whose header opens a `for`/`while` — `LOOP_BRACE_HEADER_RE`. (The `;`s inside a C-style
-//       `for (;;)` header sit at paren-depth > 0 and do NOT reset the header, so the `for (` opener is still visible.)
-//   (b) PAREN ranges of a `.forEach`/`.map` member call — `LOOP_CALL_RE` (header ends with `.forEach`/`.map`). This
-//       one range covers BOTH the braced callback (`=> { … }`) and the braceless-arrow callback (`=> …`), so
-//       `.forEach`/`.map` are handled by paren-depth, NOT the brace-header set (the crisp for/while→brace,
-//       forEach/map→paren model).
-// An interval is [openPos, closePos] (the `{`…`}` or `(`…`)` character offsets). A query match at position p is
-// "in a loop" iff some interval has openPos < p < closePos.
-const LOOP_BRACE_HEADER_RE = /\b(?:for|while)\s*\(/; // a for/while whose block body is the `{` we are opening
-const LOOP_CALL_RE = /\.\s*(?:forEach|map)\s*$/; // header ends with `.forEach`/`.map` → this `(` is its callback arg-list
+  // --- Loop-body interval detection (deterministic lexical scan — P5; NO parser/AST) --------------------------
+  // Walk the masked text once, tracking a brace stack and a paren stack plus the `header` = the code since the last
+  // statement boundary (a `{`, a `}`, or a `;` at paren-depth 0). Two loop-body interval kinds are recorded:
+  //   (a) BRACE bodies whose header opens a `for`/`while` — `LOOP_BRACE_HEADER_RE`. (The `;`s inside a C-style
+  //       `for (;;)` header sit at paren-depth > 0 and do NOT reset the header, so the `for (` opener is still visible.)
+  //   (b) PAREN ranges of a `.forEach`/`.map` member call — `LOOP_CALL_RE` (header ends with `.forEach`/`.map`). This
+  //       one range covers BOTH the braced callback (`=> { … }`) and the braceless-arrow callback (`=> …`), so
+  //       `.forEach`/`.map` are handled by paren-depth, NOT the brace-header set (the crisp for/while→brace,
+  //       forEach/map→paren model).
+  // An interval is [openPos, closePos] (the `{`…`}` or `(`…`)` character offsets). A query match at position p is
+  // "in a loop" iff some interval has openPos < p < closePos.
+  const LOOP_BRACE_HEADER_RE = /\b(?:for|while)\s*\(/; // a for/while whose block body is the `{` we are opening
+  const LOOP_CALL_RE = /\.\s*(?:forEach|map)\s*$/; // header ends with `.forEach`/`.map` → this `(` is its callback arg-list
 
-const intervals = [];
-{
-  const braceStack = [];
-  const parenStack = [];
-  let header = "";
-  const N = masked.length;
-  for (let i = 0; i < N; i++) {
-    const c = masked[i];
-    if (c === "{") {
-      braceStack.push({ isLoop: LOOP_BRACE_HEADER_RE.test(header), openPos: i });
-      header = "";
-      continue;
-    }
-    if (c === "}") {
-      const top = braceStack.pop();
-      if (top && top.isLoop) intervals.push([top.openPos, i]);
-      header = "";
-      continue;
-    }
-    if (c === "(") {
-      parenStack.push({ isLoop: LOOP_CALL_RE.test(header), openPos: i });
+  const intervals = [];
+  {
+    const braceStack = [];
+    const parenStack = [];
+    let header = "";
+    const N = masked.length;
+    for (let i = 0; i < N; i++) {
+      const c = masked[i];
+      if (c === "{") {
+        braceStack.push({ isLoop: LOOP_BRACE_HEADER_RE.test(header), openPos: i });
+        header = "";
+        continue;
+      }
+      if (c === "}") {
+        const top = braceStack.pop();
+        if (top && top.isLoop) intervals.push([top.openPos, i]);
+        header = "";
+        continue;
+      }
+      if (c === "(") {
+        parenStack.push({ isLoop: LOOP_CALL_RE.test(header), openPos: i });
+        header += c;
+        continue;
+      }
+      if (c === ")") {
+        const top = parenStack.pop();
+        if (top && top.isLoop) intervals.push([top.openPos, i]);
+        header += c;
+        continue;
+      }
+      if (c === ";" && parenStack.length === 0) {
+        header = "";
+        continue;
+      }
       header += c;
-      continue;
     }
-    if (c === ")") {
-      const top = parenStack.pop();
-      if (top && top.isLoop) intervals.push([top.openPos, i]);
-      header += c;
-      continue;
+  }
+
+  function inLoop(pos) {
+    for (let k = 0; k < intervals.length; k++) {
+      if (intervals[k][0] < pos && pos < intervals[k][1]) return true;
     }
-    if (c === ";" && parenStack.length === 0) {
-      header = "";
-      continue;
+    return false;
+  }
+
+  // --- Query-verb member-call detection (FIXED regex — P5) ----------------------------------------------------
+  // Match `<receiver-chain>.<query-verb>(` where the verb is a WHOLE identifier (the `(?![\w$])` stops `queryString`,
+  // `findOneAndUpdate`, etc. from matching) and is immediately a CALL (`\s*\(`). The receiver chain
+  // `<ident>(.<ident>)*` is required (member-call only): a bare `query(` has no receiver and is out of scope. Verbs are the
+  // unambiguous DB/ORM set ONLY (ambiguous Array/Set/Map/RegExp collisions like `.find`/`.get`/`.delete`/`.exec` are
+  // excluded by construction). Pure pattern match; no LLM, no judgment (§2 primitive #3).
+  const QUERY_RE =
+    /([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)\s*\.\s*(query|execute|findOne|findMany|findFirst|findUnique|findAll|aggregate)(?![\w$])\s*\(/g;
+
+  // 1-based line for an absolute offset (over the ORIGINAL text; masking preserves length + newlines, so offsets align).
+  const lineStarts = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
+  function lineAt(pos) {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid] <= pos) lo = mid;
+      else hi = mid - 1;
     }
-    header += c;
+    return lo + 1;
   }
-}
 
-function inLoop(pos) {
-  for (let k = 0; k < intervals.length; k++) {
-    if (intervals[k][0] < pos && pos < intervals[k][1]) return true;
+  const hits = [];
+  QUERY_RE.lastIndex = 0;
+  let m;
+  while ((m = QUERY_RE.exec(masked)) !== null) {
+    if (!inLoop(m.index)) continue; // the query call must be lexically INSIDE a loop body
+    const expr = (m[1] + "." + m[2]).replace(/\s+/g, ""); // normalize `db . findMany` → `db.findMany`
+    hits.push({ line: lineAt(m.index), expr });
   }
-  return false;
+
+  hits.sort((a, b) => a.line - b.line || (a.expr < b.expr ? -1 : a.expr > b.expr ? 1 : 0));
+  return hits;
 }
 
-// --- Query-verb member-call detection (FIXED regex — P5) ----------------------------------------------------
-// Match `<receiver-chain>.<query-verb>(` where the verb is a WHOLE identifier (the `(?![\w$])` stops `queryString`,
-// `findOneAndUpdate`, etc. from matching) and is immediately a CALL (`\s*\(`). The receiver chain
-// `<ident>(.<ident>)*` is required (member-call only): a bare `query(` has no receiver and is out of scope. Verbs are the
-// unambiguous DB/ORM set ONLY (ambiguous Array/Set/Map/RegExp collisions like `.find`/`.get`/`.delete`/`.exec` are
-// excluded by construction). Pure pattern match; no LLM, no judgment (§2 primitive #3).
-const QUERY_RE =
-  /([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*)\s*\.\s*(query|execute|findOne|findMany|findFirst|findUnique|findAll|aggregate)(?![\w$])\s*\(/g;
-
-// 1-based line for an absolute offset (over the ORIGINAL text; masking preserves length + newlines, so offsets align).
-const lineStarts = [0];
-for (let i = 0; i < text.length; i++) if (text[i] === "\n") lineStarts.push(i + 1);
-function lineAt(pos) {
-  let lo = 0;
-  let hi = lineStarts.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (lineStarts[mid] <= pos) lo = mid;
-    else hi = mid - 1;
-  }
-  return lo + 1;
-}
-
-const hits = [];
-QUERY_RE.lastIndex = 0;
-let m;
-while ((m = QUERY_RE.exec(masked)) !== null) {
-  if (!inLoop(m.index)) continue; // the query call must be lexically INSIDE a loop body
-  const expr = (m[1] + "." + m[2]).replace(/\s+/g, ""); // normalize `db . findMany` → `db.findMany`
-  hits.push({ line: lineAt(m.index), expr });
-}
-
-hits.sort((a, b) => a.line - b.line || (a.expr < b.expr ? -1 : a.expr > b.expr ? 1 : 0));
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-n-plus-one", scanText, process.argv.slice(2));

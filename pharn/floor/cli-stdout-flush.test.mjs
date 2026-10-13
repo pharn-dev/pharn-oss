@@ -10,6 +10,11 @@
 // check-verify and check-regress (check-loop-fresh.mjs check E), check-loop (check-loop-decision.mjs) — plus
 // check-red-run, which the review named (its `--verdict` lists every failed test per AC). Every other floor CLI's
 // spawner reads only its exit status or first line, which a 64 KiB cut cannot reach.
+// Since review-fanout the set also holds EVERY code scanner (`scan-code-*.mjs`): render-review-assignments.mjs
+// JSON-parses each one's `--files` batch document, which over a large target is far past 64 KiB, and a cut document
+// would turn every file of that lens into a scanner error. Their rows are DERIVED from lens-scanner-map.json and
+// asserted set-equal to the scanners on disk (L36), never hand-listed. A scanner ends `process.exitCode =
+// runScannerCli(…)` (form "scanner"), and its crash preload replaces `process.stdout.write`, the call it prints with.
 //
 // WHAT THIS FILE CAN AND CANNOT PROVE, stated because it is not obvious:
 //   * The STATIC pin (no code line calls `process.exit(`) is the platform-independent guard — and a PROXY.
@@ -23,7 +28,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,13 +36,35 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PIPE_BUFFER = 65536;
 
-/** THE SET. `form` is how the CLI ends; `crashArgs` reach a print on the first code path (bad usage). */
+/** The code scanners, from the map (THE SET's derived half). */
+const SCANNERS = [
+  ...new Set(
+    Object.values(JSON.parse(readFileSync(join(HERE, "lens-scanner-map.json"), "utf8")).scanners).filter((s) => typeof s === "string")
+  ),
+].sort();
+
+/** A real file every scanner can read — the scanners' print is the verdict of a successful scan, not bad usage. */
+const SCAN_FIXTURE_DIR = mkdtempSync(join(tmpdir(), "flush-scan-"));
+const SCAN_FIXTURE = join(SCAN_FIXTURE_DIR, "fixture.js");
+writeFileSync(SCAN_FIXTURE, 'const k = "AKIAIOSFODNN7EXAMPLE";\n');
+process.on("exit", () => rmSync(SCAN_FIXTURE_DIR, { recursive: true, force: true }));
+
+/** THE SET. `form` is how the CLI ends; `crashArgs` reach a print on the first code path (bad usage, or a scan). */
 const FLUSH_CLIS = [
   { file: "check-verify.mjs", form: "sentinel", crashArgs: [] },
   { file: "check-regress.mjs", form: "sentinel", crashArgs: [] },
   { file: "check-loop.mjs", form: "sentinel", crashArgs: [] },
   { file: "check-red-run.mjs", form: "exitCode", crashArgs: [] },
+  ...SCANNERS.map((file) => ({ file, form: "scanner", crashArgs: [SCAN_FIXTURE] })),
 ];
+
+test("✧ THE SET's scanner rows are exactly the scan-code-*.mjs files on disk (L36 — derived, never hand-listed)", () => {
+  const onDisk = readdirSync(HERE)
+    .filter((f) => f.startsWith("scan-code-") && f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
+    .sort();
+  assert.ok(SCANNERS.length >= 18, `${SCANNERS.length} scanner row(s)`);
+  assert.deepEqual(SCANNERS, onDisk);
+});
 
 /** Code lines only: a line whose first non-blank characters open a comment is prose, and the fix's own rationale
  *  names the call it replaced. */
@@ -51,17 +78,28 @@ test("✧ STATIC PIN — no code line of a CLI in the set ends the process with 
     if (form === "sentinel") {
       assert.match(src, /process\.exitCode = code;\n\s*throw EMITTED;/, `${file}: emit sets exitCode, then unwinds`);
       assert.match(src, /catch \(e\) \{\n\s*if \(e !== EMITTED\) throw e;\n\s*\}/, `${file}: the catch swallows ONLY the sentinel`);
+    } else if (form === "scanner") {
+      assert.match(src, /process\.exitCode = runScannerCli\(/, `${file}: the exit code is set from the shared front end, never forced`);
     } else {
       assert.match(src, /process\.exitCode = main\(process\.argv\);/, `${file}: the exit code is set, never forced`);
     }
   }
+  // The scanners' shared front end prints for all of them, so it carries the same pin.
+  const core = codeLines(readFileSync(join(HERE, "code-scanner-cli.mjs"), "utf8")).filter((l) => /\bprocess\.exit\s*\(/.test(l));
+  assert.deepEqual(core, [], "code-scanner-cli.mjs ends nothing through an immediate exit");
 });
 
 test("★ a crash stays a crash — a non-sentinel throw exits non-zero with its stack and prints no verdict (GATE-1 condition 1)", () => {
   // No CLI in the set has a natural input that throws inside main() (every read is caught into a verdict), so a
-  // preload makes console.log itself throw — the first thing each CLI does on its bad-usage path.
-  const preload = 'data:text/javascript,console.log=()=>{throw new Error("pharn-test-crash")}';
-  for (const { file, crashArgs } of FLUSH_CLIS) {
+  // preload makes the CLI's print call itself throw — console.log for the checkers (the first thing each does on its
+  // bad-usage path), process.stdout.write for the scanners (console.log would swallow a throwing write, and the
+  // scanners never call it).
+  const preloads = {
+    console: 'data:text/javascript,console.log=()=>{throw new Error("pharn-test-crash")}',
+    write: 'data:text/javascript,process.stdout.write=()=>{throw new Error("pharn-test-crash")}',
+  };
+  for (const { file, form, crashArgs } of FLUSH_CLIS) {
+    const preload = form === "scanner" ? preloads.write : preloads.console;
     const script = join(HERE, file);
     const normal = spawnSync(process.execPath, [script, ...crashArgs], { encoding: "utf8" });
     assert.notEqual(normal.status, 1, `${file}: the control's own exit must differ from a crash's, or this proves nothing`);
@@ -118,3 +156,26 @@ test("★ check-regress — a >64 KiB `verdict` reaches a pipe whole", (t) => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+for (const scanner of SCANNERS) {
+  test(`★ ${scanner} — a >64 KiB --files batch document reaches a pipe whole`, (t) => {
+    // One hit-bearing file listed 600 times under a long name: each result names the path and its hit, so the
+    // document passes the pipe buffer whatever the scanner detects.
+    const dir = mkdtempSync(join(tmpdir(), "flush-batch-"));
+    try {
+      const file = join(dir, `${"long-name-".repeat(12)}.js`);
+      writeFileSync(file, 'const k = "AKIAIOSFODNN7EXAMPLE";\n');
+      const list = Array.from({ length: 600 }, () => file).join(String.fromCharCode(0));
+      const r = spawnSync(process.execPath, [join(HERE, scanner), "--files", "-"], { input: list, encoding: "utf8" });
+      const bytes = Buffer.byteLength(r.stdout);
+      assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+      assert.equal(r.status, 0, r.stderr);
+      const doc = JSON.parse(r.stdout);
+      assert.equal(doc.results.length, 600, "every listed path has its entry");
+      assert.ok(doc.results.every((e) => e.file === file && Array.isArray(e.hits)));
+      t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}

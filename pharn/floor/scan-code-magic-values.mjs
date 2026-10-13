@@ -50,6 +50,9 @@
 // shape (empty, prose, or clean code) is a SUCCESSFUL scan → {"found":false,"hits":[]} on stdout, exit 0.
 //
 // Usage:  node pharn/floor/scan-code-magic-values.mjs <code-file>
+//         node pharn/floor/scan-code-magic-values.mjs --files <nul-separated-list | ->   (review-fanout: the batch
+//         mode /pharn-review's prefilter spawns once per review — one {"results":[…]} document, one entry per listed
+//         path, each the per-file verdict below; pharn/floor/code-scanner-cli.mjs owns both modes)
 // Output: {"found":<bool>,"hits":[{"line":<int>,"kind":"number"|"string","literal":"<the literal text>"}]} on stdout;
 //         exit 0 on a successful scan (whatever the result). `line` = the 1-based ORIGINAL line of the comparison
 //         operand. `literal` = the matched CODE text (a number like "86400", or a string WITH quotes like "\"ADMIN\"")
@@ -57,27 +60,8 @@
 //         > 0. hits sorted by (line, kind, literal). Exits non-zero (writing NOTHING to stdout) if the target is missing
 //         / not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
-
-const TARGET = process.argv[2];
-
-function fail(msg) {
-  process.stderr.write("scan-code-magic-values: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-magic-values.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
 // --- Comment/string MASK (+ real string-span recording) -----------------------------------------------------
 // Adapted from the scan-code-off-by-one.mjs / scan-code-copy-paste-drift.mjs mask (family idiom; consolidation of a
@@ -178,38 +162,44 @@ function endsWithEqualityOp(masked, before) {
   return two === "==" || two === "!=";
 }
 
-const { masked, spans } = maskAndSpans(text);
-const lineOf = makeLineOf(text);
-const hits = [];
+/**
+ * The hits for one file's text. Keeps nothing between calls: every per-file value is local, and the module-level
+ * `g` regex NUM_RE is reset (`lastIndex = 0`) before every line it scans.
+ */
+export function scanText(text) {
+  const { masked, spans } = maskAndSpans(text);
+  const lineOf = makeLineOf(text);
+  const hits = [];
 
-// (a) numeric — per masked line (a comparison and its numeric operand sit on one physical line).
-const maskedLines = masked.split("\n");
-for (let k = 0; k < maskedLines.length; k++) {
-  const line = maskedLines[k];
-  NUM_RE.lastIndex = 0;
-  let m;
-  while ((m = NUM_RE.exec(line)) !== null) {
-    const value = Number(m[2]);
-    if (!NUM_ALLOW.has(value)) hits.push({ line: k + 1, kind: "number", literal: m[2] });
+  // (a) numeric — per masked line (a comparison and its numeric operand sit on one physical line).
+  const maskedLines = masked.split("\n");
+  for (let k = 0; k < maskedLines.length; k++) {
+    const line = maskedLines[k];
+    NUM_RE.lastIndex = 0;
+    let m;
+    while ((m = NUM_RE.exec(line)) !== null) {
+      const value = Number(m[2]);
+      if (!NUM_ALLOW.has(value)) hits.push({ line: k + 1, kind: "number", literal: m[2] });
+    }
   }
+
+  // (b) string — for each recorded NON-EMPTY real string span, is the immediately-preceding (same-line) token an
+  // equality operator? The operator is read from MASKED code (so an operator inside a comment/string cannot match), and
+  // the span is a REAL code string (a `"` in a comment is never recorded) — injection-immune by construction (P2).
+  for (const s of spans) {
+    if (s.end - s.start <= 2) continue; // empty string ("" / '') — emptiness check, not a magic value
+    let j = s.start - 1;
+    while (j >= 0 && (masked[j] === " " || masked[j] === "\t" || masked[j] === "\r")) j--; // skip same-line whitespace
+    if (j >= 0 && endsWithEqualityOp(masked, j)) {
+      hits.push({ line: lineOf(s.start), kind: "string", literal: text.slice(s.start, s.end) });
+    }
+  }
+
+  hits.sort(
+    (a, b) =>
+      a.line - b.line || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0) || (a.literal < b.literal ? -1 : a.literal > b.literal ? 1 : 0)
+  );
+  return hits;
 }
 
-// (b) string — for each recorded NON-EMPTY real string span, is the immediately-preceding (same-line) token an
-// equality operator? The operator is read from MASKED code (so an operator inside a comment/string cannot match), and
-// the span is a REAL code string (a `"` in a comment is never recorded) — injection-immune by construction (P2).
-for (const s of spans) {
-  if (s.end - s.start <= 2) continue; // empty string ("" / '') — emptiness check, not a magic value
-  let j = s.start - 1;
-  while (j >= 0 && (masked[j] === " " || masked[j] === "\t" || masked[j] === "\r")) j--; // skip same-line whitespace
-  if (j >= 0 && endsWithEqualityOp(masked, j)) {
-    hits.push({ line: lineOf(s.start), kind: "string", literal: text.slice(s.start, s.end) });
-  }
-}
-
-hits.sort(
-  (a, b) =>
-    a.line - b.line || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0) || (a.literal < b.literal ? -1 : a.literal > b.literal ? 1 : 0)
-);
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-magic-values", scanText, process.argv.slice(2));

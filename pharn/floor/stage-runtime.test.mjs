@@ -590,7 +590,9 @@ const GIT_SPAWNS = {
   "check-bash-reconcile.mjs": [null, null, "diff"], // 6.52.0: the merged classification's two argv helpers
   "instruction-files.mjs": [null, null],
   "reconcile-baseline.mjs": ["ls-files", "rev-parse"], // 6.52.0: headCommit() records anchored_head
-  "render-review-assignments.mjs": ["merge-base", "rev-parse", "diff"],
+  // review-fanout: the work-tree probe (rev-parse, bounded) and the directory listing (`--literal-pathspecs ls-files`),
+  // ahead of the merge-base diff's three.
+  "render-review-assignments.mjs": ["rev-parse", "--literal-pathspecs", "merge-base", "rev-parse", "diff"],
   "render-run-report.mjs": [null],
   "render-ship-briefing.mjs": ["rev-parse"],
   "loop-closeout.mjs": [null], // 6.44.0: one argv-vector helper (gitRun), with a maxBuffer
@@ -663,8 +665,9 @@ test("★ GIT CEILING — every git spawn in a shipped floor module is listed, a
   assert.deepEqual(map, GIT_SPAWNS, "the enumeration (L29): list a new or removed git spawn here in the same diff");
   assert.equal(
     spawns.length,
-    15,
-    "non-vacuity (L34): the fifteen spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0; the reconciler's three, 6.52.0)"
+    17,
+    "non-vacuity (L34): the seventeen spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0; the reconciler's three, " +
+      "6.52.0; the review emitter's work-tree probe and directory listing, review-fanout)"
   );
   assert.deepEqual(
     ceilingViolations(spawns).map((s) => `${s.file}: ${s.text}`),
@@ -686,8 +689,22 @@ test("★ GIT CEILING discriminates — each property has a falsifier (L60)", ()
     ["stage-runtime.mjs"]
   );
   assert.deepEqual(
-    ceilingViolations(scanSpawns(without("render-review-assignments.mjs", "      maxBuffer: 1 << 28,\n"))).map((s) => `${s.file}:${s.sub}`),
+    ceilingViolations(scanSpawns(without("render-review-assignments.mjs", "      maxBuffer: MAX_BUFFER,\n"))).map(
+      (s) => `${s.file}:${s.sub}`
+    ),
     ["render-review-assignments.mjs:diff"]
+  );
+  // (b') the emitter's directory listing (review-fanout) without its ceiling: flagged, alone. The anchor is the
+  // listing call's own tail, so only its `maxBuffer` line goes and the call still closes.
+  const listingTail = "    maxBuffer: MAX_BUFFER,\n  });\n  return out.split(NUL)";
+  assert.ok(real["render-review-assignments.mjs"].includes(listingTail), "mutation anchor not found (L60): the listing call's tail");
+  const noListingCeiling = {
+    ...real,
+    "render-review-assignments.mjs": real["render-review-assignments.mjs"].replace(listingTail, "  });\n  return out.split(NUL)"),
+  };
+  assert.deepEqual(
+    ceilingViolations(scanSpawns(noListingCeiling)).map((s) => `${s.file}:${s.sub}`),
+    ["render-review-assignments.mjs:--literal-pathspecs"]
   );
   // (c) synthetic sources: the rule by subcommand (and a variable argv), a `)` string and a comment inside a call, and
   // the comment-line skip.

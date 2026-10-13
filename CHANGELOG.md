@@ -23,6 +23,100 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.59.0] - 2026-10-13
+
+### Added
+
+- **`/pharn-review`'s prefilter spawns each code scanner once per review, under a time limit, instead of once per
+  file.**
+  - What changed:
+    - Every `pharn/floor/scan-code-*.mjs` scanner takes `--files <list | ->`, a NUL-separated path list, and prints
+      one `{"results":[…]}` document with one entry per path. The single-file mode is unchanged.
+    - The new `pharn/floor/code-scanner-cli.mjs` serves both modes for all 18 scanners. Each scanner keeps its
+      detection in `scanText(text)`; no regex changed.
+    - Each scanner now ends through `process.exitCode`, because a batch document far past 64 KiB is cut at 65,536
+      bytes on a darwin pipe when the process exits at once.
+    - `render-review-assignments.mjs` spawns each mapped scanner once over the whole target, under 30 s + 5 ms per
+      KiB of target.
+    - A spawn that times out or fails is recorded in a new `scanner_failures[]` (`timeout` | `error`) and named on
+      stderr. Every target file goes to `scanner_errors[]` for that lens.
+  - Why: the 2026-10-12 review (CTX-3, with LOOP-6 / CTX-6) measured one node process per (lens × file). That is
+    18 × N spawns before any lens runs, about 4 h for a 24k-file `--target .`.
+  - Measured on this machine, which other agents shared (load average 38–63; `.dev/features/review-fanout/MEASUREMENTS.md`):
+    - **Same 300 files of this repo, run back to back:** 330.6 s and 5,400 spawns before; 7.0 s and 18 spawns after.
+    - **This repo's whole `--target .` (2,911 files):** 35–44 s after. Before was projected at about 59 min from
+      61–68 ms per spawn.
+    - **A synthetic ~26k-file tree (189 MB):** after, the slowest scanner's one spawn took 43.5 s and the whole run
+      projects to about 6.5 min. Before was 467,028 spawns, projected at 3.5–8.8 h. A whole after-run did not
+      finish, because the shared machine's load reached 204.
+    - **The time limit, checked against these runs:** 152 s against 5.8 s for the slowest scanner on this repo, and
+      999 s against 43.5 s on the big tree.
+  - Checked by:
+    - **★ batch ≡ single** in `code-scanner-cli.test.mjs`. For all 18 scanners, read from the lens map and pinned
+      set-equal to disk, each batch entry must equal that file's real single-file run. The corpus is 113 files: the
+      75 lens eval cases, each scanner's source and tests, and a missing path. Every scanner must hit at least one
+      file and miss at least one.
+    - **Its negative control:** a scanner that keeps its hit list at module level must be caught.
+      `scan-code-placeholder.mjs` had exactly that shape until this change.
+    - **★ one spawn, timeout, error** tests in `render-review-assignments.test.mjs`. The timeout test has a control:
+      the same sleeping scanner under a wide limit finishes.
+    - **The flush rule:** all 18 scanners join `cli-stdout-flush.test.mjs`. A >64 KiB batch reaches a pipe whole, and
+      the old pattern was measured cut at 65,536 bytes.
+    - **The record:** two new invariants in `check-review-assignments.mjs` (I8, I9) validate it.
+  - **Not covered: the 22-subagent fan-out is NOT reduced.**
+    - CTX-3 named two costs. This PR cuts the first, the per-file spawns.
+    - It does not touch the second: each of up to 22 lens subagents still pays a fresh 68k–130k-token prefix.
+    - Grouping lenses into fewer subagents is left for the follow-up `review-lens-grouping`. Showing that grouped
+      lenses still produce the same findings on the 75 lens evals would cost about 30M–60M tokens of live eval runs.
+    - What this PR does cut on that side is the input to the 4 scanner-less lenses: a directory target no longer
+      hands them ignored, binary or oversized files (next entry).
+  - Bounds:
+    - The time limits of the scanners that hang add up, because the 18 spawns run one after another. One many-sinks
+      line can stall the injection, SSRF and path-traversal scanners in turn.
+    - The time limit stops a hung scanner from stalling the prefilter. It does not stop a lens subagent that runs
+      a scanner itself (TST-2 / TST-3 are not fixed here).
+- **A directory review target skips git-ignored, binary, oversized and non-regular files, and the record lists each
+  one.**
+  - What changed: `render-review-assignments.mjs` now builds the target as follows.
+    - **A named directory** expands, inside a git work tree, to what
+      `git --literal-pathspecs ls-files --cached --others --exclude-standard` lists. Outside one, it uses a walk
+      that never follows a symlink.
+    - **Paths under `.git` or `node_modules`** are dropped, as before.
+    - **Every file it finds**, from a directory and from the merge-base diff alike, is checked with `lstat`. It is
+      skipped if it is not a regular file, larger than 512 KiB, or has a NUL byte in its first 8,000 bytes.
+    - **A file named on the command line** is kept as named, which is how a user overrides a skip.
+    - **The record** gains `skipped[]`, each entry `{path, reason}`, where `reason` is one of `binary`,
+      `excluded-name`, `git-ignored`, `not-a-regular-file` or `over-size-cap`.
+    - **When every file found was skipped**, the refusal says so by reason and names the override.
+  - Why: the old walk read no ignore rules and followed symlinks. On the review's tree, `--target .` handed every
+    lens an ignored build directory and 5 MB files.
+  - Checked by: fixtures in `render-review-assignments.test.mjs` cover each input kind git and the filesystem can
+    produce:
+    - tracked, untracked and ignored files, and an ignored directory;
+    - a `node_modules` file;
+    - links to a file and to a directory, and a dangling link;
+    - a deleted tracked file;
+    - binary, oversized and at-the-cap files;
+    - a path with a space;
+    - a directory named `[id]`;
+    - a non-git tree.
+
+    Mutants that judged files by following symlinks (`stat` instead of `lstat`), or that dropped
+    `--literal-pathspecs`, each turn a test red.
+
+  - Not a claim: the skip rules are git's ignore rules and git's binary sniff. A skipped file is not judged safe.
+
+### Fixed
+
+- **A lens whose scanner failed on every file is no longer skippable as "no hits".**
+  - What changed: `/pharn-review` Step 3 now gives a scanner-bound lens its slice plus every `scanner_errors` file
+    that names it. A lens may be skipped only when both are empty.
+  - Why: the record already kept an errored file out of the slice, because a failed scanner gives no verdict. But
+    Step 3 let a lens with an empty slice be skipped, so a lens whose scanner errored on every file was dropped
+    exactly as if it had found nothing. A timeout now makes that case reachable.
+  - Not a claim (ADVISORY): spawning is orchestration, and nothing on the floor forces the spawn. The record
+    (`scanner_failures`, I9) and the merge's `scanner-errored` label make a skipped spawn visible.
+
 ## [6.58.1] - 2026-10-13
 
 ### Changed

@@ -75,32 +75,16 @@
 // target is an ERROR (nonzero exit, NOTHING on stdout), never a silent "clean".
 //
 // Usage:  node pharn/floor/scan-code-missing-timeout.mjs <code-file>
+//         node pharn/floor/scan-code-missing-timeout.mjs --files <nul-separated-list | ->   (review-fanout: the batch
+//         mode /pharn-review's prefilter spawns once per review — one {"results":[…]} document, one entry per listed
+//         path, each the per-file verdict below; pharn/floor/code-scanner-cli.mjs owns both modes)
 // Output: {"found":<bool>,"hits":[{"line":<int>,"kind":"missing-timeout"},...]} on stdout; exit 0 on a successful
 //         scan (whatever the result). `found` === (hits.length > 0); hits sorted by line. `line` is the CALL line —
 //         the fix site where a timeout / signal / abort belongs — never a comment line. Exits non-zero (writing
 //         NOTHING to stdout) if the target is missing / not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
-
-const TARGET = process.argv[2];
-
-function fail(msg) {
-  process.stderr.write("scan-code-missing-timeout: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-missing-timeout.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
 // --- Comment/string MASK ------------------------------------------------------------------------------------
 // Same single-pass mini-lexer as scan-code-resource-leak.mjs (accepted, deferred duplication of the shared idiom —
@@ -155,162 +139,168 @@ function mask(src) {
   return out.join("");
 }
 
-const masked = mask(text);
+/**
+ * The hits for one file's text. Keeps nothing between calls: everything below — the masks, the `g` call regex, the
+ * hits — is created inside this function, once per file.
+ */
+export function scanText(text) {
+  const masked = mask(text);
 
-// --- Suppression-only template-interior MASK ----------------------------------------------------------------
-// DETECTION (CALL_RE + the paren-match, below) runs over `masked` with template literals INTACT, so it survives
-// ```-fenced code in a MARKDOWN eval fixture. But the SUPPRESSION read (the timeout-INDICATOR test over the call's
-// args) must NOT read a template literal's STRING content as code — otherwise untrusted backtick text supplies a fake
-// indicator token and silences a real no-timeout call (taint laundering INTO the enum-gated verdict, P2). So the
-// indicator test runs over THIS second copy, in which template-literal interiors are ALSO blanked. Two rules keep
-// detection fence-robust:
-//   • a RUN OF ≥3 BACKTICKS is a MARKDOWN CODE-FENCE marker → emitted unchanged, NOT a template delimiter (this
-//     preserves the real code that lives BETWEEN ```-fences; the ≥3-run skip is load-bearing);
-//   • a SINGLE (or double) backtick opens a TEMPLATE STRING (mask mode); inside it every char is blanked to a space
-//     (newline preserved), and a backtick closes it (a run of exactly TWO backticks `` is an EMPTY template —
-//     nothing masked). A DEPTH-AWARE STACK (not a boolean toggle) tracks `${…}` interpolation: interpolation CODE is
-//     left READABLE, and a backtick inside it opens ANOTHER nested template (masked) — so a nested `${`timeout`}`
-//     masks its inner string at ANY depth (the old boolean mis-closed on that inner backtick and re-laundered it).
-// MONOTONICITY (P0/P2): this pass only ever ADDS masking to the SUPPRESSION copy; DETECTION reads the untouched
-// `masked`, so no crafted backtick input can REMOVE masking to re-enable suppression — the fix can only over-flag,
-// never launder. Length + newlines are preserved 1:1, so offsets map back to `masked`. (Verbatim the #67 helper added
-// to scan-code-null-deref.mjs / scan-code-resource-leak.mjs — a deferred shared-util consolidation, P7.)
-function maskTemplateInteriors(src) {
-  const out = src.split("");
-  const N = src.length;
-  const space = (ch) => (ch === "\n" ? "\n" : " ");
-  // Depth-aware template/interpolation parse (NOT a boolean toggle — the old `inTmpl` boolean mis-closed a
-  // template on the FIRST backtick inside a `${…}` interpolation, exposing a NESTED template's interior as
-  // code and re-laundering a suppressor). `stack` holds the open contexts, innermost last:
-  //   • { kind: "tmpl" }          — inside a template-literal STRING: every char is blanked (mask mode).
-  //   • { kind: "interp", depth } — inside a `${…}` interpolation: chars are readable CODE; `depth` tracks
-  //                                 `{`/`}` nesting so the matching `}` (depth 0) closes the interpolation.
-  // A backtick inside an interpolation opens ANOTHER nested template (push) — proper stack balance at ANY
-  // depth, so `${`user`}` masks the inner `user` instead of exposing it. Only template-STRING interiors are
-  // masked; interpolation code and non-template code stay readable. Length + newlines preserved 1:1.
-  const stack = [];
-  const top = () => (stack.length ? stack[stack.length - 1] : null);
-  let i = 0;
-  while (i < N) {
-    const c = src[i];
-    const t = top();
-    if (t && t.kind === "tmpl" && c === "\\") {
-      // Inside a template STRING a backslash escapes the next char: `\`` is a LITERAL backtick (not a close)
-      // and `\${` is LITERAL text (not an interpolation opener). Consume BOTH chars as blanked template text so
-      // the escaped delimiter can't close the template early and leak literal string text into the suppression
-      // copy. Escapes only matter in template strings — interpolation/plain code stays readable.
-      out[i] = space(c);
-      if (i + 1 < N) out[i + 1] = space(src[i + 1]);
-      i += 2;
-      continue;
-    }
-    if (c === "`") {
-      if (!t || t.kind === "interp") {
-        // Outside a template STRING (top level OR interpolation code): a RUN OF ≥3 BACKTICKS is a markdown
-        // ```-fence marker → emit unchanged, do NOT open a template (preserves real code between fences).
-        let j = i;
-        while (j < N && src[j] === "`") j++;
-        if (j - i >= 3) {
-          i = j;
-          continue;
-        }
-        stack.push({ kind: "tmpl" }); // a single (or double) backtick opens a template (nested if in interp)
-        i++;
+  // --- Suppression-only template-interior MASK ----------------------------------------------------------------
+  // DETECTION (CALL_RE + the paren-match, below) runs over `masked` with template literals INTACT, so it survives
+  // ```-fenced code in a MARKDOWN eval fixture. But the SUPPRESSION read (the timeout-INDICATOR test over the call's
+  // args) must NOT read a template literal's STRING content as code — otherwise untrusted backtick text supplies a fake
+  // indicator token and silences a real no-timeout call (taint laundering INTO the enum-gated verdict, P2). So the
+  // indicator test runs over THIS second copy, in which template-literal interiors are ALSO blanked. Two rules keep
+  // detection fence-robust:
+  //   • a RUN OF ≥3 BACKTICKS is a MARKDOWN CODE-FENCE marker → emitted unchanged, NOT a template delimiter (this
+  //     preserves the real code that lives BETWEEN ```-fences; the ≥3-run skip is load-bearing);
+  //   • a SINGLE (or double) backtick opens a TEMPLATE STRING (mask mode); inside it every char is blanked to a space
+  //     (newline preserved), and a backtick closes it (a run of exactly TWO backticks `` is an EMPTY template —
+  //     nothing masked). A DEPTH-AWARE STACK (not a boolean toggle) tracks `${…}` interpolation: interpolation CODE is
+  //     left READABLE, and a backtick inside it opens ANOTHER nested template (masked) — so a nested `${`timeout`}`
+  //     masks its inner string at ANY depth (the old boolean mis-closed on that inner backtick and re-laundered it).
+  // MONOTONICITY (P0/P2): this pass only ever ADDS masking to the SUPPRESSION copy; DETECTION reads the untouched
+  // `masked`, so no crafted backtick input can REMOVE masking to re-enable suppression — the fix can only over-flag,
+  // never launder. Length + newlines are preserved 1:1, so offsets map back to `masked`. (Verbatim the #67 helper added
+  // to scan-code-null-deref.mjs / scan-code-resource-leak.mjs — a deferred shared-util consolidation, P7.)
+  function maskTemplateInteriors(src) {
+    const out = src.split("");
+    const N = src.length;
+    const space = (ch) => (ch === "\n" ? "\n" : " ");
+    // Depth-aware template/interpolation parse (NOT a boolean toggle — the old `inTmpl` boolean mis-closed a
+    // template on the FIRST backtick inside a `${…}` interpolation, exposing a NESTED template's interior as
+    // code and re-laundering a suppressor). `stack` holds the open contexts, innermost last:
+    //   • { kind: "tmpl" }          — inside a template-literal STRING: every char is blanked (mask mode).
+    //   • { kind: "interp", depth } — inside a `${…}` interpolation: chars are readable CODE; `depth` tracks
+    //                                 `{`/`}` nesting so the matching `}` (depth 0) closes the interpolation.
+    // A backtick inside an interpolation opens ANOTHER nested template (push) — proper stack balance at ANY
+    // depth, so `${`user`}` masks the inner `user` instead of exposing it. Only template-STRING interiors are
+    // masked; interpolation code and non-template code stay readable. Length + newlines preserved 1:1.
+    const stack = [];
+    const top = () => (stack.length ? stack[stack.length - 1] : null);
+    let i = 0;
+    while (i < N) {
+      const c = src[i];
+      const t = top();
+      if (t && t.kind === "tmpl" && c === "\\") {
+        // Inside a template STRING a backslash escapes the next char: `\`` is a LITERAL backtick (not a close)
+        // and `\${` is LITERAL text (not an interpolation opener). Consume BOTH chars as blanked template text so
+        // the escaped delimiter can't close the template early and leak literal string text into the suppression
+        // copy. Escapes only matter in template strings — interpolation/plain code stays readable.
+        out[i] = space(c);
+        if (i + 1 < N) out[i + 1] = space(src[i + 1]);
+        i += 2;
         continue;
       }
-      stack.pop(); // t.kind === "tmpl": a backtick closes the current template
-      i++;
-      continue;
-    }
-    if (t && t.kind === "tmpl" && c === "$" && i + 1 < N && src[i + 1] === "{") {
-      stack.push({ kind: "interp", depth: 0 }); // `${` opens interpolation; `$` and `{` are readable code
-      i += 2;
-      continue;
-    }
-    if (t && t.kind === "interp") {
-      if (c === "{") {
-        t.depth++;
-        i++;
-        continue;
-      }
-      if (c === "}") {
-        if (t.depth === 0) {
-          stack.pop(); // matching `}` closes the interpolation, back to the enclosing template
+      if (c === "`") {
+        if (!t || t.kind === "interp") {
+          // Outside a template STRING (top level OR interpolation code): a RUN OF ≥3 BACKTICKS is a markdown
+          // ```-fence marker → emit unchanged, do NOT open a template (preserves real code between fences).
+          let j = i;
+          while (j < N && src[j] === "`") j++;
+          if (j - i >= 3) {
+            i = j;
+            continue;
+          }
+          stack.push({ kind: "tmpl" }); // a single (or double) backtick opens a template (nested if in interp)
           i++;
           continue;
         }
-        t.depth--;
+        stack.pop(); // t.kind === "tmpl": a backtick closes the current template
         i++;
         continue;
       }
-      i++; // interpolation code — readable
-      continue;
+      if (t && t.kind === "tmpl" && c === "$" && i + 1 < N && src[i + 1] === "{") {
+        stack.push({ kind: "interp", depth: 0 }); // `${` opens interpolation; `$` and `{` are readable code
+        i += 2;
+        continue;
+      }
+      if (t && t.kind === "interp") {
+        if (c === "{") {
+          t.depth++;
+          i++;
+          continue;
+        }
+        if (c === "}") {
+          if (t.depth === 0) {
+            stack.pop(); // matching `}` closes the interpolation, back to the enclosing template
+            i++;
+            continue;
+          }
+          t.depth--;
+          i++;
+          continue;
+        }
+        i++; // interpolation code — readable
+        continue;
+      }
+      if (t && t.kind === "tmpl") {
+        out[i] = space(c); // blank a template-string char
+        i++;
+        continue;
+      }
+      i++; // plain code — preserved
     }
-    if (t && t.kind === "tmpl") {
-      out[i] = space(c); // blank a template-string char
-      i++;
-      continue;
+    return out.join("");
+  }
+
+  const maskedForSuppression = maskTemplateInteriors(masked);
+
+  // --- Helpers ------------------------------------------------------------------------------------------------
+  // Match the delimiter that closes the `open` at `openIdx` in `s`, counting nesting over the MASKED text. Returns the
+  // closing index, or -1 if unbalanced. (Same idiom as scan-code-resource-leak.mjs — deferred dup, P7.)
+  function matchDelim(s, openIdx, open, close) {
+    let depth = 0;
+    for (let i = openIdx; i < s.length; i++) {
+      if (s[i] === open) depth++;
+      else if (s[i] === close) {
+        depth--;
+        if (depth === 0) return i;
+      }
     }
-    i++; // plain code — preserved
+    return -1;
   }
-  return out.join("");
-}
 
-const maskedForSuppression = maskTemplateInteriors(masked);
+  function lineAt(s, idx) {
+    let line = 1;
+    for (let i = 0; i < idx && i < s.length; i++) if (s[i] === "\n") line++;
+    return line;
+  }
 
-// --- Helpers ------------------------------------------------------------------------------------------------
-// Match the delimiter that closes the `open` at `openIdx` in `s`, counting nesting over the MASKED text. Returns the
-// closing index, or -1 if unbalanced. (Same idiom as scan-code-resource-leak.mjs — deferred dup, P7.)
-function matchDelim(s, openIdx, open, close) {
-  let depth = 0;
-  for (let i = openIdx; i < s.length; i++) {
-    if (s[i] === open) depth++;
-    else if (s[i] === close) {
-      depth--;
-      if (depth === 0) return i;
+  // --- Fixed call set + indicator set (P5) --------------------------------------------------------------------
+  // Call-head regex, anchored on LIBRARY / RECEIVER tokens (never a bare verb). The optional axios method group makes
+  // both `axios(` and `axios.get(` match while `axios.create(` does NOT (create ∉ the set, and no bare `axios(` there).
+  const CALL_RE = new RegExp(
+    "\\b(?:" +
+      "fetch" +
+      "|axios(?:\\s*\\.\\s*(?:get|post|put|patch|delete|head|options|request))?" +
+      "|https?\\s*\\.\\s*(?:get|request)" +
+      "|(?:db|pool|client|conn|connection|database|knex|sql)\\s*\\.\\s*query" +
+      ")\\s*\\(",
+    "g"
+  );
+  // FIXED, LENIENT timeout-indicator token set — presence of ANY (as a whole word in the call's args) ⇒ the call is CLEAN.
+  const INDICATOR_RE = /\b(?:timeout|signal|statement_timeout|query_timeout|maxTimeMS)\b/;
+
+  // --- Scan ---------------------------------------------------------------------------------------------------
+  const hits = [];
+  let m;
+  while ((m = CALL_RE.exec(masked)) !== null) {
+    const callOpen = m.index + m[0].length - 1; // the '(' of the matched call
+    const callClose = matchDelim(masked, callOpen, "(", ")");
+    if (callClose === -1) continue; // unbalanced — cannot bound the args (documented bound)
+    // SUPPRESSION read: the indicator test runs over `maskedForSuppression` (template interiors blanked) — NOT `masked`
+    // — so a backtick arg's TEXT can never supply a fake indicator token that silences a real no-timeout call (P2; see
+    // maskTemplateInteriors). Offsets are 1:1, so the SAME callOpen/callClose bound the args in both copies.
+    const args = maskedForSuppression.slice(callOpen + 1, callClose);
+    if (!INDICATOR_RE.test(args)) {
+      hits.push({ line: lineAt(masked, m.index), kind: "missing-timeout" });
     }
   }
-  return -1;
+
+  hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
+  return hits;
 }
 
-function lineAt(s, idx) {
-  let line = 1;
-  for (let i = 0; i < idx && i < s.length; i++) if (s[i] === "\n") line++;
-  return line;
-}
-
-// --- Fixed call set + indicator set (P5) --------------------------------------------------------------------
-// Call-head regex, anchored on LIBRARY / RECEIVER tokens (never a bare verb). The optional axios method group makes
-// both `axios(` and `axios.get(` match while `axios.create(` does NOT (create ∉ the set, and no bare `axios(` there).
-const CALL_RE = new RegExp(
-  "\\b(?:" +
-    "fetch" +
-    "|axios(?:\\s*\\.\\s*(?:get|post|put|patch|delete|head|options|request))?" +
-    "|https?\\s*\\.\\s*(?:get|request)" +
-    "|(?:db|pool|client|conn|connection|database|knex|sql)\\s*\\.\\s*query" +
-    ")\\s*\\(",
-  "g"
-);
-// FIXED, LENIENT timeout-indicator token set — presence of ANY (as a whole word in the call's args) ⇒ the call is CLEAN.
-const INDICATOR_RE = /\b(?:timeout|signal|statement_timeout|query_timeout|maxTimeMS)\b/;
-
-// --- Scan ---------------------------------------------------------------------------------------------------
-const hits = [];
-let m;
-while ((m = CALL_RE.exec(masked)) !== null) {
-  const callOpen = m.index + m[0].length - 1; // the '(' of the matched call
-  const callClose = matchDelim(masked, callOpen, "(", ")");
-  if (callClose === -1) continue; // unbalanced — cannot bound the args (documented bound)
-  // SUPPRESSION read: the indicator test runs over `maskedForSuppression` (template interiors blanked) — NOT `masked`
-  // — so a backtick arg's TEXT can never supply a fake indicator token that silences a real no-timeout call (P2; see
-  // maskTemplateInteriors). Offsets are 1:1, so the SAME callOpen/callClose bound the args in both copies.
-  const args = maskedForSuppression.slice(callOpen + 1, callClose);
-  if (!INDICATOR_RE.test(args)) {
-    hits.push({ line: lineAt(masked, m.index), kind: "missing-timeout" });
-  }
-}
-
-hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-missing-timeout", scanText, process.argv.slice(2));

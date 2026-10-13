@@ -18,6 +18,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkRecord } from "./check-review-assignments.mjs";
+import { SKIP_REASON_ENUM, SCANNER_FAILURE_ENUM } from "./render-review-assignments.mjs";
 
 // A deliberately SMALL registered set — three lenses, two scanner-bound and one fallback — so every
 // mutation below differs from GREEN in exactly one field.
@@ -51,6 +52,9 @@ function greenRecord() {
     unassigned_scanner_bound: ["b.js", "c.md"],
     // The normal state. A non-empty list means a scanner failed to produce a verdict for that file.
     scanner_errors: [],
+    // The normal state for a diff of source files (review-fanout). I8/I9 cases below fill them.
+    skipped: [],
+    scanner_failures: [],
   };
 }
 
@@ -371,6 +375,8 @@ test("the EXECUTED green output states the ASSIGNED claim and disclaims the two 
       ),
       unassigned_scanner_bound: ["only.js"],
       scanner_errors: [],
+      skipped: [],
+      scanner_failures: [],
     };
     const p = join(dir, "green.json");
     writeFileSync(p, JSON.stringify(rec));
@@ -382,4 +388,131 @@ test("the EXECUTED green output states the ASSIGNED claim and disclaims the two 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- I8 skipped (review-fanout) -------------------------------------------------------------------------------------
+// Each RED below is a mutation of a GREEN record that carries a NON-EMPTY skipped list, so the GREEN half is not a
+// pass over an empty domain (L34) and each RED differs from it in one field.
+
+function skippedRecord() {
+  const r = greenRecord();
+  r.skipped = SKIP_REASON_ENUM.map((reason, i) => ({ path: `skipped-${i}/${reason}`, reason }));
+  return r;
+}
+
+test("i8_green: a skipped list naming EVERY reason in the closed enum passes (L29 — the set, not one member)", () => {
+  assert.ok(SKIP_REASON_ENUM.length >= 5, "the enumeration the rule ranges over is not empty");
+  assert.equal(check(skippedRecord()).ok, true);
+});
+
+test("i8_absent: a record without `skipped` is RED, and says such a record predates the field", () => {
+  const r = skippedRecord();
+  delete r.skipped;
+  const out = check(r);
+  assert.equal(out.ok, false);
+  assert.match(out.reason, /^I8 skipped/);
+  assert.match(out.reason, /before review-fanout/);
+});
+
+test("i8_reason: a reason outside the closed enum is RED", () => {
+  const r = skippedRecord();
+  r.skipped[0].reason = "too-boring";
+  const out = check(r);
+  assert.equal(out.ok, false);
+  assert.match(out.reason, /^I8 skipped: .*"too-boring"/);
+});
+
+test("i8_disjoint: a path both skipped and in the target is RED", () => {
+  const r = skippedRecord();
+  r.skipped.push({ path: "a.js", reason: "binary" });
+  const out = check(r);
+  assert.equal(out.ok, false);
+  assert.match(out.reason, /^I8 skipped: path "a\.js" is both skipped and in the resolved target/);
+});
+
+test("i8_path_shape: an empty, control-character or non-string path is RED", () => {
+  for (const path of ["", "evil\nline", 7]) {
+    const r = skippedRecord();
+    r.skipped[0].path = path;
+    const out = check(r);
+    assert.equal(out.ok, false, `path ${JSON.stringify(path)}`);
+    assert.match(out.reason, /^I8 skipped: a path is empty/);
+  }
+});
+
+test("i8/i9 quoting: a {toString:1} value is refused, never thrown (L62)", () => {
+  const hostile = JSON.parse('{"toString":1}');
+  assert.throws(() => String(hostile), TypeError, "the control: this value really does make String() throw");
+  const r1 = skippedRecord();
+  r1.skipped[0].reason = hostile;
+  assert.match(check(r1).reason, /^I8 skipped/);
+  const r2 = failedRecord("timeout");
+  r2.scanner_failures[0].reason = hostile;
+  assert.match(check(r2).reason, /^I9 scanner-failures/);
+});
+
+// --- I9 scanner failures (review-fanout) ----------------------------------------------------------------------------
+// The GREEN shape: secrets-in-code's one spawn failed, so its slice is empty and every target file is errored for it.
+
+function failedRecord(reason) {
+  const r = greenRecord();
+  r.scanner_errors = r.target.map((file) => ({ lens: "secrets-in-code", file }));
+  r.scanner_failures = [{ lens: "secrets-in-code", scanner: "scan-code-secrets.mjs", reason }];
+  return r;
+}
+
+test("i9_green: a failure for EVERY reason in the closed enum passes, with every file errored", () => {
+  assert.ok(SCANNER_FAILURE_ENUM.length >= 2, "the enumeration the rule ranges over is not empty");
+  for (const reason of SCANNER_FAILURE_ENUM) assert.equal(check(failedRecord(reason)).ok, true, reason);
+});
+
+test("i9_absent: a record without `scanner_failures` is RED, and says such a record predates the field", () => {
+  const r = failedRecord("timeout");
+  delete r.scanner_failures;
+  const out = check(r);
+  assert.equal(out.ok, false);
+  assert.match(out.reason, /^I9 scanner-failures/);
+  assert.match(out.reason, /before review-fanout/);
+});
+
+test("i9_reason: a reason outside the closed enum is RED", () => {
+  const r = failedRecord("timeout");
+  r.scanner_failures[0].reason = "slow";
+  assert.match(check(r).reason, /^I9 scanner-failures: .*"slow"/);
+});
+
+test("i9_once: two entries for one lens are RED — each scanner is spawned once", () => {
+  const r = failedRecord("timeout");
+  r.scanner_failures.push({ ...r.scanner_failures[0], reason: "error" });
+  assert.match(check(r).reason, /^I9 scanner-failures: .*more than one entry/);
+});
+
+test("i9_scanner: an entry naming another scanner, or a whole-target lens, is RED", () => {
+  const wrongScanner = failedRecord("error");
+  wrongScanner.scanner_failures[0].scanner = "scan-code-injection.mjs";
+  assert.match(check(wrongScanner).reason, /^I9 scanner-failures: .*is not scanner-bound on scanner/);
+  const fallback = failedRecord("error");
+  fallback.scanner_errors = fallback.target.map((file) => ({ lens: "trust-fence", file }));
+  fallback.scanner_failures = [{ lens: "trust-fence", scanner: "scan-code-secrets.mjs", reason: "error" }];
+  // trust-fence's own slice is the whole target, so I7 would refuse the errors first; take them back out so the
+  // case isolates I9's basis check.
+  fallback.scanner_errors = [];
+  assert.match(check(fallback).reason, /^I9 scanner-failures: .*is not scanner-bound/);
+});
+
+test("i9_slice: a failed lens with a non-empty slice is RED", () => {
+  const r = greenRecord();
+  // injection keeps its a.js hit; its other two files are errored, so I7 holds and only I9 can object.
+  r.scanner_errors = [
+    { lens: "injection", file: "b.js" },
+    { lens: "injection", file: "c.md" },
+  ];
+  r.scanner_failures = [{ lens: "injection", scanner: "scan-code-injection.mjs", reason: "timeout" }];
+  assert.match(check(r).reason, /^I9 scanner-failures: .*non-empty slice/);
+});
+
+test("i9_every_file: a failed lens whose errors omit a target file is RED, naming the file", () => {
+  const r = failedRecord("error");
+  r.scanner_errors = r.scanner_errors.filter((e) => e.file !== "c.md");
+  assert.match(check(r).reason, /^I9 scanner-failures: .*omits target file\(s\) \["c\.md"\]/);
 });
