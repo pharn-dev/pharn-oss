@@ -24,6 +24,21 @@ still holds the rules every session needs; this file adds detail and does not ov
   truth. **Raising a ceiling is a deliberate, visible diff to that table in the PR that needs it** (the
   rule: measured bytes + 10%, rounded up to the next multiple of 512), never a quiet edit to turn a red test
   green. The `pharn-dev-*` commands are outside the budget (follow-up `dev-command-slim`).
+- **A stage's LOAD SET is budgeted too (stage-load-budget, review finding CTX-2).** A command's file is not all a
+  run of it reads. `.dev/floor/stage-load-budget.test.mjs` sums, per product stage:
+  - the command family;
+  - every PHARN file a step tells the model to read, load or follow (its `STAGE_LOADS` row, each entry anchored by
+    its path in the command's text);
+  - every registered griller (`/pharn-grill`) or lens (`/pharn-review`);
+  - for `/pharn-ship`, the stage its `ROUTE_POLICY` row runs `interactive` (`/pharn-spec`).
+
+  It holds each total to `STAGE_LOAD_CEILINGS`, by the same measured + 10% rule. A regex rule
+  (`READ_RE`: read / re-read / follow / load, then a backticked `pharn/…` or `.claude/commands/…` `.md` path) makes
+  a new read step name its file in the table. So adding "Read `pharn/pharn-contracts/x.md`" to a command, or
+  growing a contract, griller, lens or trusted doc, can turn that test red. Its message names the row to add or
+  the ceiling to raise. FLOOR: byte totals over the table's classification. NOT: what a model really reads,
+  growth inside the headroom, repetition across contexts, or a read phrased in a way the regex does not match
+  (its header lists them).
 
 ## A command's text a run needs at only ONE point may live in a PART file
 

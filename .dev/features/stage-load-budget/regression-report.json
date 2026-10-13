@@ -1,0 +1,32 @@
+{
+  "base": "e401ac08e69ee2dfffe3b7580959558ea99dcdd4",
+  "inside": [
+    ".dev/features/stage-load-budget/PLAN.md",
+    ".dev/floor/stage-load-budget.test.mjs",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    ".dev/features/stage-load-budget/REVIEW.md",
+    ".dev/features/stage-load-budget/SHIP.md",
+    ".dev/features/stage-load-budget/VERIFY.md",
+    ".dev/features/stage-load-budget/verify-report.json",
+    ".dev/floor/instruction-growth-wiring.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
