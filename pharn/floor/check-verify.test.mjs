@@ -532,10 +532,18 @@ test("★ 6.59.0 — the POSITIONAL map keeps its table: 124/126/127 are plain f
   });
 });
 
-test("★ GATE-1 pin, live — the REAL runner records a SIGTERM-trapping gate as exit 0 + timed_out, and the verdict is INCONCLUSIVE; check-loop then stops STOP_TERMINAL (never CONTINUE)", () => {
+test("★ GATE-1 pin, live — the REAL runner records a gate that handles SIGTERM as exit 0 + timed_out, and the verdict is INCONCLUSIVE; check-loop then stops STOP_TERMINAL (never CONTINUE)", () => {
   // The plan's probe, as a test. It needs git and /bin/sh (POSIX, like run-gates.mjs itself). The runner injects
   // `instruction-growth` and `reconcile`, which read red in a scratch repo, so this half cannot show "was PASS" — the
   // hand-built pin above does; this one shows the runner really writes the stamp shape that pin reads.
+  // PLATFORM-INDEPENDENT BY CONSTRUCTION (CI, PR #345): the first cut used `sh -c 'trap "exit 0" TERM; sleep 30 & wait'`,
+  // which exited 0 on darwin but 124 on ubuntu-latest, where the runner's own `/bin/sh -c '<token> "$@"'` wrapper is dash.
+  // The mechanism, measured on darwin by forcing a wrapper that cannot exec its command (`true; <token>`): bash and
+  // macOS sh then record that old token as 124 — the wrapper shell, which no trap governs, is in the group when the group
+  // SIGTERM lands and ends by it — and the new token as 0 (Ubuntu itself was not run locally). The handler is now a node
+  // process the token `exec`s into — `exec` replaces the wrapper shell on every POSIX shell, so node is the only process
+  // in the group and decides the exit itself, having installed its handler long before a 3000 ms kill. A plain
+  // `sleep 30` gate beside it is the timed-out row that needs no premise about any shell (the group signal ends it: 124).
   const root = realpathSync(mkdtempSync(join(tmpdir(), "cv-live-")));
   try {
     const sh = (cmd, args) => spawnSync(cmd, args, { cwd: root, encoding: "utf8" });
@@ -544,10 +552,21 @@ test("★ GATE-1 pin, live — the REAL runner records a SIGTERM-trapping gate a
     writeFileSync(join(root, "a.txt"), "x\n");
     writeFileSync(join(root, ".gitignore"), ".pharn/\n");
     writeFileSync(join(root, "pharn/features/demo/PLAN.md"), "---\nspec_id: demo\n---\n# PLAN\n\n## Files\n\n- a.txt — x\n");
+    // A file, not `node -e`: `--gates` splits on commas, and the handler needs one.
+    writeFileSync(join(root, "on-term-exit-0.mjs"), 'process.on("SIGTERM", () => process.exit(0));\nsetInterval(() => {}, 1000);\n');
     sh("git", ["add", "-A"]);
     sh("git", ["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "init"]);
     const RG = join(here, "run-gates.mjs");
-    const gates = [`sh -c 'trap "exit 0" TERM; sleep 30 & wait'::trapzero`, "nosuchbinary_pharn_xyz::missing", "true::ok"].join(",");
+    assert.ok(
+      !process.execPath.includes(",") && !process.execPath.includes('"'),
+      "fixture: the node path must survive the --gates grammar"
+    );
+    const gates = [
+      `exec "${process.execPath}" on-term-exit-0.mjs::trapzero`,
+      "sleep 30::hang",
+      "nosuchbinary_pharn_xyz::missing",
+      "true::ok",
+    ].join(",");
     const init = sh(process.execPath, [RG, "init", "--stage", "verify", "--feature", "demo", "--out", ".pharn/v", "--gates", gates]);
     assert.equal(init.status, 0, init.stdout + init.stderr);
     for (let i = 0; i < 10; i++) {
@@ -559,8 +578,10 @@ test("★ GATE-1 pin, live — the REAL runner records a SIGTERM-trapping gate a
     }
     const stamp = JSON.parse(readFileSync(join(root, ".pharn/v/stamp.json"), "utf8"));
     const byId = Object.fromEntries(stamp.runs.map((r) => [r.id, r]));
-    assert.equal(byId.trapzero.exit, 0, "the premise: the trapping gate exited 0");
+    assert.equal(byId.trapzero.exit, 0, "the premise: the gate that handles SIGTERM exited 0");
     assert.equal(byId.trapzero.timed_out, true, "the premise: the runner recorded its kill");
+    assert.equal(byId.hang.exit, 124, "the premise: a hang the group signal ended is 124");
+    assert.equal(byId.hang.timed_out, true);
     assert.equal(byId.missing.exit, 127, "the premise: an unstartable command is 127");
     assert.equal(byId.ok.timed_out, false);
     const cv = sh(process.execPath, [CV, "--stamp", ".pharn/v/stamp.json", "--feature", "demo"]);
@@ -570,6 +591,7 @@ test("★ GATE-1 pin, live — the REAL runner records a SIGTERM-trapping gate a
     assert.equal(report.reason_code, "gate-not-measured");
     assert.deepEqual(report.unmeasured_gates, [
       { id: "trapzero", cause: "timed-out" },
+      { id: "hang", cause: "timed-out" },
       { id: "missing", cause: "not-started" },
     ]);
     // The review's reproduction, end to end: the report the runner's stamp yields stops the loop terminally.
