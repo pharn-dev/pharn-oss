@@ -159,8 +159,10 @@ not exempted: it never touches `CLAUDE.md`, so it measures 0 B.
 
 ## Files
 
-- `.dev/floor/stage-load-budget.test.mjs` — NEW: the two tables, rules L1–L6 and W1–W3 with a negative control per
-  property, and an honest-scope header (FLOOR / NOT guaranteed) — layer: build apparatus (`.dev/floor/`)
+- `.dev/floor/stage-load-budget.test.mjs` — NEW: the two tables, rules L1–L6 with a negative control per property,
+  and an honest-scope header (FLOOR / NOT guaranteed) — layer: build apparatus (`.dev/floor/`)
+- `.dev/floor/instruction-growth-wiring.test.mjs` — NEW (GATE-2 fix pass): W1–W3 and their helpers, moved unchanged
+  out of `stage-load-budget.test.mjs` so each file has one reason to change (REVIEW.md P3) — layer: build apparatus
 - `.github/workflows/ci.yml` — add the "Instruction-growth check" step above, with a two-line comment — layer: CI
 - `package.json` — add `"check:instruction-growth": "node pharn/floor/check-instruction-files.mjs --growth --base-rule"`
   (not added to `scripts.check`) — layer: repo-meta
@@ -249,3 +251,20 @@ GATE 1 (2026-10-13): **approved as planned** — delegated: decided by the orche
 
 Addition at GATE 1: the L3 and L5 failure messages name the table and the exact row to add or edit (written into the
 L3/L5 bullets above).
+
+## GATE 2 — fix pass (delegated decision by the orchestrating model under the maintainer's 2026-10-13 delegation)
+
+Decision: **fix, then the merge path.** One fix-loop pass (build re-anchored → regress → verify), over three items from
+`REVIEW.md`:
+
+1. **P3 split:** W1–W3, `ciStepBlock` and the `GROWTH_*` / `CI_*` constants move unchanged into
+   `.dev/floor/instruction-growth-wiring.test.mjs` (added to `## Files` above before the re-anchor). The
+   `.dev/guides/floor-gates.md` cite and the test headers point at the new file.
+2. **P0 wording (CHANGELOG):** name exactly which rules print the row to add or the ceiling to raise (L1, L3, L4, L5),
+   rather than "every failure".
+3. **P0 wording (CONTRIBUTING):** list all four per-PR CI bounds the per-PR CHANGELOG check states.
+
+Not fixed, recorded as a known residual: the P1 minor (the "each path counts once" control exercises `Set`, not
+`loadSet`; a regression would only over-count, the safe direction), stated in the test header's NOT-guaranteed list.
+Lesson candidate: declined for promotion (L22 recurring; parallel PRs would collide on the next L-number). Follow-up:
+shipped runners for dev regress/verify in isolated worktrees.

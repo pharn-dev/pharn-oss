@@ -1,5 +1,23 @@
 # REGRESSION — stage-load-budget
 
+## Fix pass (GATE 2) — the current `regression-report.json`
+
+- base: `e401ac08e69ee2dfffe3b7580959558ea99dcdd4` (HEAD — the first pass committed and `origin/main` 6.58.1 merged;
+  the fix pass is uncommitted, so `git status` is non-empty)
+- inside (10): `.dev/floor/stage-load-budget.test.mjs`, `.dev/floor/instruction-growth-wiring.test.mjs` (new),
+  `.dev/guides/floor-gates.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, and this feature's `PLAN.md`, `REVIEW.md`,
+  `SHIP.md`, `VERIFY.md`, `verify-report.json` (`escape_exempt`)
+- escaped: none (`check-regress.mjs scope` exit 0)
+- outside gates, base → head: `tests` (155 files) 0 → 0 · `validate` 0 → 0 ·
+  `structural:…/expected-injection-comment.json` 0 → 0
+- style gates skipped: no shared style config is inside
+- regressions: none · pre-existing: none
+- **verdict (FLOOR, `check-regress.mjs verdict`, exit 0): `no-regressions`** — `regression-report.json` now holds
+  this run's helper stdout, byte-identical (`cmp`); the same node runner as below, its baseline worktree removed in a
+  `finally`.
+
+## First pass
+
 - base: `8fe73d19d9108e089b35a4405b2ce552c2922ffc` (HEAD — a working-tree dogfood build, `git status` non-empty)
 - inside (9): `.dev/floor/stage-load-budget.test.mjs`, `.dev/guides/floor-gates.md`, `.dev/guides/product-commands.md`,
   `.github/workflows/ci.yml`, `CHANGELOG.md`, `CONTRIBUTING.md`, `package.json`, and this feature's `PLAN.md` /

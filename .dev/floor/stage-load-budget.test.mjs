@@ -26,12 +26,12 @@
 //   L4 budget — each stage's total is at most its ceiling.
 //   L5 read closure — every READ_RE match in a family names a path inside that stage's load set.
 //   L6 inline derivation — the inline stages are read from ROUTE_POLICY, never listed here.
-//   W1–W3 wiring — the `check:instruction-growth` npm script, the CI "Instruction-growth check" step, and the committed CI
-//      command line executed in a fixture repository (L45).
+// The CI wiring of this repo's instruction-growth check, added by the same increment, is pinned in
+// `.dev/floor/instruction-growth-wiring.test.mjs` (a different reason to change: ci.yml and package.json).
 //
 // THE CEILINGS ARE MEASURED, never chosen — the COMMAND_BYTE_CEILINGS rule, applied unchanged: measured total + 10%,
-// rounded up to the next multiple of 512. RAISING ONE IS A DELIBERATE, VISIBLE DIFF in the PR that needs it; every
-// failure message below names the table and the row to edit.
+// rounded up to the next multiple of 512. RAISING ONE IS A DELIBERATE, VISIBLE DIFF in the PR that needs it; the L1, L3,
+// L4 and L5 failure messages name the table and the row to add, edit or raise (L2's names the row; L6's names the cell).
 //
 // ── Honest scope (P0) ─────────────────────────────────────────────────────────────────────────────────────────────────
 // FLOOR (what a green run means): over THIS TABLE's classification, every product stage has a row, every listed file
@@ -49,21 +49,19 @@
 //     `pharn/…` or `.claude/commands/…` path ending `.md`. An indirect reference ("Read the contract", "Read that file",
 //     "each registered griller"), an unbackticked path, another verb, or a file a step reaches through a CLI's output is
 //     not seen — review holds those;
-//   - W3 executes the CI step's `node` line only: the `git fetch` line before it needs GitHub's merge ref and is pinned as
-//     text, never run here. The `instruction-growth` verdict itself is a floor verdict over instruction-files-core.mjs's
-//     MODEL of the loader, with that header's known-so-far under-count routes (LIMITS.md §3e, L67).
+//   - that a path counts once through loadSet itself: L4's dedupe control exercises a Set, not loadSet, so a loadSet
+//     rewritten to an array would double-count a shared file and could stay under its ceiling. That error only
+//     over-counts (the safe direction); a known residual, kept at stage-load-budget's GATE 2.
 // The `pharn-dev-*` commands are outside this budget, as they are outside COMMAND_BYTE_CEILINGS (follow-up
 // `dev-command-slim`).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
-import { lstatSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { POLICY_INLINE, ROUTE_POLICY } from "../../pharn/floor/stage-agent-core.mjs";
-import { parseGateChain } from "./check-contributing-gates.mjs";
 import { allParts, commandParts, withoutFrontmatter } from "./command-family.mjs";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
@@ -459,89 +457,4 @@ test("✧ LOAD L6: an orchestrator's inline stages are read from ROUTE_POLICY, a
   for (const mode of Object.values(routed["pharn-ship"])) mode["pharn-spec"] = "agent";
   assert.deepEqual(inlineStages("pharn-ship", routed), []);
   assert.ok(!loadSet("pharn-ship", { policy: routed }).has(`${COMMANDS_REL}/pharn-spec.md`));
-});
-
-// ── W1–W3: the instruction-growth wiring (L45) ────────────────────────────────────────────────────────────────────────
-
-const GROWTH_SCRIPT = "check:instruction-growth";
-const GROWTH_SCRIPT_LINE = "node pharn/floor/check-instruction-files.mjs --growth --base-rule";
-const CI_STEP_NAME = "Instruction-growth check";
-const CI_IF = "if: ${{ always() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}";
-const CI_FETCH = 'git fetch --no-tags --depth=2 origin "$GITHUB_SHA"';
-const CI_RUN = "node pharn/floor/check-instruction-files.mjs --growth --base HEAD^1";
-
-/** A ci.yml step's block, from its `- name:` line to the next step or EOF; null when the name is absent (L60). */
-function ciStepBlock(ci, name) {
-  const lines = ci.replace(/\r\n/g, "\n").split("\n");
-  const start = lines.findIndex((l) => l.trim() === `- name: ${name}`);
-  if (start === -1) return null;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++)
-    if (/^\s*- name:/.test(lines[i])) {
-      end = i;
-      break;
-    }
-  return lines.slice(start, end);
-}
-
-test("✧ W1: package.json carries check:instruction-growth, and keeps it OUT of `npm run check` (it needs a base)", () => {
-  const pkg = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
-  assert.equal(pkg.scripts[GROWTH_SCRIPT], GROWTH_SCRIPT_LINE);
-  assert.ok(!parseGateChain(pkg.scripts.check).includes(GROWTH_SCRIPT), "`--base-rule` is inconclusive with no origin/main");
-  // CONTROL (L60): a chain that names it is seen.
-  assert.ok(parseGateChain(`${pkg.scripts.check} && npm run ${GROWTH_SCRIPT}`).includes(GROWTH_SCRIPT));
-});
-
-test("✧ W2: ci.yml runs the instruction-growth check on pull requests, against the merge commit's first parent", () => {
-  const ci = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
-  const block = ciStepBlock(ci, CI_STEP_NAME);
-  assert.ok(block, `ci.yml must carry the step "${CI_STEP_NAME}"`);
-  const trimmed = block.map((l) => l.trim());
-  assert.ok(trimmed.includes(CI_IF), "the step's `if:` (pull requests only, after a successful install)");
-  assert.ok(trimmed.includes("run: |"));
-  const runAt = trimmed.indexOf("run: |");
-  assert.deepEqual(trimmed.slice(runAt + 1).filter(Boolean), [CI_FETCH, CI_RUN]);
-  assert.ok(!trimmed.slice(runAt).join("\n").includes("${{"), "nothing is interpolated into `run:`");
-  // CONTROLS (L60): an absent name is null (never a slice to EOF), and the block stops at the next step.
-  assert.equal(ciStepBlock(ci, "No such step"), null);
-  assert.ok(!block.slice(1).some((l) => /^\s*- name:/.test(l)));
-});
-
-test("✧ W3: the committed CI command line, run in a two-commit repository, passes +100 B and fails +3,000 B of CLAUDE.md", () => {
-  const ci = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");
-  const line = ciStepBlock(ci, CI_STEP_NAME)
-    .map((l) => l.trim())
-    .find((l) => l.startsWith("node "));
-  const [node, script, ...args] = line.split(/\s+/);
-  assert.equal(node, "node");
-  assert.equal(script, "pharn/floor/check-instruction-files.mjs");
-  const lines = (n, tag) => Array.from({ length: n }, (_, i) => `${tag} ${String(i).padStart(4, "0")}`).join("\n") + "\n";
-  for (const [grow, code, verdict] of [
-    [100, 0, "within"],
-    [3000, 1, "over"],
-  ]) {
-    const dir = realpathSync(mkdtempSync(join(tmpdir(), "slb-")));
-    try {
-      const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
-      git("init", "-q", "-b", "work", ".");
-      git("config", "user.email", "t@t");
-      git("config", "user.name", "t");
-      writeFileSync(join(dir, "CLAUDE.md"), lines(50, "base"));
-      git("add", "-A");
-      git("commit", "-q", "-m", "base");
-      let added = "";
-      for (let i = 0; Buffer.byteLength(added) < grow; i++) added += `grown line ${String(i).padStart(4, "0")}\n`;
-      writeFileSync(join(dir, "CLAUDE.md"), lines(50, "base") + added);
-      git("add", "-A");
-      git("commit", "-q", "-m", "grow");
-      const r = spawnSync(process.execPath, [join(REPO, script), ...args], { cwd: dir, encoding: "utf8" });
-      const doc = JSON.parse(r.stdout);
-      assert.equal(r.status, code, r.stdout + r.stderr);
-      assert.equal(doc.verdict, verdict);
-      assert.equal(doc.threshold_source, "default");
-      assert.equal(doc.added_bytes, Buffer.byteLength(added));
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
 });

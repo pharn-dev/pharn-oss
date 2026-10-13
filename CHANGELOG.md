@@ -45,12 +45,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       - the stages its `ROUTE_POLICY` row runs inline.
 
       Each total is held to `STAGE_LOAD_CEILINGS` (measured + 10%, rounded up to 512). A regex rule makes a new
-      "read / follow / load `pharn/…md`" step name its file in the table. Every failure names the row to add or the
-      ceiling to raise.
+      "read / follow / load `pharn/…md`" step name its file in the table. Four of its six rules (L1 closure, L3
+      anchor, L4 budget, L5 read closure) print the exact `STAGE_LOADS` or `STAGE_LOAD_CEILINGS` row to add, edit or
+      raise. L2 (a listed file is missing) names the row only, and L6 (inline stages read from `ROUTE_POLICY`) names
+      the policy cell instead.
 
     - **New CI step.** The **Instruction-growth check** step runs
       `node pharn/floor/check-instruction-files.mjs --growth --base HEAD^1` on pull requests, with the 2,048 B
-      default budget read at the base.
+      default budget read at the base. `.dev/floor/instruction-growth-wiring.test.mjs` pins the step and the npm
+      script, and runs the step's `node` line in a fixture repository.
     - **New local script.** `npm run check:instruction-growth` runs the same check with `--base-rule`. It is not
       part of `npm run check`.
   - Not covered:
@@ -58,6 +61,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       repetition across subagents, and the project's own files are outside the numbers.
     - Growth inside the 10% headroom (26–34 KB on the grill and review rows).
     - A read the regex does not see, such as "Read the contract" or "each registered griller".
+    - That `loadSet` counts each path once: the dedupe control exercises a `Set`, so a regression there would
+      over-count, which is the safe direction.
     - The `pharn-dev-*` commands (follow-up `dev-command-slim`).
     - Growth beyond what the instruction-growth gate measures: it is a verdict over its model of the loader
       (`LIMITS.md` §3e), it runs on pull requests only, it is skipped by an admin merge, and a per-PR budget does not

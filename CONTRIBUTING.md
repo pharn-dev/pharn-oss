@@ -73,7 +73,14 @@ Each stage's total must stay at or below its row in `STAGE_LOAD_CEILINGS`, by th
 
 Locally, `npm run check:instruction-growth` runs the same check with `--base-rule`: a dirty tree is compared with `HEAD` (uncommitted growth only), a clean one with its merge-base with `origin/main`. It is **not** in `npm run check`, because without an `origin/main` it cannot pick a base and exits 2.
 
-The verdict is over the checker's model of what Claude Code loads, not over the loader itself ([`LIMITS.md`](./LIMITS.md) §3e). A per-PR budget does not bound growth spread over many PRs. It is also subject to the same CI bounds as the per-PR CHANGELOG check below (no direct pushes, admin merges, the PR's own copy of the checker).
+The verdict is over the checker's model of what Claude Code loads, not over the loader itself ([`LIMITS.md`](./LIMITS.md) §3e). A per-PR budget does not bound growth spread over many PRs. The CI step has the same four bounds as the per-PR CHANGELOG check below:
+
+- it does not see direct pushes to `main`;
+- an admin merge bypasses required checks;
+- it judges GitHub's test merge commit as of the PR's last CI run, and `main` can move before the merge without a re-run;
+- a pull request runs its own copy of the checker and of `ci.yml`.
+
+Its wiring is pinned, and its `node` line executed, by [`.dev/floor/instruction-growth-wiring.test.mjs`](./.dev/floor/instruction-growth-wiring.test.mjs).
 
 ### CHANGELOG entries
 

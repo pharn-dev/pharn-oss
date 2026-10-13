@@ -1,15 +1,16 @@
 {
-  "base": "8fe73d19d9108e089b35a4405b2ce552c2922ffc",
+  "base": "e401ac08e69ee2dfffe3b7580959558ea99dcdd4",
   "inside": [
+    ".dev/features/stage-load-budget/PLAN.md",
+    ".dev/floor/stage-load-budget.test.mjs",
     ".dev/guides/floor-gates.md",
-    ".dev/guides/product-commands.md",
-    ".github/workflows/ci.yml",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
-    "package.json",
-    ".dev/features/stage-load-budget/GRILL.md",
-    ".dev/features/stage-load-budget/PLAN.md",
-    ".dev/floor/stage-load-budget.test.mjs"
+    ".dev/features/stage-load-budget/REVIEW.md",
+    ".dev/features/stage-load-budget/SHIP.md",
+    ".dev/features/stage-load-budget/VERIFY.md",
+    ".dev/features/stage-load-budget/verify-report.json",
+    ".dev/floor/instruction-growth-wiring.test.mjs"
   ],
   "outside_gates": {
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {

@@ -507,7 +507,7 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # CTX-2): the dev loop does not run it, but ci.yml's "Instruction-growth check" runs `--growth --base HEAD^1` on every pull
 # request (this repo's set = CLAUDE.md; budget from pharn.config.json at the base, default 2048), and
 # `npm run check:instruction-growth` runs `--growth --base-rule` locally — kept OUT of `npm run check`, which a clone
-# with no origin/main would turn INCONCLUSIVE. Wiring pinned and the CI line executed: .dev/floor/stage-load-budget.test.mjs W1–W3.
+# with no origin/main would turn INCONCLUSIVE. Wiring pinned and the CI line executed: .dev/floor/instruction-growth-wiring.test.mjs W1–W3.
 # Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
 node pharn/floor/check-instruction-files.mjs --report
 node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)
