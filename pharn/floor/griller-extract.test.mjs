@@ -361,7 +361,7 @@ test("★ every count-grillers output outside its closed shape is refused", () =
     ['{"registered":1,"grillers":["a\\\\b.md"]}', 0, /is not repo-relative/],
     ['{"registered":1,"grillers":["a\\nb.md"]}', 0, /control character/],
     ['{"registered":1,"grillers":["a.txt"]}', 0, /is not a \.md file/],
-    ['{"registered":1,"grillers":["missing.md"]}', 0, /cannot be lstat-ed/],
+    ['{"registered":1,"grillers":["missing.md"]}', 0, /cannot be found/],
     ['{"registered":1,"grillers":[{"toString":1}]}', 0, /is not a non-empty string/],
   ];
   for (const [stdout, code, re] of cases) {
@@ -371,6 +371,17 @@ test("★ every count-grillers output outside its closed shape is refused", () =
       assert.match(r.reason, re, stdout);
     });
   }
+});
+
+test("★ a FIFO griller is refused as not a regular file, without blocking the open (6.60.1, one-descriptor read)", () => {
+  withCounter('{"registered":1,"grillers":["f.md"]}', 0, (counter, dir) => {
+    const made = spawnSync("mkfifo", [join(dir, "f.md")], { encoding: "utf8" });
+    assert.equal(made.status, 0, `fixture: mkfifo failed: ${made.stderr}`);
+    // A blocking open of a FIFO with no writer would hang this test; the call returning at all is the first pin.
+    const r = extractGrillers(dir, { counter });
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /griller "f\.md" is not a regular file/);
+  });
 });
 
 test("★ shown() never throws, even on a value whose String() throws (L62)", () => {
