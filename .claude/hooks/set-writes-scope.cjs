@@ -52,7 +52,7 @@
 // could authorize disarming a guard. --allow-claude-dir opts back in for the increments that genuinely
 // edit a guard; it is an operator ARGV flag, so no declared file can set it for itself.
 //
-// TWO MORE REFUSALS (6.59.0, loop-scope-hardening — review findings SEC-1 and SEC-3 of 2026-10-12), each layered
+// TWO MORE REFUSALS (loop-scope-hardening — review findings SEC-1 and SEC-3 of 2026-10-12), each layered
 // AFTER the ones above and each writing nothing:
 //   • PHARN'S OWN INSTALLED SURFACE, from a plan. In an INSTALLED project (`pharn.config.json` at cwd is a regular
 //     file whose JSON carries a non-empty string `skillsVersion` — enforce-writes-scope.cjs's posture signal) a
@@ -68,12 +68,12 @@
 //     enforce-writes-scope.cjs `scanRuns()` applies, for the `pharn-loop` state directory only, read-only) a
 //     scope with that origin is refused, in every mode and posture, with no opt-in.
 //
-// OPERATOR FLAGS (6.59.0). --allow-claude-dir and --allow-pharn-surface are honored only BEFORE the mode; one
+// OPERATOR FLAGS (loop-scope-hardening). --allow-claude-dir and --allow-pharn-surface are honored only BEFORE the mode; one
 // placed after `--from-plan` / `--from-frontmatter` is refused. A pre-approved command line (a `/pharn-*`
 // command's `allowed-tools`) carries a `*` after its mode, and `*` matches any text, so an opt-in accepted after
 // the mode could ride on a pre-approved line.
 //
-// FENCED CODE (6.59.0, review finding ENF-1). Mode B never reads a fenced code block: a fenced `## Files` is not
+// FENCED CODE (loop-scope-hardening — review finding ENF-1). Mode B never reads a fenced code block: a fenced `## Files` is not
 // the list, and fenced lines under the list are not paths. This reader does not track list nesting, so it reads
 // the plan two ways — a fence line counts only at 0–3 spaces (CommonMark's top-level rule), and a fence line counts
 // at any indentation with a bare closer indented less than its opener ending that block and opening another (what
