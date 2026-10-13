@@ -205,6 +205,15 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
       ""
     );
   }
+  // 6.59.0 — the HEAD twin (`head_timed_out`, check-regress.mjs): a killed head run is not a head result either.
+  if (Array.isArray(report.head_timed_out) && report.head_timed_out.length) {
+    out.push(
+      `**${report.head_timed_out.length} head gate run(s) TIMED OUT** (${report.head_timed_out.map(dataText).join(", ")}) — a ` +
+        "killed head run is not a head result: over a base that is green or itself timed out it is neither OK nor a " +
+        "regression, so the verdict is inconclusive; over a measured red base the gate stays pre_existing.",
+      ""
+    );
+  }
 
   // BASE-evidence reuse (6.33.0): ONE line, from the report's own `base_evidence` block. Every value in it is this
   // floor's own — a boolean, a closed-enum member, a hex digest — never untrusted text.

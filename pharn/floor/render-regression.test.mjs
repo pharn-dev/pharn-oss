@@ -644,6 +644,22 @@ test("base_timed_out: named under the verdict line, ids quoted; absent key → n
   assert.doesNotMatch(render(), /TIMED OUT/, "CONTROL");
 });
 
+test("★ 6.59.0 head_timed_out: named under the verdict line beside base_timed_out, ids quoted; absent key → no line", () => {
+  const md = render({
+    report: baseReport({
+      verdict: "inconclusive",
+      head_timed_out: ["test", "lint"],
+      regressions: ["lint", "test"],
+      outside_gates: { lint: { base: 0, head: 124 }, test: { base: 0, head: 0 } },
+    }),
+  });
+  assert.match(md, /\*\*2 head gate run\(s\) TIMED OUT\*\* \(test, lint\) — a killed head run is not a head result/);
+  assert.doesNotMatch(md, /base gate run\(s\) TIMED OUT/, "only the side that timed out is named");
+  const both = render({ report: baseReport({ base_timed_out: ["a"], head_timed_out: ["b"] }) });
+  assert.ok(both.indexOf("base gate run(s) TIMED OUT") < both.indexOf("head gate run(s) TIMED OUT"), "base first, then head");
+  assert.doesNotMatch(render(), /head gate run\(s\) TIMED OUT/, "CONTROL");
+});
+
 test("unenforced_globs: listed in the Scope section as DATA; absent → no line", () => {
   const md = render({ scope: baseScope({ unenforced_globs: ["src/**"] }) });
   assert.match(md, /not enforced by the write hook \(1\)/);

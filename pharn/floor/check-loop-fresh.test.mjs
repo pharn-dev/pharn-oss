@@ -37,7 +37,16 @@ import { fileURLToPath } from "node:url";
 import { fingerprint, ALGO } from "./worktree-fingerprint.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 import { commitGateArgs } from "./loop-closeout.mjs";
-import { SCHEMA, LAPSE_CODES, REASON_CODES, AC_RESERVED_IDS, RESERVED_IDS, logBasename, resultsFileName } from "./gate-run-core.mjs";
+import {
+  SCHEMA,
+  LAPSE_CODES,
+  UNMEASURED_CODES,
+  REASON_CODES,
+  AC_RESERVED_IDS,
+  RESERVED_IDS,
+  logBasename,
+  resultsFileName,
+} from "./gate-run-core.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
 import { FAILING_IDS } from "./ac-gate-core.mjs";
 import {
@@ -175,7 +184,8 @@ function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, comp
   const out = join(proj, dirname(stampRel));
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
-  const rec = runs.map(([id, exit, acStatus], seq) => {
+  // A run tuple is [id, exit, acStatus?, opts?]; `opts.timed_out` (6.59.0) records the runner's kill.
+  const rec = runs.map(([id, exit, acStatus, opts = {}], seq) => {
     const b = logBasename(seq, id);
     writeFileSync(join(out, `${b}.out`), `out ${id} ${exit}\n`);
     writeFileSync(join(out, `${b}.err`), "");
@@ -193,7 +203,7 @@ function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, comp
       id,
       exit,
       ran: true,
-      timed_out: false,
+      timed_out: opts.timed_out === true,
       mutated: false,
       reason: null,
       argv: id === "reconcile" ? ["true"] : ["npm", "run", id],
@@ -242,6 +252,7 @@ function iterate(
       ["reconcile", 0],
     ],
     regressRuns = [["test", 0]],
+    baseRuns = regressRuns, // 6.59.0 — the BASE side's runs, when they differ from the head's (a timed-out side)
     completeness = 0,
   } = {}
 ) {
@@ -260,7 +271,7 @@ function iterate(
       runs: regressRuns,
     });
     const bfp = sha256("base-tree");
-    writeStamp(proj, DEFAULT_STAMPS.regressBase, { stage: "regress", side: "base", head: base, init: bfp, final: bfp, runs: regressRuns });
+    writeStamp(proj, DEFAULT_STAMPS.regressBase, { stage: "regress", side: "base", head: base, init: bfp, final: bfp, runs: baseRuns });
     const rep = runChecker(proj, "check-regress.mjs", [
       "verdict",
       "--base-stamp",
@@ -456,6 +467,40 @@ test("B — empty-source-set is S4 (a STOP carrying its own code), never stale e
     writeJ(p, v);
     expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "empty-source-set", stage: null });
   });
+});
+
+test("★ B (6.59.0) — EVERY not-measured code passes B, and an honest run carrying it reaches FRESH (check-loop.mjs then reads the stop)", () => {
+  // Each world's STAMPS genuinely produce its coded verdict (GRILL G3): a report that merely carried the code over a
+  // stamp that re-derives something else would stop at E, and a test asserting only "B did not fire" would pass on the
+  // wrong branch. So the code is a PRECONDITION read off the checker's own output, and the assertion is FRESH.
+  const worlds = {
+    "gate-not-measured": {
+      stage: "verify",
+      verifyRuns: [
+        ["test", 0],
+        ["lint", 0, undefined, { timed_out: true }],
+        ["build", 127],
+        ["reconcile", 0],
+      ],
+    },
+    "base-timed-out": { stage: "regress", baseRuns: [["test", 1, undefined, { timed_out: true }]], regressRuns: [["test", 1]] },
+    "head-timed-out": { stage: "regress", baseRuns: [["test", 0]], regressRuns: [["test", 124, undefined, { timed_out: true }]] },
+  };
+  assert.deepEqual(Object.keys(worlds).sort(), [...UNMEASURED_CODES], "one world per member (L29)");
+  for (const code of UNMEASURED_CODES) {
+    const { stage, ...opts } = worlds[code];
+    withRepo((r) => {
+      iterate(r, opts);
+      const rep = readJ(reportPath(r, stage === "verify" ? "verify-report.json" : "regression-report.json"));
+      assert.equal(rep.reason_code, code, `precondition: the ${stage} checker itself emitted ${code}`);
+      assert.equal(rep.verdict, stage === "verify" ? "INCONCLUSIVE" : "inconclusive");
+      expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
+      // CONTROL: the same report carrying a non-lapse member OUTSIDE the set still stops at B with that code.
+      rep.reason_code = "usage-error";
+      writeJ(reportPath(r, stage === "verify" ? "verify-report.json" : "regression-report.json"), rep);
+      expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "usage-error" });
+    });
+  }
 });
 
 test("B — a NON-lapse member stops with its own code; a non-member is a report-malformed re-run", () => {
@@ -757,6 +802,35 @@ test("✧ DIFFERENTIAL (L55) — the relation holds for EVERY honest report the 
       completeness: 0,
       evidence: false,
     });
+    // 6.59.0 — runs the runner did NOT measure (L55: the invariant re-checked against the REAL check-verify over them):
+    // a timed-out test that exited 1, one that exited 0 over an incomplete build, and an unstartable reconcile beside a
+    // measured red test.
+    worlds.push(
+      {
+        runs: [
+          ["test", 1, "failed", { timed_out: true }],
+          ["reconcile", 0],
+        ],
+        completeness: 0,
+        evidence: false,
+      },
+      {
+        runs: [
+          ["test", 0, "passed", { timed_out: true }],
+          ["reconcile", 0],
+        ],
+        completeness: 1,
+        evidence: false,
+      },
+      {
+        runs: [
+          ["test", 1],
+          ["reconcile", 127],
+        ],
+        completeness: 0,
+        evidence: false,
+      }
+    );
     const seen = { withAc: new Set(), flagless: new Set(), ac: new Set(), ids: new Set(), forgedPasses: 0, forgedStops: 0 };
     const pristine = readFileSync(join(r.proj, AC_TEST));
     for (const w of worlds) {
