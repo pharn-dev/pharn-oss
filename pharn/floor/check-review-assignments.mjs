@@ -26,6 +26,17 @@
 //   I7 scanner errors           — `scanner_errors` present and well-shaped, every entry inside the target,
 //                                 naming a lens that has an assignment, and DISJOINT from that lens's
 //                                 slice: a scanner that failed produced no verdict to hit with.
+//   I8 skipped                  — `skipped` present, an array of {path, reason}: `path` a non-empty,
+//                                 control-character-free string, `reason` ∈ SKIP_REASON_ENUM, and no
+//                                 skipped path in `target` (review-fanout).
+//   I9 scanner failures         — `scanner_failures` present, an array of {lens, scanner, reason}: `reason` ∈
+//                                 SCANNER_FAILURE_ENUM, at most one entry per lens, the lens `scanner-bound`
+//                                 on that very scanner, its slice EMPTY and `scanner_errors` naming it for
+//                                 EVERY target file — a failed spawn produced no verdict for any file
+//                                 (review-fanout).
+//   I8 and I9 are REQUIRED, like I7's field: an absent field is not "nothing skipped" / "nothing failed". A
+//   record written before review-fanout lacks both and REDs here, and the message says the record predates
+//   them. Nothing re-checks an old record: /pharn-review runs this on the record it has just emitted.
 //
 // WHAT THIS CHECKER DELIBERATELY DOES NOT DO — and each omission is a decision, not a gap:
 //
@@ -69,9 +80,18 @@ import "./runtime-floor.mjs";
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { BASIS_ENUM, lensNameFromPath, readScannerMap } from "./render-review-assignments.mjs";
+import { BASIS_ENUM, SKIP_REASON_ENUM, SCANNER_FAILURE_ENUM, lensNameFromPath, readScannerMap } from "./render-review-assignments.mjs";
 
 const BASIS = new Set(BASIS_ENUM);
+const SKIP_REASONS = new Set(SKIP_REASON_ENUM);
+const FAILURE_REASONS = new Set(SCANNER_FAILURE_ENUM);
+
+// A record value quoted into a refusal goes through JSON.stringify, which cannot throw on parsed JSON — a template
+// literal would call String(), and `{"toString":1}` makes that throw (L62).
+const quoted = (v) => JSON.stringify(v);
+
+// The sentence an absent I8/I9 field carries, so an older record reads as older rather than as corrupt.
+const PREDATES = "A record written before review-fanout has no such field; re-emit it with the current emitter.";
 
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHAR = /[\u0000-\u001f\u007f]/;
@@ -290,6 +310,91 @@ export function checkRecord(record, registeredLenses, scanners) {
     }
   }
 
+  // --- I8 skipped: present, well-shaped, a closed reason, and never a target path ---
+  if (!Array.isArray(record.skipped)) {
+    return {
+      ok: false,
+      code: 1,
+      reason: `I8 skipped: \`skipped\` is missing or not an array (an empty array is the normal state). ${PREDATES}`,
+    };
+  }
+  for (const s of record.skipped) {
+    if (!s || typeof s !== "object" || Array.isArray(s)) {
+      return { ok: false, code: 1, reason: "I8 skipped: an entry is not a {path, reason} object." };
+    }
+    if (typeof s.path !== "string" || s.path === "" || CONTROL_CHAR.test(s.path)) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I8 skipped: a path is empty, non-string, or contains a control character (${quoted(s.path)}).`,
+      };
+    }
+    if (!SKIP_REASONS.has(s.reason)) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I8 skipped: path ${quoted(s.path)} has reason ${quoted(s.reason)} — expected one of {${SKIP_REASON_ENUM.join(", ")}}.`,
+      };
+    }
+    if (targetSet.has(s.path)) {
+      return { ok: false, code: 1, reason: `I8 skipped: path ${quoted(s.path)} is both skipped and in the resolved target.` };
+    }
+  }
+
+  // --- I9 scanner failures: a closed reason, one per lens, its own scanner, and no verdict for any file ---
+  if (!Array.isArray(record.scanner_failures)) {
+    return {
+      ok: false,
+      code: 1,
+      reason: `I9 scanner-failures: \`scanner_failures\` is missing or not an array (an empty array is the normal state). ${PREDATES}`,
+    };
+  }
+  const failedLenses = new Set();
+  for (const f of record.scanner_failures) {
+    if (!f || typeof f !== "object" || Array.isArray(f) || typeof f.lens !== "string" || typeof f.scanner !== "string") {
+      return { ok: false, code: 1, reason: "I9 scanner-failures: an entry is not a {lens, scanner, reason} object of strings." };
+    }
+    if (!FAILURE_REASONS.has(f.reason)) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I9 scanner-failures: lens ${quoted(f.lens)} has reason ${quoted(f.reason)} — expected one of {${SCANNER_FAILURE_ENUM.join(", ")}}.`,
+      };
+    }
+    if (failedLenses.has(f.lens)) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I9 scanner-failures: lens ${quoted(f.lens)} has more than one entry — each scanner is spawned once.`,
+      };
+    }
+    failedLenses.add(f.lens);
+    const a = record.assignments.find((x) => x.lens === f.lens);
+    if (!a || a.basis !== "scanner-bound" || a.scanner !== f.scanner) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I9 scanner-failures: lens ${quoted(f.lens)} is not scanner-bound on scanner ${quoted(f.scanner)} in this record.`,
+      };
+    }
+    if (a.slice.length !== 0) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I9 scanner-failures: lens ${quoted(f.lens)} failed yet has a non-empty slice — a failed spawn produced no verdict.`,
+      };
+    }
+    const errored = new Set(record.scanner_errors.filter((e) => e.lens === f.lens).map((e) => e.file));
+    const unrecorded = record.target.filter((t) => !errored.has(t));
+    if (unrecorded.length) {
+      return {
+        ok: false,
+        code: 1,
+        reason: `I9 scanner-failures: lens ${quoted(f.lens)} failed, but scanner_errors omits target file(s) ${quoted(unrecorded.slice(0, 5))} — a failed spawn leaves every file unverdicted.`,
+      };
+    }
+  }
+
   return { ok: true };
 }
 
@@ -337,7 +442,8 @@ function main() {
   process.stdout.write(
     `GREEN — assignment record shape + internal consistency hold (${recordPath}): ` +
       `${record.lenses_registered.length} registered lens(es) all present, ${record.target.length} target file(s), ` +
-      `${record.unassigned_scanner_bound.length} reached by no scanner-bound lens. ` +
+      `${record.unassigned_scanner_bound.length} reached by no scanner-bound lens, ${record.skipped.length} skipped, ` +
+      `${record.scanner_failures.length} scanner failure(s). ` +
       `NOTE (P0): this certifies what was ASSIGNED, never that any lens READ its slice, and never that ` +
       `the resolved target was the right one (L43).\n`
   );

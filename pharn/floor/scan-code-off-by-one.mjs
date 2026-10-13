@@ -46,33 +46,17 @@
 // shape (empty, prose, or clean code) is a SUCCESSFUL scan → {"found":false,"hits":[]} on stdout, exit 0.
 //
 // Usage:  node pharn/floor/scan-code-off-by-one.mjs <code-file>
+//         node pharn/floor/scan-code-off-by-one.mjs --files <nul-separated-list | ->   (review-fanout: the batch mode
+//         /pharn-review's prefilter spawns once per review — one {"results":[…]} document, one entry per listed path,
+//         each the per-file verdict below; pharn/floor/code-scanner-cli.mjs owns both modes)
 // Output: {"found":<bool>,"hits":[{"line":<int>,"expr":"<the .length operand text>"}]} on stdout; exit 0 on a
 //         successful scan (whatever the result). `line` = the 1-based ORIGINAL line of the `<=` comparison; `expr` =
 //         the matched `<ident>(.<ident>)*.length` operand (CODE text — untrusted; the LENS renders it only in free-text
 //         evidence, never an enum-gated field). `found` === hits.length > 0. hits sorted by line, then expr. Exits
 //         non-zero (writing NOTHING to stdout) if the target is missing / not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
-
-const TARGET = process.argv[2];
-
-function fail(msg) {
-  process.stderr.write("scan-code-off-by-one: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-off-by-one.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
 // --- Comment/string MASK ------------------------------------------------------------------------------------
 // Verbatim reuse of the scan-code-copy-paste-drift.mjs / scan-code-duplicated-logic.mjs mask (family idiom;
@@ -136,20 +120,26 @@ function mask(src) {
 // hit — the scanner is deliberately narrow (v0.1.0). Pure pattern match; no LLM, no judgment (§2 primitive #3).
 const OFF_BY_ONE_RE = /(?<!<)<=\s*([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*\s*\.\s*length)\b(?!\s*[-+*/%(.])/g;
 
-const maskedLines = mask(text).split("\n");
-const hits = [];
-for (let k = 0; k < maskedLines.length; k++) {
-  const line = maskedLines[k];
-  OFF_BY_ONE_RE.lastIndex = 0;
-  let m;
-  while ((m = OFF_BY_ONE_RE.exec(line)) !== null) {
-    // Normalize the captured operand's internal whitespace (`a . length` → `a.length`) for a stable `expr`.
-    const expr = m[1].replace(/\s+/g, "");
-    hits.push({ line: k + 1, expr });
+/**
+ * The hits for one file's text. Keeps nothing between calls: the module-level `g` regex OFF_BY_ONE_RE is reset
+ * (`lastIndex = 0`) before every line it scans, and every other value is local.
+ */
+export function scanText(text) {
+  const maskedLines = mask(text).split("\n");
+  const hits = [];
+  for (let k = 0; k < maskedLines.length; k++) {
+    const line = maskedLines[k];
+    OFF_BY_ONE_RE.lastIndex = 0;
+    let m;
+    while ((m = OFF_BY_ONE_RE.exec(line)) !== null) {
+      // Normalize the captured operand's internal whitespace (`a . length` → `a.length`) for a stable `expr`.
+      const expr = m[1].replace(/\s+/g, "");
+      hits.push({ line: k + 1, expr });
+    }
   }
+
+  hits.sort((a, b) => a.line - b.line || (a.expr < b.expr ? -1 : a.expr > b.expr ? 1 : 0));
+  return hits;
 }
 
-hits.sort((a, b) => a.line - b.line || (a.expr < b.expr ? -1 : a.expr > b.expr ? 1 : 0));
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-off-by-one", scanText, process.argv.slice(2));

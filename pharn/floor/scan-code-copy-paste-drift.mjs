@@ -59,6 +59,9 @@
 // drift (empty, prose, or clean code) is a SUCCESSFUL scan → {"found":false,"hits":[]} on stdout, exit 0 (GRILL G4).
 //
 // Usage:  node pharn/floor/scan-code-copy-paste-drift.mjs <code-file>
+//         node pharn/floor/scan-code-copy-paste-drift.mjs --files <nul-separated-list | ->   (review-fanout: the
+//         batch mode /pharn-review's prefilter spawns once per review — one {"results":[…]} document, one entry
+//         per listed path, each the per-file verdict below; pharn/floor/code-scanner-cli.mjs owns both modes)
 // Output: {"found":<bool>,"hits":[{"lines":[<int>,...],"odd_line":<int>,"slot":<int>,"majority":"<tok>","outlier":"<tok>"}]}
 //         on stdout; exit 0 on a successful scan (whatever the result). Each hit is one odd-one-out: `lines` = the
 //         1-based ORIGINAL line numbers of the aligned group (ascending); `odd_line` = the divergent member's line;
@@ -67,28 +70,10 @@
 //         hits sorted by odd_line, then slot. Exits non-zero (writing NOTHING to stdout) if the target is missing /
 //         not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
-const TARGET = process.argv[2];
 const MIN_MEMBERS = 3; // a group needs >=3 members for a majority-vs-outlier to exist (fixed, not model-chosen — P5)
-
-function fail(msg) {
-  process.stderr.write("scan-code-copy-paste-drift: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-copy-paste-drift.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
 
 // --- Comment/string MASK ------------------------------------------------------------------------------------
 // Verbatim reuse of the scan-code-duplicated-logic.mjs / scan-code-swallowed-exception.mjs mask (family idiom;
@@ -235,56 +220,62 @@ function aligned(a, b) {
   return true;
 }
 
-// --- Build significant-line token arrays --------------------------------------------------------------------
-const maskedLines = mask(text).split("\n");
-const sig = []; // { line: <1-based original>, tokens: [...] }
-for (let k = 0; k < maskedLines.length; k++) {
-  const norm = normalize(maskedLines[k]);
-  if (!isSignificant(norm)) continue;
-  sig.push({ line: k + 1, tokens: tokenize(maskedLines[k]) });
-}
-
-// --- Group consecutive aligned lines; odd-one-out per variable slot ------------------------------------------
-const hits = [];
-let start = 0;
-while (start < sig.length) {
-  let end = start + 1;
-  while (end < sig.length && aligned(sig[start].tokens, sig[end].tokens)) end++;
-  const k = end - start;
-  if (k >= MIN_MEMBERS) {
-    const skeleton = sig[start].tokens;
-    const groupLines = [];
-    for (let m = start; m < end; m++) groupLines.push(sig[m].line);
-    for (let p = 0; p < skeleton.length; p++) {
-      if (!isSlot(skeleton[p])) continue;
-      const counts = new Map();
-      for (let m = start; m < end; m++) {
-        const v = sig[m].tokens[p];
-        counts.set(v, (counts.get(v) || 0) + 1);
-      }
-      // A clean odd-one-out: exactly two distinct values, one appearing exactly once (the outlier).
-      if (counts.size !== 2) continue;
-      let outlier = null;
-      let majority = null;
-      for (const [v, c] of counts) {
-        if (c === 1) outlier = v;
-        else majority = v;
-      }
-      if (outlier === null || majority === null) continue; // e.g. a 2+2 split has no count-1 value
-      let oddLine = null;
-      for (let m = start; m < end; m++) {
-        if (sig[m].tokens[p] === outlier) {
-          oddLine = sig[m].line;
-          break;
-        }
-      }
-      hits.push({ lines: groupLines.slice(), odd_line: oddLine, slot: p, majority, outlier });
-    }
+/**
+ * The hits for one file's text. Keeps nothing between calls: every per-file value is local, and the two module-level
+ * `g` regexes are only used through `replace` / `match`, which reset `lastIndex` themselves.
+ */
+export function scanText(text) {
+  // --- Build significant-line token arrays --------------------------------------------------------------------
+  const maskedLines = mask(text).split("\n");
+  const sig = []; // { line: <1-based original>, tokens: [...] }
+  for (let k = 0; k < maskedLines.length; k++) {
+    const norm = normalize(maskedLines[k]);
+    if (!isSignificant(norm)) continue;
+    sig.push({ line: k + 1, tokens: tokenize(maskedLines[k]) });
   }
-  start = end; // end > start always (end started at start+1); non-overlapping runs
+
+  // --- Group consecutive aligned lines; odd-one-out per variable slot ------------------------------------------
+  const hits = [];
+  let start = 0;
+  while (start < sig.length) {
+    let end = start + 1;
+    while (end < sig.length && aligned(sig[start].tokens, sig[end].tokens)) end++;
+    const k = end - start;
+    if (k >= MIN_MEMBERS) {
+      const skeleton = sig[start].tokens;
+      const groupLines = [];
+      for (let m = start; m < end; m++) groupLines.push(sig[m].line);
+      for (let p = 0; p < skeleton.length; p++) {
+        if (!isSlot(skeleton[p])) continue;
+        const counts = new Map();
+        for (let m = start; m < end; m++) {
+          const v = sig[m].tokens[p];
+          counts.set(v, (counts.get(v) || 0) + 1);
+        }
+        // A clean odd-one-out: exactly two distinct values, one appearing exactly once (the outlier).
+        if (counts.size !== 2) continue;
+        let outlier = null;
+        let majority = null;
+        for (const [v, c] of counts) {
+          if (c === 1) outlier = v;
+          else majority = v;
+        }
+        if (outlier === null || majority === null) continue; // e.g. a 2+2 split has no count-1 value
+        let oddLine = null;
+        for (let m = start; m < end; m++) {
+          if (sig[m].tokens[p] === outlier) {
+            oddLine = sig[m].line;
+            break;
+          }
+        }
+        hits.push({ lines: groupLines.slice(), odd_line: oddLine, slot: p, majority, outlier });
+      }
+    }
+    start = end; // end > start always (end started at start+1); non-overlapping runs
+  }
+
+  hits.sort((a, b) => a.odd_line - b.odd_line || a.slot - b.slot);
+  return hits;
 }
 
-hits.sort((a, b) => a.odd_line - b.odd_line || a.slot - b.slot);
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-copy-paste-drift", scanText, process.argv.slice(2));

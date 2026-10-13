@@ -30,10 +30,42 @@
 // NOW", not "was this slice assigned THEN", and on a target whose files changed since the review that is
 // a different question with a confidently wrong answer.
 //
+// ONE SPAWN PER SCANNER, UNDER A TIME LIMIT (review-fanout, review finding CTX-3). Each mapped scanner is
+// spawned ONCE per review in its `--files` batch mode (pharn/floor/code-scanner-cli.mjs), the target list on
+// its stdin. It used to be spawned once per (lens × file): 18 × N node processes, measured ≈59 min for this
+// repo's 2,908 files under load and hours for a 24k-file tree (.dev/features/review-fanout/MEASUREMENTS.md).
+// Each spawn gets SCANNER_TIMEOUT_BASE_MS + SCANNER_TIMEOUT_MS_PER_KIB × the target's KiB. The rate is several
+// times the slowest scanner's measured linear cost, so the limit exists to stop a HANG — a pathological line
+// in a scanner whose regex backtracks (TST-2/TST-3) — not to cap linear work. A spawn that times out or fails
+// in any other way is recorded in `scanner_failures` (reason `timeout` | `error`), and every target file goes
+// into `scanner_errors` for that lens, so none of them reaches its slice: no verdict was obtained. The command
+// then hands that lens its errored files to review (fail toward reviewing). The bound: the limits of the
+// scanners that hang ADD UP, because the spawns run one after another.
+//
+// WHAT A DIRECTORY TARGET EXPANDS TO (review-fanout). Inside a git work tree — asked from the named directory, so a
+// nested repository or a submodule answers for itself — the files `git ls-files --cached --others
+// --exclude-standard` lists for it; what that repository's ignore rules drop is listed in `skipped` as `git-ignored`
+// (an ignored directory once, with its trailing `/`). Outside one (no git, or a directory git refuses), a
+// `readdirSync` walk. A path under a `.git` or `node_modules` directory BELOW the named one is dropped and listed as
+// `excluded-name`. The named directory itself is followed as named; nothing below it that is a symlink is followed.
+// Every DISCOVERED file — from a directory, and from the merge-base diff — is then judged on the path itself
+// (`lstatSync`, never a follow-call, L59): not a regular file → `not-a-regular-file`; larger than
+// MAX_TARGET_FILE_BYTES → `over-size-cap`; a NUL byte in its first BINARY_SNIFF_BYTES → `binary` (git's
+// content heuristic and window; git's `.gitattributes` are NOT read, so a file an attribute marks binary, or
+// marks text despite a NUL, can be judged differently here). A path the user names as a FILE is kept as named,
+// unfiltered: that is how a file the rules above would drop gets reviewed. The rules are git's ignore rules and a
+// byte sniff, not a judgment that a skipped file holds nothing worth reviewing.
+//
+// NOT DETERMINISTIC IN ONE RESPECT, stated because the paragraphs above call every field derivable: the per-spawn
+// time limit is wall-clock, so on a loaded machine a scanner that finishes on a quiet one can time out, and the same
+// tree can then yield a different record. The difference always falls toward review (`scanner_failures`, every file
+// errored for that lens), never toward a narrower slice.
+//
 // FAIL-CLOSED, BOTH EDGES (P5 — the terminal fallback is refuse/ask, never a guess):
 //   - No resolvable target -> exit non-zero, WRITE NOTHING. /pharn-review's Step 1 third branch is "ask
 //     the human", which a deterministic emitter structurally cannot do. An empty-target record is not
-//     the honest degradation — a record is a claim, and "I could not resolve a target" is not one.
+//     the honest degradation — a record is a claim, and "I could not resolve a target" is not one. When
+//     files WERE found but every one was skipped, the refusal says so, by reason, and names the override.
 //   - A registered lens absent from lens-scanner-map.json -> exit non-zero, WRITE NOTHING. It never
 //     invents a `basis`. Reachable only once lens-scanner-map.test.mjs's consistency pin has already
 //     failed, so refusing is the honest response rather than papering over it.
@@ -48,11 +80,23 @@
 //   --target    a target path, repeatable. Omitted -> the git merge-base diff, exactly as
 //               .claude/commands/pharn-review.md Step 1 branch 2 prescribes.
 // Output: writes <base>/<name>/assignments.json (2-space JSON + trailing newline, deterministic);
-//         prints {"lenses":<int>,"target":<int>,"unassigned_scanner_bound":<int>} on stdout; exit 0.
+//         prints {"lenses":<int>,"target":<int>,"skipped":<int>,"unassigned_scanner_bound":<int>,
+//         "scanner_failures":<int>} on stdout, one stderr line per scanner failure; exit 0.
 
 import "./runtime-floor.mjs";
-import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync } from "node:fs";
-import { execFileSync } from "node:child_process";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  statSync,
+  lstatSync,
+  readdirSync,
+  openSync,
+  readSync,
+  closeSync,
+} from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { join, relative, basename, dirname, sep } from "node:path";
 
 const DEFAULT_BASE = "pharn/features";
@@ -62,6 +106,43 @@ const SCHEMA = "review-assignments/v1";
 // enumeration rather than each re-deriving a list (lessons-learned L29: when a remedy is quantified over
 // a set, the enumeration is the deliverable).
 export const BASIS_ENUM = Object.freeze(["scanner-bound", "whole-target-fallback"]);
+
+// Why a discovered path is not in the target. CLOSED; the checker imports it (I8).
+export const SKIP_REASON_ENUM = Object.freeze(["binary", "excluded-name", "git-ignored", "not-a-regular-file", "over-size-cap"]);
+
+// Why a scanner's one spawn produced no usable batch. CLOSED; the checker imports it (I9).
+export const SCANNER_FAILURE_ENUM = Object.freeze(["error", "timeout"]);
+
+// A discovered file larger than this is skipped (`over-size-cap`). 512 KiB, measured against this repo: it drops
+// the 836 KB CHANGELOG.md (prose) and keeps the largest code file (a 347 KB test). A lens reads its files whole.
+export const MAX_TARGET_FILE_BYTES = 512 * 1024;
+
+// A discovered file with a NUL byte in its first this-many bytes is skipped (`binary`) — git's content heuristic and
+// its window (FIRST_FEW_BYTES in git's xdiff). `.gitattributes` are not read, so it can disagree with git there.
+export const BINARY_SNIFF_BYTES = 8000;
+
+// The per-spawn time limit: BASE + PER_KIB × the target's size in KiB. Measured on 2026-10-13: the slowest scanner
+// (scan-code-n-plus-one) cost ≈1 ms per KB of input and the 18 together ≈5.6 ms per KB, so 5 ms per KiB is several
+// times the slowest one's linear cost; the 30 s base covers process start and a small target. Re-derived from the
+// build measurement, never carried from an estimate (L24) — see .dev/features/review-fanout/MEASUREMENTS.md.
+export const SCANNER_TIMEOUT_BASE_MS = 30_000;
+export const SCANNER_TIMEOUT_MS_PER_KIB = 5;
+
+// The directory names never reviewed, in either expansion route — today's rule, now listed in `skipped`.
+const EXCLUDED_NAMES = Object.freeze([".git", "node_modules"]);
+
+// The list separator — built from its code so this source stays printable ASCII (source-nul-guard.test.mjs).
+const NUL = String.fromCharCode(0);
+
+// One output ceiling for every child this module reads: git's listings and the scanners' batch documents. 256 MiB
+// is the ceiling gitDiffTarget already used (stage-git-maxbuffer, 6.28.3); past it the call fails, and the failure
+// is reported, never read as an empty result.
+const MAX_BUFFER = 1 << 28;
+
+/** The time limit for one scanner spawn over a target of `targetBytes` bytes. */
+export function scannerTimeoutMs(targetBytes) {
+  return SCANNER_TIMEOUT_BASE_MS + SCANNER_TIMEOUT_MS_PER_KIB * Math.ceil(targetBytes / 1024);
+}
 
 // A lens's NAME is its directory basename: count-lenses.mjs emits
 // `pharn/pharn-review/<lens>/<lens>.md`, and lens-scanner-map.json is keyed on `<lens>`.
@@ -86,31 +167,140 @@ export function readRegisteredLenses(repoDir) {
   return parsed.lenses.map(lensNameFromPath).sort();
 }
 
-// Expand a target argument to the set of FILES under it, repo-relative and POSIX-separated. A directory
-// expands to the files beneath it, mirroring pharn-review.md Step 1 ("dirs expand to the files under
-// them"); .git and node_modules are never review targets.
-function expandTarget(repoDir, entry) {
-  const abs = join(repoDir, entry);
-  if (!existsSync(abs)) return [];
-  const st = statSync(abs);
-  if (!st.isDirectory()) return [relative(repoDir, abs).split(sep).join("/")];
-  const acc = [];
-  const walk = (dir) => {
-    for (const nm of readdirSync(dir)) {
-      if (nm === ".git" || nm === "node_modules") continue;
-      const p = join(dir, nm);
-      let s;
+const toPosix = (p) => p.split(sep).join("/");
+
+// The listed form of the first `.git` / `node_modules` segment of a path RELATIVE TO THE NAMED DIRECTORY — the
+// directory, with its trailing `/` — or null when the path has none. Only segments BELOW the named directory count:
+// a directory the user names is reviewed as named, even one called `node_modules`. A last segment so named is the
+// entry itself (a worktree's `.git` FILE), listed without the slash.
+function excludedPrefix(below) {
+  const segs = below.split("/");
+  for (let i = 0; i < segs.length; i++) {
+    if (EXCLUDED_NAMES.includes(segs[i])) return segs.slice(0, i + 1).join("/") + (i < segs.length - 1 ? "/" : "");
+  }
+  return null;
+}
+
+// Is `dir` inside a git work tree? Asked FROM the named directory, so a nested repository or a submodule answers for
+// itself. A failure of the question itself — git absent, not a repository — is "no", which lands on the readdir
+// walk: never an empty or a crashed resolution.
+function insideGitWorkTree(dir) {
+  try {
+    const out = execFileSync("git", ["rev-parse", "--is-inside-work-tree"], {
+      cwd: dir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.trim() === "true";
+  } catch {
+    return false;
+  }
+}
+
+// `git ls-files -z <args>` run FROM `cwd`, as paths relative to it. `--literal-pathspecs`: no pathspec is ever read
+// as a glob. Throws on any git failure; the caller falls back to the walk.
+function gitListFiles(cwd, args) {
+  const out = execFileSync("git", ["--literal-pathspecs", "ls-files", "-z", ...args], {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    maxBuffer: MAX_BUFFER,
+  });
+  return out.split(NUL).filter(Boolean);
+}
+
+// Expand a DIRECTORY target to the repo-relative POSIX paths under it, pushing what the expansion itself drops into
+// `skipped` (git-ignored, excluded-name). The files returned are still to be classified (classifyPath).
+//
+// git runs FROM the named directory with the pathspec `.`, so the repository that answers is the one that owns that
+// directory: a nested repository or a submodule lists its own files under its own ignore rules. Asked from the outer
+// repository's root instead, git lists nothing for a path inside a nested repository, and the files vanished from
+// both `target` and `skipped` (found by this increment's review). The named directory itself is followed as named,
+// like a named file; nothing BELOW it that is a symlink is followed (classifyPath lists such a path).
+function expandDirectory(repoDir, entry, skipped) {
+  const absEntry = join(repoDir, entry);
+  const entryRel = toPosix(relative(repoDir, absEntry));
+  const fromEntry = (p) => (entryRel === "" ? p : `${entryRel}/${p}`);
+  const fromGit = (() => {
+    if (!insideGitWorkTree(absEntry)) return null;
+    try {
+      return {
+        files: gitListFiles(absEntry, ["--cached", "--others", "--exclude-standard", "--", "."]),
+        ignored: gitListFiles(absEntry, ["--others", "--ignored", "--exclude-standard", "--directory", "--", "."]),
+      };
+    } catch {
+      return null; // git refused the directory — the walk below decides it
+    }
+  })();
+  const kept = [];
+  if (fromGit !== null) {
+    for (const p of fromGit.ignored) {
+      const prefix = excludedPrefix(p);
+      skipped.push(prefix === null ? { path: fromEntry(p), reason: "git-ignored" } : { path: fromEntry(prefix), reason: "excluded-name" });
+    }
+    for (const p of fromGit.files) {
+      const prefix = excludedPrefix(p);
+      if (prefix === null) kept.push(fromEntry(p));
+      else skipped.push({ path: fromEntry(prefix), reason: "excluded-name" });
+    }
+    return kept;
+  }
+  const walk = (abs) => {
+    let names;
+    try {
+      names = readdirSync(abs);
+    } catch {
+      return;
+    }
+    for (const nm of names) {
+      const p = join(abs, nm);
+      const rel = toPosix(relative(repoDir, p));
+      let st;
       try {
-        s = statSync(p);
+        st = lstatSync(p);
       } catch {
         continue;
       }
-      if (s.isDirectory()) walk(p);
-      else acc.push(relative(repoDir, p).split(sep).join("/"));
+      if (EXCLUDED_NAMES.includes(nm)) skipped.push({ path: rel + (st.isDirectory() ? "/" : ""), reason: "excluded-name" });
+      else if (st.isDirectory()) walk(p);
+      else kept.push(rel); // a symlink is an entry here, never followed — classifyPath lists it
     }
   };
-  walk(abs);
-  return acc;
+  walk(absEntry);
+  return kept;
+}
+
+// Does the file hold a NUL byte in its first BINARY_SNIFF_BYTES? A file that cannot be opened reads as not binary:
+// it is kept, and the scanners then report it as an error for every lens (fail toward reviewing).
+function looksBinary(abs) {
+  let fd;
+  try {
+    fd = openSync(abs, "r");
+    const buf = Buffer.alloc(BINARY_SNIFF_BYTES);
+    const n = readSync(fd, buf, 0, BINARY_SNIFF_BYTES, 0);
+    return buf.subarray(0, n).includes(0);
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+// Judge one DISCOVERED path: null to keep it, "gone" when nothing is there any more (dropped unlisted, as the diff
+// branch always did), else the SKIP_REASON_ENUM member it is listed under. lstat, never stat: the question is what
+// the PATH is, and a follow-call answers for a symlink's target (L59).
+function classifyPath(repoDir, rel) {
+  const abs = join(repoDir, rel);
+  let st;
+  try {
+    st = lstatSync(abs);
+  } catch {
+    return "gone";
+  }
+  if (!st.isFile()) return "not-a-regular-file";
+  if (st.size > MAX_TARGET_FILE_BYTES) return "over-size-cap";
+  if (looksBinary(abs)) return "binary";
+  return null;
 }
 
 // pharn-review.md Step 1 branch 2, verbatim in intent: the files changed vs the merge-base with the
@@ -146,7 +336,7 @@ function gitDiffTarget(repoDir) {
       cwd: repoDir,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
-      maxBuffer: 1 << 28,
+      maxBuffer: MAX_BUFFER,
     });
     return out
       .split("\n")
@@ -157,45 +347,107 @@ function gitDiffTarget(repoDir) {
   }
 }
 
+const byPathThenReason = (a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0);
+
+/**
+ * Resolve the review target. Returns `{ target, skipped }`: `target` the sorted, de-duplicated repo-relative paths a
+ * lens may be assigned; `skipped` the sorted `{path, reason}` entries the resolution dropped (none of them in
+ * `target` — a path named explicitly as a file wins over the same path skipped under a named directory).
+ */
 export function resolveTarget(repoDir, explicitTargets) {
-  const raw =
-    explicitTargets && explicitTargets.length
-      ? explicitTargets.flatMap((t) => expandTarget(repoDir, t))
-      : gitDiffTarget(repoDir).filter((f) => existsSync(join(repoDir, f)));
-  return [...new Set(raw)].sort();
+  const kept = new Set();
+  const skipped = [];
+  const consider = (rel) => {
+    const verdict = classifyPath(repoDir, rel);
+    if (verdict === null) kept.add(rel);
+    else if (verdict !== "gone") skipped.push({ path: rel, reason: verdict });
+  };
+  if (explicitTargets && explicitTargets.length) {
+    for (const entry of explicitTargets) {
+      const abs = join(repoDir, entry);
+      if (!existsSync(abs)) continue;
+      if (statSync(abs).isDirectory()) {
+        for (const rel of expandDirectory(repoDir, entry, skipped)) consider(rel);
+      } else {
+        kept.add(toPosix(relative(repoDir, abs))); // named as a file: kept as named, unfiltered
+      }
+    }
+  } else {
+    for (const rel of gitDiffTarget(repoDir)) consider(rel);
+  }
+  const target = [...kept].sort();
+  const seen = new Set();
+  const listed = [];
+  for (const s of skipped) {
+    const key = s.path + NUL + s.reason;
+    if (kept.has(s.path) || seen.has(key)) continue;
+    seen.add(key);
+    listed.push(s);
+  }
+  return { target, skipped: listed.sort(byPathThenReason) };
 }
 
-// Run one scanner over one file. A scanner prints {"found":<bool>,...} and exits 0 on a clean read.
+/** The sum of the target files' sizes in bytes (a file that cannot be stat'ed counts 0). */
+function targetBytes(repoDir, target) {
+  let total = 0;
+  for (const f of target) {
+    try {
+      total += statSync(join(repoDir, f)).size;
+    } catch {
+      // counted as 0: the scanner reports it as an error, which the record already carries
+    }
+  }
+  return total;
+}
+
+// Run ONE scanner over the WHOLE target in one process (`--files -`, the list on stdin) and map its batch document
+// back to the target, entry by entry.
 //
-// A THROW IS NOT A MISS, and conflating the two was a real defect (surfaced by this increment's own
-// review). A scanner that fails to run — unreadable path, non-zero exit, unparseable stdout — used to be
-// recorded as "no hit", which made a WHOLLY BROKEN scanner indistinguishable from a clean target: its
-// files simply appeared in unassigned_scanner_bound with nothing saying why. The slice then meant "the
-// scanner's verdict OR silence", which is exactly the kind of widened claim this record exists to stop.
-// So the two outcomes are now distinct: `hit` is the verdict, `errored` is the absence of one, and an
-// errored file is reported in the record rather than folded into a miss. The emit is NOT refused — a
-// scanner erroring on one odd file should not deny the whole record — but the silence is gone.
-function scannerVerdict(repoDir, scannerFile, targetFile) {
-  let out;
+// A THROW IS NOT A MISS, and conflating the two was a real defect (surfaced by the coverage-record increment's own
+// review): a scanner that fails to produce a verdict for a file used to be recorded as "no hit", which made a WHOLLY
+// BROKEN scanner indistinguishable from a clean target. So the outcomes stay distinct: `hit` is the verdict,
+// `errored` is the absence of one. Since review-fanout there are two levels of failure:
+//   - the WHOLE spawn — it timed out, could not start, exited non-zero or on a signal, overflowed MAX_BUFFER, or
+//     printed something that is not one `{"results":[…]}` entry per path sent, each naming the path sent. Returns
+//     `{ failure: <SCANNER_FAILURE_ENUM member> }`: no file got a verdict.
+//   - ONE entry — the scanner could not read that file (`{"file","error"}`), exactly as a per-file spawn exiting 1
+//     always was. That file alone is `errored`.
+function runScannerBatch(repoDir, scannerFile, target, timeoutMs) {
+  const sent = target.map((f) => join(repoDir, f));
+  const r = spawnSync(process.execPath, [join(repoDir, "pharn/floor", scannerFile), "--files", "-"], {
+    input: sent.join(NUL),
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "ignore"],
+    timeout: timeoutMs,
+    maxBuffer: MAX_BUFFER,
+  });
+  if (r.error && r.error.code === "ETIMEDOUT") return { failure: "timeout", detail: `no result within ${timeoutMs} ms` };
+  if (r.error) return { failure: "error", detail: `spawn failed (${r.error.code ?? "unknown"})` };
+  if (r.status !== 0) return { failure: "error", detail: r.signal ? `killed by ${r.signal}` : `exit ${r.status}` };
+  let doc;
   try {
-    out = execFileSync("node", [join(repoDir, "pharn/floor", scannerFile), join(repoDir, targetFile)], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
+    doc = JSON.parse(r.stdout);
   } catch {
-    return { errored: true, hit: false };
+    return { failure: "error", detail: "output is not JSON" };
   }
-  try {
-    const parsed = JSON.parse(out);
-    return { errored: false, hit: parsed.found === true || (Array.isArray(parsed.hits) && parsed.hits.length > 0) };
-  } catch {
-    return { errored: true, hit: false };
+  if (!doc || !Array.isArray(doc.results) || doc.results.length !== sent.length) {
+    return { failure: "error", detail: "output does not hold one result per path sent" };
   }
+  const verdicts = [];
+  for (let i = 0; i < sent.length; i++) {
+    const e = doc.results[i];
+    if (!e || typeof e !== "object" || e.file !== sent[i]) return { failure: "error", detail: `result ${i} names another path` };
+    if (typeof e.error === "string") verdicts.push({ errored: true, hit: false });
+    else verdicts.push({ errored: false, hit: e.found === true || (Array.isArray(e.hits) && e.hits.length > 0) });
+  }
+  return { verdicts };
 }
 
-// `scannerErrors` is an OUT-parameter: computeAssignments pushes {lens, file} for every scanner
-// invocation that failed to produce a verdict, so the caller can record them at the top level.
-export function computeAssignments(repoDir, target, lenses, scanners, scannerErrors = []) {
+// `scannerErrors` and `scannerFailures` are OUT-parameters: every (lens, file) that got no verdict, and every lens
+// whose ONE spawn failed ({lens, scanner, reason, detail} — `detail` is for the stderr line, never the record).
+// `options.timeoutMs` overrides the per-spawn limit (tests); the default is scannerTimeoutMs over the target's bytes.
+export function computeAssignments(repoDir, target, lenses, scanners, scannerErrors = [], scannerFailures = [], options = {}) {
+  const timeoutMs = options.timeoutMs ?? scannerTimeoutMs(targetBytes(repoDir, target));
   const assignments = [];
   for (const lens of lenses) {
     // Own-property test, never `||`/`??` — an inherited prototype member would leak silently (L15).
@@ -214,10 +466,17 @@ export function computeAssignments(repoDir, target, lenses, scanners, scannerErr
       continue;
     }
     const slice = [];
-    for (const f of target) {
-      const v = scannerVerdict(repoDir, scanner, f);
-      if (v.errored) scannerErrors.push({ lens, file: f });
-      else if (v.hit) slice.push(f);
+    if (target.length > 0) {
+      const batch = runScannerBatch(repoDir, scanner, target, timeoutMs);
+      if (batch.failure !== undefined) {
+        scannerFailures.push({ lens, scanner, reason: batch.failure, detail: batch.detail });
+        for (const f of target) scannerErrors.push({ lens, file: f });
+      } else {
+        target.forEach((f, i) => {
+          if (batch.verdicts[i].errored) scannerErrors.push({ lens, file: f });
+          else if (batch.verdicts[i].hit) slice.push(f);
+        });
+      }
     }
     assignments.push({ lens, basis: "scanner-bound", scanner, slice });
   }
@@ -238,33 +497,48 @@ export function unassignedScannerBound(target, assignments) {
   return target.filter((f) => !covered.has(f));
 }
 
+// The refusal when nothing resolved. When files WERE found and every one was skipped, it says so by reason and
+// names the override, so the person who named a directory is not left with "nothing found".
+function emptyTargetReason(skipped) {
+  const refusal =
+    "Refusing to emit an empty-target record: /pharn-review Step 1's third branch is ASK THE HUMAN, " +
+    "which this emitter structurally cannot do (P5).";
+  if (skipped.length === 0) {
+    return `no resolvable review target (no --target paths, and the git merge-base diff yielded nothing). ${refusal}`;
+  }
+  const counts = SKIP_REASON_ENUM.map((r) => [r, skipped.filter((s) => s.reason === r).length]).filter(([, n]) => n > 0);
+  return (
+    `no resolvable review target: every path found was skipped (${counts.map(([r, n]) => `${n} ${r}`).join(", ")}). ` +
+    `Name a file with --target to review it as named, or ask the human for another target. ${refusal}`
+  );
+}
+
 export function renderAssignments(name, opts = {}) {
   const repoDir = opts.repo ?? ".";
-  const target = resolveTarget(repoDir, opts.target);
-  if (target.length === 0) {
-    return {
-      ok: false,
-      reason:
-        "no resolvable review target (no --target paths, and the git merge-base diff yielded nothing). " +
-        "Refusing to emit an empty-target record: /pharn-review Step 1's third branch is ASK THE HUMAN, " +
-        "which this emitter structurally cannot do (P5).",
-    };
-  }
+  const { target, skipped } = resolveTarget(repoDir, opts.target);
+  if (target.length === 0) return { ok: false, reason: emptyTargetReason(skipped) };
   const scanners = readScannerMap(repoDir);
   const lenses = readRegisteredLenses(repoDir);
   const scannerErrors = [];
+  const failures = [];
   let assignments;
   try {
-    assignments = computeAssignments(repoDir, target, lenses, scanners, scannerErrors);
+    assignments = computeAssignments(repoDir, target, lenses, scanners, scannerErrors, failures, { timeoutMs: opts.timeoutMs });
   } catch (e) {
     return { ok: false, reason: e.message };
   }
   scannerErrors.sort((a, b) => (a.lens + a.file < b.lens + b.file ? -1 : a.lens + a.file > b.lens + b.file ? 1 : 0));
+  failures.sort((a, b) => (a.lens < b.lens ? -1 : a.lens > b.lens ? 1 : 0));
   const record = {
     schema: SCHEMA,
     feature: name,
     generated_by: "pharn/floor/render-review-assignments.mjs",
     target,
+    // Every path the resolution judged and did not assign, with why (SKIP_REASON_ENUM). Empty is the normal state
+    // for a diff of source files; a directory target usually lists its ignored directories here. NOT listed: a path
+    // the merge-base diff names that no longer exists, and one `git diff --name-only` prints quoted (a non-ASCII
+    // name) — that listing is newline-split, as before this change, so such a path never reaches the judging.
+    skipped,
     lenses_registered: lenses,
     assignments,
     unassigned_scanner_bound: unassignedScannerBound(target, assignments),
@@ -272,8 +546,11 @@ export function renderAssignments(name, opts = {}) {
     // non-empty list means those files got NO deterministic prefilter from that lens, which is a
     // different fact from "the scanner looked and found nothing" and must not read as one.
     scanner_errors: scannerErrors,
+    // Every lens whose ONE scanner spawn produced no usable batch, and why (SCANNER_FAILURE_ENUM). Each such lens
+    // has an empty slice and every target file in scanner_errors.
+    scanner_failures: failures.map(({ lens, scanner, reason }) => ({ lens, scanner, reason })),
   };
-  return { ok: true, record };
+  return { ok: true, record, failureDetails: failures };
 }
 
 function flag(args, nm) {
@@ -308,11 +585,19 @@ function main() {
   const outDir = join(opts.repo ?? ".", base, name);
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, "assignments.json"), JSON.stringify(result.record, null, 2) + "\n");
+  for (const f of result.failureDetails) {
+    process.stderr.write(
+      `render-review-assignments: scanner ${f.scanner} (lens ${f.lens}) — ${f.reason}: ${f.detail}. ` +
+        `Its files are recorded in scanner_errors and go to the lens for review.\n`
+    );
+  }
   process.stdout.write(
     JSON.stringify({
       lenses: result.record.lenses_registered.length,
       target: result.record.target.length,
+      skipped: result.record.skipped.length,
       unassigned_scanner_bound: result.record.unassigned_scanner_bound.length,
+      scanner_failures: result.record.scanner_failures.length,
     }) + "\n"
   );
   process.exit(0);

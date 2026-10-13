@@ -67,8 +67,8 @@ case `pharn/features/<name>/` is created for it.
 The target is the set of code files the lenses review. Resolve it, in order (P5 — a membership/CLI
 test, never a guess):
 
-1. **Explicit args** — `/pharn-review <path> [<path> …]`: the given files/dirs (dirs expand to the
-   files under them). This is authoritative when present.
+1. **Explicit args** — `/pharn-review <path> [<path> …]`: the given files/dirs (a dir expands to the files
+   git lists for it; a named file is kept as named). This is authoritative when present.
 2. **Else, the working-tree diff** — the files changed vs the merge-base with the default branch:
    `git diff --name-only --diff-filter=ACMR $(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)`.
    Review what this change touches.
@@ -83,10 +83,12 @@ node pharn/floor/render-review-assignments.mjs <name> [--target <path>]...
 
 Pass the **explicit** target paths from Step 1 branch 1 as repeated `--target` flags; pass **none** to let
 the emitter run branch 2's merge-base diff itself. It writes `pharn/features/<name>/assignments.json`:
-the resolved `target[]`, `lenses_registered[]` (from `count-lenses.mjs`), one `assignments[]` entry per
-registered lens (`{lens, basis, scanner, slice}`), `unassigned_scanner_bound[]`, and `scanner_errors[]`
-— every `{lens, file}` whose scanner failed to produce a verdict (**a failed scanner is not a miss**). A
-non-empty `scanner_errors` is worth reading before trusting the rest of the record.
+the resolved `target[]`, `skipped[]` (every path it dropped — ignored, binary, oversized, not a regular
+file — with the reason), `lenses_registered[]` (from `count-lenses.mjs`), one `assignments[]` entry per
+registered lens (`{lens, basis, scanner, slice}`), `unassigned_scanner_bound[]`, `scanner_errors[]`
+— every `{lens, file}` whose scanner failed to produce a verdict (**a failed scanner is not a miss**) — and
+`scanner_failures[]`, every lens whose one scanner spawn timed out or errored. A non-empty `scanner_errors`
+is worth reading before trusting the rest of the record.
 
 **On the emitter's two refusals (P5, fail-closed — do not work around either):**
 
@@ -137,9 +139,11 @@ slice list; `basis` says which of the two cases below produced it.
 
 The cases, for reading the record (the derivation lives in the emitter, over `pharn/floor/lens-scanner-map.json`):
 
-- **Mapped lens** (`scanners[<lens>]` is a scanner file) → run that scanner over each target file;
-  the files with ≥1 hit are the lens's slice. A lens whose scanner hits **nothing** in the target
-  contributes no findings — you may **skip spawning** it (an empty `findings.json` is equivalent).
+- **Mapped lens** (`scanners[<lens>]` is a scanner file) → the emitter ran that scanner **once** over the
+  whole target, under a time limit; the files with ≥1 hit are the lens's slice. Its **files to review** are
+  that slice **plus every `scanner_errors` file naming the lens**: a scanner that timed out or errored fails
+  toward review. Only a lens with **neither** contributes no findings — you may **skip spawning** it (an
+  empty `findings.json` is equivalent).
 - **Scanner-less lens** (`scanners[<lens>]` is `null` — `hallucinated-api`, `input-validation`,
   `race-condition`, `trust-fence`) → **no deterministic prefilter exists**, so its slice is the **whole
   target** (an honestly-labeled advisory bound, not a floor claim).
@@ -181,7 +185,7 @@ never decides whether a lens spawns: Step 3's scanner rule alone does, unchanged
 Spawn **one subagent per lens** (the parallel step — the Agent/subagent mechanism), giving each:
 
 - its **lens file** (`pharn/pharn-review/<lens>/<lens>.md`) as the procedure to apply,
-- its **slice** (Step 3) as `trust: untrusted` DATA under the CONSTITUTION prefix, and
+- its **files to review** (Step 3) as `trust: untrusted` DATA under the CONSTITUTION prefix, and
 - this instruction for the **installed skills** (Step 3b): run `node pharn/floor/catalogue-installed-skills.mjs .`
   and branch on its exit and `catalogue` / `mode` fields — exit 0 with `installed-skills/1`: `none` → no skills;
   `read-all` → read every listed `SKILL.md` except an `unsafe` one; `select` → read
@@ -265,9 +269,9 @@ End with an explicitly **advisory** verdict, e.g.
 **Also render each lens's `skills:` line** (Step 4) under a `## Installed skills` heading, one quoted line per lens
 (DATA, self-reported — never evidence a skill was read or followed); a lens that returned none is listed as `none returned`.
 
-**Also render the assignment summary from `assignments.json`** (Step 1b): the resolved target count, and
-**the `unassigned_scanner_bound[]` list in full**. Word it as **assigned**, never "covered", "reviewed" or
-"examined".
+**Also render the assignment summary from `assignments.json`** (Step 1b): the resolved target count, the
+`skipped[]` count per reason, every `scanner_failures[]` entry, and **the `unassigned_scanner_bound[]` list in
+full**. Word it as **assigned**, never "covered", "reviewed" or "examined".
 
 ## Step 6b — Self-check the assignment record (FLOOR shape check; gates nothing)
 
@@ -301,9 +305,10 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   `merge-findings.mjs`. It assembles; it does not judge.
 - **Floor:** the lens→scanner map is consistent with disk — `lens-scanner-map.test.mjs`. **NARROWED:** it certifies
   the mapped scanner **file exists on disk** — never that it runs, matches, or works.
-- **Floor, when the record is the EMITTER'S OUTPUT:** which slice was ASSIGNED to which lens, and which target
-  files no scanner-bound lens reached — `render-review-assignments.mjs`, plus shape and internal consistency
-  (`check-review-assignments.mjs`). **NOT VERIFIED:** that a record's values came from the emitter — nothing binds a
+- **Floor, when the record is the EMITTER'S OUTPUT:** which slice was ASSIGNED to which lens, which target
+  files no scanner-bound lens reached, which paths were skipped and why (git's ignore rules and a NUL-byte sniff,
+  never a judgment that a skipped file is safe), and which scanner spawns failed — `render-review-assignments.mjs`,
+  plus shape and internal consistency (`check-review-assignments.mjs`). **NOT VERIFIED:** that a record's values came from the emitter — nothing binds a
   record to its producer, and a record fabricated **consistently** satisfies every invariant — measured: a
   hand-authored record with `generated_by: "typed by hand"` exits 0 GREEN. Do not read a GREEN as provenance; the
   check is near-vacuous over an unmodified emitter, and never evidence that a review was adequate. The record gates nothing downstream (residual `review-assignments-gate`).
@@ -320,8 +325,8 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   merge, any lens subagent's shell — is outside the hook (`LIMITS.md §6`). **It holds ONLY WHILE THE RUN MARKER IS
   OPEN**: in an installed project with no run open the default is the permissive one, wider still. Opening the
   marker is a Bash call — advisory.
-- **Advisory:** parallel spawn (nothing on the floor forces parallelism or every lens to run), slice derivation,
-  each lens reading only its slice, and each lens's judgment about the code (a lens
+- **Advisory:** parallel spawn (nothing on the floor forces parallelism or every lens to run, a failed scanner's
+  lens included), slice derivation, each lens reading only its slice, and each lens's judgment about the code (a lens
   never gates — §7); feeding skills to the lenses; the resolved target being the complete or correct set (a
   faithful record of a 1-file review passes every invariant); the human noticing the label (nothing reads
   `REVIEW.md`).

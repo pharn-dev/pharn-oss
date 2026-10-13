@@ -24,8 +24,9 @@
 // Further documented bounds (honest false-negatives / scope, stated not hidden):
 //   • EXACT-after-normalization only: identifiers/literals must match byte-for-byte (post whitespace-collapse).
 //     validateUser(u){...u...} vs validateAdmin(a){...a...} do NOT match (u != a). Near-identical = advisory layer.
-//   • SINGLE-FILE (v0.1.0): scans ONE file; CROSS-FILE duplication (the more common real case) is a FUTURE
-//     increment (P7 — not built speculatively). The lens applies this scanner per file today.
+//   • PER-FILE: each verdict compares lines inside ONE file; CROSS-FILE duplication (the more common real case) is a
+//     FUTURE increment (P7 — not built speculatively). `--files` (review-fanout) scans many files in one process,
+//     each still on its own.
 //   • THRESHOLD-GATED: a duplicated run shorter than N=4 SIGNIFICANT lines is not reported (noise control). N is the
 //     one tunable; it is a fixed constant here (P5 — not model-chosen).
 //   • SIGNIFICANCE FILTER: a line whose normalized form is empty after removing structural punctuation `{}()[];,`
@@ -50,34 +51,19 @@
 // non-file target is an ERROR (nonzero exit, NOTHING on stdout), never a silent "clean".
 //
 // Usage:  node pharn/floor/scan-code-duplicated-logic.mjs <code-file>
+//         node pharn/floor/scan-code-duplicated-logic.mjs --files <nul-separated-list | ->   (the batch mode
+//         /pharn-review's prefilter spawns once per review — one {"results":[…]} document, one entry per listed
+//         path, each the per-file verdict below; pharn/floor/code-scanner-cli.mjs owns both modes)
 // Output: {"found":<bool>,"hits":[{"lines":[<int>,...],"span":<int>},...]} on stdout; exit 0 on a successful scan
 //         (whatever the result). Each hit is one duplicated block: `lines` = the 1-based ORIGINAL line number of the
 //         FIRST significant line of each non-overlapping occurrence (>=2, ascending); `span` = the block length in
 //         SIGNIFICANT lines. `found` === (hits.length > 0). hits sorted by first line, then span. Exits non-zero
 //         (writing NOTHING to stdout) if the target is missing / not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
-const TARGET = process.argv[2];
 const N = 4; // minimum block length in SIGNIFICANT lines (the one tunable; fixed, not model-chosen — P5)
-
-function fail(msg) {
-  process.stderr.write("scan-code-duplicated-logic: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-duplicated-logic.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
 
 // --- Comment/string MASK ------------------------------------------------------------------------------------
 // Verbatim reuse of the scan-code-swallowed-exception.mjs mask (family idiom; consolidation deferred, P7 —
@@ -145,68 +131,74 @@ function isSignificant(norm) {
   return norm.replace(STRUCTURAL, "") !== "";
 }
 
-const maskedLines = mask(text).split("\n");
-// sig[k] = { line: <1-based ORIGINAL line number>, norm: <normalized signature> }
-const sig = [];
-for (let k = 0; k < maskedLines.length; k++) {
-  const norm = normalize(maskedLines[k]);
-  if (isSignificant(norm)) sig.push({ line: k + 1, norm });
-}
-
-// --- Longest-common-run DP over the SIGNIFICANT lines --------------------------------------------------------
-// L[i][j] = length of the longest run of byte-equal normalized significant lines starting at sig[i] and sig[j]
-// (i<j). Computed with two rolling rows (O(M) space, O(M^2) time; single-file, small M). We record only
-// BACKWARD-MAXIMAL matches (the run cannot extend one line earlier) that are NON-OVERLAPPING (the second
-// occurrence starts at or after the first occurrence's block ends), so a maximal block is anchored once, not once
-// per shifted sub-window.
-const M = sig.length;
-let next = new Array(M + 1).fill(0); // next[j] represents L[i+1][j]
-const matches = []; // { i, j, len }
-for (let i = M - 1; i >= 0; i--) {
-  const cur = new Array(M + 1).fill(0);
-  for (let j = M - 1; j > i; j--) {
-    cur[j] = sig[i].norm === sig[j].norm ? next[j + 1] + 1 : 0;
+/**
+ * The hits for one file's text. Keeps nothing between calls: every per-file value is local, and the module-level
+ * `g` regex is only used through `replace`, which resets `lastIndex` itself.
+ */
+export function scanText(text) {
+  const maskedLines = mask(text).split("\n");
+  // sig[k] = { line: <1-based ORIGINAL line number>, norm: <normalized signature> }
+  const sig = [];
+  for (let k = 0; k < maskedLines.length; k++) {
+    const norm = normalize(maskedLines[k]);
+    if (isSignificant(norm)) sig.push({ line: k + 1, norm });
   }
-  for (let j = i + 1; j < M; j++) {
-    const len = cur[j];
-    if (len < N) continue;
-    const backwardMaximal = i === 0 || sig[i - 1].norm !== sig[j - 1].norm;
-    const nonOverlap = j >= i + len;
-    if (backwardMaximal && nonOverlap) matches.push({ i, j, len });
-  }
-  next = cur;
-}
 
-// --- Group maximal matches into duplicated-block hits (by exact normalized content) --------------------------
-// Two matches whose block content (the joined normalized signatures) is identical are occurrences of the SAME
-// duplicated block; grouping by that content string collects all their start indices (a block duplicated 3x
-// yields pairs (a,b),(a,c),(b,c) -> one group {a,b,c}). The join length is fixed per content, so `len` is
-// constant within a group. Emit one hit per group with its non-overlapping occurrences (>=2).
-const groups = new Map(); // contentKey -> { len, starts:Set<number> }
-for (const m of matches) {
-  let key = "";
-  for (let t = 0; t < m.len; t++) key += sig[m.i + t].norm + "";
-  let g = groups.get(key);
-  if (!g) ((g = { len: m.len, starts: new Set() }), groups.set(key, g));
-  g.starts.add(m.i);
-  g.starts.add(m.j);
-}
-
-const hits = [];
-for (const g of groups.values()) {
-  const starts = [...g.starts].sort((a, b) => a - b);
-  const chosen = [];
-  let lastEnd = -1;
-  for (const s of starts) {
-    if (s >= lastEnd) {
-      chosen.push(s);
-      lastEnd = s + g.len; // occurrences must not overlap in significant-line space
+  // --- Longest-common-run DP over the SIGNIFICANT lines --------------------------------------------------------
+  // L[i][j] = length of the longest run of byte-equal normalized significant lines starting at sig[i] and sig[j]
+  // (i<j). Computed with two rolling rows (O(M) space, O(M^2) time; single-file, small M). We record only
+  // BACKWARD-MAXIMAL matches (the run cannot extend one line earlier) that are NON-OVERLAPPING (the second
+  // occurrence starts at or after the first occurrence's block ends), so a maximal block is anchored once, not once
+  // per shifted sub-window.
+  const M = sig.length;
+  let next = new Array(M + 1).fill(0); // next[j] represents L[i+1][j]
+  const matches = []; // { i, j, len }
+  for (let i = M - 1; i >= 0; i--) {
+    const cur = new Array(M + 1).fill(0);
+    for (let j = M - 1; j > i; j--) {
+      cur[j] = sig[i].norm === sig[j].norm ? next[j + 1] + 1 : 0;
     }
+    for (let j = i + 1; j < M; j++) {
+      const len = cur[j];
+      if (len < N) continue;
+      const backwardMaximal = i === 0 || sig[i - 1].norm !== sig[j - 1].norm;
+      const nonOverlap = j >= i + len;
+      if (backwardMaximal && nonOverlap) matches.push({ i, j, len });
+    }
+    next = cur;
   }
-  if (chosen.length >= 2) hits.push({ lines: chosen.map((s) => sig[s].line), span: g.len });
+
+  // --- Group maximal matches into duplicated-block hits (by exact normalized content) --------------------------
+  // Two matches whose block content (the joined normalized signatures) is identical are occurrences of the SAME
+  // duplicated block; grouping by that content string collects all their start indices (a block duplicated 3x
+  // yields pairs (a,b),(a,c),(b,c) -> one group {a,b,c}). The join length is fixed per content, so `len` is
+  // constant within a group. Emit one hit per group with its non-overlapping occurrences (>=2).
+  const groups = new Map(); // contentKey -> { len, starts:Set<number> }
+  for (const m of matches) {
+    let key = "";
+    for (let t = 0; t < m.len; t++) key += sig[m.i + t].norm + "";
+    let g = groups.get(key);
+    if (!g) ((g = { len: m.len, starts: new Set() }), groups.set(key, g));
+    g.starts.add(m.i);
+    g.starts.add(m.j);
+  }
+
+  const hits = [];
+  for (const g of groups.values()) {
+    const starts = [...g.starts].sort((a, b) => a - b);
+    const chosen = [];
+    let lastEnd = -1;
+    for (const s of starts) {
+      if (s >= lastEnd) {
+        chosen.push(s);
+        lastEnd = s + g.len; // occurrences must not overlap in significant-line space
+      }
+    }
+    if (chosen.length >= 2) hits.push({ lines: chosen.map((s) => sig[s].line), span: g.len });
+  }
+
+  hits.sort((a, b) => a.lines[0] - b.lines[0] || a.span - b.span);
+  return hits;
 }
 
-hits.sort((a, b) => a.lines[0] - b.lines[0] || a.span - b.span);
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-duplicated-logic", scanText, process.argv.slice(2));

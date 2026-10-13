@@ -44,40 +44,24 @@
 // No free text moves either verdict. (See the ★ tests in scan-code-placeholder.test.mjs — they are the whole
 // reason this is FLOOR, not judgment.)
 //
-// Single-file by contract (v0.1.0): scans ONE code file, mirroring scan-code-swallowed-exception.mjs's <code-file>
-// arg. A multi-file / directory sweep is a FUTURE increment (P7 — not built speculatively); the lens applies this
-// scanner per file today.
+// Per-file by contract: every verdict is about ONE file's text, mirroring scan-code-swallowed-exception.mjs. The
+// scanner takes one `<code-file>`, or many through `--files` (review-fanout) — the batch mode `/pharn-review`'s
+// prefilter spawns once per review — and each file's verdict is the same either way
+// (pharn/floor/code-scanner-cli.mjs owns both modes). A cross-file / directory sweep is a FUTURE increment.
 //
 // Non-LLM, stdlib-only, fail-closed. MIRRORS the fail-closed contract of the scan-code-* family: a missing /
 // non-file target is an ERROR (nonzero exit, NOTHING on stdout), never a silent "clean".
 //
 // Usage:  node pharn/floor/scan-code-placeholder.mjs <code-file>
+//         node pharn/floor/scan-code-placeholder.mjs --files <nul-separated-list | ->
 // Output: {"found":<bool>,"hits":[{"line":<int>,"kind":"todo|fixme|not-implemented|stub|empty-body"},...]} on
 //         stdout; exit 0 on a successful scan (whatever the result). `found` === (hits.length > 0); hits deduped
 //         by (line,kind) and sorted by line, then kind. Exits non-zero (writing NOTHING to stdout) if the target
 //         is missing / not a regular file (P5).
+//         With --files: one {"results":[…]} document, one entry per listed path (code-scanner-cli.mjs).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
-
-const TARGET = process.argv[2];
-
-function fail(msg) {
-  process.stderr.write("scan-code-placeholder: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-code-placeholder.mjs <code-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
-}
-
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
+import "./runtime-floor.mjs";
+import { runScannerCli } from "./code-scanner-cli.mjs";
 
 // --- Comment/string MASK (identical idiom to scan-code-swallowed-exception.mjs) -----------------------------
 // Replace every character inside a // line comment, a /* block */ comment, or a single-line '…' / "…" string
@@ -150,52 +134,59 @@ function lineAt(s, idx) {
   return line;
 }
 
-const hits = [];
-const seen = new Set(); // dedupe by `${line}:${kind}`
-function add(line, kind) {
-  const key = line + ":" + kind;
-  if (seen.has(key)) return;
-  seen.add(key);
-  hits.push({ line, kind });
-}
+/**
+ * The hits for one file's text. Keeps nothing between calls: the hit list and its dedup set lived at module level
+ * while the scanner ran once per process, and would have accumulated across files in `--files` mode, so they — and
+ * the `g` regexes of pass B — are created here, once per file.
+ */
+export function scanText(text) {
+  const hits = [];
+  const seen = new Set(); // dedupe by `${line}:${kind}`
+  function add(line, kind) {
+    const key = line + ":" + kind;
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push({ line, kind });
+  }
 
-// --- PASS A — marker membership over the RAW text (positive-only, no suppression) ---------------------------
-// Fixed marker patterns. Each is a deterministic membership test; a match ADDS a hit at its 1-based line.
-const MARKERS = [
-  { kind: "todo", re: /\bTODO\b/ },
-  { kind: "fixme", re: /\bFIXME\b/ },
-  // not-implemented: the `not implemented`/`unimplemented` phrase (case-insensitive), or a NotImplemented* id.
-  { kind: "not-implemented", re: /\bnot\s+(?:yet\s+)?implemented\b|\bunimplemented\b|\bNotImplemented\w*\b/i },
-  { kind: "stub", re: /\bSTUB\b|\bPLACEHOLDER\b/ },
-];
-{
-  const lines = text.split("\n");
-  for (let li = 0; li < lines.length; li++) {
-    const raw = lines[li];
-    for (const { kind, re } of MARKERS) {
-      if (re.test(raw)) add(li + 1, kind);
+  // --- PASS A — marker membership over the RAW text (positive-only, no suppression) ---------------------------
+  // Fixed marker patterns. Each is a deterministic membership test; a match ADDS a hit at its 1-based line.
+  const MARKERS = [
+    { kind: "todo", re: /\bTODO\b/ },
+    { kind: "fixme", re: /\bFIXME\b/ },
+    // not-implemented: the `not implemented`/`unimplemented` phrase (case-insensitive), or a NotImplemented* id.
+    { kind: "not-implemented", re: /\bnot\s+(?:yet\s+)?implemented\b|\bunimplemented\b|\bNotImplemented\w*\b/i },
+    { kind: "stub", re: /\bSTUB\b|\bPLACEHOLDER\b/ },
+  ];
+  {
+    const lines = text.split("\n");
+    for (let li = 0; li < lines.length; li++) {
+      const raw = lines[li];
+      for (const { kind, re } of MARKERS) {
+        if (re.test(raw)) add(li + 1, kind);
+      }
     }
   }
-}
 
-// --- PASS B — empty function body over the MASKED text (the empty-catch analog) -----------------------------
-const masked = mask(text);
-// A `function` head: `function`, optional generator `*`, optional name, a simple `( … )` param list, then `{`.
-const FN_RE = /\bfunction\b\s*\*?\s*[A-Za-z0-9_$]*\s*\([^)]*\)\s*\{/g;
-// An arrow block body: `=>` then `{`. The head line is the `=>`'s line.
-const ARROW_RE = /=>\s*\{/g;
-for (const RE of [FN_RE, ARROW_RE]) {
-  let m;
-  while ((m = RE.exec(masked)) !== null) {
-    const bodyOpen = m.index + m[0].length - 1; // index of the body's '{'
-    const bodyClose = matchDelim(masked, bodyOpen, "{", "}");
-    if (bodyClose === -1) continue; // unbalanced braces — cannot classify (documented bound)
-    const bodyMasked = masked.slice(bodyOpen + 1, bodyClose);
-    if (bodyMasked.replace(/\s/g, "") === "") add(lineAt(masked, m.index), "empty-body");
+  // --- PASS B — empty function body over the MASKED text (the empty-catch analog) -----------------------------
+  const masked = mask(text);
+  // A `function` head: `function`, optional generator `*`, optional name, a simple `( … )` param list, then `{`.
+  const FN_RE = /\bfunction\b\s*\*?\s*[A-Za-z0-9_$]*\s*\([^)]*\)\s*\{/g;
+  // An arrow block body: `=>` then `{`. The head line is the `=>`'s line.
+  const ARROW_RE = /=>\s*\{/g;
+  for (const RE of [FN_RE, ARROW_RE]) {
+    let m;
+    while ((m = RE.exec(masked)) !== null) {
+      const bodyOpen = m.index + m[0].length - 1; // index of the body's '{'
+      const bodyClose = matchDelim(masked, bodyOpen, "{", "}");
+      if (bodyClose === -1) continue; // unbalanced braces — cannot classify (documented bound)
+      const bodyMasked = masked.slice(bodyOpen + 1, bodyClose);
+      if (bodyMasked.replace(/\s/g, "") === "") add(lineAt(masked, m.index), "empty-body");
+    }
   }
+
+  hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
+  return hits;
 }
 
-hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
-
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+if (import.meta.main) process.exitCode = runScannerCli("scan-code-placeholder", scanText, process.argv.slice(2));
