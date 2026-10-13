@@ -47,6 +47,13 @@
   - `stage-regress-load-flakes` — the timing assertions in `stage-regress.test.mjs` and `entry-gates.test.mjs` fail
     under heavy machine load (fixture gates at 30 s, kill-timing windows). Observed four times in this run, outside
     this increment.
+- Decision after the RED-verdict STOP: delegated — decided by the orchestrating model under the maintainer's
+  2026-10-13 delegation, not a human approval. Push and open the PR now; verify is not re-run.
+  - **The local floor verdict is `FAIL`** (`failing_gates: ["test"]`).
+  - Four full runs, at a load average of 110–150, each failed a **different** timing-dependent test. None of those
+    tests is in this increment's files, and each passed when run alone afterwards.
+  - **The merge decision rests on CI's `check` and `floor` jobs on an unloaded runner.** The orchestrator merges
+    only if both are green.
 
 Orchestration deviations (advisory): this isolated worktree's shell refused the pinned `xargs`, `$(…)` and `$?` forms.
 So `/pharn-dev-build` Step 2b, `/pharn-dev-regress` Steps 1–3 and `/pharn-dev-verify` Step 1 ran through gitignored node
