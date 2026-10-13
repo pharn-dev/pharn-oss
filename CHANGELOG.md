@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.60.0] - 2026-10-13
+## [6.61.0] - 2026-10-13
 
 ### Added
 
@@ -137,6 +137,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     exactly as if it had found nothing. A timeout now makes that case reachable.
   - Not a claim (ADVISORY): spawning is orchestration, and nothing on the floor forces the spawn. The record
     (`scanner_failures`, I9) and the merge's `scanner-errored` label make a skipped spawn visible.
+
+## [6.60.1] - 2026-10-13
+
+### Fixed
+
+- **`pharn/floor/griller-extract.mjs` (6.60.0) reads each griller through the one descriptor it checked, so the file
+  cannot be swapped between the check and the read.**
+  - What changed: it used to check a griller path with `lstat`, then read it again by path. It now resolves the path,
+    opens it once without following a symlink, checks that open file is a regular file, and reads from it. A symlinked
+    griller and one resolving outside the repo are still refused. A griller path that does not exist now reads
+    "cannot be found" (it said "cannot be lstat-ed"), and a FIFO is refused without blocking the open.
+  - Why: CodeQL reported `js/file-system-race` (high) on the read in 6.60.0. PR #346 was merged with that check
+    failing, and this is the correction.
+  - Checked by: `pharn/floor/griller-extract.test.mjs`, 30 tests, including a new one for the FIFO. The printed extract
+    is unchanged: 13 grillers, 141,332 B.
+
+## [6.60.0] - 2026-10-13
+
+### Changed
+
+- **A full `/pharn-grill` still runs every griller, but loads each one without the two sections a grill never uses
+  (188,978 → 141,332 B of griller text, −25%).**
+  - What changed: Step 3b now runs the new `node pharn/floor/griller-extract.mjs .` instead of reading each griller
+    file. It takes the registered set from `count-grillers.mjs` and prints every griller with its frontmatter, minus
+    its `## Guarantee audit` (the griller's own claims audit, written for maintainers) and its
+    `## Machine-readable emission` (the standalone `findings.json` path, unused when the grill applies a griller
+    inline). Its first line is a `grillers:` line that `GRILL.md` now records. On any refusal the command falls back
+    to reading every griller file in full and records `grillers: extract NOT run (griller-extract.mjs exit <n>)`.
+    Step 3b also says that a griller's findings, or none, never mean the plan is sound on that axis, the rule the
+    dropped audit sections carried. `/pharn-loop`'s floor-only grill is unchanged.
+  - Why: the 2026-10-12 review (CTX-1) found the full grill loaded all 13 griller files, 188,978 B, into one context
+    whose every later request re-sent them. The same output is printed for every plan: 141,332 B of griller text,
+    143,786 B of stdout with the frame lines.
+  - Measured and rejected: the review proposed loading only the grillers whose `scan-plan-*` scanner hit the plan.
+    Over the 284 committed plans that would have skipped the security griller on all 284, and the committed
+    `GRILL.md` files hold at least 34 griller findings raised on plans where that griller's scanner had no hit. Each
+    griller judges beyond its scanner, and for migrations and observability a non-hit is the case their main finding
+    covers. Archetype selection (`applies:`) already happens at install time. The numbers and the method are in
+    `.dev/features/grill-griller-trim/MEASUREMENTS.md`.
+  - Checked by: `pharn/floor/griller-extract.test.mjs`. A ★ test pins that each omitted heading exists in every one of
+    the 13 committed grillers and that no other `##` section of any of them is dropped, so a renamed heading makes the
+    tool keep that section and the test fail. Other tests cover the fence and heading rules (a setext heading, an
+    indented fence, an HTML block and an unclosed fence each keep more, never less), refusing a symlinked or
+    out-of-repo griller and a body holding a frame line, the zero-griller case and every refusal. Ten scratch mutants
+    were each killed by a named test. A ✧ test in `.dev/floor/command-hygiene.test.mjs` pins the extract line, its
+    fallback and the `grillers:` line, and the command's byte ceiling rises to 26,624 by the stated rule.
+  - Not covered (ADVISORY): that the dropped sections hold nothing a grill needs is a reading of today's 13 grillers.
+    The heading rules were compared with markdown-it on those files and 14 adversarial inputs, once, by hand; that
+    comparison is not a maintained test. No token saving on a real run is measured. `/pharn-dev-grill` still reads
+    every griller in full (a named follow-up).
 
 ## [6.59.0] - 2026-10-13
 
