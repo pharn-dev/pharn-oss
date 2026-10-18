@@ -1,7 +1,7 @@
 # PLAN — grill-griller-slim
 
 - spec_content_hash: 75088a82d113bc52cdd3d5fb2e44533e81cba5f520877f5eaa441ced45fb0fd6
-- applied_lessons: [L1, L6, L22, L25, L29, L31, L33, L34, L36, L39, L41, L43, L50, L55, L56, L60, L69, L71, L72]
+- applied_lessons: [L1, L6, L22, L25, L29, L31, L33, L34, L36, L39, L41, L43, L50, L55, L56, L60, L64, L69, L71, L72]
 - increment: A full grill still runs every griller, but each `kind: pharn-owned` griller now loads without its
   `## The two layers` intro, its `### Layer 1` and its `## Finding output` (any other griller loses only the two
   sections omitted since 6.60.0). The scanner results those sections told the model to produce now come from
@@ -43,6 +43,111 @@ resolved:**
   `## Finding output`) applies ONLY to a griller whose frontmatter says `kind: pharn-owned`, a deterministic
   frontmatter membership test. Any other kind, and a missing or malformed one, keeps those three sections and loses
   only `## Guarantee audit` and `## Machine-readable emission`. Designed in "The `kind: pharn-owned` gate" below.
+
+## GATE 2 record — FIX FIRST (the human's decision, relayed by the orchestrator, 2026-10-18)
+
+The pipeline ran on this plan: grill `65b2475`, build `3697075`, regress `6892f61`, verify `89640b5` (PASS), review
+`b6a82fd` (GREEN, 0 floor-gate findings, 7 advisory). At GATE 2 the human chose **FIX FIRST**, authoring rule
+included:
+
+- **Fix now:** review findings 1 (the authoring rule, important, P3), 2 (the whole-word heading match, minor, P0) and
+  3 (two CHANGELOG phrasings, minor, P0). These are F1–F3 in "Fix round" below.
+- **Defer, named follow-ups:** findings 4–7 and `migrations-applies-universal`, plus a new one from the builder's
+  observation: `count-grillers.mjs` and `validate.mjs` count scratch copies of grillers left under `.pharn/`.
+- **Version unchanged: 6.63.0.** This is the same unreleased PR, so the 6.63.0 CHANGELOG entry is still editable
+  (CONTRIBUTING: only a merged entry is frozen).
+
+## Fix round (GATE 2) — design
+
+Live state read this run, after fast-forwarding to `b6a82fd`:
+
+- `pharn/floor/griller-extract.mjs:166-173` (`omittedId`) matches `text.startsWith(s.prefix)` with no boundary.
+- All 65 committed omitted heading lines (13 grillers × 5) continue with a space after the prefix (checked).
+- The 13 grillers total 189,192 B; the extract prints 99,391 B.
+- The stage load set for `/pharn-grill` sums about 261,349 B against its 285,184 B ceiling.
+
+### F1 — the authoring rule lives in the grillers (review finding 1, P3)
+
+- **The sentence.** It is added as one paragraph at the end of each `kind: pharn-owned` griller's `## The two layers`
+  intro, just above `### Layer 1`, in all 13 grillers. The text is exact; the build pins it byte-for-byte after
+  whitespace folding:
+
+  > **Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+  > `## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+  > `## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+  > `### Presence` section, never under those five headings.
+
+- **The two sections omitted since 6.60.0 are in it.** `## Guarantee audit` and `## Machine-readable emission` are
+  left out of every griller, so grill-time guidance does not belong under them either. A sentence naming only three of
+  the five would teach a partial rule. A test binds the sentence to `OMITTED_SECTIONS`: every member's heading appears
+  in it, so adding a member forces the sentence to change in every griller.
+- **Its cost to a grill is 0 bytes — verified, not argued.** A scratch probe (`.pharn/pharn-dev-plan/probe-fix-round.mjs`)
+  inserted the paragraph into all 13 grillers in memory and ran the SHIPPED `trimGriller`:
+  - the extract is byte-identical for 13 of 13 grillers, and the sentence appears in none;
+  - the griller files grow by 4,823 B (371 B each), to about 194,015 B.
+
+  That growth reaches only readers of the whole file: the whole-file fallback, `/pharn-dev-eval`, a person, and
+  `stage-load-budget.test.mjs`. That test's grill row stays about 19 KB under its ceiling, so the test is unchanged.
+  The paragraph starts with `**`, so no line of it is a heading, a setext underline or an HTML opener for the extract.
+
+- **Tests (`pharn/floor/griller-extract.test.mjs`):**
+  - ★ every committed griller that `frontmatterKind` reads as `pharn-owned` carries the sentence inside its
+    `## The two layers` section. This is a closure over the live registered set, so a new in-repo `pharn-owned` griller
+    without it goes RED;
+  - ★ the sentence never reaches the extract output of any committed griller (the 0-byte claim, pinned);
+  - ★ every `OMITTED_SECTIONS` member's heading text occurs in the pinned sentence.
+- **Negative controls (L60), inside the tests:**
+  - a synthetic `pharn-owned` griller without the sentence is RED;
+  - one with the sentence moved under `## Procedure` is RED, both for "not in the intro" and for "reaches the extract";
+  - a `kind: community` fixture without the sentence is not required to carry it.
+- **The extract header.** Its "THE CONVENTION THIS RELIES ON … nothing reaches a griller an author adds or edits" is
+  re-derived (L25). It now says where the rule is stated (each `pharn-owned` griller's intro) and what pins it (the
+  closure over this repo's registered grillers). It also states the residual: an installed project's own griller, or
+  a user-edited copy, is checked by nothing.
+- **Bound (P0):** the pin is presence and placement of a sentence over the grillers in this repo. It is not proof that
+  an author reads it, and nothing checks a griller outside this repo.
+
+### F2 — the section start matches the prefix as a whole word (review finding 2, P0)
+
+- **Rule.** In `omittedId`, a member matches only when the heading text starts with its prefix AND the next character
+  is the end of the text, a space or a tab. Every committed heading (65 of 65) continues with a space, so no committed
+  griller's output changes.
+  - Space or tab, not "any whitespace": another Unicode space after the prefix keeps the section, which is the safe
+    direction.
+  - It is stricter than the review's "not a letter, a digit or `.`", which would still drop `## Guarantee audit:`.
+- **Reproduced on the shipped code** (`probe-fix-round.mjs`): `### Layer 10 — x`, `### Layer 1.5 — x`,
+  `## Finding outputs (x)`, `## The two layersets`, `## Guarantee auditing` and `## Machine-readable emissions` are
+  all DROPPED today. The last two are 6.60.0 members, so the defect predates this PR, and this fix covers it too.
+- **Tests:** a ★ case holding the six near-misses next to the six real heading forms. The near-misses are kept; the
+  real ones (`### Layer 1`, `### Layer 1 — x`, `## Finding output (x)`, `## The two layers (P0)`,
+  `## Guarantee audit (P0)`, `## Machine-readable emission (…)`) are dropped. Also a trailing-space and an
+  end-of-line case.
+- **Mutation controls** (run once at build, scratch, recorded):
+  - the boundary removed, killed by the near-miss case;
+  - the boundary accepting any non-letter (`### Layer 1.5` dropped), killed by the same case.
+- **The markdown-it re-probe must NOT reuse the extract's own prefix predicate.** The 6.60.0 and 6.63.0 probes both
+  matched heading text with `startsWith(prefix)`, so neither could see this class (review lesson candidate A, not yet
+  promoted).
+  - For the 13 committed grillers, the reference drops a markdown-it heading token only when its inline text is
+    byte-EQUAL to an entry of a literal list of the 65 committed omitted heading texts. The list is copied once into
+    the probe and printed in `MEASUREMENTS.md` for review; 65 = 13 × 5 is asserted.
+  - For the adversarial set (the 20 earlier cases plus the near-misses), each case carries a hand-written expected
+    outcome. The shipped rule and markdown-it's section ranges are both compared against that oracle; neither is
+    computed by the rule under test.
+
+### F3 — two CHANGELOG phrasings (review finding 3, P0; L64)
+
+In the unmerged `## [6.63.0]` entry:
+
+- **"No other text changes."** It becomes: apart from naming the subject of each moved sentence ("The hardcoded-string
+  scanner …", "The PII scanner …"), no wording changes. A new item then states F1's sentence in all 13 grillers.
+- **"The floor-only `GRILL.md` still says so through its own line."** It becomes: in `--floor-only` mode, `GRILL.md`'s
+  pinned line says the interrogation did not run; that no griller ran is in the model-written sentence after it.
+- **Restatements swept (L64):**
+  - the "Checked by" bullets gain the F1 and F2 tests and the new mutant count;
+  - "Not covered" drops "no contract tells a new griller's author the convention" and states F1's bound instead;
+  - "Measured" re-states the griller-file bytes. The printed bytes stay 99,391.
+  - The extract header's numbers are re-derived the same way.
 
 ## The triggering failure (P7)
 
@@ -369,8 +474,13 @@ The `migrations` evidence feeds the follow-up below.
   frozen records (CHANGELOG `[6.60.0]`, `.dev/features/grill-griller-trim/`, committed `GRILL.md` files) are not edited.
 - L55 — the `###` rule was probed against markdown-it over the 13 committed grillers and 19 adversarial inputs before
   planning it.
-- L56 — the build probes the shipped implementation again, including the stated safe-direction exceptions.
+- L56 — the build probes the shipped implementation again, including the stated safe-direction exceptions. In the fix
+  round the reference no longer shares the rule's prefix predicate: it uses a literal list of the 65 committed heading
+  texts and hand-written per-case oracles (F2).
 - L60 — one negative control per asserted property (the mutants listed above), each killed by a named test.
+- L64 — fix round: F3 corrects two CHANGELOG restatements that said more than the diff. The same pass re-checks every
+  other restatement of the fix-round claims ("Checked by", "Not covered", the file bytes, the extract header) against
+  the shipped code before hand-off.
 - L69 — `measure.mjs` reproduces the selection record through `plan-files-core.mjs`'s `pathsFromPlanFiles`, never a
   hand-written `## Files` split.
 - L71 — in that measurement a non-concrete `## Files` entry counts as "cannot decide, skip nothing".
@@ -380,25 +490,45 @@ The `migrations` evidence feeds the follow-up below.
 
 ## Files
 
+Every path the whole PR writes, first round and fix round, so the fix round's re-anchored scope and the regress scope
+check both see one complete list. The fix round writes the 13 grillers, the two extract files, `CHANGELOG.md`, and
+the two measurement files. The other entries were written in the first round and are listed because the PR changed
+them.
+
 - `pharn/floor/griller-extract.mjs` — `OMITTED_SECTIONS` with `level`, `scope` and the three new members; the
   level-exact START; `frontmatterKind` and the `kind: pharn-owned` gate; the summary line's `deep omission:` record;
   the re-derived header (bytes, the Presence convention, the gate and its residual, the R0 selection correction).
-  — layer: product floor
+  Fix round: the whole-word boundary in `omittedId` (F2); the header's convention paragraph and file bytes re-derived
+  (F1, L25). — layer: product floor
 - `pharn/floor/griller-extract.test.mjs` — the changes listed above, including the kind-gate fixtures (inline, no new
-  fixture file). — layer: product floor (tests never ship)
+  fixture file). Fix round: the F1 authoring-rule closure, extract-absence and member-coverage tests with their
+  negative controls; the F2 near-miss case. — layer: product floor (tests never ship)
 - `pharn/floor/grill-scan.mjs` — the mode-neutral section wording. — layer: product floor
 - `pharn/floor/grill-scan.test.mjs` — the mode-neutral wording case. — layer: product floor (tests never ship)
-- `pharn/pharn-pipeline/grillers/a11y/a11y.md` — insert the `### Presence` heading. — layer: pharn-pipeline
-- `pharn/pharn-pipeline/grillers/documentation/documentation.md` — insert the `### Presence` heading. — layer:
-  pharn-pipeline
-- `pharn/pharn-pipeline/grillers/error-handling/error-handling.md` — insert the `### Presence` heading. — layer:
-  pharn-pipeline
+- `pharn/pharn-pipeline/grillers/a11y/a11y.md` — insert the `### Presence` heading; fix round: the F1 sentence.
+  — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/documentation/documentation.md` — insert the `### Presence` heading; fix round: the F1
+  sentence. — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/error-handling/error-handling.md` — insert the `### Presence` heading; fix round: the
+  F1 sentence. — layer: pharn-pipeline
 - `pharn/pharn-pipeline/grillers/testability/testability.md` — move the floor paragraph up; insert the `### Presence`
-  heading. — layer: pharn-pipeline
-- `pharn/pharn-pipeline/grillers/i18n/i18n.md` — move the illustrative-markup sentence into `### Layer 2`. — layer:
+  heading; fix round: the F1 sentence. — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/i18n/i18n.md` — move the illustrative-markup sentence into `### Layer 2`; fix round:
+  the F1 sentence. — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/privacy/privacy.md` — move the scanner-recall sentence into `### Layer 2`; fix round:
+  the F1 sentence. — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/architecture/architecture.md` — fix round: the F1 sentence only. — layer:
   pharn-pipeline
-- `pharn/pharn-pipeline/grillers/privacy/privacy.md` — move the scanner-recall sentence into `### Layer 2`. — layer:
+- `pharn/pharn-pipeline/grillers/comprehension/comprehension.md` — fix round: the F1 sentence only. — layer:
   pharn-pipeline
+- `pharn/pharn-pipeline/grillers/coupling/coupling.md` — fix round: the F1 sentence only. — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/migrations/migrations.md` — fix round: the F1 sentence only (its `applies` stays,
+  follow-up `migrations-applies-universal`). — layer: pharn-pipeline
+- `pharn/pharn-pipeline/grillers/observability/observability.md` — fix round: the F1 sentence only. — layer:
+  pharn-pipeline
+- `pharn/pharn-pipeline/grillers/performance/performance.md` — fix round: the F1 sentence only. — layer:
+  pharn-pipeline
+- `pharn/pharn-pipeline/grillers/security/security.md` — fix round: the F1 sentence only. — layer: pharn-pipeline
 - `.claude/commands/pharn-grill.md` — Step 3b (grill-scan first, the rule against a second per-hit finding, the
   whole-file fallback when grill-scan fails, the re-derived omission sentence with its `kind: pharn-owned` clause, the
   selection cite), Step 4 (the scan section), the claims block, `version:` 0.4.0 → 0.5.0. — layer: product command
@@ -407,21 +537,33 @@ The `migrations` evidence feeds the follow-up below.
 - `.dev/floor/command-hygiene.test.mjs` — the pins listed above. — layer: build apparatus
 - `.dev/features/grill-griller-slim/measure.mjs` — NEW. Reproduces every number here: section shares, the per-griller
   audit's byte and restatement columns, extract bytes per griller, scan-section bytes, and the selection record
-  (A–D) over the corpus roots given. Read-only. — layer: build apparatus
+  (A–D) over the corpus roots given. Read-only. Fix round, if the build reproduces F1's 0-byte check here: one more
+  read-only check. — layer: build apparatus
 - `.dev/features/grill-griller-slim/MEASUREMENTS.md` — NEW. The tables above re-run from the shipped CLI, the
   markdown-it probe results against the shipped code, the mutation-control results, the selection record with
-  pharn-starter's path and commit, and the named follow-ups. — layer: build apparatus
+  pharn-starter's path and commit, and the named follow-ups. Fix round adds a section with:
+  - the new griller-file bytes;
+  - the F1 0-byte check;
+  - the F2 near-miss result before and after;
+  - the independent-reference re-probe, including the literal list of the 65 heading texts;
+  - the new mutants. — layer: build apparatus
 - `SKILLS_VERSION` — 6.62.0 → 6.63.0 (minor: a changed stage behaviour: the full grill runs the deterministic scans and
-  loads a smaller extract; renumber by diff if `main` moves). — layer: repo meta
-- `README.md` — the version badge only. — layer: repo meta
+  loads a smaller extract; renumber by diff if `main` moves). First round; the fix round keeps 6.63.0. — layer: repo
+  meta
+- `README.md` — the version badge only. First round. — layer: repo meta
 - `CHANGELOG.md` — one new `## [6.63.0]` section. It states the per-kind omission in the wording above, the measured
   bytes, the full-mode scan section, the dev-grill fold-in, the selection measured and rejected, the residual (a
-  user-edited or self-declared `pharn-owned` griller is trimmed), and the follow-ups. — layer: repo meta
+  user-edited or self-declared `pharn-owned` griller is trimmed), and the follow-ups. Fix round, editing that unmerged
+  entry:
+  - F3's two phrasings;
+  - an item for F1's sentence and an item for F2's boundary, which also fixes the two 6.60.0 members;
+  - the restatements swept (L64): "Checked by", "Not covered", the file bytes. — layer: repo meta
 
 ### Not changed (stated, so their absence is a decision)
 
 - `pharn/pharn-pipeline/grillers/migrations/migrations.md` `applies` — follow-up `migrations-applies-universal`.
-- The other seven grillers; `count-grillers.mjs`; the `scan-plan-*` scanners.
+- `count-grillers.mjs`; the `scan-plan-*` scanners. The fix round also does not change `grill-scan.mjs`, either grill
+  command, `command-hygiene.test.mjs`, `SKILLS_VERSION` or `README.md`.
 - `.claude/commands/pharn-loop.md`, `pharn-ship.md`, `pharn-ship-quick.md`, `pharn-loop-quick.md`.
 - `.dev/floor/stage-load-budget.test.mjs`; `.dev/guides/*.md`. No floor guide section exists for `griller-extract`
   or `grill-scan` (none was added at 6.60.0 either); none is added here (P7).
@@ -451,6 +593,11 @@ The `migrations` evidence feeds the follow-up below.
   points: (a) Finding-output `rule_id`/`severity` are restated in the Procedure; (b) the moved passages are in the
   extract. A griller of another kind keeps those sections. Nothing pins the claim for a user-edited or self-declared
   `pharn-owned` griller.
+- "A member heading matches only as a whole word" (fix round, F2) → floor: regex (prefix, then end of text, a space
+  or a tab), pinned by the near-miss case and its mutants.
+- "Each committed `pharn-owned` griller states the authoring rule in its intro, at 0 grill bytes" (fix round, F1) →
+  floor at test time: a substring closure over this repo's registered grillers, and an absence check over the extract.
+  Advisory: that an author reads it. Nothing checks a griller outside this repo.
 - "The scanner-hit findings come from the floor" → floor: the scanners' verdicts and `grill-scan.mjs`'s shape checks
   (regex). Copying the section verbatim, and not emitting a second finding, is advisory orchestration.
 - Byte figures → measured; token figures → estimates (bytes/4).
@@ -474,10 +621,23 @@ The `migrations` evidence feeds the follow-up below.
   rationale too. Deciding what a grill does not need there is a per-griller reading, like this one.
 - `pharn/ARCHITECTURE.md` §5's archetype wording no longer matches the live tree (detection is the installer's, over
   `package.json` and the file tree). Human-only, pre-existing.
+- Deferred at GATE 2 (review findings, `REVIEW.md`):
+  - **finding 4**, `scan-section-findings-heading`: a pinned heading in Step 4 between the copied scan section and the
+    model's judgment findings;
+  - **finding 5**, `dev-grill-floor-list`: `/pharn-dev-grill`'s list of floor-grade things in a run omits the
+    grill-scan verdicts (dev apparatus);
+  - **finding 6**, with `griller-body-slim`: the kept Procedure text that still says "(Layer 1)" and "as Layer 1
+    states", and testability's "the Layer-1 presence finding";
+  - **finding 7**, `extract-form-eval`: an eval of the extract form, built only if a real miss triggers it (P7).
+- `walkers-skip-pharn-scratch` (the builder's observation at GATE 2): `count-grillers.mjs` and `validate.mjs` count
+  scratch copies of grillers left under `.pharn/` (for example a mutation runner's throwaway copies), so a run there
+  reports inflated counts.
 
 ## Open questions (HALT)
 
-- None open. All four were resolved by the human at GATE 1 (second round), and the `kind: pharn-owned` gate was added
+- GATE 2 fix round: none open. The scope (F1–F3), the deferrals and the version were set by the human at GATE 2 (see
+  "GATE 2 record").
+- GATE 1: none open. All four were resolved by the human at GATE 1 (second round), and the `kind: pharn-owned` gate was added
   there (see "GATE 1 record"):
   - Q1: omit the intro too, yes.
   - Q2: the six griller edits.
