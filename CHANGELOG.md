@@ -59,11 +59,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     404 over 40). Spawning by group is advisory, so the number of subagents a run actually starts was not observed. The
     old 68k–130k per-subagent prefix figures were measured when this repository's `CLAUDE.md` was 172 KB; it is 29 KB
     now, so they are not carried as measurements.
-  - Measured: a prefix probe in one session, all subagents on the same model. A `pharn-review-lens` subagent's first
-    request was 8,200 tokens, against 46,764 for `general-purpose` (17.5%; the go/no-go was at most 50%). Its write
-    outside the fail-closed default was denied by the writes-scope guard
-    (`.dev/features/review-lens-grouping/MEASUREMENTS.md`). The grouped lens evals run after this build, before the
-    merge; their results are in the same file.
+  - Measured (`.dev/features/review-lens-grouping/MEASUREMENTS.md`):
+    - A prefix probe in one session, all subagents on `claude-sonnet-5`: a `pharn-review-lens` subagent's first
+      request was 8,200 tokens, against 46,764 for `general-purpose` (17.5%; the go/no-go was at most 50%). Its write
+      outside the fail-closed default was denied by the writes-scope guard.
+    - The grouped lens evals, on `claude-opus-5-5`, every subagent `pharn-review-lens` with the kit's prompt byte for
+      byte. Run 1: 78 of 79 structural verdicts GREEN. Run 2: 64 of 64 GREEN from the lenses that wrote, while the
+      `error-handling` group wrote nothing (its scanner calls were refused by the session's permission rule; it said so
+      and stopped), 15 verdicts. Two confirmation runs of that group wrote all four lenses, 14 of 15 GREEN each, so
+      the unwritten outcome (1 of 3 runs) is not confirmed and its cause is not established. The only RED from a
+      written lens is `swallowed-exception`'s `case-intentional-comment.md`, whose expected file contradicts itself.
+      `trust-fence` 10 of 10 GREEN. No finding outside a lens's review set; `missing-timeout`'s findings on two
+      `missing-await` cases recur when it runs alone. First requests 5,517–6,583 tokens.
   - Checked by: `pharn/floor/lens-groups.test.mjs` (the committed map against `count-lenses.mjs` and
     `lens-scanner-map.json`, closed both ways, `trust-fence` and the six security lenses each alone, each invariant
     with an in-memory mutant; the derivation; `absent` / `stale` / equal-time / fresh `findings.json` files timed with
@@ -84,8 +91,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - `unwritten` compares modification times, which any writer can set, so it detects a stale or skipped write, never
       a forged one, and a fresh file never says its lens finished.
     - A group runs its lenses one after another, so a review's wall clock can rise; it is not measured.
-    - The lens evals score structure only, on small eval cases at N=1, with a harness's prompts; they cannot show what
-      dropping a real project's `CLAUDE.md` does to a lens's judgment.
+    - The lens evals score structure only, on small eval cases (7 to 17 per group, where a real PR can hand a group
+      hundreds of files) at N=1, with a harness's prompts, in a `-p` session whose permission rule refused compound
+      Bash commands; they cannot show what dropping a real project's `CLAUDE.md` does to a lens's judgment.
   - Follow-ups:
     - `cli-install-agents`, `slice-without-finding`, `lens-body-slim`, and the `/pharn-dev-eval` gap (it runs one lens
       top-level, never as a `/pharn-review` group).

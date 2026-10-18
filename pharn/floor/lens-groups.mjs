@@ -25,9 +25,9 @@
 // symlink — lstat, never followed) or `stale` (a regular file whose modification time is NOT LATER than the record's,
 // in nanoseconds: Step 1b rewrites the record at the start of every run, so a file an earlier run left is older, and an
 // equal time is not later). /pharn-review re-runs the same line after its groups return, so a group that stopped
-// partway, or a subagent that reported files it never wrote, shows per lens, never as "no findings". The trigger: in
-// the grouped eval's second run a group subagent made no Write call and listed all four paths as written, while the
-// first run's files were still on disk; existence alone passed it.
+// partway shows per lens, never as "no findings". The trigger: in the grouped eval's second run a group subagent had its
+// scanner calls refused, stopped and wrote nothing, while the first run's files were still on disk; existence alone
+// would have counted all four of its lenses as written.
 // BOUND (P0): a modification time is a filesystem fact any writer can set (`touch`, utimes), so this detects a stale or
 // skipped write, never a forged one; and a fresh file says nothing about whether its lens finished. On a filesystem
 // whose timestamps are coarser than the time between Step 1b and a lens's write (seconds on some), a fresh file can

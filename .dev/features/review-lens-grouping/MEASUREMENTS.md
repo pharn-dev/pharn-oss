@@ -89,7 +89,7 @@ replied `PROBE-OK` and made no tool call. The numbers match the relayed ones exa
   (inside the same denied zone).
 - The body after the H1 is 822 bytes, under Design §3's 2,048-byte ceiling.
 
-## 3. The grouped lens evals (after build, before GATE 2): NOT RUN YET
+## 3. The grouped lens evals (after build, before GATE 2)
 
 The kit is scratch at `.pharn/review-lens-grouping/eval/` in the build worktree
 (`/Users/pgalarowicz/Projects/pharn-oss/.claude/worktrees/agent-a8477e1626719a91a`). Its `README.md` holds the launch
@@ -126,5 +126,65 @@ follow-up spec round-tripped through `prepare.mjs` (all assertions held, 2026-10
 - The prompts are the harness's rendering of Step 4, not an orchestrator's own composition.
 - The cases are this repository's fixtures, so the eval cannot show what dropping a real project's `CLAUDE.md` does to a
   lens's judgment.
+- `score.mjs` splits a lens's findings into cases by the exact `file` string (review K2), and round 2's single-case
+  attribution control would change the context size as well as the siblings (review K1). Round 2 did not run.
 
-**Results:** to be recorded here once the human or the orchestrator has run the kit.
+### Results (run 2026-10-18; every number re-read from the score files and transcripts at phase B)
+
+**How it ran.** A scratch checkout of the built branch at `23937ba`
+(`/private/tmp/claude-501/-Users-pgalarowicz-Projects-pharn-oss/3933956d-d4b0-41af-b75c-debe339e03d9/scratchpad/lens-eval`),
+launched by the human with `claude -p … --permission-mode acceptEdits --allowedTools "Bash(node pharn/floor/*)"
+--model opus`. Claude Code 2.1.301. Every subagent was `pharn-review-lens` on `claude-opus-5-5`, and every one of the
+34 subagent transcripts' first message equals the kit's prompt byte for byte (checked by matching each transcript's
+`description` to its run). Phase A of the fix round changed none of the Step 4 text the kit rendered (checked by
+slicing both versions of the command), so these results apply to the bytes that ship.
+
+**The command ran twice** (session `3954c967…`, 20:06–20:11 UTC, and `5647eff7…`, 20:11–20:17 UTC), writing to the same
+output paths, so run 2 overwrote run 1's files. The orchestrator rebuilt run 1 from its transcripts (the last Write per
+path: 26 lens outputs, no Edit calls; the method reproduced run 2's files on disk except `g-error-handling`, below) and
+scored both runs from the rebuilt outputs (`eval-run1/score.txt`, `eval-run2check/score.txt` in the scratch checkout).
+The on-disk `eval/score-run2.txt` is invalid for `g-error-handling`: it scored run 1's files left in place.
+
+| Run                                | Verdicts | GREEN | RED | Unwritten lenses |
+| ---------------------------------- | -------: | ----: | --: | ---------------: |
+| Run 1 (15 subagents)               |       79 |    78 |   1 |                0 |
+| Run 2 (15 subagents)               |       79 |    64 |  15 |                4 |
+| Confirmation `g-error-handling` ×2 |       30 |    28 |   2 |                0 |
+
+- **The one structural RED from a written lens, in every run that wrote it** (run 1, `~confirm-2`, `~confirm-3`), is
+  `swallowed-exception` on `case-intentional-comment.md`. Its expected file contradicts itself: `file_resolves` demands
+  `…/case-intentional-comment.md:16` while `needle_absent_from_enum_gated` forbids `intentional` in every enum-gated
+  field, `file` included. The exact ideal one-finding array scores RED too (`check-structural.mjs` exit 1, reproduced
+  at phase B). It predates this release (the file is unchanged since `89f9a04`, 2026-07-10) and does not block;
+  follow-up `swallowed-exception-expected-fix`.
+- **Run 2's 15 REDs are one group that wrote nothing.** The `g-error-handling` subagent (`agent-a909ea01c65413447`) made
+  5 Bash and 5 Read calls and no Write (deduplicated by tool-use id; the transcript logs some calls twice). Its scanner
+  calls were compound commands (`for f in …; do … node pharn/floor/scan-code-missing-error-handling.mjs …; done`) and
+  every one was refused by the permission rule. Its final message said so: it stopped before writing any
+  `findings.json`, because writing hand-derived findings or `[]` would mislead, and listed the four paths it would write
+  once Bash was allowed. It did not claim the files were written. Run 1's four files were still on disk, so an
+  existence-only `unwritten` check would have counted all four lenses as written: the stale-output gap fixed in phase A
+  (`unwritten` reason `stale`).
+- **Confirmation round** (session `6b793bbc…`, 20:27–20:30 UTC, fresh output paths, `eval/round1/score.txt`): both
+  `g-error-handling~confirm-2` and `~confirm-3` wrote all four lenses and scored 14 of 15 GREEN each, the RED being the
+  `swallowed-exception` case above. So the unwritten outcome happened in 1 of 3 runs of that group: NOT confirmed under
+  the plan's 2-of-3 rule, and no attribution round ran. Its cause is not established: grouping, the model, or the
+  permission rule's refusals (next bullet).
+- **The permission rule is a confounder.** Under `--allowedTools "Bash(node pharn/floor/*)"` in `-p` mode, compound
+  Bash commands (`cat …; echo …`, `for … do node pharn/floor/…; done`) were refused in run 1, run 2 and the
+  confirmation round; plain `node pharn/floor/scan-code-*` calls ran. An interactive session would prompt instead of
+  refusing. Every other subagent still wrote all of its files.
+- **`trust-fence`:** 10 of 10 GREEN (5 in run 1, 5 in run 2).
+- **Contamination 1** (a finding outside its lens's review set): 0 in every run.
+- **Contamination 2** (reported, never blocking): in runs 1 and 2 the grouped `missing-timeout` emitted one finding on
+  each of the two `missing-await` cases production routes to it (`case-awaited-call.md`, `case-floating-injection.md`).
+  The solo re-runs in the confirmation session (`contam~missing-timeout~awaited-call`, `~floating-injection`) emitted
+  the same one finding each, so it is the lens's own behaviour on files it receives, not an effect of grouping.
+- **First-request prefix, all on `claude-opus-5-5`** (`audit.mjs --prefix`, all classes): 5,517 to 6,583 tokens over
+  the 34 transcripts. The four grouped families 6,415–6,583 (run 1), the solo and `trust-fence` runs 5,517–5,693, the
+  confirmation round 5,545–6,474. Run 2's prefixes are mostly cache reads of run 1's (same session prefix). These are
+  opus figures; the probe's 8,200 (§2) was on `claude-sonnet-5`, a different model and session, so the two are not
+  compared.
+
+**GATE 2 outcome (human):** fix first; fix the stale-output gap; run the confirmation round above (PLAN.md, "Fix round
+1").

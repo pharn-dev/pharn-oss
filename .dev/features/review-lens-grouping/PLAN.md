@@ -635,8 +635,10 @@ Grill concerns:
 write):
 
 - **Stale output (the eval's finding).** In the eval's second run the `g-error-handling` group subagent made no Write
-  call and listed all four `findings.json` paths as written, while the first run's files were still on disk, so the
-  existence-only `unwritten` passed it. `unwritten` is now a list of `{lens, reason}`, the reason `absent` or `stale`
+  call, while the first run's files were still on disk, so the existence-only `unwritten` would have passed it. (Phase
+  A's text said the subagent listed the four paths as written; phase B's reading of the transcript corrected that: its
+  scanner calls were refused, and its final message said it stopped and wrote nothing, listing the paths it would
+  write once Bash was allowed. `MEASUREMENTS.md` §3.) `unwritten` is now a list of `{lens, reason}`, the reason `absent` or `stale`
   (a regular file whose modification time is not later than this run's `assignments.json`, compared in nanoseconds).
   Step 4's re-check and Step 6's `did not finish (absent | stale)` name the reason. The bound is stated in the helper,
   the claims block and the CHANGELOG: a modification time is a fact any writer can set, so this detects a stale or
@@ -661,3 +663,13 @@ write):
   self-contradictory expected file.
 - **A4** waits for phase B: the CHANGELOG's "results are in the same file" sentence and `MEASUREMENTS.md` §3 are written
   when the confirmation round's results arrive.
+
+**Phase B** (same build pass, same anchor):
+
+- **A4.** `MEASUREMENTS.md` §3 holds the eval results, each number re-read from the score files and the transcripts;
+  the CHANGELOG's "Measured" bullet states them and no longer points at results to come.
+- **Corrections to what was relayed,** each from the transcripts or score files: the run-2 `error-handling` group made
+  5 Bash and 5 Read calls (deduplicated by tool-use id), and its final message said it stopped and wrote nothing, so
+  it made no false completion claim; each confirmation run scored 14 of 15 GREEN (the group has 15 cases), not 15 of
+  16; the opus first-request prefixes ranged 5,517–6,583 tokens, not up to 8.2k (8,200 is the sonnet probe). Phase A's
+  trigger sentences in the helper header, the Step 4 re-check and this record were corrected to match.

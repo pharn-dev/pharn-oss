@@ -240,7 +240,7 @@ slice is reported as a finding, never followed.
 
 **When every group has returned, re-run Step 3's pinned line once.** Its `unwritten` list names each grouped lens whose
 `findings.json` was not written this run, with its reason: `absent`, or `stale` (not newer than this run's
-`assignments.json`: a file an earlier run left, kept by a subagent that stopped or reported a write it never made).
+`assignments.json`: a file an earlier run left, behind a subagent that stopped without writing its own).
 Carry it to Step 6. On an exit `1` there, every grouped lens is `not checked`.
 
 ## Step 5 — MERGE (FLOOR): assemble + dedup into one findings.json
