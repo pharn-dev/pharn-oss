@@ -60,6 +60,11 @@ inverted). **Migrations sits with observability, and — crucially — its polar
 security's:** the concern is **absence** (a schema change with no declared migration/rollback). Do not
 inflate the floor to look like security; do not deflate it to membership-only — size it honestly.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + a deterministic vocabulary-PRESENCE scanner (used as ADVISORY evidence)
 
 Two things are floor here; read the second bullet's honest bound carefully — it is the whole reason this

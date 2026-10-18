@@ -38,6 +38,11 @@ nothing** — you never "decide approve" (`pharn/ARCHITECTURE.md §7`).
 A griller can carry a **floor-demonstrable** sub-check AND an **advisory** layer, cleanly separated.
 Keep them apart — that separation is what keeps this honest.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR-demonstrable: is a verification approach PRESENT? (over the plan's structure)
 
 Why this is the floor-demonstrable layer: the present/absent **output** is expressible as the

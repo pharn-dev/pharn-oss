@@ -70,6 +70,11 @@ its floor is a **presence** property (a declaration is there, or it is not) — 
 deterministic scanner**, because unlike a secret literal, "the plan documents its public surface" is
 **not a self-evident lexical artifact**. See "The rejected floor candidate".
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + the fixture-pinned present/absent OUTPUT
 
 Two things are floor here — identical to testability and error-handling:

@@ -46,6 +46,11 @@ from testability:** "does this approach fit" is **irreducible judgment**, so —
 whose presence check had a large floor portion — this griller's floor portion is **only membership**.
 Do not read symmetry with testability into it; there is no manufactured floor sub-check here.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)
 
 The **only** thing floor-guaranteed at runtime is that this file is a griller: `role: griller`,

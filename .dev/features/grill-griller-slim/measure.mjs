@@ -10,7 +10,9 @@
 //   1. `bytes`: per griller — the file and its 6.60.0 extract at the base; the file, its 6.60.0 extract, the shipped
 //      extract without the intro, and the shipped extract at HEAD. The 6.60.0 extract of a text is the shipped trim of
 //      that text with its `kind: pharn-owned` line respelled to a same-length non-`pharn-owned` value: the kind gate
-//      then leaves out only the scope-`all` pair, which is exactly the 6.60.0 rule, and no byte count moves.
+//      then leaves out only the scope-`all` pair, which is exactly the 6.60.0 rule, and no byte count moves. Since the
+//      GATE 2 fix round each row also carries the authoring-rule paragraph's bytes and whether the shipped extract is
+//      the same without it (1 = yes): the 0-byte check of F1.
 //   2. `sections`: each `##` / `###` section's share of the base 6.60.0 extract.
 //   3. `audit`: per griller at the base — the bytes of `## The two layers`, `### Layer 1` and `## Finding output`; and at
 //      HEAD whether the Finding-output `rule_id` / `severity` are restated in the griller's `## Procedure`.
@@ -110,9 +112,19 @@ const grillers = run.entries.map((e) => {
       headExtract660: B(shallowText(head)),
       shippedWithoutIntro: B(shipped) + sectionBytes(shallowText(head), /^## The two layers/),
       shipped: B(shipped),
+      ...authoringRuleCheck(head, shipped),
     },
   };
 });
+
+/**
+ * GATE 2 F1's 0-byte check: the bytes of the "**Not loaded by a full grill.**" paragraph in the file, and whether the
+ * shipped extract is the same with the paragraph removed (it sits in the intro the extract leaves out).
+ */
+function authoringRuleCheck(head, shipped) {
+  const without = head.replace(/\*\*Not loaded by a full grill\.\*\*[\s\S]*?never under those five headings\.\n\n/, "");
+  return { authoringRuleBytes: B(head) - B(without), extractSameWithoutRule: trimGriller(without).text === shipped ? 1 : 0 };
+}
 const sum = (k) => grillers.reduce((a, g) => a + g.row[k], 0);
 const totals = Object.fromEntries(
   Object.keys(grillers[0].row)

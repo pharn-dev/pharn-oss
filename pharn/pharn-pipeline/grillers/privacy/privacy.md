@@ -52,6 +52,11 @@ sound" is irreducible judgment, so privacy has **less** floor than testability (
 axis was floor-checkable). Do not inflate the floor; do not deflate it — size it honestly, exactly as
 security does.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + deterministic PII-PATTERN detection
 
 Two things are floor here:

@@ -19,10 +19,14 @@
 //     committed grillers held grill-time guidance only there, so 6.63.0 moved it first: a `### Presence — what counts as
 //     a declaration` heading in a11y, documentation, error-handling and testability, and one sentence each into
 //     `### Layer 2` of i18n and privacy (`.dev/features/grill-griller-slim/PLAN.md`, the per-griller audit).
-// THE CONVENTION THIS RELIES ON, for a `pharn-owned` griller: guidance a grill needs never sits under those three
-// headings. It is pinned over the committed grillers only (`griller-extract.test.mjs`); nothing reaches a griller an
-// author adds or edits.
-// Measured over the 13 grillers at 6.63.0: 189,192 B of files → 99,391 B of griller text printed (−47.5%; 102,417 B of
+// THE AUTHORING RULE THIS RELIES ON, for a `pharn-owned` griller: guidance a grill needs never sits under any of the
+// five omitted headings. Since 6.63.0 (GATE 2, F1) the rule is stated where an author edits or copies a griller: a
+// "**Not loaded by a full grill.**" paragraph at the end of each `pharn-owned` griller's `## The two layers` intro, which
+// the extract itself leaves out, so it costs a grill 0 bytes. `griller-extract.test.mjs` pins it as a closure over this
+// repo's registered grillers: each `pharn-owned` one carries the sentence in its intro, the sentence names every
+// OMITTED_SECTIONS member, and it never reaches the extract. RESIDUAL (P0): that pin is presence and placement, never
+// that an author read it; an installed project's own griller, or a user-edited copy, is checked by nothing.
+// Measured over the 13 grillers at 6.63.0: 194,015 B of files → 99,391 B of griller text printed (−48.8%; 102,417 B of
 // stdout with the summary and frame lines); 6.60.0 printed 141,332 B, so −29.7% on a full `/pharn-grill`. The same for
 // every plan.
 //
@@ -53,8 +57,10 @@
 //   - Frontmatter is kept verbatim (its `kind:` / `trust:` tags stay visible, P2), delimited exactly as count-grillers.mjs
 //     reads it (`---` at byte 0, closed at the next `\n---`). An unclosed frontmatter keeps the whole file.
 //   - A section is omitted only when its heading is a column-0 run of EXACTLY the member's level of `#` and one space,
-//     outside any fence, whose text starts with an OMITTED_SECTIONS prefix, for a member the griller's kind admits.
-//     START is strict, so an indented, reworded or other-level heading (`## Layer 1`, `### Finding output`) is kept.
+//     outside any fence, whose text starts with an OMITTED_SECTIONS prefix as a whole word (the prefix, then the end of
+//     the text, a space or a tab), for a member the griller's kind admits. START is strict, so an indented, reworded or
+//     other-level heading (`## Layer 1`, `### Finding output`) is kept, and so is a longer word (`### Layer 10`,
+//     `## Finding outputs`, `## Guarantee auditing`).
 //   - It ends at the first later line, outside a fence, that looks like any ATX heading (`#`–`######`, also after list or
 //     blockquote markers) or is a line of only `=` or only `-` (a setext underline or a thematic break); before a setext
 //     underline, the paragraph above it (that heading's text) is kept too. END is liberal, so it never runs past a
@@ -160,15 +166,26 @@ export function shown(v) {
 }
 
 /**
+ * True when `text` starts with `prefix` as a whole word: the character after it is the end of the text, a space or a
+ * tab (6.63.0, GATE 2 F2). So `Layer 10`, `Layer 1.5`, `Finding outputs` and `Guarantee auditing` do not match, and
+ * neither does `Guarantee audit:` — any other character after the prefix keeps the section, the safe direction.
+ */
+function startsWithWord(text, prefix) {
+  if (!text.startsWith(prefix)) return false;
+  const next = text[prefix.length];
+  return next === undefined || next === " " || next === "\t";
+}
+
+/**
  * The omitted-section id a heading line opens, or null: a column-0 run of exactly a member's `level` `#` characters and
- * one space, whose text starts with that member's prefix, for a member whose scope `deep` admits.
+ * one space, whose text starts with that member's prefix as a whole word, for a member whose scope `deep` admits.
  */
 function omittedId(line, deep) {
   const m = line.match(/^(#{1,6}) /);
   if (!m) return null;
   const level = m[1].length;
   const text = line.slice(level + 1).trimStart();
-  const hit = OMITTED_SECTIONS.find((s) => s.level === level && (s.scope === "all" || deep === true) && text.startsWith(s.prefix));
+  const hit = OMITTED_SECTIONS.find((s) => s.level === level && (s.scope === "all" || deep === true) && startsWithWord(text, s.prefix));
   return hit ? hit.id : null;
 }
 

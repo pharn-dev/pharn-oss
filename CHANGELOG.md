@@ -41,25 +41,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       level, so `## Layer 1` and `### Finding output` are kept. The summary line `GRILL.md` records gains
       `deep omission: <n> pharn-owned, <m> other` and names each other griller with a closed reason
       (`kind-missing`, `kind-ambiguous`, `kind-other`), never the kind value.
+    - **A heading's name must match as a whole word.** A section is left out only when the heading text continues
+      after its name with the end of the text, a space or a tab. `### Layer 10`, `### Layer 1.5`,
+      `## Finding outputs` and `## Guarantee audit:` are kept. This also fixes the two sections omitted since
+      6.60.0: `## Guarantee auditing` and `## Machine-readable emissions` were dropped before and are kept now. Every
+      committed griller's output is unchanged.
     - **Six grillers move their grill-time guidance out of `### Layer 1` first.** a11y, documentation, error-handling
       and testability gain a `### Presence — what counts as a declaration` heading over their presence rules
       (testability's floor paragraph moves above it). i18n moves its "fires on markup the plan merely quotes"
-      sentence, and privacy its scanner-recall sentence, into `### Layer 2`. No other text changes.
+      sentence, and privacy its scanner-recall sentence, into `### Layer 2`. Apart from naming the subject of each
+      moved sentence ("The hardcoded-string scanner …", "The PII scanner …"), no wording changes.
+    - **All 13 grillers state the rule the omission relies on.** One paragraph at the end of each griller's
+      `## The two layers` intro, "**Not loaded by a full grill.**", names the five headings a full grill leaves out of
+      a `kind: pharn-owned` griller and says grill-time guidance belongs under `## Procedure`, `### Layer 2` or a
+      `### Presence` section. The extract leaves that intro out, so a grill loads 0 more bytes; the files grow by
+      371 B each.
     - **`/pharn-grill` Step 3b** runs `node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md` first and copies
       its section into `GRILL.md`. Its findings are the security, privacy and i18n scanner-hit findings, and a griller
       must not emit a second finding for the same hit. If it fails, the step writes
       `scans: NOT run (grill-scan.mjs exit <n>)` and reads every griller file in full, because the extract no longer
       carries the scanner instructions. `grill-scan.mjs`'s section now reads true in both modes: its heading drops
-      "`--floor-only`," and it no longer says the grillers' judgment did not run. The floor-only `GRILL.md` still
-      says so through its own line.
+      "`--floor-only`," and it no longer says the grillers' judgment did not run. In `--floor-only` mode,
+      `GRILL.md`'s pinned line says the interrogation did not run; that no griller ran is in the model-written
+      sentence after it.
     - **`/pharn-dev-grill`** (build apparatus) loads its grillers the same way: the scan, then the extract, with the
       same fallbacks. It read all 188,978 B of griller files before.
   - Why: the 2026-10-12 review (CTX-1) found the full grill loaded every griller into one context that each later
     request re-sends. 6.60.0 cut the first two sections. A reading of all 13 grillers found the three sections hold
     membership mechanics, the scanner invocation `grill-scan.mjs` now runs, eval-time rationale, and a YAML template
     each griller's `## Procedure` restates. The record is in `.dev/features/grill-griller-slim/PLAN.md`.
-  - Measured (`.dev/features/grill-griller-slim/measure.mjs`, `MEASUREMENTS.md`): 189,192 B of griller files print as
-    99,391 B (102,417 B of stdout). The scan section adds 611 B on average (290 plans here) and 751 B (128 plans in
+  - Measured (`.dev/features/grill-griller-slim/measure.mjs`, `MEASUREMENTS.md`): 194,015 B of griller files (189,192 B
+    before the authoring-rule paragraph) print as 99,391 B (102,417 B of stdout). The scan section adds 611 B on average (290 plans here) and 751 B (128 plans in
     `pharn-starter`). Token effect, estimated at 4 bytes a token and not measured: about 10.5k tokens fewer on each
     request after the load.
   - Measured and rejected: choosing grillers per plan. Selecting by archetype at run time saves 0 B in all five
@@ -72,18 +84,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       sections. ★ kind-gate fixtures cover each reason token, a quoted value and a CLI run over a `pharn-owned` and a
       `community` griller. ★ lossless pins check that each Finding-output `rule_id` and `severity` is restated in the
       Procedure, that the four `### Presence` sections survive, and that the two moved sentences sit in `### Layer 2`.
-      Level, fence, chain and setext cases cover the heading rule.
+      Level, fence, chain and setext cases cover the heading rule, and a ★ case holds seven near-miss headings (kept)
+      beside eight real forms (left out). ★ authoring-rule tests require every committed `pharn-owned` griller to
+      carry the paragraph in its intro, keep it out of the extract, and require it to name every omitted heading,
+      with controls for a missing, a moved and a `community` griller.
     - `pharn/floor/grill-scan.test.mjs`: the section is mode-neutral, and each finding's `rule_id` and `severity`
       match its griller's Procedure.
     - `.dev/floor/command-hygiene.test.mjs`: both grill commands pin the scan before the extract, both fallbacks and
       the new omission sentence, each with removal controls.
-    - Twelve scratch mutants were each killed by a named test. A markdown-it 15.0.1 comparison of the shipped rule
-      over the 13 grillers and 20 adversarial inputs found no line dropped that markdown-it keeps.
+    - Fifteen scratch mutants were each killed by a named test. The markdown-it 15.0.1 comparison does not share the
+      rule's matching: it drops only headings byte-equal to a literal list of the 65 committed omitted headings, and
+      judges 29 adversarial inputs against hand-written expected outcomes. The shipped rule matched every one; run on
+      the rule before the whole-word fix, the same comparison flags all seven near-misses.
   - Not covered (ADVISORY): `kind` is self-declared, so this tests a declaration, not who wrote the file. A user-edited
     `pharn-owned` griller is still trimmed (`pharn update` keeps edited files), and so is a community griller that
     declares `pharn-owned`. Any text either puts under those three headings never reaches a grill. That the omitted
-    sections hold nothing a grill needs is a reading of the 13 committed grillers. The tests cover those 13 only; no
-    contract tells a new griller's author the convention. No real grill run is measured.
+    sections hold nothing a grill needs is a reading of the 13 committed grillers. The authoring-rule tests pin that
+    the paragraph is present and placed in this repo's grillers; nothing shows an author reads it, and nothing checks
+    a griller outside this repo. No real grill run is measured.
   - Follow-ups (named, not built): `migrations-applies-universal`, the migrations griller's `applies:` (15 committed
     migrations findings on 11 plans of this `lib`-shaped repo, where an install leaves that griller out);
     `griller-body-slim`, the preamble and Layer-2 maintainer rationale; and `pharn/ARCHITECTURE.md` §5's archetype

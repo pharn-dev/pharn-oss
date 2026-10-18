@@ -21,22 +21,25 @@ node .dev/features/grill-griller-slim/measure.mjs --corpus . --corpus /Users/pga
 
 | griller        | base file | base extract (6.60.0) | HEAD file | shipped, intro kept | **shipped** |
 | -------------- | --------: | --------------------: | --------: | ------------------: | ----------: |
-| a11y           |    16,106 |                12,520 |    16,153 |              10,376 |       9,688 |
-| architecture   |    10,026 |                 7,717 |    10,026 |               6,148 |       5,568 |
-| comprehension  |    16,565 |                13,432 |    16,565 |              11,787 |      10,998 |
-| coupling       |    13,617 |                10,759 |    13,617 |               9,157 |       8,583 |
-| documentation  |    15,121 |                11,614 |    15,168 |               9,692 |       9,006 |
-| error-handling |    12,971 |                 9,691 |    13,018 |               7,789 |       7,129 |
-| i18n           |    17,384 |                13,588 |    17,402 |               9,320 |       8,361 |
-| migrations     |    20,324 |                13,799 |    20,324 |               9,913 |       9,095 |
-| observability  |    18,881 |                12,470 |    18,881 |               8,546 |       7,890 |
-| performance    |    12,307 |                 9,229 |    12,307 |               7,642 |       7,084 |
-| privacy        |    13,434 |                10,084 |    13,442 |               6,751 |       6,017 |
-| security       |    13,338 |                 9,724 |    13,338 |               6,387 |       5,554 |
-| testability    |     8,904 |                 6,705 |     8,951 |               4,644 |       4,418 |
-| **total**      |   188,978 |               141,332 |   189,192 |             108,152 |  **99,391** |
+| a11y           |    16,106 |                12,520 |    16,524 |              10,747 |       9,688 |
+| architecture   |    10,026 |                 7,717 |    10,397 |               6,519 |       5,568 |
+| comprehension  |    16,565 |                13,432 |    16,936 |              12,158 |      10,998 |
+| coupling       |    13,617 |                10,759 |    13,988 |               9,528 |       8,583 |
+| documentation  |    15,121 |                11,614 |    15,539 |              10,063 |       9,006 |
+| error-handling |    12,971 |                 9,691 |    13,389 |               8,160 |       7,129 |
+| i18n           |    17,384 |                13,588 |    17,773 |               9,691 |       8,361 |
+| migrations     |    20,324 |                13,799 |    20,695 |              10,284 |       9,095 |
+| observability  |    18,881 |                12,470 |    19,252 |               8,917 |       7,890 |
+| performance    |    12,307 |                 9,229 |    12,678 |               8,013 |       7,084 |
+| privacy        |    13,434 |                10,084 |    13,813 |               7,122 |       6,017 |
+| security       |    13,338 |                 9,724 |    13,709 |               6,758 |       5,554 |
+| testability    |     8,904 |                 6,705 |     9,322 |               5,015 |       4,418 |
+| **total**      |   188,978 |               141,332 |   194,015 |             112,975 |  **99,391** |
 
-The CLI's own summary line agrees: `189192 B of griller files, 99391 B printed`; its whole stdout is 102,417 B.
+HEAD is after the GATE 2 fix round, whose authoring-rule paragraph adds 371 B to each file, inside the intro (section
+9). In the first round the HEAD file column totalled 189,192 B and the intro-kept column 108,152 B; the shipped column
+did not move. The CLI's own summary line agrees: `194015 B of griller files, 99391 B printed`; its whole stdout is
+102,417 B.
 
 | context                          | 6.62.0                | 6.63.0              |
 | -------------------------------- | --------------------- | ------------------- |
@@ -183,4 +186,119 @@ run is measured here.
   Human-only, pre-existing.
 - From this feature's `GRILL.md` (for GATE 2): the convention this omission relies on — grill-time guidance never sits
   under the three headings in a `pharn-owned` griller — is declared in the extract's header and pinned over the 13
-  committed grillers only; nothing a griller author reads states it.
+  committed grillers only; nothing a griller author reads states it. **Built in the GATE 2 fix round (F1, section 9).**
+- Deferred at GATE 2 (`REVIEW.md` findings 4–7, named in `PLAN.md`): `scan-section-findings-heading`,
+  `dev-grill-floor-list`, the "(Layer 1)" wording with `griller-body-slim`, `extract-form-eval`, and
+  `walkers-skip-pharn-scratch` (`count-grillers.mjs` and `validate.mjs` count griller copies left under `.pharn/`).
+
+## 9. GATE 2 fix round (F1–F3)
+
+Re-measured after the fix round's build with the same `measure.mjs` command (it now also prints the F1 check).
+
+### F1 — the authoring rule in all 13 grillers, at 0 grill bytes
+
+- **The paragraph** ("**Not loaded by a full grill.** …", the plan's exact text) is the last paragraph of each
+  griller's `## The two layers` intro, just above `### Layer 1`.
+- **Files:** 371 B each, 4,823 B in all. The 13 grillers go from 189,192 B to **194,015 B**, the plan's figure.
+- **The extract does not move:** `measure.mjs` reports `extractSameWithoutRule` = 1 for 13 of 13 grillers. The
+  extract's frame lines are byte-identical to the first round's (`cmp` of everything after the summary line), and it
+  prints 99,391 B as before. Only the summary line's file total changes (189192 → 194015).
+- **Pins** (`griller-extract.test.mjs`, ★ AUTHORING RULE): every committed `pharn-owned` griller carries the
+  paragraph in its intro and never in the extract; the paragraph names every `OMITTED_SECTIONS` member's heading;
+  controls for a missing paragraph, one moved under `## Procedure` (RED twice) and a `community` griller (exempt).
+
+### F2 — the whole-word heading match
+
+`omittedId` now requires the character after a member's prefix to be the end of the text, a space or a tab. The 65
+committed omitted headings all continue with a space, so no committed griller's extract changes.
+
+| heading                         | first round (prefix match) | fix round (whole word) |
+| ------------------------------- | -------------------------- | ---------------------- |
+| `### Layer 10 — x`              | dropped                    | kept                   |
+| `### Layer 1.5 — x`             | dropped                    | kept                   |
+| `## Finding outputs (x)`        | dropped                    | kept                   |
+| `## The two layersets`          | dropped                    | kept                   |
+| `## Guarantee auditing`         | dropped (6.60.0 member)    | kept                   |
+| `## Machine-readable emissions` | dropped (6.60.0 member)    | kept                   |
+| `## Guarantee audit: x`         | dropped                    | kept                   |
+
+Every real form is dropped in both rounds: `### Layer 1`, `### Layer 1 — x`, `### Layer 1` followed by a tab, `### Layer 1`
+followed by a trailing space, `## Finding output (x)`, `## The two layers (P0)`, `## Guarantee audit (P0)`,
+`## Machine-readable emission (…)`, and `### Layer 1` as the file's last line. The "first round" column comes from the
+re-probe below run on the `89640b5` rule.
+
+### The markdown-it re-probe, with a reference that does not share the rule's predicate
+
+Scratch `.pharn/pharn-dev-build/probe-fix.mjs` (not committed), markdown-it 15.0.1.
+
+- **Committed grillers.** The reference drops a markdown-it heading token only when `#`×level, a space and its
+  inline text are byte-EQUAL to an entry of the literal list below (13 × 5 = 65, asserted in the probe). Each section
+  runs to the next heading token. Result: each griller matched exactly 5 entries, and the shipped extract's non-blank
+  lines equal the reference's for 13 of 13.
+- **29 adversarial inputs, each with a hand-written oracle** (the heading lines that start a dropped section, and the
+  non-blank lines that must remain): the 19 earlier cases, the same chain under `kind: community`, the seven
+  near-misses, and two real forms (a tab after the prefix; the text ending at the prefix). For each case the shipped
+  rule's kept lines are compared with the oracle; markdown-it is asked whether each oracle heading is a heading token
+  and where its section ends.
+  - Shipped rule vs oracle: **29 of 29 match.**
+  - Every oracle heading is a markdown-it heading token, and markdown-it's section ends agree with the oracle in 29 of
+    29, counting the one documented extra: after a `---` thematic break inside `### Layer 1`, the rule keeps `---`
+    and the text after it, where a renderer's section runs on (the safe direction). The indented, list-item and
+    blockquote `###` cases are kept by the oracle by design (a renderer would show them as headings).
+  - **The reference discriminates:** run on the first-round rule (`89640b5`), the same probe flags all seven
+    near-misses and nothing else.
+
+The literal list (each griller's five omitted headings, as committed):
+
+| griller        | `## The two layers …`                                                               | `### Layer 1 …`                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| a11y           | (P0) — honestly sized: PRESENCE-check floor + a substantial advisory bulk           | — FLOOR: griller MEMBERSHIP + the fixture-pinned present/absent OUTPUT                                |
+| architecture   | (P0) — honestly sized: this griller is LARGELY ADVISORY                             | — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)                                        |
+| comprehension  | (P0) — honestly sized: this griller is LARGELY ADVISORY (architecture-shaped)       | — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)                                        |
+| coupling       | (P0) — honestly sized: this griller is LARGELY ADVISORY (architecture-shaped)       | — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)                                        |
+| documentation  | (P0) — honestly sized: PRESENCE-check floor + a substantial advisory bulk           | — FLOOR: griller MEMBERSHIP + the fixture-pinned present/absent OUTPUT                                |
+| error-handling | (P0) — honestly sized: PRESENCE-check floor + a substantial advisory bulk           | — FLOOR: griller MEMBERSHIP + the fixture-pinned present/absent OUTPUT                                |
+| i18n           | (P0) — honestly sized: a REAL PARTIAL FLOOR + a substantial advisory bulk           | — FLOOR: griller MEMBERSHIP + deterministic HARDCODED-STRING detection                                |
+| migrations     | (P0) — honestly sized: a PARTIAL floor, mirroring OBSERVABILITY (inverted polarity) | — FLOOR: griller MEMBERSHIP + a deterministic vocabulary-PRESENCE scanner (used as ADVISORY evidence) |
+| observability  | (P0) — honestly sized: a PARTIAL floor, sized BETWEEN architecture and security     | — FLOOR: griller MEMBERSHIP + a deterministic vocabulary-PRESENCE scanner (used as ADVISORY evidence) |
+| performance    | (P0) — honestly sized: this griller is LARGELY ADVISORY                             | — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)                                        |
+| privacy        | (P0) — honestly sized: a REAL PARTIAL FLOOR + a substantial advisory bulk           | — FLOOR: griller MEMBERSHIP + deterministic PII-PATTERN detection                                     |
+| security       | (P0) — honestly sized: a REAL PARTIAL FLOOR + a substantial advisory bulk           | — FLOOR: griller MEMBERSHIP + deterministic SECRET-LITERAL detection                                  |
+| testability    | (P0 — the split every griller inherits)                                             | — FLOOR-demonstrable: is a verification approach PRESENT? (over the plan's structure)                 |
+
+Every griller's other three entries: `## Finding output (dogfoods fix #1 — the enum-gated / free-text split)`,
+``## Machine-readable emission (`findings.json`)`` and `## Guarantee audit (P0) — the honest split` followed by:
+
+| griller        | `## Guarantee audit (P0) — the honest split` …          |
+| -------------- | ------------------------------------------------------- |
+| a11y           | (a PRESENCE-check floor, documentation-shaped)          |
+| architecture   | (architecture is LARGELY ADVISORY)                      |
+| comprehension  | (LARGELY ADVISORY; the disease is worst to commit HERE) |
+| coupling       | (coupling is LARGELY ADVISORY)                          |
+| documentation  | (a PRESENCE-check floor, error-handling-shaped)         |
+| error-handling | (a PRESENCE-check floor, testability-shaped)            |
+| i18n           | (a REAL PARTIAL FLOOR, security-shaped)                 |
+| migrations     | (a PARTIAL floor; ALL findings advisory)                |
+| observability  | (a PARTIAL floor; ALL findings advisory)                |
+| performance    | (performance is LARGELY ADVISORY)                       |
+| privacy        | (a REAL PARTIAL FLOOR)                                  |
+| security       | (a REAL PARTIAL FLOOR)                                  |
+| testability    | (nothing after "split")                                 |
+
+### Fix-round mutation controls (L60)
+
+Scratch `.pharn/pharn-dev-build/mutants-fix.mjs`, each in a throwaway copy, deleted after its run; the unmutated
+baseline passed.
+
+| mutant                                                 | killed by                                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| the boundary removed (prefix match again)              | ★ START matches the prefix as a whole word (F2)                                   |
+| the boundary accepting any non-letter                  | ★ START matches the prefix as a whole word (F2)                                   |
+| the authoring rule dropped from one griller (security) | ★ AUTHORING RULE: every committed pharn-owned griller states it in its intro (F1) |
+
+With the first round's 12, fifteen mutants in all, each killed by a named test.
+
+### F3
+
+The two CHANGELOG phrasings are corrected in the unmerged `[6.63.0]` entry, and its "Measured", "Checked by" and "Not
+covered" restatements are re-derived (L64). Nothing to measure.

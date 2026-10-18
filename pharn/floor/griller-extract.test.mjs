@@ -245,6 +245,46 @@ test("★ START is level-exact: a member's prefix at another level, indented, or
   }
 });
 
+// GATE 2 F2: the prefix must end at a word boundary — the end of the text, a space or a tab. Before this, every one of
+// the six near-misses below was DROPPED (two of them under the 6.60.0 members). Hand-written expectations, never the
+// rule's own predicate (review lesson candidate A).
+const NEAR_MISSES = [
+  "### Layer 10 — x",
+  "### Layer 1.5 — x",
+  "## Finding outputs (x)",
+  "## The two layersets",
+  "## Guarantee auditing",
+  "## Machine-readable emissions",
+  "## Guarantee audit: x",
+];
+const REAL_FORMS = [
+  ["### Layer 1", "layer-1"],
+  ["### Layer 1 — x", "layer-1"],
+  ["### Layer 1\t— a tab after the prefix", "layer-1"],
+  ["### Layer 1 ", "layer-1"],
+  ["## Finding output (x)", "finding-output"],
+  ["## The two layers (P0)", "two-layers"],
+  ["## Guarantee audit (P0)", "guarantee-audit"],
+  ["## Machine-readable emission (`findings.json`)", "machine-readable-emission"],
+];
+
+test("★ START matches the prefix as a whole word: every near-miss is KEPT, every real form is left out (F2)", () => {
+  for (const h of NEAR_MISSES) {
+    const text = FM + PRE + `${h}\nkept\n` + PROC;
+    assert.deepEqual(trimGriller(text), { text, omitted: [], whole: null, deep: true }, `near-miss kept: ${JSON.stringify(h)}`);
+  }
+  for (const [h, id] of REAL_FORMS) {
+    const text = FM + PRE + `${h}\ngone\n` + PROC;
+    const t = trimGriller(text);
+    assert.deepEqual(t.omitted, [id], `real form dropped: ${JSON.stringify(h)}`);
+    assert.equal(t.text, FM + PRE + PROC, JSON.stringify(h));
+  }
+  // The heading at the very end of the file (end of text, no newline) is a real form too.
+  const eof = trimGriller(FM + PRE + PROC + "### Layer 1");
+  assert.deepEqual(eof.omitted, ["layer-1"]);
+  assert.equal(eof.text, FM + PRE + PROC);
+});
+
 test("closing hashes do not change a heading's text start, so `### Layer 1 ###` is left out like `### Layer 1`", () => {
   const text = FM + PRE + "### Layer 1 ###\ngone\n### Layer 2\nkeep\n";
   const t = trimGriller(text);
@@ -325,7 +365,9 @@ function modelTrim(text) {
     } else if (f) fence = f[1];
     else {
       const m = line.match(/^(#{1,6}) (.*)$/);
-      const member = m && OMITTED_SECTIONS.find((s) => s.level === m[1].length && m[2].trimStart().startsWith(s.prefix));
+      // The prefix as a whole word, written here as its own regex (F2), not through the extract's helper.
+      const word = (s) => new RegExp(`^${s.prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:[ \\t]|$)`);
+      const member = m && OMITTED_SECTIONS.find((s) => s.level === m[1].length && word(s).test(m[2].trimStart()));
       if (member) {
         heads.push(member.id);
         dropping = true;
@@ -454,6 +496,76 @@ test("★ LOSSLESS: the two sentences moved out of `### Layer 1` (i18n, privacy)
     const l2 = out.slice(out.indexOf("\n### Layer 2"));
     assert.ok(l2.indexOf(sentence) > 0 && l2.indexOf(sentence) < l2.indexOf("\n## Procedure"), `${name}: it sits in Layer 2`);
   }
+});
+
+// ── the authoring rule, stated where a griller's author edits or copies it (GATE 2 F1, review finding 1) ─────────
+
+/** The exact sentence each `pharn-owned` griller carries at the end of its `## The two layers` intro (whitespace-folded). */
+const AUTHORING_RULE =
+  "**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out " +
+  "`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and " +
+  "`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a " +
+  "`### Presence` section, never under those five headings.";
+const fold = (s) => s.replace(/\s+/g, " ");
+
+/** The `## The two layers` intro alone: from its heading to the next heading of any level, outside fences. */
+function introOf(text) {
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /^## The two layers(?:[ \t]|$)/.test(l));
+  if (at === -1) return null;
+  const out = [];
+  let fence = false;
+  for (const l of lines.slice(at + 1)) {
+    if (/^ {0,3}(```|~~~)/.test(l)) fence = !fence;
+    if (!fence && /^ {0,3}#{1,6}(?:[ \t]|$)/.test(l)) break;
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
+/**
+ * Offenders when a griller the kind gate admits does not state the authoring rule in its intro, or when the rule reaches
+ * the extract. A griller of any other kind keeps those sections and is not required to carry it.
+ */
+function authoringOffenders(path, text, trim = trimGriller) {
+  if (frontmatterKind(text) !== "pharn-owned") return [];
+  const off = [];
+  const intro = introOf(text);
+  if (intro === null || !fold(intro).includes(AUTHORING_RULE))
+    off.push(`${path}: the authoring rule is not in its ## The two layers intro`);
+  if (fold(trim(text).text).includes("**Not loaded by a full grill.**")) off.push(`${path}: the authoring rule reaches the extract`);
+  return off;
+}
+
+test("★ AUTHORING RULE: every committed pharn-owned griller states it in its intro, and it never reaches the extract (F1)", () => {
+  const owned = LIVE.filter(({ text }) => frontmatterKind(text) === "pharn-owned");
+  assert.ok(owned.length >= 13, `L34: ${owned.length} pharn-owned griller(s), expected at least 13 — never a vacuous pass`);
+  assert.deepEqual(
+    LIVE.flatMap(({ path, text }) => authoringOffenders(path, text)),
+    []
+  );
+});
+
+test("★ AUTHORING RULE: the sentence names the heading of every OMITTED_SECTIONS member (adding one forces it to change)", () => {
+  for (const s of OMITTED_SECTIONS) assert.ok(AUTHORING_RULE.includes(`\`${heading(s)}\``), `${s.id}: "${heading(s)}" is named`);
+  assert.equal((AUTHORING_RULE.match(/`#{2,3} [^`]+`/g) ?? []).length, OMITTED_SECTIONS.length + 3, "the five members + three kept homes");
+});
+
+test("★ AUTHORING RULE DISCRIMINATES (L60): missing, or moved under ## Procedure, is RED; a community griller is exempt", () => {
+  const rule =
+    "**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out\n" +
+    "`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and\n" +
+    "`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a\n" +
+    "`### Presence` section, never under those five headings.\n\n";
+  const intro = "## The two layers (P0)\n\nintro\n\n";
+  const layer1 = "### Layer 1 — x\n\nmembership\n\n";
+  const good = FM + PRE + intro + rule + layer1 + PROC;
+  assert.deepEqual(authoringOffenders("good.md", good), [], "control: the fixture that carries it passes");
+  assert.match(authoringOffenders("missing.md", FM + PRE + intro + layer1 + PROC).join("\n"), /not in its ## The two layers intro/);
+  const moved = authoringOffenders("moved.md", FM + PRE + intro + layer1 + PROC + rule).join("\n");
+  assert.match(moved, /not in its ## The two layers intro/);
+  assert.match(moved, /reaches the extract/);
+  assert.deepEqual(authoringOffenders("community.md", FM_COMMUNITY + PRE + intro + layer1 + PROC), []);
 });
 
 // ── the CLI ───────────────────────────────────────────────────────────────────────────────────────
