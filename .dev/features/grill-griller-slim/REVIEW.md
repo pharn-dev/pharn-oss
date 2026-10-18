@@ -175,3 +175,113 @@ the `deep omission:` record prints paths and closed reason tokens only (pinned).
   headings must be written in the file being trimmed, where its author edits, not only in the reader.** Provenance:
   feature `grill-griller-slim`, commit `89640b5`, source this REVIEW (finding 1) and `PLAN.md`'s per-griller audit, date
   2026-10-18. Six of 13 grillers held grill-time guidance under `### Layer 1` before the omission landed.
+
+## GATE 2 fix round
+
+Reviewed: `git diff b6a82fd..1e0ff70` (plan amendment `6748d35`, then grill, build, regress, verify), read as
+`trust: untrusted`. The first round's findings above stand as written.
+
+**Verdict: GREEN — 0 floor-gate findings. Findings 1, 2 and 3 are resolved. 3 new advisory findings, all minor.**
+
+### Floor first (P0)
+
+- `node pharn/floor/validate.mjs .`: `FLOOR: GREEN — 37 capabilities checked`.
+- These four test files pass 375 of 375: `griller-extract.test.mjs`, `grill-scan.test.mjs`, `command-hygiene.test.mjs`
+  and `stage-load-budget.test.mjs`.
+- `docs:check`, `check:changelog` and `check:changelog-entry` (base `44b12e8`) are GREEN.
+
+### Status of findings 1–3
+
+- **Finding 1 (the authoring rule, important, P3): RESOLVED.**
+  - **The paragraph.** The same paragraph (four lines, ×13 in the diff) closes each griller's `## The two layers`
+    intro. It correctly names all five headings the extract leaves out of a `pharn-owned` griller.
+  - **Zero grill bytes.** Everything in the extract after the summary line is byte-identical to the first round
+    (`cmp` against the `89640b5` output). It still prints 99,391 B. Only the file total in the summary line moves,
+    189192 → 194015, which is the same byte length.
+  - **The pin is tied to the extract's section list.** One test checks the pinned sentence against `OMITTED_SECTIONS`,
+    and another requires every committed `pharn-owned` griller to carry that sentence.
+  - **The pins fail when they should.** I ran six mutants of my own, each on a scratch copy outside the repo
+    (`.pharn/pharn-dev-review/mut.mjs`). Each was killed by the test it should hit:
+    - the paragraph removed from security: ★ AUTHORING RULE (intro);
+    - the paragraph moved below `### Layer 1`: same test;
+    - one heading name deleted from it: same test;
+    - a sixth member added to `OMITTED_SECTIONS`: "names every member", plus 30 other failures;
+    - the word boundary also accepting `.`, or also accepting `:`: the near-miss test.
+  - **The residual is honestly stated:** the pin proves the paragraph is present and placed, not that anyone reads it.
+    One limit of the zero-byte claim is finding 9.
+- **Finding 2 (the whole-word match, minor, P0): RESOLVED.**
+  - All 65 committed omitted headings continue with a space after the name (grep, 13 of each kind), so none slips
+    through. The closure test confirms it.
+  - The seven near-misses are kept: hand-written expectations in the test, killed under both of my boundary mutants.
+  - What is still dropped is a heading that adds more whole words after the name, such as `## Finding output formats`.
+    That is the documented rule ("as a whole word"), not a near-miss.
+  - The re-probe and its oracle are scratch files and were not committed, so I could not re-run them. Two things back
+    its independence claim:
+    - the printed 65-entry list matches the committed headings;
+    - its stated result, flagging exactly the seven near-misses on the first-round rule, is what an oracle that does
+      not share the rule's matching would produce.
+  - `modelTrim` in the closure test restates the same boundary as its own regex. It does not test the boundary
+    independently; the hand-written near-miss test does.
+- **Finding 3 (two CHANGELOG phrasings, minor, P0): RESOLVED.** "Apart from naming the subject of each moved sentence
+  … no wording changes" matches the first-round diff. The `--floor-only` sentence now matches `pharn-grill.md`: the
+  pinned line says the interrogation did not run, and "no griller ran" is model-written.
+
+### New advisory findings (warn)
+
+Finding 8:
+
+```yaml
+- type: FINDING
+  rule_id: P0
+  severity: minor
+  file: ".claude/commands/pharn-grill.md:250"
+  problem: "Both grill commands still give the 6.63.0 griller files as 189,192 B, but after F1 the 13 grillers total 194,015 B (the CLI header and the CHANGELOG were updated); the restatement sweep missed the commands."
+  evidence: "loses only the last two, as since 6.60.0 (189,192 → 99,391 B over the 13 grillers at 6.63.0)"
+```
+
+The same stale figure is in `.claude/commands/pharn-dev-grill.md:193`.
+
+Finding 9:
+
+```yaml
+- type: FINDING
+  rule_id: P0
+  severity: minor
+  file: "CHANGELOG.md:57"
+  problem: "The zero-byte claim holds only when the extract runs; a grill that falls back to whole files (grill-scan or extract failure) loads 4,823 B more, and the PLAN says so but the CHANGELOG and the CLI header state it without that bound."
+  evidence: "The extract leaves that intro out, so a grill loads 0 more bytes; the files grow by"
+```
+
+The CLI header has the same claim at `pharn/floor/griller-extract.mjs:25` ("so it costs a grill 0 bytes").
+
+Finding 10:
+
+```yaml
+- type: FINDING
+  rule_id: P0
+  severity: minor
+  file: "pharn/pharn-pipeline/grillers/security/security.md:55"
+  problem: "The new paragraph says grill-time guidance never sits under `### Layer 1`, yet the five scanner grillers still keep their scanner invocation there, and the scan-failure fallback reads whole files precisely for it, so in that path the model reads 'Not loaded by a full grill' just above the section it was sent to read."
+  evidence: "Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a `### Presence` section, never under those five headings."
+```
+
+Each Procedure step 1 still names its scanner, so the fallback step can still be followed. The same holds for
+privacy, i18n, migrations and observability.
+
+### Noted, no finding
+
+- **The early `npx prettier --write`.** The builder reports it ran on two files during the build, outside the format
+  step. Both are declared in the plan's `## Files`, so neither live guard would deny them, and `reconcile` reading
+  CLEAN is the correct verdict. Prettier's writes there change formatting only, which `format:check` would have
+  required anyway, so it does not matter to the floor. The only cost is the audit trail: no committed artifact records
+  the deviation.
+- **Builder-reported follow-up `walkers-skip-pharn-scratch`.** The builder found that `count-grillers.mjs` and
+  `validate.mjs` count griller copies left under `.pharn/`. This review kept its scratch copies outside the repo for
+  that reason.
+
+### Fix before merge, or defer
+
+- **Before merge (cheap, not blocking):** finding 8, one number in each of the two grill commands. Finding 9's
+  qualifier ("when the extract runs") can go in with it.
+- **Defer:** finding 10, with `griller-body-slim`. Moving each scanner invocation into its `## Procedure` would make the
+  paragraph true everywhere.
