@@ -36,3 +36,29 @@ once; none was re-run.
 
 Verified = the named gates passed. This is NOT a guarantee of correctness beyond what those gates check; verifier
 concerns are advisory help, not assurance.
+
+## GATE 2 fix round (2026-10-18)
+
+**VERIFIED: floor gates PASS.** `check-verify.mjs` exit `0`, `"verdict": "PASS"`, `failing_gates: []`, at `8be8e79`
+(the fix-round build `c3bfd20` plus its regress record). The helper's output, merged with the empty verifiers block, is
+byte-for-byte the `verify-report.json` already committed, so that file did not change.
+
+| gate                                                                                       | exit |
+| ------------------------------------------------------------------------------------------ | ---: |
+| `test` (`npm test`: 5,515 tests, 0 failed, 1 skipped)                                      |    0 |
+| `validate` (`node pharn/floor/validate.mjs .`: GREEN, 37 capabilities)                     |    0 |
+| `lint` (`npm run lint`)                                                                    |    0 |
+| `format:check` (`npm run format:check`)                                                    |    0 |
+| `lint:md` (`npm run lint:md`: 1,863 files)                                                 |    0 |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` |    0 |
+| `reconcile` (`check-bash-reconcile.mjs --base . --require-baseline`)                       |    0 |
+
+`reconcile` read `CLEAN` against the NEW epoch the fix-round build anchored at its Step 0 (`2026-10-18T15:58:07Z`, scope
+25 paths): 18 paths reconciled (the 13 grillers, the two extract files, `CHANGELOG.md`, `MEASUREMENTS.md`,
+`measure.mjs`), `escapes: []`, nothing `merged`. It exempted `REGRESSION.md` and `regression-report.json`, written by
+`/pharn-dev-regress` under its own scope.
+
+Verifiers: `{"registered":0,"verifiers":[]}` — floor gates only. The gates ran through the same scratch node runner as
+the first round (the recorded deviation above), once each, with none re-run.
+
+Verified = the named gates passed. This is NOT a guarantee of correctness beyond what those gates check.
