@@ -95,3 +95,12 @@ maintainer of the extract looks, not where a griller author does (for GATE 2). T
 
 ADVISORY VERDICT: 3 concerns raised (0 blocking-severity, 2 important, 1 minor) — for the human to weigh before
 /pharn-dev-build.
+
+## GATE 2 fix round (2026-10-18)
+
+Plan amended at `6748d35` (fix round F1–F3, 25-path `## Files`). spec-hash: MATCH (`75088a82…fb0fd6`). Lessons
+declaration (Step 1b, `pharn/floor/check-plan-lessons.mjs`): **GREEN**, exit 0. All 20 cited ids (the first round's 19
+plus L64) resolve and are referenced in the plan body.
+
+No full interrogation was run for this round, at the orchestrator's direction: the amendment only widens the plan with
+the three fixes the human chose at GATE 2. The first round's finding on the authoring convention is what F1 builds.
