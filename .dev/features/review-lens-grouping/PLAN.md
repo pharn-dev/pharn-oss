@@ -39,6 +39,21 @@ Round 0's open questions, as answered:
 plan moved to `.dev/features/review-lens-grouping/` and the run's branch is `feat/review-lens-grouping`. The round-0
 file was removed in the same commit; it stays readable at `6a19c3f`.
 
+## GATE 1 — round 2: APPROVED (a human decision, 2026-10-18)
+
+The human approved this plan. Their answers to its six open questions, as relayed by the orchestrator:
+
+1. **Security lenses:** "(a) each alone". Six one-lens families, as Design §1 shows.
+2. **The scanner-less trio:** "(a) one family". `whole-target` = hallucinated-api, input-validation, race-condition.
+3. **If the probe fails the 50% rule:** (a), halt and return to GATE 1 with the numbers. **Accepted as the stated
+   default:** the orchestrator stated it and the human did not object.
+4. **Contamination at GATE 2:** "(a) report only". GATE 2 blocks only on a confirmed, attributed structural failure
+   (Design §6).
+5. **`LIMITS.md §3a`:** (a), leave it in this increment. **Accepted as the stated default.**
+6. **How the probe and eval sessions run:** (a), route A, else route B. **Accepted as the stated default.**
+
+No question remains open (`## Open questions (HALT)`, below). The map in Design §1 is the approved map.
+
 ## The problem, re-verified (P6)
 
 The 2026-10-12 review report is no longer on disk. Its records were read as DATA (P2) and re-checked against the
@@ -131,11 +146,11 @@ features-readme | contracts | core | floor`), so `.claude/agents/` is never inst
 3. **Within the scanner-bound lenses, families are by concern** (what forces the lens to change, as for `coupling`).
    That is a human-ratified classification committed in the map, never decided at run time. The run-time branch is
    membership in the committed map (P5).
-4. **Security lenses stay solo** (recommended, Open question 1). They are the highest-value target for an attacker who
+4. **Security lenses stay solo** (approved at GATE 1 round 2, question 1). They are the highest-value target for an attacker who
    wants a finding dropped. Keeping them solo costs +10 subagents over 32 pharn-starter reviews and +19 over 40
    pharn-oss reviews, with the median unchanged (table above).
 
-**The map (recommended), in run order:**
+**The map (approved at GATE 1 round 2), in run order:**
 
 | Family                | Lenses                                                                                    | Basis         | Eval cases |
 | --------------------- | ----------------------------------------------------------------------------------------- | ------------- | ---------- |
@@ -165,7 +180,7 @@ member.
 | ---------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `async-resources`, `error-handling`, `hygiene` | up to 4 bug-class lenses (timeouts, error paths, null and bounds, duplication) at once | each member's slice is still its own scanner's deterministic hits, recorded in `assignments.json`. A dropped hit is still assigned there, though nothing compares slices with findings (follow-up `slice-without-finding`) |
 | `whole-target`                                 | 3 lenses with no structural backstop, before or after                                  | none. Today the same file already reaches all three, so the separate contexts only weakly decorrelated one payload; they now share one context                                                                             |
-| security (six solos, recommended)              | unchanged: one lens per context                                                        | unchanged                                                                                                                                                                                                                  |
+| security (six solos, approved)                 | unchanged: one lens per context                                                        | unchanged                                                                                                                                                                                                                  |
 | security grouped (Open question 1 b)           | all six vulnerability lenses at once, the class an attacker most wants hidden          | the slices, as for the bug-class families                                                                                                                                                                                  |
 | `trust-fence`                                  | unchanged                                                                              | unchanged                                                                                                                                                                                                                  |
 
@@ -492,7 +507,7 @@ of Design §6.
 ## Trust audit (P2)
 
 - **What a grouped context changes:** a hostile file in any member's review set reaches every member. Design §1 states
-  the cost per family. `trust-fence` stays alone (floor-tested), and the security lenses stay alone (recommended).
+  the cost per family. `trust-fence` stays alone (floor-tested), and the security lenses stay alone (approved, GATE 1 round 2).
 - **The scanner-less trio** gains no exposure, because each already receives the whole target. It loses the weak
   decorrelation of separate contexts, and it has no structural backstop either way (`THREAT-MODEL.md §5` (2)).
 - **The container is narrower:** no MCP, WebFetch, WebSearch, Skill or Agent tools. Bash remains, so it is a smaller
@@ -537,29 +552,32 @@ No branch is a model classification, and no fallback ends in a guess.
 
 ## Open questions (HALT)
 
-1. **The security lenses: solo or one family?**
+None open. All six were resolved at GATE 1 round 2 (above), each by option (a). The options as they were put stay
+below for the record.
+
+1. **The security lenses: solo or one family?** Resolved: (a).
    - (a) **Recommended:** six solo families. They are the class an attacker most wants suppressed. Measured cost: +10
      subagents over 32 pharn-starter reviews and +19 over 40 pharn-oss reviews (+6% and +11%), median unchanged.
    - (b) One `security` family of six: 6 families, max 6 per review. One injection can then hide every vulnerability
      lens at once.
-2. **The three non-fence scanner-less lenses: one `whole-target` family or solo?**
+2. **The three non-fence scanner-less lenses: one `whole-target` family or solo?** Resolved: (a).
    - (a) **Recommended:** one family. Each already sees the whole target, and all three run on every review, so
      grouping saves exactly 2 subagents per review: the largest single saving. The cost is three lenses with no
      structural backstop sharing one context.
    - (b) Solo: +2 subagents on every review (with security solo: pharn-starter 161 → 225, pharn-oss 193 → 273; median
      5 → 7).
-3. **If the probe fails the 50% rule:**
+3. **If the probe fails the 50% rule:** Resolved: (a).
    - (a) **Recommended:** halt and return to GATE 1 with the numbers.
    - (b) Build grouping alone on `general-purpose`, without the definition.
-4. **Contamination at GATE 2:**
+4. **Contamination at GATE 2:** Resolved: (a).
    - (a) **Recommended:** report the two counts for the human to weigh. Block only on confirmed, attributed structural
      failures.
    - (b) Also block on any confirmed contamination candidate.
-5. **`LIMITS.md §3a`'s "`/pharn-review`'s lens fan-out is unchanged" (human-only):**
+5. **`LIMITS.md §3a`'s "`/pharn-review`'s lens fan-out is unchanged" (human-only):** Resolved: (a).
    - (a) **Recommended:** leave it in this increment. It sits in a `--quick` paragraph, where it still reads as "quick
      mode does not change it"; a clarifying edit can follow separately.
    - (b) The human edits it, landing before build Step 0 or after verify (L68).
-6. **How the probe and eval sessions run:**
+6. **How the probe and eval sessions run:** Resolved: (a).
    - (a) **Recommended:** route A, the orchestrator starting a session in the scratch checkout, else route B, the human
      running the pinned command.
    - (b) Route B always.
