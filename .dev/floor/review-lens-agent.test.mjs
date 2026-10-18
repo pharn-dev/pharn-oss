@@ -200,8 +200,16 @@ function wiringOffenders(text) {
   if (!s3.split("\n").includes(HELPER_LINE)) out.push("Step 3 does not hold the pinned helper line");
   const f3 = fold(s3);
   if (!f3.includes("- `0` → Step 4 spawns one subagent per printed group.")) out.push("Step 3: no exit-0 branch");
-  if (!/- `2` → the map is unusable .* Spawn by them, and say so in `REVIEW\.md`\./.test(f3)) out.push("Step 3: no exit-2 branch");
-  if (!/- `1`, any other exit, or no `lens-groups\/v1` line → the record itself is unusable.*\*\*STOP\*\*: spawn nothing/.test(f3)) {
+  // Exit 2 has two causes (review A2): the map fallback prints a document, the Node runtime refusal prints nothing. The
+  // spawn branch must require the document, and the stop branch must name the document-less exit 2.
+  if (!/- `2` with a `lens-groups\/v1` line → the map is unusable .* Spawn by them, and say so in `REVIEW\.md`\./.test(f3)) {
+    out.push("Step 3: no exit-2 branch");
+  }
+  if (
+    !/- `1`, `2` with no `lens-groups\/v1` line \(the Node runtime refusal\), or any other exit → the record or the runtime is unusable.*\*\*STOP\*\*: spawn nothing/.test(
+      f3
+    )
+  ) {
     out.push("Step 3: no exit-1 stop");
   }
   const f4 = fold(s4);
@@ -213,19 +221,33 @@ function wiringOffenders(text) {
     ["a lens's finding names only a file in **that lens's** list", "the own-files rule"],
     ["— `[]` when it has none — **before** starting the next", "the write-before-next rule"],
     ["**When every group has returned, re-run Step 3's pinned line once.**", "the unwritten re-check"],
+    [
+      "with its reason: `absent`, or `stale` (not newer than this run's `assignments.json`",
+      "the unwritten reasons (the eval's stale-output finding)",
+    ],
+    ["Every group's prompt, a one-lens group's included, carries all of what follows, the rules paragraph too.", "the one-lens rules (A6)"],
   ]) {
     if (!f4.includes(needle)) out.push(`Step 4: no ${what}`);
   }
   const f6 = fold(s6);
   if (!f6.includes("**Also render a `## Lens agents` block**")) out.push("Step 6: no Lens agents block");
-  if (!f6.includes("`no findings.json — did not finish`")) out.push("Step 6: no did-not-finish rendering");
+  if (!f6.includes("`did not finish (absent)` or `did not finish (stale)`")) out.push("Step 6: no did-not-finish rendering");
   const fc = fold(claims);
   for (const [needle, what] of [
     ["`lens-groups.test.mjs`", "the map's floor test"],
     ["`lens-groups.mjs`", "the helper"],
     ['"a lens in a group judged only its own files"', "the struck own-files claim"],
     ['"a lens ran with only the listed tools / without `CLAUDE.md`"', "the struck container claim"],
-    ["It loads the definition from the working tree", "the reviewed-tree channel (grill finding 1)"],
+    [
+      "so any `.claude/agents/*.md` named `pharn-review-lens` — in the reviewed tree or at user scope — sets the container",
+      "the container channel (grill finding 1, review A5)",
+    ],
+    ["`pharn/floor/lens-family-map.json` is the same kind of channel", "the map channel (review A5)"],
+    [
+      "the six security lenses (`injection`, `insecure-crypto`, `path-traversal`, `secrets-in-code`, `ssrf`, `unsafe-deserialization`) each alone",
+      "the pinned security solos (review A3)",
+    ],
+    ["detects a stale or skipped write, never a forged one", "the mtime bound"],
   ]) {
     if (!fc.includes(needle)) out.push(`claims: no ${what}`);
   }
@@ -246,7 +268,15 @@ test("★ WIRING controls: each pin turns red on its own in-memory edit, and a m
     [(t) => t.replace(`${HELPER_LINE}\n`, ""), /helper line appears 0 times/],
     [(t) => t.replace("- `0` → Step 4 spawns", "- `0` → Step 4 may spawn"), /no exit-0 branch/],
     [(t) => t.replace("Spawn by them, and say so", "Spawn by them, and"), /no exit-2 branch/],
+    [(t) => t.replace("- `2` with a `lens-groups/v1` line →", "- `2` →"), /no exit-2 branch/],
     [(t) => t.replace("**STOP**: spawn nothing", "spawn nothing"), /no exit-1 stop/],
+    [(t) => t.replace("`2` with no `lens-groups/v1` line (the Node runtime refusal), ", ""), /no exit-1 stop/],
+    [(t) => t.replace("`stale` (not newer", "`late` (not newer"), /no the unwritten reasons/],
+    [(t) => t.replace("Every group's prompt, a\none-lens group's included", "Every group's prompt"), /no the one-lens rules/],
+    [(t) => t.replace("or `did not finish (stale)`", "or `did not finish`"), /no did-not-finish rendering/],
+    [(t) => t.replace("`ssrf`, `unsafe-deserialization`) each alone", "`ssrf`) each alone"), /pinned security solos/],
+    [(t) => t.replace("never a forged one", "a forged one"), /the mtime bound/],
+    [(t) => t.replace("is the same kind of channel", "is a channel"), /the map channel/],
     [(t) => t.replace("`subagent_type: pharn-review-lens`", "`subagent_type: general-purpose`"), /Step 4: no the subagent type/],
     [
       (t) => t.replace("spawn\n`general-purpose` with the same prompt", "spawn\n`Explore` with the same prompt"),
@@ -256,7 +286,7 @@ test("★ WIRING controls: each pin turns red on its own in-memory edit, and a m
     [(t) => t.replace("— `[]` when it has none —", ""), /no the write-before-next rule/],
     [(t) => t.replace("**When every group has returned, re-run Step 3's pinned line once.**", ""), /no the unwritten re-check/],
     [(t) => t.replace("**Also render a `## Lens agents` block**", "**Also render a block**"), /no Lens agents block/],
-    [(t) => t.replace("It loads the definition from the working tree", "It loads it"), /reviewed-tree channel/],
+    [(t) => t.replace("in the reviewed tree or at user scope", "in the reviewed tree"), /the container channel/],
     [(t) => t.replace('"a lens in a group judged only its own files"; ', ""), /struck own-files claim/],
   ];
   for (const [edit, expected] of edits) {

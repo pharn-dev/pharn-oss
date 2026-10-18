@@ -79,11 +79,15 @@ true`, `user-invocable: false` — documented keys; the one live probe was incon
   file the prefix probe measured (`.dev/features/review-lens-grouping/MEASUREMENTS.md`). Changing a byte means
   re-running that probe and re-pinning, never only the hash. The test also closes `.claude/agents/` over the one file;
   a test mutant is never written there, because a file there is a live subagent type of this repo's sessions (L70).
-- **The container is the reviewed tree's.** Claude Code loads the definition from the working tree, so a reviewed
-  branch that edits it sets the container its lenses run in. The command's claims block names this; nothing detects it.
+- **The container is whatever answers to the name.** By Claude Code's documentation (not probed), a subagent type is
+  its frontmatter `name:`, so any `.claude/agents/*.md` named `pharn-review-lens`, in the reviewed tree or at user
+  scope, sets the container its lenses run in; the reviewed tree's family map likewise decides which lenses share a
+  context. The command's claims block names both; nothing detects either.
 - **The family map and its helper.** `pharn/floor/lens-family-map.json` says which lenses share a subagent; the
   deterministic `pharn/floor/lens-groups.mjs` turns it and the assignment record into the groups Step 3 prints, and
-  re-checks which grouped lenses wrote no `findings.json`. `pharn/floor/lens-groups.test.mjs` pins the map against
-  `count-lenses.mjs` and `lens-scanner-map.json` (every lens once, `trust-fence` alone, no mixed basis), so a lens
-  added here joins a family in the same PR; in an install, a lens the map does not name runs alone. A group runs its
-  lenses one after another, so a review's wall clock can rise against one subagent per lens; it is not measured.
+  re-checks which grouped lenses wrote no `findings.json` this run: `absent`, or `stale` (not newer than the run's
+  `assignments.json`; an mtime any writer can set, so it catches a skipped write, never a forged one).
+  `pharn/floor/lens-groups.test.mjs` pins the map against `count-lenses.mjs` and `lens-scanner-map.json` (every lens
+  once, `trust-fence` and the six security lenses each alone, no mixed basis), so a lens added here joins a family in
+  the same PR; in an install, a lens the map does not name runs alone. A group runs its lenses one after another, so a
+  review's wall clock can rise against one subagent per lens; it is not measured.

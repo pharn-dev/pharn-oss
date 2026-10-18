@@ -20,11 +20,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FENCE_LENS, SCHEMA, checkFamilyMap, computeLensGroups, readFamilyMap, unwrittenLenses } from "./lens-groups.mjs";
+import {
+  FENCE_LENS,
+  SCHEMA,
+  UNWRITTEN_REASONS,
+  checkFamilyMap,
+  computeLensGroups,
+  readFamilyMap,
+  unwrittenLenses,
+} from "./lens-groups.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -40,6 +48,20 @@ function registeredLenses() {
 
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
+
+/**
+ * The six security lenses GATE 1 round 2 kept each alone (question 1, option a): a human-ratified list pinned HERE, not
+ * derived from anything. `input-validation` is not on it: it runs in `whole-target`, as GATE 1 approved. The helper does
+ * not refuse a grouped security lens at run time; only this test over the committed map holds them alone.
+ */
+const SECURITY_SOLOS = Object.freeze([
+  "injection",
+  "insecure-crypto",
+  "path-traversal",
+  "secrets-in-code",
+  "ssrf",
+  "unsafe-deserialization",
+]);
 
 // ── ★ MAP — the committed map against reality ──────────────────────────────────────────────────────────────────────
 
@@ -59,6 +81,11 @@ function mapOffenders(parsed, registered, scanners) {
   if (extra.length) out.push(`closure: in a family but not registered: ${extra.join(", ")}`);
   if (inMap.length !== mapSet.size) out.push("exactly-once: a lens appears twice");
   if (!mapSet.has(FENCE_LENS)) out.push(`fence: \`${FENCE_LENS}\` is in no family`);
+  for (const s of SECURITY_SOLOS) {
+    const f = shape.families.find((x) => x.lenses.includes(s));
+    if (!f) out.push(`security: \`${s}\` is in no family`);
+    else if (f.lenses.length !== 1 || f.family !== s) out.push(`security: \`${s}\` is not alone in a family named after itself`);
+  }
   for (const f of shape.families) {
     if (f.lenses.includes(FENCE_LENS) && f.lenses.length !== 1) out.push(`fence: \`${FENCE_LENS}\` shares ${f.family}`);
     const unknown = f.lenses.filter((l) => !has(scanners, l));
@@ -129,6 +156,59 @@ test("★ MAP controls: each invariant turns red on its own mutant (L60)", () =>
   }
   // The non-vacuity half: an empty registered set is red even over the committed map.
   assert.ok(mapOffenders(COMMITTED_MAP, [], SCANNERS).some((o) => o.startsWith("non-vacuity")));
+});
+
+test("★ MAP: the six security lenses are each alone, in a family named after itself (GATE 1 round 2, question 1)", () => {
+  const registered = new Set(registeredLenses());
+  assert.equal(SECURITY_SOLOS.length, 6, "L34: the pinned list is the six GATE 1 approved");
+  for (const s of SECURITY_SOLOS) assert.ok(registered.has(s), `${s} is not a registered lens: the pin went stale`);
+  assert.deepEqual(
+    mapOffenders(COMMITTED_MAP, [...registered], SCANNERS).filter((o) => o.startsWith("security")),
+    []
+  );
+  // CONTROLS (L60): each way of breaking a solo turns red, every mutant still passing the run-time shape check.
+  const without = (m, lens) => {
+    const f = m.families.find((x) => x.lenses.includes(lens));
+    f.lenses = f.lenses.filter((l) => l !== lens);
+  };
+  const mutants = [
+    [
+      "injection grouped into hygiene",
+      (m) => {
+        m.families = m.families.filter((f) => f.family !== "injection");
+        m.families.find((f) => f.family === "hygiene").lenses.push("injection");
+      },
+      /security: `injection` is not alone/,
+    ],
+    [
+      "a sibling joins a security family",
+      (m) => {
+        without(m, "magic-values");
+        m.families.find((f) => f.family === "ssrf").lenses.push("magic-values");
+      },
+      /security: `ssrf` is not alone/,
+    ],
+    [
+      "a security family renamed",
+      (m) => (m.families.find((f) => f.family === "path-traversal").family = "paths"),
+      /security: `path-traversal` is not alone/,
+    ],
+    [
+      "a security lens in no family",
+      (m) => (m.families = m.families.filter((f) => f.family !== "secrets-in-code")),
+      /security: `secrets-in-code` is in no family/,
+    ],
+  ];
+  for (const [label, mutate, expected] of mutants) {
+    const m = clone(COMMITTED_MAP);
+    mutate(m);
+    assert.equal(checkFamilyMap(m).ok, true, `${label}: the mutant must pass the run-time shape check, so only this pin catches it`);
+    const off = mapOffenders(m, [...registered], SCANNERS);
+    assert.ok(
+      off.some((o) => expected.test(o)),
+      `${label}: expected an offender matching ${expected}, got ${JSON.stringify(off)}`
+    );
+  }
 });
 
 // ── the run-time shape check ───────────────────────────────────────────────────────────────────────────────────────
@@ -324,18 +404,79 @@ test('L62: a record refusal quotes `{"toString":1}` without throwing', () => {
   assert.match(r2.reason, /not an object with a lens string \("\[object Object\]"\)/);
 });
 
-test("unwrittenLenses: a missing findings.json, or one that is not a regular file, is unwritten", () => {
+// ★ UNWRITTEN — absent | stale | equal | fresh, on REAL files whose times are set with utimesSync. The record's time is
+// T; each fixture is judged by the same call, and each has a control that moves only the property it asserts.
+const T = new Date("2026-10-18T12:00:00.000Z");
+const at = (seconds) => new Date(T.getTime() + seconds * 1000);
+const mtimeNs = (p) => statSync(p, { bigint: true }).mtimeNs;
+
+/** A scratch record dir: assignments.json at T, plus each {lens: offsetSeconds | "dir"} findings.json. */
+function unwrittenFixture(files) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-lens-groups-unwritten-"));
+  const record = join(dir, "assignments.json");
+  writeFileSync(record, "{}\n");
+  utimesSync(record, T, T);
+  for (const [lens, offset] of Object.entries(files)) {
+    const p = join(dir, "lenses", lens, "findings.json");
+    if (offset === "dir") {
+      mkdirSync(p, { recursive: true });
+      continue;
+    }
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, "[]\n");
+    utimesSync(p, at(offset), at(offset));
+  }
+  return { dir, record };
+}
+
+test("★ UNWRITTEN: absent, a directory, stale and equal-time files are unwritten with their reason; a later file is written", () => {
+  const { dir, record } = unwrittenFixture({ stale: -60, equal: 0, fresh: 5, notfile: "dir" });
   try {
-    const record = join(dir, "assignments.json");
-    mkdirSync(join(dir, "lenses", "alpha"), { recursive: true });
-    writeFileSync(join(dir, "lenses", "alpha", "findings.json"), "[]\n");
-    mkdirSync(join(dir, "lenses", "beta", "findings.json"), { recursive: true }); // a directory, not a file
+    assert.equal(mtimeNs(join(dir, "lenses", "equal", "findings.json")), mtimeNs(record), "the equal fixture really is equal");
     const groups = [
-      { family: "pair", lenses: ["alpha", "beta"] },
-      { family: "solo", lenses: ["solo"] },
+      { family: "a", lenses: ["absent", "stale"] },
+      { family: "b", lenses: ["equal", "fresh", "notfile"] },
     ];
-    assert.deepEqual(unwrittenLenses(record, groups), ["beta", "solo"]);
+    assert.deepEqual(unwrittenLenses(record, groups, mtimeNs(record)), [
+      { lens: "absent", reason: "absent" },
+      { lens: "stale", reason: "stale" },
+      { lens: "equal", reason: "stale" },
+      { lens: "notfile", reason: "absent" },
+    ]);
+    for (const u of unwrittenLenses(record, groups, mtimeNs(record))) assert.ok(UNWRITTEN_REASONS.includes(u.reason), u.reason);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ UNWRITTEN controls: moving one file's time or presence flips only that lens (L60)", () => {
+  const { dir, record } = unwrittenFixture({ stale: -60, equal: 0, fresh: 5 });
+  try {
+    const one = (lens) => unwrittenLenses(record, [{ family: "x", lenses: [lens] }], mtimeNs(record));
+    // stale → fresh: re-time the earlier run's file to after the record.
+    assert.deepEqual(one("stale"), [{ lens: "stale", reason: "stale" }]);
+    const staleFile = join(dir, "lenses", "stale", "findings.json");
+    utimesSync(staleFile, at(1), at(1));
+    assert.deepEqual(one("stale"), []);
+    // equal → fresh by one second; fresh → stale by moving it before the record.
+    assert.deepEqual(one("equal"), [{ lens: "equal", reason: "stale" }]);
+    utimesSync(join(dir, "lenses", "equal", "findings.json"), at(1), at(1));
+    assert.deepEqual(one("equal"), []);
+    assert.deepEqual(one("fresh"), []);
+    utimesSync(join(dir, "lenses", "fresh", "findings.json"), at(-1), at(-1));
+    assert.deepEqual(one("fresh"), [{ lens: "fresh", reason: "stale" }]);
+    // absent → written: the file appears after the record.
+    assert.deepEqual(one("absent"), [{ lens: "absent", reason: "absent" }]);
+    mkdirSync(join(dir, "lenses", "absent"), { recursive: true });
+    writeFileSync(join(dir, "lenses", "absent", "findings.json"), "[]\n");
+    utimesSync(join(dir, "lenses", "absent", "findings.json"), at(2), at(2));
+    assert.deepEqual(one("absent"), []);
+    // The record's own time is the reference: re-time the RECORD past every file and all of them read stale.
+    utimesSync(record, at(10), at(10));
+    assert.deepEqual(
+      unwrittenLenses(record, [{ family: "x", lenses: ["stale", "equal", "fresh", "absent"] }], mtimeNs(record)).map((u) => u.reason),
+      ["stale", "stale", "stale", "stale"]
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -425,12 +566,26 @@ test("★ CLI: the pinned line over a real emitter record prints the map's group
       { family: "trust-fence", lenses: ["trust-fence"] },
     ]);
     assert.deepEqual(doc.idle, ["secrets-in-code"]);
-    assert.deepEqual(doc.unwritten, ["missing-error-handling", "swallowed-exception", "magic-values", "trust-fence"]);
+    const absent = (lens) => ({ lens, reason: "absent" });
+    assert.deepEqual(doc.unwritten, ["missing-error-handling", "swallowed-exception", "magic-values", "trust-fence"].map(absent));
     assert.equal(doc.map_error, null);
-    // A group that stopped after its first lens: the re-run names exactly the lenses with no findings.json.
-    mkdirSync(join(dir, "pharn/features/t/lenses/missing-error-handling"), { recursive: true });
-    writeFileSync(join(dir, "pharn/features/t/lenses/missing-error-handling/findings.json"), "[]\n");
-    assert.deepEqual(JSON.parse(runIn(dir, argv).stdout).unwritten, ["swallowed-exception", "magic-values", "trust-fence"]);
+    // A group that stopped after its first lens, beside a file an EARLIER run left (the eval's run-2 shape): the re-run
+    // names the stale one too, never only the missing ones.
+    const recordTime = statSync(join(dir, "pharn/features/t/assignments.json")).mtime;
+    const put = (lens, seconds) => {
+      const p = join(dir, `pharn/features/t/lenses/${lens}/findings.json`);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, "[]\n");
+      const when = new Date(recordTime.getTime() + seconds * 1000);
+      utimesSync(p, when, when);
+    };
+    put("missing-error-handling", 5);
+    put("swallowed-exception", -3600);
+    assert.deepEqual(JSON.parse(runIn(dir, argv).stdout).unwritten, [
+      { lens: "swallowed-exception", reason: "stale" },
+      absent("magic-values"),
+      absent("trust-fence"),
+    ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -454,6 +609,30 @@ test("★ CLI: an unusable map exits 2 and prints the one-lens-per-group fallbac
     ]);
     assert.match(doc.map_error, /`trust-fence` shares family "x"/);
     assert.match(r.stderr, /MAP UNUSABLE/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** A preload that makes `process.versions.node` read as 22.16.0 before any floor module evaluates (entry-point-guard's). */
+const FAKE_OLD_NODE =
+  "data:text/javascript," +
+  encodeURIComponent(
+    'Object.defineProperty(process, "versions", { value: { ...process.versions, node: "22.16.0" }, configurable: true });'
+  );
+
+test("★ CLI: exit 2 has a second cause — the runtime-floor refusal — and it prints NO lens-groups/v1 line (Step 3 stops)", () => {
+  const dir = scratchTree();
+  try {
+    assert.equal(runIn(dir, ["pharn/floor/render-review-assignments.mjs", "t", "--target", "swallow.js"]).status, 0);
+    const old = runIn(dir, ["--import", FAKE_OLD_NODE, ...pinnedArgv("t")]);
+    assert.equal(old.status, 2, old.stderr);
+    assert.equal(old.stdout, "", "the refusal prints nothing on stdout, so it can never be read as the map fallback");
+    assert.match(old.stderr, /Node >= 24\.2\.0/);
+    // CONTROL: the same record and map without the preload exit 0 with the document.
+    const ok = runIn(dir, pinnedArgv("t"));
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(JSON.parse(ok.stdout).schema, SCHEMA);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

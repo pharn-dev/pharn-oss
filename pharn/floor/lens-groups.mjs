@@ -20,12 +20,20 @@
 // absent from the record is ignored. A recorded lens the map does not name runs in a group of its own, named after
 // itself, after the map's groups: the one-subagent-per-lens spawn of 6.62.0.
 //
-// `unwritten` lists every grouped lens whose `<record dir>/lenses/<lens>/findings.json` is not a regular file at the
-// moment of the call (lstat, never followed). /pharn-review re-runs the same line after its groups return, so a group
-// that stopped partway shows per lens, never as "no findings". Bound: a findings.json an earlier run under the same
-// <name> left in place counts as written.
+// `unwritten` lists every grouped lens whose `<record dir>/lenses/<lens>/findings.json` was not written THIS run, as
+// {lens, reason}, the reason from the closed UNWRITTEN_REASONS: `absent` (no regular file there: missing, a directory, a
+// symlink — lstat, never followed) or `stale` (a regular file whose modification time is NOT LATER than the record's,
+// in nanoseconds: Step 1b rewrites the record at the start of every run, so a file an earlier run left is older, and an
+// equal time is not later). /pharn-review re-runs the same line after its groups return, so a group that stopped
+// partway, or a subagent that reported files it never wrote, shows per lens, never as "no findings". The trigger: in
+// the grouped eval's second run a group subagent made no Write call and listed all four paths as written, while the
+// first run's files were still on disk; existence alone passed it.
+// BOUND (P0): a modification time is a filesystem fact any writer can set (`touch`, utimes), so this detects a stale or
+// skipped write, never a forged one; and a fresh file says nothing about whether its lens finished. On a filesystem
+// whose timestamps are coarser than the time between Step 1b and a lens's write (seconds on some), a fresh file can
+// read as `stale`, toward re-review, never away from it.
 //
-// EXIT CODES. Each one picks a different /pharn-review Step 3 branch, so no two causes share one:
+// EXIT CODES. Each one picks a different /pharn-review Step 3 branch:
 //   0  printed: the groups, from the map.
 //   1  the RECORD is unusable — unreadable, not JSON, not an object, `assignments` or `scanner_errors` not well
 //      shaped, a lens name that is not one path segment, a lens recorded twice, or a `scanner_errors` lens with no
@@ -36,7 +44,10 @@
 //      not kebab-case or appears twice, an empty family, a lens that is not kebab-case or appears twice, or
 //      `trust-fence` with a sibling. The record WAS read: stdout holds the fallback document, one group per active
 //      lens named after it (6.62.0's spawn), with `map_error` saying why, and one stderr line says the same.
-// The record is judged before the map, so an exit 2 always means the record was usable.
+// The record is judged before the map, so an exit 2 WITH a `lens-groups/v1` line on stdout means the record was usable.
+// Exit 2 has a second cause: on a Node below 24.2, runtime-floor.mjs refuses before anything is read and prints NOTHING
+// on stdout. So a consumer branches on exit 2 only together with the printed document: Step 3 treats an exit 2 with no
+// `lens-groups/v1` line as unusable and stops, as it does exit 1 — the stop runtime-floor.mjs's callers take.
 //
 // It does not check a family's basis (scanner-bound vs scanner-less): that is a committed-map invariant, pinned by
 // lens-groups.test.mjs against lens-scanner-map.json in this repository, and an install receives the map as committed.
@@ -47,13 +58,13 @@
 //
 // Usage:  node pharn/floor/lens-groups.mjs <assignments.json>
 //         (run from the project root; the map is read from ./pharn/floor/lens-family-map.json)
-// Output: one line, {"schema":"lens-groups/v1","groups":[{"family","lenses":[…]}],"idle":[…],"unwritten":[…],
-//         "map_error":null|"<why>"}
+// Output: one line, {"schema":"lens-groups/v1","groups":[{"family","lenses":[…]}],"idle":[…],
+//         "unwritten":[{"lens","reason":"absent"|"stale"}],"map_error":null|"<why>"}
 //
 // NON-LLM. No network, no child process.
 
 import "./runtime-floor.mjs";
-import { lstatSync, readFileSync } from "node:fs";
+import { lstatSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { shown } from "./quote-core.mjs";
 
@@ -163,21 +174,32 @@ export function computeLensGroups(record, families) {
   return { ok: true, groups, idle: r.lenses.filter((x) => !x.active).map((x) => x.lens) };
 }
 
-/** True when `p` is a regular file (lstat: a symlink is not followed, and an absent path is false). */
-function isRegularFile(p) {
+/** Why a grouped lens's findings.json does not count as written this run. CLOSED. */
+export const UNWRITTEN_REASONS = Object.freeze(["absent", "stale"]);
+
+/** `p`'s modification time in nanoseconds when it is a regular file (lstat: never followed), else null. */
+function regularFileMtimeNs(p) {
   try {
-    return lstatSync(p).isFile();
+    const s = lstatSync(p, { bigint: true });
+    return s.isFile() ? s.mtimeNs : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
-/** Every grouped lens whose `<dir of recordPath>/lenses/<lens>/findings.json` is not a regular file now. */
-export function unwrittenLenses(recordPath, groups) {
+/**
+ * Every grouped lens whose `<dir of recordPath>/lenses/<lens>/findings.json` was not written after the record, as
+ * {lens, reason}: `absent` (not a regular file) or `stale` (modified at or before `recordMtimeNs`, a bigint).
+ */
+export function unwrittenLenses(recordPath, groups, recordMtimeNs) {
   const lensesDir = join(dirname(recordPath), "lenses");
   const out = [];
   for (const g of groups) {
-    for (const lens of g.lenses) if (!isRegularFile(join(lensesDir, lens, "findings.json"))) out.push(lens);
+    for (const lens of g.lenses) {
+      const m = regularFileMtimeNs(join(lensesDir, lens, "findings.json"));
+      if (m === null) out.push({ lens, reason: "absent" });
+      else if (m <= recordMtimeNs) out.push({ lens, reason: "stale" });
+    }
   }
   return out;
 }
@@ -192,8 +214,10 @@ export function main(argv) {
   }
   const recordPath = argv[0];
   let record;
+  let recordMtimeNs;
   try {
     record = JSON.parse(readFileSync(recordPath, "utf8"));
+    recordMtimeNs = statSync(recordPath, { bigint: true }).mtimeNs;
   } catch (e) {
     process.stderr.write(
       `lens-groups: RECORD UNUSABLE — ${shown(recordPath)} could not be read as JSON (${shown(e && (e.code ?? e.name))}). ` +
@@ -211,7 +235,7 @@ export function main(argv) {
     schema: SCHEMA,
     groups: result.groups,
     idle: result.idle,
-    unwritten: unwrittenLenses(recordPath, result.groups),
+    unwritten: unwrittenLenses(recordPath, result.groups, recordMtimeNs),
     map_error: map.ok ? null : map.reason,
   };
   process.stdout.write(JSON.stringify(doc) + "\n");

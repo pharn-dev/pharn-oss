@@ -620,3 +620,44 @@ Grill concerns:
   fields, which have no exported enum.
 - Not addressed (P3 at :11): `pharn/ARCHITECTURE.md §4` has no place for a shipped `.claude/agents/` file. That is a
   trusted doc, human-only; the edit is the human's, landing before a build's Step 0 or after verify (L68).
+
+## Fix round 1 (GATE 2, 2026-10-18; not part of the approved plan)
+
+**GATE 2 — HUMAN decisions** (relayed by the orchestrator; recorded here as the human's, not the agent's):
+
+1. Fix first.
+2. Fix the stale-output gap now.
+3. Run the plan's confirmation round for the `error-handling` group (two more grouped runs and the two contamination
+   solo re-runs), in a separate session the human launches.
+4. Promote the review's lesson candidate last, after the fix round (outside this build pass).
+
+**Phase A** (this pass: `## Files` unchanged, build Step 0 re-run and the reconcile baseline re-anchored before any
+write):
+
+- **Stale output (the eval's finding).** In the eval's second run the `g-error-handling` group subagent made no Write
+  call and listed all four `findings.json` paths as written, while the first run's files were still on disk, so the
+  existence-only `unwritten` passed it. `unwritten` is now a list of `{lens, reason}`, the reason `absent` or `stale`
+  (a regular file whose modification time is not later than this run's `assignments.json`, compared in nanoseconds).
+  Step 4's re-check and Step 6's `did not finish (absent | stale)` name the reason. The bound is stated in the helper,
+  the claims block and the CHANGELOG: a modification time is a fact any writer can set, so this detects a stale or
+  skipped write, never a forged one, and a fresh file never says its lens finished.
+- **A2.** Exit 2 has two causes; the Node runtime refusal prints nothing. Step 3 spawns on exit 2 only with a
+  `lens-groups/v1` line and stops on an exit 2 without one; the helper's header says so, a test runs the pinned line
+  under a faked Node 22.16.0, and `review-lens-agent.test.mjs`'s branch regexes changed in the same edit.
+- **A3.** `lens-groups.test.mjs` pins the six security lenses each alone, in a family named after itself, with four
+  mutants that each pass the run-time shape check. The claims sentence names them, says the helper refuses only a
+  `trust-fence` sibling at run time, and says `input-validation` runs in `whole-target` (not regrouped).
+- **A5.** The claims block, the guide and the CHANGELOG say any `.claude/agents/*.md` named `pharn-review-lens` (reviewed
+  tree or user scope; documentation, not probed) sets the container, and the reviewed tree's family map is the same
+  kind of channel.
+- **A6.** Fixed outside the text the eval rendered: Step 4's opening paragraph now says every group's prompt, a one-lens
+  group's included, carries the rules paragraph. The rendered regions (trusted prefix; Step 4 from the installed-skills
+  instruction through the rules paragraph) are byte-identical to `23937ba`, checked by slicing both files.
+- **A7.** The CHANGELOG's "Why" now says what was measured: the groups the map yields over the 40 + 40 past diffs; the
+  runtime spawn count was not observed.
+- **Follow-ups named in the 6.64.0 entry, no edit to those files:** A1 `subagent-per-lens-sweep` (19 lens bodies,
+  whose bytes the eval measured, `merge-findings.mjs:4`, `count-lenses.mjs:5`, `README.md:877`); A8
+  `architecture-agents-dir` (human-only); A9 `unwritten-layout`; and `swallowed-exception-expected-fix`, a pre-existing
+  self-contradictory expected file.
+- **A4** waits for phase B: the CHANGELOG's "results are in the same file" sentence and `MEASUREMENTS.md` §3 are written
+  when the confirmation round's results arrive.
