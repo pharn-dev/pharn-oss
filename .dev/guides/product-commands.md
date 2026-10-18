@@ -4,7 +4,8 @@ Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.4
 for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
-**Read when:** before planning or editing a `.claude/commands/pharn-*.md` product command or one of its part files. `CONTRIBUTING.md` ("Editing product commands") summarizes the same rules for contributors.
+**Read when:** before planning or editing a `.claude/commands/pharn-*.md` product command or one of its part files, or a
+`.claude/agents/pharn-*.md` subagent definition. `CONTRIBUTING.md` ("Editing product commands") summarizes the same rules for contributors.
 
 ## A product command keeps what a run executes
 
@@ -60,3 +61,29 @@ true`, `user-invocable: false` — documented keys; the one live probe was incon
   fenced line, heading or long paragraph sits in two files of a command, each pointer's load-condition and not-loaded
   sentences, and that no other command text names a part — NOT the file of a body line under an unchanged heading.
   FLOOR: the text and the file names; ADVISORY: that a run reads a part at its point, or at all.
+
+## A product subagent definition lives in `.claude/agents/pharn-*.md` (6.64.0)
+
+- **What exists.** One definition, `.claude/agents/pharn-review-lens.md`: the subagent type `/pharn-review` Step 4
+  spawns each lens group as (five tools, `omitClaudeMd: true`). Its frontmatter `name:` is its type, and the file name
+  takes the same `pharn-` / `pharn-dev-` split as the commands. It is product surface, so editing it bumps
+  `SKILLS_VERSION`.
+- **One copy of the task.** The definition's body says only its role, a scope guard, the P2 fence and its write rule;
+  it restates no command step. The command's prompt carries the whole task, so the `general-purpose` fallback runs the
+  same task text.
+- **The fallback is a rule, not a choice.** Claude Code discovers `.claude/agents/` only in a session that started
+  after the directory existed, and pharn-cli does not install it yet (follow-up `cli-install-agents`). So a command
+  that names a product type also names `general-purpose` with the same prompt for when the type is not offered or a
+  call is refused, and says so in its report.
+- **The bytes are the measured bytes.** `.dev/floor/review-lens-agent.test.mjs` pins the definition's SHA-256 to the
+  file the prefix probe measured (`.dev/features/review-lens-grouping/MEASUREMENTS.md`). Changing a byte means
+  re-running that probe and re-pinning, never only the hash. The test also closes `.claude/agents/` over the one file;
+  a test mutant is never written there, because a file there is a live subagent type of this repo's sessions (L70).
+- **The container is the reviewed tree's.** Claude Code loads the definition from the working tree, so a reviewed
+  branch that edits it sets the container its lenses run in. The command's claims block names this; nothing detects it.
+- **The family map and its helper.** `pharn/floor/lens-family-map.json` says which lenses share a subagent; the
+  deterministic `pharn/floor/lens-groups.mjs` turns it and the assignment record into the groups Step 3 prints, and
+  re-checks which grouped lenses wrote no `findings.json`. `pharn/floor/lens-groups.test.mjs` pins the map against
+  `count-lenses.mjs` and `lens-scanner-map.json` (every lens once, `trust-fence` alone, no mixed basis), so a lens
+  added here joins a family in the same PR; in an install, a lens the map does not name runs alone. A group runs its
+  lenses one after another, so a review's wall clock can rise against one subagent per lens; it is not measured.

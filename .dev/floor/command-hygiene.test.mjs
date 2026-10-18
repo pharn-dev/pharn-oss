@@ -4866,7 +4866,10 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // 24,152 bytes measured, 88 over 24,064; raised by the rule (+10%, up to a multiple of 512).
   "pharn-plan.md": 26624,
   "pharn-regress.md": 23040, // 6.49.0 entry-run-as-base-evidence: 20699 B measured + 10% → next 512 (was 20480)
-  "pharn-review.md": 24064,
+  // review-lens-grouping (6.64.0): Step 3's grouping line and its three exit branches, Step 4's subagent type, fallback,
+  // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes
+  // measured, 3,473 over 24,064; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-review.md": 30720,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 40,551 bytes measured, 615 over 39,936 (the GATE-2
   // review's R1–R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
   "pharn-ship.md": 45056,

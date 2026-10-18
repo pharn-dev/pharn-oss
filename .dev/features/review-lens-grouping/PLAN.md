@@ -552,8 +552,10 @@ No branch is a model classification, and no fallback ends in a guess.
 
 ## Open questions (HALT)
 
-None open. All six were resolved at GATE 1 round 2 (above), each by option (a). The options as they were put stay
-below for the record.
+None open. All six were resolved at GATE 1 round 2 (above), each by option (a). The options as they were put are
+recorded under the next heading, which holds no open question.
+
+## Resolved questions (the record; none is open)
 
 1. **The security lenses: solo or one family?** Resolved: (a).
    - (a) **Recommended:** six solo families. They are the class an attacker most wants suppressed. Measured cost: +10
@@ -581,3 +583,40 @@ below for the record.
    - (a) **Recommended:** route A, the orchestrator starting a session in the scratch checkout, else route B, the human
      running the pinned command.
    - (b) Route B always.
+
+## Build record (2026-10-18, `/pharn-dev-build`; not part of the approved plan)
+
+`main` had not moved (`origin/main` `SKILLS_VERSION` 6.63.0), so the version is 6.64.0 as planned. The probe was GO
+(17.5%; `MEASUREMENTS.md` §2). Where the build departs from the text above, it does so to address a grill concern inside
+the approved `## Files`:
+
+- **Exit codes (GRILL P5 at :244).** Design §2 had exit 1 for an unreadable record or map and 2 for a malformed map, and
+  Step 3 sent every non-zero exit to the one-per-lens fallback, which reads the record. The helper now judges the record
+  first: exit 1 means the record is unusable and prints nothing, and Step 3 STOPS (a node crash is also 1, so it takes
+  the same stop). Exit 2 means only the map is unusable: the helper itself prints the fallback, one group per active
+  lens, with `map_error`. So no fallback depends on a record that could not be read.
+- **`unwritten` (GRILL P7 at :250).** The helper's output gains `unwritten`, each grouped lens whose
+  `<record dir>/lenses/<lens>/findings.json` is not a regular file. Step 4 asks each lens to write `[]` when it has no
+  finding and re-runs the pinned line once its groups return; Step 6 lists each unwritten lens as `did not finish`. A
+  file left by an earlier run under the same `<name>` counts as written (stated in the helper's header).
+- **A recorded lens name** must be one path segment rather than kebab-case, so `toString`, `__proto__` and
+  `constructor` stay ordinary names (L15) and an install's non-kebab lens still runs. The map's own names are kebab-case.
+- **The definition** is the probed file byte for byte (GRILL P0 at :232; `MEASUREMENTS.md` §2), not Design §3's
+  paraphrase of its scope guard.
+- **The command** grew to 27,537 bytes, not the ≈1.5 KB estimated, because of the two fixes above and the claims lines;
+  its ceiling rose by the rule to 30,720.
+
+Grill concerns:
+
+- Addressed in the shipped text: the reviewed-tree `.claude/agents/` channel (P2 at :519: the command's claims block,
+  the product-commands guide, CHANGELOG); the probe-to-build binding (P0 at :232); the go/no-go metric (P5 at :335,
+  `MEASUREMENTS.md` §2); the eval's reach (P0 at :346: `MEASUREMENTS.md` §3, the kit README, CHANGELOG); the record
+  fallback (P5 at :244); a group that stops partway (P7 at :250); the resolved questions moved out from under the HALT
+  heading (P5 at :553); the serial latency inside a group (P7 at :250, minor: stated in the guide and CHANGELOG, not
+  measured); the 2,048-byte body ceiling's derivation (P7 at :229: `review-lens-agent.test.mjs`).
+- Addressed by a test rather than an import (P3 at :194): the helper reads only `assignments[].lens`,
+  `assignments[].slice` and `scanner_errors[].lens`, and `lens-groups.test.mjs` runs it on a real emitter record, so an
+  emitter change to those fields turns that test red. Importing the emitter's vocabulary would not have covered these
+  fields, which have no exported enum.
+- Not addressed (P3 at :11): `pharn/ARCHITECTURE.md §4` has no place for a shipped `.claude/agents/` file. That is a
+  trusted doc, human-only; the edit is the human's, landing before a build's Step 0 or after verify (L68).

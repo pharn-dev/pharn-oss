@@ -42,7 +42,8 @@
 //     a part again after compaction) or less (fewer grillers selected, a step skipped). The ceiling bounds the bytes
 //     PHARN's text instructs, never the bytes a run loads;
 //   - growth inside the headroom: a row grows by up to its 10% (26-34 KB on the grill and review rows) with no red;
-//   - contexts: one stage's distinct bytes only — the Constitution in each of up to 22 lens subagents, a part re-read
+//   - contexts: one stage's distinct bytes only — the Constitution in each of up to 11 lens-group subagents (22 when
+//     the family map is unusable), a lens group's lens files read in one context, a part re-read
 //     after a compaction, the harness prefix and the project's own files (SPEC, PLAN, canon, code, CLAUDE.md, installed
 //     SKILL.md files) are outside the number, and an `agent` stage that falls back inline adds its own row's set;
 //   - L5's reach: READ_RE sees only a read / re-read / follow / load verb, an optional `the`, then a backticked
@@ -112,8 +113,9 @@ const STAGE_LOADS = Object.freeze({
   "pharn-regress": Object.freeze([CONSTITUTION]),
   "pharn-review": Object.freeze([
     CONSTITUTION,
-    SKILL_SELECTION, // Step 4 (each lens subagent), `select`
-    LENSES, // Step 4: one subagent per registered lens, each reading its lens file
+    SKILL_SELECTION, // Step 4 (each lens-group subagent), `select`
+    ".claude/agents/pharn-review-lens.md", // Step 4: `subagent_type: pharn-review-lens`, each group's system prompt
+    LENSES, // Step 4: one subagent per family group, each reading its lenses' files
   ]),
   "pharn-ship": Object.freeze([CONSTITUTION]), // + /pharn-spec's set, inline by ROUTE_POLICY (`interactive`)
   "pharn-spec": Object.freeze([

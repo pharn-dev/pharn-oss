@@ -23,6 +23,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.64.0] - 2026-10-18
+
+### Added
+
+- **`/pharn-review` runs its lenses in family groups, one `pharn-review-lens` subagent per group (five tools, no
+  project `CLAUDE.md`), with a `general-purpose` fallback.**
+  - What changed:
+    - **The family map.** `pharn/floor/lens-family-map.json` puts the 22 lenses in 11 families, in run order:
+      `async-resources`, `error-handling` and `hygiene` (four scanner-bound lenses each, by what forces them to
+      change), `whole-target` (`hallucinated-api`, `input-validation`, `race-condition`), the six security lenses each
+      alone, and `trust-fence` alone. No family mixes a scanner-bound and a scanner-less lens.
+    - **The helper.** `pharn/floor/lens-groups.mjs <assignments.json>` prints the groups: each family with at least one
+      lens whose review set is non-empty (its slice, or a `scanner_errors` entry), members in map order, plus `idle`
+      and `unwritten` (each grouped lens with no `findings.json` yet). Exit 0 prints the groups. Exit 2 means the map
+      is unusable: it prints one group per active lens, today's spawn, with `map_error`. Exit 1 means the record is
+      unusable and prints nothing. A lens the map does not name runs alone, and a map member that is not installed is
+      ignored.
+    - **The definition.** `.claude/agents/pharn-review-lens.md`: `tools: Read, Grep, Glob, Bash, Write`,
+      `omitClaudeMd: true`, and an 822-byte body (its role, a scope guard, the P2 fence, its write rule) that restates
+      no command step.
+    - **`/pharn-review`.** Step 3 runs the helper and branches on its exit; exit 1 stops the review, because no
+      fallback can read a lens's files from an unusable record. Step 4 spawns one subagent per group as
+      `pharn-review-lens`, or `general-purpose` with the same prompt when the type is not offered or is refused, and
+      gives each lens its own lens file, files and `findings.json` path: each lens on its own, findings only on its own
+      files, `[]` when it has none, written before the next lens. When the groups return, Step 4 re-runs the helper,
+      and Step 6's new `## Lens agents` block lists each group's agent type and each lens that wrote no `findings.json`
+      as `did not finish`, never as no findings.
+  - Why: review finding CTX-3 (b), deferred by 6.62.0 as `review-lens-grouping`. Measured over the last 40
+    first-parent commits of each repository, each a PR diff (`.dev/features/review-lens-grouping/PLAN.md`): the
+    median subagents per review fall from 10 to 5 in pharn-starter (325 → 161 over 32 reviews) and from 11 to 5 here
+    (404 → 193 over 40). The old 68k–130k per-subagent prefix figures were measured when this repository's
+    `CLAUDE.md` was 172 KB; it is 29 KB now, so they are not carried as measurements.
+  - Measured: a prefix probe in one session, all subagents on the same model. A `pharn-review-lens` subagent's first
+    request was 8,200 tokens, against 46,764 for `general-purpose` (17.5%; the go/no-go was at most 50%). Its write
+    outside the fail-closed default was denied by the writes-scope guard
+    (`.dev/features/review-lens-grouping/MEASUREMENTS.md`). The grouped lens evals run after this build, before the
+    merge; their results are in the same file.
+  - Checked by: `pharn/floor/lens-groups.test.mjs` (the committed map against `count-lenses.mjs` and
+    `lens-scanner-map.json`, closed both ways, each invariant with an in-memory mutant; the derivation; the pinned
+    Step 3 line run over a real emitter record) and `.dev/floor/review-lens-agent.test.mjs` (`.claude/agents/` closed
+    over the one file, its SHA-256 equal to the probed file, the frontmatter and tools set, and the wiring in Steps
+    3, 4 and 6 and the claims block). `pharn-review.md`'s byte ceiling rises to 30,720 by the rule, and the review
+    stage's load set gains the definition (under its ceiling).
+  - Not covered:
+    - Installs get the grouping at once, as `general-purpose` subagents, but not the container until pharn-cli copies
+      `.claude/agents/` (follow-up `cli-install-agents`). `MIN_CLI` is unchanged: an older CLI is degraded, not broken.
+    - The container is applied by Claude Code (`omitClaudeMd` needs v2.1.271+) and observed by no floor primitive.
+      Claude Code loads the definition from the working tree, so a reviewed branch that edits it sets the container
+      its lenses run in.
+    - In a group, one hostile file in any member's review set reaches every member. Nothing compares a lens's slice
+      with its findings (follow-up `slice-without-finding`).
+    - A group runs its lenses one after another, so a review's wall clock can rise; it is not measured.
+    - The lens evals score structure only, on small eval cases at N=1, with a harness's prompts; they cannot show what
+      dropping a real project's `CLAUDE.md` does to a lens's judgment.
+  - Follow-ups: `cli-install-agents`, `slice-without-finding`, `lens-body-slim`, and the `/pharn-dev-eval` gap (it
+    runs one lens top-level, never as a `/pharn-review` group).
+
 ## [6.63.0] - 2026-10-18
 
 ### Changed
