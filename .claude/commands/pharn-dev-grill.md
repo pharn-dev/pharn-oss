@@ -190,7 +190,7 @@ and its verifier slot do); as axes are extracted into grillers over time, the in
   `count-verifiers.mjs`, #16). Membership is **FLOOR** (enum/regex, `pharn/ARCHITECTURE.md §2`); _running_ a griller
   is advisory. Every registered griller still runs. A griller whose frontmatter says `kind: pharn-owned` loads without
   `## The two layers`, `### Layer 1`, `## Finding output`, `## Guarantee audit` and `## Machine-readable emission`. Any
-  other griller, or one whose `kind` is missing or unreadable, loses only the last two, as since 6.60.0 (189,192 →
+  other griller, or one whose `kind` is missing or unreadable, loses only the last two, as since 6.60.0 (194,015 →
   99,391 B over the 13 grillers at 6.63.0, where this stage read all 188,978 B of the files before). Choosing grillers
   per plan was measured and rejected, from scanner hits, from the project's archetype and from the plan's `## Files`
   paths (the CLI's header). Exit 0 → its first line is `GRILL.md`'s `grillers:` line; read nothing else of the

@@ -54,8 +54,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - **All 13 grillers state the rule the omission relies on.** One paragraph at the end of each griller's
       `## The two layers` intro, "**Not loaded by a full grill.**", names the five headings a full grill leaves out of
       a `kind: pharn-owned` griller and says grill-time guidance belongs under `## Procedure`, `### Layer 2` or a
-      `### Presence` section. The extract leaves that intro out, so a grill loads 0 more bytes; the files grow by
-      371 B each.
+      `### Presence` section. The extract leaves that intro out, so a grill that loads the extract reads 0 more bytes;
+      the files grow by 371 B each, so a grill that falls back to whole files (a `grill-scan.mjs` or extract failure)
+      reads 4,823 B more.
     - **`/pharn-grill` Step 3b** runs `node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md` first and copies
       its section into `GRILL.md`. Its findings are the security, privacy and i18n scanner-hit findings, and a griller
       must not emit a second finding for the same hit. If it fails, the step writes

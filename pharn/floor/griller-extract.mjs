@@ -22,10 +22,12 @@
 // THE AUTHORING RULE THIS RELIES ON, for a `pharn-owned` griller: guidance a grill needs never sits under any of the
 // five omitted headings. Since 6.63.0 (GATE 2, F1) the rule is stated where an author edits or copies a griller: a
 // "**Not loaded by a full grill.**" paragraph at the end of each `pharn-owned` griller's `## The two layers` intro, which
-// the extract itself leaves out, so it costs a grill 0 bytes. `griller-extract.test.mjs` pins it as a closure over this
-// repo's registered grillers: each `pharn-owned` one carries the sentence in its intro, the sentence names every
-// OMITTED_SECTIONS member, and it never reaches the extract. RESIDUAL (P0): that pin is presence and placement, never
-// that an author read it; an installed project's own griller, or a user-edited copy, is checked by nothing.
+// the extract itself leaves out, so it costs a grill 0 bytes while the extract runs; a grill that falls back to whole
+// files (a grill-scan.mjs or extract failure) reads it, 4,823 B over the 13. `griller-extract.test.mjs` pins it as a
+// closure over this repo's registered grillers: each `pharn-owned` one carries the sentence in its intro, the sentence
+// names every OMITTED_SECTIONS member, and it never reaches the extract. RESIDUAL (P0): that pin is presence and
+// placement, never that an author read it; an installed project's own griller, or a user-edited copy, is checked by
+// nothing.
 // Measured over the 13 grillers at 6.63.0: 194,015 B of files → 99,391 B of griller text printed (−48.8%; 102,417 B of
 // stdout with the summary and frame lines); 6.60.0 printed 141,332 B, so −29.7% on a full `/pharn-grill`. The same for
 // every plan.
