@@ -22,7 +22,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/GRILL.md"]
 constitution_refs: ["P0", "P1", "P2", "P4", "P5", "P6", "P7"]
-version: "0.4.0"
+version: "0.5.0"
 ---
 
 # /pharn-grill — re-verify the spec→plan chain, then interrogate the plan
@@ -225,15 +225,31 @@ Beyond the interrogation axes above, `/pharn-grill` discovers and runs **griller
 `role: griller` capabilities that each interrogate the plan along **one axis** (testability,
 architecture, security, …) — only on a GREEN chain (after Step 2).
 
+- **Run the grillers' deterministic scans once, first (no model):**
+
+  ```bash
+  node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md
+  ```
+
+  Exit `0` → copy its stdout **verbatim** into `GRILL.md`. Its `FINDING` objects are the security, privacy and i18n
+  scanner-hit findings; its mention lines are the migrations and observability scanner evidence. A griller step that
+  says to run its `scan-plan-*` scanner, or to emit one finding per hit, is satisfied by this section: never emit a
+  second finding for a hit it already reports (a separate judgment about the same line is its own finding). Any other
+  exit → write `scans: NOT run (grill-scan.mjs exit <n>)`, skip the extract below, read in full every file
+  `node pharn/floor/count-grillers.mjs .` lists, and record `grillers: extract NOT run (grill-scan.mjs exit <n>)`: the
+  extract no longer carries the scanner instructions.
+
 - **Load every registered griller (P5 membership via `count-grillers.mjs`, never a prose grep):**
 
   ```bash
   node pharn/floor/griller-extract.mjs .
   ```
 
-  Every registered griller still runs; only two sections a grill never uses are left out of each, its
-  `## Guarantee audit` and `## Machine-readable emission` (188,978 → 141,332 B over the 13 grillers at 6.60.0). Choosing
-  grillers per plan from scanner hits was measured and rejected (the CLI's header). Exit 0 → its first line is
+  Every registered griller still runs. A griller whose frontmatter says `kind: pharn-owned` loads without
+  `## The two layers`, `### Layer 1`, `## Finding output`, `## Guarantee audit` and `## Machine-readable emission`. Any
+  other griller, or one whose `kind` is missing or unreadable, loses only the last two, as since 6.60.0 (194,015 →
+  99,391 B over the 13 grillers at 6.63.0). Choosing grillers per plan was measured and rejected, from scanner hits,
+  from the project's archetype and from the plan's `## Files` paths (the CLI's header). Exit 0 → its first line is
   `GRILL.md`'s `grillers:` line; read nothing else of the grillers. Any other exit → read in full every file
   `node pharn/floor/count-grillers.mjs .` lists, and record `grillers: extract NOT run (griller-extract.mjs exit <n>)`.
 
@@ -285,8 +301,9 @@ makes **no** claim about the plan's quality. (Then **HALT**, as that step direct
 - a one-line **header** — which plan, and **both FLOOR results**: `chain: GREEN (verified by
 pharn/floor/check-plan-spec-agree.mjs) · lessons: GREEN (verified by pharn/floor/check-plan-lessons.mjs)`;
 - Step 3's `skills:` line and Step 3b's `grillers:` line;
+- Step 3b's scan section, verbatim, or its `scans: NOT run` line;
 - the **findings** (the YAML objects above, grouped by axis), each with the split honored — or an explicit
-  "no findings" if the plan is clean;
+  "no findings" if the plan is clean. The scan section's findings count in the verdict like any other;
 - a **prose summary** of the concerns; and
 - a **verdict** stated plainly as **advisory**, e.g.
   `ADVISORY VERDICT: N concerns raised (M blocking-severity, K advisory) — for the human to weigh before
@@ -332,8 +349,9 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
 - **Floor:** it writes only `pharn/features/<name>/GRILL.md` — the fix #7 hook.
 - **Floor-grade enumeration that gates nothing:** the installed-skill catalogue (`catalogue-installed-skills.mjs`;
   which bodies are read is advisory) and the
-  registered grillers (`count-grillers.mjs`), each printed by `griller-extract.mjs` less a closed set of sections
-  (that those sections hold nothing a grill needs is advisory); under `--floor-only`, each `scan-plan-*` verdict (a fixed regex set),
+  registered grillers (`count-grillers.mjs`), each printed by `griller-extract.mjs` less a closed set of sections that
+  its frontmatter `kind` selects (that those sections hold nothing a grill needs is advisory, and `kind` is
+  self-declared); in full mode and under `--floor-only`, each `scan-plan-*` verdict (a fixed regex set),
   read and shape-checked by `grill-scan.mjs` — its findings advisory, and never "the plan is secure".
 - **Advisory:** invoking each checker and obeying its exit code (the verdict is floor; the act is orchestration);
   the interrogation, the installed-skills consideration and every griller — model judgment that never gates. Whether

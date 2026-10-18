@@ -52,6 +52,11 @@ sound" is irreducible judgment, so privacy has **less** floor than testability (
 axis was floor-checkable). Do not inflate the floor; do not deflate it — size it honestly, exactly as
 security does.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + deterministic PII-PATTERN detection
 
 Two things are floor here:
@@ -79,9 +84,7 @@ Two things are floor here:
    **Honestly bounded (P0, the secret-scanner precedent):** the scanner detects a **pattern's presence**
    on a line; it does **not** decide the value is real PII vs a placeholder/example, and it does **not**
    judge whether the plan handles data responsibly. "Detected a PII-shaped pattern" is a real guarantee;
-   "the plan is privacy-compliant" is not. It is biased to well-known shapes + snake_case/SQL-style field
-   declarations — it does **not** catch camelCase variants or phone/date literals (those PII kinds are
-   covered only as field NAMES, deliberately, to keep false positives low).
+   "the plan is privacy-compliant" is not.
 
 > **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). But
 > until the live isolated griller runner lands (deferred P7, as for every griller), the grill stage
@@ -97,6 +100,10 @@ collected speculatively? Is personal/sensitive data **logged** or sent to third 
 **retention** appropriate, or is data kept indefinitely? This is irreducible judgment. You **surface**
 concerns as findings for the human; you **never** gate on them (grillers as a class never gate — the
 grill stage's deterministic stops are the spec→plan hash chain and the `applied_lessons` re-verification).
+
+The PII scanner is biased to well-known shapes + snake_case/SQL-style field declarations — it does **not**
+catch camelCase variants or phone/date literals (those PII kinds are covered only as field NAMES,
+deliberately, to keep false positives low).
 
 > **The REJECTED floor candidate, named honestly (P0/P7).** "The plan handles PII AND declares no privacy
 > consideration" is **NOT floor** — detecting the ABSENCE of an adequate consideration, and judging

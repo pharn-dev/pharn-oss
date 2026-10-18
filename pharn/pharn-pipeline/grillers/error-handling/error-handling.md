@@ -53,6 +53,11 @@ runtime-scanner partial floor). **Error handling sits with testability, NOT secu
 scanner**, because unlike a secret literal, "the plan accounts for failure" is **not a self-evident
 lexical artifact**. See "The rejected floor candidate".
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + the fixture-pinned present/absent OUTPUT
 
 Two things are floor here — identical to testability:
@@ -65,6 +70,8 @@ Two things are floor here — identical to testability:
    assertions `finding_count` / `field_equals` / `needle_absent_from_enum_gated`
    (`pharn/pharn-contracts/eval-format.md`), which `pharn/floor/check-structural.mjs` verifies deterministically
    at **eval time**. This pins the griller's behavior on known inputs and proves the trust-fence holds.
+
+### Presence — what counts as a declaration
 
 Presence is a **structural** property of the plan: a populated error-handling declaration (a section, or
 an explicit failure/edge/timeout consideration for what the plan builds) is there, or it is not. Read it

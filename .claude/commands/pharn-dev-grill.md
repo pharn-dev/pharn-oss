@@ -13,10 +13,12 @@ reads:
     ".dev/features/<name>/PLAN.md",
     ".dev/memory-bank/lessons-learned.md",
     "pharn/floor/check-plan-lessons.mjs",
+    "pharn/floor/grill-scan.mjs",
+    "pharn/floor/griller-extract.mjs",
   ]
 writes: [".dev/features/<name>/GRILL.md"]
 constitution_refs: ["P0", "P1", "P2", "P4", "P5", "P6", "P7"]
-version: "0.1.0"
+version: "0.2.0"
 ---
 
 # /pharn-dev-grill — interrogate a PLAN.md before /pharn-dev-build
@@ -162,24 +164,44 @@ architecture, security, …), the parallel of `role: verifier` capabilities at `
 inline axes (Step 2) and the pluggable grillers **coexist** (exactly as `/pharn-dev-verify`'s floor gates
 and its verifier slot do); as axes are extracted into grillers over time, the inline set shrinks.
 
-- **Discover by deterministic membership (P5), never a prose grep:**
+- **Run the grillers' deterministic scans once, first (no model; 6.63.0, the `/pharn-grill` Step 3b twin):**
 
   ```bash
-  node pharn/floor/count-grillers.mjs .
+  node pharn/floor/grill-scan.mjs .dev/features/<name>/PLAN.md
   ```
 
-  This reads `role: griller` from `---`-fenced frontmatter only and prints
-  `{"registered":<int>,"grillers":[<path>,...]}`. A `role: griller` string in prose / a code block — or
-  **this stage command's own `role: griller` frontmatter** (it lives under the excluded
-  `.claude/commands/`) — **never** registers (`pharn/floor/count-grillers.mjs`, mirroring
-  `count-verifiers.mjs`, #16). Membership is **FLOOR** (enum/regex, `pharn/ARCHITECTURE.md §2`); _running_ a
-  griller is advisory.
+  Exit `0` → copy its stdout **verbatim** into `GRILL.md`. Its `FINDING` objects are the security, privacy and i18n
+  scanner-hit findings; its mention lines are the migrations and observability scanner evidence. A griller step that
+  says to run its `scan-plan-*` scanner, or to emit one finding per hit, is satisfied by this section: never emit a
+  second finding for a hit it already reports (a separate judgment about the same line is its own finding). Any other
+  exit → write `scans: NOT run (grill-scan.mjs exit <n>)`, skip the extract below, read in full every file
+  `node pharn/floor/count-grillers.mjs .` lists, and record `grillers: extract NOT run (grill-scan.mjs exit <n>)`: the
+  extract no longer carries the scanner instructions.
+
+- **Load every registered griller by deterministic membership (P5), never a prose grep:**
+
+  ```bash
+  node pharn/floor/griller-extract.mjs .
+  ```
+
+  It spawns `count-grillers.mjs`, which reads `role: griller` from `---`-fenced frontmatter only. A `role: griller`
+  string in prose / a code block — or **this stage command's own `role: griller` frontmatter** (it lives under the
+  excluded `.claude/commands/`) — **never** registers (`pharn/floor/count-grillers.mjs`, mirroring
+  `count-verifiers.mjs`, #16). Membership is **FLOOR** (enum/regex, `pharn/ARCHITECTURE.md §2`); _running_ a griller
+  is advisory. Every registered griller still runs. A griller whose frontmatter says `kind: pharn-owned` loads without
+  `## The two layers`, `### Layer 1`, `## Finding output`, `## Guarantee audit` and `## Machine-readable emission`. Any
+  other griller, or one whose `kind` is missing or unreadable, loses only the last two, as since 6.60.0 (194,015 →
+  99,391 B over the 13 grillers at 6.63.0, where this stage read all 188,978 B of the files before). Choosing grillers
+  per plan was measured and rejected, from scanner hits, from the project's archetype and from the plan's `## Files`
+  paths (the CLI's header). Exit 0 → its first line is `GRILL.md`'s `grillers:` line; read nothing else of the
+  grillers. Any other exit → read in full every file `node pharn/floor/count-grillers.mjs .` lists (it prints
+  `{"registered":<int>,"grillers":[<path>,...]}`), and record `grillers: extract NOT run (griller-extract.mjs exit <n>)`.
 
 - **Run each registered griller** over `.dev/features/<name>/PLAN.md`: apply its procedure and fold its
   findings (the `finding-shape` objects, enum-gated / free-text split honored) into the grill-log
-  (Step 3), grouped under the griller's axis. **The registered set is whatever `count-grillers.mjs` just
-  printed — this prose deliberately names no count and no member.** It used to say the set was the single
-  `testability` griller; the live count reached 13 while that sentence stood, and nothing detected the
+  (Step 3), grouped under the griller's axis. **The registered set is whatever the extract (or
+  `count-grillers.mjs`) just printed — this prose deliberately names no count and no member.** It used to say the set
+  was the single `testability` griller; the live count reached 13 while that sentence stood, and nothing detected the
   drift, because a hardcoded roster in prose is a fact that rots silently beside the deterministic reader
   that supersedes it. Read the membership from the command above, never from this paragraph.
 - **Grillers are ADVISORY — they gate nothing** (fix #3): their findings are surfaced for the human,
@@ -237,8 +259,9 @@ Write `.dev/features/<name>/GRILL.md` containing, in order:
 
 - a one-line **header** — which plan, the spec-hash check result, and the **Step 1b lessons-declaration
   verdict** (GREEN, or the checker's RED output verbatim);
+- Step 2b's `grillers:` line, then its scan section, verbatim, or its `scans: NOT run` line;
 - the **findings** (the YAML objects above, grouped by axis), each with the split honored — or an
-  explicit "no findings" if the plan is clean;
+  explicit "no findings" if the plan is clean. The scan section's findings count in the verdict like any other;
 - a **prose summary** of the concerns; and
 - a **verdict** stated plainly as **advisory**, e.g.
   `ADVISORY VERDICT: N concerns raised (M blocking-severity, K advisory) — for the human to weigh

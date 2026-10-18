@@ -76,6 +76,11 @@ runtime-scanner partial floor). **Coupling sits with architecture, NOT security:
 entangled" is **irreducible judgment**, so this griller's floor portion is **only membership**. There is
 **no manufactured floor sub-check** here — see "The rejected floor candidate".
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)
 
 The **only** thing floor-guaranteed at runtime is that this file is a griller: `role: griller`, counted

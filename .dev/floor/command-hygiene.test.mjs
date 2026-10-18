@@ -2480,11 +2480,37 @@ test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, 
 
 // grill-griller-trim (6.60.0, review CTX-1): the full grill loads its grillers through ONE pinned extract line, falls back
 // to the whole files on any other exit, and records which happened in GRILL.md. Pinned, never described (L22).
+// grill-griller-slim (6.63.0): the extract leaves `### Layer 1` (where the scanner instructions lived) out of every
+// `kind: pharn-owned` griller, so the full grill runs grill-scan.mjs once BEFORE the extract, and `/pharn-dev-grill` —
+// the deliberate copy-pair (L31) — loads its grillers the same way. Both commands carry every obligation below.
 const GRILLER_EXTRACT_LINE = "node pharn/floor/griller-extract.mjs .";
 const GRILLER_FALLBACK_LITERAL = "`grillers: extract NOT run (griller-extract.mjs exit <n>)`";
+const GRILL_COMMANDS = Object.freeze({
+  "pharn-grill.md": Object.freeze({
+    step: "## Step 3b",
+    scan: "node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md",
+    grillersLine: /Step 3's `skills:` line and Step 3b's `grillers:` line;/,
+    scanSection: /Step 3b's scan section, verbatim, or its `scans: NOT run` line;/,
+  }),
+  "pharn-dev-grill.md": Object.freeze({
+    step: "## Step 2b",
+    scan: "node pharn/floor/grill-scan.mjs .dev/features/<name>/PLAN.md",
+    grillersLine: /Step 2b's `grillers:` line, then its scan section/,
+    scanSection: /then its scan section, verbatim, or its `scans: NOT run` line;/,
+  }),
+});
+const SCANS_NOT_RUN_LITERAL = "`scans: NOT run (grill-scan.mjs exit <n>)`";
+const SCAN_SKIP_LITERAL = "`grillers: extract NOT run (grill-scan.mjs exit <n>)`";
+// The re-derived omission sentence (L25), matched across any line wrap: every space in it stands for `\s+`.
+const OMISSION_SENTENCE = [
+  "Every registered griller still runs. A griller whose frontmatter says `kind: pharn-owned` loads without",
+  "`## The two layers`, `### Layer 1`, `## Finding output`, `## Guarantee audit` and `## Machine-readable emission`.",
+  "Any other griller, or one whose `kind` is missing or unreadable, loses only the last two, as since 6.60.0",
+].join(" ");
+const OMISSION_SENTENCE_RE = new RegExp(OMISSION_SENTENCE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+"));
 
-/** Why a pharn-grill.md body fails the griller-extract wiring, or [] when it holds. */
-function grillerExtractReasons(body) {
+/** Why a grill command's body fails the griller-extract wiring, or [] when it holds. */
+function grillerExtractReasons(body, file = "pharn-grill.md") {
   const reasons = [];
   const pinned = fencedLines(body).filter((f) => f.text.trim() === GRILLER_EXTRACT_LINE);
   if (pinned.length !== 1) reasons.push(`the extract line is pinned ${pinned.length} times, not once`);
@@ -2492,21 +2518,75 @@ function grillerExtractReasons(body) {
   if (!/Any other exit → read in full every file\s+`node pharn\/floor\/count-grillers\.mjs \.` lists/.test(body)) {
     reasons.push("the whole-file fallback is missing");
   }
-  if (!/Every registered griller still runs; only two sections a grill never uses are left out of each/.test(body)) {
-    reasons.push("the every-griller-still-runs sentence is missing");
+  if (!OMISSION_SENTENCE_RE.test(body)) reasons.push("the every-griller-still-runs sentence with its kind clause is missing");
+  if (!/measured and rejected, from scanner hits,\s+from the project's archetype and from the plan's `## Files`/.test(body)) {
+    reasons.push("the selection-rejected sentence is missing");
   }
-  if (!/Step 3's `skills:` line and Step 3b's `grillers:` line;/.test(body)) reasons.push("GRILL.md's grillers: line is missing");
+  if (!GRILL_COMMANDS[file].grillersLine.test(body)) reasons.push("GRILL.md's grillers: line is missing");
   return reasons;
 }
 
-test("✧ GRILLER EXTRACT: pharn-grill.md pins the extract line once, its whole-file fallback, and GRILL.md's grillers: line", () => {
-  const body = commandBody("pharn-grill.md");
-  assert.deepEqual(grillerExtractReasons(body), []);
-  // CONTROLS (L60): the pinned line removed, the fallback removed, and a duplicate pin each fail.
-  assert.match(grillerExtractReasons(body.replace(`  ${GRILLER_EXTRACT_LINE}\n`, "")).join("\n"), /pinned 0 times/);
-  assert.match(grillerExtractReasons(body.replace(GRILLER_FALLBACK_LITERAL, "")).join("\n"), /fallback record literal/);
-  assert.match(grillerExtractReasons(`${body}\n\`\`\`bash\n${GRILLER_EXTRACT_LINE}\n\`\`\`\n`).join("\n"), /pinned 2 times/);
-});
+/** Why a grill command's body fails the full-mode grill-scan wiring (scan once, BEFORE the extract), or [] when it holds. */
+function grillScanFirstReasons(body, file) {
+  const want = GRILL_COMMANDS[file];
+  const reasons = [];
+  const lines = body.split(/\r?\n/);
+  const stepAt = lines.findIndex((l) => l.startsWith(want.step)) + 1;
+  const stepEnd = stepAt === 0 ? -1 : lines.findIndex((l, i) => i >= stepAt && /^## /.test(l)) + 1;
+  if (stepAt === 0) return [`no ${want.step} heading`];
+  const inStep = (n) => n > stepAt && (stepEnd === 0 || n < stepEnd);
+  const fenced = fencedLines(body);
+  const extract = fenced.filter((f) => f.text.trim() === GRILLER_EXTRACT_LINE && inStep(f.line));
+  const scans = fenced.filter((f) => f.text.trim() === want.scan && inStep(f.line));
+  if (scans.length !== 1) reasons.push(`the grill-scan line is pinned ${scans.length} times in ${want.step}, not once`);
+  else if (extract.length !== 1 || scans[0].line > extract[0].line)
+    reasons.push("the grill-scan line is not pinned before the extract line");
+  const step = lines.slice(stepAt, stepEnd === 0 ? undefined : stepEnd - 1).join("\n");
+  if (!step.includes(SCANS_NOT_RUN_LITERAL)) reasons.push("the scans: NOT run literal is missing");
+  if (!step.includes(SCAN_SKIP_LITERAL)) reasons.push("the grill-scan whole-file fallback record is missing");
+  if (!/never emit a\s+second finding for a hit it already reports/.test(step)) reasons.push("the no-second-finding rule is missing");
+  if (!/Exit `0` → copy its stdout \*\*verbatim\*\* into `GRILL\.md`\. Its `FINDING` objects are the security/.test(step)) {
+    reasons.push("the verbatim-copy rule is missing");
+  }
+  if (!want.scanSection.test(body)) reasons.push("GRILL.md's scan section line is missing");
+  return reasons;
+}
+
+for (const file of Object.keys(GRILL_COMMANDS)) {
+  test(`✧ GRILLER EXTRACT: ${file} pins the extract line once, its whole-file fallback, and GRILL.md's grillers: line`, () => {
+    const body = commandBody(file);
+    assert.deepEqual(grillerExtractReasons(body, file), []);
+    // CONTROLS (L60): the pinned line removed, the fallback removed, a duplicate pin, and the kind clause removed each fail.
+    assert.match(grillerExtractReasons(body.replace(`  ${GRILLER_EXTRACT_LINE}\n`, ""), file).join("\n"), /pinned 0 times/);
+    assert.match(grillerExtractReasons(body.replace(GRILLER_FALLBACK_LITERAL, ""), file).join("\n"), /fallback record literal/);
+    assert.match(grillerExtractReasons(`${body}\n\`\`\`bash\n${GRILLER_EXTRACT_LINE}\n\`\`\`\n`, file).join("\n"), /pinned 2 times/);
+    assert.match(
+      grillerExtractReasons(body.replace("whose frontmatter says `kind: pharn-owned` loads", "loads"), file).join("\n"),
+      /kind clause/
+    );
+    assert.match(
+      grillerExtractReasons(body.replace("from the project's archetype", "from archetypes"), file).join("\n"),
+      /selection-rejected/
+    );
+  });
+
+  test(`✧ GRILL SCAN FIRST: ${file} pins grill-scan.mjs once in its griller step, before the extract, with its fallbacks`, () => {
+    const body = commandBody(file);
+    const want = GRILL_COMMANDS[file];
+    assert.deepEqual(grillScanFirstReasons(body, file), []);
+    // CONTROLS (L60): the pin removed, the order swapped, and each literal removed fail.
+    const removed = body.replace(`  ${want.scan}\n`, "");
+    assert.match(grillScanFirstReasons(removed, file).join("\n"), /pinned 0 times/);
+    const swapped = body
+      .replace(`  ${want.scan}\n`, "  <SCAN>\n")
+      .replace(`  ${GRILLER_EXTRACT_LINE}\n`, `  ${want.scan}\n`)
+      .replace("  <SCAN>\n", `  ${GRILLER_EXTRACT_LINE}\n`);
+    assert.match(grillScanFirstReasons(swapped, file).join("\n"), /not pinned before the extract line/);
+    assert.match(grillScanFirstReasons(body.replaceAll(SCANS_NOT_RUN_LITERAL, ""), file).join("\n"), /scans: NOT run literal/);
+    assert.match(grillScanFirstReasons(body.replace(SCAN_SKIP_LITERAL, ""), file).join("\n"), /whole-file fallback record/);
+    assert.match(grillScanFirstReasons(body.replace(/never emit a\s+second finding/, "emit"), file).join("\n"), /no-second-finding/);
+  });
+}
 
 test("✧ FLOOR-ONLY GRILL: pharn-loop.md invokes --floor-only inline and runs neither grill checker itself (one read)", () => {
   const body = commandBody(LOOP_FILE);

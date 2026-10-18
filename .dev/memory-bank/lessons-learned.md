@@ -2364,3 +2364,18 @@ type: floor · concepts: [path-identity, case-folding, symlink, refusal-path, le
 - commit: `fc107972719de32fb1b82871923cb26a1a0a39c7`
 - source: .dev/features/deletion-follow-ups/REVIEW.md F1 (probes 2, 3, 7) + .dev/features/plan-declared-deletions/REVIEW.md § Floor-gate findings (blocking) (F1 in that feature's PLAN.md § Amended after review)
 - promoted: 2026-10-11 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L74 — A differential probe is independent only where its reference decides — a predicate the probe borrows from the checker under test hides that predicate's errors
+
+type: floor · concepts: [differential-testing, shared-oracle, verification-fidelity, false-green, lesson-recurrence]
+
+**Lesson.** When a check is probed against a reference implementation, the probe is independent only for what the reference itself computes. A predicate the probe borrows from the checker under test (here: which heading texts open an omitted section) is applied identically on both sides, so the two always agree on it, and an error in it cannot show. Two occurrences, both in `griller-extract.mjs`'s section omission: the 6.60.0 probe (`grill-griller-trim`, MEASUREMENTS.md § 3) and the first-round 6.63.0 probe (`grill-griller-slim`) let markdown-it decide where headings and sections render, but picked the omitted sections with the extract's own prefix test (`text.startsWith(prefix)`, no word boundary). Both reported no divergence while `### Layer 10`, `## Finding outputs` and `## Guarantee auditing` were dropped. An independent reviewer found it by writing near-miss headings by hand. The fix round's probe takes its reference from a literal list of the 65 committed heading lines plus hand-written expected outcomes, and was shown to flag all seven near-misses on the pre-fix rule.
+
+**Why it matters.** [[L55]] and [[L56]] say to probe a re-derived parser against the renderer; this is the gap left after you do. A differential reads as the strong check because it compares against something external, so the parts it silently shares with the code under test are the ones nobody re-tests. The remedy: for each probe, list which decisions the reference makes and which the probe inherits, give every inherited predicate its own oracle (a literal list, hand-written expectations, near-miss inputs), and show the probe flags a known-bad version. **Bound (P0):** discipline only; no checker can tell which of a probe's predicates came from the code under test.
+
+**Provenance.**
+
+- feature: `grill-griller-slim`
+- commit: `1e0ff70aeb49e3aba6e1ed9110411791ace1c645`
+- source: .dev/features/grill-griller-slim/REVIEW.md finding 2 + § Lesson candidates, Candidate A
+- promoted: 2026-10-18 via gated `/pharn-dev-memory-promote` (human-approved).

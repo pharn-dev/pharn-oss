@@ -52,6 +52,11 @@ so security has **less** floor than testability (whose whole present/absent axis
 not inflate the floor to look like testability; do not deflate it to look like architecture — size it
 honestly.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + deterministic SECRET-LITERAL detection
 
 Two things are floor here:

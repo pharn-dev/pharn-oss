@@ -92,6 +92,11 @@ section that explains nothing) or **absent but unnecessary** (a mechanical renam
 "comprehensible" is **not a structural presence property** you can read by membership. Do not manufacture
 a floor sub-check for symmetry; there is none here beyond membership.
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP only (the whole runtime guarantee)
 
 The **only** thing floor-guaranteed at runtime is that this file is a griller: `role: griller`, counted

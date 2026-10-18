@@ -70,6 +70,11 @@ its floor is a **presence** property (a declaration is there, or it is not) — 
 deterministic scanner**, because unlike a secret literal, "the plan documents its public surface" is
 **not a self-evident lexical artifact**. See "The rejected floor candidate".
 
+**Not loaded by a full grill.** For a `kind: pharn-owned` griller, `pharn/floor/griller-extract.mjs` leaves out
+`## The two layers` (this section), `### Layer 1`, `## Finding output`, `## Guarantee audit` and
+`## Machine-readable emission`. Guidance a grill needs belongs under `## Procedure`, `### Layer 2` or a
+`### Presence` section, never under those five headings.
+
 ### Layer 1 — FLOOR: griller MEMBERSHIP + the fixture-pinned present/absent OUTPUT
 
 Two things are floor here — identical to testability and error-handling:
@@ -82,6 +87,8 @@ Two things are floor here — identical to testability and error-handling:
    assertions `finding_count` / `field_equals` / `needle_absent_from_enum_gated`
    (`pharn/pharn-contracts/eval-format.md`), which `pharn/floor/check-structural.mjs` verifies deterministically
    at **eval time**. This pins the griller's behavior on known inputs and proves the trust-fence holds.
+
+### Presence — what counts as a declaration
 
 Presence is a **structural** property of the plan: a populated documentation declaration (a `## Documentation`
 section, or an explicit "update README/docs/JSDoc/comments" for the public surface it builds) is there,
