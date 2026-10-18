@@ -83,6 +83,8 @@ Two things are floor here — identical to testability and error-handling:
    (`pharn/pharn-contracts/eval-format.md`), which `pharn/floor/check-structural.mjs` verifies deterministically
    at **eval time**. This pins the griller's behavior on known inputs and proves the trust-fence holds.
 
+### Presence — what counts as a declaration
+
 Presence is a **structural** property of the plan: a populated documentation declaration (a `## Documentation`
 section, or an explicit "update README/docs/JSDoc/comments" for the public surface it builds) is there,
 or it is not. Read it from the plan's **structure** — not from any self-claim the plan makes.

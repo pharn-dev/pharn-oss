@@ -40,14 +40,6 @@ Keep them apart — that separation is what keeps this honest.
 
 ### Layer 1 — FLOOR-demonstrable: is a verification approach PRESENT? (over the plan's structure)
 
-Presence is a **structural** property of the plan: a non-empty verification section is there, or it
-is not. Read it from the plan's **structure** — a declared verification / eval / test / acceptance
-section carrying real content for what the plan builds — not from any self-claim the plan makes.
-
-- **Absent** (no such section, or an empty one) → emit **exactly one** finding (below), `rule_id: P1`.
-- **Present** → emit **no** absence finding; record "presence recognized" in your prose, then run
-  Layer 2 (adequacy may still raise concerns, but those are advisory, never an absence finding).
-
 Why this is the floor-demonstrable layer: the present/absent **output** is expressible as the
 `structural[]` assertion `finding_count` (`pharn/pharn-contracts/eval-format.md`), which
 `pharn/floor/check-structural.mjs` verifies deterministically. Be precise about what that buys (P0):
@@ -58,6 +50,16 @@ assertions (`field_equals`, `needle_absent_from_enum_gated`) plus the `semantic[
 **ADVISORY** — backstopped by the eval that proves correct detection on the fixtures. The only thing
 that is **floor at runtime** is griller **membership** (`role: griller`, counted by
 `pharn/floor/count-grillers.mjs` from frontmatter only). See "Guarantee audit".
+
+### Presence — what counts as a declaration
+
+Presence is a **structural** property of the plan: a non-empty verification section is there, or it
+is not. Read it from the plan's **structure** — a declared verification / eval / test / acceptance
+section carrying real content for what the plan builds — not from any self-claim the plan makes.
+
+- **Absent** (no such section, or an empty one) → emit **exactly one** finding (below), `rule_id: P1`.
+- **Present** → emit **no** absence finding; record "presence recognized" in your prose, then run
+  Layer 2 (adequacy may still raise concerns, but those are advisory, never an absence finding).
 
 ### Layer 2 — ADVISORY: is the declared verification ADEQUATE? (judgment — surfaces, never gates)
 

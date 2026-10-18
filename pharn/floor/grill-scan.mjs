@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // pharn/floor/grill-scan.mjs — run the five deterministic `scan-plan-*` scanners over ONE plan and print the scan
-// section `/pharn-grill --floor-only` copies into GRILL.md (6.45.0, front-grill-concurrent, review R2).
+// section a grill copies into GRILL.md (6.45.0, front-grill-concurrent, review R2; full mode since 6.63.0).
 //
 // WHY (P7): /pharn-loop's grill became floor-only in 6.45.0 (pharn/floor/stage-agent-core.mjs, header). Dropping the
 // grill AGENT dropped the model-driven grillers and the interrogation; the five `scan-plan-*` scanners those grillers
 // run are deterministic and cost no model request, so the floor-only grill keeps them. The orchestrating model, under
 // the maintainer's delegation, decided this at the review of `cfb7158`. Quick mode (`--quick`) does not call this.
+// Since 6.63.0 (grill-griller-slim, review finding CTX-1) a FULL `/pharn-grill` and `/pharn-dev-grill` run it once
+// too, before loading the grillers: the griller extract leaves out each `pharn-owned` griller's `### Layer 1`, where
+// the scanner invocation lived (pharn/floor/griller-extract.mjs, header). So the section has TWO readers — one where no
+// judgment ran (floor-only) and one where the grillers judge after it — and its wording is true for both (L39).
 //
 // WHAT IT DOES. Spawns each scanner as its griller invokes it (`node pharn/floor/scan-plan-<x>.mjs <PLAN.md>`, no
 // LLM), validates each output's closed shape, and prints ONE markdown section on stdout:
@@ -13,13 +17,13 @@
 //     object — `type: FINDING`, the griller's own `rule_id` and `severity`, `file` = `<plan>:<line>` from the
 //     scanner, and a FIXED `problem` / `evidence` naming the scanner and its closed `kind`. No plan text is copied.
 //   - migrations, observability: these scanners report MENTIONS, and a finding from them needs the griller's
-//     judgment (is a migration / telemetry needed, is it adequate), which does not run here. So their result is
-//     printed as a plain line (mentions true/false and the lines), never as a finding.
+//     judgment (is a migration / telemetry needed, is it adequate), which this module does not make. So their result
+//     is printed as a plain line (mentions true/false and the lines), never as a finding.
 //
 // FLOOR: each scanner's verdict (a fixed regex set — primitive #3) and this module's shape checks. ADVISORY: every
 // finding (grillers never gate, fix #3), that the model copies stdout into GRILL.md verbatim, and that it ran at all.
 // NOT A CLAIM: "the plan is secure / private / localized / reversible / observable". The scanners detect a pattern's
-// presence on a line; the judgment half of each griller did not run.
+// presence on a line; a scanner finding is not the griller's judgment.
 //
 // Exit: 0 the section on stdout · 2 refusal (usage, an unreadable plan, a scanner that failed or printed an
 // unexpected shape) — the reason on stderr, NOTHING on stdout, so a partial section is never printed.
@@ -103,10 +107,10 @@ export function shapeReason(scan, out) {
 
 /** Render the section from validated results (`[{scan, out}]`, GRILL_SCANS order). Pure. */
 export function renderScanSection(planPath, results) {
-  const lines = ["## Deterministic plan scans (`--floor-only`, `pharn/floor/grill-scan.mjs`)", ""];
+  const lines = ["## Deterministic plan scans (`pharn/floor/grill-scan.mjs`)", ""];
   lines.push(
-    "Advisory: each finding below gates nothing. The scanners detect a pattern's presence on a line; the grillers'",
-    "judgment and the plan interrogation did not run."
+    "Advisory: each finding below gates nothing. The scanners detect a pattern's presence on a line; a scanner finding",
+    "is not the griller's judgment."
   );
   const findings = [];
   for (const { scan, out } of results) {
@@ -134,7 +138,7 @@ export function renderScanSection(planPath, results) {
     if (scan.rule_id !== null) continue;
     const at = out.hits.map((h) => `${h.line} (${h.term})`).join(", ");
     lines.push(
-      `- \`scan-plan-${scan.id}\`: mentions ${out.mentions}${at ? ` — lines ${at}` : ""}. Not a finding: whether the plan needs or adequately declares this is the ${scan.griller} griller's judgment, which did not run.`
+      `- \`scan-plan-${scan.id}\`: mentions ${out.mentions}${at ? ` — lines ${at}` : ""}. Not a finding: whether the plan needs or adequately declares this is the ${scan.griller} griller's judgment.`
     );
   }
   return `${lines.join("\n")}\n`;
