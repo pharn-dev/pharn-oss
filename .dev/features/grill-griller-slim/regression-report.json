@@ -1,0 +1,42 @@
+{
+  "base": "44b12e81244c1ea2cb49ec03591d945e8078ce83",
+  "inside": [
+    ".claude/commands/pharn-dev-grill.md",
+    ".claude/commands/pharn-grill.md",
+    ".dev/features/grill-griller-slim/GRILL.md",
+    ".dev/features/grill-griller-slim/MEASUREMENTS.md",
+    ".dev/features/grill-griller-slim/PLAN.md",
+    ".dev/features/grill-griller-slim/measure.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/grill-scan.mjs",
+    "pharn/floor/grill-scan.test.mjs",
+    "pharn/floor/griller-extract.mjs",
+    "pharn/floor/griller-extract.test.mjs",
+    "pharn/pharn-pipeline/grillers/a11y/a11y.md",
+    "pharn/pharn-pipeline/grillers/documentation/documentation.md",
+    "pharn/pharn-pipeline/grillers/error-handling/error-handling.md",
+    "pharn/pharn-pipeline/grillers/i18n/i18n.md",
+    "pharn/pharn-pipeline/grillers/privacy/privacy.md",
+    "pharn/pharn-pipeline/grillers/testability/testability.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
