@@ -430,6 +430,68 @@ test("an unreadable PLAN → RED (fail-closed), naming the path", () => {
   assert.match(r.out, /PLAN is unreadable/);
 });
 
+// ── (A2) UNIQUENESS (6.65.2, audit ENF-4): a repeated declaration is refused, never resolved to one copy ───────────
+//
+// The repro: `applied_lessons: none` then `applied_lessons: [L9999]` was GREEN on the FIRST copy, while YAML and
+// frontmatter-core.mjs `readField` keep the LAST. Every case below is a twin pair (L4): the single-declaration twin is
+// GREEN, so the RED comes from the repeat and not from something incidental. Each RED must name the repeat (L60) —
+// the second copy is a well-formed value (or the undeclared L9999), so a different refusal could otherwise pass.
+const DUP_RE = /RED — PLAN declares `applied_lessons` 2 times in its structured header/;
+
+const DUP_CASES = [
+  // [name, the repeated plan, its single-declaration twin, frontmatter count, bullet count]
+  [
+    "frontmatter: none then [L9999]",
+    productPlan("applied_lessons: none\napplied_lessons: [L9999]", "", "L9999 is mentioned here.\n"),
+    productPlan("applied_lessons: none", "", "L9999 is mentioned here.\n"),
+    2,
+    0,
+  ],
+  [
+    "dev bullets: none then [L9999]",
+    devPlan("- applied_lessons: none\n- applied_lessons: [L9999]", "", "L9999 is mentioned here.\n"),
+    devPlan("- applied_lessons: none", "", "L9999 is mentioned here.\n"),
+    0,
+    2,
+  ],
+  [
+    "two identical copies (agreement is not uniqueness)",
+    devPlan("- applied_lessons: [L1]\n- applied_lessons: [L1]", "", REF("L1")),
+    devPlan("- applied_lessons: [L1]", "", REF("L1")),
+    0,
+    2,
+  ],
+  [
+    "one in the frontmatter AND one in the leading bullet block",
+    `---\nspec_id: x\napplied_lessons: none\n---\n\n# PLAN\n\n- applied_lessons: [L1]\n\n## Body\n${REF("L1")}`,
+    `---\nspec_id: x\napplied_lessons: none\n---\n\n# PLAN\n\n- increment: one\n\n## Body\n${REF("L1")}`,
+    1,
+    1,
+  ],
+];
+
+for (const [name, repeated, single, fmCount, bulletCount] of DUP_CASES) {
+  test(`✧ A2: a repeated applied_lessons is RED — ${name}; its single-declaration twin is GREEN`, () => {
+    const twin = run(single);
+    assert.equal(twin.status, 0, `precondition: the twin must be GREEN:\n${twin.out}`);
+    const r = run(repeated);
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, DUP_RE);
+    assert.match(r.out, new RegExp(`${fmCount} in the frontmatter, ${bulletCount} in the leading bullet block`));
+    assert.doesNotMatch(r.out, /L9999|\[L1\]/, "the refusal names counts and regions only, never a value (P2)");
+  });
+}
+
+test("A2 is not a mask over L6: an applied_lessons line in the BODY or inside a header fence is still not a declaration", () => {
+  const inBody = devPlan("- applied_lessons: none", "", "\n- applied_lessons: [L9999]\n");
+  const inFence = devPlan("- applied_lessons: none", "```\n- applied_lessons: [L9999]\n```\n");
+  for (const plan of [inBody, inFence]) {
+    const r = run(plan);
+    assert.equal(r.status, 0, r.out);
+    assert.match(r.out, /^GREEN — applied_lessons: none/m);
+  }
+});
+
 // ── Dogfood: the checker over the LIVE repo artifacts it was built for ───────────────────────────────
 
 test("dogfood: this increment's own PLAN.md passes against the live lessons canon", () => {

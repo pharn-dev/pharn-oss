@@ -78,6 +78,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
       can for the table's own inferred install.
 
+## [6.65.2] - 2026-10-19
+
+### Fixed
+
+- **A leading UTF-8 BOM no longer hides a capability from the floor, and `check-plan-lessons.mjs` REDs a repeated
+  `applied_lessons` instead of gating its first copy** (audit 2026-10-12, ENF-3 and ENF-4).
+  - ENF-3, what failed: `validate.mjs` and the readers that mirror its loose `startsWith("---")` fence tested the raw
+    text, so a BOM before the `---` made a capability "not a capability". Reproduced at 6.64.2: a lens with four
+    blocking findings printed `FLOOR: GREEN — 0 capabilities checked` once a BOM was prepended, and `count-lenses.mjs`
+    registered 0.
+  - ENF-3, what changed: `validate.mjs`, `count-lenses.mjs`, `count-grillers.mjs`, `count-verifiers.mjs`,
+    `check-model-config.mjs` and `griller-extract.mjs` (`frontmatterKind`, `trimGriller`) strip one leading BOM with
+    `frontmatter-core.mjs`'s `stripBom` before their own fence test. Nothing else in their loose model changes: a
+    `----` opening still parses, and the count-\* readers keep the same parse as `validate.mjs`, BOM strip included.
+    `trimGriller` keeps the BOM in its output, so the output still matches the input byte for byte. In the build
+    apparatus, `capability-catalog-core.mjs` and `check-config.mjs` do the same, importing the product core.
+  - ENF-4, what failed: `check-plan-lessons.mjs` kept the FIRST `applied_lessons` line, while YAML and
+    `frontmatter-core.mjs`'s `readField` keep the LAST. A PLAN declaring `none` and then `[L9999]` was GREEN, in both
+    the frontmatter and the dev bullet shape.
+  - ENF-4, what changed: the checker reads both header regions in full and REDs when the field is declared more than
+    once, naming the counts per region and never a value. Neither copy is chosen. A line in the body or inside a fence
+    is still not a declaration. `render-ship-briefing.mjs` and `check-ship-briefing.mjs` `readHeaderField` now keep the
+    LAST copy, the one `check-spec.mjs` reads, so a SPEC with `state: Draft` then `state: Approved` no longer briefs as
+    Draft. Its bullet-header branch now skips fences with `plan-files-core.mjs`'s `fenceStates`. A backtick line inside
+    a tilde fence no longer closes it, and a fence line indented four or more spaces is now content.
+  - One line reader: `frontmatter-core.mjs` gains `BULLET_FIELD_LINE_RE` and `fieldEntries(lines, re)`, and `readField`
+    is rebuilt on top of it with the same reading. `check-loop-record.mjs`, `check-loop-decision.mjs`,
+    `loop-closeout.mjs`, `render-cost-ledger.mjs`, `check-ship-briefing.mjs` `readEnvelope` and the dev
+    `command-family.mjs` parse their `key: value` lines through it. Each keeps its own value rule and still keeps the
+    last copy of a repeated key. `render-cost-ledger.mjs` was a fourth LOOP.md envelope reader with a narrower key
+    grammar, and the audit did not list it. `render-review-assignments.test.mjs` and `lens-groups.test.mjs` copy
+    `frontmatter-core.mjs` into their scratch repos beside `count-lenses.mjs`, which now imports it.
+  - Checked by: 24 new tests. Each change of reading above has a test with a BOM'd or repeated input and a twin without
+    the BOM or the repeat. Reverted one at a time in a scratch copy (eleven reverts), each change turned its test RED.
+    The six reader swaps change no reading, and their existing suites cover them. Two closure tests in
+    `frontmatter-core.test.mjs` cover every non-test `pharn/floor` module. A module that tests the frontmatter fence
+    must be in `CONSUMERS`, which grows from 9 to 19. Each consumer must call `stripBom` or `matchFrontmatter`; before,
+    only `stripBom` counted, and this widening is deliberate. No module but the core may hold a regex literal of the
+    `key: value` line grammar, except `instruction-files-core.mjs`, which parses nested YAML. A new
+    `.dev/floor/frontmatter-readers.test.mjs` holds the same two rules for `.dev/floor`.
+  - Bounds: the closures are lexical. A module that strips one variable and tests the fence on another passes them, and
+    only the per-site tests catch that. A line-grammar copy written with another key class passes them too, and only
+    review catches that. `.claude/hooks/set-writes-scope.cjs` parses a command's frontmatter with its own strict
+    anchor, which fails closed on a BOM, and reads the first `writes:` line. It is a protected hook outside this
+    increment. The LOOP.md and BRIEFING.md envelope readers still keep the last copy of a repeated key; refusing it
+    there is a named follow-up, because it would change `loop-record.md` and `ship-briefing.md`.
+
 ## [6.65.1] - 2026-10-19
 
 ### Fixed

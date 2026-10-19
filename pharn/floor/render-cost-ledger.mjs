@@ -138,7 +138,7 @@ import { homedir } from "node:os";
 import { findTranscriptDirs, sessionScan } from "./transcript-core.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar, markerLine } from "./mark-phase.mjs";
 import { isRouteToken } from "./route-token-core.mjs";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import {
   runWindow,
@@ -557,9 +557,10 @@ export function readOutcome(loopPath) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fields = new Map(); // a Map, never a plain object keyed by arbitrary input (L15)
-  for (const line of m[1].split("\n")) {
-    const kv = line.match(/^([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], kv[2].trim().replace(/^["']|["']$/g, ""));
+  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.65.2), the one check-loop-record.mjs reads this
+  // envelope with; the last copy of a repeated key wins, as there. The value rule below is unchanged.
+  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+    fields.set(key, raw.trim().replace(/^["']|["']$/g, ""));
   }
   const decision = fields.get("decision");
   if (typeof decision !== "string" || decision.length === 0) return null;

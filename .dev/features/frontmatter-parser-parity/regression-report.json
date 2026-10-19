@@ -1,0 +1,66 @@
+{
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
+  "inside": [
+    ".dev/features/frontmatter-parser-parity/GRILL.md",
+    ".dev/features/frontmatter-parser-parity/PLAN.md",
+    ".dev/features/frontmatter-parser-parity/REGRESSION.md",
+    ".dev/features/frontmatter-parser-parity/REVIEW.md",
+    ".dev/features/frontmatter-parser-parity/VERIFY.md",
+    ".dev/features/frontmatter-parser-parity/regression-report.json",
+    ".dev/features/frontmatter-parser-parity/verify-report.json",
+    ".dev/floor/capability-catalog-core.mjs",
+    ".dev/floor/capability-catalog-core.test.mjs",
+    ".dev/floor/check-config.mjs",
+    ".dev/floor/check-config.test.mjs",
+    ".dev/floor/command-family.mjs",
+    ".dev/floor/frontmatter-readers.test.mjs",
+    ".dev/guides/floor-checks.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-loop-decision.mjs",
+    "pharn/floor/check-loop-record.mjs",
+    "pharn/floor/check-model-config.mjs",
+    "pharn/floor/check-model-config.test.mjs",
+    "pharn/floor/check-plan-lessons.mjs",
+    "pharn/floor/check-plan-lessons.test.mjs",
+    "pharn/floor/check-ship-briefing.mjs",
+    "pharn/floor/check-ship-briefing.test.mjs",
+    "pharn/floor/count-grillers.mjs",
+    "pharn/floor/count-grillers.test.mjs",
+    "pharn/floor/count-lenses.mjs",
+    "pharn/floor/count-lenses.test.mjs",
+    "pharn/floor/count-verifiers.mjs",
+    "pharn/floor/count-verifiers.test.mjs",
+    "pharn/floor/frontmatter-core.mjs",
+    "pharn/floor/frontmatter-core.test.mjs",
+    "pharn/floor/griller-extract.mjs",
+    "pharn/floor/griller-extract.test.mjs",
+    "pharn/floor/lens-groups.test.mjs",
+    "pharn/floor/loop-closeout.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-review-assignments.test.mjs",
+    "pharn/floor/render-ship-briefing.mjs",
+    "pharn/floor/validate.mjs",
+    "pharn/floor/validate.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

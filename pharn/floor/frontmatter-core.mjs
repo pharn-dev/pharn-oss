@@ -19,6 +19,13 @@
 // at the anchor. Normalising both at the read is what makes the two defences complete rather than
 // individually plausible.
 //
+// THE SECOND FAMILY (6.65.2, audit ENF-3). validate.mjs and the readers that mirror it (count-lenses, count-grillers,
+// count-verifiers, check-model-config, griller-extract; in .dev, capability-catalog-core and check-config) never used
+// `FM_RE`: they test a LOOSER fence, `startsWith("---")` closed by the next `\n---`, on purpose. A BOM defeated it the
+// same way, and there the failure was OPEN — a BOM'd capability was "not a capability" and validate printed GREEN
+// over it. Each now calls `stripBom` before its own fence test and keeps the rest of its loose model unchanged. The
+// test's anchor closure ranges over both families.
+//
 // WHAT THIS DOES NOT DO (P0):
 //   - NOT a YAML parser. `FM_RE` captures the raw block; a consumer reads a scalar from it with `readField`
 //     (below, since 6.20.5 — the one value reader), or parses other shapes itself.
@@ -71,7 +78,10 @@ export function matchFrontmatter(text) {
 // `readValue` or `scalar`.
 //
 // WHAT IT DOES NOT DO (P0): it does not REFUSE a duplicated key. LAST-wins, as a JS object assignment and YAML
-// both resolve it; every consumer now agrees on which copy counts, and nothing in the floor REDs the duplicate.
+// both resolve it. Since 6.65.2 (frontmatter-parser-parity, audit ENF-4) the refusal lives in ONE consumer:
+// check-plan-lessons.mjs REDs a repeated `applied_lessons`, because it gates that one field and choosing either
+// copy would certify a declaration some other reader discards. Every other reader still chooses the last copy.
+// The LOOP.md and BRIEFING.md envelope readers do not refuse a repeat; that is a named follow-up, not an oversight.
 
 function stripQuotes(v) {
   return v.replace(/^["']|["']$/g, "");
@@ -113,15 +123,49 @@ export function readValue(raw) {
 /** One `key: value` frontmatter line — the key grammar check-spec.mjs's parseSpec uses. */
 export const FIELD_LINE_RE = /^([A-Za-z_][\w-]*):[ \t]*(.*)$/;
 
+/** One `- key: value` line of a dev PLAN's leading bullet header — the same key grammar behind a list marker. */
+export const BULLET_FIELD_LINE_RE = /^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/;
+
+// ── The ONE `key: value` line reader (6.65.2, frontmatter-parser-parity — audit ENF-4) ─────────────────────────
+//
+// WHY IT LIVES HERE (the trigger, P7). Eight floor modules (seven product, one dev) carried twelve private copies of
+// the line regex above, and they disagreed on which copy of a repeated key counts: check-plan-lessons.mjs and the
+// ship-briefing pair kept the FIRST, the LOOP.md envelope readers and `readField` the LAST. A PLAN carrying
+// `applied_lessons: none` and then `applied_lessons: [L9999]` was GREEN on the copy YAML discards (reproduced at
+// d5453a17). L35: retire the copies rather than bind them with a sync check. frontmatter-core.test.mjs (and, for
+// .dev/floor, frontmatter-readers.test.mjs) holds the closure: no other non-test floor module may carry a regex literal
+// opening `^(` or `^-[ \t]+(` followed by the `[A-Za-z_]` key class, with one allowlisted exception and its reason.
+// BOUND (P0): the closure is LEXICAL. It catches every spelling the retired copies used; a copy written with another
+// key class (say `[a-zA-Z_]`) would pass it, and only review catches that.
+//
+// It takes LINES, not a raw block, on purpose: the bullet-header readers must cut their region themselves (it ends at
+// the first `##` heading, and fenced lines inside it are skipped), so a block-taking helper could not serve them. A
+// frontmatter consumer passes `m[1].split(/\r?\n/)`. The VALUE is returned exactly as captured, untrimmed: each
+// consumer keeps its own value rule, and those rules differ on purpose (check-loop-record.mjs refuses to strip a
+// ` # comment` from a machine-written envelope; `readValue` strips it from a hand-written SPEC).
+
+/**
+ * Every line of `lines` matching `re` (default `FIELD_LINE_RE`), in order, as `{ key, raw }` — `raw` is the value
+ * exactly as captured. Pure; a non-array yields `[]`. Which copy of a repeated key counts is the CALLER's choice.
+ */
+export function fieldEntries(lines, re = FIELD_LINE_RE) {
+  const out = [];
+  if (!Array.isArray(lines)) return out;
+  for (const line of lines) {
+    const kv = typeof line === "string" ? line.match(re) : null;
+    if (kv) out.push({ key: kv[1], raw: kv[2] });
+  }
+  return out;
+}
+
 /**
  * One frontmatter field by exact key, from the raw block `FM_RE` captured (`match[1]`), read with `readValue`.
  * LAST-wins across duplicate keys — the reading parseSpec's object assignment gives. `undefined` when absent.
  */
 export function readField(block, key) {
   let found;
-  for (const line of String(block).split(/\r?\n/)) {
-    const kv = line.match(FIELD_LINE_RE);
-    if (kv && kv[1] === key) found = readValue(kv[2]);
+  for (const { key: k, raw } of fieldEntries(String(block).split(/\r?\n/))) {
+    if (k === key) found = readValue(raw);
   }
   return found;
 }

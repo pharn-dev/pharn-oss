@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -257,6 +257,34 @@ test("agreement GREEN: eleven product commands whose frontmatter matches the con
   const r = onAgreement(VALID);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, /GREEN — config valid; 11\/11 product stage\(s\) agree/);
+});
+
+// ENF-3 (6.65.2): a leading UTF-8 BOM used to make a command's `model:`/`effort:` unreadable, so an agreeing
+// command read as "missing `model:`" — RED over a correct file. With every command BOM'd, agreement is GREEN exactly
+// as for the clean commands above; the mismatch control proves the BOM'd frontmatter is really being read.
+test("✧ ENF-3: BOM'd product commands are read as their clean twins (agreement GREEN; a BOM'd mismatch still REDs)", () => {
+  const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+  const bomAll = (cmdDir) => {
+    for (const f of readdirSync(cmdDir)) writeFileSync(join(cmdDir, f), bom + readFileSync(join(cmdDir, f), "utf8"));
+  };
+  for (const [overrides, status] of [
+    [{}, 0],
+    [{ [PRODUCT_STAGES[0]]: { model: "haiku", effort: expected(VALID, PRODUCT_STAGES[0]).effort } }, 1],
+  ]) {
+    const { dir, configPath } = withConfig(VALID);
+    try {
+      const cmdDir = writeCommands(dir, VALID, overrides);
+      bomAll(cmdDir);
+      const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+      assert.equal(r.status, status, r.stdout + r.stderr);
+      if (status === 1) {
+        assert.match(r.stdout, /model "haiku" != config "opus"/, "the BOM'd mismatch must be read as a MISMATCH");
+        assert.doesNotMatch(r.stdout, /has no `model:`/, "a BOM'd command must never read as having no model");
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
 });
 
 test("agreement RED: EACH product stage, one at a time, with a mismatched model (the whole enumeration)", () => {
