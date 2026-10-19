@@ -1294,7 +1294,7 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
   // head-install-drift since 6.40.0; plan-files-total-glob, no-change-under-test, base-install-unreliable since
-  // regress-base-integrity (plus the unusable base-worktree-unplaceable); the unusable install-config-invalid since 6.65.0
+  // regress-base-integrity (plus the unusable base-worktree-unplaceable); the unusable install-config-invalid since 6.66.0
   // (reached by the regress-install-config tests at the end of this file)
   assert.equal(REGISTRY.regress.refused.length, 8);
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
@@ -3114,7 +3114,7 @@ test("resume — a stage.json whose baseWorktree is not this project's temp chec
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
-// THE DECLARED BASE INSTALL (6.65.0, regress-install-config — audit LOOP-11): `pharn.config.json` `regress.install`.
+// THE DECLARED BASE INSTALL (6.66.0, regress-install-config — audit LOOP-11): `pharn.config.json` `regress.install`.
 // Every fixture COMMITS the declaration in its base (an uncommitted one is a changed path outside the plan).
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 const DEP_TEST =

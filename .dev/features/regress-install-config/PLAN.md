@@ -115,8 +115,8 @@ finishes only an all-green run. **The condition holds; LOOP-11 is not fixed for 
 - `README.md` — a short "Declaring the base install" subsection beside "Excluding a gate", plus the generated
   `CURRENT-STATE` region if `npm run docs:generate` changes it (no capability changes, so `docs/capabilities/**` is not
   expected to move; if it does, that is a re-plan, not a silent write) — repo-meta
-- `CHANGELOG.md` — new `[6.65.0]` section — repo-meta
-- `SKILLS_VERSION` — 6.64.2 → 6.65.0 (minor: a new config key) — repo-meta
+- `CHANGELOG.md` — new `[6.66.0]` section (planned as `[6.65.0]`; renumbered when `origin/main` took 6.65.0) — repo-meta
+- `SKILLS_VERSION` — 6.65.0 → 6.66.0 (minor: a new config key; renumbered after merging `origin/main`) — repo-meta
 - `.dev/features/regress-install-config/GRILL.md` — dev-grill artifact
 - `.dev/features/regress-install-config/REGRESSION.md` — dev-regress artifact
 - `.dev/features/regress-install-config/regression-report.json` — dev-regress artifact

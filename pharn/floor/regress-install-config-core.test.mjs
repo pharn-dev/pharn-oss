@@ -1,4 +1,4 @@
-// pharn/floor/regress-install-config-core.test.mjs — the project's declared BASE install (6.65.0, regress-install-config,
+// pharn/floor/regress-install-config-core.test.mjs — the project's declared BASE install (6.66.0, regress-install-config,
 // audit LOOP-11): its closed grammar in both directions (L36), own-property reads (L15), total quoting in every refusal
 // (L62), the loader's absent/unreadable split, and the one-owner pin of the value set (L35).
 

@@ -96,7 +96,7 @@
 // patterns; SPEC.md is hashed by the shelled checker and never read here; git paths are attacker-nameable
 // strings that travel as argv elements (never shell text) and are rendered only fenced. A `--gates`/
 // `--install` value is the human's own shell text, exactly as it is today. The project's `pharn.config.json`
-// `regress.install` (6.65.0, regress-install-config-core.mjs) is read when neither --install nor --no-install was given;
+// `regress.install` (6.66.0, regress-install-config-core.mjs) is read when neither --install nor --no-install was given;
 // it selects a member of a closed set, never a command (`install-config-invalid` when it cannot answer the run; a
 // `head-node-modules` base links the project's node_modules into the base worktree). Child stdout is parsed as JSON
 // and only enums/ints branch; free text is quoted through `dataText`/`quoteData` (`quote-core.mjs`).
@@ -780,7 +780,7 @@ function phaseHeadInit(cfg, base, scope, tests) {
   }
 
   const { hasPackageJson, lockfiles } = lockfilesAtBase(base);
-  // 6.65.0 (regress-install-config) — the project's declared answer, read only when argv gave none and there is a
+  // 6.66.0 (regress-install-config) — the project's declared answer, read only when argv gave none and there is a
   // manifest to install for (argv > declaration > lockfile table; regress-install-config-core.mjs owns the grammar).
   let declared = null;
   if (!cfg.installOverride && hasPackageJson) {
@@ -809,7 +809,7 @@ function phaseHeadInit(cfg, base, scope, tests) {
   return { install, installNeeded, e2eExcluded: parsed.e2e_excluded ?? [], styleSkipped: skipStyle };
 }
 
-/** `head-node-modules` (6.65.0) needs the project's own `node_modules` to be a REAL directory: lstat, never stat — a
+/** `head-node-modules` (6.66.0) needs the project's own `node_modules` to be a REAL directory: lstat, never stat — a
  *  symlink (dangling or not) is not one (L54/L59). Returns null, or a refusal sentence naming no absolute path. Checked
  *  at head-init (fail early) and again where the link is made (a `--resume` may run long after). */
 function headModulesError() {
@@ -1018,7 +1018,7 @@ function runPhases(state, budget) {
         return runPhases(state, budget); // the SAME tracker — see makeBudget's header
       });
     }
-    // 6.65.0 — a declared `head-node-modules`: no install; the base worktree resolves HEAD's installed tree through a link.
+    // 6.66.0 — a declared `head-node-modules`: no install; the base worktree resolves HEAD's installed tree through a link.
     if (state.install.link === HEAD_MODULES_LINK) {
       const m = linkHeadModules(state.baseWorktree);
       if (m !== null) emitUnusable(state.feature, "install-config-invalid", m);
@@ -1237,7 +1237,7 @@ function runPhases(state, budget) {
   const headInstall = readRecordedInstallCheck(REGRESS_PATHS.headInstall);
   // 6.42.0: `entry_gate_changes`, last, only when the partition wrote one (pre-run-snapshot-core.mjs entryBlocks).
   const entryGates = state.scope.entry_gate_changes ? { entry_gate_changes: state.scope.entry_gate_changes } : {};
-  // 6.65.0: `base_install`, after `base_source`, only when the project's declaration decided THIS invocation's fresh BASE
+  // 6.66.0: `base_install`, after `base_source`, only when the project's declaration decided THIS invocation's fresh BASE
   // side (reused or entry evidence ran no install here) — so every other report keeps its bytes. Fixed strings selected
   // by membership; never a path.
   const baseInstall = baseEvidence.source === "fresh" ? declaredInstallBlock(state.install) : {};
@@ -1300,7 +1300,7 @@ function runPhases(state, budget) {
   emit(doneExit({ stage: "regress", feature: state.feature, verdict: state.report.verdict, report: reportPath, render: renderPath }));
 }
 
-/** The report's additive `base_install` block (6.65.0): `{base_install: {declared_in, value}}` when the decision came from
+/** The report's additive `base_install` block (6.66.0): `{base_install: {declared_in, value}}` when the decision came from
  *  `pharn.config.json` `regress.install`, else `{}`. `value` is re-derived from the validated decision's fixed fields. */
 function declaredInstallBlock(install) {
   if (!install || install.declaredIn !== INSTALL_DECLARED_IN) return {};

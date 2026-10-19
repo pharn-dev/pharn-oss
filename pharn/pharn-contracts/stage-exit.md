@@ -169,7 +169,7 @@ Keyed by stage; `regress` and `verify` are its members.
 - **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `unrepresentable-path`, `git-failed`,
   `child-crashed`, `child-refused`, `no-progress`, `progress-malformed`, `base-worktree-unplaceable`
   (regress-base-integrity: the temp directory that holds the base checkout is inside the project, or could not be
-  created — `pharn/floor/base-worktree.mjs`), `install-config-invalid` (6.65.0: the project's `pharn.config.json`
+  created — `pharn/floor/base-worktree.mjs`), `install-config-invalid` (6.66.0: the project's `pharn.config.json`
   `regress.install` cannot be read or cannot answer this run — see "The `regress` install command" below). A progress
   record of schema `pharn-stage-regress-progress/4` carries the
   base's source and its checkout path; a resumed record whose path is not this project's temp-root checkout is
@@ -230,7 +230,7 @@ Zero or two-or-more families present → `question install-unresolved`. The same
 labels, are the `INSTALL_RULE` table in `stage-regress-core.mjs`'s own header — this section cites that
 table rather than re-deriving it (P4), so the two never say something different.
 
-**The declared answer (6.65.0).** A project may answer that question once, in `pharn.config.json`:
+**The declared answer (6.66.0).** A project may answer that question once, in `pharn.config.json`:
 `{"regress": {"install": <value>}}`, one of `none`, `head-node-modules`, `npm`, `pnpm`, `yarn`, `bun` — a closed set,
 never a command. It is read from the project root only when the invocation passed neither `--install` nor
 `--no-install` and the base commit has a `package.json`; precedence is argv, then the declaration, then the table

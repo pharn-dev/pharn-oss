@@ -77,7 +77,7 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
       "no-progress",
       "progress-malformed",
       "base-worktree-unplaceable", // regress-base-integrity
-      "install-config-invalid", // regress-install-config (6.65.0)
+      "install-config-invalid", // regress-install-config (6.66.0)
     ])
   );
   assert.deepEqual(STAGES, ["regress", "verify"]);

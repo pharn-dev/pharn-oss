@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.65.0] - 2026-10-19
+## [6.66.0] - 2026-10-19
 
 ### Added
 
@@ -77,6 +77,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       prevented, by the reconcile gate. In a dev checkout a plan may scope it.
     - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
       can for the table's own inferred install.
+
+## [6.65.0] - 2026-10-19
+
+### Changed
+
+- **`/pharn-loop`'s run report, closeout and summary now name the gates a project's `gates.exclude` removed, and the
+  run report shows the always-loaded instruction set's token estimate.** Audit findings LOOP-4 and CTX-14 (2026-10-12).
+  - What changed: `RUN-REPORT.md`'s `## Verdicts` gets one line under each verdict naming the excluded gate ids
+    (verify's `gate_run.excluded`, regress's `gate_run.head.excluded`). `pharn/floor/loop-closeout.mjs` gets a new
+    closed document key, `excluded_gates`, and when a green commit ran without excluded gates its message gets a third
+    paragraph naming them. The `/pharn-loop` Step 7 summary repeats them. Before this, a `STOP_GREEN` over a suite
+    minus `e2e` read as a full green everywhere except `VERIFY.md` and `REGRESSION.md`. One reader serves all three:
+    `excludedFacts` in `pharn/floor/gate-run-core.mjs`. Ids appear inline only as allowlist members.
+  - `/pharn-loop` Step 1a gets one new pinned line, `node pharn/floor/check-instruction-files.mjs --report`, which
+    writes to `.pharn/pharn-loop/<name>/instruction-files.json`. Its exact grant line is added to `allowed-tools`, and
+    it never stops the run. `RUN-REPORT.md`'s `## Tokens` shows the estimate (bytes / 4) below the token table. The
+    files are already inside the input counts above it; an unusable record renders as `n/a`.
+  - Bounds: the figure is an estimate of `check-instruction-files.mjs`'s model of the loader, not a measurement
+    (`LIMITS.md §1c`, §3e). `/pharn-ship` records none and its report says so; follow-up `ship-instruction-set`.
+    Whether the reports' `excluded` block is truthful is the stamp's own bound (`gate-run-record.md`). The listing
+    gates nothing.
+
+### Fixed
+
+- **A loop record's `cap` must now be the cap the run opened with, and an inconclusive reconcile gate no longer reads
+  as a detected escape.** Audit findings LOOP-2 and LOOP-3 (2026-10-12).
+  - LOOP-2: `pharn/floor/check-loop-decision.mjs`, which gates `/pharn-loop`'s commit, re-derived the decision with
+    the record's own `cap`, which the model types. A record `cap: 7` over a run opened with `--cap 3` stayed GREEN. The
+    check now reads the Stop guard's marker, `.pharn/pharn-loop/<name>/active.json`, written by
+    `require-loop-record.cjs --open <name> --cap <M>` at Step 1a. Three new REDs:
+    - `CAP_MISMATCH` when the two caps differ;
+    - `CAP_UNWITNESSED` when no usable marker exists (fail-closed). The closeout runs the check before its own
+      `--close`, every run opens the marker before its feature directory exists, and a blocked record is skipped
+      first;
+    - `ITER_OVER_CAP` when `iterations` exceeds `cap`.
+  - LOOP-3: `pharn/floor/check-loop.mjs` gains the terminal cause `reconcile-inconclusive`. It applies when the
+    reconcile gate's recorded exit is exactly 2 (`check-bash-reconcile.mjs`'s INCONCLUSIVE, for example no
+    baseline), and the reason now says nothing was detected. The decision stays `STOP_TERMINAL`.
+    `RUN-REPORT.md` heads that block INCONCLUSIVE, and `/pharn-loop` Step 5 routes the new cause like `reconcile`.
+    The contracts (`verify-report.md`, `loop-record.md`, `reconciliation-record.md`) say the same.
+  - Bounds: the cap check is agreement between two files the run can write, never provenance. A typed
+    `iterations` that is too low still passes. Re-checking a record by hand after the run's Final step closed the
+    marker is RED `CAP_UNWITNESSED`. A reconcile checker that crashed exits 1, its ESCAPE code, so it still reads
+    `reconcile`. Not done: cross-checking `iterations` against the run's stage markers (follow-up
+    `loop-iterations-markers`).
+
+## [6.64.4] - 2026-10-19
+
+### Fixed
+
+- **Tests now fail when a finding or verify-report enum changes in its contract but not in the code that restates it,
+  or the other way round** (`SKILLS_VERSION` 6.64.3 → **6.64.4**, patch; audit 2026-10-12 ARCH-9).
+  - The tests read `pharn/pharn-contracts/finding-shape.md` and `verify-report.md` and compare each enum with the set
+    the code uses, by set equality. Each also runs negative controls: a value added to the contract, a value removed
+    from it, and a missing anchor, which must throw rather than read as an empty set.
+  - `merge-findings.test.mjs`: the severity enum, both where the contract's object block states it and in its
+    field-trust table, equals `SEVERITY_ENUM`. The contract lists `type` as an open list ending in `...`, and
+    `merge-findings.mjs` checks `type` by shape (`TYPE_OK`), not by set. So the test checks that every listed type
+    passes `TYPE_OK` and that the list is still open. If the list is closed, the test fails and says a set is needed.
+  - `check-loop.test.mjs` and `check-ship.test.mjs`: each consumer's row in the verdict table equals the set the
+    checker tests. Both CLIs run on import, so the set is read from the checker's refusal of an unknown verdict, which
+    prints the set it tested against. The `check-ship.mjs` test finds the contract by walking up the directory tree
+    and matches its row by file name, so moving the checker and its test does not break the binding.
+  - `check-ship-briefing.test.mjs`: the rows for `check-ship-briefing.mjs` and `render-ship-briefing.mjs` equal each
+    module's `VERIFY_ENUM`.
+  - `check-verify.test.mjs`: the verdict literals `check-verify.mjs` emits equal the contract's stated union
+    `{PASS, FAIL, INCOMPLETE, INCONCLUSIVE}`, and that union equals the union of the table's rows.
+  - Shipped bytes: `SEVERITY_ENUM` and `TYPE_OK` in `pharn/floor/merge-findings.mjs`, and `VERIFY_ENUM` in
+    `render-ship-briefing.mjs` and `check-ship-briefing.mjs`, are now exported. Nothing else in those files changed.
+  - Bounds: the tests show that a contract and its code agree, not that the enum is right; a wrong value written in
+    both places passes. `gate-run-core.mjs`, which the audit also cited, holds no verdict set at this version, so there
+    was nothing to bind.
 
 ## [6.64.3] - 2026-10-19
 

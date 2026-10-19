@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.65.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.66.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -629,7 +629,7 @@ Each id must be one of the gates PHARN discovers (`test`, `lint`, `format:check`
 - A criterion whose level only an excluded gate runs (an `e2e` criterion with `e2e` excluded) is refused at
   `/pharn-plan`. Re-specify it at another level, or keep the gate.
 
-### Declaring the base install (6.65.0)
+### Declaring the base install (6.66.0)
 
 `/pharn-regress` installs dependencies into a checkout of the base commit with your one lockfile's frozen command
 (`npm ci`, …). With no lockfile, or with two lockfile families, it has to ask how — and `/pharn-loop` cannot ask, so

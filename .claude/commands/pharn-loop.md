@@ -29,6 +29,7 @@ reads:
     "pharn/floor/render-cost-ledger.mjs",
     "pharn/floor/check-cost-ledger.mjs",
     "pharn/floor/render-run-report.mjs",
+    "pharn/floor/check-instruction-files.mjs",
     "pharn/floor/check-spec.mjs",
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-plan-spec-agree.mjs",
@@ -66,6 +67,7 @@ allowed-tools:
     "Bash(node .claude/hooks/require-loop-record.cjs --open * --cap *)",
     "Bash(node pharn/floor/pre-run-snapshot.mjs --capture *)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind run-start)",
+    "Bash(node pharn/floor/check-instruction-files.mjs --report > .pharn/pharn-loop/*/instruction-files.json)",
     "Bash(node pharn/floor/entry-gates.mjs --start --feature * --timeout-ms 540000)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage * --route 'inline:route-unavailable')",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind orchestrator)",
@@ -308,6 +310,15 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    membership", which states its bounds). **A stop BEFORE S2 records nothing** and goes straight to the Step 7
    summary.
 
+   Then record the always-loaded instruction set's size estimate, which `RUN-REPORT.md`'s `## Tokens` shows (6.65.0):
+
+   ```bash
+   node pharn/floor/check-instruction-files.mjs --report > .pharn/pharn-loop/<name>/instruction-files.json
+   ```
+
+   Any exit → go on: it never stops the run, and an unusable file renders as `n/a` in a full run's report (a quick
+   run renders none).
+
 6. **Start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on the tree this run starts
    from, in the background, while the spec, plan and grill stages work; Step 4 reads the verdict before `/pharn-test`
    (`pharn/floor/entry-gates.mjs`, header):
@@ -367,7 +378,7 @@ above by a fixed rule:
 - `done` (`0`) → on to `/pharn-verify`; its verdict is read by `check-loop.mjs` (Step 5);
 - `question no-gates` → **S4**;
 - every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10** — `install-unresolved`
-  is pre-answered by the project's `pharn.config.json` `regress.install` (6.65.0; `pharn/pharn-contracts/stage-exit.md`),
+  is pre-answered by the project's `pharn.config.json` `regress.install` (6.66.0; `pharn/pharn-contracts/stage-exit.md`),
   so name that in `### next_steps`;
 - `refused` and `unusable` → **S9** — the call's own refusal too (exit `2`, a `stage-direct:` line, no object: the
   stage's writes-scope or the in-flight lock could not be taken);
@@ -769,9 +780,10 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
      runner timed out or could not start included: verify `.unmeasured_gates[]`, regress `.head_timed_out[]` /
      `.base_timed_out[]`, each a gate never measured, never a red one), an
      **AC-evidence red**, or a **reconcile red** (a retry would re-anchor the baseline and erase the detected Bash
-     escape). The JSON's closed `terminal_cause` says which: **`ac-evidence` is S13** (`blocked: ac-evidence-invalid`)
-     — a blocked stop, recorded as Step 2 says; `unmeasured` and `reconcile` go to Step 6 with the decision as
-     emitted. Never rebuild over any of them.
+     escape — or, `reconcile-inconclusive` since 6.65.0, re-anchor over a window the checker could not judge; nothing
+     was detected then, and the summary says so). The JSON's closed `terminal_cause` says which: **`ac-evidence` is
+     S13** (`blocked: ac-evidence-invalid`) — a blocked stop, recorded as Step 2 says; `unmeasured`, `reconcile` and
+     `reconcile-inconclusive` go to Step 6 with the decision as emitted. Never rebuild over any of them.
    - **`2` `INCONCLUSIVE`** — a report is missing or malformed. Go to Step 6, fail-closed.
 
 ## At the stop — Steps 6 and 7 are in the close part

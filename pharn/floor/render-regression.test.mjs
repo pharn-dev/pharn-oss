@@ -135,7 +135,7 @@ test("renderDone: install none (no-manifest), and an UNMEASURED lockfile family 
   assert.match(unmeasured, /pnpm install --frozen-lockfile/);
 });
 
-test("renderDone (6.65.0): a DECLARED install says so; head-node-modules states its approximation in fixed text, no path", () => {
+test("renderDone (6.66.0): a DECLARED install says so; head-node-modules states its approximation in fixed text, no path", () => {
   const at = (install) =>
     renderDone({
       feature: "demo",
@@ -176,7 +176,7 @@ test("renderDone (6.65.0): a DECLARED install says so; head-node-modules states 
     /\*\*APPROXIMATION:\*\* .* a regression caused purely by a dependency change is red on both sides and reads `pre_existing` — it is not attributed\./
   );
   assert.ok(!/\/(tmp|private|Users|home)\//.test(link), "the link line names no absolute path");
-  // CONTROL: an undeclared none renders exactly as before 6.65.0.
+  // CONTROL: an undeclared none renders exactly as before 6.66.0.
   assert.match(at({ kind: "none", cmd: null, unmeasured: false }), /^install: none$/m);
 });
 

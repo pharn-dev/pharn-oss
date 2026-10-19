@@ -227,7 +227,7 @@ test("resolveInstall: no lockfile, or two lockfile families -> ask (install-unre
   assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: { yarn: true, bun: true } }), { kind: "ask" });
 });
 
-// ── THE DECLARED INSTALL (6.65.0, regress-install-config — audit LOOP-11) ─────────────────────────────
+// ── THE DECLARED INSTALL (6.66.0, regress-install-config — audit LOOP-11) ─────────────────────────────
 const LOCK_CASES = [{}, { npm: true }, { pnpm: true }, { yarn: true }, { bun: true }, { npm: true, yarn: true }, { pnpm: true, bun: true }];
 
 test("L41 — with NO `declared` argument at all, every existing case resolves exactly as with `declared: null`", () => {
@@ -240,7 +240,7 @@ test("L41 — with NO `declared` argument at all, every existing case resolves e
       );
     }
   }
-  // and the default path is the pre-6.65.0 table: one family resolves, zero or two asks.
+  // and the default path is the pre-6.66.0 table: one family resolves, zero or two asks.
   assert.equal(resolveInstall({ hasPackageJson: true, lockfiles: { npm: true } }).cmd, "npm ci");
   assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: {} }), { kind: "ask" });
 });

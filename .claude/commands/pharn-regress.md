@@ -242,7 +242,7 @@ The base-commit **install** command is resolved from exactly one lockfile family
 **No `package.json` at all proceeds with no install** (M3, GATE 2: the omitted case) — there is nothing to
 install. With a `package.json` present, zero lockfile families or two-or-more → the script's
 `install-unresolved` question, unless the project declares the answer in `pharn.config.json` `regress.install`
-(6.65.0; argv wins; a closed set, never a command — `pharn/pharn-contracts/stage-exit.md`, "The `regress` install
+(6.66.0; argv wins; a closed set, never a command — `pharn/pharn-contracts/stage-exit.md`, "The `regress` install
 command"). A declaration that cannot answer the run is `unusable install-config-invalid`.
 
 ## Guarantee audit (P0) — the honest split

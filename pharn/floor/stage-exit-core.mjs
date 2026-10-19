@@ -312,7 +312,7 @@ export const REGISTRY = Object.freeze({
       "base-install-unreliable",
     ]),
     // `base-worktree-unplaceable` (regress-base-integrity): the base checkout's temp directory is inside the project, or could
-    // not be created (base-worktree.mjs). `install-config-invalid` (6.65.0, regress-install-config): pharn.config.json's
+    // not be created (base-worktree.mjs). `install-config-invalid` (6.66.0, regress-install-config): pharn.config.json's
     // `regress.install` cannot be read or cannot answer this run (regress-install-config-core.mjs; a declared family with no
     // lockfile at BASE; `head-node-modules` with no real node_modules directory, or a link that could not be made).
     unusable: Object.freeze([

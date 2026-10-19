@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/regress-install-config-core.mjs — a project's declared answer to /pharn-regress's BASE install question
-// (6.65.0, regress-install-config, audit LOOP-11). P3: this file changes when "how a project declares the base install"
+// (6.66.0, regress-install-config, audit LOOP-11). P3: this file changes when "how a project declares the base install"
 // changes, and for no other reason; APPLYING the declaration is stage-regress-core.mjs's resolveInstall, which owns the
 // values (DECLARED_INSTALL_VALUES, imported — L35).
 //

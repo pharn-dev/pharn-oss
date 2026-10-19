@@ -181,7 +181,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
     const preExisting = Array.isArray(report.pre_existing) ? report.pre_existing : [];
     out.push(
       `**THE BASE-COMMIT INSTALL FAILED** (exit ${progress.installResult.exit}${progress.installResult.timedOut ? ", timed out" : ""}` +
-        // 6.65.0 (GATE 2 review): a failed install the project DECLARED says so, like every other declared install line.
+        // 6.66.0 (GATE 2 review): a failed install the project DECLARED says so, like every other declared install line.
         `${progress.install.declaredIn === INSTALL_DECLARED_IN ? `; the command was declared in \`${INSTALL_DECLARED_IN}\`` : ""}) — ` +
         (preExisting.length
           ? `base gates MAY read red as a result; the ${preExisting.length} gate(s) classified \`pre_existing\` below ` +
@@ -251,7 +251,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
   } else if (be && be.source === "entry") {
     out.push("install: none run by this invocation (the BASE evidence came from this run's entry gates).", "");
   } else if (progress.install.link === HEAD_MODULES_LINK && progress.install.declaredIn === INSTALL_DECLARED_IN) {
-    // 6.65.0 — fixed text only: the link's target is a machine-local path and this file is committed by /pharn-loop.
+    // 6.66.0 — fixed text only: the link's target is a machine-local path and this file is committed by /pharn-loop.
     out.push(
       `install: none — \`${INSTALL_DECLARED_IN}\` is \`${HEAD_MODULES_LINK}\`: the base worktree used THIS tree's installed ` +
         "`node_modules` through a link. **APPROXIMATION:** the base was measured with the head's dependency tree, so a " +

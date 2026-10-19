@@ -1,10 +1,15 @@
 {
-  "base": "d5453a170a68a1b7842bf633b8638eb02dcd61cb",
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
   "inside": [
     ".claude/commands/pharn-loop.md",
     ".claude/commands/pharn-regress.md",
     ".dev/features/regress-install-config/GRILL.md",
     ".dev/features/regress-install-config/PLAN.md",
+    ".dev/features/regress-install-config/REGRESSION.md",
+    ".dev/features/regress-install-config/REVIEW.md",
+    ".dev/features/regress-install-config/VERIFY.md",
+    ".dev/features/regress-install-config/regression-report.json",
+    ".dev/features/regress-install-config/verify-report.json",
     ".dev/floor/command-hygiene.test.mjs",
     ".dev/guides/floor-gates.md",
     "CHANGELOG.md",
@@ -30,7 +35,7 @@
     },
     "tests": {
       "base": 1,
-      "head": 0
+      "head": 1
     },
     "validate": {
       "base": 0,
