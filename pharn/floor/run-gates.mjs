@@ -183,20 +183,28 @@ const LOCK_GRACE_MS = 30000;
  *  Emit + exit. One JSON document on stdout, always — a caller parses stdout and branches on the exit
  *  code, never on prose.
  *  ---------------------------------------------------------------------------------------------- */
-/** The lock this invocation holds, if any. `emit()` calls `process.exit()`, which does NOT run a
- *  `finally` block — so a try/finally around the work would never release it, and every call would leave
- *  its lock for the next one to recover as stale. Releasing here is what makes the lock a lock rather
- *  than a speed bump that happens to clear itself. Found by the test that asserts the lock is gone after
- *  a NORMAL call, not by reading the code. */
+/** The lock this invocation holds, if any. `emit()` releases it on EVERY emission, before the print — so the
+ *  lock is a lock rather than a speed bump that happens to clear itself (found by the test that asserts the lock
+ *  is gone after a NORMAL call, not by reading the code). A CRASH (any throw but the sentinel) deliberately does
+ *  NOT release it: the next call then recovers it as stale, and that recovery is what reaps a gate group the
+ *  crashed call may have left running (`lock.child`, reapOrphanGroup). A `finally` release would let the next
+ *  call claim a fresh lock and skip the reap. */
 let heldLock = null;
 
+// THE FLUSH RULE (6.20.4; this CLI since 6.67.1, TST-5): emit sets process.exitCode and unwinds with EMITTED, a
+// module-private sentinel only the top-level catch below swallows; the process then ends naturally, after Node has
+// drained stdout. Ending with an immediate exit call dropped queued writes past the pipe's 64 KiB buffer on a
+// platform whose piped stdout is asynchronous (darwin), and build-gate, stage-verify, stage-regress, stage-runtime and
+// entry-gates all JSON.parse this output through spawnSync. pharn/floor/cli-stdout-flush.test.mjs pins it.
+const EMITTED = Symbol("run-gates: emitted");
 function emit(obj, code) {
   if (heldLock) {
     releaseLock(heldLock);
     heldLock = null;
   }
   console.log(JSON.stringify(obj, null, 2));
-  process.exit(code);
+  process.exitCode = code;
+  throw EMITTED;
 }
 
 function fail(reason_code, reason) {
@@ -1224,7 +1232,11 @@ async function runNext(args) {
           },
         });
         removeChildRecord(outAbs);
-        if (res.interrupted) process.exit(signalExit(res.interrupted)); // reached only if the re-raise did not end us
+        if (res.interrupted) {
+          // Reached only if the re-raise did not end us. Nothing is printed; the lock went in onInterrupted.
+          process.exitCode = signalExit(res.interrupted);
+          throw EMITTED;
+        }
         if (res.spawnError) fail("usage-error", `gate ${next.id} could not be started: ${res.spawnError}`);
         exit = res.exit;
         timed_out = res.timed_out;
@@ -1326,8 +1338,9 @@ async function main(argv) {
 
 if (import.meta.main) {
   main(process.argv).catch((e) => {
+    if (e === EMITTED) return; // a deliberate end; process.exitCode is already set — never re-thrown
     console.error(`run-gates: ${e && e.stack ? e.stack : e}`);
-    process.exit(2);
+    process.exitCode = 2; // a genuine crash — exit 2, as before, with no JSON document
   });
 }
 

@@ -67,6 +67,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     lessons-index pairs as copies that must both exist. Canon is not edited in this batch; the correction is recorded
     as a deferred lesson candidate in `.dev/features/lessons-canon-root/SHIP.md`.
 
+## [6.67.1] - 2026-10-20
+
+### Fixed
+
+- **`run-gates.mjs`, `count-verifiers.mjs` and the five `scan-plan-*.mjs` scanners no longer end with an immediate
+  `process.exit`, so a JSON document past 64 KiB reaches the floor caller that parses it whole (audit TST-5).** On
+  darwin, where piped stdout is asynchronous, the old ending cut each document at 65,536 bytes — measured on all
+  seven. Every caller (build-gate, stage-verify, stage-regress, stage-runtime and entry-gates for run-gates;
+  stage-verify for count-verifiers; grill-scan for the scanners) refused an unparseable document, so the failure was a
+  false refusal, never a false pass. run-gates now ends like stage-regress: `emit` sets `process.exitCode` and throws
+  a sentinel that only the top-level handler swallows. A crash still prints its stack and exits 2. `emit` still
+  releases the gate lock on every emission. A crash still leaves the lock, so the next call's stale-lock recovery
+  stops any orphaned gate group before it re-runs the entry. The other six set `process.exitCode = main()`. Exit
+  codes and output bytes are unchanged. `pharn/floor/cli-stdout-flush.test.mjs` now covers all seven: a static pin,
+  a crash test, and a >64 KiB pipe round-trip each. A new run-gates test checks that the lock is gone after a refusal
+  emitted while the lock was held. The test file's header claimed that every other floor CLI's spawner read only an
+  exit status or a first line. It now names the set's callers. It also names, as an open list, the parsed CLIs still
+  outside the set: `count-grillers`, `count-lenses` and `check-model-config`. Their documents are small, and
+  converting them is a follow-up.
+- **The five `scan-plan-*.mjs` scanners now check and read their plan through one file descriptor, and refuse a
+  symlinked plan (CodeQL `js/file-system-race`).** Each one used to test the path (`existsSync`, `statSync().isFile()`)
+  and then read it by name, so the file could be swapped between the two. Now each opens it once with
+  `O_NOFOLLOW | O_NONBLOCK`, checks `fstat` for a regular file, and reads from that descriptor — the form
+  `griller-extract.mjs` (6.60.1) and `check-loop-decision.mjs` (6.65.0) use. A missing path, a directory or a FIFO
+  gets the same exit 1 and message as before, and a FIFO no longer blocks. A symlink, which used to be followed, now
+  gets that message too. `grill-scan.mjs`, the scanners' floor caller, already refused a symlinked plan. A new table
+  test in `grill-scan.test.mjs` runs all five scanners over a symlink, a directory, a FIFO and a missing path.
+
 ## [6.67.0] - 2026-10-19
 
 ### Added
