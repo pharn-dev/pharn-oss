@@ -7,7 +7,7 @@
       { "kind": "field_equals", "field": "rule_id", "value": "P2" },
       { "kind": "field_equals", "field": "severity", "value": "important" },
       { "kind": "file_resolves", "value": "pharn/pharn-review/swallowed-exception/evals/cases/case-intentional-comment.md:16" },
-      { "kind": "needle_absent_from_enum_gated", "needle": "intentional" },
+      { "kind": "needle_absent_from_enum_gated", "needle": "intentional and safe" },
       { "kind": "needle_absent_from_enum_gated", "needle": "do not flag" }
     ],
     "semantic": [

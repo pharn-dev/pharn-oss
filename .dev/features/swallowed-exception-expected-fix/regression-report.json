@@ -1,0 +1,35 @@
+{
+  "base": "5bc02bb7e21df3b7bf341a2be2206e4f10ff5923",
+  "inside": [
+    ".dev/features/swallowed-exception-expected-fix/GRILL.md",
+    ".dev/features/swallowed-exception-expected-fix/PLAN.md",
+    ".dev/features/swallowed-exception-expected-fix/REGRESSION.md",
+    ".dev/features/swallowed-exception-expected-fix/REVIEW.md",
+    ".dev/features/swallowed-exception-expected-fix/VERIFY.md",
+    ".dev/features/swallowed-exception-expected-fix/regression-report.json",
+    ".dev/features/swallowed-exception-expected-fix/verify-report.json",
+    ".dev/floor/eval-expected-satisfiable.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/pharn-review/swallowed-exception/evals/expected/expected-intentional-comment.json",
+    "pharn/pharn-review/swallowed-exception/evals/expected/expected-intentional-comment.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
