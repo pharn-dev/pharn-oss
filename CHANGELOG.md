@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.66.0] - 2026-10-19
+## [6.68.0] - 2026-10-20
 
 ### Added
 
@@ -38,10 +38,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - ARCH-6, what changed: a new `pharn/floor/canon-root.mjs` is the one parser for `--canon-root <dir>` (default
     `memory-bank`; a repo-relative POSIX path, no `.`/`..` segment, no leading `-`). `lessons-index-core.mjs` takes a
     profile (canon path, output path, generator, regenerate hint, two header paragraphs). Its default profile renders
-    the same bytes as before. `check-lessons-index.mjs` and `gen-lessons-index.mjs` accept `--canon-root`. An invalid
-    value exits 2 and prints no verdict token. `check-provenance.mjs` exports `checkProvenance()`, builds its target
-    list under the root and gains `--strict-commit`, which refuses `unknown`. It now loads the runtime floor first and
-    runs only when invoked directly, so on a Node below the floor it exits 2 instead of checking.
+    the same bytes as before, and `productProfile()` runs the same root grammar. `check-lessons-index.mjs` and
+    `gen-lessons-index.mjs` accept `--canon-root`. An invalid value exits 2 and prints no verdict token.
+    `check-provenance.mjs` exports `checkProvenance()`, which validates the root it is given, builds its target list
+    under that root and gains `--strict-commit`, which refuses `unknown`. It now loads the runtime floor first and runs
+    only when invoked directly, so on a Node below the floor it exits 2 instead of checking.
   - The `.dev/floor/` files keep their paths and exported APIs and now declare only the dev profile and what differs
     there: canon must exist, the verdicts are `MISSING`/`DRIFT` over a committed page, and `commit` must be a SHA.
     `docs/lessons-index.md` regenerates byte-identical.
@@ -51,13 +52,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - CTX-8, what changed: `COLD` and `STALE` now run `node pharn/floor/gen-lessons-index.mjs .`, then the `--verdict`
     line again. `GREEN` selects from the index and reads only the candidates; anything else falls back to canon in
     full. `/pharn-loop`'s `allowed-tools` gains that one line. `/pharn-memory-promote` Step 6b's sentence about a
-    skipped refresh now says the next plan regenerates. `node pharn/floor/check-lessons-index.mjs --canon-root
-.dev/memory-bank . --verdict` reads this repo's canon.
+    skipped refresh now says the next plan regenerates. With `--canon-root .dev/memory-bank`, the product checker
+    reads this repo's canon.
   - Checked by: a canon-root grammar suite; per-CLI custom-root and no-flag cases (the default stays the production
-    path); `--strict-commit` and import-runs-nothing cases. Each dev test file gets a closure that refuses any
-    top-level declaration in a wrapper beyond its profile, with negative controls. A dev test runs the product checker
-    on this repo's canon and requires a token other than `NO_CANON`. `LESSONS_SWEEP_WIRING` grows from 4 to 5. The
-    retired text pins compared the two copies; with one copy there is nothing for them to compare.
+    path); `--strict-commit`, root-validation and import-runs-nothing cases. Each dev test file gets a closure that
+    refuses any top-level declaration in a wrapper beyond its profile, with negative controls. A dev test runs the
+    product checker on this repo's canon and requires a token other than `NO_CANON`. `LESSONS_SWEEP_WIRING` grows from
+    4 to 5. The retired text pins compared the two copies; with one copy there is nothing for them to compare.
   - Bound: `--canon-root` changes which file these four CLIs read. Every other product canon path stays
     `memory-bank/`: `check-plan-lessons`'s argument, the promote target and `/pharn-plan`'s "read canon" step. So the
     flag does not relocate a project's memory-bank. The root check is lexical: a symlinked root is followed for
@@ -65,6 +66,103 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Not covered: lessons L31 and L35 in `.dev/memory-bank/lessons-learned.md` still describe the check-provenance and
     lessons-index pairs as copies that must both exist. Canon is not edited in this batch; the correction is recorded
     as a deferred lesson candidate in `.dev/features/lessons-canon-root/SHIP.md`.
+
+## [6.67.0] - 2026-10-19
+
+### Added
+
+- **`/pharn-build`'s seam-config step is a pinned floor script that `/pharn-loop` pre-approves, and the loop
+  pre-approves the Skill tool only for the five stage commands it runs itself** (`SKILLS_VERSION` 6.66.0 →
+  **6.67.0**, minor: a new product floor script; audit 2026-10-12 LOOP-5 and SEC-6).
+  - What changed:
+    - New `pharn/floor/seam-config-materialize.mjs` replaces Step 2c's inline `node -e` line. It writes the
+      `seam` block of `pharn.config.json` to `.pharn/seam-config.json` — the documented default when the file is
+      absent or has no `seam` block — and `check-seam-config.mjs` still validates it on the next line. It HALTs
+      (exit 1, nothing written) on an unreadable file, invalid JSON, a failed scratch write, and, new in this
+      release, a file whose top level is not a JSON object: the old line crashed on `null` and silently used the
+      default for an array, a string or a number.
+    - `/pharn-loop`'s `allowed-tools` grants that line exactly, so an inline build no longer stops on a
+      permission prompt there. Corrects CHANGELOG [6.61.0], whose "Not covered" list said this line was left out
+      of the grant and might prompt.
+    - The bare `Skill` grant became `Skill(pharn-spec *)`, `Skill(pharn-plan *)`, `Skill(pharn-grill *)`,
+      `Skill(pharn-test *)` and `Skill(pharn-build *)`: the loop invokes `/pharn-grill` itself on every run, and the
+      other four when a stage falls back to running inline.
+  - Why: an unattended loop that ran `/pharn-build` inline waited on a prompt for the seam line (the 6.58.0
+    incident class). And the bare `Skill` grant pre-approved every skill in the project that declares its own
+    `allowed-tools`, a user's `.claude/skills/` drop included, which then loads as instructions
+    (`THREAT-MODEL.md §2` surface 8).
+  - Measured before choosing the scoped form: Claude Code 2.1.303, `claude -p`, default permission mode, scratch
+    projects (`.dev/features/loop-grant-seam-skill/PROBE.md`). A command's `Skill(<name> *)` grant was honored and
+    matched by name: a target declaring `allowed-tools` was denied with no grant or with another name's grant, and ran
+    with its own. A target declaring no `allowed-tools`, as the five stage commands do today, ran with no grant at
+    all. So the five grants change nothing today; they keep the inline stages prompt-free if that behavior changes.
+  - Checked by: `pharn/floor/seam-config-materialize.test.mjs` covers every branch, feeds each written file to
+    `check-seam-config.mjs`, and runs the replaced one-liner over the same inputs (same exit and bytes where behavior
+    is kept; the non-object change asserted on both sides). `.dev/floor/command-hygiene.test.mjs` drops the loop
+    grant's one exclusion, requires the Skill grants to equal the set derived from the loop's routing table and its
+    own "invoke `/pharn-…`" text, and fails a bare `Skill`, an extra or a missing name, the no-argument spelling,
+    and a `node -e` line.
+  - Not covered (ADVISORY):
+    - Whether Claude Code honors the grant is harness behavior: one probe, one version, `-p` only, command-file
+      targets only.
+    - The grant matches by name, so whatever skill or command answers to one of those five names runs under it.
+    - A skill that declares no `allowed-tools` loads through the Skill tool with no grant at all, in any session.
+      That is Claude Code's behavior, not this grant's, and nothing here changes it.
+
+## [6.66.0] - 2026-10-19
+
+### Added
+
+- **A project can declare `/pharn-regress`'s base install in `pharn.config.json` — `{"regress": {"install": …}}` — so a
+  full `/pharn-loop` can finish over a project with no lockfile or with two lockfile families.**
+  - What changed:
+    - **The key.** `regress.install` is one of `none`, `head-node-modules`, `npm`, `pnpm`, `yarn`, `bun`: a closed set,
+      never a command, read by the new `pharn/floor/regress-install-config-core.mjs` (own-property reads, every
+      refusal quoted through the total `shown()`). `stage-regress.mjs` reads it from the project root only when the
+      invocation passed neither `--install` nor `--no-install` and the base commit has a `package.json`. Precedence:
+      argv, then the declaration, then the lockfile table.
+    - **The values.** `none` skips the install, and the `base-install-unreliable` rule applies as for `--no-install`. A
+      family runs that family's frozen command from the existing table, and only when its lockfile is in the base
+      commit. `head-node-modules` runs no install and makes the base checkout's `node_modules` a link to the project's
+      own installed `node_modules`, checked with `lstat` (a symlink or a missing directory refuses). The unreliable-install
+      mask does not apply to it, and its evidence is never reused.
+    - **Disclosure.** `regression-report.json` gains an additive `base_install` block (`{declared_in, value}`), after
+      `base_source`, only when the declaration decided this invocation's fresh base, so every other report keeps its
+      bytes. `REGRESSION.md`'s install line names the declaration, and for `head-node-modules` states the
+      approximation in fixed text with no path.
+    - **Refusal.** A declaration that cannot be read or cannot answer the run (a family absent at the base, no real
+      `node_modules` for `head-node-modules`, a base commit that tracks its own `node_modules`, a link that cannot be
+      made) is the new `unusable install-config-invalid`; `/pharn-loop` already maps every `unusable` to S9. The fixed
+      `install-unresolved` question now names the declaration; its options are unchanged.
+    - **Text.** `stage-exit.md` ("The `regress` install command") and `regression-report.md` specify it;
+      `/pharn-regress` names it, `/pharn-loop`'s regress mapping names it as the way to pre-answer
+      `install-unresolved`, and the README has "Declaring the base install". `pharn-regress.md`'s byte ceiling rises
+      to 25,600 (23,140 measured + 10%, next 512).
+  - Why: audit finding LOOP-11. `resolveInstall` asked whenever a base had a `package.json` and not exactly one lockfile
+    family; `/pharn-loop` maps that question to S10 and its granted regress line passes no install flag, so such a
+    project could never finish a full loop.
+  - Why `head-node-modules` and not only `none`: for the common case — a library with devDependencies and no lockfile —
+    `none` leaves the base without dependencies, so every gate that needs them is red at the base, and the first gate
+    red at head (a pre-existing red, or an iteration that broke an outside test) is refused `base-install-unreliable`,
+    an S9 stop. A test pins that. `head-node-modules` measures the base with HEAD's dependency tree instead, so such a
+    run reaches a verdict and the loop iterates on a regression.
+  - Not covered:
+    - `head-node-modules` is an approximation: a regression caused purely by a dependency change is red on both sides
+      and reads `pre_existing`. It costs regress's attribution, not the loop's green: `/pharn-verify`'s threshold is
+      absolute over every gate at HEAD. It re-admits, opt-in and disclosed, the dependency borrowing that 6.50.x's
+      out-of-project base checkout removed by default.
+    - The link is writable: a base gate that writes under `node_modules` (a cache) writes the project's tree. Only the
+      root `node_modules` is linked; a workspace's nested ones are not.
+    - Because `none` and `head-node-modules` evidence is never reused, every `/pharn-loop` iteration that does not take
+      its base from the entry gates runs the whole base side again. That cost was not measured.
+    - No non-frozen install (`npm install`) is offered: resolving dependency versions at run time could turn a new
+      upstream break red at base and read a head regression as `pre_existing`.
+    - The declaration is not pinned at `/pharn-test`: the test-infrastructure pin covers what decides `/pharn-verify`'s
+      AC gate, and this decides only regress's base. In an installed project a build cannot write `pharn.config.json`
+      with the write tools (the 6.61.0 setter refusal and the reserved surface); a Bash write is detected, never
+      prevented, by the reconcile gate. In a dev checkout a plan may scope it.
+    - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
+      can for the table's own inferred install.
 
 ## [6.65.2] - 2026-10-19
 
