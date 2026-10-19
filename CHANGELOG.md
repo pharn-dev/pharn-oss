@@ -68,6 +68,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `reconcile`. Not done: cross-checking `iterations` against the run's stage markers (follow-up
     `loop-iterations-markers`).
 
+## [6.64.4] - 2026-10-19
+
+### Fixed
+
+- **Tests now fail when a finding or verify-report enum changes in its contract but not in the code that restates it,
+  or the other way round** (`SKILLS_VERSION` 6.64.3 → **6.64.4**, patch; audit 2026-10-12 ARCH-9).
+  - The tests read `pharn/pharn-contracts/finding-shape.md` and `verify-report.md` and compare each enum with the set
+    the code uses, by set equality. Each also runs negative controls: a value added to the contract, a value removed
+    from it, and a missing anchor, which must throw rather than read as an empty set.
+  - `merge-findings.test.mjs`: the severity enum, both where the contract's object block states it and in its
+    field-trust table, equals `SEVERITY_ENUM`. The contract lists `type` as an open list ending in `...`, and
+    `merge-findings.mjs` checks `type` by shape (`TYPE_OK`), not by set. So the test checks that every listed type
+    passes `TYPE_OK` and that the list is still open. If the list is closed, the test fails and says a set is needed.
+  - `check-loop.test.mjs` and `check-ship.test.mjs`: each consumer's row in the verdict table equals the set the
+    checker tests. Both CLIs run on import, so the set is read from the checker's refusal of an unknown verdict, which
+    prints the set it tested against. The `check-ship.mjs` test finds the contract by walking up the directory tree
+    and matches its row by file name, so moving the checker and its test does not break the binding.
+  - `check-ship-briefing.test.mjs`: the rows for `check-ship-briefing.mjs` and `render-ship-briefing.mjs` equal each
+    module's `VERIFY_ENUM`.
+  - `check-verify.test.mjs`: the verdict literals `check-verify.mjs` emits equal the contract's stated union
+    `{PASS, FAIL, INCOMPLETE, INCONCLUSIVE}`, and that union equals the union of the table's rows.
+  - Shipped bytes: `SEVERITY_ENUM` and `TYPE_OK` in `pharn/floor/merge-findings.mjs`, and `VERIFY_ENUM` in
+    `render-ship-briefing.mjs` and `check-ship-briefing.mjs`, are now exported. Nothing else in those files changed.
+  - Bounds: the tests show that a contract and its code agree, not that the enum is right; a wrong value written in
+    both places passes. `gate-run-core.mjs`, which the audit also cited, holds no verdict set at this version, so there
+    was nothing to bind.
+
 ## [6.64.3] - 2026-10-19
 
 ### Fixed
