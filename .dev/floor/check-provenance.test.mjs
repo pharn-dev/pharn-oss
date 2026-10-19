@@ -1,9 +1,10 @@
 // .dev/floor/check-provenance.test.mjs — black-box tests for the deterministic provenance / duplicate-id /
 // entry-tag checker.
 //
-// Run as a subprocess (mirrors check-structural.test.mjs / validate.test.mjs) so check-provenance.mjs keeps
-// its dependency-free, top-level-exec contract: we assert only on its public surface (exit code + RED/GREEN
-// stdout). Inputs are written to a fresh temp dir per run (the plan scopes only the two floor files, not a
+// Run as a subprocess (mirrors check-structural.test.mjs / validate.test.mjs): we assert only on its public
+// surface (exit code + RED/GREEN stdout). Since 6.66.0 the dev file is a thin wrapper over
+// pharn/floor/check-provenance.mjs (`--canon-root .dev/memory-bank --strict-commit`), so this whole suite runs the
+// SHARED code under the dev settings. Inputs are written to a fresh temp dir per run (the plan scopes only the two floor files, not a
 // fixtures dir), and nothing touches the real memory-bank — except the ✧ agreement test, which reads
 // check-provenance.mjs and pharn-dev-memory-promote.md by design (P4 drift guard; see typeEnumFrom*).
 //
@@ -31,6 +32,7 @@ import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(here, "check-provenance.mjs");
+const PRODUCT_CHECK = join(here, "..", "..", "pharn", "floor", "check-provenance.mjs");
 const PROMOTE_DOC = join(here, "..", "..", ".claude", "commands", "pharn-dev-memory-promote.md");
 
 // A well-formed candidate (target in enum, full provenance, unique id, enum-member type, shaped concepts)
@@ -81,9 +83,10 @@ function runWith(candidate, canonText = CANON, canonRel = canonRelFor(candidate)
 
 const withProv = (overrides) => ({ ...VALID, provenance: { ...VALID.provenance, ...overrides } });
 
-// Derive the enum from the checker SOURCE rather than restating it here — see the ✧ note above.
+// Derive the enum from the checker SOURCE rather than restating it here — see the ✧ note above. Since 6.66.0 the
+// source is the shared product checker: the dev file is a thin wrapper that declares no enum of its own.
 function typeEnumFromChecker() {
-  const src = readFileSync(CHECK, "utf8");
+  const src = readFileSync(PRODUCT_CHECK, "utf8");
   const m = src.match(/const TYPE_ENUM = \[([^\]]*)\];/);
   assert.ok(m, "check-provenance.mjs must declare `const TYPE_ENUM = [...]`");
   return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
@@ -432,110 +435,74 @@ test("the GREEN line labels the P0 bound: the VALUES being apt is advisory, only
   assert.match(r.stdout, /never aboutness/);
 });
 
-// ── ✧ CROSS-COPY AGREEMENT GUARD (product-memory-promote) ────────────────────────────────────────────
+// ── ✧ ONE IMPLEMENTATION (6.66.0, audit ARCH-6) — the dev file is a thin wrapper, and stays one ─────────
 //
-// WHY THIS EXISTS. `pharn/floor/check-provenance.mjs` is a deliberate SECOND COPY of this checker for the
-// PRODUCT surface (a user's `memory-bank/`), chosen over a shared core at the plan gate. Two copies drift;
-// that is the whole cost of the choice, and this guard is the mitigation that made the choice acceptable.
-// It converts "drifts silently" into "drifts loudly".
+// WHY THIS CHANGED. Until 6.66.0 `pharn/floor/check-provenance.mjs` and this directory's copy were two hand-kept
+// files pinned to agree by text tests (shared constants, shared function bodies) plus the behaviour set below. Two
+// product-only patches still missed the dev copy for a whole release line (L31). The copy is now retired (L35): the
+// dev file imports checkProvenance() and passes `{ canonRoot: ".dev/memory-bank", strictCommit: true }`.
 //
-// WHY IT LIVES HERE, on the dev side. The product suite must stay runnable inside a user's install, where
-// `.dev/**` does not exist (it is stripped at packaging). A test comparing the two copies can therefore
-// only live in the copy that never ships. Same reasoning as check-loop-record.mjs re-implementing its
-// regexes rather than importing from `.dev/floor/`.
+// WHAT REPLACES THE TEXT PINS. A CLOSURE over what the wrapper may declare (L36 — closure, not per-member presence):
+// any top-level `const` / `let` / `function` outside WRAPPER_ALLOWED fails, so a re-grown TARGET_ENUM, COMMIT_RE or
+// validation helper cannot sit there unnoticed. Its non-vacuity is pinned by a negative control on a mutated copy of
+// the wrapper's text (L4 — an authored assertion passes by construction).
 //
-// ── Honest scope (P0) — what a green run does and does NOT buy ───────────────────────────────────────
-// FLOOR, and only within the `npm test` gate: the named CONSTANTS are byte-equal across the two files,
-//   and the two TARGET_ENUMs are the intended, DIFFERENT values. `node --test` is not a fourth floor
-//   primitive; what makes this binding is its membership in `/pharn-dev-verify`'s check-verify.mjs gate
-//   map (the `test` gate) — the same standing every other *.test.mjs here has. Its VERDICT is
-//   floor-grade there; its EXISTENCE and the act of running it are advisory orchestration (two clocks).
-// NOT guaranteed: that the two files BEHAVE identically. This compares declarations, not logic — a
-//   divergence in the validation BODY passes untouched. It pins the constants most likely to be tightened
-//   in one copy and forgotten in the other, nothing more.
-//
-// MEASURED REJECTING A MUTANT before being trusted (L4 — an authored assertion passes by construction):
-// a seventh member appended to one TYPE_ENUM was confirmed to FAIL this test, and the change reverted.
-// If that measurement is ever repeated and the guard stays green, the guard is inert and this comment
-// is a lie — treat it as such.
+// HONEST SCOPE (P0): the closure reads SOURCE TEXT for top-level declarations. It does not prove the wrapper calls
+// the shared checker correctly — the black-box suite above does that, by running every case THROUGH the wrapper.
 
-const PRODUCT_CHECK = join(here, "..", "..", "pharn", "floor", "check-provenance.mjs");
 const COMMANDS_DIR = join(here, "..", "..", ".claude", "commands");
 const MEMORY_BANK_WRITES_ALLOWLIST = new Set(["pharn-memory-promote.md", "pharn-dev-memory-promote.md"]);
 
-// Extract a top-level `const <NAME> = <value>;` declaration's raw right-hand side from a source file.
-// Deliberately textual and derived from BOTH sources — neither side is restated as a literal here, so a
-// tightening applied to one copy and not the other fails, rather than a stale literal in this file failing.
-function constSource(file, name) {
-  const src = readFileSync(file, "utf8");
-  const m = src.match(new RegExp(`^const ${name} = (.+?);\\s*(?://.*)?$`, "m"));
-  assert.ok(m, `${file} must declare a top-level \`const ${name} = …;\``);
-  return m[1].trim();
+/** The only top-level names the dev wrapper may declare. */
+const WRAPPER_ALLOWED = new Set(["DEV_CANON_ROOT"]);
+
+/** Top-level declarations (const / let / var / function / class) in a module's source, by name. */
+function topLevelDeclarations(src) {
+  return [...src.matchAll(/^(?:export\s+)?(?:const|let|var|function\*?|async\s+function|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
 }
 
-test("✧ the dev and product provenance checkers agree on every shared constant", () => {
-  for (const name of ["REQUIRED_PROVENANCE", "DATE_RE", "TYPE_ENUM", "CONCEPTS_MIN", "CONCEPTS_MAX", "CONCEPT_MAX_LEN", "CONCEPT_RE"]) {
-    assert.equal(
-      constSource(PRODUCT_CHECK, name),
-      constSource(CHECK, name),
-      `${name} has drifted between .dev/floor/check-provenance.mjs and pharn/floor/check-provenance.mjs — ` +
-        `tighten both copies or split them deliberately and update this guard`
-    );
-  }
-});
-
-test("✧ the two TARGET_ENUMs are DELIBERATELY different — dev canon vs a user's canon", () => {
-  const dev = constSource(CHECK, "TARGET_ENUM");
-  const prod = constSource(PRODUCT_CHECK, "TARGET_ENUM");
-  assert.notEqual(prod, dev, "the product checker must not gate the apparatus's own .dev/memory-bank paths");
-  assert.match(dev, /\.dev\/memory-bank\/lessons-learned\.md/);
-  assert.match(dev, /\.dev\/memory-bank\/pattern-library\.md/);
-  assert.match(prod, /"memory-bank\/lessons-learned\.md"/);
-  assert.match(prod, /"memory-bank\/pattern-library\.md"/);
-  assert.doesNotMatch(prod, /\.dev\//, "a .dev path in the product enum would gate a path no install has");
-});
-
-// Extract a top-level `function <NAME>(…) { … }` body from a source file, from the `function` keyword
-// through the matching brace at column 0. Textual and derived from BOTH sources, like constSource().
-function functionSource(file, name) {
-  const src = readFileSync(file, "utf8");
-  const m = src.match(new RegExp(`^function ${name}\\([\\s\\S]*?\\n\\}`, "m"));
-  assert.ok(m, `${file} must declare a top-level \`function ${name}(…)\``);
-  return m[0];
+/** Offenders: declarations outside the allowlist, or a wrapper that does not import the shared checker. */
+function wrapperOffenders(src) {
+  const out = topLevelDeclarations(src).filter((n) => !WRAPPER_ALLOWED.has(n));
+  if (!/from "\.\.\/\.\.\/pharn\/floor\/check-provenance\.mjs"/.test(src)) out.push("<no import of the shared checker>");
+  return out;
 }
 
-// The SHARED FUNCTION set — the enumeration is the deliverable (L29), materialized here so a function
-// added to one copy and not the other fails rather than being assessed per-file (L31).
-const SHARED_FUNCTIONS = ["nonEmptyString", "cleanScalar", "existingIds", "isGregorianDate", "pathSegments", "canonArgMatchesTarget"];
-
-test("✧ the dev and product provenance checkers agree on every shared FUNCTION body", () => {
-  // The constant guard above compares DECLARATIONS. That is exactly why the two back-ported patches
-  // (`isGregorianDate`, the whitespace-free id check) drifted for a whole release line with every gate
-  // green: both live in the validation BODY, which no rule ranged over. This closes the half of the
-  // stated bound that could be closed textually.
-  assert.ok(SHARED_FUNCTIONS.length >= 6, "the shared-function set must not silently shrink (L34)");
-  for (const name of SHARED_FUNCTIONS) {
-    assert.equal(
-      functionSource(PRODUCT_CHECK, name),
-      functionSource(CHECK, name),
-      `${name}() has drifted between .dev/floor/check-provenance.mjs and pharn/floor/check-provenance.mjs — ` +
-        `port the change to both copies, or split them deliberately and update this guard`
-    );
-  }
+test("✧ the dev provenance checker is a THIN WRAPPER — it declares nothing but its root, and imports the shared checker", () => {
+  assert.deepEqual(wrapperOffenders(readFileSync(CHECK, "utf8")), []);
 });
 
-// ── ✧ BEHAVIOURAL cross-copy agreement — the obligation set nothing ranged over (L31) ────────────────
+test("✧ the thinness closure DISCRIMINATES — a re-grown enum, regex or helper in the wrapper is caught", () => {
+  const src = readFileSync(CHECK, "utf8");
+  for (const grown of [
+    'const TARGET_ENUM = [".dev/memory-bank/lessons-learned.md"];',
+    "const COMMIT_RE = /^[0-9a-f]{7,40}$/;",
+    "function cleanScalar(v) { return v; }",
+    "export function checkProvenance() {}",
+  ]) {
+    assert.notDeepEqual(wrapperOffenders(`${src}\n${grown}\n`), [], `the closure must flag: ${grown}`);
+  }
+  assert.deepEqual(wrapperOffenders(src.replace("../../pharn/floor/check-provenance.mjs", "./elsewhere.mjs")), [
+    "<no import of the shared checker>",
+  ]);
+});
+
+test("✧ the wrapper passes the dev root and strict commit — targets are .dev/memory-bank/*, never a user's memory-bank", () => {
+  const src = readFileSync(CHECK, "utf8");
+  assert.match(src, /export const DEV_CANON_ROOT = "\.dev\/memory-bank";/);
+  assert.match(src, /canonRoot: DEV_CANON_ROOT,/);
+  assert.match(src, /strictCommit: true,/);
+  // behaviourally: a user-canon target is not a member here
+  const r = runWith({ ...VALID, target: "memory-bank/lessons-learned.md" });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /not in \{\.dev\/memory-bank\/lessons-learned\.md, \.dev\/memory-bank\/pattern-library\.md\}/);
+});
+
+// ── ✧ BEHAVIOURAL agreement — kept: the dev wrapper and the product CLI on one input class ───────────
 //
-// WHY, precisely. The guards above compare TEXT: constants, now also function bodies. The ✧ block's own
-// header states the residual — "NOT guaranteed: that the two files BEHAVE identically" — and finding
-// `provenance-dev-copy-behind` is that residual cashing out: two product-only patches never reached the
-// dev copy, and the constant guard could not see them. This set EXECUTES both checkers on the same
-// input class and requires the same verdict, which is a strictly different kind of evidence.
-//
-// HONEST BOUND, and it is the point (L36). This is a PRESENCE set over behaviours a review NAMED. It
-// cannot DISCOVER an unnamed divergence, and `length >= 3` defeats vacuity (L34) but not attrition — a
-// member deleted and replaced by a trivial one keeps it green. "The behavioural guard is green" NEVER
-// means "the two copies behave identically"; it means these three cannot drift again silently.
+// With one implementation these can only disagree through the two settings the wrapper passes, which is exactly
+// what the set still tests: the named refusals give the same reason under either root, and the unmutated candidate
+// is GREEN in both. HONEST BOUND (L36): a PRESENCE set over behaviours a review NAMED.
 const CROSS_COPY_BEHAVIOURS = [
   {
     name: "an impossible Gregorian date is refused",
@@ -574,10 +541,8 @@ function runOn(checker, candidate, canonRel) {
 // A valid candidate for whichever copy, with `target` DERIVED from that copy's own TARGET_ENUM rather
 // than restated here — so this guard cannot drift from either enum.
 function validCandidateFor(checker) {
-  const enumSrc = constSource(checker, "TARGET_ENUM");
-  const first = enumSrc.match(/"([^"]+)"/);
-  assert.ok(first, `${checker} must declare a TARGET_ENUM with at least one string member`);
-  return { ...VALID, target: first[1] };
+  // The target is the first member of each surface's enum: the product default root, or the dev root.
+  return { ...VALID, target: checker === PRODUCT_CHECK ? "memory-bank/lessons-learned.md" : VALID.target };
 }
 
 test("✧ BEHAVIOUR: both copies REFUSE each named input, with the same reason", () => {
@@ -606,12 +571,15 @@ test("✧ BEHAVIOUR NON-VACUITY: the UNMUTATED candidate is GREEN in both copies
   }
 });
 
-test("✧ COMMIT_RE differs deliberately: only the PRODUCT copy admits the literal `unknown`", () => {
-  // The one shape constant that is intentionally NOT shared. A user's project may not be a git repo;
-  // the apparatus always is, so widening the dev copy would buy nothing and weaken its provenance.
-  // Asserted rather than omitted, so "they differ" stays a recorded decision instead of looking like drift.
-  assert.match(constSource(PRODUCT_CHECK, "COMMIT_RE"), /unknown/);
-  assert.doesNotMatch(constSource(CHECK, "COMMIT_RE"), /unknown/);
+test("✧ the commit rule differs deliberately: only the PRODUCT default admits the literal `unknown`", () => {
+  // The one setting that is intentionally NOT shared. A user's project may not be a git repo; the apparatus
+  // always is, so admitting `unknown` here would buy nothing and weaken its provenance. Asserted BEHAVIOURALLY
+  // (the wrapper runs the shared code with `strictCommit`), so "they differ" stays a recorded decision.
+  const unknown = (checker) => runOn(checker, { ...validCandidateFor(checker), provenance: { ...VALID.provenance, commit: "unknown" } });
+  const dev = unknown(CHECK);
+  assert.equal(dev.status, 1, dev.stdout);
+  assert.match(dev.stdout, /commit must match \/\^\[0-9a-f\]\{7,40\}\$\/ \(a git SHA, 7–40 hex\)/);
+  assert.equal(unknown(PRODUCT_CHECK).status, 0, "the product default keeps the honest-absence member");
 });
 
 test("✧ 6.49.3: BOTH promote commands HALT and ask on a failed `git rev-parse HEAD`; neither writes `unknown` on its own (audit P3-O)", () => {

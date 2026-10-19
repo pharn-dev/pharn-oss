@@ -23,6 +23,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.66.0] - 2026-10-19
+
+### Added
+
+- **One implementation of the lessons grammar: the product lessons floor takes the canon root as a parameter, the
+  four `.dev/floor/` twins are thin wrappers over it, and `/pharn-plan` regenerates the lessons index on `COLD` and
+  `STALE`** (audit 2026-10-12, ARCH-6 and CTX-8).
+  - ARCH-6, what failed: `lessons-index-core.mjs`, `check-lessons-index.mjs`, `gen-lessons-index.mjs` and
+    `check-provenance.mjs` each existed twice, in `pharn/floor/` and `.dev/floor/`, kept equal by hand and by ✧ text
+    pins. Measured at 6.65.2, the grammar code of each pair was identical. The real differences were the paths, the
+    regenerate hint, two header paragraphs, how an absent canon is read, the verdict names and the dev `commit` rule.
+    The product hard-coded `memory-bank/` and had no way to read another root.
+  - ARCH-6, what changed: a new `pharn/floor/canon-root.mjs` is the one parser for `--canon-root <dir>` (default
+    `memory-bank`; a repo-relative POSIX path, no `.`/`..` segment, no leading `-`). `lessons-index-core.mjs` takes a
+    profile (canon path, output path, generator, regenerate hint, two header paragraphs). Its default profile renders
+    the same bytes as before. `check-lessons-index.mjs` and `gen-lessons-index.mjs` accept `--canon-root`. An invalid
+    value exits 2 and prints no verdict token. `check-provenance.mjs` exports `checkProvenance()`, builds its target
+    list under the root and gains `--strict-commit`, which refuses `unknown`. It now loads the runtime floor first and
+    runs only when invoked directly, so on a Node below the floor it exits 2 instead of checking.
+  - The `.dev/floor/` files keep their paths and exported APIs and now declare only the dev profile and what differs
+    there: canon must exist, the verdicts are `MISSING`/`DRIFT` over a committed page, and `commit` must be a SHA.
+    `docs/lessons-index.md` regenerates byte-identical.
+  - CTX-8, what failed: on `COLD`, `/pharn-plan` read `memory-bank/lessons-learned.md` in full (about 210 KB in this
+    repo) with an "optional" warm-up, and on `STALE` likewise. The product checker printed `NO_CANON` here, so this
+    repo could not run the product sweep on its own canon.
+  - CTX-8, what changed: `COLD` and `STALE` now run `node pharn/floor/gen-lessons-index.mjs .`, then the `--verdict`
+    line again. `GREEN` selects from the index and reads only the candidates; anything else falls back to canon in
+    full. `/pharn-loop`'s `allowed-tools` gains that one line. `/pharn-memory-promote` Step 6b's sentence about a
+    skipped refresh now says the next plan regenerates. `node pharn/floor/check-lessons-index.mjs --canon-root
+.dev/memory-bank . --verdict` reads this repo's canon.
+  - Checked by: a canon-root grammar suite; per-CLI custom-root and no-flag cases (the default stays the production
+    path); `--strict-commit` and import-runs-nothing cases. Each dev test file gets a closure that refuses any
+    top-level declaration in a wrapper beyond its profile, with negative controls. A dev test runs the product checker
+    on this repo's canon and requires a token other than `NO_CANON`. `LESSONS_SWEEP_WIRING` grows from 4 to 5. The
+    retired text pins compared the two copies; with one copy there is nothing for them to compare.
+  - Bound: `--canon-root` changes which file these four CLIs read. Every other product canon path stays
+    `memory-bank/`: `check-plan-lessons`'s argument, the promote target and `/pharn-plan`'s "read canon" step. So the
+    flag does not relocate a project's memory-bank. The root check is lexical: a symlinked root is followed for
+    reading.
+  - Not covered: lessons L31 and L35 in `.dev/memory-bank/lessons-learned.md` still describe the check-provenance and
+    lessons-index pairs as copies that must both exist. Canon is not edited in this batch; the correction is recorded
+    as a deferred lesson candidate in `.dev/features/lessons-canon-root/SHIP.md`.
+
 ## [6.65.2] - 2026-10-19
 
 ### Fixed

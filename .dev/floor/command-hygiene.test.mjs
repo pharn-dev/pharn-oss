@@ -548,6 +548,9 @@ test(
 // so the dependency may only point `.dev/` -> product, never the reverse.
 const LESSONS_SWEEP_WIRING = [
   { file: "pharn-plan.md", role: "checks the index before selecting", re: /pharn\/floor\/check-lessons-index\.mjs\b[^\n]*--verdict/ },
+  // 6.66.0 (audit CTX-8): on COLD/STALE the plan stage REGENERATES the cache and re-checks, instead of reading
+  // canon in full with an "optional" warm-up. A fifth site with the same shape: the regeneration is a pinned line.
+  { file: "pharn-plan.md", role: "regenerates the index on COLD/STALE", re: /\n {5}node pharn\/floor\/gen-lessons-index\.mjs \.\n/ },
   { file: "pharn-dev-plan.md", role: "checks the index before selecting", re: /node\s+\.dev\/floor\/check-lessons-index\.mjs/ },
   { file: "pharn-memory-promote.md", role: "regenerates the index after a promotion", re: /node\s+pharn\/floor\/gen-lessons-index\.mjs/ },
   {
@@ -583,7 +586,11 @@ test("✧ the lessons-index wiring set is non-vacuous — every named command ex
   const present = new Set(commandFiles());
   const missing = LESSONS_SWEEP_WIRING.filter((s) => !present.has(s.file)).map((s) => s.file);
   assert.deepEqual(missing, [], `these wiring-set members name no live command file: ${missing.join(", ")}`);
-  assert.equal(LESSONS_SWEEP_WIRING.length, 4, "expected both surfaces x both sites (dev/product x check/regenerate)");
+  assert.equal(
+    LESSONS_SWEEP_WIRING.length,
+    5,
+    "expected both surfaces x both sites (dev/product x check/regenerate), plus /pharn-plan's COLD/STALE regeneration"
+  );
 });
 
 // ── The `applied_lessons` re-verification wiring (check-plan-lessons.mjs) ─────────────────────────────

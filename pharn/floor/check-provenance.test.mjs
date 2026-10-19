@@ -1,9 +1,9 @@
 // pharn/floor/check-provenance.test.mjs — black-box tests for the PRODUCT provenance / duplicate-id /
 // entry-tag checker.
 //
-// Run as a subprocess (mirrors check-structural.test.mjs / validate.test.mjs) so check-provenance.mjs keeps
-// its dependency-free, top-level-exec contract: we assert only on its public surface (exit code + RED/GREEN
-// stdout). Inputs are written to a fresh temp dir per run, and nothing touches any real memory-bank —
+// Run as a subprocess (mirrors check-structural.test.mjs / validate.test.mjs): we assert on its public surface
+// (exit code + RED/GREEN stdout). Since 6.66.0 the module also exports checkProvenance() / targetEnum() for the
+// `.dev/floor/` wrapper, gated by `import.meta.main`; the import-runs-nothing case below pins that gate. Inputs are written to a fresh temp dir per run, and nothing touches any real memory-bank —
 // except the ✧ agreement test, which reads check-provenance.mjs and pharn-memory-promote.md by design
 // (P4 drift guard; see typeEnumFrom*). Both of those paths SHIP, so this suite stays runnable inside a
 // user's install; it never reads `.dev/**`, which is stripped at packaging.
@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { targetEnum, TARGET_FILES } from "./check-provenance.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(here, "check-provenance.mjs");
@@ -328,7 +329,10 @@ test("✧ TARGET_ENUM is EXACTLY the two prescription files — it was not widen
   // The port's single most consequential constant. ARCHITECTURE §5 names FOUR canonical state files;
   // this checker deliberately gates only the two that PRESCRIBE behavior. Derived from source, never
   // restated from the checker's prose, so a silent widening fails HERE.
-  const target = arrayConstFromChecker("TARGET_ENUM");
+  // Since 6.66.0 the enum is the fixed file list under a canon root; the DEFAULT root (no flag — the production
+  // path, L41) must yield exactly these two.
+  assert.deepEqual([...TARGET_FILES], ["lessons-learned.md", "pattern-library.md"]);
+  const target = targetEnum();
   assert.deepEqual(target, ["memory-bank/lessons-learned.md", "memory-bank/pattern-library.md"]);
   for (const recordOnly of ["memory-bank/feature-catalog.md", "memory-bank/architecture-context.md"]) {
     assert.ok(!target.includes(recordOnly), `${recordOnly} RECORDS rather than prescribes — it must not be a target`);
@@ -617,4 +621,87 @@ test("ROUND TRIP: an entry rendered from a GREEN candidate resolves in check-pla
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── 6.66.0: `--canon-root` and `--strict-commit` (audit ARCH-6 — the dev wrapper runs THIS code) ─────────
+
+/** Run the CLI with extra flags in front of the two positional arguments. */
+function runFlags(flags, candidate, canonRel = canonRelFor(candidate)) {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-prov-flags-"));
+  try {
+    const candPath = join(dir, "candidate.json");
+    const canonPath = join(dir, canonRel);
+    mkdirSync(dirname(canonPath), { recursive: true });
+    writeFileSync(candPath, JSON.stringify(candidate));
+    writeFileSync(canonPath, CANON);
+    return spawnSync(process.execPath, [CHECK, ...flags, candPath, canonPath], { encoding: "utf8" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("--canon-root moves the target enum: a candidate under that root is GREEN, the default root is then RED", () => {
+  const custom = { ...VALID, target: "team/canon/lessons-learned.md" };
+  const r = runFlags(["--canon-root", "team/canon"], custom);
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /GREEN/);
+  // the default-root candidate is not a member under the custom root
+  const d = runFlags(["--canon-root", "team/canon"], VALID);
+  assert.equal(d.status, 1);
+  assert.match(
+    d.stdout,
+    /target "memory-bank\/lessons-learned\.md" not in \{team\/canon\/lessons-learned\.md, team\/canon\/pattern-library\.md\}/
+  );
+  // NON-VACUITY (L41): with NO flag, the custom-root candidate is refused and the default one passes.
+  assert.equal(runWith(custom).status, 1);
+  assert.equal(runWith(VALID).status, 0);
+});
+
+test("--canon-root still binds argv[3] to the declared target, and a duplicate under the custom root is RED", () => {
+  const custom = { ...VALID, target: "team/canon/lessons-learned.md", id: "L1" };
+  const dup = runFlags(["--canon-root", "team/canon"], custom);
+  assert.equal(dup.status, 1);
+  assert.match(dup.stdout, /already exists/);
+  const decoy = runFlags(["--canon-root", "team/canon"], { ...custom, id: "L5" }, "decoy.md");
+  assert.equal(decoy.status, 1);
+  assert.match(decoy.stdout, /does not name the declared target/);
+});
+
+test("--strict-commit refuses the literal `unknown`; a SHA still passes; without the flag `unknown` passes", () => {
+  const unknown = withProv({ commit: "unknown" });
+  const strict = runFlags(["--strict-commit"], unknown);
+  assert.equal(strict.status, 1);
+  assert.match(strict.stdout, /commit must match \/\^\[0-9a-f\]\{7,40\}\$\/ \(a git SHA, 7–40 hex\), got "unknown"/);
+  assert.equal(runFlags(["--strict-commit"], VALID).status, 0);
+  assert.equal(runWith(unknown).status, 0, "the default (no flag) keeps the honest-absence member");
+});
+
+test("an invalid --canon-root exits 2 with the reason on stderr and checks nothing", () => {
+  for (const flags of [["--canon-root", "../escape"], ["--canon-root"], ["--canon-root", "/abs"]]) {
+    const r = runFlags(flags, VALID);
+    assert.equal(r.status, 2, `${flags.join(" ")}: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, "");
+    assert.match(r.stderr, /^check-provenance: --canon-root/);
+  }
+});
+
+test("checkProvenance() validates a root passed as CODE too — an importer gets exit 2, never an out-of-grammar enum", () => {
+  const src =
+    `import { checkProvenance } from ${JSON.stringify(CHECK)};` +
+    `const code = checkProvenance("c.json", "../x/lessons-learned.md", { canonRoot: "../x" });` +
+    `console.log("code=" + code);`;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", src], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^RED — --canon-root must not hold an empty, "\." or "\.\." segment/m);
+  assert.match(r.stdout, /^code=2$/m);
+});
+
+test("importing the module runs nothing — the CLI is gated by import.meta.main", () => {
+  const r = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", `import(${JSON.stringify(CHECK)}).then((m) => console.log(typeof m.checkProvenance))`],
+    { encoding: "utf8" }
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, "function\n", "an import must print nothing of its own (no usage RED, no exit)");
 });

@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-// .dev/floor/gen-lessons-index.mjs — the lessons-index GENERATOR (build apparatus).
+// .dev/floor/gen-lessons-index.mjs — the lessons-index GENERATOR for the committed dev index (build apparatus).
 //
-// Emits docs/lessons-index.md from .dev/memory-bank/lessons-learned.md. Rendering is delegated ENTIRELY to
-// lessons-index-core.mjs, the single source of truth shared with the drift checker, so the two can never
-// diverge (P3). Output is deterministic + idempotent: no timestamps, ordering by numeric id; running twice
-// yields byte-identical bytes, and the file is written ONLY on a real change so a second run is a true
-// filesystem no-op.
+// A THIN WRAPPER since 6.66.0 (audit ARCH-6): emits docs/lessons-index.md from .dev/memory-bank/lessons-learned.md
+// through pharn/floor/gen-lessons-index.mjs's generate(), under this surface's profile (./lessons-index-core.mjs).
+// Output is deterministic + idempotent (written only on a real change). The one thing it adds: canon MUST exist
+// here, so the shared generator's benign `no-canon` status is a throw — fail-closed, never an empty index.
 //
 // This is NOT a floor guarantee (P0): running a generator is orchestration. The guarantee is the checker's
 // byte-equality (`check-lessons-index.mjs`); this just produces the bytes it checks.
@@ -20,24 +19,15 @@
 // Non-LLM, stdlib-only.
 
 import "../../pharn/floor/runtime-floor.mjs";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { buildIndex, OUT_PATH, CANON_PATH } from "./lessons-index-core.mjs";
+import { generate as productGenerate } from "../../pharn/floor/gen-lessons-index.mjs";
+import { STATUS_NO_CANON } from "../../pharn/floor/lessons-index-core.mjs";
+import { buildIndex, DEV_PROFILE, OUT_PATH, CANON_PATH } from "./lessons-index-core.mjs";
 
-/** Generate the index under targetDir. Returns { entries, updated }. Throws (fail-closed) on bad canon. */
+/** Generate the index under targetDir. Returns { entries, updated }. Throws (fail-closed) on absent or bad canon. */
 export function generate(targetDir) {
-  const { entries, content } = buildIndex(targetDir);
-  const abs = join(targetDir, OUT_PATH);
-  mkdirSync(dirname(abs), { recursive: true });
-
-  let current = null;
-  try {
-    current = readFileSync(abs, "utf8");
-  } catch {
-    // not yet committed — first generation
-  }
-  const updated = current !== content;
-  if (updated) writeFileSync(abs, content);
+  buildIndex(targetDir); // this surface's refusal of an absent / empty canon — before anything is written
+  const { status, entries, updated } = productGenerate(targetDir, DEV_PROFILE);
+  if (status === STATUS_NO_CANON) buildIndex(targetDir); // canon vanished between the reads: throw its message
   return { entries, updated };
 }
 

@@ -12,7 +12,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkLessonsIndex, VERDICTS } from "./check-lessons-index.mjs";
 import { generate } from "./gen-lessons-index.mjs";
-import { CANON_PATH, OUT_PATH } from "./lessons-index-core.mjs";
+import { CANON_PATH, OUT_PATH, productProfile } from "./lessons-index-core.mjs";
 
 const CLI = fileURLToPath(new URL("./check-lessons-index.mjs", import.meta.url));
 
@@ -181,6 +181,59 @@ test("a WARN about malformed tag lines never flips the GREEN verdict", () => {
     const cli = runCli([dir]);
     assert.equal(cli.status, 0);
     assert.match(cli.stdout, /WARN — 1 entry\(ies\) carry a malformed tag line/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── 6.66.0: `--canon-root` (audit CTX-8 — a repo whose canon is not at memory-bank/ can run the sweep) ──
+
+/** A temp repo whose canon lives under `root/` instead of memory-bank/. */
+function tmpRepoAt(root, canon) {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-check-lessons-root-"));
+  mkdirSync(join(dir, root), { recursive: true });
+  writeFileSync(join(dir, root, "lessons-learned.md"), canon);
+  return dir;
+}
+
+test("--canon-root reads canon under that root: COLD, then GREEN after the generator runs with the same root", () => {
+  const dir = tmpRepoAt("team/canon", CANON_ONE);
+  try {
+    assert.equal(runCli([dir, "--canon-root", "team/canon", "--verdict"]).stdout, "COLD\n");
+    const cold = runCli(["--canon-root", "team/canon", dir]);
+    assert.match(cold.stdout, /regenerate with: node pharn\/floor\/gen-lessons-index\.mjs --canon-root team\/canon \./);
+    generate(dir, productProfile("team/canon"));
+    assert.equal(runCli([dir, "--canon-root", "team/canon", "--verdict"]).stdout, "GREEN\n");
+    // L41 — the DEFAULT (no flag) is the production path: here it still reads memory-bank/, which is absent.
+    assert.equal(runCli([dir, "--verdict"]).stdout, "NO_CANON\n");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a cache generated from one root reads STALE under another — the header names its root", () => {
+  const dir = tmpRepoAt("team/canon", CANON_ONE);
+  try {
+    mkdirSync(join(dir, "memory-bank"));
+    writeFileSync(join(dir, CANON_PATH), CANON_ONE);
+    generate(dir); // default root
+    assert.equal(runCli([dir, "--verdict"]).stdout, "GREEN\n");
+    const r = runCli([dir, "--canon-root", "team/canon", "--verdict"]);
+    assert.equal(r.stdout, "STALE\n");
+    assert.equal(r.status, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("an invalid --canon-root exits 2 and prints NO token — never a member of the verdict set", () => {
+  const dir = tmpRepo(CANON_ONE);
+  try {
+    for (const bad of [["--canon-root", "../x"], ["--canon-root"], ["--canon-root=x"], ["--canon-root", "a", "--canon-root", "b"]]) {
+      const r = runCli([dir, "--verdict", ...bad]);
+      assert.equal(r.status, 2, bad.join(" "));
+      assert.equal(r.stdout, "", `${bad.join(" ")}: stdout must stay empty`);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

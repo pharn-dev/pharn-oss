@@ -1,0 +1,52 @@
+{
+  "base": "6b49cafdb6c98da52e01fafd72b93b1335021e44",
+  "inside": [
+    ".claude/commands/pharn-dev-memory-promote.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-memory-promote.md",
+    ".claude/commands/pharn-plan.md",
+    ".dev/floor/check-lessons-index.mjs",
+    ".dev/floor/check-provenance.mjs",
+    ".dev/floor/check-provenance.test.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/gen-lessons-index.mjs",
+    ".dev/floor/lessons-index-core.mjs",
+    ".dev/floor/lessons-index-core.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/lessons.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-lessons-index.mjs",
+    "pharn/floor/check-lessons-index.test.mjs",
+    "pharn/floor/check-provenance.mjs",
+    "pharn/floor/check-provenance.test.mjs",
+    "pharn/floor/gen-lessons-index.mjs",
+    "pharn/floor/gen-lessons-index.test.mjs",
+    "pharn/floor/lessons-index-core.mjs",
+    "pharn/floor/lessons-index-core.test.mjs",
+    ".dev/features/lessons-canon-root/GRILL.md",
+    ".dev/features/lessons-canon-root/PLAN.md",
+    "pharn/floor/canon-root.mjs",
+    "pharn/floor/canon-root.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

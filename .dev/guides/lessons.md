@@ -45,7 +45,7 @@ still holds the rules every session needs; this file adds detail and does not ov
   counts from `docs/lessons-index.md`, never from this doc — P6) and **both** absence markers
   are now unexpected: a `-` means no tag line, i.e. an entry that reached canon without the promote
   gate's `type`/`concepts`; a `?` means a tag line is present but **failed its gate**. Read that entry in
-  canon and flag it either way. (The PRODUCT twin keeps the benign reading of `-` on purpose — a user's
+  canon and flag it either way. (The PRODUCT profile keeps the benign reading of `-` on purpose — a user's
   `memory-bank/` may legitimately hold hand-written entries.) **Neither marker is a floor error:** a `-`
   or `?` regenerates cleanly and `docs:check` stays exit 0, so this is a read-it-and-look signal, not a
   gate — the named `lesson-tagline-render-check` residual.
@@ -53,21 +53,35 @@ still holds the rules every session needs; this file adds detail and does not ov
     `/pharn-plan` selects from `.pharn/lessons-index.md` and then reads the full entries from the user's
     `memory-bank/lessons-learned.md`, branching on `pharn/floor/check-lessons-index.mjs --verdict`'s closed
     token set `{NO_CANON, COLD, GREEN, STALE, ENUM_ERROR}` — **membership, never prose, and never the exit
-    code alone** (three tokens share exit 0 and each prescribes a different sweep). A stale, absent or
-    invalid index **degrades to "read canon in full and say so"; it never blocks a plan.** The product
+    code alone** (three tokens share exit 0 and each prescribes a different sweep). A stale or absent index is
+    regenerated and re-checked (6.66.0, below); an index that still is not `GREEN`, or an invalid canon,
+    **degrades to "read canon in full and say so"; it never blocks a plan.** The product
     index is a **gitignored, disposable CACHE** under `.pharn/`, not a committed page, so its check is a
     **staleness** comparison whose coverage is machine-local — **not** the dev surface's
     "committed == recomputed" byte-equality. `NO_CANON` (no memory-bank yet) and `COLD` (no cache yet) are
     **GREEN by design**: both are the honest normal state of a fresh install, and REDding there would make
     every first run a false alarm. `/pharn-memory-promote` Step 6b refreshes the cache after an accepted
     promotion — a Bash write, therefore **outside** the fix #7 scope and declared as such (L19), and
-    advisory: skipping it just yields a `STALE` the next plan degrades on.
-  - **The two cores are deliberate SEPARATE COPIES** (`pharn/floor/lessons-index-core.mjs` vs
-    `.dev/floor/lessons-index-core.mjs`), the `check-provenance.mjs` precedent. Four constants diverge on
-    purpose — `CANON_PATH`, `OUT_PATH`, `GEN`, `REGEN` — as does the **absent/empty-canon semantics**
-    (a divergent function, pinned separately: the product copy treats no-canon as a benign no-op where
-    the dev copy throws). ✧ tests in
-    `.dev/floor/lessons-index-core.test.mjs` pin **both** halves: every shared constant must AGREE and
-    those four must DIFFER. The pin lives on the dev side because a user's install ships `pharn/floor/`
-    **without** `.dev/`, so the dependency may only point `.dev/` → `pharn/`; the honest consequence is
-    that it guards the two copies **in this repo**, and does not travel with the shipped code.
+    advisory: skipping it just yields a `STALE` the next plan regenerates.
+  - **One implementation, two profiles (6.66.0, audit ARCH-6).** Until 6.66.0 the two cores were
+    hand-kept SEPARATE COPIES (`pharn/floor/lessons-index-core.mjs` vs `.dev/floor/lessons-index-core.mjs`, and
+    likewise `check-lessons-index`, `gen-lessons-index` and `check-provenance`), pinned to agree by ✧ text tests.
+    The copies are retired (L35): the grammar, the renderer and the comparison live only under `pharn/floor/`,
+    which takes the canon root as a parameter (`--canon-root <dir>`, default `memory-bank`; plus
+    `--strict-commit` on check-provenance). The four `.dev/floor/` files are thin wrappers that pass the dev
+    surface's PROFILE — `.dev/memory-bank/`, the committed `docs/lessons-index.md`, `npm run docs:generate`, a
+    columns paragraph reading both absence markers as unexpected — and keep what is genuinely different there:
+    canon must exist (the product's benign `no-canon` is a throw), the committed-index verdicts (`MISSING` /
+    `DRIFT` for the product's `COLD` / `STALE`), and a SHA-only `commit`. A ✧ closure in each dev test refuses any
+    other top-level declaration in a wrapper, so the grammar cannot grow back. The dependency still points only
+    `.dev/` → `pharn/` (an install ships `pharn/floor/` without `.dev/`). **The flag's bound:** it changes which
+    file those four CLIs read; every other product canon path (`check-plan-lessons`'s argument, the promote
+    target, `/pharn-plan`'s "read canon" step) stays `memory-bank/`, so it is not a way to relocate a project's
+    memory-bank. Its consumer is this repo: `node pharn/floor/check-lessons-index.mjs --canon-root .dev/memory-bank
+. --verdict` runs the product sweep's checker on PHARN's own canon (a dev test pins that it is never
+    `NO_CANON`).
+  - **`/pharn-plan` regenerates on `COLD` / `STALE` (6.66.0, audit CTX-8).** It used to read canon in full on
+    `COLD` with an "optional" warm-up, and on `STALE`. Now both run `node pharn/floor/gen-lessons-index.mjs .`,
+    re-check, and on `GREEN` select from the index; only a non-`GREEN` re-check, a failed generator or
+    `ENUM_ERROR` falls back to reading canon in full. `LESSONS_SWEEP_WIRING` holds the new line as its fifth
+    member; the grant is in `/pharn-loop`'s `allowed-tools`.

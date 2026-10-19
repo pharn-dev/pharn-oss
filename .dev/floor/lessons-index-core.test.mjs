@@ -11,7 +11,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseLessons, renderIndex, TYPE_ENUM, CHARS_PER_TOKEN, ABSENT, MALFORMED } from "./lessons-index-core.mjs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { parseLessons, renderIndex, TYPE_ENUM, CHARS_PER_TOKEN, ABSENT, MALFORMED, DEV_PROFILE } from "./lessons-index-core.mjs";
+import { PRODUCT_PROFILE, renderIndex as productRenderIndex } from "../../pharn/floor/lessons-index-core.mjs";
 
 const one = (body) => parseLessons(body)[0];
 
@@ -159,7 +162,8 @@ test("rendering is deterministic — two runs over the same canon are byte-ident
 // ── DRIFT GUARDS (these read live files on purpose) ────────────────────────────────────────────────
 
 test("✧ P4: TYPE_ENUM here EQUALS the TYPE_ENUM in check-provenance.mjs (its single source of truth)", () => {
-  const src = readFileSync(new URL("./check-provenance.mjs", import.meta.url), "utf8");
+  // Both live on the product surface since 6.66.0 — the dev files are thin wrappers that declare neither.
+  const src = readFileSync(new URL("../../pharn/floor/check-provenance.mjs", import.meta.url), "utf8");
   const m = src.match(/const TYPE_ENUM = \[([^\]]*)\];/);
   assert.ok(m, "check-provenance.mjs must declare `const TYPE_ENUM = [...]`");
   const theirs = m[1]
@@ -230,217 +234,101 @@ test("✧ CI actually INVOKES the drift check, and its step is not disabled by a
   // out-of-band approval signal. "The wiring is pinned" NEVER means "CI is guaranteed to run it".
 });
 
-// ── ✧ CROSS-SURFACE PINS — this core vs. pharn/floor/lessons-index-core.mjs ────────────────────────
+// ── ✧ ONE IMPLEMENTATION (6.66.0, audit ARCH-6) — the three dev lessons-index files are thin wrappers ──
 //
-// `product-lessons-index` shipped a DELIBERATE SECOND COPY of this core on the product surface, rather
-// than a shared core parameterized by paths — the same call pharn/floor/check-provenance.mjs made, whose
-// pins live in .dev/floor/check-provenance.test.mjs. These two tests are that precedent applied here:
-// the shared constants must AGREE, and the divergent ones must DIFFER **on purpose**, so neither an
-// accidental drift nor an over-eager "unification" can pass unnoticed.
+// Until 6.66.0 this file pinned a hand-kept second copy of pharn/floor/lessons-index-core.mjs to the product one:
+// shared constants and shared function bodies byte-identical, four constants and two functions deliberately
+// different. The copy is retired (lessons-learned L35); the dev files import the product modules and pass DEV_PROFILE.
+// What replaces the text pins is a CLOSURE over what each wrapper may declare (L36 — closure, not per-member
+// presence): a re-grown HEADING_RE, TAG_RE, parseLessons or byte comparison in a dev file fails here. Its
+// non-vacuity is pinned by negative controls (L4). The dependency points `.dev/` -> `pharn/` only, so — as before —
+// this guard lives on the dev side and protects THIS repo; the product suite pins its own default profile.
 //
-// WHY THE PIN LIVES HERE AND NOT IN THE PRODUCT SUITE (direction and reach, stated — GRILL F4):
-// a user's install ships `pharn/floor/**` WITHOUT `.dev/`, so a product test may never depend on a dev
-// file existing. The dependency can only point `.dev/` -> `pharn/`. The honest consequence: this guard
-// does NOT travel with the code it pins — it protects the two copies while they live in THIS repo
-// together, which is the only place they can drift apart. The product suite carries the positive half
-// (its own constants hold the product values) so it is not left with nothing.
+// HONEST SCOPE (P0): the closure reads SOURCE TEXT for top-level declarations. That the wrappers call the shared
+// code correctly is shown by the rest of the dev suites, which run THROUGH them, and by `npm run docs:check`, which
+// compares the committed docs/lessons-index.md with the shared renderer's output under DEV_PROFILE.
 
-/**
- * Read a `const NAME = <rhs>;` declaration's right-hand side from a module's SOURCE.
- *
- * A trailing `// …` comment is tolerated and EXCLUDED from the compared value: several of these
- * declarations carry an explanatory comment on the same line (`TAG_CLAIM_RE` does on both surfaces), and
- * pinning prose alongside the value would make the two copies' COMMENTS load-bearing — a guard that fires
- * on a reworded sentence is a guard operators learn to wave through.
- */
-function constSource(src, name, file) {
-  const m = src.match(new RegExp(`^(?:export )?const ${name} = (.*?);(?:\\s*//.*)?$`, "m"));
-  assert.ok(m, `${file} must declare \`const ${name} = …;\` on one line`);
-  return m[1];
+/** Each wrapper, the shared module it must import, and the only top-level names it may declare. */
+const WRAPPERS = [
+  {
+    file: "lessons-index-core.mjs",
+    imports: "../../pharn/floor/lessons-index-core.mjs",
+    allowed: ["DEV_PROFILE", "CANON_PATH", "OUT_PATH", "renderIndex", "buildIndex"],
+  },
+  {
+    file: "check-lessons-index.mjs",
+    imports: "../../pharn/floor/check-lessons-index.mjs",
+    allowed: ["FIX", "checkLessonsIndex", "main"],
+  },
+  { file: "gen-lessons-index.mjs", imports: "../../pharn/floor/gen-lessons-index.mjs", allowed: ["generate", "main"] },
+];
+
+/** Top-level declarations (const / let / var / function / class) in a module's source, by name. */
+function topLevelDeclarations(src) {
+  return [...src.matchAll(/^(?:export\s+)?(?:const|let|var|function\*?|async\s+function|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]);
 }
 
-const PRODUCT_CORE_URL = new URL("../../pharn/floor/lessons-index-core.mjs", import.meta.url);
-
-test("✧ cross-surface: every SHARED constant is byte-identical between the dev and product cores", () => {
-  const dev = readFileSync(new URL("./lessons-index-core.mjs", import.meta.url), "utf8");
-  const prod = readFileSync(PRODUCT_CORE_URL, "utf8");
-
-  // The entry-contract parsers and the tag-line gate. If these ever diverge, the two surfaces disagree
-  // about what a lesson IS — the failure mode the second copy is otherwise blind to.
-  for (const name of [
-    "HEADING_RE",
-    "ANY_H2_RE",
-    "TAG_CLAIM_RE",
-    "TAG_RE",
-    "PROMOTED_RE",
-    "TYPE_ENUM",
-    "CONCEPTS_MIN",
-    "CONCEPTS_MAX",
-    "CONCEPT_MAX_LEN",
-    "CONCEPT_RE",
-    "CHARS_PER_TOKEN",
-    "ABSENT",
-    "MALFORMED",
-  ]) {
-    assert.equal(
-      constSource(prod, name, "pharn/floor/lessons-index-core.mjs"),
-      constSource(dev, name, ".dev/floor/lessons-index-core.mjs"),
-      `${name} drifted between the dev and product cores`
-    );
-  }
-
-  // `pad` governs the rendered column layout, so a divergence here means the two surfaces emit
-  // differently-shaped indexes from identical canon.
-  assert.equal(
-    constSource(prod, "pad", "pharn/floor/lessons-index-core.mjs"),
-    constSource(dev, "pad", ".dev/floor/lessons-index-core.mjs"),
-    "pad drifted between the dev and product cores"
-  );
-});
-
-// ── ✧ L8: the pin must range over EVERY shared function, and the domain must be COMPLETE ──────────
-
-// The pin used to compare exactly ONE function body (`cleanScalar`) and read as discharged, while four
-// sibling behavioural functions could diverge freely — a behavioural edit to one copy passed the whole ✧
-// suite as long as that copy's own tests were updated in the same PR, which is the single-PR drift the
-// pin exists to stop. lessons-learned L29: when a remedy is quantified over a set, the ENUMERATION is
-// the deliverable. So both sets are materialised here, and the completeness rule below asserts they
-// COVER the cores — a function added to either core later must be classified as shared or divergent, and
-// cannot sit silently unpinned.
-
-/** Behaviour that MUST be identical on both surfaces. */
-const SHARED_FUNCTIONS = ["cleanScalar", "parseTagLine", "assertSafeTitle", "parseLessons"];
-
-/**
- * Behaviour that MUST differ — the documented product-vs-dev divergences, asserted so that "unifying"
- * one of them fails loudly instead of passing silently.
- *
- *   buildIndex  — the product surface treats an ABSENT canon as a benign no-op (the honest normal state
- *                 of a fresh install) where the dev twin throws.
- *   renderIndex — the product header describes a DISPOSABLE CACHE under gitignored `.pharn/` and keeps
- *                 the BENIGN reading of the absent-tag marker, because a user's `memory-bank/` may
- *                 legitimately hold hand-written entries. The dev index is a COMMITTED artifact where
- *                 every entry passed the promote gate, so there both absence markers are unexpected.
- *
- * `renderIndex` is here rather than in SHARED because the live cores were READ, not because a fix
- * request classified it: the request that prompted this pin listed it as shared. It is not.
- */
-const DIVERGENT_FUNCTIONS = ["buildIndex", "renderIndex"];
-
-/** Every top-level `function` name declared in a core. */
-function functionNames(src) {
-  return [...src.matchAll(/^(?:export )?function ([A-Za-z0-9_]+)\s*\(/gm)].map((m) => m[1]);
+/** Offenders for one wrapper's source: a declaration outside its allowlist, or a missing import of its module. */
+function wrapperOffenders(w, src) {
+  const out = topLevelDeclarations(src).filter((n) => !w.allowed.includes(n));
+  if (!src.includes(`from "${w.imports}"`)) out.push(`<no import of ${w.imports}>`);
+  return out;
 }
 
-/** The full source text of one top-level function, closing brace included. */
-function functionSource(src, name, file) {
-  const m = src.match(new RegExp(String.raw`^(?:export )?function ${name}\s*\([^)]*\)\s*\{[\s\S]*?\n\}`, "m"));
-  assert.ok(m, `${file} must declare a top-level \`function ${name}(…)\``);
-  return m[0];
+for (const w of WRAPPERS) {
+  test(`✧ .dev/floor/${w.file} is a THIN WRAPPER — no grammar, no comparison of its own`, () => {
+    assert.deepEqual(wrapperOffenders(w, readFileSync(new URL(`./${w.file}`, import.meta.url), "utf8")), []);
+  });
 }
 
-/**
- * The same source with WHOLE-LINE comments and blank lines removed — i.e. the CODE.
- *
- * Why the pin compares code rather than raw text, stated because it is a real weakening. The two cores
- * are allowed to explain themselves DIFFERENTLY, and one difference is load-bearing: a user's install
- * ships `pharn/floor/` WITHOUT `.dev/`, so the product copy deliberately avoids citing dev-only
- * artifacts (a GRILL finding id, a PR number) that a reader of the shipped file could never open. A raw
- * byte pin would force the product copy to cite files it cannot reference, or force the dev copy to
- * drop provenance it should keep — it would fight a divergence that is correct.
- *
- * Only WHOLE-LINE comments are stripped (a line whose first non-space characters are `//`), never
- * trailing ones, so a `//` inside a string or a regex on a code line cannot be mangled into a false
- * match. That is the conservative direction: an unstripped trailing comment can only make the pin
- * STRICTER, never looser.
- */
-function functionCode(src, name, file) {
-  return functionSource(src, name, file)
-    .split("\n")
-    .filter((l) => l.trim() !== "" && !l.trim().startsWith("//"))
-    .join("\n");
-}
-
-test("✧ L8: the shared/divergent split COVERS every function in both cores", () => {
-  const dev = readFileSync(new URL("./lessons-index-core.mjs", import.meta.url), "utf8");
-  const prod = readFileSync(PRODUCT_CORE_URL, "utf8");
-  const classified = new Set([...SHARED_FUNCTIONS, ...DIVERGENT_FUNCTIONS]);
-
-  for (const [label, src] of [
-    [".dev/floor/lessons-index-core.mjs", dev],
-    ["pharn/floor/lessons-index-core.mjs", prod],
-  ]) {
-    for (const name of functionNames(src)) {
-      assert.ok(
-        classified.has(name),
-        `${label} declares \`${name}\`, which is in neither SHARED_FUNCTIONS nor DIVERGENT_FUNCTIONS — ` +
-          `classify it, or it drifts unpinned (the exact gap this test exists to close)`
-      );
+test("✧ the wrapper closure DISCRIMINATES — a re-grown grammar constant, parser or comparison is caught", () => {
+  for (const w of WRAPPERS) {
+    const src = readFileSync(new URL(`./${w.file}`, import.meta.url), "utf8");
+    for (const grown of [
+      "const HEADING_RE = /^## L(\\d+) (.*)$/;",
+      "export function parseLessons(t) { return t; }",
+      "const pad = (s) => s;",
+    ]) {
+      assert.notDeepEqual(wrapperOffenders(w, `${src}\n${grown}\n`), [], `${w.file}: the closure must flag ${grown}`);
     }
+    assert.deepEqual(wrapperOffenders(w, src.replace(w.imports, "./elsewhere.mjs")), [`<no import of ${w.imports}>`]);
   }
+  assert.equal(WRAPPERS.length, 3, "the three dev lessons-index files (L34: the domain must not silently shrink)");
+});
 
-  // And the enumeration may not name a function that does not exist, which would make a rule vacuous.
-  for (const name of classified) {
-    assert.ok(functionNames(dev).includes(name), `SHARED/DIVERGENT names ${name}, absent from the dev core`);
-    assert.ok(functionNames(prod).includes(name), `SHARED/DIVERGENT names ${name}, absent from the product core`);
+test("✧ the two profiles DIFFER where they must, and hold their surface's values", () => {
+  // A future "let's unify these" edit that pointed the product default at `.dev/memory-bank/` or `docs/` would
+  // re-introduce the two rejections the product profile encodes — writing into the gated-canon zone, and claiming
+  // a directory that belongs to the user. And a dev profile pointed at `.pharn/` would make `docs:check` compare a
+  // gitignored cache.
+  assert.equal(DEV_PROFILE.canonPath, ".dev/memory-bank/lessons-learned.md");
+  assert.equal(DEV_PROFILE.outPath, "docs/lessons-index.md");
+  assert.equal(DEV_PROFILE.gen, ".dev/floor/gen-lessons-index.mjs");
+  assert.equal(DEV_PROFILE.regen, "npm run docs:generate");
+  assert.equal(DEV_PROFILE.storageNote, "", "the committed dev index carries no cache paragraph");
+  assert.equal(PRODUCT_PROFILE.canonPath, "memory-bank/lessons-learned.md");
+  assert.equal(PRODUCT_PROFILE.outPath, ".pharn/lessons-index.md");
+  // L2 — a doc may cite only a LIVE op: the product hint is a bare `node` invocation.
+  assert.equal(PRODUCT_PROFILE.regen, "node pharn/floor/gen-lessons-index.mjs .");
+  for (const k of ["canonPath", "outPath", "gen", "regen", "columnsNote"]) {
+    assert.notEqual(DEV_PROFILE[k], PRODUCT_PROFILE[k], `${k} must differ between the surfaces`);
   }
 });
 
-test("✧ L8: every SHARED function body is byte-identical between the two cores", () => {
-  const dev = readFileSync(new URL("./lessons-index-core.mjs", import.meta.url), "utf8");
-  const prod = readFileSync(PRODUCT_CORE_URL, "utf8");
-  for (const name of SHARED_FUNCTIONS) {
-    assert.equal(
-      functionCode(prod, name, "pharn/floor/lessons-index-core.mjs"),
-      functionCode(dev, name, ".dev/floor/lessons-index-core.mjs"),
-      `${name} drifted between the dev and product cores — the two surfaces now disagree about behaviour`
-    );
-  }
+test("✧ the dev render is the SHARED renderer under DEV_PROFILE — identical bytes, no private renderer", () => {
+  const canon = "## L1 — a\n\nx\n\n## L2 — b\n\ntype: eval · concepts: [m]\n\ny";
+  assert.equal(renderIndex(parseLessons(canon)), productRenderIndex(parseLessons(canon), DEV_PROFILE));
 });
 
-test("✧ L8: every DIVERGENT function DIFFERS — asserting the difference is as load-bearing as the agreement", () => {
-  const dev = readFileSync(new URL("./lessons-index-core.mjs", import.meta.url), "utf8");
-  const prod = readFileSync(PRODUCT_CORE_URL, "utf8");
-  for (const name of DIVERGENT_FUNCTIONS) {
-    assert.notEqual(
-      functionCode(prod, name, "pharn/floor/lessons-index-core.mjs"),
-      functionCode(dev, name, ".dev/floor/lessons-index-core.mjs"),
-      `${name} must DIFFER: the product surface treats an absent canon as a benign no-op where the dev twin throws. ` +
-        `A "let's unify these" edit that erased that would otherwise pass silently.`
-    );
-  }
-});
-
-test("✧ L8: the pin compares SOURCE TEXT — a stated bound, not a claim of semantic equivalence", () => {
-  // Honest scope (P0): this proves the two copies AGREE, never that either is CORRECT, and a
-  // semantically identical refactor of one copy WILL fail the pin. That is intended — the pin exists to
-  // force a deliberate decision at the moment one copy moves, not to certify the behaviour.
-  assert.ok(SHARED_FUNCTIONS.length >= 4, "the shared set must not silently shrink");
-  assert.ok(DIVERGENT_FUNCTIONS.length >= 2, "the divergent set must not silently empty");
-});
-
-test("✧ cross-surface: the FOUR divergent constants DIFFER, and hold their surface's values", () => {
-  // Asserting the difference is as load-bearing as asserting the agreement: a future "let's unify these"
-  // edit that pointed the product core at `.dev/memory-bank/` or `docs/` would otherwise pass silently,
-  // and would re-introduce exactly the two rejections the product copy exists to encode — writing into
-  // the gated-canon zone, and claiming a directory that belongs to the user.
-  const dev = readFileSync(new URL("./lessons-index-core.mjs", import.meta.url), "utf8");
-  const prod = readFileSync(PRODUCT_CORE_URL, "utf8");
-
-  for (const name of ["CANON_PATH", "OUT_PATH", "GEN", "REGEN"]) {
-    assert.notEqual(
-      constSource(prod, name, "pharn/floor/lessons-index-core.mjs"),
-      constSource(dev, name, ".dev/floor/lessons-index-core.mjs"),
-      `${name} must DIFFER between the surfaces — it is one of the four deliberate divergences`
-    );
-  }
-
-  assert.equal(constSource(dev, "CANON_PATH", "dev"), '".dev/memory-bank/lessons-learned.md"');
-  assert.equal(constSource(dev, "OUT_PATH", "dev"), '"docs/lessons-index.md"');
-  assert.equal(constSource(prod, "CANON_PATH", "product"), '"memory-bank/lessons-learned.md"');
-  assert.equal(constSource(prod, "OUT_PATH", "product"), '".pharn/lessons-index.md"');
-
-  // L2 — a doc may cite only a LIVE op. The product regenerate hint must be a bare `node` invocation,
-  // because a user's project has no npm scripts and may not be a Node project at all.
-  assert.match(constSource(prod, "REGEN", "product"), /^"node pharn\/floor\/gen-lessons-index\.mjs \."$/);
+test("✧ CTX-8 dogfood: the PRODUCT checker runs on THIS repo's canon with --canon-root, and is never NO_CANON", () => {
+  // Before 6.66.0 `node pharn/floor/check-lessons-index.mjs . --verdict` printed NO_CANON here — this repo's canon is
+  // .dev/memory-bank/, so the product sweep could not be run on it at all. The flag reaches it. The token is COLD
+  // or GREEN or STALE depending on this machine's gitignored cache; any of those proves canon was READ.
+  const repo = fileURLToPath(new URL("../../", import.meta.url));
+  const cli = fileURLToPath(new URL("../../pharn/floor/check-lessons-index.mjs", import.meta.url));
+  const withFlag = spawnSync(process.execPath, [cli, "--canon-root", ".dev/memory-bank", repo, "--verdict"], { encoding: "utf8" });
+  assert.ok(["COLD", "GREEN", "STALE"].includes(withFlag.stdout.trim()), `got ${JSON.stringify(withFlag.stdout)}`);
+  // NON-VACUITY: without the flag the same call still reads memory-bank/ (absent here) — the default did not move.
+  const without = spawnSync(process.execPath, [cli, repo, "--verdict"], { encoding: "utf8" });
+  assert.equal(without.stdout, "NO_CANON\n");
 });
