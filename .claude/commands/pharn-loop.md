@@ -366,7 +366,9 @@ above by a fixed rule:
 
 - `done` (`0`) → on to `/pharn-verify`; its verdict is read by `check-loop.mjs` (Step 5);
 - `question no-gates` → **S4**;
-- every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10**;
+- every other `question` (`base-unresolved`, `install-unresolved`, `tests-unresolved`) → **S10** — `install-unresolved`
+  is pre-answered by the project's `pharn.config.json` `regress.install` (6.65.0; `pharn/pharn-contracts/stage-exit.md`),
+  so name that in `### next_steps`;
 - `refused` and `unusable` → **S9** — the call's own refusal too (exit `2`, a `stage-direct:` line, no object: the
   stage's writes-scope or the in-flight lock could not be taken);
 - a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;

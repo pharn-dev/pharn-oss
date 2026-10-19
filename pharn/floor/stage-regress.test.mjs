@@ -22,6 +22,7 @@ import {
   appendFileSync,
   realpathSync,
   readdirSync,
+  readlinkSync,
 } from "node:fs";
 import { namePrefix, tempRoot } from "./base-worktree.mjs";
 import { execFileSync, spawnSync, spawn } from "node:child_process";
@@ -1293,10 +1294,11 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
   // head-install-drift since 6.40.0; plan-files-total-glob, no-change-under-test, base-install-unreliable since
-  // regress-base-integrity (plus the unusable base-worktree-unplaceable)
+  // regress-base-integrity (plus the unusable base-worktree-unplaceable); the unusable install-config-invalid since 6.65.0
+  // (reached by the regress-install-config tests at the end of this file)
   assert.equal(REGISTRY.regress.refused.length, 8);
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
-  assert.equal(REGISTRY.regress.unusable.length, 10);
+  assert.equal(REGISTRY.regress.unusable.length, 11);
 });
 
 // ── ★ WIRING (L45) — the COMMITTED pharn-regress.md line, executed ─────────────────────────────────
@@ -3108,5 +3110,227 @@ test("resume — a stage.json whose baseWorktree is not this project's temp chec
     rmSync(victim, { recursive: true, force: true });
     for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// THE DECLARED BASE INSTALL (6.65.0, regress-install-config — audit LOOP-11): `pharn.config.json` `regress.install`.
+// Every fixture COMMITS the declaration in its base (an uncommitted one is a changed path outside the plan).
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+const DEP_TEST =
+  "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from './index.js';\n" +
+  "test('dep', async () => { const m = await import('mydep'); assert.equal(m.two, 2); assert.equal(add(2, 2), 4); });\n";
+const LIBRARY_PKG =
+  JSON.stringify({ name: "lib", version: "1.0.0", scripts: { test: "node --test" }, devDependencies: { mydep: "1.0.0" } }, null, 2) + "\n";
+const declaration = (install) => JSON.stringify({ regress: { install } }) + "\n";
+const MYDEP_PKG = JSON.stringify({ name: "mydep", type: "module", main: "index.js" });
+const MYDEP_INDEX = "export const two = 2;\n";
+const declaredArgs = (base, extra = []) => ["--feature", FEATURE, "--timeout-ms", "30000", "--base", base, ...extra]; // no --install/--no-install
+
+/** A no-lockfile library (devDependencies, no lockfile — the LOOP-11 case) whose outside test needs `mydep`, installed
+ *  in the HEAD tree's node_modules (ignored). `install` null = no declaration committed. */
+function library(install, committedExtra = {}) {
+  const committed = {
+    "package.json": LIBRARY_PKG,
+    ".gitignore": ".pharn/\nnode_modules\n", // no trailing slash: a node_modules SYMLINK is ignored too
+    "src/other.test.js": DEP_TEST,
+    ...(install === null ? {} : { "pharn.config.json": declaration(install) }),
+    ...committedExtra,
+  };
+  const fx = repo({ committed });
+  mkdirSync(join(fx.dir, "node_modules", "mydep"), { recursive: true });
+  writeFileSync(join(fx.dir, "node_modules", "mydep", "package.json"), MYDEP_PKG);
+  writeFileSync(join(fx.dir, "node_modules", "mydep", "index.js"), MYDEP_INDEX);
+  return fx;
+}
+
+test("LOOP-11 control: a no-lockfile library with NO declaration still asks install-unresolved (unchanged)", () => {
+  const { dir, base } = library(null);
+  try {
+    writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD);
+    const r = cli(dir, declaredArgs(base));
+    assert.equal(r.code, 4, r.raw);
+    assert.equal(r.json.reason_code, "install-unresolved");
+    assert.match(r.json.question, /declare it in pharn\.config\.json: \{"regress": \{"install": "none" \| "head-node-modules"/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ LOOP-11 — a library declaring `none` is refused base-install-unreliable once a dependency-needing gate is red at head (why `none` alone does not fix it)", () => {
+  const { dir, base } = library("none");
+  try {
+    writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD); // an iteration-1 build that broke an outside test
+    const r = cli(dir, declaredArgs(base));
+    assert.equal(r.code, 3, r.raw);
+    assert.equal(r.json.reason_code, "base-install-unreliable");
+    assert.match(refusedMd(dir), /skipped \(pharn\.config\.json#regress\.install is "none"\)/);
+    assert.match(refusedMd(dir), /or declare pharn\.config\.json#regress\.install "head-node-modules"/, "the refusal names the remedy");
+    assert.deepEqual(baseCheckouts(dir), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ LOOP-11 — a library declaring `head-node-modules` reaches a verdict: the regression IS found, disclosed as an approximation, and HEAD's node_modules survives", () => {
+  const { dir, base } = library("head-node-modules");
+  try {
+    writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD);
+    const r = cli(dir, declaredArgs(base));
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.json.verdict, "regressions", "base resolved mydep through the link (green), head is red — a loop iterates on this");
+    const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    assert.deepEqual(report.outside_gates, { test: { base: 0, head: 1 } });
+    assert.deepEqual(report.base_install, { declared_in: "pharn.config.json#regress.install", value: "head-node-modules" });
+    const keys = Object.keys(report);
+    assert.equal(keys.indexOf("base_install"), keys.indexOf("base_source") + 1, "after base_source");
+    const md = readFileSync(join(dir, r.json.render), "utf8");
+    assert.match(md, /\*\*APPROXIMATION:\*\*/);
+    assert.ok(!md.includes(realpathSync(dir)), "REGRESSION.md names no absolute path (the link target)");
+    assert.equal(
+      readFileSync(join(dir, "node_modules", "mydep", "index.js"), "utf8"),
+      "export const two = 2;\n",
+      "the link target survives cleanup"
+    );
+    assert.deepEqual(baseCheckouts(dir), [], "and the checkout (with its link) was removed");
+    // A gate red on BOTH sides now reads pre_existing — the disclosed approximation, not base-install-unreliable.
+    writeFileSync(join(dir, "src", "other.test.js"), "import { test } from 'node:test';\ntest('r', () => { throw new Error('red'); });\n");
+    execFileSync("git", ["add", "src/other.test.js"], { cwd: dir });
+    execFileSync("git", ["commit", "-q", "-m", "red outside test"], { cwd: dir }); // the broken build stays uncommitted
+    const base2 = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
+    const r2 = cli(dir, declaredArgs(base2));
+    assert.equal(r2.code, 0, r2.raw);
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, r2.json.report), "utf8")).pre_existing, ["test"]);
+  } finally {
+    for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("head-node-modules refuses install-config-invalid when the project's node_modules is absent, a symlink, or the base tracks its own", () => {
+  const cases = [
+    ["absent", (dir) => rmSync(join(dir, "node_modules"), { recursive: true, force: true }), {}, /has no node_modules \(ENOENT\)/],
+    [
+      "a symlink (never followed — L54/L59)",
+      (dir) => {
+        const real = join(dir, "..", `${dir.split("/").pop()}-nm`);
+        rmSync(join(dir, "node_modules"), { recursive: true, force: true });
+        mkdirSync(real, { recursive: true });
+        symlinkSync(real, join(dir, "node_modules"), "dir");
+      },
+      {},
+      /node_modules is not a real directory/,
+    ],
+    [
+      "the base commit tracks node_modules",
+      () => {},
+      { ".gitignore": ".pharn/\n", "node_modules/mydep/package.json": MYDEP_PKG, "node_modules/mydep/index.js": MYDEP_INDEX },
+      /already has a node_modules entry/,
+    ],
+  ];
+  for (const [why, prep, extra, re] of cases) {
+    const { dir, base } = library("head-node-modules", extra);
+    try {
+      prep(dir);
+      writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD);
+      const r = cli(dir, declaredArgs(base));
+      assert.equal(r.code, 2, `${why}: ${r.raw}`);
+      assert.equal(r.json.reason_code, "install-config-invalid", why);
+      assert.match(r.json.detail, re, why);
+      assert.ok(!r.json.detail.includes(realpathSync(dir)), `${why}: no absolute path in the detail`);
+    } finally {
+      for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
+      rmSync(join(dir, "..", `${dir.split("/").pop()}-nm`), { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("a declared family over TWO lockfile families resolves its frozen command (persisted, paused before the install runs)", () => {
+  const { dir, base } = repo({
+    committed: { "package-lock.json": "{}", "yarn.lock": "", "pharn.config.json": declaration("yarn") },
+  });
+  try {
+    writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+    let r = cli(dir, declaredArgs(base, ["--budget-ms", "1"]));
+    for (let i = 0; i < 20 && r.code === 5 && r.json.phase !== "install"; i++) r = cli(dir, ["--resume", "--budget-ms", "1"]);
+    assert.equal(r.code, 5, r.raw);
+    assert.equal(r.json.phase, "install", "paused before the install, so no package manager runs in this test");
+    const rec = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.stageJson), "utf8"));
+    assert.deepEqual(rec.install, {
+      kind: "cmd",
+      cmd: "yarn install --frozen-lockfile",
+      unmeasured: true,
+      family: "yarn",
+      declaredIn: "pharn.config.json#regress.install",
+    });
+    assert.equal(rec.installOverride, false, "a declaration is not an argv override (entry evidence stays eligible)");
+  } finally {
+    for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("head-node-modules on a RESUME (GATE 2 review, L59): the install phase re-run accepts its own exact link, and refuses a foreign one", () => {
+  for (const variant of ["own link", "foreign link"]) {
+    const { dir, base } = library("head-node-modules");
+    const elsewhere = mkdtempSync(join(tmpdir(), "sr-elsewhere-"));
+    try {
+      writeFileSync(join(dir, "src", "index.js"), BROKEN_ADD);
+      let r = cli(dir, declaredArgs(base, ["--budget-ms", "1"]));
+      for (let i = 0; i < 20 && r.code === 5 && r.json.phase !== "drain-base"; i++) r = cli(dir, ["--resume", "--budget-ms", "1"]);
+      assert.equal(r.code, 5, `${variant}: ${r.raw}`);
+      assert.equal(r.json.phase, "drain-base", `${variant}: paused after the link was made`);
+      const rec = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.stageJson), "utf8"));
+      const at = join(rec.baseWorktree, "node_modules");
+      assert.equal(readlinkSync(at), join(realpathSync(dir), "node_modules"), "CONTROL: the install phase made exactly this link");
+      if (variant === "foreign link") {
+        rmSync(at);
+        symlinkSync(elsewhere, at, "dir");
+      }
+      // Re-enter the install phase, as a kill there would (the record is otherwise unchanged and valid).
+      writeFileSync(join(dir, REGRESS_PATHS.stageJson), JSON.stringify({ ...rec, phase: "install" }));
+      const again = cli(dir, ["--resume", "--budget-ms", "600000"]);
+      if (variant === "own link") {
+        assert.equal(again.code, 0, again.raw);
+        assert.equal(again.json.verdict, "regressions");
+      } else {
+        assert.equal(again.code, 2, again.raw);
+        assert.equal(again.json.reason_code, "install-config-invalid");
+        assert.match(again.json.detail, /already has a node_modules entry, which is never replaced/);
+      }
+      assert.equal(readFileSync(join(dir, "node_modules", "mydep", "index.js"), "utf8"), MYDEP_INDEX, `${variant}: the target survives`);
+    } finally {
+      for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("install-config-invalid: a declared family with no lockfile at BASE, and a malformed declaration; argv wins over both", () => {
+  for (const [why, install, re] of [
+    ["a family absent at base", "pnpm", /declares "pnpm", but the base commit has no pnpm lockfile \(pnpm-lock\.yaml\)/],
+    [
+      "a command string",
+      "npm ci",
+      /`regress\.install` is "npm ci"; it must be one of none \| head-node-modules \| npm \| pnpm \| yarn \| bun/,
+    ],
+  ]) {
+    const { dir, base } = repo({ committed: { "package-lock.json": "{}", "pharn.config.json": declaration(install) } });
+    try {
+      writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport const x = 2;\n");
+      const r = cli(dir, declaredArgs(base));
+      assert.equal(r.code, 2, `${why}: ${r.raw}`);
+      assert.equal(r.json.reason_code, "install-config-invalid", why);
+      assert.match(r.json.detail, re, why);
+      // argv > declaration: with --no-install the declaration is never read, and the run completes.
+      const ok = cli(dir, declaredArgs(base, ["--no-install"]));
+      assert.equal(ok.code, 0, `${why} + --no-install: ${ok.raw}`);
+      assert.equal(JSON.parse(readFileSync(join(dir, ok.json.report), "utf8")).base_install, undefined, "no declaration was used");
+    } finally {
+      for (const c of baseCheckouts(dir)) rmSync(c, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });

@@ -4865,7 +4865,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // loop-scope-hardening (6.61.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —
   // 24,152 bytes measured, 88 over 24,064; raised by the rule (+10%, up to a multiple of 512).
   "pharn-plan.md": 26624,
-  "pharn-regress.md": 23040, // 6.49.0 entry-run-as-base-evidence: 20699 B measured + 10% → next 512 (was 20480)
+  "pharn-regress.md": 25600, // 6.65.0 regress-install-config: 23140 B measured + 10% → next 512 (was 23040)
   // review-lens-grouping (6.64.0): Step 3's grouping line and its three exit branches, Step 4's subagent type, fallback,
   // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes
   // measured, 3,473 over 24,064; raised by the rule (+10%, up to a multiple of 512).
