@@ -1,0 +1,43 @@
+{
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
+  "inside": [
+    ".dev/features/scanner-redos-bounds/GRILL.md",
+    ".dev/features/scanner-redos-bounds/MEASUREMENTS.md",
+    ".dev/features/scanner-redos-bounds/PLAN.md",
+    ".dev/features/scanner-redos-bounds/REGRESSION.md",
+    ".dev/features/scanner-redos-bounds/REVIEW.md",
+    ".dev/features/scanner-redos-bounds/regression-report.json",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/scan-code-injection.mjs",
+    "pharn/floor/scan-code-injection.test.mjs",
+    "pharn/floor/scan-code-n-plus-one.mjs",
+    "pharn/floor/scan-code-n-plus-one.test.mjs",
+    "pharn/floor/scan-code-path-traversal.mjs",
+    "pharn/floor/scan-code-path-traversal.test.mjs",
+    "pharn/floor/scan-code-ssrf.mjs",
+    "pharn/floor/scan-code-ssrf.test.mjs",
+    "pharn/floor/sink-span-core.mjs",
+    "pharn/floor/sink-span-core.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

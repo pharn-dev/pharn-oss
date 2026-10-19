@@ -7,7 +7,8 @@
   check-loop and check-red-run because on darwin a piped document past 64 KiB was cut at exit. Convert them to the
   repo's existing exit forms, add them to `cli-stdout-flush.test.mjs`'s FLUSH_CLIS (static pin, crash test, >64 KiB
   pipe round-trip), and correct that test's header, which claims every other floor CLI's spawner reads only an exit
-  status or a first line. Exit codes and output bytes stay identical. Patch bump 6.65.0 → 6.65.1.
+  status or a first line. Exit codes and output bytes stay identical. Patch bump to 6.65.2 (planned
+  as 6.65.1; #363 took that number first, so it was renumbered at the merge of `origin/main`).
 - layer(s): product floor (`pharn/floor/`), build apparatus (`.dev/guides/`), repo meta
 - constitution_refs: [P0, P5, P6, P7]
 - mode: LIGHT (batch 2026-10-19, group H) — no stage commands; plan, edit with tests, `npm run check`, validate.
