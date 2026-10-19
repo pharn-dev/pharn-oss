@@ -459,6 +459,41 @@ test("★ LOOP-2 / L54 — a symlink at the marker path is never followed: CAP_U
   );
 });
 
+test("★ LOOP-2 / CodeQL js/file-system-race — the marker is checked and read through ONE O_NOFOLLOW descriptor; a directory or FIFO there is refused", () => {
+  // The source form: one openSync with O_NOFOLLOW, fstat on its descriptor, the read from the descriptor — never a
+  // path-based lstat followed by a path-based read, which a symlink swapped in between would follow.
+  const src = readFileSync(CHECKER, "utf8");
+  const fn = src.slice(src.indexOf("function markerCap("), src.indexOf("\n}\n", src.indexOf("function markerCap(")));
+  assert.match(fn, /openSync\(marker, constants\.O_RDONLY \| constants\.O_NOFOLLOW \| constants\.O_NONBLOCK\)/);
+  assert.match(fn, /fstatSync\(fd\)\.isFile\(\)/);
+  assert.match(fn, /readFileSync\(fd, "utf8"\)/);
+  assert.match(fn, /finally \{\s*closeSync\(fd\);/);
+  assert.doesNotMatch(fn, /lstatSync|statSync\(marker|readFileSync\(marker/);
+  // Behaviour: a directory (fstat says not a file) and, where mkfifo exists, a FIFO (O_NONBLOCK keeps the open from
+  // blocking) are both CAP_UNWITNESSED.
+  const kinds = [["a directory", (at) => mkdirSync(at)]];
+  if (spawnSync("mkfifo", ["--version"]).error === undefined) kinds.push(["a FIFO", (at) => spawnSync("mkfifo", [at])]);
+  for (const [label, make] of kinds) {
+    withFixture(
+      GREEN_REC,
+      PASS,
+      CLEAN,
+      (r) => {
+        mkdirSync(join(r.root, ".pharn", "pharn-loop", MARKER_NAME), { recursive: true });
+        const at = join(r.root, ".pharn", "pharn-loop", MARKER_NAME, "active.json");
+        make(at);
+        if (!existsSync(at)) return; // mkfifo unavailable here: nothing to assert for this kind
+        const out = spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8", timeout: 20000 });
+        assert.equal(out.status, 1, `${label}: ${out.stdout}`);
+        assert.match(out.stdout, /CAP_UNWITNESSED/, label);
+        assert.match(out.stdout, /not a regular file|cannot be opened/, label);
+      },
+      null,
+      null
+    );
+  }
+});
+
 test("★ LOOP-2 — a record that is not at pharn/features/<name>/LOOP.md cannot locate its marker → CAP_UNWITNESSED", () => {
   const dir = mkdtempSync(join(tmpdir(), "pharn-loop-decision-offlayout-"));
   try {

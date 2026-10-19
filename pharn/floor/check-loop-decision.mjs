@@ -76,8 +76,9 @@
 // decision and mode comparisons (collected, never an early return, so every mismatch prints):
 //   • the marker is located from the record's own path, never an argument: the record must sit at
 //     `<root>/pharn/features/<name>/LOOP.md` (two literal parent segments), the marker at
-//     `<root>/.pharn/pharn-loop/<name>/active.json`. It is lstat'ed first — a regular file only, never through a
-//     symlink (L54) — then JSON.parsed; its `schema` must be `pharn-loop-active/1`, its `name` the record's `<name>`,
+//     `<root>/.pharn/pharn-loop/<name>/active.json`. It is opened once with O_NOFOLLOW and checked and read
+//     through that one descriptor — a regular file only, never through a symlink (L54), with no window between the
+//     type check and the read (CodeQL js/file-system-race) — then JSON.parsed; its `schema` must be `pharn-loop-active/1`, its `name` the record's `<name>`,
 //     and its `cap` a positive safe integer (own-property reads — L15). A record off that layout, or a marker that is
 //     absent or fails any of those tests, is RED `CAP_UNWITNESSED` — FAIL-CLOSED. The one caller (loop-closeout.mjs)
 //     runs this check before its own `--close`; every run opens the marker at Step 1a before its feature directory can
@@ -112,7 +113,7 @@
 //                    recorded mode (MODE_MISMATCH), a cap the run's marker does not witness (CAP_UNWITNESSED) or
 //                    contradicts (CAP_MISMATCH), or `iterations` over `cap` (ITER_OVER_CAP). Fail-closed throughout.
 
-import { readFileSync, existsSync, lstatSync } from "node:fs";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, constants } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { basename, dirname, join, resolve } from "node:path";
@@ -153,16 +154,29 @@ function markerCap(recordPath) {
     return { ok: false, why: "the record is not at pharn/features/<name>/LOOP.md, so its run marker cannot be located" };
   }
   const marker = join(dirname(pharnDir), ".pharn", "pharn-loop", name, "active.json");
-  let st;
+  // ONE descriptor (the griller-extract.mjs 6.60.1 form, CodeQL js/file-system-race): the type check and the read see
+  // the same file, so the path cannot be swapped between them. O_NOFOLLOW refuses a symlink at the final component
+  // (ELOOP); O_NONBLOCK keeps a FIFO from blocking the open, and fstat then refuses it as not a regular file.
+  let fd;
   try {
-    st = lstatSync(marker);
-  } catch {
-    return { ok: false, why: `no run marker at .pharn/pharn-loop/${name}/active.json` };
+    fd = openSync(marker, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    if (e && e.code === "ELOOP") return { ok: false, why: "the run marker is not a regular file (a symlink is never followed)" };
+    if (e && e.code === "ENOENT") return { ok: false, why: `no run marker at .pharn/pharn-loop/${name}/active.json` };
+    return { ok: false, why: "the run marker cannot be opened" };
   }
-  if (!st.isFile()) return { ok: false, why: "the run marker is not a regular file (a symlink is never followed)" };
+  let text;
+  try {
+    if (!fstatSync(fd).isFile()) return { ok: false, why: "the run marker is not a regular file (a symlink is never followed)" };
+    text = readFileSync(fd, "utf8");
+  } catch {
+    return { ok: false, why: "the run marker is unreadable" };
+  } finally {
+    closeSync(fd);
+  }
   let doc;
   try {
-    doc = JSON.parse(readFileSync(marker, "utf8"));
+    doc = JSON.parse(text);
   } catch {
     return { ok: false, why: "the run marker is not valid JSON" };
   }
