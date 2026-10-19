@@ -77,6 +77,7 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
       "no-progress",
       "progress-malformed",
       "base-worktree-unplaceable", // regress-base-integrity
+      "install-config-invalid", // regress-install-config (6.66.0)
     ])
   );
   assert.deepEqual(STAGES, ["regress", "verify"]);
@@ -157,7 +158,7 @@ test("isReasonCode / allReasonCodes: membership matches the registry, and non-me
   assert.equal(isReasonCode("nonexistent-stage", "refused", "chain-red"), false);
 
   const all = allReasonCodes("regress");
-  assert.equal(all.length, 8 + 4 + 10, "refused + question + unusable counts");
+  assert.equal(all.length, 8 + 4 + 11, "refused + question + unusable counts");
   assert.deepEqual(new Set(all).size, all.length, "no duplicate reason_code across the three sub-vocabularies");
   assert.deepEqual(allReasonCodes("nonexistent-stage"), []);
 });

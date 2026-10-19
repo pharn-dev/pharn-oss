@@ -262,7 +262,8 @@ export const REGISTRY = Object.freeze({
           "bun.lock/bun.lockb — or more than one family is present). How should dependencies be installed at the base commit? " +
           "If the install is skipped, the base checkout has no dependencies (it sits outside the project), so a gate red at " +
           "both base and head cannot be told apart from a missing install, and the stage then stops (base-install-unreliable) " +
-          "instead of reporting no regressions.",
+          "instead of reporting no regressions. To answer it for every run (an unattended /pharn-loop cannot ask), declare " +
+          'it in pharn.config.json: {"regress": {"install": "none" | "head-node-modules" | "npm" | "pnpm" | "yarn" | "bun"}}.',
         options: Object.freeze([
           Object.freeze({
             id: "install",
@@ -311,7 +312,9 @@ export const REGISTRY = Object.freeze({
       "base-install-unreliable",
     ]),
     // `base-worktree-unplaceable` (regress-base-integrity): the base checkout's temp directory is inside the project, or could
-    // not be created (base-worktree.mjs).
+    // not be created (base-worktree.mjs). `install-config-invalid` (6.66.0, regress-install-config): pharn.config.json's
+    // `regress.install` cannot be read or cannot answer this run (regress-install-config-core.mjs; a declared family with no
+    // lockfile at BASE; `head-node-modules` with no real node_modules directory, or a link that could not be made).
     unusable: Object.freeze([
       "usage-error",
       "no-feature",
@@ -323,6 +326,7 @@ export const REGISTRY = Object.freeze({
       "no-progress",
       "progress-malformed",
       "base-worktree-unplaceable",
+      "install-config-invalid",
     ]),
   }),
   // stage-verify-script (6.26.0): `/pharn-verify`'s vocabulary. ONE question — verify has no base, no install and
