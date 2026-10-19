@@ -401,7 +401,7 @@ test("✧ PIN: all three scan-code-* scanners declare a byte-identical SPAN", ()
 });
 
 // ---------------------------------------------------------------------------
-// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.64.3). The same reasoning
+// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.64.4). The same reasoning
 // as the block of that name in scan-code-injection.test.mjs: through 6.64.2 a line cost O(sinks × length) —
 // `path.join(`×8000 (80 KB) took 1.5 s — and the driver in sink-span-core.mjs now skips every sink inside a failed
 // sink's span. (old: killed) marks a shape the 6.64.2 scanner does not finish within this timeout, measured once in

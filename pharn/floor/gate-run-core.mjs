@@ -339,10 +339,13 @@ export const NON_REUSABLE_IDS = Object.freeze(
 );
 
 /** A feature slug: one path segment, no traversal, no separators.
- *  A THIRD copy of a grammar already in mark-phase.mjs (NAME_RE) and render-run-report.mjs (SLUG_RE) — neither exports
- *  it, so it cannot be imported today, and inventing a shared home for it is a different increment.
- *  gate-run-core.test.mjs carries a ✧ parity test reading all three module sources and requiring the
- *  three literals to agree; FOLLOW-UP, named rather than implied: fold the copy-set into one export. */
+ *  The floor's one export of this grammar: check-regress, feature-name, run-marker, ac-tests-lock and check-test-stage
+ *  (the last three since 6.64.3) import it. Copies remain where an import is not possible or not yet made:
+ *  mark-phase.mjs (NAME_RE), render-run-report.mjs (SLUG_RE), stage-exit-core.mjs (imports nothing), the two
+ *  human-only hooks set-writes-scope.cjs and enforce-writes-scope.cjs (RUN_NAME_RE, CommonJS) and
+ *  .claude/commands/pharn-ship-close.md's prose. gate-run-core.test.mjs's ✧ parity test reads every one of those
+ *  sources except stage-exit-core.mjs (stage-exit-core.test.mjs compares the live objects) and requires the literals
+ *  to agree; FOLLOW-UP, named rather than implied: fold the two floor-module copies into this export. */
 export const FEATURE_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 /** A 40-hex git object id. */

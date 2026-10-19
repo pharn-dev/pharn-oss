@@ -50,7 +50,7 @@
 //   in the remaining line length. Measured across 11 adversarial paren families — `((a)`, `(a)`, `((a))`, `()`,
 //   `(x,(y)`, unclosed `(`×N, bare `)`×N, deep `(`×N a `)`×N, up to ~480 KB lines: all linear (2× input → ~2×
 //   time), worst family 2.93 ms at 480 KB.
-//   THE PER-LINE COST (re-derived in 6.64.3 for the driver that runs the pattern now — L24). Through 6.64.2 the
+//   THE PER-LINE COST (re-derived in 6.64.4 for the driver that runs the pattern now — L24). Through 6.64.2 the
 //   scanner called `re.test(line)`, and the engine retried the whole pattern at every position a sink callee can
 //   start, so a line cost O(sink-callee occurrences × line length): `query(`×8000 (48 KB) took 1.0 s, ~4× per
 //   doubling (TST-2, the 2026-10-12 review). The regex is unchanged; `lineMatches()` in sink-span-core.mjs runs

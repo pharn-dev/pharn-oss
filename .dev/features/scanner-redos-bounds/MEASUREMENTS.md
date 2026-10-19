@@ -25,11 +25,12 @@ Every row grows about 4× per doubling, so each is quadratic. Two rows were not 
 html-injection's `[^;]*?` span (`.innerHTML=`) and the N+1 header test on many `(`. Both are fixed here. The N+1
 interval lookup (O(hits × intervals)) is quadratic by construction. On 9000 one-line loops it took 1.2 s.
 
-## 2. After: the ★ shapes through the real CLI, 6.64.2 against 6.64.3, 5 s timeout
+## 2. After: the ★ shapes through the real CLI, 6.64.2 against this change, 5 s timeout
 
 `oldnew.mjs` spawns each scanner's CLI on a one-line file. "same" means the two stdout documents are byte-equal.
+This change ships as 6.64.4. It was built as 6.64.3 and renumbered when `main` released its own 6.64.3.
 
-| scanner        | shape                                              | 6.64.2    | 6.64.3 | output |
+| scanner        | shape                                              | 6.64.2    | new    | output |
 | -------------- | -------------------------------------------------- | --------- | ------ | ------ |
 | injection      | `query(`×33k (200 KB)                              | KILLED@5s | 81 ms  | –      |
 | injection      | `exec(`×40k (200 KB)                               | KILLED@5s | 134 ms | –      |

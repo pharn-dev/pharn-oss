@@ -9,11 +9,12 @@
 //   - L27 — each state's remedy must be present in its own output AND absent from every other state's.
 //   - L34 — every "for each X, assert P" is preceded by an assertion that X is non-empty.
 //   - L41/L52 — the defaults in this checker are enumerated and each gets a test that reaches its
-//     no-argument path: `now` (the live-repo CLI run injects none) and `targetDir` (a CLI run with no
-//     argument, from the repo root).
+//     no-argument path: `now` (a CLI run injects none) and `targetDir` (a CLI run with no argument,
+//     started in a fixture). Both run against fixtures, never the live repo (audit TST-6, 6.64.3).
 //
 // Fixture dates for CLI runs are in the PAST relative to any real clock this suite will run under
-// (2026-09 and earlier) or unmistakably in the future (2099), so the real-clock `now` cannot flip a case.
+// (2026-09 and earlier), unmistakably in the future (2099), or computed from the real clock itself (the
+// DEFAULT `now` test: today, and a year ahead), so the real-clock `now` cannot flip a case.
 // Tests that need a precise `now` call the pure core, or `main()` in-process, with an injected one.
 
 import { test } from "node:test";
@@ -38,7 +39,6 @@ import {
   MAX_FINDINGS_PER_STATE,
   FUTURE_ALLOWANCE_DAYS,
 } from "./check-skills-version-recorded.mjs";
-import { parseChangelog } from "./changelog-core.mjs";
 import { isCleanScalar as badgeIsCleanScalar, VERSION_RE as BADGE_VERSION_RE, MAX_LEN as BADGE_MAX_LEN } from "./check-version-badge.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -522,25 +522,45 @@ test("✧ CI actually INVOKES the record check, and its step is not disabled by 
   assert.match(step[0], /^ {8}if: \$\{\{ always\(\) && steps\.install\.outcome == 'success' \}\}$/m);
 });
 
-// ── The real repo, and the defaults (L41/L52) ─────────────────────────────────────────────────────
+// ── The defaults (L41/L52), against hermetic fixtures ─────────────────────────────────────────────
+// These ran against the live repo until 6.64.3 (audit TST-6): a test that reads the real CHANGELOG under the
+// real clock restates `npm run check:changelog` and goes red on any working tree mid-bump. Each default is
+// now exercised against a fixture, so the real clock and the real tree decide nothing here.
 
-test("✧ DEFAULT `now`: the CLI against this repo injects no clock, and is GREEN on the real one", () => {
-  const { code, out } = run([REPO]);
-  assert.equal(code, 0, out);
+/** A UTC calendar date `days` from the real clock's today. */
+function utcDatePlus(days) {
+  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+test("✧ DEFAULT `now`: the CLI injects no clock — an entry dated today is GREEN, one a year ahead is FUTURE_DATE", () => {
+  // Today is later than the fixed NOW every other test injects, so the GREEN proves the default is not NOW,
+  // and the FUTURE_DATE proves it is not a far-future value either: it is the real clock.
+  const today = changelog({ unreleased: [`- ${utcDatePlus(0)}: **Today's change.** It adds nothing.`] });
+  withFixture({ text: today }, (dir) => {
+    const { code, out } = run([dir]);
+    assert.equal(code, 0, out);
+    assert.match(out, /SKILLS-VERSION-RECORDED: GREEN/);
+  });
+  const ahead = changelog({ unreleased: [`- ${utcDatePlus(366)}: **A change from next year.** It adds nothing.`] });
+  withFixture({ text: ahead }, (dir) => {
+    const { code, out } = run([dir]);
+    assert.equal(code, 1, out);
+    assert.match(out, /\[FUTURE_DATE\]/);
+  });
 });
 
-test("✧ DEFAULT `targetDir`: run from the repo root with no argument, the CLI reads `.`", () => {
-  const { code, out } = run([], { cwd: REPO });
-  assert.equal(code, 0, out);
-  assert.match(out, /SKILLS-VERSION-RECORDED: GREEN/);
-});
-
-test("✧ NON-VACUITY against the real repo: the GREEN rests on SKILLS_VERSION heading the newest section", () => {
-  const version = readFileSync(join(REPO, "SKILLS_VERSION"), "utf8").trim();
-  const { headings } = parseChangelog(readFileSync(join(REPO, "CHANGELOG.md"), "utf8"));
-  const first = headings.find((h) => h.kind === "VERSION");
-  assert.ok(first, "the live CHANGELOG must have a version section (L34)");
-  assert.equal(first.version, version);
+test("✧ DEFAULT `targetDir`: run with no argument, the CLI reads `.` — the fixture it is started in", () => {
+  withFixture({}, (dir) => {
+    const { code, out } = run([], { cwd: dir });
+    assert.equal(code, 0, out);
+    assert.match(out, /SKILLS-VERSION-RECORDED: GREEN/);
+    assert.match(out, /"## \[3\.0\.2\] - 2026-09-09"/, "the GREEN names the fixture's own newest section");
+  });
+  withFixture({ version: "3.0.3" }, (dir) => {
+    const { code, out } = run([], { cwd: dir });
+    assert.equal(code, 1, out);
+    assert.match(out, /\[UNRECORDED\]/, "a fixture whose version has no section is RED from `.` too");
+  });
 });
 
 test("✧ THIS PR's recorded head excerpt is GREEN at 6.12.1 on the day it was written", () => {
