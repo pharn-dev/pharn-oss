@@ -155,7 +155,7 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
   - `plan-files-total-glob` — a `## Files` entry declares everything (`**`, `*`, `**/*`, `.`): replace it with the
     files, or a narrow glob, via `/pharn-plan`;
   - `base-install-unreliable` — the base install was skipped or failed and a gate is red at base and head, so that
-    gate could not be measured: fix the install (or pass `--install "<cmd>"`) and re-run;
+    gate could not be measured: fix the install (pass `--install "<cmd>"`, or declare `regress.install`) and re-run;
   - `scope-escaped` — an undeclared path changed: either declare it in `PLAN.md`'s `## Files` via
     `/pharn-plan` (a legitimate widening) or revert the undeclared change. Re-running does not fix it; it only replaces
     the refusal with a report, and the escaped change stays in the tree. **The blind spot this remedy
@@ -241,7 +241,9 @@ The base-commit **install** command is resolved from exactly one lockfile family
 `bun install --frozen-lockfile` are **UNMEASURED** — nobody has run them from this stage) or `--install`.
 **No `package.json` at all proceeds with no install** (M3, GATE 2: the omitted case) — there is nothing to
 install. With a `package.json` present, zero lockfile families or two-or-more → the script's
-`install-unresolved` question.
+`install-unresolved` question, unless the project declares the answer in `pharn.config.json` `regress.install`
+(6.66.0; argv wins; a closed set, never a command — `pharn/pharn-contracts/stage-exit.md`, "The `regress` install
+command"). A declaration that cannot answer the run is `unusable install-config-invalid`.
 
 ## Guarantee audit (P0) — the honest split
 
@@ -273,8 +275,8 @@ install. With a `package.json` present, zero lockfile families or two-or-more �
   quoted through `dataText`/`quoteData` into a fence.
 - **No absolute path in `REGRESSION.md`.** `/pharn-loop` commits it, so the script hands every child
   repo-relative paths, and the renderer writes only what it is given.
-- **Executed commands.** Only the user's own suite and install command — the lockfile table or the user's
-  own `--install`/`--gates`. No command ever comes from `PLAN`/`SPEC` text.
+- **Executed commands.** Only the user's own suite and install command — the lockfile table (a declared family selects
+  its line) or the user's own `--install`/`--gates`. No command ever comes from `PLAN`/`SPEC` or config text.
 - **The question object.** It carries only fixed text and the user's own argv — no tainted field reaches a
   relayed question.
 - **Residual.** A human or model reading `REGRESSION.md`'s quoted text is the accepted, bounded residual

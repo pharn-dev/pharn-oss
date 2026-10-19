@@ -23,13 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.65.0] - 2026-10-19
+## [6.67.0] - 2026-10-19
 
 ### Added
 
 - **`/pharn-build`'s seam-config step is a pinned floor script that `/pharn-loop` pre-approves, and the loop
-  pre-approves the Skill tool only for the five stage commands it runs itself** (`SKILLS_VERSION` 6.64.3 →
-  **6.65.0**, minor: a new product floor script; audit 2026-10-12 LOOP-5 and SEC-6).
+  pre-approves the Skill tool only for the five stage commands it runs itself** (`SKILLS_VERSION` 6.66.0 →
+  **6.67.0**, minor: a new product floor script; audit 2026-10-12 LOOP-5 and SEC-6).
   - What changed:
     - New `pharn/floor/seam-config-materialize.mjs` replaces Step 2c's inline `node -e` line. It writes the
       `seam` block of `pharn.config.json` to `.pharn/seam-config.json` — the documented default when the file is
@@ -64,6 +64,234 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - The grant matches by name, so whatever skill or command answers to one of those five names runs under it.
     - A skill that declares no `allowed-tools` loads through the Skill tool with no grant at all, in any session.
       That is Claude Code's behavior, not this grant's, and nothing here changes it.
+
+## [6.66.0] - 2026-10-19
+
+### Added
+
+- **A project can declare `/pharn-regress`'s base install in `pharn.config.json` — `{"regress": {"install": …}}` — so a
+  full `/pharn-loop` can finish over a project with no lockfile or with two lockfile families.**
+  - What changed:
+    - **The key.** `regress.install` is one of `none`, `head-node-modules`, `npm`, `pnpm`, `yarn`, `bun`: a closed set,
+      never a command, read by the new `pharn/floor/regress-install-config-core.mjs` (own-property reads, every
+      refusal quoted through the total `shown()`). `stage-regress.mjs` reads it from the project root only when the
+      invocation passed neither `--install` nor `--no-install` and the base commit has a `package.json`. Precedence:
+      argv, then the declaration, then the lockfile table.
+    - **The values.** `none` skips the install, and the `base-install-unreliable` rule applies as for `--no-install`. A
+      family runs that family's frozen command from the existing table, and only when its lockfile is in the base
+      commit. `head-node-modules` runs no install and makes the base checkout's `node_modules` a link to the project's
+      own installed `node_modules`, checked with `lstat` (a symlink or a missing directory refuses). The unreliable-install
+      mask does not apply to it, and its evidence is never reused.
+    - **Disclosure.** `regression-report.json` gains an additive `base_install` block (`{declared_in, value}`), after
+      `base_source`, only when the declaration decided this invocation's fresh base, so every other report keeps its
+      bytes. `REGRESSION.md`'s install line names the declaration, and for `head-node-modules` states the
+      approximation in fixed text with no path.
+    - **Refusal.** A declaration that cannot be read or cannot answer the run (a family absent at the base, no real
+      `node_modules` for `head-node-modules`, a base commit that tracks its own `node_modules`, a link that cannot be
+      made) is the new `unusable install-config-invalid`; `/pharn-loop` already maps every `unusable` to S9. The fixed
+      `install-unresolved` question now names the declaration; its options are unchanged.
+    - **Text.** `stage-exit.md` ("The `regress` install command") and `regression-report.md` specify it;
+      `/pharn-regress` names it, `/pharn-loop`'s regress mapping names it as the way to pre-answer
+      `install-unresolved`, and the README has "Declaring the base install". `pharn-regress.md`'s byte ceiling rises
+      to 25,600 (23,140 measured + 10%, next 512).
+  - Why: audit finding LOOP-11. `resolveInstall` asked whenever a base had a `package.json` and not exactly one lockfile
+    family; `/pharn-loop` maps that question to S10 and its granted regress line passes no install flag, so such a
+    project could never finish a full loop.
+  - Why `head-node-modules` and not only `none`: for the common case — a library with devDependencies and no lockfile —
+    `none` leaves the base without dependencies, so every gate that needs them is red at the base, and the first gate
+    red at head (a pre-existing red, or an iteration that broke an outside test) is refused `base-install-unreliable`,
+    an S9 stop. A test pins that. `head-node-modules` measures the base with HEAD's dependency tree instead, so such a
+    run reaches a verdict and the loop iterates on a regression.
+  - Not covered:
+    - `head-node-modules` is an approximation: a regression caused purely by a dependency change is red on both sides
+      and reads `pre_existing`. It costs regress's attribution, not the loop's green: `/pharn-verify`'s threshold is
+      absolute over every gate at HEAD. It re-admits, opt-in and disclosed, the dependency borrowing that 6.50.x's
+      out-of-project base checkout removed by default.
+    - The link is writable: a base gate that writes under `node_modules` (a cache) writes the project's tree. Only the
+      root `node_modules` is linked; a workspace's nested ones are not.
+    - Because `none` and `head-node-modules` evidence is never reused, every `/pharn-loop` iteration that does not take
+      its base from the entry gates runs the whole base side again. That cost was not measured.
+    - No non-frozen install (`npm install`) is offered: resolving dependency versions at run time could turn a new
+      upstream break red at base and read a head regression as `pre_existing`.
+    - The declaration is not pinned at `/pharn-test`: the test-infrastructure pin covers what decides `/pharn-verify`'s
+      AC gate, and this decides only regress's base. In an installed project a build cannot write `pharn.config.json`
+      with the write tools (the 6.61.0 setter refusal and the reserved surface); a Bash write is detected, never
+      prevented, by the reconcile gate. In a dev checkout a plan may scope it.
+    - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
+      can for the table's own inferred install.
+
+## [6.65.2] - 2026-10-19
+
+### Fixed
+
+- **A leading UTF-8 BOM no longer hides a capability from the floor, and `check-plan-lessons.mjs` REDs a repeated
+  `applied_lessons` instead of gating its first copy** (audit 2026-10-12, ENF-3 and ENF-4).
+  - ENF-3, what failed: `validate.mjs` and the readers that mirror its loose `startsWith("---")` fence tested the raw
+    text, so a BOM before the `---` made a capability "not a capability". Reproduced at 6.64.2: a lens with four
+    blocking findings printed `FLOOR: GREEN — 0 capabilities checked` once a BOM was prepended, and `count-lenses.mjs`
+    registered 0.
+  - ENF-3, what changed: `validate.mjs`, `count-lenses.mjs`, `count-grillers.mjs`, `count-verifiers.mjs`,
+    `check-model-config.mjs` and `griller-extract.mjs` (`frontmatterKind`, `trimGriller`) strip one leading BOM with
+    `frontmatter-core.mjs`'s `stripBom` before their own fence test. Nothing else in their loose model changes: a
+    `----` opening still parses, and the count-\* readers keep the same parse as `validate.mjs`, BOM strip included.
+    `trimGriller` keeps the BOM in its output, so the output still matches the input byte for byte. In the build
+    apparatus, `capability-catalog-core.mjs` and `check-config.mjs` do the same, importing the product core.
+  - ENF-4, what failed: `check-plan-lessons.mjs` kept the FIRST `applied_lessons` line, while YAML and
+    `frontmatter-core.mjs`'s `readField` keep the LAST. A PLAN declaring `none` and then `[L9999]` was GREEN, in both
+    the frontmatter and the dev bullet shape.
+  - ENF-4, what changed: the checker reads both header regions in full and REDs when the field is declared more than
+    once, naming the counts per region and never a value. Neither copy is chosen. A line in the body or inside a fence
+    is still not a declaration. `render-ship-briefing.mjs` and `check-ship-briefing.mjs` `readHeaderField` now keep the
+    LAST copy, the one `check-spec.mjs` reads, so a SPEC with `state: Draft` then `state: Approved` no longer briefs as
+    Draft. Its bullet-header branch now skips fences with `plan-files-core.mjs`'s `fenceStates`. A backtick line inside
+    a tilde fence no longer closes it, and a fence line indented four or more spaces is now content.
+  - One line reader: `frontmatter-core.mjs` gains `BULLET_FIELD_LINE_RE` and `fieldEntries(lines, re)`, and `readField`
+    is rebuilt on top of it with the same reading. `check-loop-record.mjs`, `check-loop-decision.mjs`,
+    `loop-closeout.mjs`, `render-cost-ledger.mjs`, `check-ship-briefing.mjs` `readEnvelope` and the dev
+    `command-family.mjs` parse their `key: value` lines through it. Each keeps its own value rule and still keeps the
+    last copy of a repeated key. `render-cost-ledger.mjs` was a fourth LOOP.md envelope reader with a narrower key
+    grammar, and the audit did not list it. `render-review-assignments.test.mjs` and `lens-groups.test.mjs` copy
+    `frontmatter-core.mjs` into their scratch repos beside `count-lenses.mjs`, which now imports it.
+  - Checked by: 24 new tests. Each change of reading above has a test with a BOM'd or repeated input and a twin without
+    the BOM or the repeat. Reverted one at a time in a scratch copy (eleven reverts), each change turned its test RED.
+    The six reader swaps change no reading, and their existing suites cover them. Two closure tests in
+    `frontmatter-core.test.mjs` cover every non-test `pharn/floor` module. A module that tests the frontmatter fence
+    must be in `CONSUMERS`, which grows from 9 to 19. Each consumer must call `stripBom` or `matchFrontmatter`; before,
+    only `stripBom` counted, and this widening is deliberate. No module but the core may hold a regex literal of the
+    `key: value` line grammar, except `instruction-files-core.mjs`, which parses nested YAML. A new
+    `.dev/floor/frontmatter-readers.test.mjs` holds the same two rules for `.dev/floor`.
+  - Bounds: the closures are lexical. A module that strips one variable and tests the fence on another passes them, and
+    only the per-site tests catch that. A line-grammar copy written with another key class passes them too, and only
+    review catches that. `.claude/hooks/set-writes-scope.cjs` parses a command's frontmatter with its own strict
+    anchor, which fails closed on a BOM, and reads the first `writes:` line. It is a protected hook outside this
+    increment. The LOOP.md and BRIEFING.md envelope readers still keep the last copy of a repeated key; refusing it
+    there is a named follow-up, because it would change `loop-record.md` and `ship-briefing.md`.
+
+## [6.65.1] - 2026-10-19
+
+### Fixed
+
+- **The injection, SSRF, path-traversal and N+1 scanners no longer slow down quadratically on one long line or
+  one long receiver chain.**
+  - What changed:
+    - `scan-code-injection.mjs`, `scan-code-ssrf.mjs` and `scan-code-path-traversal.mjs` run each pattern through
+      `pharn/floor/sink-span-core.mjs`, a new shared driver. The regexes are unchanged. Each regex runs at one sink
+      at a time. When it fails there, the driver skips every later sink inside that sink's span, because each of
+      them must fail too. The span ends at the call's own `)`, or at the next `;` for html-injection. The proof,
+      and what it needs from each sink regex, are in the driver's header. At import, the driver also refuses a
+      pattern whose span does not match its skip limit.
+    - `scan-code-n-plus-one.mjs` runs its query regex only where a match can start. After a failed start it skips
+      the rest of that receiver chain. It tests the `.forEach`/`.map` header backwards from each `(` instead of
+      re-running a regex over the whole header, and it looks query hits up in one coverage array instead of scanning
+      every loop interval.
+    - The scanners' output is unchanged, and their headers now give the re-derived cost.
+  - Why: the 2026-10-12 review (TST-2, TST-3), whose shapes this PR reproduced first:
+    - `query(`×8000 (48 KB): 1.0 s; `fetch(`×16000 (96 KB): 3.6 s; `path.join(`×8000 (80 KB): 1.5 s;
+    - `a.`×10000 (20 KB) in the N+1 scanner: 1.1 s, and ×80000 did not finish in 30 s.
+
+    Each grew about 4× per doubling. The 6.62.0 prefilter timeout does not bound a lens subagent that runs a
+    scanner itself. Two more quadratic steps were found and fixed along the way: html-injection's `[^;]*?` span
+    (`.innerHTML=`×N) and the N+1 header test on many `(`.
+
+  - Checked by:
+    - **★ ReDoS tests** in the four scanner suites spawn the real CLI over 200 KB to 1 MB lines under a 5 s timeout.
+      Each passes when the scan finishes and fails if the timeout kills it. The 6.64.2 scanners were killed on 13 of
+      these shapes; the new ones finish in about 60–830 ms (`.dev/features/scanner-redos-bounds/MEASUREMENTS.md`).
+      The other shapes are the new driver's own worst cases, and each true-positive twin must still find its hit.
+    - **★ Differential tests** compare each new `scanText` with a frozen copy of the 6.64.2 one, written into the
+      test file and importing nothing from the scanner. The inputs are the lens eval cases (three of the four lenses),
+      every `.mjs` file under `pharn/floor/`, near-miss lines and seeded fuzz. **Negative controls** show this corpus
+      catches a driver that skips too far, and catches an N+1 copy changed at each edge the new code re-decides.
+    - **A one-time comparison, not a maintained check**, found identical output, old against new:
+      - over all 2,999 tracked text files, for all four scanners;
+      - over 300,000 fuzzed lines for each sink scanner;
+      - over 3,000 fuzzed texts for N+1.
+  - Bounds (ADVISORY):
+    - "Same verdict as 6.64.2" is argued and tested over a fixed corpus, not guaranteed.
+    - "Linear" is the derived bound, measured on the named shapes, not a floor property.
+    - The skip assumes three things of every sink regex: it consumes no stop character of its span, each start has
+      one end, and no sink starts inside another sink's match. A new sink that breaks one of these can drop a hit,
+      and the differential sees it only if its alphabet holds that sink.
+    - A receiver chain of about 1.5 million links (3 MB) still overflows V8's regex stack in the N+1 scanner. The
+      scan then throws, as it did in 6.64.2.
+  - Not covered: the same sweep found `scan-code-missing-error-handling.mjs` and `scan-code-missing-timeout.mjs`
+    super-linear too:
+    - missing-error-handling: about 2.9× per doubling on `try{`×N and 6.2× on `await x(`×N;
+    - missing-timeout: about 3.6× on `fetch(`×N.
+
+    They use other mechanisms and are left to the named follow-up `scanner-redos-sweep-2`.
+
+## [6.65.0] - 2026-10-19
+
+### Changed
+
+- **`/pharn-loop`'s run report, closeout and summary now name the gates a project's `gates.exclude` removed, and the
+  run report shows the always-loaded instruction set's token estimate.** Audit findings LOOP-4 and CTX-14 (2026-10-12).
+  - What changed: `RUN-REPORT.md`'s `## Verdicts` gets one line under each verdict naming the excluded gate ids
+    (verify's `gate_run.excluded`, regress's `gate_run.head.excluded`). `pharn/floor/loop-closeout.mjs` gets a new
+    closed document key, `excluded_gates`, and when a green commit ran without excluded gates its message gets a third
+    paragraph naming them. The `/pharn-loop` Step 7 summary repeats them. Before this, a `STOP_GREEN` over a suite
+    minus `e2e` read as a full green everywhere except `VERIFY.md` and `REGRESSION.md`. One reader serves all three:
+    `excludedFacts` in `pharn/floor/gate-run-core.mjs`. Ids appear inline only as allowlist members.
+  - `/pharn-loop` Step 1a gets one new pinned line, `node pharn/floor/check-instruction-files.mjs --report`, which
+    writes to `.pharn/pharn-loop/<name>/instruction-files.json`. Its exact grant line is added to `allowed-tools`, and
+    it never stops the run. `RUN-REPORT.md`'s `## Tokens` shows the estimate (bytes / 4) below the token table. The
+    files are already inside the input counts above it; an unusable record renders as `n/a`.
+  - Bounds: the figure is an estimate of `check-instruction-files.mjs`'s model of the loader, not a measurement
+    (`LIMITS.md §1c`, §3e). `/pharn-ship` records none and its report says so; follow-up `ship-instruction-set`.
+    Whether the reports' `excluded` block is truthful is the stamp's own bound (`gate-run-record.md`). The listing
+    gates nothing.
+
+### Fixed
+
+- **A loop record's `cap` must now be the cap the run opened with, and an inconclusive reconcile gate no longer reads
+  as a detected escape.** Audit findings LOOP-2 and LOOP-3 (2026-10-12).
+  - LOOP-2: `pharn/floor/check-loop-decision.mjs`, which gates `/pharn-loop`'s commit, re-derived the decision with
+    the record's own `cap`, which the model types. A record `cap: 7` over a run opened with `--cap 3` stayed GREEN. The
+    check now reads the Stop guard's marker, `.pharn/pharn-loop/<name>/active.json`, written by
+    `require-loop-record.cjs --open <name> --cap <M>` at Step 1a. Three new REDs:
+    - `CAP_MISMATCH` when the two caps differ;
+    - `CAP_UNWITNESSED` when no usable marker exists (fail-closed). The closeout runs the check before its own
+      `--close`, every run opens the marker before its feature directory exists, and a blocked record is skipped
+      first;
+    - `ITER_OVER_CAP` when `iterations` exceeds `cap`.
+  - LOOP-3: `pharn/floor/check-loop.mjs` gains the terminal cause `reconcile-inconclusive`. It applies when the
+    reconcile gate's recorded exit is exactly 2 (`check-bash-reconcile.mjs`'s INCONCLUSIVE, for example no
+    baseline), and the reason now says nothing was detected. The decision stays `STOP_TERMINAL`.
+    `RUN-REPORT.md` heads that block INCONCLUSIVE, and `/pharn-loop` Step 5 routes the new cause like `reconcile`.
+    The contracts (`verify-report.md`, `loop-record.md`, `reconciliation-record.md`) say the same.
+  - Bounds: the cap check is agreement between two files the run can write, never provenance. A typed
+    `iterations` that is too low still passes. Re-checking a record by hand after the run's Final step closed the
+    marker is RED `CAP_UNWITNESSED`. A reconcile checker that crashed exits 1, its ESCAPE code, so it still reads
+    `reconcile`. Not done: cross-checking `iterations` against the run's stage markers (follow-up
+    `loop-iterations-markers`).
+
+## [6.64.4] - 2026-10-19
+
+### Fixed
+
+- **Tests now fail when a finding or verify-report enum changes in its contract but not in the code that restates it,
+  or the other way round** (`SKILLS_VERSION` 6.64.3 → **6.64.4**, patch; audit 2026-10-12 ARCH-9).
+  - The tests read `pharn/pharn-contracts/finding-shape.md` and `verify-report.md` and compare each enum with the set
+    the code uses, by set equality. Each also runs negative controls: a value added to the contract, a value removed
+    from it, and a missing anchor, which must throw rather than read as an empty set.
+  - `merge-findings.test.mjs`: the severity enum, both where the contract's object block states it and in its
+    field-trust table, equals `SEVERITY_ENUM`. The contract lists `type` as an open list ending in `...`, and
+    `merge-findings.mjs` checks `type` by shape (`TYPE_OK`), not by set. So the test checks that every listed type
+    passes `TYPE_OK` and that the list is still open. If the list is closed, the test fails and says a set is needed.
+  - `check-loop.test.mjs` and `check-ship.test.mjs`: each consumer's row in the verdict table equals the set the
+    checker tests. Both CLIs run on import, so the set is read from the checker's refusal of an unknown verdict, which
+    prints the set it tested against. The `check-ship.mjs` test finds the contract by walking up the directory tree
+    and matches its row by file name, so moving the checker and its test does not break the binding.
+  - `check-ship-briefing.test.mjs`: the rows for `check-ship-briefing.mjs` and `render-ship-briefing.mjs` equal each
+    module's `VERIFY_ENUM`.
+  - `check-verify.test.mjs`: the verdict literals `check-verify.mjs` emits equal the contract's stated union
+    `{PASS, FAIL, INCOMPLETE, INCONCLUSIVE}`, and that union equals the union of the table's rows.
+  - Shipped bytes: `SEVERITY_ENUM` and `TYPE_OK` in `pharn/floor/merge-findings.mjs`, and `VERIFY_ENUM` in
+    `render-ship-briefing.mjs` and `check-ship-briefing.mjs`, are now exported. Nothing else in those files changed.
+  - Bounds: the tests show that a contract and its code agree, not that the enum is right; a wrong value written in
+    both places passes. `gate-run-core.mjs`, which the audit also cited, holds no verdict set at this version, so there
+    was nothing to bind.
 
 ## [6.64.3] - 2026-10-19
 

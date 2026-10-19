@@ -5,8 +5,8 @@
 // stderr line, and the bytes it wrote (or did not write). Every written file is also fed to check-seam-config.mjs,
 // the validator the next pinned line runs, so the two lines are tested as the command runs them.
 //
-// ★ PARITY: the inline one-liner this script replaced (6.65.0, audit LOOP-5) is kept below, byte for byte as
-// /pharn-build shipped it through 6.64.3, and run over the same inputs. Where the script keeps the line's behavior the
+// ★ PARITY: the inline one-liner this script replaced (6.67.0, audit LOOP-5) is kept below, byte for byte as
+// /pharn-build shipped it through 6.66.0, and run over the same inputs. Where the script keeps the line's behavior the
 // two must agree on exit code and bytes; the one declared change (a non-object top level HALTs) is asserted on both
 // sides, so the divergence is measured rather than described.
 
@@ -25,7 +25,7 @@ const CHECK = join(here, "check-seam-config.mjs");
 const DEFAULT_BYTES = JSON.stringify({ resolutionOrder: ["official-skill", "pinned-docs", "model", "fetch", "ask"] }, null, 2);
 const SENTINEL = "SENTINEL — written before the run";
 
-// The replaced line, verbatim (the `node -e` argument from .claude/commands/pharn-build.md Step 2c at 6.64.3).
+// The replaced line, verbatim (the `node -e` argument from .claude/commands/pharn-build.md Step 2c through 6.66.0).
 const ONE_LINER =
   "const fs=require('fs');const DEF={resolutionOrder:['official-skill','pinned-docs','model','fetch','ask']};let c={},raw;try{raw=fs.readFileSync('pharn.config.json','utf8')}catch(e){if(e.code!=='ENOENT'){console.error('HALT: pharn.config.json unreadable: '+e.message);process.exit(1)}}if(raw!==undefined){try{c=JSON.parse(raw)}catch(e){console.error('HALT: pharn.config.json is present but not valid JSON ('+e.message+') — refusing to substitute the permissive default for your seam policy; fix the file.');process.exit(1)}}const seam=c.seam??DEF;fs.mkdirSync('.pharn',{recursive:true});fs.writeFileSync('.pharn/seam-config.json',JSON.stringify(seam,null,2))";
 
@@ -111,7 +111,7 @@ test("(d) malformed JSON HALTs with exit 1, writes nothing, and leaves an older 
   assert.equal(kept.written, SENTINEL, "an existing .pharn/seam-config.json is untouched on HALT");
 });
 
-test("(d) a top level that is not a JSON object HALTs (null, array, string, number) — the 6.65.0 change", () => {
+test("(d) a top level that is not a JSON object HALTs (null, array, string, number) — the 6.67.0 change", () => {
   for (const config of ["null", "[]", '[{"seam":{"resolutionOrder":["ask"]}}]', '"seam"', "3", "true"]) {
     const r = run(config, plantSentinel);
     assert.equal(r.status, 1, config);

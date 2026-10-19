@@ -4866,7 +4866,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // loop-scope-hardening (6.61.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —
   // 24,152 bytes measured, 88 over 24,064; raised by the rule (+10%, up to a multiple of 512).
   "pharn-plan.md": 26624,
-  "pharn-regress.md": 23040, // 6.49.0 entry-run-as-base-evidence: 20699 B measured + 10% → next 512 (was 20480)
+  "pharn-regress.md": 25600, // 6.66.0 regress-install-config: 23140 B measured + 10% → next 512 (was 23040)
   // review-lens-grouping (6.64.0): Step 3's grouping line and its three exit branches, Step 4's subagent type, fallback,
   // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes
   // measured, 3,473 over 24,064; raised by the rule (+10%, up to a multiple of 512).
@@ -5617,7 +5617,7 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
 // may run INLINE in its own turn when routing falls back (`stage-agent.mjs start` exits 3) — their lines run in the
 // grant's turn, so leaving them out would stall an unattended run.
 //
-// 6.65.0 (loop-grant-seam-skill — audit LOOP-5, SEC-6): no line is excluded any more. `/pharn-build`'s seam-config
+// 6.67.0 (loop-grant-seam-skill — audit LOOP-5, SEC-6): no line is excluded any more. `/pharn-build`'s seam-config
 // `node -e` line, whose quoted JavaScript the subcommand split could not read, became the pinned
 // `node pharn/floor/seam-config-materialize.mjs`, granted exactly like every other line. And the Skill tool is no longer
 // granted whole: the Skill grants are DERIVED too — one `Skill(<name> *)` per command the loop runs in its own turn
@@ -5713,7 +5713,7 @@ test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line 
   assert.deepEqual(loopGrantOffenders(grants, lines), []);
   // 6.61.0 closure (L36): the Bash grants ARE the derived exact set — no prefix rule, nothing wider, nothing missing.
   assert.deepEqual([...grants.filter((g) => g.startsWith("Bash("))].sort(), derivedLoopGrants(lines));
-  // 6.65.0: the seam-config step is in the domain as its pinned script line, and no `node -e` line is left in it.
+  // 6.67.0: the seam-config step is in the domain as its pinned script line, and no `node -e` line is left in it.
   assert.ok(
     lines.some((l) => l.file === "pharn-build.md" && l.text.startsWith("node pharn/floor/seam-config-materialize.mjs")),
     "non-vacuous: /pharn-build's seam-config line is a pinned line of the domain"
@@ -5728,12 +5728,12 @@ test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line 
   assert.equal(allowedTools(withoutGrant(raw)), null, "withoutGrant removes the allowed-tools list");
   assert.match(withoutGrant(raw), /^writes: \[/m, "and keeps the rest of the frontmatter");
   // The other grants are a closed set: a new tool in the grant is a reviewed change, not a drift. The Skill grants are
-  // checked on their own below (6.65.0), so the bare `Skill` is no longer a member.
+  // checked on their own below (6.67.0), so the bare `Skill` is no longer a member.
   assert.deepEqual(
     grants.filter((g) => !g.startsWith("Bash(") && !g.startsWith("Skill")),
     LOOP_NON_BASH_GRANTS
   );
-  // 6.65.0 (SEC-6): the Skill grants EQUAL the derived set — one `Skill(<name> *)` per command the run invokes inline.
+  // 6.67.0 (SEC-6): the Skill grants EQUAL the derived set — one `Skill(<name> *)` per command the run invokes inline.
   assert.deepEqual(loopSkillGrantOffenders(grants, commandFamilyText(COMMANDS_DIR, "pharn-loop.md")), []);
   // Only the loop carries a grant: the gated /pharn-ship keeps its prompts, and no part declares its own.
   for (const f of productCommandFiles().filter((x) => x !== "pharn-loop.md"))

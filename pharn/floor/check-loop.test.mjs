@@ -335,7 +335,11 @@ test("★ exact membership: an 'ac-evidence' substring in another gate id, or in
   assert.equal(o.terminal_cause, null);
 });
 
-test("✧ L36 CLOSURE — terminal_cause takes exactly {unmeasured, ac-evidence, reconcile} on STOP_TERMINAL and null otherwise", () => {
+// 6.65.0 (audit LOOP-3): check-bash-reconcile.mjs's INCONCLUSIVE exit 2, recorded under the gate id.
+const VRECONCILE_INCONCLUSIVE = { feature: "x", gates: { reconcile: 2 }, verdict: "FAIL", failing_gates: ["reconcile"] };
+const CAUSES = ["ac-evidence", "reconcile", "reconcile-inconclusive", "unmeasured"];
+
+test("✧ L36 CLOSURE — terminal_cause takes exactly the four causes on STOP_TERMINAL and null otherwise", () => {
   const seen = new Map();
   const cases = [
     [PASS, CLEAN, 1, 3],
@@ -344,23 +348,72 @@ test("✧ L36 CLOSURE — terminal_cause takes exactly {unmeasured, ac-evidence,
     [VAC_DELIVERY, CLEAN, 1, 3],
     [VAC_EVIDENCE, CLEAN, 1, 3],
     [VRECONCILE, CLEAN, 1, 3],
+    [VRECONCILE_INCONCLUSIVE, CLEAN, 1, 3],
     [{ ...PASS, verdict: "INCONCLUSIVE" }, CLEAN, 1, 3],
     [{ ...PASS, verdict: "BOGUS" }, CLEAN, 1, 3],
   ];
   for (const [v, rg, i, c] of cases) {
     const o = json(decide(v, rg, i, c));
     seen.set(o.decision + ":" + o.terminal_cause, true);
-    if (o.decision === "STOP_TERMINAL") assert.ok(["unmeasured", "ac-evidence", "reconcile"].includes(o.terminal_cause), JSON.stringify(o));
+    if (o.decision === "STOP_TERMINAL") assert.ok(CAUSES.includes(o.terminal_cause), JSON.stringify(o));
     else assert.equal(o.terminal_cause, null, JSON.stringify(o));
   }
   const causes = [...seen.keys()]
     .filter((k) => k.startsWith("STOP_TERMINAL:"))
     .map((k) => k.split(":")[1])
     .sort();
-  assert.deepEqual(causes, ["ac-evidence", "reconcile", "unmeasured"], "every cause is reachable");
+  assert.deepEqual(causes, CAUSES, "every cause is reachable");
   const src = readFileSync(CL, "utf8");
   const assigned = [...src.matchAll(/terminal_cause = "([^"]+)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(assigned, ["ac-evidence", "reconcile", "unmeasured"], "no cause is assigned outside the closed set");
+  assert.deepEqual(assigned, CAUSES, "no cause is assigned outside the closed set");
+});
+
+test("★ LOOP-3 — a reconcile gate that exited 2 (INCONCLUSIVE) stops as reconcile-inconclusive, never as a detected escape", () => {
+  for (const [label, spec] of [
+    ["full", null],
+    ["quick", QUICK_SPEC],
+  ]) {
+    const r = decide(VRECONCILE_INCONCLUSIVE, CLEAN, 1, 3, spec);
+    assert.equal(r.status, 4, label);
+    const o = json(r);
+    assert.equal(o.decision, "STOP_TERMINAL", label);
+    assert.equal(o.terminal_cause, "reconcile-inconclusive", label);
+    assert.match(o.reason, /could not decide/, label);
+    assert.match(o.reason, /no escape was detected/, label);
+    assert.doesNotMatch(o.reason, /erase the detected escape/, label);
+  }
+  // control: exit 1 (an escape) keeps `reconcile` and its own reason
+  const o = json(decide(VRECONCILE, CLEAN, 1, 3));
+  assert.equal(o.terminal_cause, "reconcile");
+  assert.match(o.reason, /erase the detected escape/);
+});
+
+test("★ LOOP-3 — only an OWN `reconcile` key holding exactly the number 2 reads inconclusive; anything else keeps `reconcile`", () => {
+  const variants = [
+    ["exit 1", { reconcile: 1 }],
+    ["exit 3", { reconcile: 3 }],
+    ["the string '2'", { reconcile: "2" }],
+    ["no reconcile key", { test: 2 }],
+    ["gates absent", undefined],
+    ["gates null", null],
+    ["gates an array", [2]],
+    ["gates a string", "reconcile: 2"],
+    ["an inherited key", Object.create({ reconcile: 2 })],
+  ];
+  for (const [label, gates] of variants) {
+    const v = { feature: "x", verdict: "FAIL", failing_gates: ["reconcile"] };
+    if (gates !== undefined) v.gates = gates;
+    const o = json(decide(v, CLEAN, 1, 3));
+    assert.equal(o.decision, "STOP_TERMINAL", label);
+    assert.equal(o.terminal_cause, "reconcile", label);
+  }
+  // `gates.reconcile === 2` without reconcile in failing_gates never stops terminally on reconcile
+  const o = json(decide({ ...VFAIL, gates: { test: 1, reconcile: 2 } }, CLEAN, 1, 3));
+  assert.equal(o.decision, "CONTINUE");
+  assert.equal(o.terminal_cause, null);
+  // ac-evidence still wins over an inconclusive reconcile
+  const both = { feature: "x", gates: { reconcile: 2 }, verdict: "FAIL", failing_gates: ["ac-evidence", "reconcile"] };
+  assert.equal(json(decide(both, CLEAN, 1, 3)).terminal_cause, "ac-evidence");
 });
 
 test("★ STOP_GREEN is unreachable with any AC id in failing_gates — the verdict it rides on is FAIL, whatever the cap", () => {
@@ -612,6 +665,68 @@ test("✧ CLOSURE (L36) — the source assigns exactly five decisions, and INCON
   assert.deepEqual(literal, ["INCONCLUSIVE"], "INCONCLUSIVE is emitted only by the two refusal objects");
   // Every assigned token is reachable (non-vacuous): CONTINUE, STOP_CAP, STOP_GREEN, STOP_TERMINAL above, and:
   assert.equal(json(decide(PASS, null, 1, 3, QUICK_SPEC)).decision, "STOP_GREEN_QUICK");
+});
+
+// ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — verify-report.md's verdict table row against the LIVE set ─────────
+// pharn/pharn-contracts/verify-report.md lists, per consumer, the `verdict` set it accepts; check-loop.mjs restates its
+// own in VERIFY_VERDICTS. The CLI runs main() on import, so the set is read where the checker states it: its refusal of
+// an off-contract verdict prints `is not one of {…}` from the very Set it tests membership in. Set EQUALITY (L36), so an
+// extra value on either side fails; the parser throws on a missing header or a malformed row (L60). BOUND (L43): it
+// certifies agreement between the contract and the code, never that the set is right.
+const VERIFY_REPORT = join(here, "..", "pharn-contracts", "verify-report.md");
+
+/** The per-consumer `verdict` table → Map(basename → sorted values). Throws on a missing header or a malformed row. */
+function contractVerdictTable(text) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => /^\|\s*consumer\s*\|\s*accepted `verdict` set\s*\|\s*on a value outside it\s*\|\s*$/.test(l));
+  if (h < 0) throw new Error("verify-report.md: the per-consumer `verdict` table header was not found");
+  const rows = new Map();
+  for (let i = h + 2; i < lines.length && lines[i].startsWith("|"); i++) {
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const file = /^`(?:[^`]*\/)?([^`/]+\.mjs)`$/.exec(cells[0] ?? "");
+    if (!file || !/^`[A-Z_]+`(?: · `[A-Z_]+`)*$/.test(cells[1] ?? ""))
+      throw new Error(`verify-report.md: malformed verdict-table row: ${lines[i]}`);
+    rows.set(
+      file[1],
+      cells[1]
+        .split(" · ")
+        .map((t) => t.slice(1, -1))
+        .sort()
+    );
+  }
+  if (rows.size === 0) throw new Error("verify-report.md: the verdict table has no rows");
+  return rows;
+}
+
+/** The set check-loop.mjs actually tests, read from its own refusal of a verdict no contract names. */
+function liveVerifySet() {
+  const r = decide({ ...PASS, verdict: "NOT_A_CONTRACT_VERDICT" }, CLEAN, 1, 3);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  const m = /\.verdict "NOT_A_CONTRACT_VERDICT" is not one of \{([^}]*)\}/.exec(json(r).reason);
+  assert.ok(m, `check-loop.mjs's refusal no longer prints the set it tests: ${json(r).reason}`);
+  return m[1].split(", ").sort();
+}
+
+test("✧ ARCH-9 — verify-report.md's check-loop.mjs row equals the verdict set check-loop.mjs tests", () => {
+  const row = contractVerdictTable(readFileSync(VERIFY_REPORT, "utf8")).get("check-loop.mjs");
+  assert.ok(row, "verify-report.md's verdict table has no check-loop.mjs row");
+  assert.deepEqual(liveVerifySet(), row, "check-loop.mjs VERIFY_VERDICTS and its verify-report.md row differ — edit both");
+});
+
+test("✧ ARCH-9 negative controls — a value added to or removed from the row, or a missing header, fails", () => {
+  const text = readFileSync(VERIFY_REPORT, "utf8");
+  const live = liveVerifySet();
+  const line = text.split("\n").find((l) => /^\|\s*`[^`]*check-loop\.mjs`/.test(l));
+  assert.ok(line, "the check-loop.mjs row must exist for the mutants to mean anything");
+  const added = text.replace(line, line.replace("`INCONCLUSIVE`", "`INCONCLUSIVE` · `SKIPPED`"));
+  assert.notDeepEqual(contractVerdictTable(added).get("check-loop.mjs"), live);
+  const removed = text.replace(line, line.replace("`INCOMPLETE` · ", ""));
+  assert.notDeepEqual(contractVerdictTable(removed).get("check-loop.mjs"), live);
+  assert.throws(() => contractVerdictTable(text.replace("accepted `verdict` set", "accepted set")), /header was not found/);
+  assert.throws(() => contractVerdictTable(text.replace(line, line.replace("`PASS` · ", "PASS or "))), /malformed/);
 });
 
 // ── 6.59.0 — an UNMEASURED gate stops the loop terminally (the 2026-10-12 review's LOOP-1) ────────────────────────────

@@ -156,7 +156,11 @@ The only widening that stays clean is declaring every path **before** the build'
 says so.
 
 **Where the reason is visible.** `check-loop.mjs`'s closed `terminal_cause` names the cause (`reconcile`), not the
-reason. Since 6.55.0 `/pharn-verify` reads the reconcile gate's recorded output (bound to the stamp's digest) into
+reason. Since 6.65.0 (audit LOOP-3) it names a third outcome apart: when the gate's recorded exit is exactly `2` —
+this checker's INCONCLUSIVE, for example no baseline under `--require-baseline` — the cause is
+`reconcile-inconclusive`, because nothing was detected; the stop is still `STOP_TERMINAL`, and `RUN-REPORT.md` heads
+that block INCONCLUSIVE. A checker that crashed exits 1, the ESCAPE code, so it still reads `reconcile`; the report's
+`reconcile_detail.state` `not-checker-json` shows it. Since 6.55.0 `/pharn-verify` reads the reconcile gate's recorded output (bound to the stamp's digest) into
 `verify-report.json`'s advisory `reconcile_detail` block (`verify-report.md`), and `VERIFY.md` — and `RUN-REPORT.md`
 when the loop stopped on `reconcile` — lists each escape's `file`, `denied_by`, `reason` and `scope_set_by` (first 20
 rows) and the `merged` count. The remedy text stays in each finding's `problem`, which the reports do not render: to

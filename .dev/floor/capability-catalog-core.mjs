@@ -30,6 +30,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep, basename, dirname } from "node:path";
 import { posix } from "node:path";
 import { frontmatterFields } from "./command-family.mjs";
+import { stripBom } from "../../pharn/floor/frontmatter-core.mjs";
 
 // The catalog output directory (repo-relative, POSIX). One page per capability + a README index.
 export const OUT_DIR = "docs/capabilities";
@@ -75,8 +76,10 @@ const EXCLUDE_SEGMENTS = [
   `${sep}docs${sep}`,
 ];
 
-// --- tiny dependency-free frontmatter parser (mirrors validate.mjs `parseFrontmatter`) ---
-function parseFrontmatter(text) {
+// --- tiny dependency-free frontmatter parser (mirrors validate.mjs `parseFrontmatter`, including its leading-BOM
+// strip through the product core's `stripBom`, 6.65.2 — the catalog lists exactly what validate counts) ---
+function parseFrontmatter(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return { fm: null, body: text };
   const end = text.indexOf("\n---", 3);
   if (end === -1) return { fm: null, body: text };

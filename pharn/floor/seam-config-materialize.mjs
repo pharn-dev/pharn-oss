@@ -2,7 +2,7 @@
 // pharn/floor/seam-config-materialize.mjs — extract the project's seam policy to scratch for the validator.
 //
 // /pharn-build Step 2c runs this line, then `node pharn/floor/check-seam-config.mjs .pharn/seam-config.json`. It
-// replaces an inline `node -e` one-liner (6.65.0, audit LOOP-5): that line's quoted JavaScript held `;` and `|`, so
+// replaces an inline `node -e` one-liner (6.67.0, audit LOOP-5): that line's quoted JavaScript held `;` and `|`, so
 // /pharn-loop's exact allowed-tools grant could not name it and an inline build stopped on a permission prompt. A
 // pinned script line can be granted exactly, and its behavior is tested here instead of retyped by a model (L22).
 //
@@ -13,7 +13,7 @@
 //   (c) present, a JSON object, `seam` set         → write `seam` as given; validating it is NOT this script's job;
 //   (d) unreadable, not valid JSON, or a top level that is not an object (null, an array, a string, a number)
 //                                                  → HALT, exit 1, write nothing. Never swap the user's policy for
-//                                                    the permissive default without saying so. Since 6.65.0 (d)
+//                                                    the permissive default without saying so. Since 6.67.0 (d)
 //                                                    includes a non-object top level, which the one-liner either
 //                                                    crashed on (null) or read as "no seam" (the rest).
 // The output is `JSON.stringify(seam, null, 2)` with no trailing newline — byte-identical to the one-liner's. On a

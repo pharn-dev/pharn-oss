@@ -60,7 +60,7 @@ import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
 import { fenceStates } from "./plan-files-core.mjs";
 
 // The sentinel line emitted in `## Why this design` when the heading-scan finds nothing. A caller may
@@ -91,7 +91,7 @@ const HEADING_RE = /^#{1,6}[ \t]+\S/;
 // mechanism `check-spec.mjs` / `check-plan-lessons.mjs` use.
 
 const REGRESS_ENUM = new Set(["no-regressions", "regressions", "inconclusive"]);
-const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
+export const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 
 function stripQuotes(v) {
   return v.replace(/^["']|["']$/g, "");
@@ -106,29 +106,37 @@ function clean(v) {
 // Read ONE field from a PLAN/SPEC's structured header, trying BOTH shapes (frontmatter, then the dev
 // bullet-header), fenced blocks skipped inside the bullet-header region (L6). Returns undefined if the
 // field is present in NEITHER shape — a legitimate, expected outcome (e.g. `spec_id` on a dev PLAN).
+//
+// The LAST copy of a repeated key wins in both shapes (6.65.2, frontmatter-parser-parity — audit ENF-4), the copy
+// check-spec.mjs reads with frontmatter-core.mjs `readField`: the SPEC's `state` and `spec_id` are DECIDED by
+// check-spec, so a briefing that kept the first copy reported a state the gate never saw. The line grammar is the
+// core's (`fieldEntries`); the value rule stays this file's `clean()`. The bullet-header region's fences are
+// `fenceStates` (top-level reading), the rule this file's section reader already uses — a backtick line inside a
+// tilde fence no longer closes it, and a fence line indented 4+ spaces is content (plan-files-core.mjs states that
+// model's own limits — it is not a CommonMark parser).
 export function readHeaderField(text, field) {
   const fm = text.match(FM_RE);
   if (fm) {
-    for (const line of fm[1].split(/\r?\n/)) {
-      const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-      if (kv && kv[1] === field) return clean(kv[2]);
-    }
-    return undefined; // real frontmatter present but this field isn't in it — never fall through to
-    // the bullet-header scan below, which would otherwise read a `- field: value` line that happens to
-    // sit in the markdown BODY (past the frontmatter) as if it were structured header data.
+    // real frontmatter present: read it alone, never falling through to the bullet-header scan below, which
+    // would otherwise read a `- field: value` line in the markdown BODY as if it were structured header data.
+    return lastValue(fieldEntries(fm[1].split(/\r?\n/)), field);
   }
-  let inFence = false;
-  for (const line of text.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    if (HEADING_RE.test(line)) break; // the structured header region ends at the first heading
-    const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === field) return clean(kv[2]);
+  const lines = text.split(/\r?\n/);
+  const fenced = fenceStates(lines);
+  const header = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (fenced[i]) continue;
+    if (HEADING_RE.test(lines[i])) break; // the structured header region ends at the first heading
+    header.push(lines[i]);
   }
-  return undefined;
+  return lastValue(fieldEntries(header, BULLET_FIELD_LINE_RE), field);
+}
+
+// The `clean()`ed value of the LAST entry keyed `field`, or undefined when there is none.
+function lastValue(entries, field) {
+  let found;
+  for (const { key, raw } of entries) if (key === field) found = clean(raw);
+  return found;
 }
 
 // Extract the body of the FIRST section whose heading line matches `headingTest(line)`, up to (not

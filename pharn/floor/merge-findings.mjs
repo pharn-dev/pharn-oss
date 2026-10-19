@@ -149,7 +149,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SEVERITY_RANK = { minor: 0, important: 1, blocking: 2 };
-const SEVERITY_ENUM = new Set(Object.keys(SEVERITY_RANK));
+export const SEVERITY_ENUM = new Set(Object.keys(SEVERITY_RANK));
 // Key separator: the NUL byte. Built via fromCharCode so the SOURCE stays printable ASCII. A validated
 // enum-gated field forbids all control chars (below), so NUL can never occur inside one → no key collision.
 const NUL = String.fromCharCode(0);
@@ -178,7 +178,7 @@ function isCleanScalar(v, max = 200) {
   return typeof v === "string" && v.length >= 1 && v.length <= max && !hasControlChar(v);
 }
 
-const TYPE_OK = (v) => isCleanScalar(v, 64) && /^[A-Z][A-Z0-9_]*$/.test(v); // FINDING | CONSTITUTION_VIOLATION | ...
+export const TYPE_OK = (v) => isCleanScalar(v, 64) && /^[A-Z][A-Z0-9_]*$/.test(v); // FINDING | CONSTITUTION_VIOLATION | ...
 
 // FIX 1 (harden-merge-keying, Option A — structural regex-tighten; approved at a human gate to REVERSE the
 // prior "don't whitelist rule shapes" note). A rule_id is valid iff it is a clean scalar AND, after

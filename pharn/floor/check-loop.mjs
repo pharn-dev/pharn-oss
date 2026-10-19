@@ -58,7 +58,8 @@
 //                                                     → INCONCLUSIVE  exit 2  (FAIL-CLOSED, P5)
 //   v === "INCONCLUSIVE"  OR  r === "inconclusive"     → STOP_TERMINAL exit 4  (nothing was measured)
 //   v === "FAIL"  ∧  fg includes "ac-evidence"          → STOP_TERMINAL exit 4  (AC evidence changed or missing)
-//   v === "FAIL"  ∧  fg includes "reconcile"            → STOP_TERMINAL exit 4  (a detected escape)
+//   v === "FAIL"  ∧  fg includes "reconcile"            → STOP_TERMINAL exit 4  (a detected escape — or, when the
+//                                                        gate's recorded exit is 2, reconcile-inconclusive)
 //   v === "PASS"  ∧  r === "no-regressions"            → STOP_GREEN    exit 0  (converged)
 //   a measurable red (v ∈ {FAIL, INCOMPLETE} or r === "regressions") ∧ iter <  cap
 //                                                     → CONTINUE      exit 3  (retry, under cap)
@@ -92,6 +93,16 @@
 // `terminal_cause` (6.20.0) names WHICH terminal predicate fired — a CLOSED member of TERMINAL_CAUSES, or null for any
 // other decision — so /pharn-loop maps `ac-evidence` to its stuck point S13 by membership, never by reading `reason`.
 //
+// AN INCONCLUSIVE RECONCILE IS NOT A DETECTED ESCAPE (6.65.0, audit LOOP-3). check-bash-reconcile.mjs exits 2 when it
+// cannot decide (no baseline under --require-baseline, a refused probe marker, …); the gate runner records that exit
+// under the gate id, so check-verify.mjs lists `reconcile` in `failing_gates` exactly as for an escape (exit 1). The
+// DECISION does not change — still STOP_TERMINAL, because a retry would re-anchor over a window nobody reconciled — but
+// the cause does: when the report's `gates` is a plain object with an OWN `reconcile` key whose value is exactly the
+// number 2 (read from its structured location, L6; own-property, L15), `terminal_cause` is `reconcile-inconclusive`
+// and the reason says nothing was detected. Any other value, a missing key, or a `gates` that is not a plain object
+// keeps `reconcile`, the conservative reading. BOUND: a reconcile checker that CRASHED exits 1 — its own ESCAPE code —
+// so a crash still reads as `reconcile`; the verify report's `reconcile_detail.state` (`not-checker-json`) shows it.
+//
 // WHY AN INCONCLUSIVE VERDICT IS TERMINAL: the stage could not measure, so a fix has nothing to be judged
 // against and a retry would spend an iteration blind (P5 fail-closed). The checker's OWN exit-2
 // INCONCLUSIVE stays reserved for "cannot read a valid verdict" (bad/missing input).
@@ -123,8 +134,8 @@
 //   `regress_verdict` is null and `floor_green` means verify PASS.
 //
 // Exit: 0 STOP_GREEN, or STOP_GREEN_QUICK in the quick table · 1 STOP_CAP · 2 INCONCLUSIVE (bad input, fail-closed) ·
-//       3 CONTINUE · 4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red or a reconcile red — stop, never
-//       retried).
+//       3 CONTINUE · 4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red or a reconcile red, detected or
+//       inconclusive — stop, never retried).
 
 import { readFileSync, existsSync } from "node:fs";
 import { dirname } from "node:path";
@@ -143,7 +154,18 @@ const RECONCILE_GATE = "reconcile";
 const AC_EVIDENCE_GATE = "ac-evidence";
 
 /** Which terminal predicate fired, in precedence order. Closed; the suite asserts it both ways (L36). */
-const TERMINAL_CAUSES = Object.freeze(["unmeasured", "ac-evidence", "reconcile"]);
+const TERMINAL_CAUSES = Object.freeze(["unmeasured", "ac-evidence", "reconcile", "reconcile-inconclusive"]);
+
+// check-bash-reconcile.mjs's INCONCLUSIVE exit — the one recorded gate exit that names "could not decide", not "escape".
+const RECONCILE_INCONCLUSIVE_EXIT = 2;
+
+/** Is the reconcile gate's recorded exit exactly the checker's INCONCLUSIVE code? Own-property read of a plain object
+ *  (L15); anything else — no `gates`, an array, no own key, a non-number — is false, the conservative reading. */
+function reconcileInconclusive(report) {
+  const g = report.gates;
+  if (g === null || typeof g !== "object" || Array.isArray(g)) return false;
+  return Object.hasOwn(g, RECONCILE_GATE) && g[RECONCILE_GATE] === RECONCILE_INCONCLUSIVE_EXIT;
+}
 
 // --- emit one JSON document to stdout, then END. The command captures this verbatim. ---
 // THE FLUSH RULE (6.20.4, the check-verify.mjs rule — its header says why): set process.exitCode and unwind with a
@@ -322,6 +344,15 @@ async function main() {
     reason =
       `terminal: the ${AC_EVIDENCE_GATE} gate is red (verify FAIL) — the AC evidence itself changed or is missing, and a rebuild ` +
       `cannot restore it${reconcileRed ? `; the ${RECONCILE_GATE} gate is red too` : ""}; stop`;
+  } else if (reconcileRed && reconcileInconclusive(verify.report)) {
+    // The checker could not decide: nothing was detected, and a retry would re-anchor over a window nobody reconciled.
+    decision = "STOP_TERMINAL";
+    code = 4;
+    terminal_cause = "reconcile-inconclusive";
+    reason =
+      `terminal: the ${RECONCILE_GATE} gate could not decide (check-bash-reconcile.mjs exit ${RECONCILE_INCONCLUSIVE_EXIT}, ` +
+      "INCONCLUSIVE — for example no baseline was anchored): no escape was detected and none was ruled out; a retry " +
+      "would re-anchor over a window nobody reconciled; stop";
   } else if (reconcileRed) {
     // A retry would re-anchor the reconciliation baseline in /pharn-build Step 0 and erase this detection.
     decision = "STOP_TERMINAL";

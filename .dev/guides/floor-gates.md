@@ -92,7 +92,8 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # reads it beside <m> and resolveSet drops those ids from DISCOVERY at verify, at regress (after the e2e rule) and at the
 # ac-test red run; an explicit --gates is never filtered. The stamp carries an optional `excluded` {declared_in, ids}
 # only when discovery removed one (validateStamp shape-checks it), gateRunBlock copies it into both reports, and
-# VERIFY.md / REGRESSION.md show a line under the verdict. /pharn-test pins the whole list (lock /5, below), and the red
+# VERIFY.md / REGRESSION.md show a line under the verdict (6.65.0: so does /pharn-loop's RUN-REPORT.md, and the loop
+# closeout names them in its document and commit message — gate-run-core.mjs excludedFacts, the one reader). /pharn-test pins the whole list (lock /5, below), and the red
 # run's preflight REDs an AC whose level gates are all excluded. THE RECORDED FAILURE (P7): a user's e2e gate could not
 # run on their machine and --gates makes the AC gate read test-infra-changed — two of three real loops stopped on it.
 # BOUND: FLOOR when init resolves the set, never re-derived later (only the red run's bindStamp re-resolves); legacy and
@@ -241,6 +242,14 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # `unenforced_globs`. Refusals, not verdicts, wherever a stamp alone cannot decide — so check E never re-derives one.
 # NAMED RESIDUAL: a partially committed build with another uncommitted change still compares against a base holding
 # the committed part — only `--base` closes it.
+# THE DECLARED BASE INSTALL (6.66.0, regress-install-config, audit LOOP-11): `pharn.config.json` `regress.install`
+# (pharn/floor/regress-install-config-core.mjs reads it; stage-regress-core.mjs DECLARED_INSTALL_VALUES owns the values:
+# none | head-node-modules | npm | pnpm | yarn | bun) answers `install-unresolved` when no --install/--no-install was
+# given — /pharn-loop could not, so a no-lockfile or mixed-lockfile project never finished a full loop. A family runs its
+# frozen line only when its lockfile is at BASE; `head-node-modules` links the base checkout's node_modules to the
+# project's (an APPROXIMATION: dependency-caused regressions read pre_existing; disclosed in the report's `base_install`
+# block and REGRESSION.md; exempt from the unreliable-install mask; never reused). Anything that cannot answer is
+# `unusable install-config-invalid`. Not pinned at /pharn-test (it decides regress's base, not verify's AC gate).
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
@@ -519,6 +528,8 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # request (this repo's set = CLAUDE.md; budget from pharn.config.json at the base, default 2048), and
 # `npm run check:instruction-growth` runs `--growth --base-rule` locally — kept OUT of `npm run check`, which a clone
 # with no origin/main would turn INCONCLUSIVE. Wiring pinned and the CI line executed: .dev/floor/instruction-growth-wiring.test.mjs W1–W3.
+# 6.65.0 (audit CTX-14): /pharn-loop Step 1a runs `--report` into .pharn/pharn-loop/<name>/instruction-files.json, and
+# RUN-REPORT.md's ## Tokens shows its estimate (advisory; /pharn-ship records none — follow-up ship-instruction-set).
 # Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
 node pharn/floor/check-instruction-files.mjs --report
 node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rule)

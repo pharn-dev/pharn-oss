@@ -62,6 +62,7 @@ import {
   EXCLUDED_KEYS,
   exclusionError,
   levelExcludedGates,
+  excludedFacts,
 } from "./gate-run-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1580,4 +1581,30 @@ test("the reuse matrix: a reused run validates ONLY in its pair — every off-ma
     ["ac-test ← entry", stampOf("ac-test", null, { stage: "entry", side: null })],
   ];
   for (const [name, s] of off) assert.equal(validateStampSlot(s).reason_code, "stamp-malformed", name);
+});
+
+// ── excludedFacts (6.65.0, audit LOOP-4): what a report's `excluded` block says, total over parsed JSON ──────────────
+
+test("★ excludedFacts — no block reads null; a block reads its ALLOWLIST ids in ALLOWLIST order, the rest counted, never shown", () => {
+  for (const none of [undefined, null, 3, "e2e", ["e2e"], true]) assert.equal(excludedFacts(none), null, JSON.stringify(none));
+  assert.deepEqual(excludedFacts({ declared_in: EXCLUSION_DECLARED_IN, ids: ["e2e", "typecheck"] }), {
+    count: 2,
+    ids: ["typecheck", "e2e"],
+    unlisted: 0,
+    declaredHere: true,
+  });
+  assert.deepEqual(excludedFacts({ declared_in: "elsewhere", ids: ["e2e", "rm -rf /", 7, null, { toString: 1 }] }), {
+    count: 5,
+    ids: ["e2e"],
+    unlisted: 4,
+    declaredHere: false,
+  });
+  assert.deepEqual(excludedFacts({}), { count: 0, ids: [], unlisted: 0, declaredHere: false });
+  assert.deepEqual(excludedFacts({ ids: "e2e" }), { count: 0, ids: [], unlisted: 0, declaredHere: false });
+  // L15: an inherited `ids` / `declared_in` is not the block's own
+  const inherited = Object.create({ ids: ["e2e"], declared_in: EXCLUSION_DECLARED_IN });
+  assert.deepEqual(excludedFacts(inherited), { count: 0, ids: [], unlisted: 0, declaredHere: false });
+  // L62: a parsed {"toString":1} anywhere never throws
+  const hostile = JSON.parse('{"declared_in":{"toString":1},"ids":[{"toString":1},["e2e"]]}');
+  assert.deepEqual(excludedFacts(hostile), { count: 2, ids: [], unlisted: 2, declaredHere: false });
 });

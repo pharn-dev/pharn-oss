@@ -29,6 +29,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { stripBom } from "./frontmatter-core.mjs";
 
 const TARGET = process.argv[2] || ".";
 // Same exclusions as pharn/floor/count-verifiers.mjs / validate.mjs: tooling (.claude/, .dev/) and
@@ -80,13 +81,16 @@ function isExcluded(file) {
 
 // The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none.
 // MIRRORS pharn/floor/count-verifiers.mjs `frontmatterRole` EXACTLY (which mirrors validate.mjs
-// `parseFrontmatter`): the same opening fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`),
+// `parseFrontmatter`): the same leading-BOM strip (frontmatter-core.mjs `stripBom`, 6.65.2), then the same
+// opening fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`),
 // the same `slice(3, end).trim()` block, the same `^([A-Za-z0-9_]+):\s*(.*)$` line parse, and the same
 // `^["']|["']$` quote-strip. That byte-for-byte sameness is what makes membership agree with validate.mjs
 // on EVERY input. A `role:` line in the body (prose / code block) stays outside the parsed block, so it is
 // structurally unreachable. The ONLY behavioural difference in this whole file from count-verifiers.mjs is
-// the enum tested below (`griller`). Not an import — validate.mjs / count-verifiers.mjs export nothing (P4: cite).
-function frontmatterRole(text) {
+// the enum tested below (`griller`). Not an import of validate.mjs / count-verifiers.mjs — they export nothing (P4:
+// cite); the BOM strip is the shared core's.
+function frontmatterRole(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return null;
   const end = text.indexOf("\n---", 3);
   if (end === -1) return null;
