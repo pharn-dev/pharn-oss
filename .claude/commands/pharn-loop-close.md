@@ -66,8 +66,9 @@ capture rules:
   Write the literal `unknown` when that yields no SHA. Never a guessed SHA, never the loop's own commit.
 
 - **`iterations`** is the iteration reached (a stop before the first build counts as `1`).
-- **`cap`** — on every **non-blocked** stop, write the literal `<M>` this run entered with (Step 1). A
-  **blocked** stop may omit it.
+- **`cap`** — on every **non-blocked** stop, write the literal `<M>` this run entered with (Step 1) — the value Step
+  1a's `--open` recorded in the Stop guard's marker, which the decision check compares it with. A **blocked** stop may
+  omit it.
 - The body carries an **`## Outcome`** section with four lines, so the outcome survives on disk and not only
   in the summary: `commit:` — one value from the Step 7 closed set (for a green stop, the expected
   `committed <branch>`; Step 6d rewrites it if the commit does not happen); `spec:` — `approved by the model`,
@@ -100,7 +101,9 @@ node pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'
    repair bound is advisory (`LIMITS.md §1d`) — command prose and an argument you pass, not a counter.
 2. **The decision re-derivation, on every NON-BLOCKED stop** — `check-loop-decision.mjs`. Its result is the
    document's `decision_check`, called `<decision-check>` below and in Step 7. It is **not retried**: a RED blocks
-   the commit regardless of `decision`. A blocked stop skips it (`N/A`).
+   the commit regardless of `decision`. A blocked stop skips it (`N/A`). Since 6.65.0 it also REDs a record whose
+   `cap` is not the one the Stop guard's marker recorded at Step 1a (`CAP_MISMATCH`, or `CAP_UNWITNESSED` when no
+   usable marker is there) or whose `iterations` exceed its `cap` (`ITER_OVER_CAP`).
 3. **The run-stop marker, the cost ledger and its check — on EVERY stop that has a feature directory**, green or
    not: `mark-phase.mjs --kind run-stop`, `render-cost-ledger.mjs` with `--command /pharn-loop --base-sha '<base sha>'`,
    then `check-cost-ledger.mjs` on `cost.json`. Keep the emitter's printed table for Step 7 and the checker's output
@@ -218,6 +221,9 @@ Report, plainly and without asking anything:
   `requests[].model`. A stage agent that may still be running (a backgrounded call, S9) is named here;
 - the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
   and verify with the scope result per iteration — `## Quick mode` item 9);
+- **the gates the project excluded** (6.65.0), from the closeout document's `excluded_gates`: name each id as
+  excluded by `pharn.config.json` `gates.exclude` and **not run**, and say the stop covers only the gates that ran;
+  `null` → no verdict report was read. A commit's message carries the same ids;
 - **every stage re-run**, by stage and iteration, read from the budget ledger the closeout printed
   (`.pharn/pharn-loop/<name>/freshness.jsonl`, or `no re-runs`) rather than from memory, and the final freshness
   verdict (`FRESH`, or the `reason_code` that blocked or stopped the commit);
@@ -266,15 +272,18 @@ last three feeds `check-loop.mjs`'s inputs.
 
 - **Floor:** the loop stops on the Design C table — `check-loop.mjs` (enum membership over the verdicts and an
   `iter >= cap` compare), in the table the SPEC's pinned kind chooses: verify's verdict alone, green
-  `STOP_GREEN_QUICK`, for a `quick` SPEC; the full table for every other. An AC-evidence red and a reconcile red are
-  `STOP_TERMINAL`, never retried; an undelivered AC is an ordinary red. **Structural:** its inputs are the two verdict
+  `STOP_GREEN_QUICK`, for a `quick` SPEC; the full table for every other. An AC-evidence red and a reconcile red
+  (detected, or `reconcile-inconclusive` when the checker could not decide) are `STOP_TERMINAL`, never retried; an undelivered AC is an ordinary red. **Structural:** its inputs are the two verdict
   reports, `--iter` / `--cap` and ONE token of the feature's own SPEC, its `spec_kind` — no review, finding, severity,
   record or fingerprint input — so no advisory stage can gate the loop and the record cannot affect the stop. A retry
   buys a **bounded stop**, never convergence: a red whose cause lies outside the plan's `## Files`, or a plan that
   cannot be built, runs to `STOP_CAP`; an unsound fix cannot fake a green stop, because the verdicts are recomputed
   every iteration.
 - **Floor compare, ADVISORY bound:** "at most `M` iterations" — `check-loop.mjs` keeps no counter; it compares an
-  **agent-supplied `--iter`**, so the cap bounds the decision, not the agent (`LIMITS.md §1d`).
+  **agent-supplied `--iter`**, so the cap bounds the decision, not the agent (`LIMITS.md §1d`). Since 6.65.0 the
+  commit also needs the record's `cap` to equal the one Step 1a's marker recorded and its `iterations` to stay within
+  it (`check-loop-decision.mjs`) — agreement between two files Bash reaches, never provenance, and a typed iteration
+  count that is too low still passes.
 - **Floor:** the stop is read only from evidence about THIS tree, and a stale or skipped stage is re-run —
   `check-loop-fresh.mjs` (content-hash, enum membership and a live re-derivation), at the decision and again at the
   commit gate. **Bounded:** it is **tree identity, not recency**; it certifies **agreement, never provenance** — a

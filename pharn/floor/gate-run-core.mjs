@@ -715,6 +715,26 @@ function excludedBlock(ids) {
   return ids.length ? { declared_in: EXCLUSION_DECLARED_IN, ids: [...ids] } : null;
 }
 
+/** 6.65.0 (audit LOOP-4) — what a REPORT's copy of that block says, for a renderer or a commit message that must name
+ *  the excluded gates: `null` when the value is not a plain object (no block — nothing was excluded, or the report
+ *  predates 6.36.0), else `{ count, ids, unlisted, declaredHere }` — `ids` the ALLOWLIST members it names, in ALLOWLIST
+ *  order (the only values a caller may render inline), `unlisted` how many entries are not, `count` both, and
+ *  `declaredHere` whether `declared_in` is the one sanctioned source. Lenient by design: it describes what a report
+ *  says and never validates it (validateStamp's excludedDefect is the shape gate, at the stamp). TOTAL over parsed
+ *  JSON (L62): only typeof / Array.isArray / includes, never String(); own-property reads (L15). */
+export function excludedFacts(x) {
+  if (x === null || typeof x !== "object" || Array.isArray(x)) return null;
+  const raw = Object.hasOwn(x, "ids") && Array.isArray(x.ids) ? x.ids : [];
+  const ids = ALLOWLIST.filter((id) => raw.some((v) => typeof v === "string" && v === id));
+  const listed = raw.filter((v) => typeof v === "string" && ALLOWLIST.includes(v)).length;
+  return {
+    count: raw.length,
+    ids,
+    unlisted: raw.length - listed,
+    declaredHere: Object.hasOwn(x, "declared_in") && x.declared_in === EXCLUSION_DECLARED_IN,
+  };
+}
+
 /** The `--base-tests` list's shape (6.49.0), or null: a NON-EMPTY array (an empty list handed to a runner means "the
  *  whole suite", L16) of distinct clean tokens, none led by `-` and none glob-shaped, at most MAX_BASE_TESTS long. The
  *  path rule proper is ac-tests-core.mjs `badPath`, which run-gates.mjs applies when it reads the file. TOTAL (L62). */

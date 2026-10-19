@@ -278,6 +278,139 @@ test("exit 0 — a quick record skips the report and commits STOP_GREEN_QUICK", 
   }
 });
 
+// ── 6.65.0 (audit LOOP-4): the gates the project excluded reach the document and the commit message ──────────
+
+const EXCLUDED = { declared_in: "pharn.config.json#gates.exclude", ids: ["e2e"] };
+const writeReports = (fx, verify, regress) => {
+  const fd = join(fx.dir, "pharn", "features", FEATURE);
+  if (verify !== null) writeFileSync(join(fd, "verify-report.json"), typeof verify === "string" ? verify : JSON.stringify(verify));
+  if (regress !== null) writeFileSync(join(fd, "regression-report.json"), typeof regress === "string" ? regress : JSON.stringify(regress));
+};
+
+test("★ LOOP-4 — a green over a suite minus e2e: excluded_gates names it and the commit message carries a third paragraph", () => {
+  const fx = fixture();
+  try {
+    writeReports(
+      fx,
+      { verdict: "PASS", failing_gates: [], gate_run: { excluded: EXCLUDED } },
+      { verdict: "no-regressions", regressions: [], gate_run: { head: { excluded: { ...EXCLUDED, ids: ["test:e2e", "e2e"] } } } }
+    );
+    const { doc, out } = close(fx, { run: stub().run });
+    assert.equal(doc.exit, EXIT.COMMITTED, out);
+    assert.deepEqual(doc.excluded_gates, { ids: ["test:e2e", "e2e"], unlisted: 0 });
+    const body = sh(fx.dir, "log", "-1", "--format=%b").stdout.trim();
+    assert.ok(body.startsWith(COMMIT_BODY), body);
+    assert.match(
+      body,
+      /Gates excluded by the project's pharn\.config\.json gates\.exclude, NOT run by the final verify or regress: test:e2e, e2e\. The green covers only the gates that ran\./
+    );
+  } finally {
+    fx.done();
+  }
+});
+
+test("★ LOOP-4 — no exclusion leaves the message byte-identical; no readable report is excluded_gates null", () => {
+  const fx = fixture();
+  try {
+    writeReports(fx, { verdict: "PASS", failing_gates: [], gate_run: {} }, { verdict: "no-regressions", regressions: [] });
+    const { doc } = close(fx, { run: stub().run });
+    assert.deepEqual(doc.excluded_gates, { ids: [], unlisted: 0 });
+    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), COMMIT_BODY);
+  } finally {
+    fx.done();
+  }
+  const bare = fixture({ record: loopRecord({ decision: "STOP_CAP", iterations: "3" }) });
+  try {
+    writeReports(bare, "{ not json", null);
+    assert.equal(close(bare, { run: stub().run }).doc.excluded_gates, null);
+  } finally {
+    bare.done();
+  }
+});
+
+test("★ LOOP-4 — a quick record reads verify alone: a stale regression report's exclusion is never named", () => {
+  const fx = fixture({ record: loopRecord({ decision: "STOP_GREEN_QUICK", mode: "quick" }) });
+  try {
+    writeReports(
+      fx,
+      { verdict: "PASS", failing_gates: [], gate_run: {} },
+      { verdict: "no-regressions", regressions: [], gate_run: { head: { excluded: EXCLUDED } } }
+    );
+    const { doc } = close(fx, { run: stub().run });
+    assert.deepEqual(doc.excluded_gates, { ids: [], unlisted: 0 });
+    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), COMMIT_BODY);
+  } finally {
+    fx.done();
+  }
+});
+
+test("LOOP-4 — commitArgs adds the paragraph only for ALLOWLIST ids or a positive unlisted count; hostile values never reach argv", () => {
+  const base = commitArgs("L", "n", "STOP_GREEN", "1");
+  for (const none of [null, undefined, {}, { ids: [], unlisted: 0 }, { ids: ["rm -rf /"], unlisted: -1 }, { ids: "e2e" }]) {
+    assert.deepEqual(commitArgs("L", "n", "STOP_GREEN", "1", none), base, JSON.stringify(none));
+  }
+  const withIds = commitArgs("L", "n", "STOP_GREEN", "1", { ids: ["e2e", "`x`"], unlisted: 2 });
+  assert.deepEqual(withIds.slice(0, base.length), base);
+  assert.equal(withIds.length, base.length + 2);
+  assert.equal(withIds[base.length], "-m");
+  assert.match(withIds.at(-1), /: e2e, \+2 id\(s\) outside the allowlist\. /);
+  assert.doesNotMatch(withIds.at(-1), /`x`/);
+});
+
+// ── the GATE-1 condition for CAP_UNWITNESSED: the marker is open whenever check-loop-decision.mjs runs ───────
+
+test("★ GATE-1 (a) — on every path that runs both, the decision check runs before the Stop guard's --close", () => {
+  const records = [
+    loopRecord(),
+    loopRecord({ decision: "STOP_GREEN_QUICK", mode: "quick" }),
+    loopRecord({ decision: "STOP_CAP", iterations: "3" }),
+    loopRecord({ decision: "STOP_TERMINAL", iterations: "2" }),
+    loopRecord({ decision: "INCONCLUSIVE", iterations: "1" }),
+  ];
+  let both = 0;
+  for (const record of records) {
+    const fx = fixture({ record });
+    try {
+      const s = stub();
+      close(fx, { run: s.run });
+      const ids = s.ids();
+      const d = ids.indexOf("check-loop-decision.mjs");
+      const c = ids.indexOf("require-loop-record.cjs --close");
+      assert.ok(d !== -1, `the decision check ran for ${record.split("\n")[1]}`);
+      if (c !== -1) {
+        both++;
+        assert.ok(d < c, `${record.split("\n")[1]}: ${ids.join(" → ")}`);
+      }
+    } finally {
+      fx.done();
+    }
+  }
+  assert.ok(both >= 2, "non-vacuous (L34): at least two paths ran both steps");
+});
+
+test("★ GATE-1 (b) — the command family opens the marker in Step 1a before every stop line, and closes it only in the Final step", () => {
+  const loop = commandFamilyText(join(REPO, ".claude", "commands"), "pharn-loop.md");
+  const lines = loop.split("\n");
+  const at = (re) => lines.map((l, i) => (re.test(l.trim()) ? i : -1)).filter((i) => i !== -1);
+  const open = at(/^node \.claude\/hooks\/require-loop-record\.cjs --open /);
+  assert.equal(open.length, 1, "exactly one pinned --open line");
+  const step1a = lines.findIndex((l) => l.startsWith("### Step 1a"));
+  const step2 = lines.findIndex((l) => l.startsWith("## Step 2"));
+  assert.ok(step1a !== -1 && step2 !== -1 && step1a < open[0] && open[0] < step2, "the --open line sits in Step 1a");
+  const stops = [...at(/^node pharn\/floor\/check-loop\.mjs /), ...at(/^node pharn\/floor\/loop-closeout\.mjs /)];
+  assert.ok(stops.length >= 2, "non-vacuous: the stop core and the closeout lines were found");
+  for (const s of stops) assert.ok(open[0] < s, `line ${s} runs after the marker is open`);
+  const close = at(/^node \.claude\/hooks\/require-loop-record\.cjs --close /);
+  assert.equal(close.length, 1, "exactly one pinned --close line");
+  const finalStep = lines.findIndex((l) => l.startsWith("## Final step"));
+  assert.ok(finalStep !== -1 && close[0] > finalStep, "--close sits in the Final step");
+  for (const s of stops) assert.ok(s < close[0], `line ${s} precedes the pinned --close`);
+  // the quick part changes none of this: it runs Step 1a unchanged and pins no --open / --close of its own
+  const quick = readFileSync(join(REPO, ".claude", "commands", "pharn-loop-quick.md"), "utf8");
+  assert.match(quick, /Step 1a runs unchanged/);
+  assert.doesNotMatch(quick, /require-loop-record\.cjs --(?:open|close)/);
+});
+
 // ── terminal non-commits ─────────────────────────────────────────────────────────────────────────────────────
 
 test("exit 3 — a non-green stop over a Draft SPEC: the ledger tail, no commit gate, then the releases", () => {
