@@ -2394,3 +2394,18 @@ type: process · concepts: [sweep-scope, declaration-audit, enumeration, doc-dri
 - commit: `829d097ec3e4624cf790f83dce45de89d571e115`
 - source: .dev/features/review-lens-grouping/REVIEW.md A1 + § Lesson candidate
 - promoted: 2026-10-18 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L76 — A mechanism restated in N capability bodies needs a sweep each time its owner changes — on the second sweep, replace the restatement with a cite and pin its absence
+
+type: contract · concepts: [doc-drift, single-source, restatement, lesson-recurrence, floor-escalation]
+
+**Lesson.** When N capability bodies restate a mechanism that another file owns, every change to the owner needs a sweep over all N, and a sweep that rewrites the restatement to the new truth sets up the next sweep. Measured on the "Two clocks" blockquote of 18 `pharn/pharn-review/*` lens bodies plus two sentences in `race-condition`: #168 (2.7.15, `a0cfd0d2`) wrote "`/pharn-review` Step 4 spawns one subagent per lens" into them; 6.64.0 grouped the lenses by family and made that false; `subagent-per-lens-sweep` (6.64.2) swept the same 19 files again and wrote "one subagent per lens family (`pharn/floor/lens-family-map.json`)", which is true today and false the next time Step 4 or the family map changes. The lens's own point, that its scanner is floor and its act of running it is advisory, never needed the spawn unit. Remedy, at the second sweep: replace the restatement with a cite of the owner (here "`/pharn-review` Step 4"), and add a `.dev/floor/` regex test that REDs when a capability body outside `evals/` matches the restatement's spellings (for this case `subagents? per` and `spawns (one|\*\*one)`), enum-regex, primitive #3. Follow-up `lens-spawn-cite` carries it for the lens bodies.
+
+**Why it matters.** P4 says enforcers cite rather than restate, and [[L25]] says an explanation reaches only the file it sits in. Both remedies are discipline, and per [[L20]] a discipline-only remedy that recurs earns a floor check: this is that recurrence, on the same files. It is distinct from the sweep lessons. [[L33]] (the repair pass misses variant spellings), [[L47]] (replacing a false quantifier with a new count rebuilds the defect at the new value; here a new spawn unit rebuilt it) and [[L75]] (record every sweep hit with a disposition, and let grill re-run the grep) govern how to sweep; this one removes the need for the sweep. **Bound (P0):** the test would see only the spellings it names (L33's residual), and until `lens-spawn-cite` lands this is a PENDING-remedy lesson ([[L46]]). **Honest trigger (P7):** the second sweep of one restatement over the same 19 files, found by `/pharn-dev-grill` (P3) and `/pharn-dev-review` (R1) of `subagent-per-lens-sweep` before merge.
+
+**Provenance.**
+
+- feature: `subagent-per-lens-sweep`
+- commit: `e940ff2685ba7c1c8245e5e8e22c13299db8788a`
+- source: .dev/features/subagent-per-lens-sweep/REVIEW.md R1 + § Lesson candidate; .dev/features/subagent-per-lens-sweep/GRILL.md P3 (Coupling)
+- promoted: 2026-10-19 via gated `/pharn-dev-memory-promote` (human-approved).
