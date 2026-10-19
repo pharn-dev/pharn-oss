@@ -524,6 +524,9 @@ passes today):
 - `README.md` — E9 (line 877) and the version badge (line 27). — layer: repo meta
 - `SKILLS_VERSION` — 6.64.1 to 6.64.2. — layer: repo meta
 - `CHANGELOG.md` — one new `## [6.64.2] - 2026-10-19` section (below). — layer: repo meta
+- `pharn/floor/lens-scanner-map.json` — added at GATE 2 fix round 1: R2, the `doc` string only. — layer: product floor
+- `pharn/floor/installed-skills-core.mjs` — added at GATE 2 fix round 1: R3, header comment lines 12–13. — layer:
+  product floor
 
 ### Not in Files
 
@@ -662,3 +665,31 @@ the table above. `git diff c47707e 125ff0fe` over the three files shows exactly 
 
 State at this record: `origin/main` is `c47707e` (fetched 2026-10-19), so the plan's 6.64.1 → 6.64.2 bump and its pin
 stand. `## Files` is unchanged by this record.
+
+## Fix round 1 (GATE 2, 2026-10-19; not part of the approved plan)
+
+After `REVIEW.md` (commit `4e9b1d7d`: GREEN, 0 floor-gate findings, advisory R1–R4), the human answered GATE 2 through
+the orchestrator's AskUserQuestion form on 2026-10-19. The orchestrator relayed the answers verbatim:
+
+- Fix: "Fix R2–R4, then PR (Recommended)". R1 becomes a follow-up named `lens-spawn-cite`.
+- Trusted docs: "Confirmed". The orchestrator showed the human the exact `125ff0fe` diff at GATE 2, and the human
+  confirmed it as their edit. This closes GRILL.md's P2 concern.
+- Lesson: "Promote". REVIEW.md's lesson candidate goes to `/pharn-dev-memory-promote`, last, after this round's verify.
+
+**`## Files` is amended by exactly two lines**, the two bullets marked "added at GATE 2 fix round 1":
+`pharn/floor/lens-scanner-map.json` (R2) and `pharn/floor/installed-skills-core.mjs` (R3). Every other approved byte
+above this section is unchanged. Both lines were written before this round's build Step 0, which re-runs the setter
+`--from-plan` and then `--anchor`, so the new anchored snapshot covers both paths and neither is a
+`plan-widened-after-anchor` escape (`pharn/pharn-contracts/reconciliation-record.md` §1). The re-anchor resets the
+baseline. That loses nothing: the round-1 verify's reconcile was `CLEAN` with no escapes. `## Files` is not widened
+again after that anchor.
+
+The fix round:
+
+- **R2** — `pharn/floor/lens-scanner-map.json`, its `doc` string only: "(its subagent reads only those)" is false for a
+  grouped lens, whose family's subagent is given every member's slice (`/pharn-review` Step 4). No key or value other
+  than `doc` changes.
+- **R3** — `pharn/floor/installed-skills-core.mjs:12–13`: "each `/pharn-review` lens … now read this catalogue first"
+  becomes the lens-group subagent, matching E8 and H5.
+- **R4** — the CHANGELOG `[6.64.2]` entry, which stays 6.64.2: the count (152 line hits of the 15 pinned patterns plus 1
+  line-wrap hit = 153 rows), the two sentences the patterns missed, and the follow-up `lens-spawn-cite`.
