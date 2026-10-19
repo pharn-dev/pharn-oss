@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { FM_RE, stripBom, matchFrontmatter, readField, readValue } from "./frontmatter-core.mjs";
+import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom, matchFrontmatter, readField, readValue } from "./frontmatter-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BOM = "﻿";
@@ -34,7 +34,39 @@ const CONSUMERS = [
   "render-ship-briefing.mjs",
   "loop-closeout.mjs", // 6.44.0: reads LOOP.md's envelope and SPEC.md's state
   "installed-skills-core.mjs", // 6.47.0: reads an installed SKILL.md's name/description for the catalogue
+  // 6.65.2 (frontmatter-parser-parity, audit ENF-3): the loose-fence family. Each tests `startsWith("---")` on purpose
+  // (validate.mjs's model, mirrored by the count-* readers) and now strips the BOM first; before, a BOM'd capability
+  // was "not a capability" and validate printed GREEN over it.
+  "validate.mjs",
+  "count-lenses.mjs",
+  "count-grillers.mjs",
+  "count-verifiers.mjs",
+  "check-model-config.mjs",
+  "griller-extract.mjs",
+  // 6.65.2: readers that already stripped (or used matchFrontmatter) but were not listed — found by the closure below.
+  "render-cost-ledger.mjs",
+  "instruction-files-core.mjs",
+  "ac-tests-lock.mjs",
+  "spec-template-core.mjs",
 ];
+
+// A module that tests the frontmatter fence, by any of the spellings the floor uses: the shared anchor, the matcher,
+// the loose `startsWith("---")` of the validate.mjs family, or a private regex literal anchored on `^---`.
+const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|startsWith\("---"|\/\^---/;
+// A module that strips the BOM before that test: it calls stripBom, or reads through matchFrontmatter (which does).
+const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(/;
+// The `key: value` line grammar as a regex literal: `^(` or `^-[ \t]+(` followed by the `[A-Za-z_]` key class. It
+// matches FIELD_LINE_RE, BULLET_FIELD_LINE_RE and the key-class variants the retired copies used; it deliberately does
+// not match validate.mjs's family grammar `^([A-Za-z0-9_]+):`, a separate, mirrored model (see the core's header).
+const LINE_GRAMMAR_RE = /\^(?:-\[ \\t\]\+)?\(\[A-Za-z_\]/;
+// The one module allowed its own line grammar, and why. instruction-files-core.mjs walks a NESTED YAML block mapping
+// (`paths:` with indented items) in a Claude Code rule file — TOP_KEY_RE and NESTED_KEY_RE — which the flat
+// `fieldEntries` does not model; it reads flat lines with the core's FIELD_LINE_RE.
+const LINE_GRAMMAR_ALLOWLIST = ["instruction-files-core.mjs"];
+
+function nonTestFloorModules() {
+  return readdirSync(HERE).filter((n) => n.endsWith(".mjs") && !n.endsWith(".test.mjs") && n !== "frontmatter-core.mjs");
+}
 
 // ── stripBom ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -104,11 +136,65 @@ test("✧ every consumer imports the shared core", () => {
   }
 });
 
-test("✧ every consumer actually APPLIES stripBom — importing it is not using it", () => {
+// Since 6.65.2 a call to matchFrontmatter also counts: it strips by construction, and instruction-files-core.mjs and
+// ac-tests-lock.mjs read only through it. The pin is WIDENED by exactly that one spelling, and says so here.
+test("✧ every consumer actually APPLIES the BOM strip (stripBom, or matchFrontmatter) — importing it is not using it", () => {
   for (const name of CONSUMERS) {
     const src = readFileSync(join(HERE, name), "utf8");
-    assert.match(src, /stripBom\(/, `${name} imports the core but never calls stripBom — the BOM would still reach FM_RE`);
+    assert.match(src, APPLIES_STRIP_RE, `${name} never calls stripBom or matchFrontmatter — the BOM would still reach its fence test`);
   }
+});
+
+test("✧ CLOSURE (6.65.2): every non-test floor module that tests the frontmatter fence is a listed consumer", () => {
+  const readers = nonTestFloorModules().filter((f) => ANCHOR_IDIOM_RE.test(readFileSync(join(HERE, f), "utf8")));
+  assert.ok(readers.length >= CONSUMERS.length, "non-vacuity: the idiom finds at least the listed consumers");
+  assert.deepEqual(
+    readers.filter((f) => !CONSUMERS.includes(f)),
+    [],
+    "a module tests the frontmatter fence but is not in CONSUMERS — list it (which requires it to strip the BOM)"
+  );
+  assert.deepEqual(
+    CONSUMERS.filter((f) => !readers.includes(f)),
+    [],
+    "a CONSUMERS entry no longer tests the fence — drop it, or the list stops describing the floor"
+  );
+});
+
+test("✧ the anchor closure's predicates DISCRIMINATE (L60): each old idiom is seen; a raw fence test is not a strip", () => {
+  for (const src of [
+    'if (!text.startsWith("---")) return null;',
+    "const m = text.match(FM_RE);",
+    "const m = matchFrontmatter(t);",
+    "if (/^---\\r?\\n/.test(t)) x();",
+  ]) {
+    assert.match(src, ANCHOR_IDIOM_RE, src);
+  }
+  assert.doesNotMatch('if (!text.startsWith("---")) return null;', APPLIES_STRIP_RE);
+  assert.match("const text = stripBom(raw);", APPLIES_STRIP_RE);
+});
+
+test("✧ CLOSURE (6.65.2): no non-test floor module but the core declares the `key: value` line grammar (one allowlisted)", () => {
+  const holders = nonTestFloorModules().filter((f) => LINE_GRAMMAR_RE.test(readFileSync(join(HERE, f), "utf8")));
+  assert.deepEqual(
+    holders.filter((f) => !LINE_GRAMMAR_ALLOWLIST.includes(f)),
+    [],
+    "read `key: value` lines with frontmatter-core.mjs fieldEntries (FIELD_LINE_RE / BULLET_FIELD_LINE_RE), never a private regex"
+  );
+  for (const f of LINE_GRAMMAR_ALLOWLIST) {
+    assert.ok(holders.includes(f), `${f} is allowlisted but no longer declares the grammar — remove the stale entry`);
+  }
+  assert.match(readFileSync(join(HERE, "frontmatter-core.mjs"), "utf8"), LINE_GRAMMAR_RE, "non-vacuity: the pattern finds the core's own");
+});
+
+test("✧ the line-grammar predicate DISCRIMINATES (L60): every retired spelling is caught; validate's family grammar is not", () => {
+  const retired = [
+    String.raw`const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);`,
+    String.raw`const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);`,
+    String.raw`const kv = line.match(/^([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/);`,
+    String.raw`const kv = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);`,
+  ];
+  for (const src of retired) assert.match(src, LINE_GRAMMAR_RE, src);
+  assert.doesNotMatch(String.raw`const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);`, LINE_GRAMMAR_RE);
 });
 
 test("✧ the consumer list is not empty and names only files that exist", () => {
@@ -132,6 +218,24 @@ test("readValue: the quote is resolved BEFORE an inline comment; an unquoted ` #
   assert.equal(readValue("feat#3"), "feat#3");
   assert.equal(readValue("'single'"), "single");
   assert.equal(readValue(""), "");
+});
+
+// ── The ONE line reader (6.65.2): fieldEntries ────────────────────────────────────────────────────────────────
+
+test("fieldEntries: every match in file order, the value exactly as captured, repeats kept for the caller to judge", () => {
+  const lines = ["a: 1", "not a field", "b-c:   two  # note", "a: 3", "  indented: no", "_x:"];
+  assert.deepEqual(fieldEntries(lines), [
+    { key: "a", raw: "1" },
+    { key: "b-c", raw: "two  # note" },
+    { key: "a", raw: "3" },
+    { key: "_x", raw: "" },
+  ]);
+  assert.deepEqual(fieldEntries(["- a: 1", "a: 2", "-   b: x"], BULLET_FIELD_LINE_RE), [
+    { key: "a", raw: "1" },
+    { key: "b", raw: "x" },
+  ]);
+  assert.deepEqual(fieldEntries("a: 1"), [], "a non-array (a raw block passed by mistake) yields nothing, never a throw");
+  assert.deepEqual(fieldEntries([null, 7, "a: 1"]), [{ key: "a", raw: "1" }]);
 });
 
 test("readField: LAST-wins across a duplicated key, exact key match, undefined when absent", () => {

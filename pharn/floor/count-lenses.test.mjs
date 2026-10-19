@@ -173,6 +173,25 @@ test("CRLF frontmatter registers (parity with validate.mjs's slice/trim/split li
   });
 });
 
+// ENF-3 (6.65.2): a leading UTF-8 BOM used to hide the declaration from both this counter and validate.mjs (0 and
+// "GREEN — 0 capabilities checked"). Twin pair (L4): the BOM'd file registers exactly as its clean twin, and
+// validate.mjs counts the same file, so the two still agree on membership.
+test("✧ ENF-3: a BOM'd lens registers as its clean twin does, and validate.mjs counts it too", () => {
+  const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+  for (const [name, body] of [
+    ["clean.md", REAL_LENS],
+    ["bom.md", bom + REAL_LENS],
+  ]) {
+    withRepo({ [`pharn-review/${name}`]: body }, (root) => {
+      const r = run(root);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), { registered: 1, lenses: [`pharn-review/${name}`] });
+      const v = spawnSync(process.execPath, [join(here, "validate.mjs"), root], { encoding: "utf8" });
+      assert.match(v.stdout, /\b1 capabilities checked/, `${name}: validate.mjs must count the same file`);
+    });
+  }
+});
+
 test("multiple lenses are returned sorted", () => {
   withRepo({ "pharn-review/z/z.md": REAL_LENS, "pharn-review/a/a.md": REAL_LENS }, (root) => {
     const r = run(root);

@@ -18,6 +18,7 @@ import { tmpdir } from "node:os";
 
 import * as checker from "./check-ship-briefing.mjs";
 import * as renderer from "./render-ship-briefing.mjs";
+import { FM_RE, readField } from "./frontmatter-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(here, "check-ship-briefing.mjs");
@@ -338,6 +339,30 @@ test("GREEN: the real ADVISORY marker heading is accepted", () => {
 test("usage error: no path argument", () => {
   const r = run(undefined);
   assert.equal(r.status, 1);
+});
+
+// ✧ ENF-4 (6.65.2): readHeaderField keeps the LAST copy of a repeated key in both shapes — the copy check-spec.mjs
+// reads with frontmatter-core.mjs `readField` — and its bullet-header fences are plan-files-core.mjs `fenceStates`.
+// Before, both copies returned the FIRST copy, so on a SPEC re-approved by appending `state: Approved` under
+// `state: Draft` the briefing reported Draft while the gate read Approved. Each row's expected value differs from what
+// the pre-fix reader returned (noted per row), so a revert fails here.
+test("✧ ENF-4: readHeaderField reads the last copy and fences as fenceStates does — renderer and checker agree", () => {
+  const rows = [
+    // [text, field, expected, the pre-fix reading]
+    [["---", "spec_id: FEAT-1", "state: Draft", "state: Approved", "---", ""].join("\n"), "state", "Approved", "Draft"],
+    [["- spec_id: A", "- spec_id: B", "", "## Files", ""].join("\n"), "spec_id", "B", "A"],
+    // a backtick line inside a tilde fence does not close it (the old toggle closed it and read FENCED-FAKE)
+    [["~~~", "```", "- spec_id: FENCED-FAKE", "~~~", "- spec_id: REAL", "", "## X", ""].join("\n"), "spec_id", "REAL", "FENCED-FAKE"],
+    // a fence line indented 4+ spaces is content, not a fence (the old `^\s*` toggle opened one and read nothing)
+    [["    ```", "- spec_id: A", "", "## X", ""].join("\n"), "spec_id", "A", undefined],
+  ];
+  for (const [text, field, want, before] of rows) {
+    assert.notEqual(want, before, "each row must discriminate the fix from the pre-fix reading");
+    assert.equal(renderer.readHeaderField(text, field), want, text);
+    assert.equal(checker.readHeaderField(text, field), want, text);
+  }
+  const spec = rows[0][0];
+  assert.equal(renderer.readHeaderField(spec, "state"), readField(spec.match(FM_RE)[1], "state"), "parity with readField");
 });
 
 // ✧ PARITY — the duplicated field-readers agree across a shared fixture set.

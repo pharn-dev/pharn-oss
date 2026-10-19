@@ -120,6 +120,27 @@ test("enumerate: role-order then slug, excludes non-role + excluded segments, no
   }
 });
 
+// ENF-3 (6.65.2): the catalog mirrors validate.mjs's parse, so it inherited the BOM blind spot — a BOM'd capability was
+// left out of the catalog exactly as validate left it out of the count. Twin pair (L4): the BOM'd capability enumerates
+// to the same record as its clean twin.
+test("✧ ENF-3: a BOM'd capability enumerates exactly as its clean twin does", () => {
+  const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+  const records = [];
+  for (const prefix of ["", bom]) {
+    const root = makeRepo();
+    try {
+      cap(root, "pharn/pharn-review/aaa", "aaa", { name: "aaa", role: "lens", kind: "pharn-owned", version: "0.1.0" }, "# aaa — flags aaa");
+      const p = join(root, "pharn/pharn-review/aaa/aaa.md");
+      writeFileSync(p, prefix + readFileSync(p, "utf8"));
+      records.push(enumerateCapabilities(root));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  assert.equal(records[0].length, 1, "precondition: the clean twin is enumerated");
+  assert.deepEqual(records[1], records[0]);
+});
+
 test("renderPage: full fields, GENERATED header names source, source link + install note", () => {
   const root = makeRepo();
   try {

@@ -96,6 +96,7 @@ import "./runtime-floor.mjs";
 import { spawnSync } from "node:child_process";
 import { closeSync, constants, fstatSync, openSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, sep } from "node:path";
+import { stripBom } from "./frontmatter-core.mjs";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -124,10 +125,13 @@ export const KIND_REASONS = Object.freeze(["kind-missing", "kind-ambiguous", "ki
  * exactly as count-grillers.mjs and validate.mjs slice it (`---` at byte 0, closed at the next `\n---`); only its
  * column-0 `kind:` lines are read, never the body (L6). One matching pair of `"` or `'` around the value is stripped.
  * Only ONE `kind:` line whose value is exactly `pharn-owned` (case-sensitive) admits; two or more lines are ambiguous,
- * even when they agree, because validate.mjs takes the last and a reader might take the first.
+ * even when they agree, because validate.mjs takes the last and a reader might take the first. One leading BOM is
+ * stripped first (frontmatter-core.mjs `stripBom`, 6.65.2), as validate.mjs and count-grillers.mjs now strip it.
  */
-export function frontmatterKind(text) {
-  if (typeof text !== "string" || !text.startsWith("---")) return "kind-missing";
+export function frontmatterKind(rawText) {
+  if (typeof rawText !== "string") return "kind-missing";
+  const text = stripBom(rawText);
+  if (!text.startsWith("---")) return "kind-missing";
   const close = text.indexOf("\n---", 3);
   if (close === -1) return "kind-missing";
   const values = [];
@@ -200,9 +204,12 @@ export function trimGriller(text) {
   const kind = frontmatterKind(text);
   const deep = kind === "pharn-owned" ? true : kind;
   const keep = (reason) => ({ text, omitted: [], whole: reason, deep });
+  // One leading BOM (the strip frontmatterKind applies) is skipped when finding the fence, and KEPT in `head`, so the
+  // trimmed output still rejoins to the exact input bytes.
+  const bom = text.length - stripBom(text).length;
   let bodyStart = 0;
-  if (text.startsWith("---")) {
-    const close = text.indexOf("\n---", 3);
+  if (text.startsWith("---", bom)) {
+    const close = text.indexOf("\n---", bom + 3);
     if (close === -1) return keep("unclosed-frontmatter");
     const eol = text.indexOf("\n", close + 1);
     bodyStart = eol === -1 ? text.length : eol + 1;
