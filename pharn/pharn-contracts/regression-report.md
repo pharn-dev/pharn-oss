@@ -26,14 +26,15 @@ The regression-report is `pharn/features/<name>/regression-report.json` (product
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0; its `source` and
 `entry` keys 6.49.0),
-`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), the key `base_source` (regress-base-integrity), and, only
+`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), the key `base_source` (regress-base-integrity), only when the
+project's declaration decided this invocation's fresh base install, `base_install` (6.66.0), and, only
 when the run's entry gates recorded changes, `entry_gate_changes` (6.42.0), all below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
 appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, since 6.40.0 `head_install`, then `base_source`
-(regress-base-integrity), and since 6.42.0, when present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
+(regress-base-integrity), since 6.66.0, when present, `base_install`, and since 6.42.0, when present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
 the checker prints with, so every key the checker printed keeps its bytes: the report minus those blocks is the
 checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
 twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
@@ -486,6 +487,23 @@ records. NOT claimed: a partially committed build with another uncommitted chang
 holds the committed part (only `--base` closes it); the base checkout still reaches an inherited `NODE_PATH`, global
 folders and an ancestor of the temp root; `baseInstallNeeded` sees lockfiles and declared dependencies, not a
 dependency resolved some other way; and a broad-but-not-total glob (`**/*.js`) is reported, never refused.
+
+## The conditional `base_install` block (6.66.0, advisory shape)
+
+Present only when the project's `pharn.config.json` `regress.install` decided THIS invocation's fresh base install
+(`stage-exit.md`, "The `regress` install command"); absent when argv or the lockfile table decided it, and when the
+BASE evidence was reused or came from the entry gates, so every other report keeps its bytes. It sits after
+`base_source` and before `entry_gate_changes`:
+
+```json
+"base_install": { "declared_in": "pharn.config.json#regress.install", "value": "head-node-modules" }
+```
+
+`value` is the declared member (`none`, `head-node-modules`, or a lockfile family), re-derived from the validated
+decision, never copied from the file. **`head-node-modules` is an APPROXIMATION and the block is its disclosure:** the
+base gates ran over the project's own installed `node_modules`, so a regression caused purely by a dependency change is
+red on both sides and reads `pre_existing` — not attributed. It does not weaken `/pharn-verify`, whose threshold is
+absolute over every gate at HEAD. Nothing gates on this block. Trust: fixed strings selected by membership; no path.
 
 ## The conditional `entry_gate_changes` block (6.42.0, advisory shape)
 

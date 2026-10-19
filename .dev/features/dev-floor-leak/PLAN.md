@@ -66,7 +66,7 @@ receives, yet the CLI copies every non-test `pharn/floor/*.mjs` into every insta
    entry keeps its stated reason).
 6. `npm run docs:generate` (the floor checker count in README's generated inventory drops by one). Version: product
    bytes change, so SKILLS_VERSION 6.65.2 → 6.65.3 (patch: a file stops shipping, no shape change), README badge,
-   CHANGELOG section.
+   CHANGELOG section. Renumbered 6.66.1 after merging `origin/main` at 6.66.0 (#364).
 
 ## Sweep (L75)
 
@@ -148,5 +148,5 @@ Regex `check-ship([^-]|$)` and `fixtures/cost-ledger|"fixtures"`, `git grep` ove
 - `pharn/floor/test-fixtures/cost-ledger/with-subagents/00000000-0000-4000-8000-00000000cafe/subagents/agent-bbb2222222222222.meta.json` — moved here. — layer: test fixture
 - `.prettierignore` — the JSONL fixtures entry follows the move. — layer: repo meta
 - `README.md` — version badge + regenerated inventory (docs:generate). — layer: repo meta (generated region)
-- `SKILLS_VERSION` — 6.65.3. — layer: repo meta
-- `CHANGELOG.md` — the 6.65.3 section. — layer: repo meta
+- `SKILLS_VERSION` — 6.66.1 (planned 6.65.3; renumbered after the merge). — layer: repo meta
+- `CHANGELOG.md` — the 6.66.1 section. — layer: repo meta

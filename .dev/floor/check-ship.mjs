@@ -3,7 +3,7 @@
 //
 // Floor/eval infrastructure — NOT a Capability (no `role:`, like pharn/floor/check-verify.mjs /
 // pharn/floor/check-regress.mjs / .dev/floor/check-variance.mjs). DEV APPARATUS: its one consumer is the dev command
-// `/pharn-dev-ship`, which no install receives, so it lives in `.dev/floor/` (6.65.3; it sat in pharn/floor/ before,
+// `/pharn-dev-ship`, which no install receives, so it lives in `.dev/floor/` (6.66.1; it sat in pharn/floor/ before,
 // and every install copied it — audit 2026-10-12 ARCH-5). The product loop's stop core is pharn/floor/check-loop.mjs.
 // It owns the WHOLE deterministic stop/continue decision of the loop so the maximum surface is in tested Node, not in
 // the command's prose. The command

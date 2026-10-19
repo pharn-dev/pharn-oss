@@ -27,6 +27,11 @@
 // INSTALL_RULE — read at the BASE commit (GATE 1 Q3: npm, pnpm, yarn and bun families, ALL included). The
 // pnpm/yarn/bun LINES ARE UNMEASURED: nobody has run that command against that tool from this stage. The
 // label is carried on the resolved decision (`unmeasured: true`) so a caller can render it honestly.
+// Since 6.66.0 (regress-install-config, audit LOOP-11) a project may DECLARE the answer the table cannot give —
+// `pharn.config.json` `regress.install`, read by regress-install-config-core.mjs, whose header owns the declaration's
+// grammar and bounds. Precedence: `--install`/`--no-install` > the declaration > the lockfile table; a no-manifest base
+// still needs no install. The declared values are DECLARED_INSTALL_VALUES below (this module owns them, so the reader
+// imports them and never keeps a second list — L35).
 //
 // BASE_RULE — a pure decision over git results the CLI passes in: explicit `--base` wins; else a dirty
 // working tree resolves to `HEAD`; else `git merge-base HEAD origin/main`; else `ask`. The CLI turns the
@@ -278,10 +283,34 @@ export const LOCKFILE_FAMILIES = Object.freeze({
   bun: Object.freeze(["bun.lock", "bun.lockb"]),
 });
 
+/** The frozen install command per family — the ONE table (a declared family maps through it too). */
+const FAMILY_COMMAND = Object.freeze({
+  npm: "npm ci",
+  pnpm: "pnpm install --frozen-lockfile",
+  yarn: "yarn install --frozen-lockfile",
+  bun: "bun install --frozen-lockfile",
+});
+
+/** THE DECLARATION'S VALUES (6.66.0) — `pharn.config.json` `regress.install` (regress-install-config-core.mjs reads it):
+ *    none               no base install (a `--no-install` the project declares once);
+ *    head-node-modules  no base install; the base worktree's `node_modules` is a link to the project's own installed
+ *                       `node_modules`, so the BASE is measured with HEAD's dependency tree (an APPROXIMATION — a
+ *                       regression caused purely by a dependency change is red on both sides and is not attributed);
+ *    <family>           that family's frozen command from FAMILY_COMMAND, only when its lockfile is present at BASE.
+ *  CLOSED: no other value, and never a command string (a config-sourced shell command is the SEC-4 class). */
+export const HEAD_MODULES_LINK = "head-node-modules";
+export const DECLARED_INSTALL_VALUES = Object.freeze(["none", HEAD_MODULES_LINK, ...Object.keys(LOCKFILE_FAMILIES)]);
+/** Where a declared decision came from — carried on the decision (`declaredIn`) and in the report's `base_install`. */
+export const INSTALL_DECLARED_IN = "pharn.config.json#regress.install";
+
 /** `lockfiles` — `{npm, pnpm, yarn, bun}` booleans, read at the BASE commit (`git ls-tree`). `npm` is true
  *  whenever EITHER `package-lock.json` OR `npm-shrinkwrap.json` is present — both are the SAME family, so
- *  having both is not "two lockfile families". */
-export function resolveInstall({ explicitInstall = null, noInstall = false, hasPackageJson, lockfiles }) {
+ *  having both is not "two lockfile families".
+ *  `declared` (6.66.0) — the project's validated `regress.install` value, or null (none declared). It is consulted
+ *  only when argv gave no answer and the base has a manifest. A declared family whose lockfile is absent at BASE
+ *  returns `{kind: "unmatched", family}`, which the CLI refuses (`install-config-invalid`) — never a non-frozen install.
+ *  `unmatched` and `ask` are never persisted. */
+export function resolveInstall({ explicitInstall = null, noInstall = false, hasPackageJson, lockfiles, declared = null }) {
   // `kind: "none"` ALWAYS carries `cmd: null, unmeasured: false` too — a stable, self-describing shape a
   // caller (the progress-record validator, the renderer) never needs to special-case by omission.
   if (noInstall) return { kind: "none", cmd: null, unmeasured: false };
@@ -290,16 +319,25 @@ export function resolveInstall({ explicitInstall = null, noInstall = false, hasP
     return { kind: "cmd", cmd: explicitInstall, unmeasured: false };
   }
   if (!hasPackageJson) return { kind: "none", cmd: null, unmeasured: false, reason: "no-manifest" };
-  const families = ["npm", "pnpm", "yarn", "bun"].filter((f) => lockfiles && lockfiles[f]);
+  if (declared !== null) {
+    if (!DECLARED_INSTALL_VALUES.includes(declared)) throw new Error("internal: resolveInstall requires a validated declaration");
+    if (declared === "none") return { kind: "none", cmd: null, unmeasured: false, declaredIn: INSTALL_DECLARED_IN };
+    if (declared === HEAD_MODULES_LINK) {
+      return { kind: "none", cmd: null, unmeasured: false, link: HEAD_MODULES_LINK, declaredIn: INSTALL_DECLARED_IN };
+    }
+    if (!(lockfiles && lockfiles[declared] === true)) return { kind: "unmatched", family: declared };
+    return {
+      kind: "cmd",
+      cmd: FAMILY_COMMAND[declared],
+      unmeasured: UNMEASURED_FAMILY[declared],
+      family: declared,
+      declaredIn: INSTALL_DECLARED_IN,
+    };
+  }
+  const families = Object.keys(LOCKFILE_FAMILIES).filter((f) => lockfiles && lockfiles[f]);
   if (families.length !== 1) return { kind: "ask" };
   const family = families[0];
-  const cmd = {
-    npm: "npm ci",
-    pnpm: "pnpm install --frozen-lockfile",
-    yarn: "yarn install --frozen-lockfile",
-    bun: "bun install --frozen-lockfile",
-  }[family];
-  return { kind: "cmd", cmd, unmeasured: UNMEASURED_FAMILY[family], family };
+  return { kind: "cmd", cmd: FAMILY_COMMAND[family], unmeasured: UNMEASURED_FAMILY[family], family };
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -343,11 +381,13 @@ export function baseInstallNeeded({ lockfiles, manifest }) {
     return v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0;
   });
 }
+// A declared `head-node-modules` base (6.66.0) is NOT unreliable here: the dependencies ARE present (HEAD's), so a gate
+// red on both sides reads `pre_existing` — the disclosed approximation (DECLARED_INSTALL_VALUES), never this refusal.
 export function unreliableInstallMasking({ install, installResult, installNeeded, freshBase, outsideGates }) {
   if (!freshBase || install === null || typeof install !== "object") return [];
   const unreliable =
     install.kind === "none"
-      ? install.reason !== "no-manifest" && installNeeded === true
+      ? install.reason !== "no-manifest" && install.link !== HEAD_MODULES_LINK && installNeeded === true
       : !installResult || installResult.ran !== true || installResult.exit !== 0 || installResult.timedOut === true;
   if (!unreliable || outsideGates === null || typeof outsideGates !== "object") return [];
   return Object.keys(outsideGates)
@@ -452,6 +492,17 @@ function isValidInstall(v) {
   if (v === null || typeof v !== "object" || Array.isArray(v)) return false;
   if (!INSTALL_KIND_SET.has(v.kind)) return false;
   if (typeof v.unmeasured !== "boolean") return false;
+  // 6.66.0 — optional, and exact when present (an older record has neither, so no schema bump): `declaredIn` names the
+  // declaration; `link` only on a declared `none`.
+  if (Object.hasOwn(v, "declaredIn") && v.declaredIn !== INSTALL_DECLARED_IN) return false;
+  if (Object.hasOwn(v, "link") && !(v.link === HEAD_MODULES_LINK && v.kind === "none" && v.declaredIn === INSTALL_DECLARED_IN)) {
+    return false;
+  }
+  // A DECLARED family's decision is exactly the table's: its `family` a LOCKFILE_FAMILIES key (own property — L15) and its
+  // command that family's line, so the report's `base_install.value` is never a string a paused record supplied.
+  if (v.kind === "cmd" && Object.hasOwn(v, "declaredIn")) {
+    if (typeof v.family !== "string" || !Object.hasOwn(FAMILY_COMMAND, v.family) || v.cmd !== FAMILY_COMMAND[v.family]) return false;
+  }
   if (v.kind === "none") return v.cmd === null;
   return isCleanToken(v.cmd, 4096) && !v.cmd.startsWith("-");
 }
@@ -481,7 +532,8 @@ export function validateProgress(rec) {
   if (["install", "base-init", "drain-base"].includes(rec.phase) && rec.baseWorktree === null) {
     return { ok: false, reason: `progress.baseWorktree is required at ${rec.phase} — the base checkout exists from the worktree phase on` };
   }
-  if (!isValidInstall(rec.install)) return { ok: false, reason: "progress.install must be {kind: none|cmd, cmd, unmeasured}" };
+  if (!isValidInstall(rec.install))
+    return { ok: false, reason: "progress.install must be {kind: none|cmd, cmd, unmeasured, declaredIn?, link?}" };
   if (!Array.isArray(rec.e2eExcluded) || !rec.e2eExcluded.every((s) => typeof s === "string")) {
     return { ok: false, reason: "progress.e2eExcluded must be a string array" };
   }

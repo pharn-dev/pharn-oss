@@ -95,7 +95,10 @@
 // TRUST (P2): the `## Files` text of PLAN.md/AC-TESTS.md is untrusted and becomes ONLY declared glob
 // patterns; SPEC.md is hashed by the shelled checker and never read here; git paths are attacker-nameable
 // strings that travel as argv elements (never shell text) and are rendered only fenced. A `--gates`/
-// `--install` value is the human's own shell text, exactly as it is today. Child stdout is parsed as JSON
+// `--install` value is the human's own shell text, exactly as it is today. The project's `pharn.config.json`
+// `regress.install` (6.66.0, regress-install-config-core.mjs) is read when neither --install nor --no-install was given;
+// it selects a member of a closed set, never a command (`install-config-invalid` when it cannot answer the run; a
+// `head-node-modules` base links the project's node_modules into the base worktree). Child stdout is parsed as JSON
 // and only enums/ints branch; free text is quoted through `dataText`/`quoteData` (`quote-core.mjs`).
 //
 // Usage:
@@ -106,7 +109,19 @@
 // Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else (1 included) = CRASHED.
 
 import "./runtime-floor.mjs";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+  rmSync,
+  unlinkSync,
+} from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -135,6 +150,8 @@ import {
   resolveBaseSource,
   unreliableInstallMasking,
   baseInstallNeeded,
+  HEAD_MODULES_LINK,
+  INSTALL_DECLARED_IN,
   PROGRESS_SCHEMA,
   validateProgress,
 } from "./stage-regress-core.mjs";
@@ -142,6 +159,7 @@ import { clearBaseWorktrees, createBaseDir, isOurBaseDir, redact } from "./base-
 import { readInstallCheck, recordInstallCheck, readRecordedInstallCheck, refuses } from "./install-drift.mjs";
 import { detailText } from "./install-drift-core.mjs";
 import { renderDone, renderRefused } from "./render-regression.mjs";
+import { loadRegressInstall } from "./regress-install-config-core.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
@@ -762,13 +780,76 @@ function phaseHeadInit(cfg, base, scope, tests) {
   }
 
   const { hasPackageJson, lockfiles } = lockfilesAtBase(base);
-  const install = resolveInstall({ explicitInstall: cfg.explicitInstall, noInstall: cfg.noInstall, hasPackageJson, lockfiles });
+  // 6.66.0 (regress-install-config) — the project's declared answer, read only when argv gave none and there is a
+  // manifest to install for (argv > declaration > lockfile table; regress-install-config-core.mjs owns the grammar).
+  let declared = null;
+  if (!cfg.installOverride && hasPackageJson) {
+    const d = loadRegressInstall(".");
+    if (!d.ok) emitUnusable(cfg.feature, "install-config-invalid", d.reason);
+    declared = d.install;
+  }
+  const install = resolveInstall({ explicitInstall: cfg.explicitInstall, noInstall: cfg.noInstall, hasPackageJson, lockfiles, declared });
   if (install.kind === "ask") emitQuestion(cfg.feature, "install-unresolved", cfg.originalArgv);
+  if (install.kind === "unmatched") {
+    emitUnusable(
+      cfg.feature,
+      "install-config-invalid",
+      `${INSTALL_DECLARED_IN} declares ${JSON.stringify(install.family)}, but the base commit has no ${install.family} lockfile ` +
+        `(${LOCKFILE_FAMILIES[install.family].join(" or ")}); a declared family runs only its frozen install`
+    );
+  }
+  if (install.link === HEAD_MODULES_LINK) {
+    const m = headModulesError();
+    if (m !== null) emitUnusable(cfg.feature, "install-config-invalid", m);
+  }
   // regress-base-integrity: would an install at the base materialize anything? Read once, here, for the unreliable-install
   // rule (stage-regress-core.mjs baseInstallNeeded) — the base package.json is parsed as data, never executed.
   const installNeeded = hasPackageJson ? baseInstallNeeded({ lockfiles, manifest: manifestAtBase(base) }) : false;
 
   return { install, installNeeded, e2eExcluded: parsed.e2e_excluded ?? [], styleSkipped: skipStyle };
+}
+
+/** `head-node-modules` (6.66.0) needs the project's own `node_modules` to be a REAL directory: lstat, never stat — a
+ *  symlink (dangling or not) is not one (L54/L59). Returns null, or a refusal sentence naming no absolute path. Checked
+ *  at head-init (fail early) and again where the link is made (a `--resume` may run long after). */
+function headModulesError() {
+  let st;
+  try {
+    st = lstatSync("node_modules");
+  } catch (e) {
+    return `${INSTALL_DECLARED_IN} is "${HEAD_MODULES_LINK}", but the project has no node_modules (${e && e.code ? e.code : "error"}) — install the dependencies first`;
+  }
+  if (!st.isDirectory()) {
+    return `${INSTALL_DECLARED_IN} is "${HEAD_MODULES_LINK}", but the project's node_modules is not a real directory (a symlink or another kind of entry is never followed)`;
+  }
+  return null;
+}
+
+/** Make `<base worktree>/node_modules` a link to the project's own `node_modules` (`head-node-modules`). Idempotent on a
+ *  resume: an existing link whose text is exactly the target is accepted; any other entry there — a `node_modules` the
+ *  base commit tracks, a foreign link — refuses, and so does a failed symlink call. Returns null or a refusal sentence. */
+function linkHeadModules(baseWorktree) {
+  const m = headModulesError();
+  if (m !== null) return m;
+  const target = join(projectReal(), "node_modules");
+  const at = join(baseWorktree, "node_modules");
+  let st = null;
+  try {
+    st = lstatSync(at);
+  } catch (e) {
+    if (!e || e.code !== "ENOENT")
+      return `the base worktree's node_modules entry could not be inspected (${e && e.code ? e.code : "error"})`;
+  }
+  if (st !== null) {
+    if (st.isSymbolicLink() && readlinkSync(at) === target) return null;
+    return `${INSTALL_DECLARED_IN} is "${HEAD_MODULES_LINK}", but the base commit already has a node_modules entry, which is never replaced`;
+  }
+  try {
+    symlinkSync(target, at, "dir");
+  } catch (e) {
+    return `the link from the base worktree to the project's node_modules could not be made (${e && e.code ? e.code : "error"})`;
+  }
+  return null;
 }
 
 /** The base commit's package.json, parsed, or null when it cannot be read or parsed (baseInstallNeeded fails closed). */
@@ -936,6 +1017,11 @@ function runPhases(state, budget) {
         state.phase = "base-init";
         return runPhases(state, budget); // the SAME tracker — see makeBudget's header
       });
+    }
+    // 6.66.0 — a declared `head-node-modules`: no install; the base worktree resolves HEAD's installed tree through a link.
+    if (state.install.link === HEAD_MODULES_LINK) {
+      const m = linkHeadModules(state.baseWorktree);
+      if (m !== null) emitUnusable(state.feature, "install-config-invalid", m);
     }
     state.installResult = null;
     state.phase = "base-init";
@@ -1116,14 +1202,15 @@ function runPhases(state, budget) {
     }
     const why =
       state.install.kind === "none"
-        ? "the base install was skipped (--no-install) although the base commit has a lockfile or declares dependencies"
+        ? `the base install was skipped (${state.install.declaredIn === INSTALL_DECLARED_IN ? `${INSTALL_DECLARED_IN} is "none"` : "--no-install"}) although the base commit has a lockfile or declares dependencies`
         : `the base install ${state.installResult && state.installResult.timedOut ? "timed out" : `exited ${state.installResult ? state.installResult.exit : "without running"}`}`;
     writeRefusedAndEmit(
       state.feature,
       "base-install-unreliable",
       `${why}, and ${state.installMasked.map((id) => JSON.stringify(id)).join(", ")} ${state.installMasked.length === 1 ? "is" : "are"} ` +
         "red at both base and head — with no reliable install at the base, a red base gate cannot be told apart from a " +
-        "missing dependency, so it cannot be classified pre_existing. Fix the install (or supply --install) and re-run.",
+        "missing dependency, so it cannot be classified pre_existing. Fix the install (or supply --install, or declare " +
+        `${INSTALL_DECLARED_IN} "${HEAD_MODULES_LINK}" to measure the base with this tree's dependencies) and re-run.`,
       null,
       null,
       { base: state.base, baseSource: state.baseSource },
@@ -1150,6 +1237,10 @@ function runPhases(state, budget) {
   const headInstall = readRecordedInstallCheck(REGRESS_PATHS.headInstall);
   // 6.42.0: `entry_gate_changes`, last, only when the partition wrote one (pre-run-snapshot-core.mjs entryBlocks).
   const entryGates = state.scope.entry_gate_changes ? { entry_gate_changes: state.scope.entry_gate_changes } : {};
+  // 6.66.0: `base_install`, after `base_source`, only when the project's declaration decided THIS invocation's fresh BASE
+  // side (reused or entry evidence ran no install here) — so every other report keeps its bytes. Fixed strings selected
+  // by membership; never a path.
+  const baseInstall = baseEvidence.source === "fresh" ? declaredInstallBlock(state.install) : {};
   atomicWriteIntoFeature(
     reportPath,
     `${JSON.stringify(
@@ -1160,6 +1251,7 @@ function runPhases(state, budget) {
         pre_run_snapshot: preRunBlock,
         head_install: headInstall,
         base_source: state.baseSource,
+        ...baseInstall,
         ...entryGates,
       },
       null,
@@ -1206,6 +1298,14 @@ function runPhases(state, budget) {
     (m) => console.error(`stage-regress: ${m}`)
   );
   emit(doneExit({ stage: "regress", feature: state.feature, verdict: state.report.verdict, report: reportPath, render: renderPath }));
+}
+
+/** The report's additive `base_install` block (6.66.0): `{base_install: {declared_in, value}}` when the decision came from
+ *  `pharn.config.json` `regress.install`, else `{}`. `value` is re-derived from the validated decision's fixed fields. */
+function declaredInstallBlock(install) {
+  if (!install || install.declaredIn !== INSTALL_DECLARED_IN) return {};
+  const value = install.kind === "cmd" ? install.family : install.link === HEAD_MODULES_LINK ? HEAD_MODULES_LINK : "none";
+  return { base_install: { declared_in: INSTALL_DECLARED_IN, value } };
 }
 
 /** Did THIS invocation take its BASE evidence from the entry gates? Only after the verdict-time re-decision wrote it. */

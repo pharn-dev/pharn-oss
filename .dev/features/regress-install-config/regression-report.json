@@ -1,0 +1,50 @@
+{
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-regress.md",
+    ".dev/features/regress-install-config/GRILL.md",
+    ".dev/features/regress-install-config/PLAN.md",
+    ".dev/features/regress-install-config/REGRESSION.md",
+    ".dev/features/regress-install-config/REVIEW.md",
+    ".dev/features/regress-install-config/VERIFY.md",
+    ".dev/features/regress-install-config/regression-report.json",
+    ".dev/features/regress-install-config/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/regress-install-config-core.mjs",
+    "pharn/floor/regress-install-config-core.test.mjs",
+    "pharn/floor/render-regression.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/stage-exit-core.mjs",
+    "pharn/floor/stage-exit-core.test.mjs",
+    "pharn/floor/stage-regress-core.mjs",
+    "pharn/floor/stage-regress-core.test.mjs",
+    "pharn/floor/stage-regress.mjs",
+    "pharn/floor/stage-regress.test.mjs",
+    "pharn/pharn-contracts/regression-report.md",
+    "pharn/pharn-contracts/stage-exit.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}
