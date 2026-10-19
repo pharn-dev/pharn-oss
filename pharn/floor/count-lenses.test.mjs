@@ -173,7 +173,7 @@ test("CRLF frontmatter registers (parity with validate.mjs's slice/trim/split li
   });
 });
 
-// ENF-3 (6.64.3): a leading UTF-8 BOM used to hide the declaration from both this counter and validate.mjs (0 and
+// ENF-3 (6.64.4): a leading UTF-8 BOM used to hide the declaration from both this counter and validate.mjs (0 and
 // "GREEN — 0 capabilities checked"). Twin pair (L4): the BOM'd file registers exactly as its clean twin, and
 // validate.mjs counts the same file, so the two still agree on membership.
 test("✧ ENF-3: a BOM'd lens registers as its clean twin does, and validate.mjs counts it too", () => {

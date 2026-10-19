@@ -120,7 +120,7 @@ test("enumerate: role-order then slug, excludes non-role + excluded segments, no
   }
 });
 
-// ENF-3 (6.64.3): the catalog mirrors validate.mjs's parse, so it inherited the BOM blind spot — a BOM'd capability was
+// ENF-3 (6.64.4): the catalog mirrors validate.mjs's parse, so it inherited the BOM blind spot — a BOM'd capability was
 // left out of the catalog exactly as validate left it out of the count. Twin pair (L4): the BOM'd capability enumerates
 // to the same record as its clean twin.
 test("✧ ENF-3: a BOM'd capability enumerates exactly as its clean twin does", () => {

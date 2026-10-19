@@ -121,7 +121,7 @@ function readEnvelopeValue(raw) {
   return isQuotedScalar(trimmed) ? yamlUnscalar(trimmed) : clean(raw);
 }
 
-// duplicated: render-ship-briefing.mjs's readHeaderField (6.64.3: LAST copy wins, as check-spec.mjs reads the SPEC;
+// duplicated: render-ship-briefing.mjs's readHeaderField (6.64.4: LAST copy wins, as check-spec.mjs reads the SPEC;
 // the line grammar is frontmatter-core.mjs's; bullet-header fences are plan-files-core.mjs's `fenceStates`)
 export function readHeaderField(text, field) {
   const fm = text.match(FM_RE);
@@ -236,7 +236,7 @@ export function readEnvelope(text) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fields = new Map(); // Map, never a plain object indexed by an arbitrary key (L15)
-  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.64.3); the last copy of a repeated key wins.
+  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.64.4); the last copy of a repeated key wins.
   for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) fields.set(key, readEnvelopeValue(raw));
   return fields;
 }

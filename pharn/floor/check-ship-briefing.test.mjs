@@ -284,7 +284,7 @@ test("usage error: no path argument", () => {
   assert.equal(r.status, 1);
 });
 
-// ✧ ENF-4 (6.64.3): readHeaderField keeps the LAST copy of a repeated key in both shapes — the copy check-spec.mjs
+// ✧ ENF-4 (6.64.4): readHeaderField keeps the LAST copy of a repeated key in both shapes — the copy check-spec.mjs
 // reads with frontmatter-core.mjs `readField` — and its bullet-header fences are plan-files-core.mjs `fenceStates`.
 // Before, both copies returned the FIRST copy, so on a SPEC re-approved by appending `state: Approved` under
 // `state: Draft` the briefing reported Draft while the gate read Approved. Each row's expected value differs from what

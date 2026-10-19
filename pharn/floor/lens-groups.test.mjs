@@ -507,7 +507,7 @@ function scratchTree() {
   mkdirSync(join(dir, "pharn/floor"), { recursive: true });
   const floor = [
     "count-lenses.mjs",
-    "frontmatter-core.mjs", // count-lenses.mjs imports its BOM strip (6.64.3)
+    "frontmatter-core.mjs", // count-lenses.mjs imports its BOM strip (6.64.4)
     "render-review-assignments.mjs",
     "runtime-floor.mjs",
     "code-scanner-cli.mjs",

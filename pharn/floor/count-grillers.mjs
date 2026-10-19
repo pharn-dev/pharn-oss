@@ -81,7 +81,7 @@ function isExcluded(file) {
 
 // The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none.
 // MIRRORS pharn/floor/count-verifiers.mjs `frontmatterRole` EXACTLY (which mirrors validate.mjs
-// `parseFrontmatter`): the same leading-BOM strip (frontmatter-core.mjs `stripBom`, 6.64.3), then the same
+// `parseFrontmatter`): the same leading-BOM strip (frontmatter-core.mjs `stripBom`, 6.64.4), then the same
 // opening fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`),
 // the same `slice(3, end).trim()` block, the same `^([A-Za-z0-9_]+):\s*(.*)$` line parse, and the same
 // `^["']|["']$` quote-strip. That byte-for-byte sameness is what makes membership agree with validate.mjs

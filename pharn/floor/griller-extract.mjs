@@ -126,7 +126,7 @@ export const KIND_REASONS = Object.freeze(["kind-missing", "kind-ambiguous", "ki
  * column-0 `kind:` lines are read, never the body (L6). One matching pair of `"` or `'` around the value is stripped.
  * Only ONE `kind:` line whose value is exactly `pharn-owned` (case-sensitive) admits; two or more lines are ambiguous,
  * even when they agree, because validate.mjs takes the last and a reader might take the first. One leading BOM is
- * stripped first (frontmatter-core.mjs `stripBom`, 6.64.3), as validate.mjs and count-grillers.mjs now strip it.
+ * stripped first (frontmatter-core.mjs `stripBom`, 6.64.4), as validate.mjs and count-grillers.mjs now strip it.
  */
 export function frontmatterKind(rawText) {
   if (typeof rawText !== "string") return "kind-missing";

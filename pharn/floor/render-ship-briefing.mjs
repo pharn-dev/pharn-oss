@@ -107,7 +107,7 @@ function clean(v) {
 // bullet-header), fenced blocks skipped inside the bullet-header region (L6). Returns undefined if the
 // field is present in NEITHER shape — a legitimate, expected outcome (e.g. `spec_id` on a dev PLAN).
 //
-// The LAST copy of a repeated key wins in both shapes (6.64.3, frontmatter-parser-parity — audit ENF-4), the copy
+// The LAST copy of a repeated key wins in both shapes (6.64.4, frontmatter-parser-parity — audit ENF-4), the copy
 // check-spec.mjs reads with frontmatter-core.mjs `readField`: the SPEC's `state` and `spec_id` are DECIDED by
 // check-spec, so a briefing that kept the first copy reported a state the gate never saw. The line grammar is the
 // core's (`fieldEntries`); the value rule stays this file's `clean()`. The bullet-header region's fences are

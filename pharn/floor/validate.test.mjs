@@ -57,7 +57,7 @@ version: 0.1.0
 # A sample product capability
 `;
 
-// ── ENF-3 (6.64.3): a leading UTF-8 BOM no longer hides a capability ──────────────────────────────────────────
+// ── ENF-3 (6.64.4): a leading UTF-8 BOM no longer hides a capability ──────────────────────────────────────────
 // Before the fix a BOM defeated `startsWith("---")`, so a capability with blocking findings was "not a capability"
 // and validate printed GREEN — 0 capabilities checked (reproduced at d5453a17). Each case is a twin pair (L4): the
 // BOM'd file must produce exactly what its clean twin produces, so the test passes only because of the strip.
@@ -943,7 +943,7 @@ test("★ CHECK 6 NON-VACUITY: the RED disappears when CHECK 6's branch is disab
     assert.match(real.stdout, CHECK6_RE);
 
     // Mutant: same fixture, CHECK 6 disabled -> GREEN. This is what proves the RED was CHECK 6's.
-    // validate.mjs imports its BOM strip from the shared core (6.64.3), so the mutant needs the core beside it.
+    // validate.mjs imports its BOM strip from the shared core (6.64.4), so the mutant needs the core beside it.
     const core = readFileSync(join(here, "frontmatter-core.mjs"), "utf8");
     withRepo({ "validate.mjs": mutant, "frontmatter-core.mjs": core }, (mutantRoot) => {
       const m = spawnSync(process.execPath, [join(mutantRoot, "validate.mjs"), root], { encoding: "utf8" });

@@ -215,7 +215,7 @@ test("CRLF frontmatter registers (parity with validate.mjs's slice/trim/split li
   });
 });
 
-// ENF-3 (6.64.3): a leading UTF-8 BOM used to hide the declaration (0 registered). Twin pair (L4), plus agreement
+// ENF-3 (6.64.4): a leading UTF-8 BOM used to hide the declaration (0 registered). Twin pair (L4), plus agreement
 // with validate.mjs on the same file.
 test("✧ ENF-3: a BOM'd griller registers as its clean twin does, and validate.mjs counts it too", () => {
   const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff

@@ -168,7 +168,7 @@ function walk(dir, acc = []) {
 }
 
 // --- tiny dependency-free frontmatter parser (handles the subset PHARN uses) ---
-// One leading UTF-8 BOM is stripped FIRST (frontmatter-core.mjs `stripBom`, 6.64.3 — audit ENF-3): before it, a BOM
+// One leading UTF-8 BOM is stripped FIRST (frontmatter-core.mjs `stripBom`, 6.64.4 — audit ENF-3): before it, a BOM
 // defeated the `startsWith("---")` fence and a capability with blocking findings was "not a capability", GREEN.
 // Everything after the strip is the loose fence it always was (a `----` opening still parses); the count-* readers
 // mirror this function, so they strip first too.

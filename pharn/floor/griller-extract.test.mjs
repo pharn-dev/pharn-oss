@@ -321,7 +321,7 @@ test("CRLF line endings trim the same way and keep their bytes", () => {
   assert.equal(t.text, (FM + PRE + PROC + NOTES).replace(/\n/g, "\r\n"));
 });
 
-// ENF-3 (6.64.3): a leading UTF-8 BOM used to read as kind-missing (the deep members were kept — fail-closed, but out
+// ENF-3 (6.64.4): a leading UTF-8 BOM used to read as kind-missing (the deep members were kept — fail-closed, but out
 // of parity with validate.mjs and count-grillers.mjs, which now count a BOM'd griller). Twin pair (L4): the BOM'd
 // griller trims exactly as its clean twin, and the BOM stays as the output's first character (lossless bytes).
 test("✧ ENF-3: a BOM'd pharn-owned griller reads pharn-owned and trims as its clean twin, keeping the BOM", () => {

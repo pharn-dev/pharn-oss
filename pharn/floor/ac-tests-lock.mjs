@@ -106,6 +106,7 @@ import { RESULTS_GATES } from "./test-results-core.mjs";
 import { evaluateRedRun } from "./red-run-core.mjs";
 import { computeTestInfra, pinShapeError, sha256RegularFile, testInfraReds } from "./test-infra-core.mjs";
 import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
+import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 export { sha256RegularFile };
 
@@ -131,7 +132,6 @@ export const LOCK_KEYS_V1 = Object.freeze(["feature", "files", "mapping", "red_r
 /** `red_run`'s closed key set. */
 export const RED_RUN_KEYS = Object.freeze(["acs", "files_sha256", "gates", "stamp_sha256"]);
 
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const AC_ID_RE = /^AC-[1-9][0-9]*$/;
 const MAX_TEST_ID = 4096;
 const HEX64_RE = /^[0-9a-f]{64}$/;
@@ -168,7 +168,8 @@ function scopedFilesOf(text) {
  *  the test-infrastructure pin. Returns `{ok, spec, files, mapping, levels}` or a refusal. `levels` is null when the
  *  `## Mapping` is not usable (acRowsOf); only `buildLock` needs it. */
 function mappingFacts(name, base, root) {
-  if (typeof name !== "string" || !SLUG_RE.test(name)) return { ok: false, reason: `<name> must be a plain slug matching ${SLUG_RE}` };
+  if (typeof name !== "string" || !FEATURE_SLUG_RE.test(name))
+    return { ok: false, reason: `<name> must be a plain slug matching ${FEATURE_SLUG_RE}` };
   const mappingPath = join(base, name, MAPPING_NAME);
   let text;
   try {
@@ -288,7 +289,8 @@ function specApproval(name, base, root) {
  *  increment is for, and SPEC.md's pin. Refuses when the SPEC is not test-infra, or when an AC-TESTS.md exists. */
 export function buildBootstrapLock(name, base, root) {
   if (typeof root !== "string" || root === "") throw new TypeError("buildBootstrapLock: `root` must be a non-empty string");
-  if (typeof name !== "string" || !SLUG_RE.test(name)) return { ok: false, reason: `<name> must be a plain slug matching ${SLUG_RE}` };
+  if (typeof name !== "string" || !FEATURE_SLUG_RE.test(name))
+    return { ok: false, reason: `<name> must be a plain slug matching ${FEATURE_SLUG_RE}` };
   const facts = readSpecFacts(name, base, root);
   if (!facts.ok) return facts;
   const approval = specApproval(name, base, root);

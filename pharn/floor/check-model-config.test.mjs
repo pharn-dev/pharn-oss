@@ -259,7 +259,7 @@ test("agreement GREEN: eleven product commands whose frontmatter matches the con
   assert.match(r.stdout, /GREEN — config valid; 11\/11 product stage\(s\) agree/);
 });
 
-// ENF-3 (6.64.3): a leading UTF-8 BOM used to make a command's `model:`/`effort:` unreadable, so an agreeing
+// ENF-3 (6.64.4): a leading UTF-8 BOM used to make a command's `model:`/`effort:` unreadable, so an agreeing
 // command read as "missing `model:`" — RED over a correct file. With every command BOM'd, agreement is GREEN exactly
 // as for the clean commands above; the mismatch control proves the BOM'd frontmatter is really being read.
 test("✧ ENF-3: BOM'd product commands are read as their clean twins (agreement GREEN; a BOM'd mismatch still REDs)", () => {

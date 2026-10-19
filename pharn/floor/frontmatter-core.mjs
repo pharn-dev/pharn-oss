@@ -19,7 +19,7 @@
 // at the anchor. Normalising both at the read is what makes the two defences complete rather than
 // individually plausible.
 //
-// THE SECOND FAMILY (6.64.3, audit ENF-3). validate.mjs and the readers that mirror it (count-lenses, count-grillers,
+// THE SECOND FAMILY (6.64.4, audit ENF-3). validate.mjs and the readers that mirror it (count-lenses, count-grillers,
 // count-verifiers, check-model-config, griller-extract; in .dev, capability-catalog-core and check-config) never used
 // `FM_RE`: they test a LOOSER fence, `startsWith("---")` closed by the next `\n---`, on purpose. A BOM defeated it the
 // same way, and there the failure was OPEN — a BOM'd capability was "not a capability" and validate printed GREEN
@@ -78,7 +78,7 @@ export function matchFrontmatter(text) {
 // `readValue` or `scalar`.
 //
 // WHAT IT DOES NOT DO (P0): it does not REFUSE a duplicated key. LAST-wins, as a JS object assignment and YAML
-// both resolve it. Since 6.64.3 (frontmatter-parser-parity, audit ENF-4) the refusal lives in ONE consumer:
+// both resolve it. Since 6.64.4 (frontmatter-parser-parity, audit ENF-4) the refusal lives in ONE consumer:
 // check-plan-lessons.mjs REDs a repeated `applied_lessons`, because it gates that one field and choosing either
 // copy would certify a declaration some other reader discards. Every other reader still chooses the last copy.
 // The LOOP.md and BRIEFING.md envelope readers do not refuse a repeat; that is a named follow-up, not an oversight.
@@ -126,7 +126,7 @@ export const FIELD_LINE_RE = /^([A-Za-z_][\w-]*):[ \t]*(.*)$/;
 /** One `- key: value` line of a dev PLAN's leading bullet header — the same key grammar behind a list marker. */
 export const BULLET_FIELD_LINE_RE = /^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/;
 
-// ── The ONE `key: value` line reader (6.64.3, frontmatter-parser-parity — audit ENF-4) ─────────────────────────
+// ── The ONE `key: value` line reader (6.64.4, frontmatter-parser-parity — audit ENF-4) ─────────────────────────
 //
 // WHY IT LIVES HERE (the trigger, P7). Eight floor modules (seven product, one dev) carried twelve private copies of
 // the line regex above, and they disagreed on which copy of a repeated key counts: check-plan-lessons.mjs and the
