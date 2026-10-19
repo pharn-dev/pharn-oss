@@ -25,8 +25,9 @@
 //   • each `field_equals` sets its `field` to its `value` (only when `field` is one of those six keys; any other field
 //     is left to the checker, which REDs it), and each `file_resolves` sets `file` to its `value`;
 //   • the count is read from the FIRST `finding_count` in file order: `value` for `==` or `>=`, `min(1, value)` for
-//     `<=`; 1 when the file has no `finding_count`, or when the value is not a non-negative integer (the checker REDs
-//     that assertion). The witness is that many copies. No committed file has two `finding_count` assertions today
+//     `<=`; 1 when the file has no `finding_count`, or when the value is not a non-negative integer. The checker REDs
+//     a non-integer value itself. It accepts a negative integer: one finding meets `>= -1`, and no count meets `==` or
+//     `<=` a negative value, so those RED. The witness is that many copies. No committed file has two `finding_count` assertions today
 //     (measured by /pharn-dev-grill on this increment); one that did could only get a false RED here.
 // An empty string contains no non-empty needle, and the checker REDs an empty needle by itself. A construction error
 // can only produce a false RED, which is loud. It cannot produce a false GREEN, because a GREEN is an output the

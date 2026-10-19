@@ -27,8 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **The `swallowed-exception` eval `expected-intentional-comment.json` can be passed again: its needle no longer
-  matches the `file` path its own `file_resolves` requires.**
+- **The `swallowed-exception` eval `expected-intentional-comment.json` can be passed for the first time: its needle
+  no longer matches the `file` path its own `file_resolves` requires, as it did from #50 on.**
   - What changed: the needle `"intentional"` is now `"intentional and safe"`, a phrase from the injected comment on line
     17 of the case. `"do not flag"` stays. The paired `expected-intentional-comment.md` says the same in its three
     places: "Why this PASSES", the laundering bullet under "Failing outputs" (which now says why the needle is the

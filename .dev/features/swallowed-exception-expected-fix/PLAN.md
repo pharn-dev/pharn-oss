@@ -263,9 +263,16 @@ is never walked.
 
 ## GATE 1 — decided by the human (2026-10-19; appended below the approved text, not part of it)
 
-Everything above this heading is the approved draft, copied byte for byte from session `funny-diffie-2a16d0`'s
-`PLAN.draft.md` with the Write tool (sha256 `10e630b7fe24bf19fc1a7c03ee35f13844f363bf009b580428015cc52f1ba2ca`,
-recomputed over the copy before this section was appended). Nothing above was edited.
+Everything above this heading is the approved draft, copied byte for byte with the Write tool (sha256
+`10e630b7fe24bf19fc1a7c03ee35f13844f363bf009b580428015cc52f1ba2ca`, 18,638 bytes, recomputed over the copy before this
+section was appended). Nothing above was edited. Corrected at GATE 2 (REVIEW.md A3), because the first version of this
+paragraph named a file that session `funny-diffie-2a16d0` does not hold. Two files carry that hash and size, both
+re-hashed on 2026-10-19:
+
+- the hand-off copy this PLAN was copied from, which is outside that session's scratchpad:
+  `~/Library/Application Support/Claude/side-session-notes/local_46f75c2a-b2cf-4340-9586-c77ac62d863c/swallowed-exception-expected-fix/PLAN.draft.md`;
+- the session's own draft:
+  `/private/tmp/claude-501/-Users-pgalarowicz-Projects-pharn-oss--claude-worktrees-funny-diffie-2a16d0/276e4ac4-741c-44df-9087-b7211fb0847b/scratchpad/plan-draft/PLAN.md`.
 
 The human's GATE 1 answers, given on 2026-10-19 in session `funny-diffie-2a16d0` through its AskUserQuestion form,
 verbatim:
@@ -296,3 +303,20 @@ State re-read at `5bc02bb` (main after #356 merged):
   it and renumber by diff against `origin/main`.
 - #356 adds no `evals/expected/` file: `git diff --name-only 0fefcb8 origin/main` lists none, so the sweep set the plan
   measured at `0fefcb8` is unchanged.
+
+## GATE 2 — decided by the human (2026-10-19; appended, not part of the approved text)
+
+After `REVIEW.md` (GREEN, 0 floor-gate findings, 3 advisory findings), the human chose "Fix A1–A3, then PR", relayed by
+the main-checkout orchestrator. One fix round, in the build's worktree:
+
+- A1: the CHANGELOG [6.64.1] bold sentence said the eval "can be passed again", but the file could not be passed at any
+  commit since #50 (`bb1a7e36`). It is reworded. The build commit's subject is left as committed; the PR title is the
+  orchestrator's.
+- A2: the witness header in `.dev/floor/eval-expected-satisfiable.test.mjs` said the checker REDs a count that is "not a
+  non-negative integer". The checker REDs only a non-integer (`finding_count >= -1` exits 0), and the comment now says
+  so.
+- A3: the GATE 1 record above names the files that carry the approved hash.
+
+The fix round edits only `CHANGELOG.md` and the test, both already in `## Files`, so `## Files` is unchanged and the
+approved bytes stay as they are. This PLAN is edited before the fix round's build Step 0, so its edit is outside the new
+reconcile window. Regress exempts it as this feature's own artifact.
