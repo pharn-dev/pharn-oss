@@ -28,19 +28,14 @@
 //         successful scan (whatever the result). `found` === (hits.length > 0); hits sorted by line.
 //         Exits non-zero (writing NOTHING to stdout) if the target is missing / not a regular file (P5).
 
-import { readFileSync, statSync, existsSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
 
 const TARGET = process.argv[2];
 
+/** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {
   process.stderr.write("scan-plan-pii: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-plan-pii.mjs <plan-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
+  return 1;
 }
 
 // The fixed detection set. Each entry is a deterministic regex + a stable `kind` label. Adding or removing
@@ -60,22 +55,46 @@ const PATTERNS = [
   },
 ];
 
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
-
-const hits = [];
-const lines = text.split(/\r?\n/);
-for (let i = 0; i < lines.length; i++) {
-  for (const { kind, re } of PATTERNS) {
-    if (re.test(lines[i])) hits.push({ line: i + 1, kind });
+function main() {
+  if (!TARGET) return fail("usage: scan-plan-pii.mjs <plan-file>");
+  // Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "clean") result.
+  // ONE descriptor (the griller-extract.mjs 6.60.1 form, CodeQL js/file-system-race): the type check and the read see
+  // the same file, so the path cannot be swapped between them. O_NOFOLLOW refuses a symlink at the final component
+  // (ELOOP; since 6.67.1 a symlinked plan is refused, as grill-scan.mjs already refuses one); O_NONBLOCK keeps a FIFO
+  // from blocking the open, and fstat then refuses it as not a regular file.
+  const notFile = () => fail(`target file not found (or not a regular file): ${TARGET}`);
+  let fd;
+  try {
+    fd = openSync(TARGET, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    if (e && ["ENOENT", "ENOTDIR", "ELOOP"].includes(e.code)) return notFile();
+    return fail(`could not read target: ${e.message}`);
   }
-}
-// Deterministic order: by line, then by kind (a line matching >1 pattern yields >1 hit, stably ordered).
-hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
+  let text;
+  try {
+    if (!fstatSync(fd).isFile()) return notFile();
+    text = readFileSync(fd, "utf8");
+  } catch (e) {
+    return fail(`could not read target: ${e.message}`);
+  } finally {
+    closeSync(fd);
+  }
 
-process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
-process.exit(0);
+  const hits = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    for (const { kind, re } of PATTERNS) {
+      if (re.test(lines[i])) hits.push({ line: i + 1, kind });
+    }
+  }
+  // Deterministic order: by line, then by kind (a line matching >1 pattern yields >1 hit, stably ordered).
+  hits.sort((a, b) => a.line - b.line || a.kind.localeCompare(b.kind));
+
+  process.stdout.write(JSON.stringify({ found: hits.length > 0, hits }) + "\n");
+  return 0;
+}
+
+// THE FLUSH RULE (6.20.4; this CLI since 6.67.1, TST-5): the exit code is SET and the process ends naturally, after
+// Node has drained stdout — grill-scan.mjs JSON.parses this document through spawnSync, and an immediate exit
+// dropped queued writes past a pipe's 64 KiB buffer on darwin. pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();

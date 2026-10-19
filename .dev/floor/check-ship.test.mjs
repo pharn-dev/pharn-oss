@@ -184,7 +184,7 @@ test("fail-closed: a known flag missing its value → INCONCLUSIVE, exit 2", () 
 // own in VERIFY_VERDICTS. The CLI runs main() on import, so the set is read where the checker states it: its refusal of
 // an off-contract verdict prints `is not one of {…}` from the very Set it tests membership in. Set EQUALITY (L36), so an
 // extra value on either side fails. It survived the move of this checker and its test from pharn/floor/ to
-// .dev/floor/ (6.66.1): the contract is found by walking up to the directory that holds it, and the row is matched by
+// .dev/floor/ (6.67.2): the contract is found by walking up to the directory that holds it, and the row is matched by
 // the basename `check-ship.mjs`, not by its path. Removing the row fails loudly, which is what a binding is for. BOUND (L43): it
 // certifies agreement between the contract and the code, never that the set is right.
 function findContract(rel) {

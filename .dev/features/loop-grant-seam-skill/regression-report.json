@@ -1,0 +1,35 @@
+{
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
+  "inside": [
+    ".claude/commands/pharn-build.md",
+    ".claude/commands/pharn-loop.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    ".dev/features/loop-grant-seam-skill/GRILL.md",
+    ".dev/features/loop-grant-seam-skill/PLAN.md",
+    ".dev/features/loop-grant-seam-skill/PROBE.md",
+    "pharn/floor/seam-config-materialize.mjs",
+    "pharn/floor/seam-config-materialize.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

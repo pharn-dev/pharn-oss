@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.66.1] - 2026-10-20
+## [6.67.2] - 2026-10-20
 
 ### Changed
 
@@ -41,6 +41,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Not covered: an existing install keeps its copy of `check-ship.mjs` until `pharn update`, which reports it as a
     file upstream no longer ships. Nothing installed reads it, so `MIN_CLI` does not move. "Nothing installed reads
     it" is a grep over this tree at this commit, not a floor check.
+
+## [6.67.1] - 2026-10-20
+
+### Fixed
+
+- **`run-gates.mjs`, `count-verifiers.mjs` and the five `scan-plan-*.mjs` scanners no longer end with an immediate
+  `process.exit`, so a JSON document past 64 KiB reaches the floor caller that parses it whole (audit TST-5).** On
+  darwin, where piped stdout is asynchronous, the old ending cut each document at 65,536 bytes — measured on all
+  seven. Every caller (build-gate, stage-verify, stage-regress, stage-runtime and entry-gates for run-gates;
+  stage-verify for count-verifiers; grill-scan for the scanners) refused an unparseable document, so the failure was a
+  false refusal, never a false pass. run-gates now ends like stage-regress: `emit` sets `process.exitCode` and throws
+  a sentinel that only the top-level handler swallows. A crash still prints its stack and exits 2. `emit` still
+  releases the gate lock on every emission. A crash still leaves the lock, so the next call's stale-lock recovery
+  stops any orphaned gate group before it re-runs the entry. The other six set `process.exitCode = main()`. Exit
+  codes and output bytes are unchanged. `pharn/floor/cli-stdout-flush.test.mjs` now covers all seven: a static pin,
+  a crash test, and a >64 KiB pipe round-trip each. A new run-gates test checks that the lock is gone after a refusal
+  emitted while the lock was held. The test file's header claimed that every other floor CLI's spawner read only an
+  exit status or a first line. It now names the set's callers. It also names, as an open list, the parsed CLIs still
+  outside the set: `count-grillers`, `count-lenses` and `check-model-config`. Their documents are small, and
+  converting them is a follow-up.
+- **The five `scan-plan-*.mjs` scanners now check and read their plan through one file descriptor, and refuse a
+  symlinked plan (CodeQL `js/file-system-race`).** Each one used to test the path (`existsSync`, `statSync().isFile()`)
+  and then read it by name, so the file could be swapped between the two. Now each opens it once with
+  `O_NOFOLLOW | O_NONBLOCK`, checks `fstat` for a regular file, and reads from that descriptor — the form
+  `griller-extract.mjs` (6.60.1) and `check-loop-decision.mjs` (6.65.0) use. A missing path, a directory or a FIFO
+  gets the same exit 1 and message as before, and a FIFO no longer blocks. A symlink, which used to be followed, now
+  gets that message too. `grill-scan.mjs`, the scanners' floor caller, already refused a symlinked plan. A new table
+  test in `grill-scan.test.mjs` runs all five scanners over a symlink, a directory, a FIFO and a missing path.
+
+## [6.67.0] - 2026-10-19
+
+### Added
+
+- **`/pharn-build`'s seam-config step is a pinned floor script that `/pharn-loop` pre-approves, and the loop
+  pre-approves the Skill tool only for the five stage commands it runs itself** (`SKILLS_VERSION` 6.66.0 →
+  **6.67.0**, minor: a new product floor script; audit 2026-10-12 LOOP-5 and SEC-6).
+  - What changed:
+    - New `pharn/floor/seam-config-materialize.mjs` replaces Step 2c's inline `node -e` line. It writes the
+      `seam` block of `pharn.config.json` to `.pharn/seam-config.json` — the documented default when the file is
+      absent or has no `seam` block — and `check-seam-config.mjs` still validates it on the next line. It HALTs
+      (exit 1, nothing written) on an unreadable file, invalid JSON, a failed scratch write, and, new in this
+      release, a file whose top level is not a JSON object: the old line crashed on `null` and silently used the
+      default for an array, a string or a number.
+    - `/pharn-loop`'s `allowed-tools` grants that line exactly, so an inline build no longer stops on a
+      permission prompt there. Corrects CHANGELOG [6.61.0], whose "Not covered" list said this line was left out
+      of the grant and might prompt.
+    - The bare `Skill` grant became `Skill(pharn-spec *)`, `Skill(pharn-plan *)`, `Skill(pharn-grill *)`,
+      `Skill(pharn-test *)` and `Skill(pharn-build *)`: the loop invokes `/pharn-grill` itself on every run, and the
+      other four when a stage falls back to running inline.
+  - Why: an unattended loop that ran `/pharn-build` inline waited on a prompt for the seam line (the 6.58.0
+    incident class). And the bare `Skill` grant pre-approved every skill in the project that declares its own
+    `allowed-tools`, a user's `.claude/skills/` drop included, which then loads as instructions
+    (`THREAT-MODEL.md §2` surface 8).
+  - Measured before choosing the scoped form: Claude Code 2.1.303, `claude -p`, default permission mode, scratch
+    projects (`.dev/features/loop-grant-seam-skill/PROBE.md`). A command's `Skill(<name> *)` grant was honored and
+    matched by name: a target declaring `allowed-tools` was denied with no grant or with another name's grant, and ran
+    with its own. A target declaring no `allowed-tools`, as the five stage commands do today, ran with no grant at
+    all. So the five grants change nothing today; they keep the inline stages prompt-free if that behavior changes.
+  - Checked by: `pharn/floor/seam-config-materialize.test.mjs` covers every branch, feeds each written file to
+    `check-seam-config.mjs`, and runs the replaced one-liner over the same inputs (same exit and bytes where behavior
+    is kept; the non-object change asserted on both sides). `.dev/floor/command-hygiene.test.mjs` drops the loop
+    grant's one exclusion, requires the Skill grants to equal the set derived from the loop's routing table and its
+    own "invoke `/pharn-…`" text, and fails a bare `Skill`, an extra or a missing name, the no-argument spelling,
+    and a `node -e` line.
+  - Not covered (ADVISORY):
+    - Whether Claude Code honors the grant is harness behavior: one probe, one version, `-p` only, command-file
+      targets only.
+    - The grant matches by name, so whatever skill or command answers to one of those five names runs under it.
+    - A skill that declares no `allowed-tools` loads through the Skill tool with no grant at all, in any session.
+      That is Claude Code's behavior, not this grant's, and nothing here changes it.
 
 ## [6.66.0] - 2026-10-19
 
