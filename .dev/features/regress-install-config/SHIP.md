@@ -48,7 +48,16 @@ After the second merge: `check:changelog-entry` exit 0, `check:reconcile` CLEAN 
 `docs:check` / `check:markers` / `check:badge` / `check:changelog` / `check:contributing` / `lint:md` / `eslint` /
 `prettier` 0. The final `npm test` is reported in the PR conversation.
 
-The run ended at **GATE 2 (delegated)**. The orchestrator decides what happens to the PR.
+The run ended at **GATE 2 (delegated)**.
+
+**GATE 2 decision (the orchestrating model's, under the maintainer's delegation — not a human approval): MERGE on
+green CI.** The local verify `FAIL` is read as load noise, and CI's full suite on an unloaded runner is the
+measurement. On PR #364 every check passed, including `check` (the full `npm test`) and `floor`. The final local
+`npm test` exited 1 with 3 load-sensitive failures out of 5605 (`entry-base-evidence` ×2, `entry-gates` ×1). The local
+verdicts above stay as computed.
+
+`origin/main` then moved to `5b468d66` (6.65.1, #363) and was merged a third time. This increment stays 6.66.0, above
+main's `[6.65.1]` section, which is byte-identical.
 
 ## Structural verdicts read, verbatim
 

@@ -69,12 +69,15 @@
 //   in the remaining line length. Measured across 11 adversarial paren families — `((a)`, `(a)`, `((a))`, `()`,
 //   `(x,(y)`, unclosed `(`×N, bare `)`×N, deep `(`×N a `)`×N, up to ~480 KB lines: all linear (2× input → ~2×
 //   time), worst family 2.93 ms at 480 KB.
-//   THE PER-LINE BOUND IS QUADRATIC, NOT LINEAR, AND SAYING OTHERWISE WOULD BE THE SAME OVERCLAIM AGAIN: the
-//   engine retries the whole pattern at every position where the sink callee can start, so a line's cost is
-//   O(sink-callee occurrences × line length). Worst case is a line that is nothing but sink callees — measured
-//   on the SSRF sibling as `fetch(`×8000 (a 56 KB line) → 999 ms, growing ~4× per doubling. What this fix
-//   removes is the EXPONENTIAL term, not the polynomial one. The polynomial term is pre-existing and was
-//   strictly WORSE before: on that same shape the old span was CUBIC (~7.7× per doubling).
+//   THE PER-LINE COST (re-derived in 6.65.1 for the driver that runs the pattern now — L24). Through 6.64.2 the
+//   scanner called `re.test(line)`, and the engine retried the whole pattern at every position where a sink
+//   callee can start, so a line cost O(sink-callee occurrences × line length): `path.join(`×8000 (80 KB) took
+//   1.5 s, ~4× per doubling (TST-2, the 2026-10-12 review). The regex is unchanged; `lineMatches()` in
+//   sink-span-core.mjs runs it sticky at one sink, and when it fails there it skips every sink up to that call's
+//   own outer `)`, because each of those sinks must fail too (the proof and its precondition on the sink regexes
+//   are in that file's header). Each character then sits in at most one tested span, so a line costs O(its
+//   length): the derived bound, measured on the ★ shapes in scan-code-path-traversal.test.mjs and in
+//   .dev/features/scanner-redos-bounds/MEASUREMENTS.md, never a floor claim.
 //   THE PREVIOUS SPAN — `(?:[^)]|\([^)]*\))*?` — WAS EXPONENTIAL, and the "no EXPONENTIAL backtracking
 //   observed" claim it shipped was FALSE (a P0 violation: a bound asserted in a floor file that did not hold).
 //   Its two branches OVERLAPPED on `(` (`[^)]` accepts it; the group branch requires it), so a chunk like
@@ -122,6 +125,7 @@
 
 import "./runtime-floor.mjs";
 import { runScannerCli } from "./code-scanner-cli.mjs";
+import { compileSinkPattern, lineMatches, parenSpanLimit } from "./sink-span-core.mjs";
 
 // The fixed detection set — the traversal SHAPE per sink family. Each pattern requires BOTH a recognized
 // filesystem-path SINK (a fixed callee name set — membership, P5) AND a recognized untrusted-request SOURCE
@@ -141,22 +145,27 @@ const SOURCE = String.raw`\b(?:req|request)\.(?:params|query|body|headers|cookie
 // later expression. See "ARGUMENT SPAN" in the header for the one-level bound, the two rejected alternatives,
 // and the ReDoS position.
 const SPAN = String.raw`(?:[^)]*\([^()]*\))*?[^)]*?`;
+// Each pattern is its SINK source + SPAN + SOURCE — one regex, as before; the split only tells the driver where the
+// sink ends (sink-span-core.mjs).
 const PATTERNS = [
   // Node filesystem path sinks: fs.<m>( / fs.promises.<m>( / fsPromises.<m>( with a request source in the args.
-  { kind: "fs-path", re: new RegExp(String.raw`\b(?:fs(?:\.promises)?|fsPromises)\.\w+\s*\(` + SPAN + SOURCE) },
+  { kind: "fs-path", ...compileSinkPattern(String.raw`\b(?:fs(?:\.promises)?|fsPromises)\.\w+\s*\(`, SPAN + SOURCE, parenSpanLimit) },
   // Path builders: path.join( / path.resolve( with a request source in the args (the traversal entry point).
-  { kind: "path-join", re: new RegExp(String.raw`\bpath\.(?:join|resolve)\s*\(` + SPAN + SOURCE) },
+  { kind: "path-join", ...compileSinkPattern(String.raw`\bpath\.(?:join|resolve)\s*\(`, SPAN + SOURCE, parenSpanLimit) },
   // Express response file sinks: res.sendFile( / res.download( with a request source in the args.
-  { kind: "send-file", re: new RegExp(String.raw`\.(?:sendFile|download)\s*\(` + SPAN + SOURCE) },
+  { kind: "send-file", ...compileSinkPattern(String.raw`\.(?:sendFile|download)\s*\(`, SPAN + SOURCE, parenSpanLimit) },
 ];
 
-/** The hits for one file's text. Keeps nothing between calls: no PATTERNS regex carries a `g`/`y` flag. */
+/**
+ * The hits for one file's text. Keeps nothing between calls: the driver sets each `g`/`y` regex's `lastIndex`
+ * before every use (sink-span-core.mjs), and nothing else is kept outside this function.
+ */
 export function scanText(text) {
   const hits = [];
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
-    for (const { kind, re } of PATTERNS) {
-      if (re.test(lines[i])) hits.push({ line: i + 1, kind });
+    for (const p of PATTERNS) {
+      if (lineMatches(lines[i], p)) hits.push({ line: i + 1, kind: p.kind });
     }
   }
   // Deterministic order: by line, then by kind (a line matching >1 pattern yields >1 hit, stably ordered).
