@@ -31,6 +31,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { stripBom } from "./frontmatter-core.mjs";
 
 const TARGET = process.argv[2] || ".";
 
@@ -167,7 +168,12 @@ function walk(dir, acc = []) {
 }
 
 // --- tiny dependency-free frontmatter parser (handles the subset PHARN uses) ---
-function parseFrontmatter(text) {
+// One leading UTF-8 BOM is stripped FIRST (frontmatter-core.mjs `stripBom`, 6.65.2 — audit ENF-3): before it, a BOM
+// defeated the `startsWith("---")` fence and a capability with blocking findings was "not a capability", GREEN.
+// Everything after the strip is the loose fence it always was (a `----` opening still parses); the count-* readers
+// mirror this function, so they strip first too.
+function parseFrontmatter(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return { fm: null, body: text };
   const end = text.indexOf("\n---", 3);
   if (end === -1) return { fm: null, body: text };

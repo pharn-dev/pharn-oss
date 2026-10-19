@@ -14,13 +14,13 @@
 // would turn every file of that lens into a scanner error. Their rows are DERIVED from lens-scanner-map.json and
 // asserted set-equal to the scanners on disk (L36), never hand-listed. A scanner ends `process.exitCode =
 // runScannerCli(…)` (form "scanner"), and its crash preload replaces `process.stdout.write`, the call it prints with.
-// Since 6.65.2 (audit TST-5) the set also holds run-gates (JSON-parsed by build-gate, stage-verify, stage-regress,
+// Since 6.66.1 (audit TST-5) the set also holds run-gates (JSON-parsed by build-gate, stage-verify, stage-regress,
 // stage-runtime and entry-gates; form "sentinel-async", and it crashes with exit 2, its runner-error code),
 // count-verifiers (stage-verify) and the five plan scanners `scan-plan-*.mjs` (grill-scan), whose rows are derived
 // from the files on disk (form "main": `process.exitCode = main();`). Until then this header said every other floor
 // CLI's spawner read only an exit status or a first line, which was false for all seven.
 // NOT EVERY PARSED CLI IS HERE, and the list of the known ones outside it is OPEN (L47), never a count: a caller sweep
-// at 6.65.2 also found count-grillers (griller-extract.mjs), count-lenses (render-review-assignments.mjs,
+// at 6.66.1 also found count-grillers (griller-extract.mjs), count-lenses (render-review-assignments.mjs,
 // check-review-assignments.mjs) and check-model-config (stage-agent-core.mjs) JSON-parsed and still ending with an
 // immediate exit. Their documents are a griller list, a lens list and one {model, effort} pair — bounded by what is
 // installed, not by the input — and converting them is a named follow-up, not done here.
@@ -197,7 +197,7 @@ test("★ check-regress — a >64 KiB `verdict` reaches a pipe whole", (t) => {
   }
 });
 
-test("★ run-gates — a >64 KiB refusal document reaches a pipe whole (6.65.2, TST-5)", (t) => {
+test("★ run-gates — a >64 KiB refusal document reaches a pipe whole (6.66.1, TST-5)", (t) => {
   // The one input-sized field a run-gates document carries is a refusal's `reason`; `--ac-tests` echoes its operand
   // there when the path is not the feature's mapping, and nothing is read, written or locked before that refusal.
   const dir = mkdtempSync(join(tmpdir(), "flush-rg-"));
@@ -217,7 +217,7 @@ test("★ run-gates — a >64 KiB refusal document reaches a pipe whole (6.65.2,
   }
 });
 
-test("★ count-verifiers — a >64 KiB membership document reaches a pipe whole (6.65.2, TST-5)", (t) => {
+test("★ count-verifiers — a >64 KiB membership document reaches a pipe whole (6.66.1, TST-5)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "flush-cvf-"));
   try {
     const names = Array.from({ length: 800 }, (_, i) => `verifier-${"x".repeat(80)}-${String(i).padStart(4, "0")}.md`);
@@ -236,7 +236,7 @@ test("★ count-verifiers — a >64 KiB membership document reaches a pipe whole
 });
 
 for (const scanner of PLAN_SCANNERS) {
-  test(`★ ${scanner} — a >64 KiB hit document reaches a pipe whole (6.65.2, TST-5)`, (t) => {
+  test(`★ ${scanner} — a >64 KiB hit document reaches a pipe whole (6.66.1, TST-5)`, (t) => {
     const dir = mkdtempSync(join(tmpdir(), "flush-plan-"));
     try {
       const plan = join(dir, "PLAN.md");

@@ -39,6 +39,7 @@
 import { quoteData, dataText } from "./quote-core.mjs";
 import { ALLOWLIST, EXCLUSION_DECLARED_IN } from "./gate-run-core.mjs";
 import { headInstallLine } from "./install-drift-core.mjs";
+import { HEAD_MODULES_LINK, INSTALL_DECLARED_IN } from "./stage-regress-core.mjs";
 
 /** A gate id, git path, or command string rendered INLINE — always with fixed text before it on the same
  *  line, so a leading `#`/`>`/`-` in the value cannot become document structure. `String()` first: a gate
@@ -179,7 +180,9 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
   if (installFailed) {
     const preExisting = Array.isArray(report.pre_existing) ? report.pre_existing : [];
     out.push(
-      `**THE BASE-COMMIT INSTALL FAILED** (exit ${progress.installResult.exit}${progress.installResult.timedOut ? ", timed out" : ""}) — ` +
+      `**THE BASE-COMMIT INSTALL FAILED** (exit ${progress.installResult.exit}${progress.installResult.timedOut ? ", timed out" : ""}` +
+        // 6.66.0 (GATE 2 review): a failed install the project DECLARED says so, like every other declared install line.
+        `${progress.install.declaredIn === INSTALL_DECLARED_IN ? `; the command was declared in \`${INSTALL_DECLARED_IN}\`` : ""}) — ` +
         (preExisting.length
           ? `base gates MAY read red as a result; the ${preExisting.length} gate(s) classified \`pre_existing\` below ` +
             "(rather than blamed on the feature) could include ones this install failure caused to fail, not this feature's own change."
@@ -247,11 +250,21 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
     out.push("install: none run by this invocation (the BASE evidence was reused).", "");
   } else if (be && be.source === "entry") {
     out.push("install: none run by this invocation (the BASE evidence came from this run's entry gates).", "");
-  } else if (progress.install.kind === "none") {
-    out.push(`install: none${progress.install.reason ? ` (${inline(progress.install.reason)})` : ""}`, "");
-  } else {
+  } else if (progress.install.link === HEAD_MODULES_LINK && progress.install.declaredIn === INSTALL_DECLARED_IN) {
+    // 6.66.0 — fixed text only: the link's target is a machine-local path and this file is committed by /pharn-loop.
     out.push(
-      `install${progress.install.unmeasured ? " (UNMEASURED — no run of this stage has exercised this command)" : ""}:`,
+      `install: none — \`${INSTALL_DECLARED_IN}\` is \`${HEAD_MODULES_LINK}\`: the base worktree used THIS tree's installed ` +
+        "`node_modules` through a link. **APPROXIMATION:** the base was measured with the head's dependency tree, so a " +
+        "regression caused purely by a dependency change is red on both sides and reads `pre_existing` — it is not attributed.",
+      ""
+    );
+  } else if (progress.install.kind === "none") {
+    const declared = progress.install.declaredIn === INSTALL_DECLARED_IN ? ` (declared in \`${INSTALL_DECLARED_IN}\`)` : "";
+    out.push(`install: none${progress.install.reason ? ` (${inline(progress.install.reason)})` : ""}${declared}`, "");
+  } else {
+    const declared = progress.install.declaredIn === INSTALL_DECLARED_IN ? ` (declared in \`${INSTALL_DECLARED_IN}\`)` : "";
+    out.push(
+      `install${progress.install.unmeasured ? " (UNMEASURED — no run of this stage has exercised this command)" : ""}${declared}:`,
       "",
       quoteData("", dataText(progress.install.cmd)),
       ""

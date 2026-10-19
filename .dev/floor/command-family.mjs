@@ -22,6 +22,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fieldEntries, matchFrontmatter, stripBom } from "../../pharn/floor/frontmatter-core.mjs";
 
 /** The two kinds of part, in splice order. */
 export const PART_KINDS = Object.freeze(["quick", "close"]);
@@ -31,26 +32,27 @@ export const QUICK_ANCHOR_RE = /^## Quick mode\b/m;
 
 /**
  * The leading `---` frontmatter of `text` as a flat {key: value} map (a value's surrounding double quotes are
- * removed; a line without `key:` is ignored), or null when there is no frontmatter block.
+ * removed; a line without `key:` is ignored; the last copy of a repeated key wins), or null when there is no
+ * frontmatter block. The anchor and the line grammar are the product core's (`matchFrontmatter`, `fieldEntries` —
+ * 6.65.2), so a leading BOM and CRLF are tolerated as every floor reader tolerates them.
  */
 export function frontmatterFields(text) {
-  const m = text.replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n/);
+  const m = matchFrontmatter(text);
   if (!m) return null;
   const out = {};
-  for (const line of m[1].split("\n")) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);
-    if (!kv) continue;
-    let v = kv[2].trim();
+  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+    let v = raw.trim();
     if (v.startsWith('"') && v.endsWith('"') && v.length >= 2) v = v.slice(1, -1);
-    out[kv[1]] = v;
+    out[key] = v;
   }
   return out;
 }
 
-/** `text` without its leading frontmatter block (unchanged when it has none). */
+/** `text` without its leading frontmatter block (unchanged when it has none), read with the same anchor. */
 export function withoutFrontmatter(text) {
-  const m = text.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/);
-  return m ? text.slice(m[0].length) : text;
+  const clean = stripBom(text);
+  const m = matchFrontmatter(clean);
+  return m ? clean.slice(m[0].length) : text;
 }
 
 /** Every `.md` file in `dir` whose frontmatter declares `part_of:` — [{file, parent, part}], sorted by file. */

@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.65.2] - 2026-10-19
+## [6.66.1] - 2026-10-19
 
 ### Fixed
 
@@ -42,6 +42,108 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   exit status or a first line. It now names the set's callers. It also names, as an open list, the parsed CLIs still
   outside the set: `count-grillers`, `count-lenses` and `check-model-config`. Their documents are small, and
   converting them is a follow-up.
+
+## [6.66.0] - 2026-10-19
+
+### Added
+
+- **A project can declare `/pharn-regress`'s base install in `pharn.config.json` — `{"regress": {"install": …}}` — so a
+  full `/pharn-loop` can finish over a project with no lockfile or with two lockfile families.**
+  - What changed:
+    - **The key.** `regress.install` is one of `none`, `head-node-modules`, `npm`, `pnpm`, `yarn`, `bun`: a closed set,
+      never a command, read by the new `pharn/floor/regress-install-config-core.mjs` (own-property reads, every
+      refusal quoted through the total `shown()`). `stage-regress.mjs` reads it from the project root only when the
+      invocation passed neither `--install` nor `--no-install` and the base commit has a `package.json`. Precedence:
+      argv, then the declaration, then the lockfile table.
+    - **The values.** `none` skips the install, and the `base-install-unreliable` rule applies as for `--no-install`. A
+      family runs that family's frozen command from the existing table, and only when its lockfile is in the base
+      commit. `head-node-modules` runs no install and makes the base checkout's `node_modules` a link to the project's
+      own installed `node_modules`, checked with `lstat` (a symlink or a missing directory refuses). The unreliable-install
+      mask does not apply to it, and its evidence is never reused.
+    - **Disclosure.** `regression-report.json` gains an additive `base_install` block (`{declared_in, value}`), after
+      `base_source`, only when the declaration decided this invocation's fresh base, so every other report keeps its
+      bytes. `REGRESSION.md`'s install line names the declaration, and for `head-node-modules` states the
+      approximation in fixed text with no path.
+    - **Refusal.** A declaration that cannot be read or cannot answer the run (a family absent at the base, no real
+      `node_modules` for `head-node-modules`, a base commit that tracks its own `node_modules`, a link that cannot be
+      made) is the new `unusable install-config-invalid`; `/pharn-loop` already maps every `unusable` to S9. The fixed
+      `install-unresolved` question now names the declaration; its options are unchanged.
+    - **Text.** `stage-exit.md` ("The `regress` install command") and `regression-report.md` specify it;
+      `/pharn-regress` names it, `/pharn-loop`'s regress mapping names it as the way to pre-answer
+      `install-unresolved`, and the README has "Declaring the base install". `pharn-regress.md`'s byte ceiling rises
+      to 25,600 (23,140 measured + 10%, next 512).
+  - Why: audit finding LOOP-11. `resolveInstall` asked whenever a base had a `package.json` and not exactly one lockfile
+    family; `/pharn-loop` maps that question to S10 and its granted regress line passes no install flag, so such a
+    project could never finish a full loop.
+  - Why `head-node-modules` and not only `none`: for the common case — a library with devDependencies and no lockfile —
+    `none` leaves the base without dependencies, so every gate that needs them is red at the base, and the first gate
+    red at head (a pre-existing red, or an iteration that broke an outside test) is refused `base-install-unreliable`,
+    an S9 stop. A test pins that. `head-node-modules` measures the base with HEAD's dependency tree instead, so such a
+    run reaches a verdict and the loop iterates on a regression.
+  - Not covered:
+    - `head-node-modules` is an approximation: a regression caused purely by a dependency change is red on both sides
+      and reads `pre_existing`. It costs regress's attribution, not the loop's green: `/pharn-verify`'s threshold is
+      absolute over every gate at HEAD. It re-admits, opt-in and disclosed, the dependency borrowing that 6.50.x's
+      out-of-project base checkout removed by default.
+    - The link is writable: a base gate that writes under `node_modules` (a cache) writes the project's tree. Only the
+      root `node_modules` is linked; a workspace's nested ones are not.
+    - Because `none` and `head-node-modules` evidence is never reused, every `/pharn-loop` iteration that does not take
+      its base from the entry gates runs the whole base side again. That cost was not measured.
+    - No non-frozen install (`npm install`) is offered: resolving dependency versions at run time could turn a new
+      upstream break red at base and read a head regression as `pre_existing`.
+    - The declaration is not pinned at `/pharn-test`: the test-infrastructure pin covers what decides `/pharn-verify`'s
+      AC gate, and this decides only regress's base. In an installed project a build cannot write `pharn.config.json`
+      with the write tools (the 6.61.0 setter refusal and the reserved surface); a Bash write is detected, never
+      prevented, by the reconcile gate. In a dev checkout a plan may scope it.
+    - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
+      can for the table's own inferred install.
+
+## [6.65.2] - 2026-10-19
+
+### Fixed
+
+- **A leading UTF-8 BOM no longer hides a capability from the floor, and `check-plan-lessons.mjs` REDs a repeated
+  `applied_lessons` instead of gating its first copy** (audit 2026-10-12, ENF-3 and ENF-4).
+  - ENF-3, what failed: `validate.mjs` and the readers that mirror its loose `startsWith("---")` fence tested the raw
+    text, so a BOM before the `---` made a capability "not a capability". Reproduced at 6.64.2: a lens with four
+    blocking findings printed `FLOOR: GREEN — 0 capabilities checked` once a BOM was prepended, and `count-lenses.mjs`
+    registered 0.
+  - ENF-3, what changed: `validate.mjs`, `count-lenses.mjs`, `count-grillers.mjs`, `count-verifiers.mjs`,
+    `check-model-config.mjs` and `griller-extract.mjs` (`frontmatterKind`, `trimGriller`) strip one leading BOM with
+    `frontmatter-core.mjs`'s `stripBom` before their own fence test. Nothing else in their loose model changes: a
+    `----` opening still parses, and the count-\* readers keep the same parse as `validate.mjs`, BOM strip included.
+    `trimGriller` keeps the BOM in its output, so the output still matches the input byte for byte. In the build
+    apparatus, `capability-catalog-core.mjs` and `check-config.mjs` do the same, importing the product core.
+  - ENF-4, what failed: `check-plan-lessons.mjs` kept the FIRST `applied_lessons` line, while YAML and
+    `frontmatter-core.mjs`'s `readField` keep the LAST. A PLAN declaring `none` and then `[L9999]` was GREEN, in both
+    the frontmatter and the dev bullet shape.
+  - ENF-4, what changed: the checker reads both header regions in full and REDs when the field is declared more than
+    once, naming the counts per region and never a value. Neither copy is chosen. A line in the body or inside a fence
+    is still not a declaration. `render-ship-briefing.mjs` and `check-ship-briefing.mjs` `readHeaderField` now keep the
+    LAST copy, the one `check-spec.mjs` reads, so a SPEC with `state: Draft` then `state: Approved` no longer briefs as
+    Draft. Its bullet-header branch now skips fences with `plan-files-core.mjs`'s `fenceStates`. A backtick line inside
+    a tilde fence no longer closes it, and a fence line indented four or more spaces is now content.
+  - One line reader: `frontmatter-core.mjs` gains `BULLET_FIELD_LINE_RE` and `fieldEntries(lines, re)`, and `readField`
+    is rebuilt on top of it with the same reading. `check-loop-record.mjs`, `check-loop-decision.mjs`,
+    `loop-closeout.mjs`, `render-cost-ledger.mjs`, `check-ship-briefing.mjs` `readEnvelope` and the dev
+    `command-family.mjs` parse their `key: value` lines through it. Each keeps its own value rule and still keeps the
+    last copy of a repeated key. `render-cost-ledger.mjs` was a fourth LOOP.md envelope reader with a narrower key
+    grammar, and the audit did not list it. `render-review-assignments.test.mjs` and `lens-groups.test.mjs` copy
+    `frontmatter-core.mjs` into their scratch repos beside `count-lenses.mjs`, which now imports it.
+  - Checked by: 24 new tests. Each change of reading above has a test with a BOM'd or repeated input and a twin without
+    the BOM or the repeat. Reverted one at a time in a scratch copy (eleven reverts), each change turned its test RED.
+    The six reader swaps change no reading, and their existing suites cover them. Two closure tests in
+    `frontmatter-core.test.mjs` cover every non-test `pharn/floor` module. A module that tests the frontmatter fence
+    must be in `CONSUMERS`, which grows from 9 to 19. Each consumer must call `stripBom` or `matchFrontmatter`; before,
+    only `stripBom` counted, and this widening is deliberate. No module but the core may hold a regex literal of the
+    `key: value` line grammar, except `instruction-files-core.mjs`, which parses nested YAML. A new
+    `.dev/floor/frontmatter-readers.test.mjs` holds the same two rules for `.dev/floor`.
+  - Bounds: the closures are lexical. A module that strips one variable and tests the fence on another passes them, and
+    only the per-site tests catch that. A line-grammar copy written with another key class passes them too, and only
+    review catches that. `.claude/hooks/set-writes-scope.cjs` parses a command's frontmatter with its own strict
+    anchor, which fails closed on a BOM, and reads the first `writes:` line. It is a protected hook outside this
+    increment. The LOOP.md and BRIEFING.md envelope readers still keep the last copy of a repeated key; refusing it
+    there is a named follow-up, because it would change `loop-record.md` and `ship-briefing.md`.
 
 ## [6.65.1] - 2026-10-19
 

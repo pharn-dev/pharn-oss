@@ -160,7 +160,7 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # process.exitCode (the first three unwind with a module-private sentinel only their top-level catch swallows) —
 # never by an immediate exit, which dropped queued stdout: on darwin a piped verdict was cut at 64 KiB, and
 # check-loop-fresh.mjs check E JSON.parses check-verify's through spawnSync. A crash still exits non-zero.
-# Since 6.65.2 (audit TST-5) run-gates (sentinel; a crash still exits 2), count-verifiers and the five scan-plan-*
+# Since 6.66.1 (audit TST-5) run-gates (sentinel; a crash still exits 2), count-verifiers and the five scan-plan-*
 # scanners (`process.exitCode = main()`) are in the set too — each is JSON-parsed by a floor caller. run-gates' emit
 # still releases the lock on every emission; a crash still leaves it for the stale-lock recovery and its orphan reap.
 # Parsed CLIs still outside the set are named, openly, in the test file's header.
@@ -246,6 +246,14 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # `unenforced_globs`. Refusals, not verdicts, wherever a stamp alone cannot decide — so check E never re-derives one.
 # NAMED RESIDUAL: a partially committed build with another uncommitted change still compares against a base holding
 # the committed part — only `--base` closes it.
+# THE DECLARED BASE INSTALL (6.66.0, regress-install-config, audit LOOP-11): `pharn.config.json` `regress.install`
+# (pharn/floor/regress-install-config-core.mjs reads it; stage-regress-core.mjs DECLARED_INSTALL_VALUES owns the values:
+# none | head-node-modules | npm | pnpm | yarn | bun) answers `install-unresolved` when no --install/--no-install was
+# given — /pharn-loop could not, so a no-lockfile or mixed-lockfile project never finished a full loop. A family runs its
+# frozen line only when its lockfile is at BASE; `head-node-modules` links the base checkout's node_modules to the
+# project's (an APPROXIMATION: dependency-caused regressions read pre_existing; disclosed in the report's `base_install`
+# block and REGRESSION.md; exempt from the unreliable-install mask; never reused). Anything that cannot answer is
+# `unusable install-config-invalid`. Not pinned at /pharn-test (it decides regress's base, not verify's AC gate).
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
