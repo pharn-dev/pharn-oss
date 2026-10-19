@@ -60,7 +60,7 @@ import { FM_RE, stripBom } from "./frontmatter-core.mjs";
 
 const HEADING_RE = /^#{1,6}[ \t]+\S/;
 const REGRESS_ENUM = new Set(["no-regressions", "regressions", "inconclusive"]);
-const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
+export const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 
 // The exact marker heading a generated paragraph must carry — duplicated from
 // render-ship-briefing.mjs's ADVISORY_HEADING (P3; pinned equal by the parity test).

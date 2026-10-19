@@ -614,3 +614,76 @@ test("★ GATE-1 pin, live — the REAL runner records a gate that handles SIGTE
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — the verdicts this EMITTER writes against verify-report.md's enum ────
+// check-verify.mjs keeps no verdict set: it emits each verdict as a `verdict: "<X>"` literal (the CLI runs main() on
+// import, so a set could not be imported anyway). verify-report.md states the artifact's enum as "the union —
+// `{…}`" of its per-consumer table. Two bindings, both by set EQUALITY (L36): the literals this source emits equal that
+// union, and the union equals the union of the table's rows (the contract agrees with itself). Every parser throws on
+// a missing anchor (L60). BOUND (L43): agreement between texts, never that the enum is right; and the literal scan sees
+// the source, so a verdict built from a variable (none today) would escape it.
+const VERIFY_REPORT = join(here, "..", "pharn-contracts", "verify-report.md");
+
+function contractVerdictUnion(text) {
+  const m = /The artifact's enum is the union — `\{([A-Z_]+(?:, [A-Z_]+)*)\}`/.exec(text);
+  if (!m) throw new Error('verify-report.md: the sentence "The artifact\'s enum is the union — `{…}`" was not found');
+  return m[1].split(", ").sort();
+}
+
+/** The per-consumer `verdict` table → Map(basename → sorted values). Throws on a missing header or a malformed row. */
+function contractVerdictTable(text) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => /^\|\s*consumer\s*\|\s*accepted `verdict` set\s*\|\s*on a value outside it\s*\|\s*$/.test(l));
+  if (h < 0) throw new Error("verify-report.md: the per-consumer `verdict` table header was not found");
+  const rows = new Map();
+  for (let i = h + 2; i < lines.length && lines[i].startsWith("|"); i++) {
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const file = /^`(?:[^`]*\/)?([^`/]+\.mjs)`$/.exec(cells[0] ?? "");
+    if (!file || !/^`[A-Z_]+`(?: · `[A-Z_]+`)*$/.test(cells[1] ?? ""))
+      throw new Error(`verify-report.md: malformed verdict-table row: ${lines[i]}`);
+    rows.set(
+      file[1],
+      cells[1]
+        .split(" · ")
+        .map((t) => t.slice(1, -1))
+        .sort()
+    );
+  }
+  if (rows.size === 0) throw new Error("verify-report.md: the verdict table has no rows");
+  return rows;
+}
+
+const rowsUnion = (rows) => [...new Set([...rows.values()].flat())].sort();
+const emittedVerdicts = (src) => [...new Set([...src.matchAll(/\bverdict: "([A-Z_]+)"/g)].map((m) => m[1]))].sort();
+
+test("✧ ARCH-9 — the verdict literals check-verify.mjs emits equal verify-report.md's stated union", () => {
+  const emitted = emittedVerdicts(readFileSync(CV, "utf8"));
+  assert.ok(emitted.length > 0, 'the scan found no `verdict: "…"` literal — the emitter\'s shape changed; re-anchor');
+  const union = contractVerdictUnion(readFileSync(VERIFY_REPORT, "utf8"));
+  assert.deepEqual(emitted, union, "check-verify.mjs's emitted verdicts and verify-report.md's union differ — edit both");
+});
+
+test("✧ ARCH-9 — verify-report.md's stated union equals the union of its per-consumer table rows", () => {
+  const text = readFileSync(VERIFY_REPORT, "utf8");
+  assert.deepEqual(rowsUnion(contractVerdictTable(text)), contractVerdictUnion(text));
+});
+
+test("✧ ARCH-9 negative controls — a mutated union, an extra emitted literal, a row value, and a missing anchor fail", () => {
+  const text = readFileSync(VERIFY_REPORT, "utf8");
+  const src = readFileSync(CV, "utf8");
+  const union = contractVerdictUnion(text);
+  assert.notDeepEqual(
+    contractVerdictUnion(text.replace("{PASS, FAIL, INCOMPLETE, INCONCLUSIVE}", "{PASS, FAIL, INCONCLUSIVE}")),
+    emittedVerdicts(src)
+  );
+  assert.notDeepEqual(emittedVerdicts(src + '\nemit({ verdict: "SKIPPED" }, 0);\n'), union);
+  const line = text.split("\n").find((l) => /^\|\s*`[^`]*check-loop\.mjs`/.test(l));
+  assert.ok(line, "the check-loop.mjs row must exist for the row mutant to mean anything");
+  const widened = text.replace(line, line.replace("`INCONCLUSIVE`", "`INCONCLUSIVE` · `SKIPPED`"));
+  assert.notDeepEqual(rowsUnion(contractVerdictTable(widened)), contractVerdictUnion(widened));
+  assert.throws(() => contractVerdictUnion(text.replace("The artifact's enum is the union", "The enum is")), /was not found/);
+  assert.throws(() => contractVerdictTable(text.replace("accepted `verdict` set", "accepted set")), /header was not found/);
+});
