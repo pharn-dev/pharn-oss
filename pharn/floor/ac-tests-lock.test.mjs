@@ -545,9 +545,9 @@ function infraWorld() {
   writeFileSync(join(root, "vitest.config.ts"), "export default {}\n");
   return root;
 }
-/** infraWorld's manifest without its one OTHER allowlisted gate (`lint`): the tree a pre-6.66.0 lock reads as before. */
+/** infraWorld's manifest without its one OTHER allowlisted gate (`lint`): the tree a pre-6.68.0 lock reads as before. */
 const dropOtherGates = (root) => writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
-/** A /6 lock as a 6.36.0–6.65.x floor wrote it: schema /5, no `other_*` sections. */
+/** A /6 lock as a 6.36.0–6.67.x floor wrote it: schema /5, no `other_*` sections. */
 const toV5 = (lock) => {
   const test_infra = { ...lock.test_infra };
   delete test_infra.other_gates;
@@ -762,7 +762,7 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
     const lock = lockOf(root);
     const v3 = { ...toV3(lock), red_run: redRunFor(lock) };
     writeLockJson(root, v3);
-    dropOtherGates(root); // no other allowlisted gate either (6.66.0 reads one as unpinned — its own test)
+    dropOtherGates(root); // no other allowlisted gate either (6.68.0 reads one as unpinned — its own test)
     const g = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(g.code, 0, g.out);
     assert.match(g.out, /the test-infrastructure pin holds/);
@@ -844,7 +844,7 @@ test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, R
     const lock = lockOf(root);
     const v4 = { ...toV4(lock), red_run: redRunFor(lock) };
     writeLockJson(root, v4);
-    dropOtherGates(root); // no other allowlisted gate either (6.66.0 reads one as unpinned — its own test)
+    dropOtherGates(root); // no other allowlisted gate either (6.68.0 reads one as unpinned — its own test)
     const g = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(g.code, 0, g.out);
     declare(root, []);
@@ -874,9 +874,9 @@ test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, R
   }
 });
 
-// ── 6.66.0 (audit SEC-4): /6 pins every other allowlisted gate's command; a /5 lock is still read ───────────────
+// ── 6.68.0 (audit SEC-4): /6 pins every other allowlisted gate's command; a /5 lock is still read ───────────────
 
-test("6.66.0 /6 — --write pins every other allowlisted gate; --check REDs a rewritten `lint` and an ADDED `typecheck`, by id only", () => {
+test("6.68.0 /6 — --write pins every other allowlisted gate; --check REDs a rewritten `lint` and an ADDED `typecheck`, by id only", () => {
   const root = infraWorld();
   try {
     const w = cli(root, ["--write", NAME]);
@@ -908,7 +908,7 @@ test("6.66.0 /6 — --write pins every other allowlisted gate; --check REDs a re
   }
 });
 
-test("6.66.0 MIGRATION — a /5 lock is still read: GREEN with no other gate, RED `unpinned` (never `changed`) with one; no red run is recorded on it", () => {
+test("6.68.0 MIGRATION — a /5 lock is still read: GREEN with no other gate, RED `unpinned` (never `changed`) with one; no red run is recorded on it", () => {
   const root = infraWorld();
   try {
     cli(root, ["--write", NAME]);
@@ -947,7 +947,7 @@ test("6.66.0 MIGRATION — a /5 lock is still read: GREEN with no other gate, RE
   }
 });
 
-test("6.66.0 --write REFUSES an other gate it cannot pin (exit 2), naming the script, and writes no lock", () => {
+test("6.68.0 --write REFUSES an other gate it cannot pin (exit 2), naming the script, and writes no lock", () => {
   const root = infraWorld();
   try {
     writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run", lint: ["eslint"] } }));

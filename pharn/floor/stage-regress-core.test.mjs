@@ -26,6 +26,9 @@ import {
   BASE_REUSE_MISSES,
   ENTRY_BASE_MISSES,
   DELIVERY_COMMANDS,
+  DECLARED_INSTALL_VALUES,
+  HEAD_MODULES_LINK,
+  INSTALL_DECLARED_IN,
 } from "./stage-regress-core.mjs";
 
 // ── ★ LOAD GRAPH (GRILL G8) ──────────────────────────────────────────────────────────────────────────
@@ -222,6 +225,121 @@ test("resolveInstall: no lockfile, or two lockfile families -> ask (install-unre
   assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: {} }), { kind: "ask" });
   assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: { npm: true, pnpm: true } }), { kind: "ask" });
   assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: { yarn: true, bun: true } }), { kind: "ask" });
+});
+
+// ── THE DECLARED INSTALL (6.66.0, regress-install-config — audit LOOP-11) ─────────────────────────────
+const LOCK_CASES = [{}, { npm: true }, { pnpm: true }, { yarn: true }, { bun: true }, { npm: true, yarn: true }, { pnpm: true, bun: true }];
+
+test("L41 — with NO `declared` argument at all, every existing case resolves exactly as with `declared: null`", () => {
+  for (const lockfiles of LOCK_CASES) {
+    for (const hasPackageJson of [true, false]) {
+      assert.deepEqual(
+        resolveInstall({ hasPackageJson, lockfiles }),
+        resolveInstall({ hasPackageJson, lockfiles, declared: null }),
+        JSON.stringify({ hasPackageJson, lockfiles })
+      );
+    }
+  }
+  // and the default path is the pre-6.66.0 table: one family resolves, zero or two asks.
+  assert.equal(resolveInstall({ hasPackageJson: true, lockfiles: { npm: true } }).cmd, "npm ci");
+  assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: {} }), { kind: "ask" });
+});
+
+test("precedence: --no-install and --install win over a declaration, and a no-manifest base never reads it", () => {
+  for (const declared of DECLARED_INSTALL_VALUES) {
+    assert.deepEqual(resolveInstall({ noInstall: true, hasPackageJson: true, lockfiles: { npm: true }, declared }), {
+      kind: "none",
+      cmd: null,
+      unmeasured: false,
+    });
+    assert.deepEqual(resolveInstall({ explicitInstall: "make deps", hasPackageJson: true, lockfiles: {}, declared }), {
+      kind: "cmd",
+      cmd: "make deps",
+      unmeasured: false,
+    });
+    assert.deepEqual(resolveInstall({ hasPackageJson: false, lockfiles: {}, declared }), {
+      kind: "none",
+      cmd: null,
+      unmeasured: false,
+      reason: "no-manifest",
+    });
+  }
+});
+
+test("a declaration answers EVERY lockfile state it can — including the zero- and two-family cases the table asks about", () => {
+  for (const lockfiles of LOCK_CASES) {
+    assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles, declared: "none" }), {
+      kind: "none",
+      cmd: null,
+      unmeasured: false,
+      declaredIn: INSTALL_DECLARED_IN,
+    });
+    assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles, declared: HEAD_MODULES_LINK }), {
+      kind: "none",
+      cmd: null,
+      unmeasured: false,
+      link: HEAD_MODULES_LINK,
+      declaredIn: INSTALL_DECLARED_IN,
+    });
+  }
+});
+
+test("a declared family runs that family's frozen table command ONLY when its lockfile is at BASE; else `unmatched`", () => {
+  for (const fam of Object.keys(LOCKFILE_FAMILIES)) {
+    const table = resolveInstall({ hasPackageJson: true, lockfiles: { [fam]: true } });
+    // two families present: the declaration picks one, with the table's own command (one table — L35)
+    const other = fam === "npm" ? "yarn" : "npm";
+    assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: { [fam]: true, [other]: true }, declared: fam }), {
+      ...table,
+      declaredIn: INSTALL_DECLARED_IN,
+    });
+    assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: {}, declared: fam }), { kind: "unmatched", family: fam });
+    assert.deepEqual(resolveInstall({ hasPackageJson: true, lockfiles: { [other]: true }, declared: fam }), {
+      kind: "unmatched",
+      family: fam,
+    });
+  }
+  assert.throws(() => resolveInstall({ hasPackageJson: true, lockfiles: {}, declared: "npm ci" }), /validated declaration/);
+});
+
+test("the mask: a declared `none` over declared dependencies still refuses; a declared head-node-modules link never does", () => {
+  const gates = { test: { base: 1, head: 1 }, lint: { base: 0, head: 0 } };
+  const at = (install) =>
+    unreliableInstallMasking({ install, installResult: null, installNeeded: true, freshBase: true, outsideGates: gates });
+  assert.deepEqual(at(resolveInstall({ hasPackageJson: true, lockfiles: {}, declared: "none" })), ["test"]);
+  assert.deepEqual(at(resolveInstall({ hasPackageJson: true, lockfiles: {}, declared: HEAD_MODULES_LINK })), []);
+  // CONTROL: the same `none` shape WITHOUT the link field is masked — the exemption is the link, nothing else.
+  assert.deepEqual(at({ kind: "none", cmd: null, unmeasured: false, declaredIn: INSTALL_DECLARED_IN }), ["test"]);
+});
+
+test("the progress record accepts the declared fields only in their exact shape (no schema bump: an old record has neither)", () => {
+  for (const install of [
+    resolveInstall({ hasPackageJson: true, lockfiles: {}, declared: "none" }),
+    resolveInstall({ hasPackageJson: true, lockfiles: {}, declared: HEAD_MODULES_LINK }),
+    resolveInstall({ hasPackageJson: true, lockfiles: { npm: true, yarn: true }, declared: "yarn" }),
+  ]) {
+    assert.deepEqual(validateProgress(validRecord({ install })), { ok: true }, JSON.stringify(install));
+  }
+  for (const [why, install] of [
+    ["a foreign declaredIn", { kind: "none", cmd: null, unmeasured: false, declaredIn: "elsewhere" }],
+    ["a link without the declaration", { kind: "none", cmd: null, unmeasured: false, link: HEAD_MODULES_LINK }],
+    ["a link on a cmd", { kind: "cmd", cmd: "npm ci", unmeasured: false, link: HEAD_MODULES_LINK, declaredIn: INSTALL_DECLARED_IN }],
+    ["another link value", { kind: "none", cmd: null, unmeasured: false, link: "/abs/node_modules", declaredIn: INSTALL_DECLARED_IN }],
+    ["an unmatched decision", { kind: "unmatched", family: "npm" }],
+    // GATE 2 review (P2): a declared cmd's `family` is copied into the report, so it is checked against the table.
+    [
+      "a declared cmd with a foreign family",
+      { kind: "cmd", cmd: "npm ci", unmeasured: false, family: "<script>", declaredIn: INSTALL_DECLARED_IN },
+    ],
+    ["a declared cmd with no family", { kind: "cmd", cmd: "npm ci", unmeasured: false, declaredIn: INSTALL_DECLARED_IN }],
+    [
+      "a declared cmd whose command is not its family's",
+      { kind: "cmd", cmd: "make", unmeasured: false, family: "npm", declaredIn: INSTALL_DECLARED_IN },
+    ],
+    ["an inherited family name", { kind: "cmd", cmd: "npm ci", unmeasured: false, family: "toString", declaredIn: INSTALL_DECLARED_IN }],
+  ]) {
+    assert.equal(validateProgress(validRecord({ install })).ok, false, why);
+  }
 });
 
 // ── BASE_RULE ────────────────────────────────────────────────────────────────────────────────────────

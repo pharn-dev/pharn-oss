@@ -108,7 +108,7 @@ advisory `NOTE —` instead of checking the named files (the GREEN line then say
 **advisory** `NOTE —` line per such entry and **never changes its exit code**. It can see that the plan names the
 file, but not WHICH part of it the build will change, and a dependency is an ordinary build change. Every part the
 pin reads there — the level gates' scripts and the scripts they chain to, the `jest` key, the `testResults` formats,
-and since 6.66.0 every other allowlisted gate's script (`lint`, `typecheck`, `build`, …) with its `pre`/`post` and
+and since 6.68.0 every other allowlisted gate's script (`lint`, `typecheck`, `build`, …) with its `pre`/`post` and
 chained scripts, an ADDED one included — is still compared at `/pharn-verify`, late (after those gates have already
 run); and since 6.31.0 the build's write scope cannot re-pin what it changed
 there, because the lock is kept out of it (next paragraph) — a Bash rewrite of the lock is detected by reconcile, never
@@ -282,7 +282,7 @@ the script.
 
 - The key set is **closed at every level**, per schema and mode. A lock that breaks it is unusable (exit 2), never
   a verdict.
-  - `ac-tests-lock/6` (6.66.0) is what `--write` and `--write-bootstrap` write. `/5` (6.36.0), `/4` (6.31.0), `/3`
+  - `ac-tests-lock/6` (6.68.0) is what `--write` and `--write-bootstrap` write. `/5` (6.36.0), `/4` (6.31.0), `/3`
     (6.20.0), `/2` (6.18.0) and `/1` (6.17.0: no `mode`, no `bootstrap`) are still read and checked.
   - `test_infra` is REQUIRED on a `/6`, `/5`, `/4` or `/3` test-first lock, in THAT schema's shape:
     - `/6`: `{levels, gates, chained, configs, script_files, jest, exclude, other_gates, other_chained}`;
@@ -295,7 +295,7 @@ the script.
   - `--record-red-run` writes only on a `/6` test-first lock. A red run recorded on a lock with no pin could never pass
     the AC gate, and one on a `/5`, `/4` or `/3` pin would be judged by less than this floor pins. Re-running `--write`
     is cheap there.
-- **Rolling back, stated (6.31.0, again at 6.36.0 and 6.66.0):** a floor older than 6.66.0 reads a `/6` lock as
+- **Rolling back, stated (6.31.0, again at 6.36.0 and 6.68.0):** a floor older than 6.68.0 reads a `/6` lock as
   unusable (one older than 6.36.0 a `/5` lock, one older than 6.31.0 a `/4` lock): `lock-unusable` at the test-stage
   gate, `ac-tests-modified` at the AC gate (verify FAIL), never GREEN. `--write` writes `/6` for every project, so this
   cost applies to every project. A feature pinned under `/6` returns to an older floor only by re-running `/pharn-test`
@@ -326,7 +326,7 @@ the script.
   bootstrap lock, and the caller that passes it has said it accepts the weaker evidence. `--check` alone being GREEN
   never means a red run happened.
 
-### The test-infrastructure pin — `test_infra` (6.20.0; `/4` since 6.31.0; `/5` since 6.36.0; `/6` since 6.66.0)
+### The test-infrastructure pin — `test_infra` (6.20.0; `/4` since 6.31.0; `/5` since 6.36.0; `/6` since 6.68.0)
 
 The lock pins the test FILES; this pins the parts of what RUNS them listed below, so a change to one of THOSE parts
 is a `--check` RED ("test infrastructure changed — …", which the test-stage gate reads as `lock-red`) and reads
@@ -381,11 +381,11 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
     `VERIFY.md` shows it. `BRIEFING.md` does not carry the line (`gate-exclusion-summary-disclosure`).
     **Not closed here:** regress has the base commit, so it could compare the declaration at base and HEAD. That is
     the named follow-up `gate-exclusion-base-compare`: report a widened exclusion as a closed finding.
-- **`other_gates`** (`/6`, 6.66.0 — audit SEC-4) — `{ id, script, pre, post }` for every OTHER gate the gate runner
+- **`other_gates`** (`/6`, 6.68.0 — audit SEC-4) — `{ id, script, pre, post }` for every OTHER gate the gate runner
   runs: each ALLOWLIST id (`gate-run-record.md`) that `package.json` `scripts` HAS and that is not in `gates` — `lint`,
   `typecheck`, `build`, `format:check`, `lint:md`, and an e2e gate when no e2e AC is mapped — sorted by id. So
   `gates` ∪ `other_gates` is every gate discovery finds, an excluded one included, so it covers every gate
-  `/pharn-verify` runs (a closure test pins the equality with `discoverGates`). Before 6.66.0 a build whose plan
+  `/pharn-verify` runs (a closure test pins the equality with `discoverGates`). Before 6.68.0 a build whose plan
   named `package.json` could rewrite `scripts.lint` or `scripts.typecheck` — to `true`, a forged green gate, or to any
   command — and the AC gate stayed PASS. Now a rewritten, removed or ADDED other gate, or a changed `pre`/`post`
   script, is `test-infra-changed`, named by the gate id. Excluded gates are not filtered out.
@@ -418,10 +418,10 @@ path, never a script's text or a file's content. **What it does NOT catch, state
   assertion library or the reporter there — `assert.equal = () => {}` in the only in-scope file made verify PASS with
   the AC counted delivered while the function was wrong. No pin reaches it; a green pin never means the build could
   not forge the AC gate.
-- **Detection, never prevention** (6.66.0): a changed gate script is caught when the pin is recomputed — `--check`
+- **Detection, never prevention** (6.68.0): a changed gate script is caught when the pin is recomputed — `--check`
   and the AC gate — and by then the changed command has already run: in `/pharn-build`'s own build gate (every
   discovered gate but e2e, on each `/pharn-loop` iteration too), on regress's head side, and in `/pharn-verify` itself.
-- what an other gate's command reads (6.66.0): the files its value names and its own configuration, above;
+- what an other gate's command reads (6.68.0): the files its value names and its own configuration, above;
 - any file a pinned file imports — a setup or helper file a config imports, the named reporter's own imports;
 - configuration read from the environment (`NODE_OPTIONS`, `npm_config_*`), and npm configuration outside the
   project root (the user and the global npmrc);
@@ -446,7 +446,7 @@ npmrc. **Costs, stated:** a SOURCE file a test-reachable script names literally 
 (`tsup src/index.ts` reached through `"pretest": "npm run build"`), a runner script — so a feature that edits it reads
 `test-infra-changed`; so does one that edits a chained build script, or a file a chained step writes under a literal
 name (a `cp` destination, which the red run itself can change — `--record-red-run` then refuses). Name a directory, a
-glob or a config file there instead, as its own `spec_kind: test-infra` increment. **Since 6.66.0, any allowlisted
+glob or a config file there instead, as its own `spec_kind: test-infra` increment. **Since 6.68.0, any allowlisted
 gate's script is pinned too, fail-closed:** a feature that rewrites `lint`, `typecheck` or `build`, changes one's
 `pre`/`post` script, or ADDS one (a first `typecheck`) reads `test-infra-changed` — an added gate is a command the
 build chose just the same. Make that change its own `spec_kind: test-infra` increment first.
@@ -478,7 +478,7 @@ same remedy. A `/3` lock over a tree with none of them stays GREEN. A `/3` lock 
 - Because the pin now reads the declaration, a `/4` or `/3` lock over a `pharn.config.json` that is not valid JSON
   reads `changed`. Before, such a file recorded `results: config-invalid` and could stay GREEN.
 
-**Since 6.66.0 a `/5` lock is judged by what it pinned — and almost every in-flight one reads `unpinned`.**
+**Since 6.68.0 a `/5` lock is judged by what it pinned — and almost every in-flight one reads `unpinned`.**
 
 - Every other allowlisted gate the live tree has (`lint`, `typecheck`, `build`, …), and every script those chain to,
   which only `/6` pins, reads `unpinned` against a `/5`, `/4` or `/3` lock — never `changed`, never GREEN: a
@@ -553,7 +553,7 @@ reads SPEC.md: without it, a SPEC re-approved as `test-infra` beside an old test
   runner config (`test-infra-in-plan`, 6.21.0), every root package-manager config and every file a level gate's
   script names (6.31.0), and this feature's own AC-TESTS.md and lock (`ac-artifact-in-plan`, 6.31.0) out of the
   build's scope. It cannot keep out the level gates' `package.json` scripts, the scripts they chain to, the `jest` key,
-  the `testResults` formats, (6.36.0) the `gates.exclude` list or (6.66.0) any other allowlisted gate's script when
+  the `testResults` formats, (6.36.0) the `gates.exclude` list or (6.68.0) any other allowlisted gate's script when
   the plan names `package.json` or
   `pharn.config.json` for another reason, so a
   build that changes those turns the gate RED — and cannot re-pin them through its write scope, since the lock is out
@@ -671,7 +671,7 @@ in-scope, and a rewritten lock passed every check. Detected, never prevented, as
   and probed through the real setter and write guard over the measured spellings: neither this feature's AC-TESTS.md
   nor its lock (`ac-artifact-in-plan`), no root package-manager config, and — when the tree can be read (else a NOTE,
   and the GREEN line says so) — no file a level gate's script names under the closed token rule is in the build's scope; the pin also covers the scripts the level gates chain to, those
-  files, and `package.json`'s `jest` key (content-hash + exact comparison); since 6.66.0 it also covers every other
+  files, and `package.json`'s `jest` key (content-hash + exact comparison); since 6.68.0 it also covers every other
   allowlisted gate's command — script, `pre`/`post`, chained scripts — detected at `--check` and the AC gate, after
   the gate has already run; and a per-test anomaly decides only the ACs
   whose files it sits in (enum membership over the record's `anomalies`).

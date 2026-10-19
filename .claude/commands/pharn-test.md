@@ -189,7 +189,7 @@ node pharn/floor/ac-tests-lock.mjs --check <name>
 
 `--write` records every test file's sha256, AC-TESTS.md's digest and the SPEC pin (`pharn/pharn-contracts/ac-tests.md`,
 "The lock"), with `red_run: null` — and, since 6.20.0, the **test-infrastructure pin** (`test_infra`, lock schema
-`ac-tests-lock/6` since 6.66.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
+`ac-tests-lock/6` since 6.68.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
 scripts) and the scripts they chain to, their `testResults` formats, the files those scripts name (a `pharn-json`
 reporter, a runner script), `package.json`'s `jest` key, the root runner and package-manager configs in a closed
 name set, `pharn.config.json`'s `gates.exclude` list, and every other allowlisted gate's script (`lint`,

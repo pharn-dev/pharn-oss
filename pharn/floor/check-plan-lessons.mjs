@@ -17,9 +17,10 @@
 // NON-LLM. Node stdlib only (fs). No network, no eval, no deps, no child processes.
 //
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
-// FLOOR (what the exit code guarantees): the field is PRESENT, WELL-FORMED, every cited id RESOLVES
-//   to a real lesson heading, and every cited id is REFERENCED in the plan BODY. All four are
-//   enum/regex/membership tests.
+// FLOOR (what the exit code guarantees): the field is PRESENT, declared EXACTLY ONCE across the structured
+//   header (6.65.2 — a repeat is refused, never resolved to one copy), WELL-FORMED, every cited id RESOLVES
+//   to a real lesson heading, and every cited id is REFERENCED in the plan BODY. All five are
+//   enum/regex/membership/count tests.
 // ADVISORY (what it can NEVER check): whether the lessons were GENUINELY applied, and whether a `none`
 //   is JUSTIFIED. A plan may cite [L1] having ignored L1 completely and this checker will pass it — that
 //   is grill/review territory, never this file's. "passed check-plan-lessons" means ONLY "the plan
@@ -61,14 +62,14 @@
 //
 // Usage:
 //   node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
-//       exit 0 (GREEN) iff `applied_lessons` is present and well-formed AND (it is `none`, or every
+//       exit 0 (GREEN) iff `applied_lessons` is present exactly once and well-formed AND (it is `none`, or every
 //       cited `L<n>` both has a `## L<n> ` heading in the lessons file AND is referenced in the plan
 //       body); exit 1 (RED) otherwise.
 //
 // Exit: 0 only when the declaration holds; 1 on every refusal (fail-closed).
 
 import { readFileSync } from "node:fs";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
 
 const FIELD = "applied_lessons";
 
@@ -96,19 +97,20 @@ function clean(v) {
     .trim();
 }
 
-// Both parsers return `{ raw, body }` — the declared VALUE plus the plan's BODY REGION, the two things
-// the gate needs. `body` is deterministically delimited (never "the whole file"): the header region that
-// carries the declaration is EXCLUDED, so the declaration line can never satisfy its own sub-check (D).
+// Both parsers return `{ values, body }` — EVERY declared value in their region, in file order (6.65.2: the gate
+// refuses more than one, so a parser must never stop at the first), plus the plan's BODY REGION. `body` is
+// deterministically delimited (never "the whole file"): the header region that carries the declaration is
+// EXCLUDED, so the declaration line can never satisfy its own sub-check (D). The line grammar is frontmatter-core.mjs's
+// (`fieldEntries` over `FIELD_LINE_RE` / `BULLET_FIELD_LINE_RE`), never a private copy.
 //
 // (1) The product PLAN shape: the field as a frontmatter key. Body = everything after the frontmatter.
 function fromFrontmatter(text) {
   const m = text.match(FM_RE);
-  if (!m) return undefined;
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === FIELD) return { raw: clean(kv[2]), body: text.slice(m[0].length) };
-  }
-  return undefined;
+  if (!m) return { values: [], body: "" };
+  const values = fieldEntries(m[1].split(/\r?\n/))
+    .filter((e) => e.key === FIELD)
+    .map((e) => clean(e.raw));
+  return { values, body: text.slice(m[0].length) };
 }
 
 // (2) The dev PLAN shape: the field as a `- key: value` bullet in the leading header block. The region
@@ -133,7 +135,7 @@ function fromBulletHeader(text) {
   const after = m ? text.slice(m[0].length) : text;
   const lines = after.split(/\r?\n/);
   let fence = null; // { char, len } while a fence is OPEN; null while closed
-  let raw;
+  const header = []; // the region's unfenced lines, read for declarations after the scan
   let bodyStart = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -156,11 +158,12 @@ function fromBulletHeader(text) {
       bodyStart = i; // the structured header region ends at the first `##` heading
       break;
     }
-    const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === FIELD && raw === undefined) raw = clean(kv[2]);
+    header.push(line);
   }
-  if (raw === undefined) return undefined;
-  return { raw, body: bodyStart === -1 ? "" : lines.slice(bodyStart).join("\n") };
+  const values = fieldEntries(header, BULLET_FIELD_LINE_RE)
+    .filter((e) => e.key === FIELD)
+    .map((e) => clean(e.raw));
+  return { values, body: bodyStart === -1 ? "" : lines.slice(bodyStart).join("\n") };
 }
 
 // Collect the lesson ids that actually EXIST, as a membership set (P5 — a set test, not a substring scan).
@@ -181,20 +184,39 @@ function gate(planPath, lessonsPath) {
     return red(`PLAN is unreadable (${planPath}): ${e.message}`);
   }
 
-  // Frontmatter first, then the leading bullet block. Both are structured header regions, so this needs
-  // no fragile "does this file have frontmatter" branch and handles BOTH plan shapes uniformly.
-  const parsed = fromFrontmatter(planText) ?? fromBulletHeader(planText);
-  const raw = parsed?.raw;
-  const planBody = parsed?.body ?? "";
+  // Both structured header regions are read IN FULL — the frontmatter, and the leading bullet block (read whether or
+  // not frontmatter exists, the region it always was). Every declaration in either counts, so a repeat is SEEN
+  // rather than resolved by whichever region or line happens to be read first.
+  const fm = fromFrontmatter(planText);
+  const bullets = fromBulletHeader(planText);
+  const count = fm.values.length + bullets.values.length;
 
   // (A) PRESENCE — the field is mandatory. The VALUE `none` is the escape; OMISSION is not.
-  if (raw === undefined) {
+  if (count === 0) {
     return red(
       `PLAN declares no \`${FIELD}\` in its structured header (${planPath}) — the field is MANDATORY. ` +
         `Add it to the frontmatter (product PLAN) or the leading bullet block (dev PLAN), as either ` +
         `\`${FIELD}: none\` or \`${FIELD}: [L1, L2]\`. Omission is not the escape — \`none\` is.`
     );
   }
+
+  // (A2) UNIQUENESS (6.65.2, frontmatter-parser-parity — audit ENF-4). A repeated declaration is REFUSED, never read.
+  // Before this, the FIRST copy was gated while YAML, a JS object assignment and frontmatter-core.mjs `readField`
+  // all keep the LAST — so `applied_lessons: none` followed by `applied_lessons: [L9999]` was GREEN on the copy every
+  // other reader discards. Choosing the last copy instead would only move the disagreement to a first-wins reader;
+  // refusing leaves nothing to disagree about. The message names counts and regions only, never a value (P2).
+  if (count > 1) {
+    return red(
+      `PLAN declares \`${FIELD}\` ${count} times in its structured header (${planPath}): ` +
+        `${fm.values.length} in the frontmatter, ${bullets.values.length} in the leading bullet block — declare ` +
+        `it exactly once. A repeated key is refused rather than read: YAML keeps the last copy and a first-wins ` +
+        `reader keeps the first, so gating either would certify a declaration another reader discards.`
+    );
+  }
+
+  const chosen = fm.values.length === 1 ? fm : bullets;
+  const raw = chosen.values[0];
+  const planBody = chosen.body;
 
   // (B) SHAPE — the enum-gate, applied BEFORE the value is used for anything (P2).
   if (NONE_RE.test(raw)) {

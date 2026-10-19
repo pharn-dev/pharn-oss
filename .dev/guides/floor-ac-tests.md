@@ -29,7 +29,7 @@ come from the single code block this text was moved from, so the entry they name
 # `NOTE —` line and never change the exit code — every part of package.json the pin READS is still compared at verify
 # and cannot be re-pinned through the build's scope, a composition a ★ HOOK test executes; the parts it does not read
 # stay changeable, as the NOT-caught list states); exit 0/1/2. ac-tests-lock.mjs --write/--check pins the tests
-# in AC-TESTS.lock.json (schema ac-tests-lock/6 since 6.66.0 — /5, /4, /3, /2 and /1 still read; closed keys per mode; test_infra
+# in AC-TESTS.lock.json (schema ac-tests-lock/6 since 6.68.0 — /5, /4, /3, /2 and /1 still read; closed keys per mode; test_infra
 # is the test-infrastructure pin, see THE AC GATE below); --check names a PATH, never content. Since 6.49.3 every file a
 # mapping cell names must be in the lock's files (byte-equal, unlisted-file's comparison): --write refuses such a cell,
 # and --check REDs a lock that holds one (lock-red at check-test-stage, ac-tests-modified at the AC gate; audit P3-K). The mapping grammar lives in ac-tests-core.mjs. AC-TESTS.md and the lock are PIPELINE_ARTIFACTS (regress-exempt); for reconcile
@@ -129,7 +129,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # through an explicit --gates is test-infra-changed (test-first) / ac-untested (bootstrap) BY DESIGN; its detail names
 # the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
-# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/6 since 6.66.0, /5 since 6.36.0, /4 since 6.31.0,
+# test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/6 since 6.68.0, /5 since 6.36.0, /4 since 6.31.0,
 # test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
 # scripts + testResults formats, root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since
 # 6.21.0 — on APFS a `Vitest.config.mjs` is the runner's config), and since 6.31.0 (the review's H2 + the GATE-1
@@ -150,14 +150,14 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # /pharn-test (its red run cannot pass over a built tree). A /4 lock is lock-unusable to a pre-6.31.0 floor, never
 # GREEN (rolling back means re-running /pharn-test there). 6.36.0 (/5): the pin adds `exclude`, the project's whole
 # declared `pharn.config.json` `gates.exclude` list (GATE EXCLUSION, further up); a /4 lock reads `unpinned` only when a
-# non-empty declaration exists, and every --write now writes /5, so a pre-6.36.0 floor reads it lock-unusable. 6.66.0
+# non-empty declaration exists, and every --write now writes /5, so a pre-6.36.0 floor reads it lock-unusable. 6.68.0
 # (/6, audit SEC-4): the pin adds `other_gates` — {id, script, pre, post} for EVERY other ALLOWLIST gate package.json has
 # (lint, typecheck, build, format:check, lint:md, an unmapped e2e gate), so gates ∪ other_gates == every gate discovery
 # finds, an excluded one included (closure-tested; a superset of what verify runs) — and `other_chained`, the scripts those chain to by the same token pass; a rewritten, removed or
 # ADDED one is test-infra-changed (fail-closed). Only the COMMAND is pinned for those gates: the files their scripts
 # name and their own configs (eslint, tsconfig, prettier) are not, and scriptNamedFiles stays level-gate-only. A /5, /4
 # or /3 lock reads every other gate the tree has as `unpinned` (so almost every in-flight old lock: verify FAIL
-# test-infra-unpinned until /pharn-test is re-run); a pre-6.66.0 floor reads a /6 lock lock-unusable. DETECTION, never
+# test-infra-unpinned until /pharn-test is re-run); a pre-6.68.0 floor reads a /6 lock lock-unusable. DETECTION, never
 # prevention: the changed command has already run at the build gate, regress head and verify. IN THE LOOP: check-loop-fresh E re-derives WITH --ac-gate and compares ac_gate (when the tree moved,
 # 6.20.6: it re-derives WITHOUT the flag and compares what the stamp alone decides — gates, the non-AC failing ids and
 # the verdict rule — so only the AC part defers to F; the AC ids come from gate-run-core AC_RESERVED_IDS, not from

@@ -498,7 +498,7 @@ test("6.31.0 test-infra-unpinned — a /3 lock over a tree whose `test` gate nam
   });
 });
 
-test("6.66.0 (audit SEC-4) test-infra-changed — the build rewrote `lint` (a forged green gate) or ADDED `typecheck`: FAIL, named by gate id only", () => {
+test("6.68.0 (audit SEC-4) test-infra-changed — the build rewrote `lint` (a forged green gate) or ADDED `typecheck`: FAIL, named by gate id only", () => {
   withWorld({}, (w) => {
     assert.equal(gateOf(w).verdict, "PASS", "control: the pinned world is GREEN");
     writeFileSync(join(w.root, "package.json"), JSON.stringify({ name: "w", scripts: { test: "vitest run", lint: "true" } }));
@@ -517,7 +517,7 @@ test("6.66.0 (audit SEC-4) test-infra-changed — the build rewrote `lint` (a fo
   });
 });
 
-test("6.66.0 test-infra-unpinned — a /5 lock over a tree with an other allowlisted gate: unpinned, never a PASS; without one it still PASSes", () => {
+test("6.68.0 test-infra-unpinned — a /5 lock over a tree with an other allowlisted gate: unpinned, never a PASS; without one it still PASSes", () => {
   const toV5 = (w) => {
     const l = JSON.parse(readFileSync(w.lockPath, "utf8"));
     const test_infra = { ...l.test_infra };

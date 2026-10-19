@@ -18,7 +18,7 @@ reads:
   ]
 writes: ["<user-code files named in the plan's ## Files (Phase-1, via --from-plan — not from this list)>", "pharn/features/<name>/BUILD.md"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
-version: "0.2.3"
+version: "0.2.4"
 ---
 
 # /pharn-build — build the user's code from an Approved, un-drifted plan, within the plan's scope
@@ -79,7 +79,7 @@ Load the trusted prefix and obey it for the whole run:
 
    The gate also passes on a **rebuild** (a `/pharn-loop` iteration 2+, `/pharn-ship`'s Step 2b retry) **that left
    what the lock pins alone** (`pharn/pharn-contracts/ac-tests.md`, "The test-infrastructure pin" — that section is
-   the list). **So never change or add an allowlisted gate's script (`test`, `test:e2e`, `e2e`, and since 6.66.0
+   the list). **So never change or add an allowlisted gate's script (`test`, `test:e2e`, `e2e`, and since 6.68.0
    `lint`, `typecheck`, `build`, …), its `pre`/`post` scripts, the `testResults` formats or the `gates.exclude` list,
    even when the plan names `package.json` or `pharn.config.json`:** that reads `lock-red`
    here and `test-infra-changed` at `/pharn-verify`, and no rebuild clears it.
@@ -180,21 +180,19 @@ is a **no-op** and the build proceeds identically (mirrors Step 2b's `mode: none
    ever runs on an unvalidated config (even the safe default):
 
    ```bash
-   # Extract the `seam` block of pharn.config.json to gitignored scratch. Three-way, fail-closed (FIX 5):
-   #   (a) file ABSENT                → materialize the documented default order (contains terminal `ask`);
-   #   (b) present + valid + no seam  → `c.seam ?? default` (default substitution, file intact — today's case);
-   #   (c) present + MALFORMED JSON   → HALT (exit 1) — never silently swap the user's policy for the default.
-   # Then validate.
-   node -e "const fs=require('fs');const DEF={resolutionOrder:['official-skill','pinned-docs','model','fetch','ask']};let c={},raw;try{raw=fs.readFileSync('pharn.config.json','utf8')}catch(e){if(e.code!=='ENOENT'){console.error('HALT: pharn.config.json unreadable: '+e.message);process.exit(1)}}if(raw!==undefined){try{c=JSON.parse(raw)}catch(e){console.error('HALT: pharn.config.json is present but not valid JSON ('+e.message+') — refusing to substitute the permissive default for your seam policy; fix the file.');process.exit(1)}}const seam=c.seam??DEF;fs.mkdirSync('.pharn',{recursive:true});fs.writeFileSync('.pharn/seam-config.json',JSON.stringify(seam,null,2))"
+   node pharn/floor/seam-config-materialize.mjs   # exit 0 written | 1 HALT — the three-way rule is in its header
    node pharn/floor/check-seam-config.mjs .pharn/seam-config.json   # FLOOR: exit 0 GREEN | non-zero RED
    ```
+
+   The first line extracts the `seam` block of `pharn.config.json` to gitignored scratch (the documented default
+   when the file is absent or has no `seam` block); the second validates it.
 
    - **RED (non-zero) → HALT the whole build** (fail-closed): an unsafe seam-config (an invalid step, or
      the unsafe case — **no `ask`**) means seams cannot be resolved safely. Do not build against it; ask
      the human to fix the config.
-   - **Malformed config → HALT, never a silent default-swap.** The default order is materialized **only when
-     `pharn.config.json` is ABSENT**; a file that is **present but not valid JSON** HALTs (exit 1), the same
-     posture as a RED verdict.
+   - **Malformed config → HALT, never a silent default-swap.** A `pharn.config.json` that is **present but
+     unreadable, not valid JSON, or not a JSON object** makes the first line exit 1 — HALT, the same posture as
+     a RED verdict, and do not run the second line.
 
 2. **Follow the resolver's walk (ADVISORY).** With a GREEN config, follow
    `pharn/pharn-core/seam-resolver/seam-resolver.md` (cited, not restated — P4): walk `resolutionOrder` in

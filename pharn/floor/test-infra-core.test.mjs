@@ -87,7 +87,7 @@ const rewritePkg = (root, edit) => {
 };
 const HOLDS = { changed: [], unpinned: [] };
 
-test("the pin: the level gates' script values and results formats, the root runner configs, every OTHER allowlisted gate's command (6.66.0) — and NOT other scripts", () => {
+test("the pin: the level gates' script values and results formats, the root runner configs, every OTHER allowlisted gate's command (6.68.0) — and NOT other scripts", () => {
   withWorld({}, (root) => {
     rewritePkg(root, (p) => (p.scripts.dev = "vite"));
     const pin = pinOf(root);
@@ -196,7 +196,7 @@ test("each change is named by gate id or path, never by script text (P2), and ea
     assert.deepEqual(testInfraReds({ recorded: pin, root }).changed, ["gate e2e: a package.json script was added"]);
   });
   // control: a script NO gate runs or reaches and a dependency change are NOT test infrastructure (an allowlisted
-  // `lint` IS since 6.66.0 — its own test below)
+  // `lint` IS since 6.68.0 — its own test below)
   withWorld({}, (root) => {
     rewritePkg(root, (p) => (p.scripts.dev = "vite"));
     const pin = pinOf(root);
@@ -228,7 +228,7 @@ const RICH = {
   },
   pkg: { jest: { testEnvironment: "node", reporters: ["default"] } },
 };
-/** RICH without its one OTHER allowlisted gate (`lint`), for the readings that predate 6.66.0. */
+/** RICH without its one OTHER allowlisted gate (`lint`), for the readings that predate 6.68.0. */
 const RICH_NO_OTHER = { ...RICH, scripts: Object.fromEntries(Object.entries(RICH.scripts).filter(([k]) => k !== "lint")) };
 /** A /6 pin as a /5 lock records it: without the two `other_*` sections. */
 function asV5(pin) {
@@ -1019,7 +1019,7 @@ test("6.36.0 — the pin records the DECLARED gate exclusion; a change is CHANGE
 });
 
 test("6.36.0 MIGRATION — a /4 or /3 pin reads as before with no declaration, and `unpinned` (never `changed`) with one", () => {
-  // no OTHER allowlisted gate here, so only the 6.36.0 reading is in play (6.66.0's has its own test)
+  // no OTHER allowlisted gate here, so only the 6.36.0 reading is in play (6.68.0's has its own test)
   withWorld({ scripts: { test: SCRIPT_SECRET } }, (root) => {
     const full = pinOf(root);
     const v4 = asV5(full);
@@ -1089,7 +1089,7 @@ test("6.31.0 MIGRATION — a /3 pin is judged by what it pinned; what only /4 pi
   });
 });
 
-// ── 6.66.0 (audit SEC-4): every OTHER allowlisted gate's command — other_gates, other_chained ────────────────────────
+// ── 6.68.0 (audit SEC-4): every OTHER allowlisted gate's command — other_gates, other_chained ────────────────────────
 
 /** A world whose scripts hold EVERY ALLOWLIST id (iterated, never hand-picked — L36/L52), plus a non-gate `dev`. */
 const ALL_GATES = () => ({
@@ -1098,7 +1098,7 @@ const ALL_GATES = () => ({
   files: {},
 });
 
-test("6.66.0 CLOSURE — the pinned gate set IS the set the gate runner discovers: gates ∪ other_gates == discoverGates, per level set", () => {
+test("6.68.0 CLOSURE — the pinned gate set IS the set the gate runner discovers: gates ∪ other_gates == discoverGates, per level set", () => {
   const levelSets = [["unit"], ["integration"], ["e2e"], ["e2e", "unit"]];
   // every ALLOWLIST id present, then each single id dropped in turn, then a manifest of the `test` gate alone
   const scriptSets = [
@@ -1128,7 +1128,7 @@ test("6.66.0 CLOSURE — the pinned gate set IS the set the gate runner discover
   }
 });
 
-test("6.66.0: each other-gate change is CHANGED, named by id, and trips only itself (L52) — never the script's text (P2)", () => {
+test("6.68.0: each other-gate change is CHANGED, named by id, and trips only itself (L52) — never the script's text (P2)", () => {
   const OTHER = {
     scripts: {
       test: "vitest run",
@@ -1213,7 +1213,7 @@ test("6.66.0: each other-gate change is CHANGED, named by id, and trips only its
   });
 });
 
-test("6.66.0 STATED BOUND, probed: an other gate's NAMED FILES and its own configs are not pinned — only its command is", () => {
+test("6.68.0 STATED BOUND, probed: an other gate's NAMED FILES and its own configs are not pinned — only its command is", () => {
   withWorld(
     {
       scripts: { test: "vitest run", build: "tsup src/index.ts", lint: "node tools/lint.mjs" },
@@ -1258,7 +1258,7 @@ test("6.66.0 STATED BOUND, probed: an other gate's NAMED FILES and its own confi
     assert.ok(header.includes(needle), `the header states: ${needle}`);
 });
 
-test("6.66.0: an other gate the pin cannot read REFUSES the pin, named by id; a chain from it past the hop bound refuses too", () => {
+test("6.68.0: an other gate the pin cannot read REFUSES the pin, named by id; a chain from it past the hop bound refuses too", () => {
   withWorld({ scripts: { test: "vitest run", lint: 1 } }, (root) => {
     const r = computeTestInfra({ root, levels: ["unit"] });
     assert.equal(r.ok, false);
@@ -1273,7 +1273,7 @@ test("6.66.0: an other gate the pin cannot read REFUSES the pin, named by id; a 
   });
 });
 
-test("6.66.0 MIGRATION — a /5, /4 or /3 pin reads as before with no other gate, and every other gate is UNPINNED (never CHANGED) with one", () => {
+test("6.68.0 MIGRATION — a /5, /4 or /3 pin reads as before with no other gate, and every other gate is UNPINNED (never CHANGED) with one", () => {
   const variants = (full) => {
     const v5 = asV5(full);
     const v4 = { ...v5 };
@@ -1320,7 +1320,7 @@ test("6.66.0 MIGRATION — a /5, /4 or /3 pin reads as before with no other gate
   });
 });
 
-test("6.66.0 — pinShapeError under /6: /5's shape plus other_gates and other_chained, closed at every level (L36)", () => {
+test("6.68.0 — pinShapeError under /6: /5's shape plus other_gates and other_chained, closed at every level (L36)", () => {
   const good = {
     ...GOOD_V4,
     exclude: [],

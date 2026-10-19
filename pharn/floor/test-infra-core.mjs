@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/test-infra-core.mjs — the TEST-INFRASTRUCTURE PIN: the parts of a project, other than the AC tests
 // themselves, that decide how those tests run and what they report. `/pharn-test`'s `ac-tests-lock.mjs --write` records
-// it in the lock's `test_infra` section (schema `ac-tests-lock/6` since 6.66.0; `/5`, `/4` and `/3` are still read); `--check` and
+// it in the lock's `test_infra` section (schema `ac-tests-lock/6` since 6.68.0; `/5`, `/4` and `/3` are still read); `--check` and
 // `/pharn-verify`'s AC gate (ac-gate-core.mjs) recompute it from the live tree and compare. Contract:
 // pharn/pharn-contracts/ac-tests.md, "The test-infrastructure pin".
 //
@@ -49,7 +49,7 @@
 //                 an excluded `typecheck` or `build` changes what /pharn-verify runs as surely as an excluded `test`. A
 //                 declaration that cannot be read refuses the pin. A /4 or /3 pin never recorded it, so a NON-EMPTY live
 //                 declaration reads `unpinned` against one (and an empty one reads exactly as before 6.36.0).
-//   other_gates   (/6, 6.66.0 — audit SEC-4) { id, script, pre, post } for every OTHER gate the gate runner runs: each
+//   other_gates   (/6, 6.68.0 — audit SEC-4) { id, script, pre, post } for every OTHER gate the gate runner runs: each
 //                 ALLOWLIST id package.json `scripts` HAS (discoverGates) that is not in `gates` — `lint`, `typecheck`,
 //                 `build`, `format:check`, `lint:md`, and an e2e gate when no e2e AC is mapped — sorted by id. Before,
 //                 a build scoped to package.json could rewrite `scripts.lint` to `true` (a forged green gate) or to any
@@ -62,7 +62,7 @@
 //   A /5, /4 or /3 pin never recorded the other gates, so each one the live tree has, and each script they chain to,
 //   reads `unpinned` against it (never `changed`, never GREEN) — almost every project has a `lint` script, so an
 //   in-flight old lock reads `test-infra-unpinned` at the AC gate until /pharn-test is re-run. A tree with no other
-//   gate reads exactly as before 6.66.0.
+//   gate reads exactly as before 6.68.0.
 //
 // THE TOKEN PASS (6.31.0) — ONE closed, literal rule, never a shell parse (the reconcile precedent: parsing a shell
 // command is undecidable, and a verb list would be a heuristic P0 forbids calling a guarantee). scriptTokens() splits
@@ -102,10 +102,10 @@
 //     imports are never followed;
 //   • configuration read from the environment (`NODE_OPTIONS`, `npm_config_*`, a runner's own variables), and npm
 //     configuration outside the project root (the user and the global npmrc);
-//   • DETECTION, NEVER PREVENTION (6.66.0): a changed gate script is caught when the pin is recomputed — `--check` and
+//   • DETECTION, NEVER PREVENTION (6.68.0): a changed gate script is caught when the pin is recomputed — `--check` and
 //     verify's AC gate — and by then the changed command has already RUN: in /pharn-build's own build gate (every
 //     discovered gate but e2e, on each /pharn-loop iteration too), on regress's head side, and in verify itself;
-//   • what an OTHER gate's command READS (6.66.0): the files its value names (`tsup src/index.ts`, `node tools/lint.mjs`)
+//   • what an OTHER gate's command READS (6.68.0): the files its value names (`tsup src/index.ts`, `node tools/lint.mjs`)
 //     and its own configuration (`eslint.config.*`, `tsconfig.json`, a Prettier or markdownlint config) — only the
 //     command is pinned, because those files are usually source a feature legitimately edits;
 //   • package.json fields other than the allowlisted gates' scripts, the scripts they chain to and `jest` —
@@ -127,7 +127,7 @@
 // FAIL-CLOSED COSTS, stated: a change it catches is `test-infra-changed` whether or not it was legitimate. So a SOURCE
 // file a test-reachable script names literally — a bundler's entry (`tsup src/index.ts` reached through
 // `"pretest": "npm run build"`), `node test.js` — is pinned, and a feature that edits it reads `test-infra-changed`;
-// a chained build step is pinned as a value, so a feature that edits the build script reads the same; and since 6.66.0
+// a chained build step is pinned as a value, so a feature that edits the build script reads the same; and since 6.68.0
 // a feature that changes ANY allowlisted gate's script — or ADDS one (a first `typecheck`), fail-closed, since an added
 // gate is a command the build chose just the same — reads `test-infra-changed` too. The remedy is a
 // human: name a directory, a glob or a config file instead, as its own `spec_kind: test-infra` increment. For an
@@ -222,7 +222,7 @@ export function testInfraPathKind(entry) {
 }
 /** A pinned gate's `results` value: a format, or the refusal that stood in for one when the pin was taken. */
 export const RESULTS_VALUES = Object.freeze([...RESULTS_FORMATS, "config-invalid", "not-configured"].sort());
-/** `test_infra`'s closed key sets (L36): the /6 pin (6.66.0), and the /5 (6.36.0–6.65.x), /4 (6.31.0–6.35.x) and /3
+/** `test_infra`'s closed key sets (L36): the /6 pin (6.68.0), and the /5 (6.36.0–6.67.x), /4 (6.31.0–6.35.x) and /3
  *  (6.20.0–6.30.x) pins still read. */
 export const PIN_KEYS = Object.freeze([
   "chained",
@@ -408,7 +408,7 @@ function valuesOf(scripts, id) {
  * candidates}` — the chained scripts `{id, script, pre, post}` sorted by id (the gates' own ids and pre/post names not
  * repeated), and every candidate path any pinned value names, sorted — or a refusal (a chained value that is not a
  * string, a chain past MAX_CHAIN_HOPS).
- * `pinned` (6.66.0): script names already pinned elsewhere, which the walk neither records nor enters again — the other
+ * `pinned` (6.68.0): script names already pinned elsewhere, which the walk neither records nor enters again — the other
  * gates' walk passes every level gate, chained script and other gate, so a script reached from both sides is recorded
  * once, in `chained`. `who` names the walk's start in a refusal.
  */
@@ -504,7 +504,7 @@ function readGates(scripts, levels) {
   return { ok: true, gates };
 }
 
-/** (6.66.0) The OTHER gates the gate runner discovers — every ALLOWLIST id the manifest has that is not a candidate
+/** (6.68.0) The OTHER gates the gate runner discovers — every ALLOWLIST id the manifest has that is not a candidate
  *  level gate for `levels` — each `{id, script, pre, post}`, sorted by id, or a refusal. */
 function readOtherGates(scripts, levels) {
   const level = new Set(candidateGates(levels));
@@ -723,7 +723,7 @@ export function pinShapeError(pin, { version } = {}) {
   return otherShapeError(pin);
 }
 
-/** (6.66.0) The /6 sections: `other_gates` — ALLOWLIST ids that are not a candidate level gate for the pin's levels;
+/** (6.68.0) The /6 sections: `other_gates` — ALLOWLIST ids that are not a candidate level gate for the pin's levels;
  *  `other_chained` — clean ids no other section holds. Each `{id, post, pre, script}` exactly, sorted and unique by id.
  *  The one overlap allowed is `chained` ∩ `other_gates` (an other gate a level gate chains to). */
 function otherShapeError(pin) {
@@ -828,7 +828,7 @@ export function diffTestInfra(recorded, now) {
     for (const id of now.exclude)
       if (!recorded.exclude.includes(id)) out.push(`pharn.config.json gates.exclude: ${id} was added — discovery no longer runs it`);
   }
-  // /6 (6.66.0): every other allowlisted gate's command. A gate id is an ALLOWLIST member (inline is safe); a chained id
+  // /6 (6.68.0): every other allowlisted gate's command. A gate id is an ALLOWLIST member (inline is safe); a chained id
   // is project text, quoted through shown().
   if (Object.hasOwn(recorded, "other_gates")) {
     const owas = byId(recorded.other_gates);
@@ -863,7 +863,7 @@ export function diffTestInfra(recorded, now) {
   return out;
 }
 
-/** What the /6 pin covers that a /5, /4 or /3 pin could not (6.66.0): each other allowlisted gate the live tree has, and
+/** What the /6 pin covers that a /5, /4 or /3 pin could not (6.68.0): each other allowlisted gate the live tree has, and
  *  each script those chain to — UNPINNED, never "changed". A tree with no other gate adds nothing. */
 function beyondV5(pin) {
   return [
@@ -901,7 +901,7 @@ function beyondV3(pin) {
  *  (L6 — two fields, never one list split by prefix). `changed` holds the differences, or `[reason]` when the live pin
  *  cannot be computed (an unreadable manifest, a symlinked config or named file — itself a change from what was
  *  pinned). `unpinned` is empty for a /6 pin; for a /5 pin it names every other allowlisted gate and the scripts those
- *  chain to (6.66.0); for a /4 pin that and a non-empty declared gate exclusion (6.36.0); for a /3 pin all of that and
+ *  chain to (6.68.0); for a /4 pin that and a non-empty declared gate exclusion (6.36.0); for a /3 pin all of that and
  *  what the live tree has that /4 pins and /3 did not (6.31.0 — the AC gate reads it as `test-infra-unpinned`,
  *  `--check` as a RED). A /3, /4 or /5 pin over a tree the current pin cannot be computed on (a
  *  symlinked `.npmrc` or script-named file, a chain past MAX_CHAIN_HOPS, a gate exclusion that cannot be read) reads

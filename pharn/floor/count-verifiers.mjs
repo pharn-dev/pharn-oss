@@ -25,6 +25,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { stripBom } from "./frontmatter-core.mjs";
 
 const TARGET = process.argv[2] || ".";
 // Same exclusions as pharn/floor/validate.mjs: tooling (.claude/, .dev/) and noise are NOT the
@@ -36,14 +37,10 @@ const TARGET = process.argv[2] || ".";
 // and only the enumeration test ranges over it. Closure, not a second member.
 const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
 
+/** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {
   process.stderr.write("count-verifiers: " + msg + "\n");
-  process.exit(1);
-}
-
-// Fail-closed (P5): a missing / non-directory target is an ERROR, never a silent empty count.
-if (!existsSync(TARGET) || !statSync(TARGET).isDirectory()) {
-  fail(`target dir not found (or not a directory): ${TARGET}`);
+  return 1;
 }
 
 // Recursive *.md collector — mirrors pharn/floor/validate.mjs `walk`.
@@ -75,16 +72,18 @@ function isExcluded(file) {
 }
 
 // The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none.
-// MIRRORS pharn/floor/validate.mjs `parseFrontmatter` EXACTLY (restricted to the `role` key): the same opening
-// fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`), the same `slice(3, end).trim()`
+// MIRRORS pharn/floor/validate.mjs `parseFrontmatter` EXACTLY (restricted to the `role` key): the same leading-BOM
+// strip (frontmatter-core.mjs `stripBom`, 6.65.2), then the same opening fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`), the same `slice(3, end).trim()`
 // block, the same `^([A-Za-z0-9_]+):\s*(.*)$` line parse, and the same `^["']|["']$` quote-strip. That
 // byte-for-byte sameness is what makes membership agree with the AUTHORITY on EVERY input — closing
 // REVIEW.md F1, where the prior strict `^---\r?\n` regex diverged from validate's loose opening fence on
 // >=4-dash openings. A `role:` line in the body (prose / code block) stays outside the parsed block, so it
 // is structurally unreachable (the enum-gated / free-text split is preserved). `role` is a scalar enum, so
 // validate's array branch (list-valued keys only) never applies to it; the last `role:` line wins, exactly
-// as validate's `fm[key] = val` overwrite does. Not an import — validate.mjs exports nothing (P4: cite).
-function frontmatterRole(text) {
+// as validate's `fm[key] = val` overwrite does. Not an import of validate.mjs — it exports nothing (P4: cite); the
+// BOM strip is the shared core's.
+function frontmatterRole(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return null;
   const end = text.indexOf("\n---", 3);
   if (end === -1) return null;
@@ -97,21 +96,33 @@ function frontmatterRole(text) {
   return role;
 }
 
-const verifiers = [];
-for (const file of walk(TARGET)) {
-  if (isExcluded(file)) continue;
-  let text;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    continue;
+function main() {
+  // Fail-closed (P5): a missing / non-directory target is an ERROR, never a silent empty count.
+  if (!existsSync(TARGET) || !statSync(TARGET).isDirectory()) {
+    return fail(`target dir not found (or not a directory): ${TARGET}`);
   }
-  // The ONLY membership test: enum equality against a frontmatter-gated field (P5). No content grep.
-  if (frontmatterRole(text) === "verifier") {
-    verifiers.push(relative(TARGET, file).replace(/\\/g, "/"));
-  }
-}
-verifiers.sort();
 
-process.stdout.write(JSON.stringify({ registered: verifiers.length, verifiers }) + "\n");
-process.exit(0);
+  const verifiers = [];
+  for (const file of walk(TARGET)) {
+    if (isExcluded(file)) continue;
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    // The ONLY membership test: enum equality against a frontmatter-gated field (P5). No content grep.
+    if (frontmatterRole(text) === "verifier") {
+      verifiers.push(relative(TARGET, file).replace(/\\/g, "/"));
+    }
+  }
+  verifiers.sort();
+
+  process.stdout.write(JSON.stringify({ registered: verifiers.length, verifiers }) + "\n");
+  return 0;
+}
+
+// THE FLUSH RULE (6.20.4; this CLI since 6.67.1, TST-5): the exit code is SET and the process ends naturally, after
+// Node has drained stdout — stage-verify.mjs JSON.parses this document through spawnSync, and an immediate exit
+// dropped queued writes past a pipe's 64 KiB buffer on darwin. pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();

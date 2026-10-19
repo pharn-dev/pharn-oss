@@ -53,6 +53,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { stripBom } from "../../pharn/floor/frontmatter-core.mjs";
 
 // Enums — every branch is a presence / enum / equality membership test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These mirror the Claude Code model/effort surface (sub-agents +
@@ -152,8 +153,10 @@ function resolveStage(stages, stage) {
 
 // Parse a command file's frontmatter `model:`/`effort:` — mirrors count-grillers.mjs `frontmatterRole`
 // (the same `---` fence + `^([A-Za-z0-9_]+):\s*(.*)$` line parse + quote-strip), so `model_tier:` (a
-// different key) is never mistaken for `model:`. Not an import — those files export nothing (P4: cite).
-function frontmatterModelEffort(text) {
+// different key) is never mistaken for `model:`. Not an import — those files export nothing (P4: cite). One leading
+// BOM is stripped first through the product core's `stripBom` (6.65.2), as count-grillers.mjs now does.
+function frontmatterModelEffort(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return {};
   const end = text.indexOf("\n---", 3);
   if (end === -1) return {};

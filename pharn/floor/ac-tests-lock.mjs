@@ -5,7 +5,7 @@
 // Every digest in the lock is computed HERE, never typed by a model (PHARN's own build-loop lesson L22). One lock per
 // feature, with NAMED sections, so later stages extend this record instead of adding a second one (L35).
 //
-// SCHEMA `ac-tests-lock/6` (6.66.0) is what `--write` and `--write-bootstrap` write; `ac-tests-lock/5` (6.36.0),
+// SCHEMA `ac-tests-lock/6` (6.68.0) is what `--write` and `--write-bootstrap` write; `ac-tests-lock/5` (6.36.0),
 // `ac-tests-lock/4` (6.31.0), `ac-tests-lock/3` (6.20.0), `ac-tests-lock/2` (6.18.0) and `ac-tests-lock/1` (6.17.0) are
 // still READ and checked — a /1 lock never passes `--require-red-run`, /2 and /1 carry no test-infrastructure pin (the
 // AC gate reads that as `test-infra-unpinned`), a /5 pin is judged by what it pinned plus every other allowlisted gate
@@ -29,14 +29,14 @@
 //              other_chained } — the TEST-INFRASTRUCTURE PIN test-infra-core.mjs computes: the mapped levels, the
 //              package.json scripts and testResults formats of their gates, the scripts those chain to, the root runner
 //              and package-manager configs in a closed name set, the files the scripts name, a digest of package.json's
-//              `jest` key, the project's declared gate exclusion (pharn.config.json `gates.exclude`) and (6.66.0) the
+//              `jest` key, the project's declared gate exclusion (pharn.config.json `gates.exclude`) and (6.68.0) the
 //              command of every OTHER allowlisted gate the gate runner runs, with the scripts those chain to ·
 //              test-first (/5) the same without the two `other_*` sections · (/4) also without `exclude` ·
 //              test-first (/3) { levels, gates, configs } · bootstrap, /2 and /1 null
 // `--write` always resets `red_run` to null and re-takes the pin: a rewrite means the tests changed, so evidence about
 // the old ones is stale by construction. The pin is taken at `--write`, BEFORE the red run, so the red run runs under
 // the pinned infrastructure and `--record-red-run` (which requires `--check` GREEN) refuses a pin that no longer holds.
-// ROLLING BACK (6.31.0, again at 6.36.0 and 6.66.0): a floor older than 6.66.0 reads a /6 lock as unusable (one older
+// ROLLING BACK (6.31.0, again at 6.36.0 and 6.68.0): a floor older than 6.68.0 reads a /6 lock as unusable (one older
 // than 6.36.0 a /5 lock, one older than 6.31.0 a /4 lock) — `lock-unusable` at the test-stage gate,
 // `ac-tests-modified` at the AC gate, verify FAIL — never as GREEN; a feature pinned under /6 returns to an older floor
 // only by re-running /pharn-test there, which writes its own schema.
@@ -75,7 +75,7 @@
 //                  (6.49.3), a listed file missing or not a regular file, a test
 //                  infrastructure that cannot be pinned — an unparseable package.json, a symlinked runner or
 //                  package-manager config, a symlinked or unreadable file a level gate's script names, a chain deeper
-//                  than test-infra-core.mjs's MAX_CHAIN_HOPS, and since 6.66.0 an allowlisted gate's script or a script
+//                  than test-infra-core.mjs's MAX_CHAIN_HOPS, and since 6.68.0 an allowlisted gate's script or a script
 //                  it chains to that is not a string or is over the size bound)
 //       --write-bootstrap  0 written · 2 refused (the SPEC is not Approved and un-drifted, is not
 //                  `spec_kind: test-infra`, has no usable criteria, or an AC-TESTS.md exists; or, since 6.21.1, the
@@ -117,7 +117,7 @@ export { sha256RegularFile };
 /** The schema `--write` / `--write-bootstrap` write. */
 export const SCHEMA = "ac-tests-lock/6";
 /** The 6.36.0 schema: /6's keys, a test-infrastructure pin without `other_gates` / `other_chained`. Still read and
- *  checked — and every other allowlisted gate the live tree has reads `unpinned` against it (6.66.0). */
+ *  checked — and every other allowlisted gate the live tree has reads `unpinned` against it (6.68.0). */
 export const SCHEMA_V5 = "ac-tests-lock/5";
 /** The 6.31.0 schema: /6's keys, a test-infrastructure pin without `exclude` or the `other_*` sections. Still read and checked. */
 export const SCHEMA_V4 = "ac-tests-lock/4";
@@ -544,7 +544,7 @@ export function redRunReds(lock, name, base, root, { requireRedRun = false } = {
 
 /** PURE: the test-infrastructure pin, recomputed over `root` (test-infra-core.mjs): `{changed, unpinned}` — two fields,
  *  never one list split by prefix (L6). `changed`: what differs from the recorded pin. `unpinned` (a /5, /4 or /3 pin,
- *  6.31.0 / 6.36.0 / 6.66.0): what the live tree has that a newer pin covers and this one never recorded. A lock with no pin (/2, /1)
+ *  6.31.0 / 6.36.0 / 6.68.0): what the live tree has that a newer pin covers and this one never recorded. A lock with no pin (/2, /1)
  *  has nothing to hold here — the AC gate names that absence `test-infra-unpinned`; `--check` does not. */
 export function pinReds(lock, root) {
   if (lock.test_infra === null) return { changed: [], unpinned: [] };
@@ -639,7 +639,7 @@ function recordRedRun(name, base, lockPath, out) {
   const lock = loaded.lock;
   if (lock.schema !== SCHEMA || lock.mode !== "test-first") {
     // A /2 test-first lock has no test-infrastructure pin, so a red run recorded on it could never pass /pharn-verify's
-    // AC gate (`test-infra-unpinned`), and a /5, /4 or /3 pin covers less than this floor pins (6.31.0, 6.36.0, 6.66.0): all refused
+    // AC gate (`test-infra-unpinned`), and a /5, /4 or /3 pin covers less than this floor pins (6.31.0, 6.36.0, 6.68.0): all refused
     // here, where re-running --write is still cheap.
     console.log(
       `UNUSABLE — ${lockPath} is ${lock.schema}${lock.mode ? ` ${lock.mode}` : ""}; a red run is recorded on an ${SCHEMA} test-first lock — re-run --write`
