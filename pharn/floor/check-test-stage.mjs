@@ -70,6 +70,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CHILD_CRASHED, RED_LINE, reportsChildCrash } from "./shelled-verdict-core.mjs";
+import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_AC_TESTS = join(HERE, "check-ac-tests.mjs");
@@ -94,7 +95,6 @@ export const TEST_STAGE_REASONS = Object.freeze([
 /** The closed PASS tokens (exit 0). */
 export const READY_TOKENS = Object.freeze(["NOT-APPLICABLE legacy-spec", "READY bootstrap", "READY test-first"]);
 
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const MAX_CHILD_LINES = 20;
 
 function present(path) {
@@ -199,7 +199,7 @@ export function evaluateTestStage({ name, base = FEATURE_BASE, cwd = process.cwd
 }
 
 function decide({ name, base, cwd }) {
-  if (typeof name !== "string" || !SLUG_RE.test(name)) return unusable(`<name> must be a plain slug matching ${SLUG_RE}`);
+  if (typeof name !== "string" || !FEATURE_SLUG_RE.test(name)) return unusable(`<name> must be a plain slug matching ${FEATURE_SLUG_RE}`);
   const dir = join(base, name);
   const spec = join(dir, "SPEC.md");
   const plan = join(dir, "PLAN.md");

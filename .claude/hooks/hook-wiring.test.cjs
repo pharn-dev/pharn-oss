@@ -67,6 +67,38 @@ test("✧ the Write|Edit|MultiEdit|NotebookEdit matcher wires EXACTLY the two an
   );
 });
 
+// `disableAllHooks: true` in a settings file Claude Code loads turns off EVERY hook, both guards included, and leaves
+// the wiring above untouched — so the matcher test stays green while nothing runs (audit SEC-7, 6.64.3). The two
+// project files are checked: settings.json (committed) and settings.local.json (gitignored, checked when present).
+// The key is refused whatever its value: `false` today is one edit from `true`, and no shipped file needs it.
+// BOUND (P0): a user-level ~/.claude/settings.json is outside the repo and outside this test (LIMITS.md §6).
+const PROJECT_SETTINGS = [join(".claude", "settings.json"), join(".claude", "settings.local.json")];
+function assertHooksNotDisabled(settings, rel) {
+  assert.ok(settings !== null && typeof settings === "object" && !Array.isArray(settings), `${rel} is not a JSON object`);
+  assert.ok(!Object.hasOwn(settings, "disableAllHooks"), `${rel} carries a disableAllHooks key — it switches off both write guards`);
+}
+
+test("✧ no project settings file carries `disableAllHooks` (settings.json always; settings.local.json when present)", () => {
+  let checked = 0;
+  for (const rel of PROJECT_SETTINGS) {
+    const abs = join(REPO, rel);
+    if (rel.endsWith("settings.local.json") && !fs.existsSync(abs)) continue;
+    assertHooksNotDisabled(JSON.parse(fs.readFileSync(abs, "utf8")), rel);
+    checked += 1;
+  }
+  assert.ok(checked >= 1, "the committed settings.json must always be checked");
+});
+
+test("✧ the disableAllHooks check DISCRIMINATES: the key with either value fails it (L40 negative control)", () => {
+  const settings = JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8"));
+  assert.doesNotThrow(() => assertHooksNotDisabled(settings, "settings.json"));
+  for (const value of [true, false]) {
+    const planted = { ...JSON.parse(JSON.stringify(settings)), disableAllHooks: value };
+    assert.throws(() => assertHooksNotDisabled(planted, "planted"), /disableAllHooks/, `disableAllHooks: ${value} must fail`);
+  }
+  assert.throws(() => assertHooksNotDisabled([], "planted"), /not a JSON object/);
+});
+
 test("precondition: the subdirectory these tests start the guards from exists", () => {
   assert.ok(fs.statSync(SUBDIR).isDirectory(), `${SUBDIR} must exist for the subdirectory cases to mean anything`);
 });

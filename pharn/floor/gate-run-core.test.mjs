@@ -256,25 +256,48 @@ test("✧ L31/L35 PARITY — /pharn-regress's 'minus the e2e ids' clause names e
   assert.equal(text.split("(minus the e2e ids)").length - 1, 1, "the determinism audit's shorthand clause is gone");
 });
 
-test("✧ L52 PARITY — the feature-slug grammar agrees across all THREE copies", () => {
+test("✧ L52 PARITY — the feature-slug grammar agrees across EVERY copy that cannot import it", () => {
   // Named rather than implied: mark-phase.mjs and render-run-report.mjs each keep a private copy and
-  // neither exports it, so this module adds a third. The follow-up is to fold them into one export; until
-  // then this pins that they cannot drift apart. It iterates EVERY copy, not one.
+  // neither exports it. The follow-up is to fold them into this export; until then this pins that they
+  // cannot drift apart. Since 6.64.3 (audit ENF-5) it also READS — never edits — the copies an import cannot
+  // reach: the two human-only CommonJS hooks' RUN_NAME_RE and /pharn-ship's close part, whose prose names the
+  // grammar a shell-pasted `<name>` satisfies (written there as `^…$`, without slashes). It iterates EVERY copy.
+  // stage-exit-core.mjs's copy is pinned by stage-exit-core.test.mjs against the live object instead.
   const copies = [
     ["pharn/floor/mark-phase.mjs", /const NAME_RE = (\/\^.*\$\/);/],
     ["pharn/floor/render-run-report.mjs", /const SLUG_RE = (\/\^.*\$\/);/],
     ["pharn/floor/gate-run-core.mjs", /export const FEATURE_SLUG_RE = (\/\^.*\$\/);/],
+    [".claude/hooks/set-writes-scope.cjs", /^const RUN_NAME_RE = (\/\^.*\$\/);$/m],
+    [".claude/hooks/enforce-writes-scope.cjs", /^const RUN_NAME_RE = (\/\^.*\$\/);$/m],
+    [".claude/commands/pharn-ship-close.md", /a member of\s+`(\^[^`]*\$)`/, (lit) => `/${lit}/`],
   ];
   const seen = [];
-  for (const [rel, re] of copies) {
-    const m = read(rel).match(re);
+  for (const [rel, re, asLiteral = (lit) => lit] of copies) {
+    const text = read(rel);
+    const m = text.match(re);
     assert.ok(m, `${rel} no longer carries the slug literal this parity test reads`);
-    seen.push([rel, m[1]]);
+    assert.equal(text.split(m[0]).length - 1, 1, `${rel} carries the slug declaration this test reads more than once`);
+    seen.push([rel, asLiteral(m[1])]);
   }
-  assert.equal(seen.length, 3, "the parity test must range over all three copies");
+  assert.equal(seen.length, copies.length, "the parity test must range over every copy");
+  assert.equal(seen.length, 6, "the copy set is the six named above — a new copy is added to it, not left out");
   const [, first] = seen[0];
   for (const [rel, lit] of seen) assert.equal(lit, first, `${rel}'s slug grammar diverged from ${seen[0][0]}'s`);
   assert.equal(first, String(FEATURE_SLUG_RE), "the exported constant disagrees with its own source literal");
+});
+
+test("✧ ENF-5 (6.64.3) — run-marker, ac-tests-lock and check-test-stage IMPORT FEATURE_SLUG_RE and declare no copy", () => {
+  const importLine = /^import \{[^}]*\bFEATURE_SLUG_RE\b[^}]*\} from "\.\/gate-run-core\.mjs";$/m;
+  const literal = /\/\^\[a-z0-9\]\[a-z0-9-\]\{0,63\}\$\//;
+  const modules = ["pharn/floor/run-marker.mjs", "pharn/floor/ac-tests-lock.mjs", "pharn/floor/check-test-stage.mjs"];
+  assert.equal(modules.length, 3);
+  for (const rel of modules) {
+    const src = read(rel);
+    assert.match(src, importLine, `${rel} no longer imports FEATURE_SLUG_RE from gate-run-core.mjs`);
+    assert.doesNotMatch(src, literal, `${rel} carries a private copy of the slug regex again`);
+  }
+  // Negative control (L40): the private-copy matcher does see the declaration these modules used to carry.
+  assert.match("const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;", literal);
 });
 
 test("STYLE_SET ⊂ ALLOWLIST, and RESERVED_IDS is disjoint from ALLOWLIST (every member checked)", () => {

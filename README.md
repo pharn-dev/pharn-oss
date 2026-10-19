@@ -114,7 +114,7 @@ later, not taken on trust.
 ## Quick start
 
 PHARN runs on [Claude Code](https://claude.com/claude-code). The `@pharn-dev/pharn` installer requires
-Node 20 or newer. The deterministic floor checkers this repo ships (`pharn/floor/*.mjs`, invoked by the
+Node 24.2 or newer (the installer refuses older). The deterministic floor checkers this repo ships (`pharn/floor/*.mjs`, invoked by the
 `/pharn-*` stages) require **Node 24.2 or newer**: their CLI entry points gate on `import.meta.main`, which
 Node added in 22.18 / 24.2. Since 6.50.0 every guarded tool refuses an older Node: it prints the required version
 and exits `2` instead of exiting `0` without running its checks. CI and local contributor gates use Node 24. In your project root:
