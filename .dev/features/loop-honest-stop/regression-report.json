@@ -1,8 +1,15 @@
 {
-  "base": "d5453a170a68a1b7842bf633b8638eb02dcd61cb",
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
   "inside": [
     ".claude/commands/pharn-loop-close.md",
     ".claude/commands/pharn-loop.md",
+    ".dev/features/loop-honest-stop/GRILL.md",
+    ".dev/features/loop-honest-stop/PLAN.md",
+    ".dev/features/loop-honest-stop/REGRESSION.md",
+    ".dev/features/loop-honest-stop/REVIEW.md",
+    ".dev/features/loop-honest-stop/VERIFY.md",
+    ".dev/features/loop-honest-stop/regression-report.json",
+    ".dev/features/loop-honest-stop/verify-report.json",
     ".dev/guides/floor-gates.md",
     ".dev/guides/floor-orchestration.md",
     "CHANGELOG.md",
@@ -21,9 +28,7 @@
     "pharn/floor/render-run-report.test.mjs",
     "pharn/pharn-contracts/loop-record.md",
     "pharn/pharn-contracts/reconciliation-record.md",
-    "pharn/pharn-contracts/verify-report.md",
-    ".dev/features/loop-honest-stop/GRILL.md",
-    ".dev/features/loop-honest-stop/PLAN.md"
+    "pharn/pharn-contracts/verify-report.md"
   ],
   "outside_gates": {
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
@@ -32,7 +37,7 @@
     },
     "tests": {
       "base": 1,
-      "head": 0
+      "head": 1
     },
     "validate": {
       "base": 0,

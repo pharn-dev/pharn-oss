@@ -1,5 +1,29 @@
 # VERIFY — loop-honest-stop
 
+## Run 3 — the final tree (after the GATE-2 review fixes and the merge of `origin/main` 6.64.3)
+
+| gate                                                                                       | run 3 |
+| ------------------------------------------------------------------------------------------ | ----- |
+| `test` (`npm test`, 5,568 tests)                                                           | 1     |
+| `validate`                                                                                 | 0     |
+| `lint`                                                                                     | 0     |
+| `format:check`                                                                             | 0     |
+| `lint:md`                                                                                  | 0     |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0     |
+| `reconcile` (`check-bash-reconcile.mjs --require-baseline`)                                | 0     |
+
+**VERIFY FAILS: gate(s) `test` red — stage FAILS** (`check-verify.mjs` exit 1; `verify-report.json` holds this
+verdict verbatim, and its bytes are the same as run 2's).
+
+- The single failure (5,566 pass, 1 fail) is the same pre-existing timing test as in runs 1 and 2,
+  `pharn/floor/stage-regress.test.mjs:2207`. Run 3 ran at a load average of 130–180.
+- It also failed on `main` (`94ad252b`) in regress run 2's base side, under the same load.
+- No test of this increment failed in any run.
+- `reconcile`: `CLEAN`, 31 paths reconciled, no escapes. The files the merge of `origin/main` brought in are listed
+  under `merged`, the 6.52.0 class: upstream bytes, not this build's writes.
+- What would change the verdict: a run of the suite with that test green. CI's runner on the pull request is the next
+  such run. This file does not count it in advance.
+
 ## Run 1 and run 2 (the same tree; build complete, before the review fixes)
 
 | gate                                                                                       | run 1 | run 2 |
