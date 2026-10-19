@@ -6,7 +6,7 @@
 //
 // A COMPANION, NOT A FLAG. The scanner's one positional argument is its target; a flag there would
 // reinterpret it for every existing caller. This CLI takes the same `[targetDir]` (default: cwd) and the same
-// target check, so `/pharn-build`, full `/pharn-grill` and each `/pharn-review` lens run one pinned line and
+// target check, so `/pharn-build`, full `/pharn-grill` and each `/pharn-review` lens group run one pinned line and
 // branch only on the exit code and the `catalogue` / `mode` fields (P5).
 //
 // EXITS. 0 — the catalogue, one JSON line on stdout (an empty roster included: `mode: "none"`). 1 — the

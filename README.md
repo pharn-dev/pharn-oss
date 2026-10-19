@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.64.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.64.2-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -874,7 +874,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `cost.json` shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
   platform veto, and what deleting the block costs — are stated once, in [`LIMITS.md`](./LIMITS.md) § 8.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
-  `/pharn-review` fans every applicable lens out as its own parallel subagent; `/pharn-loop` repeats
+  `/pharn-review` fans the applicable lenses out to parallel subagents, one per lens family; `/pharn-loop` repeats
   build → regress → verify up to the cap, unattended — each pass runs your suite at HEAD and the verify gates,
   and at the base too unless that evidence can be reused: from an earlier pass of the same run (6.33.0) or, since
   6.49.0, from the run's own entry gates. A verify gate is not re-run when the same run's regress already recorded

@@ -88,8 +88,9 @@ this floor.
 two hits for that one line — emit one finding per hit; both point at the same dangerous line the developer must
 fix (mirrors `injection`, where a line matching >1 pattern yields >1 hit).
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` (the per-GRILLER
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The lens runner has
+> LANDED — `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each
+> lens writing its own `findings.json` (the per-GRILLER
 > runner is still deferred, P7) — but the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the
 > scanner's own tests and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model
 > always ran it".
@@ -170,7 +171,7 @@ reaches an enum-gated field). That the lens **emits** it at all, and emits it cl
   **injection-immune by construction**. Named precisely: **"detects a recognized HTTP-request source reaching a
   recognized filesystem-path sink on line N."** Bounded: it detects a SHAPE, not "a real exploitable traversal"
   and not "traversal-safe". **Two clocks:** the scanner's output is floor; the model's inline invocation of it
-  (pre-runner) is advisory orchestration, backstopped by the scanner's tests + the eval.
+  is advisory orchestration, backstopped by the scanner's tests + the eval.
 - **Is the value actually untrusted? Is a basename/allow-list/`..`-check done elsewhere? Full taint tracing? Is
   the code traversal-free?** → **ADVISORY.** Irreducible judgment; surfaced, never gates. **No taint analysis is
   claimed.** The **via-a-local-variable** case (the common real pattern) is a floor MISS, handled only here.

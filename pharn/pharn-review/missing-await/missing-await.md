@@ -83,8 +83,9 @@ call inside a **backtick template's text** or a roster-triggering pattern in fix
 **single-file**, with no scope/shadowing analysis. **This is NOT semantic/intent analysis** — that is the advisory
 layer, never this floor.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` — but
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The lens runner has LANDED —
+> `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each lens writing
+> its own `findings.json` — but
 > the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the scanner's own tests
 > and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model always ran it".
 
@@ -173,7 +174,7 @@ named residual (`finding-shape.md` §Emission-enforcement audit; `LIMITS.md §2`
   the file's own `async` declarations**), and **injection-immune by construction**. Named precisely: **"detects a
   statement-position, non-awaited call to a function this file declares `async`."** Bounded: it detects a SHAPE, not
   "this missing await is wrong" and not "the code is async-correct." **Two clocks:** the scanner's output is floor;
-  the model's inline invocation of it (pre-runner) is advisory orchestration, backstopped by the scanner's tests +
+  the model's inline invocation of it is advisory orchestration, backstopped by the scanner's tests +
   the eval.
 - **Is the missing await actually a BUG vs deliberate fire-and-forget? An imported async call? An async method?
   An assigned-then-unawaited result? A non-line-start call? Cross-file?** → **ADVISORY** / out of scope. Irreducible

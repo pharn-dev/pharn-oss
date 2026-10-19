@@ -9,8 +9,9 @@
 // real `SKILL.md` file (lstat). What changed is that the reasons an entry did NOT register, and the
 // failures the legacy loop swallowed, are now returned as diagnostics the legacy CLI discards.
 //
-// WHAT THE CATALOGUE IS FOR. The product stages `/pharn-build`, full `/pharn-grill` and each `/pharn-review`
-// lens used to read every listed `SKILL.md` in full. They now read this catalogue first and follow
+// WHAT THE CATALOGUE IS FOR. Before 6.47.0 the product stages `/pharn-build`, full `/pharn-grill` and each
+// `/pharn-review` lens read every listed `SKILL.md` in full. Now `/pharn-build`, full `/pharn-grill` and each
+// `/pharn-review` lens-group subagent read this catalogue first and follow
 // `pharn/pharn-core/installed-skill-selection/installed-skill-selection.md` to decide which bodies to read.
 // The selection is ADVISORY model work. Nothing here decides relevance, and nothing here gates.
 //

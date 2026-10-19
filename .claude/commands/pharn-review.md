@@ -365,7 +365,7 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   the assignment record — `merge-findings.mjs` (enum-regex over a closed `BACKSTOP_ENUM`). An unusable artifact, an
   uncovered lens, a map↔record disagreement or a file outside the record's `target` resolves to `unknown`. The label
   is a property of the **contributor**, never of the finding.
-- **Floor-grade enumeration that gates nothing:** the installed-skill catalogue each lens runs
+- **Floor-grade enumeration that gates nothing:** the installed-skill catalogue each lens group runs
   (`catalogue-installed-skills.mjs`). Which bodies a lens reads is ADVISORY selection; a skipped skill's convention can
   be missed, and a lens's `skills:` line is self-report.
 - **Floor: hook, through the fail-closed DEFAULT, not a declared scope:** with no scope file and the run marker open,

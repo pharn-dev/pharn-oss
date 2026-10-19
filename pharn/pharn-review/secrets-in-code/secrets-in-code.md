@@ -67,8 +67,9 @@ line; it does **not** decide the literal is a live/real secret vs a placeholder,
 whether the code is "secret-free". "Detected a secret-shaped literal" is a real guarantee; **"the code has
 no secrets" is not** — novel formats, encodings, or split literals evade a fixed regex set.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The isolated lens runner has
-> LANDED — `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json`
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The lens runner has
+> LANDED — `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each
+> lens writing its own `findings.json`
 > (the per-GRILLER runner is still deferred, P7) — but the lens's **act** of invoking the scanner is **advisory orchestration**,
 > backstopped by the scanner's own tests and this lens's eval. The guarantee is "the scanner IS
 > deterministic", not "the model always ran it".
@@ -145,7 +146,7 @@ audit; `LIMITS.md §2`).
   code text) → **FLOOR** (regex; `pharn/ARCHITECTURE.md §2` primitive #3), and **injection-immune by
   construction**. Named precisely: **"detects secret-literal patterns in the code deterministically."**
   Bounded: it detects a pattern, not "a real secret" and not "secure". **Two clocks:** the scanner's output
-  is floor; the model's inline invocation of it (pre-runner) is advisory orchestration, backstopped by the
+  is floor; the model's inline invocation of it is advisory orchestration, backstopped by the
   scanner's tests + the eval.
 - **Is a flagged literal a LIVE secret vs a placeholder? Is the code secret-free?** → **ADVISORY.**
   Irreducible judgment; surfaced, never gates.

@@ -141,6 +141,7 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
        └─ pharn-review        lenses (post-build review, one hunt each)
 .claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, review, memory-promote)
+.claude/agents/                                PHARN's subagent types: pharn-review-lens (/pharn-review's lens groups)
 ```
 
 - `pharn-contracts` is a separate **bottom**, not a leaf. This fixes the v1 inversion where the
@@ -158,7 +159,9 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
   make PHARN's most expensive-to-maintain artifact its default content.
 - **Stages live in commands, not in a module.** `spec → … → ship` are `.claude/commands/pharn-*`
   files; the modules under `pharn/` hold only the capabilities those stages invoke. The `pharn-dev-*`
-  twins are contributor apparatus (`.dev/`) and are not product surface.
+  twins are contributor apparatus (`.dev/`) and are not product surface. PHARN's own subagent types are
+  `.claude/agents/pharn-*.md` definitions, such as `pharn-review-lens` (`/pharn-review`'s lens groups): a
+  definition states a role and its fences, and the stage's prompt carries the task.
 
 > Caveat the build agent must respect: in markdown there is no `import` statement to lint, so "no
 > sibling imports" is partly a **convention** — a sibling reference is a path in `reads:` or a

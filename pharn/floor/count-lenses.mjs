@@ -2,7 +2,8 @@
 // pharn/floor/count-lenses.mjs — deterministic lens-MEMBERSHIP counter (CONSTITUTION P0/P5).
 //
 // Answers ONE structural question for a parallel /pharn-review: which capabilities DECLARE `role: lens`?
-// That set is exactly the lenses the review spawns (one subagent each) and whose findings.json the
+// That set is exactly the lenses the review assigns (run in family groups, one subagent per group) and whose
+// findings.json the
 // deterministic pharn/floor/merge-findings.mjs assembles. Membership is read ONLY from the `---`-fenced
 // YAML frontmatter — never a substring grep over file contents. A `role: lens` string in PROSE or a
 // fenced code block is DATA *about* lenses, not a declaration *of* one (the enum-gated / free-text split

@@ -84,8 +84,9 @@ cross-file all evade it. A `'…'`/`"…"` inside a **backtick template's text**
 (backticks are not masked). The scan is **single-file**. **This is NOT semantic/intent analysis** — that is the
 advisory layer, never this floor.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` — but
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The lens runner has LANDED —
+> `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each lens writing
+> its own `findings.json` — but
 > the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the scanner's own tests
 > and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model always ran it".
 
@@ -180,7 +181,7 @@ audit; `LIMITS.md §2`).
   is a decimal numeric literal not in {0,1,-1,2,10,100,1000}" and **(b)** "detects an equality operator whose right
   operand is a non-empty string literal." Bounded: it detects a SHAPE, not "this literal needs a name" and not "the
   code is magic-value-free." **Two clocks:** the scanner's output is floor; the model's inline invocation of it
-  (pre-runner) is advisory orchestration, backstopped by the scanner's tests + the eval.
+  is advisory orchestration, backstopped by the scanner's tests + the eval.
 - **Does the flagged literal actually NEED A NAME? The Yoda form? Arithmetic/index/call-arg literals? Non-decimal
   numbers? Relational-string compares? `switch`/`case` strings? Cross-file?** → **ADVISORY** / out of scope.
   Irreducible judgment; surfaced, never gates. **No semantic / intent analysis is claimed.**
