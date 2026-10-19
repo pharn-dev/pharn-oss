@@ -37,15 +37,10 @@ import { readFileSync, statSync, existsSync } from "node:fs";
 
 const TARGET = process.argv[2];
 
+/** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {
   process.stderr.write("scan-plan-observability: " + msg + "\n");
-  process.exit(1);
-}
-
-if (!TARGET) fail("usage: scan-plan-observability.mjs <plan-file>");
-// Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "no mentions") result.
-if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
-  fail(`target file not found (or not a regular file): ${TARGET}`);
+  return 1;
 }
 
 // The fixed observability-vocabulary set. Each entry is a deterministic, WORD-BOUNDARY-anchored regex + a
@@ -67,22 +62,35 @@ const TERMS = [
   { term: "slo-sli", re: /\bSL[OI]s?\b/ },
 ];
 
-let text;
-try {
-  text = readFileSync(TARGET, "utf8");
-} catch (e) {
-  fail(`could not read target: ${e.message}`);
-}
-
-const hits = [];
-const lines = text.split(/\r?\n/);
-for (let i = 0; i < lines.length; i++) {
-  for (const { term, re } of TERMS) {
-    if (re.test(lines[i])) hits.push({ line: i + 1, term });
+function main() {
+  if (!TARGET) return fail("usage: scan-plan-observability.mjs <plan-file>");
+  // Fail-closed (P5): a missing / non-file target is an ERROR, never a silent empty (= "no mentions") result.
+  if (!existsSync(TARGET) || !statSync(TARGET).isFile()) {
+    return fail(`target file not found (or not a regular file): ${TARGET}`);
   }
-}
-// Deterministic order: by line, then by term (a line matching >1 term yields >1 hit, stably ordered).
-hits.sort((a, b) => a.line - b.line || a.term.localeCompare(b.term));
 
-process.stdout.write(JSON.stringify({ mentions: hits.length > 0, hits }) + "\n");
-process.exit(0);
+  let text;
+  try {
+    text = readFileSync(TARGET, "utf8");
+  } catch (e) {
+    return fail(`could not read target: ${e.message}`);
+  }
+
+  const hits = [];
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    for (const { term, re } of TERMS) {
+      if (re.test(lines[i])) hits.push({ line: i + 1, term });
+    }
+  }
+  // Deterministic order: by line, then by term (a line matching >1 term yields >1 hit, stably ordered).
+  hits.sort((a, b) => a.line - b.line || a.term.localeCompare(b.term));
+
+  process.stdout.write(JSON.stringify({ mentions: hits.length > 0, hits }) + "\n");
+  return 0;
+}
+
+// THE FLUSH RULE (6.20.4; this CLI since 6.65.1, TST-5): the exit code is SET and the process ends naturally, after
+// Node has drained stdout — grill-scan.mjs JSON.parses this document through spawnSync, and an immediate exit
+// dropped queued writes past a pipe's 64 KiB buffer on darwin. pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();

@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.65.1] - 2026-10-19
+
+### Fixed
+
+- **`run-gates.mjs`, `count-verifiers.mjs` and the five `scan-plan-*.mjs` scanners no longer end with an immediate
+  `process.exit`, so a JSON document past 64 KiB reaches the floor caller that parses it whole (audit TST-5).** On
+  darwin, where piped stdout is asynchronous, the old ending cut each document at 65,536 bytes — measured on all
+  seven. Every caller (build-gate, stage-verify, stage-regress, stage-runtime and entry-gates for run-gates;
+  stage-verify for count-verifiers; grill-scan for the scanners) refused an unparseable document, so the failure was a
+  false refusal, never a false pass. run-gates now ends like stage-regress: `emit` sets `process.exitCode` and throws
+  a sentinel that only the top-level handler swallows. A crash still prints its stack and exits 2. `emit` still
+  releases the gate lock on every emission. A crash still leaves the lock, so the next call's stale-lock recovery
+  stops any orphaned gate group before it re-runs the entry. The other six set `process.exitCode = main()`. Exit
+  codes and output bytes are unchanged. `pharn/floor/cli-stdout-flush.test.mjs` now covers all seven: a static pin,
+  a crash test, and a >64 KiB pipe round-trip each. A new run-gates test checks that the lock is gone after a refusal
+  emitted while the lock was held. The test file's header claimed that every other floor CLI's spawner read only an
+  exit status or a first line. It now names the set's callers. It also names, as an open list, the parsed CLIs still
+  outside the set: `count-grillers`, `count-lenses` and `check-model-config`. Their documents are small, and
+  converting them is a follow-up.
+
 ## [6.65.0] - 2026-10-19
 
 ### Changed

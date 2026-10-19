@@ -36,14 +36,10 @@ const TARGET = process.argv[2] || ".";
 // and only the enumeration test ranges over it. Closure, not a second member.
 const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
 
+/** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {
   process.stderr.write("count-verifiers: " + msg + "\n");
-  process.exit(1);
-}
-
-// Fail-closed (P5): a missing / non-directory target is an ERROR, never a silent empty count.
-if (!existsSync(TARGET) || !statSync(TARGET).isDirectory()) {
-  fail(`target dir not found (or not a directory): ${TARGET}`);
+  return 1;
 }
 
 // Recursive *.md collector — mirrors pharn/floor/validate.mjs `walk`.
@@ -97,21 +93,33 @@ function frontmatterRole(text) {
   return role;
 }
 
-const verifiers = [];
-for (const file of walk(TARGET)) {
-  if (isExcluded(file)) continue;
-  let text;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    continue;
+function main() {
+  // Fail-closed (P5): a missing / non-directory target is an ERROR, never a silent empty count.
+  if (!existsSync(TARGET) || !statSync(TARGET).isDirectory()) {
+    return fail(`target dir not found (or not a directory): ${TARGET}`);
   }
-  // The ONLY membership test: enum equality against a frontmatter-gated field (P5). No content grep.
-  if (frontmatterRole(text) === "verifier") {
-    verifiers.push(relative(TARGET, file).replace(/\\/g, "/"));
-  }
-}
-verifiers.sort();
 
-process.stdout.write(JSON.stringify({ registered: verifiers.length, verifiers }) + "\n");
-process.exit(0);
+  const verifiers = [];
+  for (const file of walk(TARGET)) {
+    if (isExcluded(file)) continue;
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    // The ONLY membership test: enum equality against a frontmatter-gated field (P5). No content grep.
+    if (frontmatterRole(text) === "verifier") {
+      verifiers.push(relative(TARGET, file).replace(/\\/g, "/"));
+    }
+  }
+  verifiers.sort();
+
+  process.stdout.write(JSON.stringify({ registered: verifiers.length, verifiers }) + "\n");
+  return 0;
+}
+
+// THE FLUSH RULE (6.20.4; this CLI since 6.65.1, TST-5): the exit code is SET and the process ends naturally, after
+// Node has drained stdout — stage-verify.mjs JSON.parses this document through spawnSync, and an immediate exit
+// dropped queued writes past a pipe's 64 KiB buffer on darwin. pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();

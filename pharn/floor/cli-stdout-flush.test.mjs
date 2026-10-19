@@ -6,15 +6,24 @@
 // spawnSync (a pipe) and JSON.parses the output — so a feature with many AC tests read "unusable" there on every
 // iteration (the review measured 75,785 bytes to a file, 65,536 through a pipe).
 //
-// THE SET (L29 — the enumeration is the deliverable): the floor CLIs whose stdout a FLOOR spawnSync caller PARSES —
+// THE SET (L29 — the enumeration is the deliverable): floor CLIs whose stdout a FLOOR spawnSync caller PARSES —
 // check-verify and check-regress (check-loop-fresh.mjs check E), check-loop (check-loop-decision.mjs) — plus
-// check-red-run, which the review named (its `--verdict` lists every failed test per AC). Every other floor CLI's
-// spawner reads only its exit status or first line, which a 64 KiB cut cannot reach.
+// check-red-run, which the review named (its `--verdict` lists every failed test per AC).
 // Since review-fanout the set also holds EVERY code scanner (`scan-code-*.mjs`): render-review-assignments.mjs
 // JSON-parses each one's `--files` batch document, which over a large target is far past 64 KiB, and a cut document
 // would turn every file of that lens into a scanner error. Their rows are DERIVED from lens-scanner-map.json and
 // asserted set-equal to the scanners on disk (L36), never hand-listed. A scanner ends `process.exitCode =
 // runScannerCli(…)` (form "scanner"), and its crash preload replaces `process.stdout.write`, the call it prints with.
+// Since 6.65.1 (audit TST-5) the set also holds run-gates (JSON-parsed by build-gate, stage-verify, stage-regress,
+// stage-runtime and entry-gates; form "sentinel-async", and it crashes with exit 2, its runner-error code),
+// count-verifiers (stage-verify) and the five plan scanners `scan-plan-*.mjs` (grill-scan), whose rows are derived
+// from the files on disk (form "main": `process.exitCode = main();`). Until then this header said every other floor
+// CLI's spawner read only an exit status or a first line, which was false for all seven.
+// NOT EVERY PARSED CLI IS HERE, and the list of the known ones outside it is OPEN (L47), never a count: a caller sweep
+// at 6.65.1 also found count-grillers (griller-extract.mjs), count-lenses (render-review-assignments.mjs,
+// check-review-assignments.mjs) and check-model-config (stage-agent-core.mjs) JSON-parsed and still ending with an
+// immediate exit. Their documents are a griller list, a lens list and one {model, effort} pair — bounded by what is
+// installed, not by the input — and converting them is a named follow-up, not done here.
 //
 // WHAT THIS FILE CAN AND CANNOT PROVE, stated because it is not obvious:
 //   * The STATIC pin (no code line calls `process.exit(`) is the platform-independent guard — and a PROXY.
@@ -49,21 +58,43 @@ const SCAN_FIXTURE = join(SCAN_FIXTURE_DIR, "fixture.js");
 writeFileSync(SCAN_FIXTURE, 'const k = "AKIAIOSFODNN7EXAMPLE";\n');
 process.on("exit", () => rmSync(SCAN_FIXTURE_DIR, { recursive: true, force: true }));
 
-/** THE SET. `form` is how the CLI ends; `crashArgs` reach a print on the first code path (bad usage, or a scan). */
+/** The plan scanners, from disk (THE SET's second derived half), each with one line it reports as a hit — the
+ *  >64 KiB recipe below repeats it. A scanner added on disk without a hit line here fails the closure test. */
+const onDiskCli = (prefix) =>
+  readdirSync(HERE)
+    .filter((f) => f.startsWith(prefix) && f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
+    .sort();
+const PLAN_SCANNERS = onDiskCli("scan-plan-");
+const PLAN_HIT_LINE = {
+  "scan-plan-i18n.mjs": "<button>Delete Account</button>",
+  "scan-plan-migrations.mjs": "run the migration",
+  "scan-plan-observability.mjs": "add logging",
+  "scan-plan-pii.mjs": "contact: someone@example.com",
+  "scan-plan-secrets.mjs": 'const k = "AKIAIOSFODNN7EXAMPLE";',
+};
+
+/** THE SET. `form` is how the CLI ends; `crashArgs` reach a print on the first code path (bad usage, or a scan);
+ *  `print` is the call the CLI prints its document with (the crash preload replaces it); `crashStatus` is the exit a
+ *  crash ends with (1, node's own, unless the CLI catches the crash and sets its documented runner-error code). */
 const FLUSH_CLIS = [
   { file: "check-verify.mjs", form: "sentinel", crashArgs: [] },
   { file: "check-regress.mjs", form: "sentinel", crashArgs: [] },
   { file: "check-loop.mjs", form: "sentinel", crashArgs: [] },
   { file: "check-red-run.mjs", form: "exitCode", crashArgs: [] },
-  ...SCANNERS.map((file) => ({ file, form: "scanner", crashArgs: [SCAN_FIXTURE] })),
+  { file: "run-gates.mjs", form: "sentinel-async", crashArgs: [], crashStatus: 2 },
+  { file: "count-verifiers.mjs", form: "main", print: "write", crashArgs: [SCAN_FIXTURE_DIR] },
+  ...PLAN_SCANNERS.map((file) => ({ file, form: "main", print: "write", crashArgs: [SCAN_FIXTURE] })),
+  ...SCANNERS.map((file) => ({ file, form: "scanner", print: "write", crashArgs: [SCAN_FIXTURE] })),
 ];
 
 test("✧ THE SET's scanner rows are exactly the scan-code-*.mjs files on disk (L36 — derived, never hand-listed)", () => {
-  const onDisk = readdirSync(HERE)
-    .filter((f) => f.startsWith("scan-code-") && f.endsWith(".mjs") && !f.endsWith(".test.mjs"))
-    .sort();
   assert.ok(SCANNERS.length >= 18, `${SCANNERS.length} scanner row(s)`);
-  assert.deepEqual(SCANNERS, onDisk);
+  assert.deepEqual(SCANNERS, onDiskCli("scan-code-"));
+});
+
+test("✧ THE SET's plan-scanner rows are the scan-plan-*.mjs files on disk, each with a hit line (L36)", () => {
+  assert.ok(PLAN_SCANNERS.length >= 5, `${PLAN_SCANNERS.length} plan scanner row(s)`);
+  assert.deepEqual(Object.keys(PLAN_HIT_LINE).sort(), PLAN_SCANNERS);
 });
 
 /** Code lines only: a line whose first non-blank characters open a comment is prose, and the fix's own rationale
@@ -78,8 +109,13 @@ test("✧ STATIC PIN — no code line of a CLI in the set ends the process with 
     if (form === "sentinel") {
       assert.match(src, /process\.exitCode = code;\n\s*throw EMITTED;/, `${file}: emit sets exitCode, then unwinds`);
       assert.match(src, /catch \(e\) \{\n\s*if \(e !== EMITTED\) throw e;\n\s*\}/, `${file}: the catch swallows ONLY the sentinel`);
+    } else if (form === "sentinel-async") {
+      assert.match(src, /process\.exitCode = code;\n\s*throw EMITTED;/, `${file}: emit sets exitCode, then unwinds`);
+      assert.match(src, /\.catch\(\(e\) => \{\n\s*if \(e === EMITTED\) return;/, `${file}: the rejection handler passes ONLY the sentinel`);
     } else if (form === "scanner") {
       assert.match(src, /process\.exitCode = runScannerCli\(/, `${file}: the exit code is set from the shared front end, never forced`);
+    } else if (form === "main") {
+      assert.match(src, /^process\.exitCode = main\(\);$/m, `${file}: the exit code is set, never forced`);
     } else {
       assert.match(src, /process\.exitCode = main\(process\.argv\);/, `${file}: the exit code is set, never forced`);
     }
@@ -92,20 +128,24 @@ test("✧ STATIC PIN — no code line of a CLI in the set ends the process with 
 test("★ a crash stays a crash — a non-sentinel throw exits non-zero with its stack and prints no verdict (GATE-1 condition 1)", () => {
   // No CLI in the set has a natural input that throws inside main() (every read is caught into a verdict), so a
   // preload makes the CLI's print call itself throw — console.log for the checkers (the first thing each does on its
-  // bad-usage path), process.stdout.write for the scanners (console.log would swallow a throwing write, and the
-  // scanners never call it).
+  // bad-usage path), process.stdout.write for the rows whose `print` says so (console.log would swallow a throwing
+  // write, and those CLIs never call it).
   const preloads = {
     console: 'data:text/javascript,console.log=()=>{throw new Error("pharn-test-crash")}',
     write: 'data:text/javascript,process.stdout.write=()=>{throw new Error("pharn-test-crash")}',
   };
-  for (const { file, form, crashArgs } of FLUSH_CLIS) {
-    const preload = form === "scanner" ? preloads.write : preloads.console;
+  for (const { file, print = "console", crashArgs, crashStatus = 1 } of FLUSH_CLIS) {
+    const preload = preloads[print];
     const script = join(HERE, file);
     const normal = spawnSync(process.execPath, [script, ...crashArgs], { encoding: "utf8" });
-    assert.notEqual(normal.status, 1, `${file}: the control's own exit must differ from a crash's, or this proves nothing`);
+    // run-gates' crash exit (2) is also its usage refusal's, so there the control differs from the crash by its
+    // printed document alone — asserted for every row on the next line, and on the crash's empty stdout below.
+    if (crashStatus === 1)
+      assert.notEqual(normal.status, 1, `${file}: the control's own exit must differ from a crash's, or this proves nothing`);
     assert.notEqual(normal.stdout, "", `${file}: the control prints its usage verdict`);
+    assert.doesNotMatch(normal.stderr, /pharn-test-crash/, `${file}: the control did not crash`);
     const crashed = spawnSync(process.execPath, ["--import", preload, script, ...crashArgs], { encoding: "utf8" });
-    assert.equal(crashed.status, 1, `${file}: exit ${crashed.status} — the crash was swallowed`);
+    assert.equal(crashed.status, crashStatus, `${file}: exit ${crashed.status} — the crash was swallowed`);
     assert.match(crashed.stderr, /Error: pharn-test-crash/, `${file}: the stack reaches stderr`);
     assert.equal(crashed.stdout, "", `${file}: no verdict printed`);
   }
@@ -156,6 +196,64 @@ test("★ check-regress — a >64 KiB `verdict` reaches a pipe whole", (t) => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("★ run-gates — a >64 KiB refusal document reaches a pipe whole (6.65.1, TST-5)", (t) => {
+  // The one input-sized field a run-gates document carries is a refusal's `reason`; `--ac-tests` echoes its operand
+  // there when the path is not the feature's mapping, and nothing is read, written or locked before that refusal.
+  const dir = mkdtempSync(join(tmpdir(), "flush-rg-"));
+  try {
+    const acTests = `${"a/".repeat(36000)}AC-TESTS.md`;
+    const args = ["init", "--stage", "ac-test", "--feature", "f", "--out", ".pharn/g", "--discover", "package.json", "--ac-tests", acTests];
+    const r = spawnSync(process.execPath, [join(HERE, "run-gates.mjs"), ...args], { cwd: dir, encoding: "utf8" });
+    const bytes = Buffer.byteLength(r.stdout);
+    assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+    const doc = JSON.parse(r.stdout);
+    assert.equal(r.status, 2, r.stderr);
+    assert.equal(doc.reason_code, "usage-error");
+    assert.ok(doc.reason.includes(JSON.stringify(acTests)), "the whole operand is in the reason");
+    t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ count-verifiers — a >64 KiB membership document reaches a pipe whole (6.65.1, TST-5)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "flush-cvf-"));
+  try {
+    const names = Array.from({ length: 800 }, (_, i) => `verifier-${"x".repeat(80)}-${String(i).padStart(4, "0")}.md`);
+    for (const n of names) writeFileSync(join(dir, n), "---\nrole: verifier\n---\n");
+    const r = spawnSync(process.execPath, [join(HERE, "count-verifiers.mjs"), dir], { encoding: "utf8" });
+    const bytes = Buffer.byteLength(r.stdout);
+    assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+    assert.equal(r.status, 0, r.stderr);
+    const doc = JSON.parse(r.stdout);
+    assert.equal(doc.registered, 800);
+    assert.deepEqual(doc.verifiers, names);
+    t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+for (const scanner of PLAN_SCANNERS) {
+  test(`★ ${scanner} — a >64 KiB hit document reaches a pipe whole (6.65.1, TST-5)`, (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "flush-plan-"));
+    try {
+      const plan = join(dir, "PLAN.md");
+      writeFileSync(plan, `${Array.from({ length: 3000 }, () => PLAN_HIT_LINE[scanner]).join("\n")}\n`);
+      const r = spawnSync(process.execPath, [join(HERE, scanner), plan], { encoding: "utf8" });
+      const bytes = Buffer.byteLength(r.stdout);
+      assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+      assert.equal(r.status, 0, r.stderr);
+      const doc = JSON.parse(r.stdout);
+      assert.ok(doc.hits.length >= 3000, `every line is a hit (${doc.hits.length})`);
+      assert.equal(doc.hits.at(-1).line, 3000, "the last line's hit arrived");
+      t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
 
 for (const scanner of SCANNERS) {
   test(`★ ${scanner} — a >64 KiB --files batch document reaches a pipe whole`, (t) => {
