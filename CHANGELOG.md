@@ -23,6 +23,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-19: **A pull request that changes a shipped product path now has to bump `SKILLS_VERSION`, or CI
+  fails** (audit 2026-10-12, ARCH-2). Before this, the rule was kept by care alone. `check:changelog-entry` compares
+  CHANGELOG text, and `check:changelog` and `check:badge` check that the copies of the version agree. None of them
+  compared a PR's changed paths with the product surface, so a product edit with only an `[Unreleased]` entry passed
+  every gate. That happened three times: `6c5ae8e`, `e4e8529` and `c338b9d` (lessons-learned L43).
+  - New `.dev/floor/check-surface-bump.mjs` lists the PR's own changed paths: its diff from the merge commit's first
+    parent in CI, or from the merge-base with `origin/main` locally, plus uncommitted and untracked files. If any
+    path is in the product surface and `SKILLS_VERSION` is unchanged, it fails with `NOT_BUMPED`. Files that a merge
+    from `main` brought in do not count, and a bump made in a different commit of the same PR does.
+  - The product surface is one constant, and a test binds it to the list in `CLAUDE.md` ("SKILLS_VERSION
+    discipline"), so neither can change alone. That list was rewritten as exact path patterns. It also gains
+    `pharn/floor/*.json`, the shipped data files (`lens-family-map.json`, `lens-scanner-map.json`,
+    `reconcile-ignore.json`) that the floor's checkers read at run time. `pharn/floor/README.md` stays out until the
+    maintainer confirms whether the installer ships it.
+  - Wired as `npm run check:surface-bump` (not in `npm run check`, because it needs a base) and as the CI step
+    "SKILLS_VERSION surface-bump check" on pull requests. Its test executes the committed CI lines in a shallow
+    checkout of a test merge commit.
+  - Measured before the build against the last 40 commits on `main`: 33 changed the product surface and all of them
+    bumped, and 7 changed none, so 0 false positives. Each of the three earlier misses fails the check.
+  - Bounds: the check proves only that `SKILLS_VERSION` moved. It does not prove the bump is the right size, or that
+    the listed set is exactly what an install receives. The new version's CHANGELOG section is checked by
+    `check:changelog` and `check:changelog-entry`. Direct pushes to `main` and admin merges skip it. Running it in
+    `/pharn-dev-ship` Step 2c is the follow-up `dev-ship-surface-bump`. Apparatus and repo meta only, so there is no
+    `SKILLS_VERSION` bump.
+
 ## [6.65.2] - 2026-10-19
 
 ### Fixed

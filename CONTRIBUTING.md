@@ -125,7 +125,16 @@ Two checks hold these rules. Both read the file through one shared grammar, [`.d
   npm run check:changelog-entry
   ```
 
-What the checks do **not** prove: that an entry describes its change, that a date is when anything merged (it is the date you wrote), or that a bump was needed or the right size. The per-PR check is also bounded in four ways:
+- **`check:surface-bump`** — **not** in `npm run check`, for the same reason. It REDs a PR that changes a path in the bump-triggering product surface and leaves `SKILLS_VERSION` unchanged. The path set is the list in [`CLAUDE.md`](./CLAUDE.md) ("SKILLS_VERSION discipline"), held as one constant in [`.dev/floor/check-surface-bump.mjs`](./.dev/floor/check-surface-bump.mjs) and bound to that list by a test, so change both together. Only the PR's own diff counts: CI compares against the merge commit's first parent, and locally the script compares against the merge-base with `origin/main`, so files a merge from `main` brought in are not yours. Your uncommitted and untracked files count. Run it the same way, after fetching:
+
+  ```bash
+  git fetch --no-tags origin main
+  npm run check:surface-bump
+  ```
+
+  It checks only that `SKILLS_VERSION` moved. The new version's CHANGELOG section is checked by the two checks above, and the size of the bump is not checked at all.
+
+What the checks do **not** prove: that an entry describes its change, that a date is when anything merged (it is the date you wrote), or that a bump was needed or the right size. The per-PR checks are also bounded in four ways:
 
 - It does not see direct pushes to `main`.
 - An admin merge bypasses required checks.

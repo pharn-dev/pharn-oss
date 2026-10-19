@@ -77,12 +77,15 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   every `*.test.*` file (the checkers' tests never ship). Pure repo-meta (`README` / `CHANGELOG` /
   `SECURITY` / `CONTRIBUTING` / `LICENSE` / CI / `package.json` / `SKILLS_VERSION` itself) does not
   bump either — it is not methodology a user runs.
-- **The bump-triggering set (the product surface), concretely:** the `pharn/` capability tree
-  (`pharn/pharn-contracts/`, `pharn/pharn-core/`, `pharn/pharn-pipeline/grillers/`,
-  `pharn/pharn-review/`); the product-floor checkers `pharn/floor/*.mjs` (not their `*.test.mjs`); the
-  four trusted docs (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`, `THREAT-MODEL.md`, `LIMITS.md`);
-  and the product `.claude/` surface (`pharn-*` — non-`pharn-dev-*` — commands, `.cjs` hooks,
-  `settings.json`, `.claude/agents/pharn-*.md`).
+- **The bump-triggering set (the product surface), concretely:** the capability tree
+  `pharn/pharn-contracts/**`, `pharn/pharn-core/**`, `pharn/pharn-pipeline/grillers/**` and
+  `pharn/pharn-review/**`; the product floor's checkers and data, `pharn/floor/*.mjs` and
+  `pharn/floor/*.json`; the four trusted docs `pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`,
+  `THREAT-MODEL.md` and `LIMITS.md`; and the product .claude surface `.claude/commands/pharn-*.md`,
+  `.claude/hooks/*.cjs`, `.claude/settings.json` and `.claude/agents/pharn-*.md`. **Never in it, even
+  inside those:** `**/*.test.*` and `.claude/commands/pharn-dev-*.md`. **Checked:** on a pull request,
+  `check:surface-bump` REDs a change to such a path that leaves `SKILLS_VERSION` unchanged; its one
+  constant is bound to the two lists above by a test, so edit both together.
 - **Bump size (SemVer over the product surface):** **patch** = a correction/clarification to bytes that
   already shipped; **minor** = a newly shipped capability / command / checker; **major** = a breaking
   shape change (a contract / finding-shape / frontmatter change that invalidates existing installs).
@@ -154,9 +157,11 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live
-  (`npm test`), never assert it from this doc (P6). One CHANGELOG gate is deliberately **outside** the
-  chain: `npm run check:changelog-entry` (`.dev/floor/check-changelog-entry.mjs`, the per-PR diff) needs a
-  base to compare against. CI runs it on pull requests only, against the merge commit's first parent.
+  (`npm test`), never assert it from this doc (P6). Two per-PR gates are deliberately **outside** the
+  chain because each needs a base to compare against: `npm run check:changelog-entry`
+  (`.dev/floor/check-changelog-entry.mjs`, the CHANGELOG diff) and `npm run check:surface-bump`
+  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`). CI runs both on pull requests
+  only, against the merge commit's first parent.
 - `node pharn/floor/validate.mjs .` reports `GREEN` over the product surface — the `pharn/pharn-review/*`
   code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and the `pharn/pharn-core/` skills
   (`seam-resolver/`, `installed-skill-selection/`), over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.
