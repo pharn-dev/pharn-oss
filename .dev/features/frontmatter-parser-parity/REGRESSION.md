@@ -1,14 +1,34 @@
 # REGRESSION — frontmatter-parser-parity
 
-- base: `d5453a170a68a1b7842bf633b8638eb02dcd61cb` (HEAD; the tree is a dirty working-tree build, so base = HEAD)
-- machine report: `regression-report.json` (`check-regress.mjs verdict`, verbatim; sha256 `b7e934fd…93d0`)
-- partition: `check-regress.mjs scope --feature frontmatter-parser-parity` → exit 0; 37 inside paths, 35 declared, 148
-  outside tests of 162, one outside eval pair; `escape_exempt` = this feature's `PLAN.md` and `GRILL.md`
 - orchestration: Steps 1–3 ran from one node runner (`.pharn/pharn-dev-regress/capture.mjs`), with every subprocess
   spawned from an argv array. The pinned `xargs` / `$?` shell forms are refused in this isolated worktree. This is
   advisory orchestration; the verdict is the checker's.
+- machine report: `regression-report.json` records **run 3** (`check-regress.mjs verdict`, verbatim; sha256
+  `5d0ca98e…344f`).
 
-## Run 2 (the one `regression-report.json` records)
+## Run 3 (the one `regression-report.json` records) — after the GATE 2 fix round and the merge of `origin/main`
+
+- base: `94ad252baef07e219db9adfccad83df2c40e2e58` (`origin/main` at 6.64.3, #359). The tree was clean and committed,
+  so base = `git merge-base HEAD origin/main`.
+- partition: `check-regress.mjs scope --feature frontmatter-parser-parity` → exit 0; 42 inside paths, 36 declared,
+  149 outside tests of 163, one outside eval pair. `escape_exempt` = this feature's seven stage artifacts.
+
+| gate                                                                                       | base | head |
+| ------------------------------------------------------------------------------------------ | ---- | ---- |
+| `tests` (149 outside test files, one `node --test` run)                                    | 1    | 1    |
+| `validate`                                                                                 | 0    | 0    |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    | 0    |
+
+- `regressions`: none. `pre_existing`: `tests`.
+- The logs, read because the gate is one exit code for the whole suite:
+  - base: 1 of 5154 failed, `★ budget clock — …` (32.6 s), the same timing test as runs 1 and 2.
+  - head: 1 of 5154 failed, a different timing test in `pharn/floor/stage-regress.test.mjs` (`never recorded — a
+timed-out base gate …`, 28.5 s). Run alone, it passes (2/2 matching tests). This increment does not touch that file
+    or the code it runs. The machine's load average was 140–270 during the run.
+
+**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.**
+
+## Run 2 (superseded by run 3) — base `d5453a17`, HEAD of a dirty working-tree build
 
 | gate                                                                                       | base | head |
 | ------------------------------------------------------------------------------------------ | ---- | ---- |
@@ -25,7 +45,7 @@ HITs first …`.
   - head: 1 of 5141 failed, the same `budget clock` test (32.9 s). Run alone, it passes (1/1).
   - No head failure is new. Both logs were read to confirm that, because the gate is one exit code for the whole suite.
 
-**REGRESSIONS: none — no deterministically-detectable breakage outside the feature.**
+Run 2's verdict was `no-regressions`, and its machine report is superseded by run 3's.
 
 ## Run 1 (superseded; kept because it found a real regression the verdict did not show)
 

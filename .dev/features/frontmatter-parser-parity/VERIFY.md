@@ -5,7 +5,35 @@
   spawned from an argv array. The pinned `$?` capture form is refused in this isolated worktree. This is advisory
   orchestration; the verdict is the checker's.
 
-## Run 2 (the one `verify-report.json` records)
+## Run 4 (the one `verify-report.json` records) — the final tree, after the GATE 2 fix round and the merge of `origin/main`
+
+| gate                                                                                       | exit |
+| ------------------------------------------------------------------------------------------ | ---- |
+| `test` (`npm test`: 5572 tests, 5564 pass, 7 fail)                                         | 1    |
+| `validate`                                                                                 | 0    |
+| `lint`                                                                                     | 0    |
+| `format:check`                                                                             | 0    |
+| `lint:md`                                                                                  | 0    |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    |
+| `reconcile` (`--require-baseline`: `CLEAN`, 46 reconciled, 0 escapes; 12 paths `merged`)   | 0    |
+
+**VERIFY FAILS: gate(s) `test` red — stage FAILS.**
+
+That is the checker's verdict, and it stands. Here is what the 7 failures are, read from `.pharn/pharn-dev-verify/test.log`
+(this reading is not an input to the verdict):
+
+- Each is a slow integration test, taking 31–103 s, in one of `pharn/floor/entry-base-evidence.test.mjs`,
+  `entry-gates.test.mjs`, `stage-verify.test.mjs` or `stage-regress.test.mjs`.
+- This increment changes none of those four files, and none of the code they time.
+- The machine's load average was 48–272 during the run, with several other sessions running suites.
+- Some of the same tests failed at the untouched base in regress runs 1–3, and subsets run alone passed (runs 3 and 1
+  below).
+
+Run 3 ran the same final tree an hour earlier. It failed the same way, on 2 of these tests (`budget clock …` and
+`never recorded — a timed-out base gate …`), and those two passed 4/4 when run alone. The next measurement of this gate
+is a clean CI runner. This report does not claim it will pass.
+
+## Run 2 (superseded — the pre-merge tree before the GATE 2 fix round)
 
 | gate                                                                                              | exit |
 | ------------------------------------------------------------------------------------------------- | ---- |
@@ -21,7 +49,7 @@ The two exemptions `reconcile` lists are this feature's `REGRESSION.md` and `reg
 fix round's anchor (`2026-10-19T12:25:39Z`). The first build window was reconciled separately before the fix round,
 also `CLEAN` (33 reconciled, 0 escapes); see PLAN `## Amendment 1`.
 
-**VERIFIED: floor gates PASS.**
+Run 2's verdict was **PASS** (every gate 0) on the tree before the GATE 2 fix round and the merge.
 
 ## Run 1 (superseded)
 
