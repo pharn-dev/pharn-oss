@@ -1,0 +1,53 @@
+{
+  "base": "c47707e62d5cd72f3e581ea49508ff3aa7e97bb8",
+  "inside": [
+    ".claude/commands/pharn-review.md",
+    ".dev/features/subagent-per-lens-sweep/GRILL.md",
+    ".dev/features/subagent-per-lens-sweep/PLAN.md",
+    "CHANGELOG.md",
+    "LIMITS.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "THREAT-MODEL.md",
+    "pharn/ARCHITECTURE.md",
+    "pharn/floor/catalogue-installed-skills.mjs",
+    "pharn/floor/count-lenses.mjs",
+    "pharn/floor/merge-findings.mjs",
+    "pharn/pharn-review/copy-paste-drift/copy-paste-drift.md",
+    "pharn/pharn-review/duplicated-logic/duplicated-logic.md",
+    "pharn/pharn-review/injection/injection.md",
+    "pharn/pharn-review/insecure-crypto/insecure-crypto.md",
+    "pharn/pharn-review/magic-values/magic-values.md",
+    "pharn/pharn-review/missing-await/missing-await.md",
+    "pharn/pharn-review/missing-error-handling/missing-error-handling.md",
+    "pharn/pharn-review/missing-timeout/missing-timeout.md",
+    "pharn/pharn-review/n-plus-one/n-plus-one.md",
+    "pharn/pharn-review/null-deref/null-deref.md",
+    "pharn/pharn-review/off-by-one/off-by-one.md",
+    "pharn/pharn-review/path-traversal/path-traversal.md",
+    "pharn/pharn-review/placeholder-as-done/placeholder-as-done.md",
+    "pharn/pharn-review/race-condition/race-condition.md",
+    "pharn/pharn-review/resource-leak/resource-leak.md",
+    "pharn/pharn-review/secrets-in-code/secrets-in-code.md",
+    "pharn/pharn-review/ssrf/ssrf.md",
+    "pharn/pharn-review/swallowed-exception/swallowed-exception.md",
+    "pharn/pharn-review/unsafe-deserialization/unsafe-deserialization.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
