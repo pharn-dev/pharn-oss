@@ -693,3 +693,24 @@ The fix round:
   becomes the lens-group subagent, matching E8 and H5.
 - **R4** — the CHANGELOG `[6.64.2]` entry, which stays 6.64.2: the count (152 line hits of the 15 pinned patterns plus 1
   line-wrap hit = 153 rows), the two sentences the patterns missed, and the follow-up `lens-spawn-cite`.
+
+**Results of fix round 1** (recorded after its verify):
+
+- **Plan and anchor.** Commit `3ca01062` holds this section and the two `## Files` lines. Then build Step 0 ran: the
+  setter printed 28 paths and `--anchor` re-anchored (2,998 paths hashed, scope of 28 entries). The spec hash
+  `2c84959c…` still equals the pin.
+- **The count, re-verified.** At `c47707e` the 15 pinned greps give the same per-pattern counts as the table and 152
+  distinct `path:line` hits. `.claude/commands/pharn-review.md:23` is not among them: its P3/R2 match ("own parallel" /
+  "subagent") spans lines 23–24.
+- **Build `09744eb0`.**
+  - R2 changes the `doc` string only, and no test pins it.
+  - R3 rewrites `installed-skills-core.mjs:12–15`. No `.dev/guides/floor-*.md` section exists for that file.
+  - R4 corrects the CHANGELOG entry.
+  - Step 2b (prettier 28 paths, markdownlint 22, eslint 4), `format:check`, `lint:md`, `lint` and `docs:check` all
+    exit 0.
+- **Greps.** The post-build greps and one grep each for R2's old text ("its subagent reads only those") and R3's ("They
+  now read this catalogue first") return no hit. `(pre-runner)` remains only in the three grillers, and the
+  trusted-doc digests are unchanged.
+- **Floor.** `validate` is GREEN, 37 capabilities, exit 0.
+- **Regress `0e26688d`.** `no-regressions`, base `c47707e`, 38 inside paths, `escaped: []`.
+- **Verify.** `PASS`, `failing_gates: []`. Reconcile is `CLEAN` over the new epoch (3 paths reconciled, no escapes).
