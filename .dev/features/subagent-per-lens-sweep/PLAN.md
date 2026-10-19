@@ -624,3 +624,41 @@ otherwise.
    in `catalogue-installed-skills.mjs`.
 4. **The spec pin.** Pin the post-patch `pharn/ARCHITECTURE.md` hash (so build Step 1 checks the human's bytes), or pin
    the live hash and re-pin after the patch? **Default: post-patch pin, with the patch committed before grill.**
+
+## GATE 1 — decided by the human (2026-10-19; appended below the approved text, not part of it)
+
+Everything above this heading is the plan as committed in `50497b60` (`wip(subagent-per-lens-sweep): plan`): sha256
+`f98eb74365c08d6651206e6e0277205ec22c925abe72101ce973c49d7fb6d67b`, 47,275 bytes, recomputed over the file before this
+section was appended. Nothing above was edited.
+
+**The approval was given in advance.** On 2026-10-19 the maintainer wrote, in the orchestrator's conversation, "1. I
+approve the plan." The plan agent had not yet written this PLAN.md when they wrote it, so this records an approval of the
+plan's intent given before its text existed, not an approval of text the maintainer had read.
+
+In the same message the maintainer asked that every file the agent cannot write (the trusted docs) be changed by a
+Python patch script that they run themselves. The orchestrator then told them it would take the four `## Open questions
+(HALT)` defaults (Q1 yes, Q2 leave, Q3 patch H5, Q4 post-patch pin). They raised no objection, and they ran the patch,
+H5 included.
+
+**The human-applied trusted-doc patch (landed before the build anchor, L68).** The orchestrator generated a script from
+`## Human-applied trusted-doc patch` (H1–H5). The maintainer ran it on a scratch checkout of
+`feat/subagent-per-lens-sweep`; its output reported all five blocks applied, with digests ARCHITECTURE `2c84959c…`,
+LIMITS `94805c21…` and THREAT-MODEL `ec0c9c78…`. The orchestrator checked those digests with `.dev/floor/hash-doc.mjs`,
+committed the three docs as `125ff0fe` (`docs(trusted): human-applied patch H1–H5 for subagent-per-lens-sweep`), and
+deleted the script. Re-checked in the stage worktree at `125ff0fe`: `node .dev/floor/hash-doc.mjs` prints
+`2c84959cbca0b2dc51aaad90f90d40e574732c9c5c83c0bda7e1481ecb0db12e` for `pharn/ARCHITECTURE.md` (equal to this plan's
+`spec_content_hash`), `94805c21eaff406df8a30fba6976da2a5cdefd9ea992d039bd61ee19a946759b` for `LIMITS.md` and
+`ec0c9c789d367d7a5aa848249791d758dc1a4619d32141e05b30dc64caeec52c` for `THREAT-MODEL.md`, the three post-patch digests in
+the table above. `git diff c47707e 125ff0fe` over the three files shows exactly the H1–H5 After blocks.
+
+**The `## Open questions (HALT)` list above is resolved. No question is open.** Each takes its default:
+
+1. Q1 (E2's reach) → **yes**: E2 drops `(pre-runner)` in the 16 lens bodies.
+2. Q2 (the four "lenses run in parallel" summaries) → **leave**: `pharn-review.md:2`, `:20`, `README.md:316` and `:494`
+   stay as still-true.
+3. Q3 (H5) → **patch**: applied by the maintainer in `125ff0fe`.
+4. Q4 (the spec pin) → **post-patch pin**, with the patch committed before grill: `spec_content_hash` stays
+   `2c84959c…`, and build Step 1 checks the human's bytes against it.
+
+State at this record: `origin/main` is `c47707e` (fetched 2026-10-19), so the plan's 6.64.1 → 6.64.2 bump and its pin
+stand. `## Files` is unchanged by this record.
