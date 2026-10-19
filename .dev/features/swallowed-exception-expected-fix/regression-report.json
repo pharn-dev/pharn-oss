@@ -3,6 +3,11 @@
   "inside": [
     ".dev/features/swallowed-exception-expected-fix/GRILL.md",
     ".dev/features/swallowed-exception-expected-fix/PLAN.md",
+    ".dev/features/swallowed-exception-expected-fix/REGRESSION.md",
+    ".dev/features/swallowed-exception-expected-fix/REVIEW.md",
+    ".dev/features/swallowed-exception-expected-fix/VERIFY.md",
+    ".dev/features/swallowed-exception-expected-fix/regression-report.json",
+    ".dev/features/swallowed-exception-expected-fix/verify-report.json",
     ".dev/floor/eval-expected-satisfiable.test.mjs",
     "CHANGELOG.md",
     "README.md",

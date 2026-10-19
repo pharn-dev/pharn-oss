@@ -1,8 +1,10 @@
 # VERIFY — swallowed-exception-expected-fix
 
-Verified at HEAD `79b4fdd` (the build commit `ea09d57` plus the regress artifacts), in the working tree. Verdict helper:
+Re-run after the GATE 2 fix round (A1–A3), at HEAD `2d91080` plus this round's uncommitted regress artifacts, in the
+working tree. It replaces the first run's report (at `79b4fdd`, also `PASS`). Verdict helper:
 `node pharn/floor/check-verify.mjs .pharn/pharn-dev-verify/results.json --feature swallowed-exception-expected-fix` →
 exit 0. The machine report is `verify-report.json` (the helper's stdout, verbatim, plus the advisory `verifiers` block).
+Its bytes are unchanged, because this run's gates and verdict are identical to the first run's.
 
 ## Floor gates
 
@@ -19,15 +21,17 @@ exit 0. The machine report is `verify-report.json` (the helper's stdout, verbati
 **VERIFIED: floor gates PASS.** `failing_gates`: none.
 
 - `test`: 5,546 tests, 5,545 passed, 0 failed, 1 skipped. That is the 5,542 the regress outside suite ran plus the four
-  new tests in `.dev/floor/eval-expected-satisfiable.test.mjs`, the feature's own correctness signal: every one of the
-  111 `pharn/**/evals/expected/*.json` files is passed by its witness, and the fixed swallowed-exception eval is among
+  tests in `.dev/floor/eval-expected-satisfiable.test.mjs`, the feature's own correctness signal: every one of the 111
+  `pharn/**/evals/expected/*.json` files is passed by its witness, and the fixed swallowed-exception eval is among
   them.
 - `validate`: `FLOOR: GREEN — 37 capabilities checked`.
 - `structural:*`: the one committed eval pair (trust-fence ↔ `.dev/features/trust-fence/findings.json`). This feature
   ships no committed actual findings for the swallowed-exception eval, so it has no `structural:*` gate of its own; the
   new test runs that eval through the same checker instead.
-- `reconcile`: `CLEAN`, epoch anchored by `pharn-dev-build`, 6 paths reconciled, 0 escapes, 0 merged; `exempted`:
-  `REGRESSION.md` and `regression-report.json` (written under `/pharn-dev-regress`'s own scope).
+- `reconcile`: `CLEAN`. The fix round's own epoch, anchored by its build Step 0 (`pharn-dev-build`); 2 paths
+  reconciled (`CHANGELOG.md` and the test), 0 escapes, 0 merged. `exempted`: `REGRESSION.md` and
+  `regression-report.json` (written under `/pharn-dev-regress`'s own scope). The fix round's `PLAN.md` edit was made
+  before that anchor, so it lies outside this epoch.
 
 ## Verifiers (advisory)
 

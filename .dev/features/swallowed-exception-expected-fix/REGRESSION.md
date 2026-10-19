@@ -1,16 +1,20 @@
 # REGRESSION — swallowed-exception-expected-fix
 
+Re-run after the GATE 2 fix round (A1–A3). It replaces the first run's report, made at `ea09d57`, which was also
+`no-regressions` over the same three gates.
+
 - Base: `5bc02bb7e21df3b7bf341a2be2206e4f10ff5923` (`git merge-base HEAD origin/main`; the working tree was clean, so
-  the base is the fork point, not `HEAD`). HEAD: `ea09d57` (the build commit).
+  the base is the fork point, not `HEAD`). HEAD: `2d91080` (the fix-round commit).
 - Verdict helper: `node pharn/floor/check-regress.mjs verdict` → exit 0. The machine report is
-  `regression-report.json` (the helper's stdout, verbatim; sha256 `f0c796a2…3132f3`).
+  `regression-report.json` (the helper's stdout, verbatim; sha256 `4d99e7f4…92bb3fc30`).
 
 ## Inside / outside partition (`check-regress.mjs scope`, exit 0)
 
-Inside (8 paths, `git diff --name-only <base>`; no untracked files):
+Inside (13 paths, `git diff --name-only <base>`; no untracked files):
 
-- `.dev/features/swallowed-exception-expected-fix/GRILL.md`, `.dev/features/swallowed-exception-expected-fix/PLAN.md`
-  (both in `escape_exempt`: this feature's own stage artifacts)
+- Seven feature artifacts under `.dev/features/swallowed-exception-expected-fix/` (`GRILL.md`, `PLAN.md`,
+  `REGRESSION.md`, `REVIEW.md`, `VERIFY.md`, `regression-report.json`, `verify-report.json`), all in `escape_exempt`
+  as this feature's own stage artifacts.
 - `.dev/floor/eval-expected-satisfiable.test.mjs`
 - `CHANGELOG.md`, `README.md`, `SKILLS_VERSION`
 - `pharn/pharn-review/swallowed-exception/evals/expected/expected-intentional-comment.json` and `.md`
@@ -43,7 +47,7 @@ comparison: `/pharn-dev-regress` catches what its suite catches, nothing more.
 
 ## Orchestration notes (advisory)
 
-- The isolated-worktree shell guard refused the pinned `$(…)`, `$VAR` and `xargs` forms and any `git` call inside
+- The isolated-worktree shell guard refuses the pinned `$(…)`, `$VAR` and `xargs` forms and any `git` call inside
   `node -e`. The lists were captured with plain `git ls-files` / `git diff --name-only` redirects into
   `.pharn/pharn-dev-regress/`, and the scope, the gate runs and the verdict were run by node with `spawnSync` argv
   arrays (`.pharn/pharn-dev-regress/run-gates.mjs`, one `node --test` over the whole outside list, equivalent to the
