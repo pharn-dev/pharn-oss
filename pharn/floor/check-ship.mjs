@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// pharn/floor/check-ship.mjs — the deterministic STOP-DECISION CORE for the `/ship --loop` mode.
+// pharn/floor/check-ship.mjs — the deterministic STOP-DECISION CORE for the `/pharn-dev-ship --loop` mode.
 //
 // Floor/eval infrastructure — NOT a Capability (no `role:`; the floor capability count stays 1, exactly
-// like pharn/floor/check-verify.mjs / pharn/floor/check-regress.mjs / floor/check-variance.mjs / check-structural.mjs,
+// like pharn/floor/check-verify.mjs / pharn/floor/check-regress.mjs / .dev/floor/check-variance.mjs / check-structural.mjs,
 // which live in this floor-ignored dir). It owns the WHOLE deterministic stop/continue decision of the
 // loop so the maximum surface is in tested Node, not in the command's prose. The command
-// (.claude/commands/ship.md, `--loop` mode) owns only the I/O side-effects (running the stages, applying
+// (.claude/commands/pharn-dev-ship.md, `--loop` mode) owns only the I/O side-effects (running the stages, applying
 // fixes, writing artifacts); this helper computes whether the loop STOPS or CONTINUES.
 //
 // WHY THIS FILE EXISTS — the floor reduction that makes `--loop` legal (ARCHITECTURE §2 / §7, P0):
