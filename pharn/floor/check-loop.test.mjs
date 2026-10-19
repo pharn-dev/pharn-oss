@@ -614,6 +614,68 @@ test("✧ CLOSURE (L36) — the source assigns exactly five decisions, and INCON
   assert.equal(json(decide(PASS, null, 1, 3, QUICK_SPEC)).decision, "STOP_GREEN_QUICK");
 });
 
+// ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — verify-report.md's verdict table row against the LIVE set ─────────
+// pharn/pharn-contracts/verify-report.md lists, per consumer, the `verdict` set it accepts; check-loop.mjs restates its
+// own in VERIFY_VERDICTS. The CLI runs main() on import, so the set is read where the checker states it: its refusal of
+// an off-contract verdict prints `is not one of {…}` from the very Set it tests membership in. Set EQUALITY (L36), so an
+// extra value on either side fails; the parser throws on a missing header or a malformed row (L60). BOUND (L43): it
+// certifies agreement between the contract and the code, never that the set is right.
+const VERIFY_REPORT = join(here, "..", "pharn-contracts", "verify-report.md");
+
+/** The per-consumer `verdict` table → Map(basename → sorted values). Throws on a missing header or a malformed row. */
+function contractVerdictTable(text) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => /^\|\s*consumer\s*\|\s*accepted `verdict` set\s*\|\s*on a value outside it\s*\|\s*$/.test(l));
+  if (h < 0) throw new Error("verify-report.md: the per-consumer `verdict` table header was not found");
+  const rows = new Map();
+  for (let i = h + 2; i < lines.length && lines[i].startsWith("|"); i++) {
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const file = /^`(?:[^`]*\/)?([^`/]+\.mjs)`$/.exec(cells[0] ?? "");
+    if (!file || !/^`[A-Z_]+`(?: · `[A-Z_]+`)*$/.test(cells[1] ?? ""))
+      throw new Error(`verify-report.md: malformed verdict-table row: ${lines[i]}`);
+    rows.set(
+      file[1],
+      cells[1]
+        .split(" · ")
+        .map((t) => t.slice(1, -1))
+        .sort()
+    );
+  }
+  if (rows.size === 0) throw new Error("verify-report.md: the verdict table has no rows");
+  return rows;
+}
+
+/** The set check-loop.mjs actually tests, read from its own refusal of a verdict no contract names. */
+function liveVerifySet() {
+  const r = decide({ ...PASS, verdict: "NOT_A_CONTRACT_VERDICT" }, CLEAN, 1, 3);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  const m = /\.verdict "NOT_A_CONTRACT_VERDICT" is not one of \{([^}]*)\}/.exec(json(r).reason);
+  assert.ok(m, `check-loop.mjs's refusal no longer prints the set it tests: ${json(r).reason}`);
+  return m[1].split(", ").sort();
+}
+
+test("✧ ARCH-9 — verify-report.md's check-loop.mjs row equals the verdict set check-loop.mjs tests", () => {
+  const row = contractVerdictTable(readFileSync(VERIFY_REPORT, "utf8")).get("check-loop.mjs");
+  assert.ok(row, "verify-report.md's verdict table has no check-loop.mjs row");
+  assert.deepEqual(liveVerifySet(), row, "check-loop.mjs VERIFY_VERDICTS and its verify-report.md row differ — edit both");
+});
+
+test("✧ ARCH-9 negative controls — a value added to or removed from the row, or a missing header, fails", () => {
+  const text = readFileSync(VERIFY_REPORT, "utf8");
+  const live = liveVerifySet();
+  const line = text.split("\n").find((l) => /^\|\s*`[^`]*check-loop\.mjs`/.test(l));
+  assert.ok(line, "the check-loop.mjs row must exist for the mutants to mean anything");
+  const added = text.replace(line, line.replace("`INCONCLUSIVE`", "`INCONCLUSIVE` · `SKIPPED`"));
+  assert.notDeepEqual(contractVerdictTable(added).get("check-loop.mjs"), live);
+  const removed = text.replace(line, line.replace("`INCOMPLETE` · ", ""));
+  assert.notDeepEqual(contractVerdictTable(removed).get("check-loop.mjs"), live);
+  assert.throws(() => contractVerdictTable(text.replace("accepted `verdict` set", "accepted set")), /header was not found/);
+  assert.throws(() => contractVerdictTable(text.replace(line, line.replace("`PASS` · ", "PASS or "))), /malformed/);
+});
+
 // ── 6.59.0 — an UNMEASURED gate stops the loop terminally (the 2026-10-12 review's LOOP-1) ────────────────────────────
 // check-loop.mjs is UNCHANGED: the fix is upstream, in what check-verify.mjs / check-regress.mjs emit for a run the runner
 // did not measure. These pin that the reports they now emit hit the existing `unmeasured` row, in both tables, at every

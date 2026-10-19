@@ -271,7 +271,7 @@ test("fail-closed: no argument → nonzero exit, nothing on stdout", () => {
 
 // ---------------------------------------------------------------------------
 // ★ ReDoS REGRESSION — LONG RECEIVER CHAINS, LONG IDENTIFIERS, MANY `(`, MANY LOOPS (TST-3, the 2026-10-12 review;
-// fixed in 6.64.4).
+// fixed in 6.64.5).
 //
 // Through 6.64.2 three steps were quadratic in the file: the query regex restarted at every character of a receiver
 // chain with no verb call (`a.`×10000, 20 KB: 1.1 s; ×80000 did not finish in 30 s; one 80 KB identifier: 4.2 s), the
@@ -320,7 +320,7 @@ for (const s of LONG_SHAPES) {
 }
 
 // ---------------------------------------------------------------------------
-// ★ DIFFERENTIAL — the 6.64.4 scanText returns exactly what the 6.64.2 one returned (L55). The ORACLE below is a frozen
+// ★ DIFFERENTIAL — the 6.64.5 scanText returns exactly what the 6.64.2 one returned (L55). The ORACLE below is a frozen
 // copy of the 6.64.2 scanText (its mask, its header string, its exec loop, its interval scan), written into this file
 // and importing nothing from the scanner, so it shares no predicate with the code under test (L74). The corpus: every
 // .mjs file beside this one (real code; this scanner's own tests are dense with query-in-loop shapes), plus fuzzed

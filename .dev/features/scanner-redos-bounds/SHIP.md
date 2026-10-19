@@ -1,7 +1,9 @@
 # SHIP — scanner-redos-bounds
 
-Branch `fix/scanner-redos-bounds`, batch 2026-10-19 group C, mode SHIP. Final version **6.64.4**: planned as 6.64.3,
-renumbered after `main` released its own 6.64.3.
+Branch `fix/scanner-redos-bounds`, batch 2026-10-19 group C, mode SHIP. Final version **6.64.5**: planned as 6.64.3,
+renumbered twice as `main` released its own 6.64.3 and 6.64.4. The second merge (`origin/main` 661f3470) came after
+the regress and verify runs recorded here. It brought only other files and released CHANGELOG sections, and was
+followed by the fast gates listed in the PR.
 
 ## Stages run, in order
 

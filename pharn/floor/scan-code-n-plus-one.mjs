@@ -51,7 +51,7 @@
 // newlines, so a /* block comment */ spanning lines leaves those physical lines in place (blanked) — 1-based line
 // numbers map 1:1, and the loop-interval / query positions are computed over the SAME masked coordinate space.
 //
-// COST (6.64.4, TST-3 of the 2026-10-12 review): through 6.64.2 three steps were quadratic in the file — the query
+// COST (6.64.5, TST-3 of the 2026-10-12 review): through 6.64.2 three steps were quadratic in the file — the query
 // regex restarting along a long receiver chain (`a.`×10000, 20 KB: 1.1 s), the `.forEach`/`.map` header test re-run at
 // every `(`, and the interval lookup per query hit. Each is now linear; the reasons sit beside the code ("COST" notes
 // in scanText). "Linear" is the derived bound, measured on the ★ shapes in scan-code-n-plus-one.test.mjs and in
@@ -193,8 +193,8 @@ export function scanText(text) {
   const LOOP_BRACE_HEADER_RE = /\b(?:for|while)\s*\(/; // a for/while whose block body is the `{` we are opening
 
   //
-  // COST (6.64.4, TST-3). The `header` is the masked text from `headerStart` up to the current character — the same
-  // string the pre-6.64.4 code built with `header += c` — so it is never copied per character. `LOOP_BRACE_HEADER_RE`
+  // COST (6.64.5, TST-3). The `header` is the masked text from `headerStart` up to the current character — the same
+  // string the pre-6.64.5 code built with `header += c` — so it is never copied per character. `LOOP_BRACE_HEADER_RE`
   // still tests that exact slice at each `{`; a `{` resets the header, so those slices never overlap and their total
   // length is at most the file's. The `.forEach`/`.map` regex used to be re-run over the whole header at EVERY `(`,
   // and a `(` does not reset it, so `(`×N cost O(N²); `endsWithLoopCall()` decides the same question by reading
@@ -269,7 +269,7 @@ export function scanText(text) {
     return lo + 1;
   }
 
-  // COST (6.64.4, TST-3). `QUERY_RE.exec` over the masked text gave the right matches but retried at EVERY start: on a
+  // COST (6.64.5, TST-3). `QUERY_RE.exec` over the masked text gave the right matches but retried at EVERY start: on a
   // receiver chain with no verb call (`a.a.a…`, or one long identifier) each start re-scanned the rest of the chain,
   // so `a.`×10000 (20 KB) took 1.1 s and ×80000 did not finish in 30 s. The same regex now runs sticky, only where a
   // match can start (`[A-Za-z_$]`, the first character it accepts). When it fails at start `s`, every start up to the
