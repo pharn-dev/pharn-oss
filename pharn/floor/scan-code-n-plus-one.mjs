@@ -51,6 +51,13 @@
 // newlines, so a /* block comment */ spanning lines leaves those physical lines in place (blanked) — 1-based line
 // numbers map 1:1, and the loop-interval / query positions are computed over the SAME masked coordinate space.
 //
+// COST (6.65.1, TST-3 of the 2026-10-12 review): through 6.64.2 three steps were quadratic in the file — the query
+// regex restarting along a long receiver chain (`a.`×10000, 20 KB: 1.1 s), the `.forEach`/`.map` header test re-run at
+// every `(`, and the interval lookup per query hit. Each is now linear; the reasons sit beside the code ("COST" notes
+// in scanText). "Linear" is the derived bound, measured on the ★ shapes in scan-code-n-plus-one.test.mjs and in
+// .dev/features/scanner-redos-bounds/MEASUREMENTS.md — never a floor claim. The hits are meant to be exactly the old
+// ones; the differential in the test file compares them with a frozen copy of the 6.64.2 scanText over a fixed corpus.
+//
 // Non-LLM, stdlib-only, fail-closed. MIRRORS the fail-closed contract of the scan-code-* family: a missing / non-file
 // target is an ERROR (nonzero exit, NOTHING on stdout), never a silent "clean". A readable file with no query-in-loop
 // shape (empty, prose, or clean code) is a SUCCESSFUL scan → {"found":false,"hits":[]} on stdout, exit 0.
@@ -121,9 +128,53 @@ function mask(src) {
   return out.join("");
 }
 
+const WS = /\s/;
+
 /**
- * The hits for one file's text. Keeps nothing between calls: everything below — the loop intervals, the `g` query
- * regex, the line index — is created inside this function, once per file. The regexes' bytes are unchanged.
+ * Exactly `/\.\s*(?:forEach|map)\s*$/.test(s.slice(start, end))`, read backwards from `end` without building the slice:
+ * skip the trailing whitespace, require `forEach` or `map` to end there (neither is a suffix of the other), skip the
+ * whitespace before it, and require a `.`. Each step stays inside `[start, end)`.
+ */
+function endsWithLoopCall(s, start, end) {
+  let j = end;
+  while (j > start && WS.test(s[j - 1])) j--;
+  let k;
+  if (j - 7 >= start && s.startsWith("forEach", j - 7)) k = j - 7;
+  else if (j - 3 >= start && s.startsWith("map", j - 3)) k = j - 3;
+  else return false;
+  while (k > start && WS.test(s[k - 1])) k--;
+  return k > start && s[k - 1] === ".";
+}
+
+const isIdentStart = (c) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c === 36; // [A-Za-z_$]
+const isIdentPart = (c) => isIdentStart(c) || (c >= 48 && c <= 57); // [\w$]
+
+/**
+ * Where a sticky, greedy match of the receiver-chain source `[A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*)*` from `i`
+ * ends — `s[i]` already being `[A-Za-z_$]` — computed by a loop. Each `.word` link is taken whole or not at all, as
+ * the greedy group takes it, and `\s` is tested with the same `WS` regex.
+ */
+function chainEnd(s, i) {
+  let j = i + 1;
+  while (j < s.length && isIdentPart(s.charCodeAt(j))) j++;
+  for (;;) {
+    let k = j;
+    while (k < s.length && WS.test(s[k])) k++;
+    if (s[k] !== ".") return j;
+    k++;
+    while (k < s.length && WS.test(s[k])) k++;
+    if (k >= s.length || !isIdentStart(s.charCodeAt(k))) return j;
+    k++;
+    while (k < s.length && isIdentPart(s.charCodeAt(k))) k++;
+    j = k;
+  }
+}
+
+/**
+ * The hits for one file's text. Keeps nothing between calls: everything below — the loop intervals and their coverage
+ * array, the `g`/`y` regexes, the line index — is created inside this function, once per file (the module-level `WS`
+ * has no flag, so it holds no state). The regexes' bytes are unchanged; the `.forEach`/`.map` header regex is now
+ * decided by `endsWithLoopCall()` instead of being run (its source is quoted at that function).
  */
 export function scanText(text) {
   const masked = mask(text);
@@ -133,59 +184,67 @@ export function scanText(text) {
   // statement boundary (a `{`, a `}`, or a `;` at paren-depth 0). Two loop-body interval kinds are recorded:
   //   (a) BRACE bodies whose header opens a `for`/`while` — `LOOP_BRACE_HEADER_RE`. (The `;`s inside a C-style
   //       `for (;;)` header sit at paren-depth > 0 and do NOT reset the header, so the `for (` opener is still visible.)
-  //   (b) PAREN ranges of a `.forEach`/`.map` member call — `LOOP_CALL_RE` (header ends with `.forEach`/`.map`). This
-  //       one range covers BOTH the braced callback (`=> { … }`) and the braceless-arrow callback (`=> …`), so
-  //       `.forEach`/`.map` are handled by paren-depth, NOT the brace-header set (the crisp for/while→brace,
-  //       forEach/map→paren model).
+  //   (b) PAREN ranges of a `.forEach`/`.map` member call — the header ends with `.forEach`/`.map`, i.e. it matches
+  //       `/\.\s*(?:forEach|map)\s*$/` (decided by `endsWithLoopCall()`, below the function). This one range covers
+  //       BOTH the braced callback (`=> { … }`) and the braceless-arrow callback (`=> …`), so `.forEach`/`.map` are
+  //       handled by paren-depth, NOT the brace-header set (the crisp for/while→brace, forEach/map→paren model).
   // An interval is [openPos, closePos] (the `{`…`}` or `(`…`)` character offsets). A query match at position p is
   // "in a loop" iff some interval has openPos < p < closePos.
   const LOOP_BRACE_HEADER_RE = /\b(?:for|while)\s*\(/; // a for/while whose block body is the `{` we are opening
-  const LOOP_CALL_RE = /\.\s*(?:forEach|map)\s*$/; // header ends with `.forEach`/`.map` → this `(` is its callback arg-list
 
+  //
+  // COST (6.65.1, TST-3). The `header` is the masked text from `headerStart` up to the current character — the same
+  // string the pre-6.65.1 code built with `header += c` — so it is never copied per character. `LOOP_BRACE_HEADER_RE`
+  // still tests that exact slice at each `{`; a `{` resets the header, so those slices never overlap and their total
+  // length is at most the file's. The `.forEach`/`.map` regex used to be re-run over the whole header at EVERY `(`,
+  // and a `(` does not reset it, so `(`×N cost O(N²); `endsWithLoopCall()` decides the same question by reading
+  // backwards from the `(` over the whitespace run, the one word and the whitespace run before it — each whitespace
+  // run is read for at most one `(` or one word, so the total is linear.
   const intervals = [];
   {
     const braceStack = [];
     const parenStack = [];
-    let header = "";
+    let headerStart = 0;
     const N = masked.length;
     for (let i = 0; i < N; i++) {
       const c = masked[i];
       if (c === "{") {
-        braceStack.push({ isLoop: LOOP_BRACE_HEADER_RE.test(header), openPos: i });
-        header = "";
+        braceStack.push({ isLoop: LOOP_BRACE_HEADER_RE.test(masked.slice(headerStart, i)), openPos: i });
+        headerStart = i + 1;
         continue;
       }
       if (c === "}") {
         const top = braceStack.pop();
         if (top && top.isLoop) intervals.push([top.openPos, i]);
-        header = "";
+        headerStart = i + 1;
         continue;
       }
       if (c === "(") {
-        parenStack.push({ isLoop: LOOP_CALL_RE.test(header), openPos: i });
-        header += c;
+        parenStack.push({ isLoop: endsWithLoopCall(masked, headerStart, i), openPos: i });
         continue;
       }
       if (c === ")") {
         const top = parenStack.pop();
         if (top && top.isLoop) intervals.push([top.openPos, i]);
-        header += c;
         continue;
       }
       if (c === ";" && parenStack.length === 0) {
-        header = "";
+        headerStart = i + 1;
         continue;
       }
-      header += c;
     }
   }
 
-  function inLoop(pos) {
-    for (let k = 0; k < intervals.length; k++) {
-      if (intervals[k][0] < pos && pos < intervals[k][1]) return true;
-    }
-    return false;
+  // "Is `pos` strictly inside some loop interval" — answered from one prefix-sum coverage array instead of a scan
+  // over every interval per query hit (which was O(hits × intervals)). An interval [open, close] covers the
+  // positions open+1 … close-1: +1 at open+1, -1 at close.
+  const cover = new Int32Array(masked.length + 2);
+  for (const [open, close] of intervals) {
+    cover[open + 1] += 1;
+    cover[close] -= 1;
   }
+  for (let i = 1; i < cover.length; i++) cover[i] += cover[i - 1];
+  const inLoop = (pos) => cover[pos] > 0;
 
   // --- Query-verb member-call detection (FIXED regex — P5) ----------------------------------------------------
   // Match `<receiver-chain>.<query-verb>(` where the verb is a WHOLE identifier (the `(?![\w$])` stops `queryString`,
@@ -210,10 +269,34 @@ export function scanText(text) {
     return lo + 1;
   }
 
+  // COST (6.65.1, TST-3). `QUERY_RE.exec` over the masked text gave the right matches but retried at EVERY start: on a
+  // receiver chain with no verb call (`a.a.a…`, or one long identifier) each start re-scanned the rest of the chain,
+  // so `a.`×10000 (20 KB) took 1.1 s and ×80000 did not finish in 30 s. The same regex now runs sticky, only where a
+  // match can start (`[A-Za-z_$]`, the first character it accepts). When it fails at start `s`, every start up to the
+  // end `e` of the greedy receiver chain from `s` (`chainEnd()`) fails too, so the search resumes at `e`. Why: a
+  // match's verb is followed by `\s*\(`, so the verb word can never be linked to a further `.word`; from any start
+  // inside the chain the only candidate verb is therefore the chain's LAST word, the same one `s` already tried. A
+  // start mid-word reads the same chain as the word's own start. So every start is tried at most once and each try
+  // and each `chainEnd()` read covers text no later try re-reads: linear in the file. A success resumes at the match's
+  // end, exactly as `exec` with the `g` flag does, so the hits are the ones the old loop produced. `chainEnd()` is a
+  // plain loop, not a regex, because V8's regex backtrack stack overflows on a chain of about 1.5 million links and a
+  // regex there would throw on inputs the 6.64.2 scanner merely crawled through (found by the review's probe). The
+  // query regex itself still overflows a little later on such a chain, exactly as it did in 6.64.2.
+  const START_RE = /[A-Za-z_$]/g;
+  const QUERY_AT = new RegExp(QUERY_RE.source, "y");
   const hits = [];
-  QUERY_RE.lastIndex = 0;
-  let m;
-  while ((m = QUERY_RE.exec(masked)) !== null) {
+  let from = 0;
+  for (;;) {
+    START_RE.lastIndex = from;
+    const st = START_RE.exec(masked);
+    if (st === null) break;
+    QUERY_AT.lastIndex = st.index;
+    const m = QUERY_AT.exec(masked);
+    if (m === null) {
+      from = chainEnd(masked, st.index); // > st.index: the chain holds at least the start character
+      continue;
+    }
+    from = QUERY_AT.lastIndex;
     if (!inLoop(m.index)) continue; // the query call must be lexically INSIDE a loop body
     const expr = (m[1] + "." + m[2]).replace(/\s+/g, ""); // normalize `db . findMany` → `db.findMany`
     hits.push({ line: lineAt(m.index), expr });
