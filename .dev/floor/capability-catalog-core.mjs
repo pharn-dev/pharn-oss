@@ -77,7 +77,7 @@ const EXCLUDE_SEGMENTS = [
 ];
 
 // --- tiny dependency-free frontmatter parser (mirrors validate.mjs `parseFrontmatter`, including its leading-BOM
-// strip through the product core's `stripBom`, 6.64.4 — the catalog lists exactly what validate counts) ---
+// strip through the product core's `stripBom`, 6.65.2 — the catalog lists exactly what validate counts) ---
 function parseFrontmatter(rawText) {
   const text = stripBom(rawText);
   if (!text.startsWith("---")) return { fm: null, body: text };

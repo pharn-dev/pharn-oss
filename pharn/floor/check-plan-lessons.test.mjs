@@ -430,7 +430,7 @@ test("an unreadable PLAN → RED (fail-closed), naming the path", () => {
   assert.match(r.out, /PLAN is unreadable/);
 });
 
-// ── (A2) UNIQUENESS (6.64.4, audit ENF-4): a repeated declaration is refused, never resolved to one copy ───────────
+// ── (A2) UNIQUENESS (6.65.2, audit ENF-4): a repeated declaration is refused, never resolved to one copy ───────────
 //
 // The repro: `applied_lessons: none` then `applied_lessons: [L9999]` was GREEN on the FIRST copy, while YAML and
 // frontmatter-core.mjs `readField` keep the LAST. Every case below is a twin pair (L4): the single-declaration twin is

@@ -34,7 +34,7 @@ const CONSUMERS = [
   "render-ship-briefing.mjs",
   "loop-closeout.mjs", // 6.44.0: reads LOOP.md's envelope and SPEC.md's state
   "installed-skills-core.mjs", // 6.47.0: reads an installed SKILL.md's name/description for the catalogue
-  // 6.64.4 (frontmatter-parser-parity, audit ENF-3): the loose-fence family. Each tests `startsWith("---")` on purpose
+  // 6.65.2 (frontmatter-parser-parity, audit ENF-3): the loose-fence family. Each tests `startsWith("---")` on purpose
   // (validate.mjs's model, mirrored by the count-* readers) and now strips the BOM first; before, a BOM'd capability
   // was "not a capability" and validate printed GREEN over it.
   "validate.mjs",
@@ -43,7 +43,7 @@ const CONSUMERS = [
   "count-verifiers.mjs",
   "check-model-config.mjs",
   "griller-extract.mjs",
-  // 6.64.4: readers that already stripped (or used matchFrontmatter) but were not listed — found by the closure below.
+  // 6.65.2: readers that already stripped (or used matchFrontmatter) but were not listed — found by the closure below.
   "render-cost-ledger.mjs",
   "instruction-files-core.mjs",
   "ac-tests-lock.mjs",
@@ -136,7 +136,7 @@ test("✧ every consumer imports the shared core", () => {
   }
 });
 
-// Since 6.64.4 a call to matchFrontmatter also counts: it strips by construction, and instruction-files-core.mjs and
+// Since 6.65.2 a call to matchFrontmatter also counts: it strips by construction, and instruction-files-core.mjs and
 // ac-tests-lock.mjs read only through it. The pin is WIDENED by exactly that one spelling, and says so here.
 test("✧ every consumer actually APPLIES the BOM strip (stripBom, or matchFrontmatter) — importing it is not using it", () => {
   for (const name of CONSUMERS) {
@@ -145,7 +145,7 @@ test("✧ every consumer actually APPLIES the BOM strip (stripBom, or matchFront
   }
 });
 
-test("✧ CLOSURE (6.64.4): every non-test floor module that tests the frontmatter fence is a listed consumer", () => {
+test("✧ CLOSURE (6.65.2): every non-test floor module that tests the frontmatter fence is a listed consumer", () => {
   const readers = nonTestFloorModules().filter((f) => ANCHOR_IDIOM_RE.test(readFileSync(join(HERE, f), "utf8")));
   assert.ok(readers.length >= CONSUMERS.length, "non-vacuity: the idiom finds at least the listed consumers");
   assert.deepEqual(
@@ -173,7 +173,7 @@ test("✧ the anchor closure's predicates DISCRIMINATE (L60): each old idiom is 
   assert.match("const text = stripBom(raw);", APPLIES_STRIP_RE);
 });
 
-test("✧ CLOSURE (6.64.4): no non-test floor module but the core declares the `key: value` line grammar (one allowlisted)", () => {
+test("✧ CLOSURE (6.65.2): no non-test floor module but the core declares the `key: value` line grammar (one allowlisted)", () => {
   const holders = nonTestFloorModules().filter((f) => LINE_GRAMMAR_RE.test(readFileSync(join(HERE, f), "utf8")));
   assert.deepEqual(
     holders.filter((f) => !LINE_GRAMMAR_ALLOWLIST.includes(f)),
@@ -220,7 +220,7 @@ test("readValue: the quote is resolved BEFORE an inline comment; an unquoted ` #
   assert.equal(readValue(""), "");
 });
 
-// ── The ONE line reader (6.64.4): fieldEntries ────────────────────────────────────────────────────────────────
+// ── The ONE line reader (6.65.2): fieldEntries ────────────────────────────────────────────────────────────────
 
 test("fieldEntries: every match in file order, the value exactly as captured, repeats kept for the caller to judge", () => {
   const lines = ["a: 1", "not a field", "b-c:   two  # note", "a: 3", "  indented: no", "_x:"];

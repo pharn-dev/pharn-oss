@@ -130,6 +130,17 @@ checker's distinct, RED verdict) — the honest consequence of `cap` being addit
 a record from before this field existed can be well-shaped without being re-derivable, and nothing
 conflates the two.
 
+**`cap` is also compared with the run marker (6.65.0, audit LOOP-2).** Re-deriving with the record's own `cap` only
+proves the record agrees with itself, so `check-loop-decision.mjs` also reads the cap `/pharn-loop` opened with — the
+`cap` that `require-loop-record.cjs --open <name> --cap <M>` wrote at Step 1a into `.pharn/pharn-loop/<name>/active.json`,
+located from the record's own `pharn/features/<name>/` path. Unequal is RED `CAP_MISMATCH`; a marker that is absent, a
+symlink, malformed, another run's or capless is RED `CAP_UNWITNESSED` (fail-closed: the closeout runs this check before
+its own `--close`, every run opens the marker before its feature directory exists, and a blocked record — the one stop
+that may lack one — is skipped first); and `iterations` greater than `cap` is RED `ITER_OVER_CAP`, since a compliant
+run stops at `iter <= cap`. Bound: agreement between two files the run can write, never provenance; a typed
+`iterations` that is too low still passes; and a hand re-check after the run's Final step closed the marker is RED
+`CAP_UNWITNESSED`. `check-loop-record.mjs` is unchanged: `cap` stays optional to the shape.
+
 **The sixth, optional field: `mode` (6.28.0, `/pharn-loop --quick`).** `mode ∈ {full, quick}` (the vocabulary is
 `pharn/floor/loop-mode-core.mjs`'s `LOOP_MODES`); **absent means `full`**, so every record written before 6.28.0
 keeps its meaning, and a full run may omit it. **What it records, one meaning for every record class: the run's
@@ -164,7 +175,9 @@ so no record carries `STOP_TERMINAL` for it. From 6.59.0 a gate the runner did n
 or (at verify) unable to start — makes the stage's verdict inconclusive, so a run that hit one records
 `STOP_TERMINAL` (`terminal_cause: unmeasured`) where an earlier one recorded `STOP_CAP` after rebuilding toward the
 hang, or — for a timed-out regress BASE — the blocked stop S11 `stale-evidence` (`verify-report.md`, "A gate that was
-not measured"; `regression-report.md`). Nothing branches on a prior record's `decision` (a later run reads only
+not measured"; `regression-report.md`). From 6.65.0 a reconcile gate that could not decide (its checker's exit 2) is
+`terminal_cause: reconcile-inconclusive` rather than `reconcile`; the record's `decision` is `STOP_TERMINAL` as
+before. Nothing branches on a prior record's `decision` (a later run reads only
 its `## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
 
 **`commit` — `unknown` is an honest absence, not a value.** `/pharn-loop` captures the SHA with

@@ -557,7 +557,7 @@ export function readOutcome(loopPath) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fields = new Map(); // a Map, never a plain object keyed by arbitrary input (L15)
-  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.64.4), the one check-loop-record.mjs reads this
+  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.65.2), the one check-loop-record.mjs reads this
   // envelope with; the last copy of a repeated key wins, as there. The value rule below is unchanged.
   for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
     fields.set(key, raw.trim().replace(/^["']|["']$/g, ""));

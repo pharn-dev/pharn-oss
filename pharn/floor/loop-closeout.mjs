@@ -56,8 +56,10 @@
 //     then `git switch -c`; non-zero → `branch failed`, exit 4.
 // 13. GIT_LITERAL_PATHSPECS=1 git add -A / git commit, both --pathspec-from-file=<list> --pathspec-file-nul; the
 //     commit message is `pharn-loop(<name>): <decision> after <N> iteration(s)` plus the fixed second paragraph, with
-//     <decision> and <N> the record's enum token and digits. Hooks run (never --no-verify; nothing is pushed or
-//     merged). A failed add → `stage failed`, a failed commit → `commit failed`, each followed by the undo the close
+//     <decision> and <N> the record's enum token and digits — and, since 6.65.0 (audit LOOP-4), a third paragraph
+//     naming the gates the project's `gates.exclude` removed from the final verify / regress (`excludedGates`, read
+//     after step 3 into the document's `excluded_gates`; ALLOWLIST tokens and digits only), when there were any.
+//     Hooks run (never --no-verify; nothing is pushed or merged). A failed add → `stage failed`, a failed commit → `commit failed`, each followed by the undo the close
 //     part prescribed — reset of the list, `git checkout - --`, `git branch -d <branch>` — exit 4. Success → the SHA
 //     from `git rev-parse HEAD`, `committed <branch>`, exit 0.
 // 14. The freshness ledger (.pharn/pharn-loop/<name>/freshness.jsonl, read only as an lstat regular file), or
@@ -93,7 +95,7 @@ import "./runtime-floor.mjs";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
+import { FEATURE_SLUG_RE, SHA_RE, ALLOWLIST, excludedFacts } from "./gate-run-core.mjs";
 import { FM_RE, fieldEntries, stripBom, readField } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 import { cleanScalar } from "./mark-phase.mjs";
@@ -162,6 +164,7 @@ export const DOC_KEYS = Object.freeze([
   "ledger_check",
   "report",
   "freshness",
+  "excluded_gates",
   "branch",
   "commit",
   "checkout",
@@ -246,7 +249,8 @@ export function gitRun(args, { literal = false } = {}) {
 export function addArgs(list) {
   return ["add", "-A", `--pathspec-from-file=${list}`, "--pathspec-file-nul"];
 }
-export function commitArgs(list, feature, decision, iterations) {
+export function commitArgs(list, feature, decision, iterations, excluded = null) {
+  const note = exclusionNote(excluded);
   return [
     "commit",
     "-q",
@@ -256,7 +260,54 @@ export function commitArgs(list, feature, decision, iterations) {
     `pharn-loop(${feature}): ${decision} after ${iterations} iteration(s)`,
     "-m",
     COMMIT_BODY,
+    ...(note === null ? [] : ["-m", note]),
   ];
+}
+
+/** 6.65.0 (audit LOOP-4) — the commit message's third paragraph when the final verify or regress ran without gates the
+ *  project's `gates.exclude` removed, so a green over fewer gates never reads as a full one. Only ALLOWLIST tokens and
+ *  digits reach it (P2). null (no paragraph, a message byte-identical to before) when nothing was excluded. */
+export function exclusionNote(excluded) {
+  if (excluded === null || typeof excluded !== "object") return null;
+  const ids = Array.isArray(excluded.ids) ? excluded.ids.filter((id) => ALLOWLIST.includes(id)) : [];
+  const unlisted = Number.isSafeInteger(excluded.unlisted) && excluded.unlisted > 0 ? excluded.unlisted : 0;
+  if (ids.length === 0 && unlisted === 0) return null;
+  const named = [ids.join(", "), unlisted > 0 ? `+${unlisted} id(s) outside the allowlist` : ""].filter(Boolean).join(", ");
+  return (
+    `Gates excluded by the project's pharn.config.json gates.exclude, NOT run by the final verify or regress: ${named}. ` +
+    "The green covers only the gates that ran."
+  );
+}
+
+/**
+ * 6.65.0 (audit LOOP-4) — the gates the project excluded from this run's final verify and, in full mode, its regress
+ * (the quick table never reads the regression report, so neither does this), from the reports' `excluded` blocks read
+ * through gate-run-core.mjs excludedFacts. `null` when no report was readable (lstat-regular, JSON), else
+ * `{ ids, unlisted }`: `ids` the UNION of the allowlisted ids, in ALLOWLIST order; `unlisted` the LARGER side's count of
+ * ids outside the allowlist — a lower bound, since those ids are never read to be compared (L62). Never a commit
+ * decision: it names, it gates nothing.
+ */
+export function excludedGates(feature, mode) {
+  const read = (file, pick) => {
+    const text = readRegular(`${featureDir(feature)}/${file}`);
+    if (text === null) return { read: false, facts: null };
+    try {
+      const doc = JSON.parse(text);
+      if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return { read: false, facts: null };
+      return { read: true, facts: excludedFacts(pick(doc)) };
+    } catch {
+      return { read: false, facts: null };
+    }
+  };
+  const obj = (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? v : null);
+  const sides = [read("verify-report.json", (d) => obj(d.gate_run)?.excluded ?? null)];
+  if (mode !== "quick") sides.push(read("regression-report.json", (d) => obj(obj(d.gate_run)?.head)?.excluded ?? null));
+  if (!sides.some((s) => s.read)) return null;
+  const facts = sides.map((s) => s.facts).filter((f) => f !== null);
+  return {
+    ids: ALLOWLIST.filter((id) => facts.some((f) => f.ids.includes(id))),
+    unlisted: facts.reduce((n, f) => Math.max(n, f.unlisted), 0),
+  };
 }
 export function undoArgs(list, branch) {
   return [
@@ -505,6 +556,7 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
     echo(log, steps.decisionCheck, dc);
     doc.decision_check = dc.status === 0 ? "GREEN" : "RED";
   }
+  doc.excluded_gates = excludedGates(feature, facts.mode);
 
   trace.phase = "ledger";
   doc.run_stop = runStop({ steps, run, log });
@@ -598,7 +650,7 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   }
   trace.phase = "commit";
   writePhase(feature, "commit", log);
-  const cm = git(commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations), { literal: true });
+  const cm = git(commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations, doc.excluded_gates), { literal: true });
   echo(log, { id: "git commit" }, cm);
   if (cm.status !== 0) {
     writePhase(feature, "undo", log);

@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -177,4 +177,76 @@ test("fail-closed: a known flag missing its value → INCONCLUSIVE, exit 2", () 
   withReports(PASS, CLEAN, (vp, rp) => {
     assert.equal(run([vp, rp, "--iter", "1", "--cap"]).status, 2);
   });
+});
+
+// ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — verify-report.md's verdict table row against the LIVE set ─────────
+// pharn/pharn-contracts/verify-report.md lists, per consumer, the `verdict` set it accepts; check-ship.mjs restates its
+// own in VERIFY_VERDICTS. The CLI runs main() on import, so the set is read where the checker states it: its refusal of
+// an off-contract verdict prints `is not one of {…}` from the very Set it tests membership in. Set EQUALITY (L36), so an
+// extra value on either side fails. Written to survive a move of this checker and its test (group L, 2026-10-19
+// batch): the contract is found by walking up to the directory that holds it, and the row is matched by the basename
+// `check-ship.mjs`, not by its path. Removing the row fails loudly, which is what a binding is for. BOUND (L43): it
+// certifies agreement between the contract and the code, never that the set is right.
+function findContract(rel) {
+  for (let d = here; ; d = dirname(d)) {
+    if (existsSync(join(d, rel))) return join(d, rel);
+    if (dirname(d) === d) throw new Error(`${rel} not found above ${here}`);
+  }
+}
+const VERIFY_REPORT = findContract(join("pharn", "pharn-contracts", "verify-report.md"));
+
+/** The per-consumer `verdict` table → Map(basename → sorted values). Throws on a missing header or a malformed row. */
+function contractVerdictTable(text) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => /^\|\s*consumer\s*\|\s*accepted `verdict` set\s*\|\s*on a value outside it\s*\|\s*$/.test(l));
+  if (h < 0) throw new Error("verify-report.md: the per-consumer `verdict` table header was not found");
+  const rows = new Map();
+  for (let i = h + 2; i < lines.length && lines[i].startsWith("|"); i++) {
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const file = /^`(?:[^`]*\/)?([^`/]+\.mjs)`$/.exec(cells[0] ?? "");
+    if (!file || !/^`[A-Z_]+`(?: · `[A-Z_]+`)*$/.test(cells[1] ?? ""))
+      throw new Error(`verify-report.md: malformed verdict-table row: ${lines[i]}`);
+    rows.set(
+      file[1],
+      cells[1]
+        .split(" · ")
+        .map((t) => t.slice(1, -1))
+        .sort()
+    );
+  }
+  if (rows.size === 0) throw new Error("verify-report.md: the verdict table has no rows");
+  return rows;
+}
+
+/** The set check-ship.mjs actually tests, read from its own refusal of a verdict no contract names. */
+function liveVerifySet() {
+  return withReports({ ...PASS, verdict: "NOT_A_CONTRACT_VERDICT" }, CLEAN, (vp, rp) => {
+    const r = run([vp, rp, "--iter", "1", "--cap", "3"]);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    const m = /\.verdict "NOT_A_CONTRACT_VERDICT" is not one of \{([^}]*)\}/.exec(json(r).reason);
+    assert.ok(m, `check-ship.mjs's refusal no longer prints the set it tests: ${json(r).reason}`);
+    return m[1].split(", ").sort();
+  });
+}
+
+test("✧ ARCH-9 — verify-report.md's check-ship.mjs row equals the verdict set check-ship.mjs tests", () => {
+  const row = contractVerdictTable(readFileSync(VERIFY_REPORT, "utf8")).get("check-ship.mjs");
+  assert.ok(row, "verify-report.md's verdict table has no check-ship.mjs row");
+  assert.deepEqual(liveVerifySet(), row, "check-ship.mjs VERIFY_VERDICTS and its verify-report.md row differ — edit both");
+});
+
+test("✧ ARCH-9 negative controls — a value added to or removed from the row, or a missing header, fails", () => {
+  const text = readFileSync(VERIFY_REPORT, "utf8");
+  const live = liveVerifySet();
+  const line = text.split("\n").find((l) => /^\|\s*`[^`]*check-ship\.mjs`/.test(l));
+  assert.ok(line, "the check-ship.mjs row must exist for the mutants to mean anything");
+  const added = text.replace(line, line.replace("`INCONCLUSIVE`", "`INCONCLUSIVE` · `INCOMPLETE`"));
+  assert.notDeepEqual(contractVerdictTable(added).get("check-ship.mjs"), live);
+  const removed = text.replace(line, line.replace("`PASS` · ", ""));
+  assert.notDeepEqual(contractVerdictTable(removed).get("check-ship.mjs"), live);
+  assert.throws(() => contractVerdictTable(text.replace("accepted `verdict` set", "accepted set")), /header was not found/);
+  assert.throws(() => contractVerdictTable(text.replace(line, line.replace("`PASS` · ", "PASS or "))), /malformed/);
 });

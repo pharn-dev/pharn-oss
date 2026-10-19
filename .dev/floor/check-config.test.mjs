@@ -167,7 +167,7 @@ test("agreement GREEN: command frontmatter matching the config exits 0", () => {
   }
 });
 
-// ENF-3 (6.64.4): a leading UTF-8 BOM used to make a dev command's `model:`/`effort:` unreadable. Twin of the GREEN
+// ENF-3 (6.65.2): a leading UTF-8 BOM used to make a dev command's `model:`/`effort:` unreadable. Twin of the GREEN
 // case above with every command BOM'd; the mismatch control proves the BOM'd frontmatter is really read (L60).
 test("✧ ENF-3: BOM'd dev commands are read as their clean twins (agreement GREEN; a BOM'd mismatch still REDs)", () => {
   const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff

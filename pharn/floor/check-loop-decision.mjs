@@ -67,6 +67,31 @@
 // this feature or is otherwise malformed — nothing currently re-runs this checker against pre-existing
 // records automatically, so no legacy record is broken by this rule.
 //
+// THE CAP THE RUN OPENED WITH (6.65.0, audit LOOP-2). `/pharn-loop` types `--iter` / `--cap` into every check-loop.mjs
+// call and copies `cap` into the record, so re-deriving with the record's own `cap` only proves the record agrees with
+// itself: a run that kept iterating past the cap it was given, and recorded the cap it used, re-derived GREEN. The cap
+// the run opened with has a second home, written once at Step 1a: `require-loop-record.cjs --open <name> --cap <M>`
+// writes `.pharn/pharn-loop/<name>/active.json` (`pharn-loop-active/1`, that hook the one owner of the schema — L35 —
+// whose restated literal below a test pins equal to the hook's exported SCHEMA). After the live re-run, beside the
+// decision and mode comparisons (collected, never an early return, so every mismatch prints):
+//   • the marker is located from the record's own path, never an argument: the record must sit at
+//     `<root>/pharn/features/<name>/LOOP.md` (two literal parent segments), the marker at
+//     `<root>/.pharn/pharn-loop/<name>/active.json`. It is opened once with O_NOFOLLOW and checked and read
+//     through that one descriptor — a regular file only, never through a symlink (L54), with no window between the
+//     type check and the read (CodeQL js/file-system-race) — then JSON.parsed; its `schema` must be `pharn-loop-active/1`, its `name` the record's `<name>`,
+//     and its `cap` a positive safe integer (own-property reads — L15). A record off that layout, or a marker that is
+//     absent or fails any of those tests, is RED `CAP_UNWITNESSED` — FAIL-CLOSED. The one caller (loop-closeout.mjs)
+//     runs this check before its own `--close`; every run opens the marker at Step 1a before its feature directory can
+//     exist (a non-zero `--open` stops S9 with no record); and a blocked record — the one stop that may lack one — is
+//     SKIPPED above, before any of this. COST, stated: re-running this checker by hand after a run's Final step closed
+//     the marker is RED `CAP_UNWITNESSED`; the cap the run opened with is no longer on disk.
+//   • the marker's `cap` must equal the record's `cap`, else RED `CAP_MISMATCH` (both integers named; no marker text is
+//     ever quoted — L62);
+//   • and the record's `iterations` must not exceed its `cap`, else RED `ITER_OVER_CAP`: a compliant run stops at
+//     `iter <= cap` in every decision class (CONTINUE needs `iter < cap`; STOP_CAP fires at the first `iter >= cap`).
+// BOUND (L43): agreement between two files in the writable tree, never provenance — a run that rewrites the marker
+// through Bash together with the record passes, and `iterations` is still model-typed, so an under-count passes.
+//
 // NON-LLM. Node stdlib only (fs, child_process, url, path). No network, no eval, no deps.
 //
 // ── NO CROSS-TREE IMPORT, NO SIBLING-INTERNALS IMPORT (P3) ──────────────────────────────────────────────
@@ -85,12 +110,13 @@
 //       1 (RED)   — every refusal: a malformed record/envelope, a missing/invalid `iterations` or `cap`
 //                    on a non-blocked record, a malformed `mode`, or a live re-derivation that does NOT match the
 //                    recorded decision (reports missing/malformed, or a genuine mismatch — DECISION_MISMATCH) or the
-//                    recorded mode (MODE_MISMATCH). Fail-closed throughout.
+//                    recorded mode (MODE_MISMATCH), a cap the run's marker does not witness (CAP_UNWITNESSED) or
+//                    contradicts (CAP_MISMATCH), or `iterations` over `cap` (ITER_OVER_CAP). Fail-closed throughout.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, openSync, fstatSync, closeSync, constants } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 
@@ -109,6 +135,58 @@ const CAP_RE = /^\d+$/;
 function red(msg) {
   console.log(`RED — ${msg}`);
   return 1;
+}
+
+// The run marker's schema — require-loop-record.cjs's SCHEMA, restated because the floor never imports a hook; a test
+// pins the two equal by reading this line (L35) — this file is a CLI with no import guard, so nothing imports it.
+const MARKER_SCHEMA = "pharn-loop-active/1";
+
+/**
+ * The cap the run opened with, from its Stop-guard marker beside the record's project root.
+ * @returns {{ok: true, cap: number} | {ok: false, why: string}} — `why` is a fixed phrase, never marker text (L62).
+ */
+function markerCap(recordPath) {
+  const featureDir = dirname(resolve(recordPath));
+  const name = basename(featureDir);
+  const featuresDir = dirname(featureDir);
+  const pharnDir = dirname(featuresDir);
+  if (basename(featuresDir) !== "features" || basename(pharnDir) !== "pharn") {
+    return { ok: false, why: "the record is not at pharn/features/<name>/LOOP.md, so its run marker cannot be located" };
+  }
+  const marker = join(dirname(pharnDir), ".pharn", "pharn-loop", name, "active.json");
+  // ONE descriptor (the griller-extract.mjs 6.60.1 form, CodeQL js/file-system-race): the type check and the read see
+  // the same file, so the path cannot be swapped between them. O_NOFOLLOW refuses a symlink at the final component
+  // (ELOOP); O_NONBLOCK keeps a FIFO from blocking the open, and fstat then refuses it as not a regular file.
+  let fd;
+  try {
+    fd = openSync(marker, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    if (e && e.code === "ELOOP") return { ok: false, why: "the run marker is not a regular file (a symlink is never followed)" };
+    if (e && e.code === "ENOENT") return { ok: false, why: `no run marker at .pharn/pharn-loop/${name}/active.json` };
+    return { ok: false, why: "the run marker cannot be opened" };
+  }
+  let text;
+  try {
+    if (!fstatSync(fd).isFile()) return { ok: false, why: "the run marker is not a regular file (a symlink is never followed)" };
+    text = readFileSync(fd, "utf8");
+  } catch {
+    return { ok: false, why: "the run marker is unreadable" };
+  } finally {
+    closeSync(fd);
+  }
+  let doc;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    return { ok: false, why: "the run marker is not valid JSON" };
+  }
+  if (doc === null || typeof doc !== "object" || Array.isArray(doc)) return { ok: false, why: "the run marker is not a JSON object" };
+  if (!Object.hasOwn(doc, "schema") || doc.schema !== MARKER_SCHEMA)
+    return { ok: false, why: `the run marker's schema is not ${MARKER_SCHEMA}` };
+  if (!Object.hasOwn(doc, "name") || doc.name !== name) return { ok: false, why: "the run marker names another run" };
+  const cap = Object.hasOwn(doc, "cap") ? doc.cap : undefined;
+  if (!Number.isSafeInteger(cap) || cap < 1) return { ok: false, why: "the run marker carries no positive integer cap" };
+  return { ok: true, cap };
 }
 
 // A string with no control characters and a bounded length — the SAME precondition
@@ -259,6 +337,29 @@ function gate(recordPath) {
         `commit it, and never repair this by editing \`mode\`.`
     );
   }
+  // The cap the run opened with (6.65.0, LOOP-2) — after the re-run, so a decision or mode mismatch still prints.
+  const witnessed = markerCap(recordPath);
+  if (!witnessed.ok) {
+    mismatches.push(
+      `loop-record's \`cap\` ${cap} (${recordPath}) is not witnessed by the run's Stop-guard marker — ${witnessed.why} — ` +
+        `CAP_UNWITNESSED. /pharn-loop opens that marker at Step 1a with the cap it was given and closes it only after this ` +
+        `check, so a non-blocked record with none cannot show that its cap is the one the run started with; do not commit ` +
+        `it. (Re-running this check after the run's Final step closed the marker is RED here too.)`
+    );
+  } else if (witnessed.cap !== Number(cap)) {
+    mismatches.push(
+      `loop-record's \`cap\` is ${Number(cap)} (${recordPath}), but the run opened with --cap ${witnessed.cap} ` +
+        `(.pharn/pharn-loop/<name>/active.json) — CAP_MISMATCH. The record's stop was computed against a cap the run was ` +
+        `not given; do not commit it, and never repair this by editing \`cap\`.`
+    );
+  }
+  if (Number(iterations) > Number(cap)) {
+    mismatches.push(
+      `loop-record's \`iterations\` ${Number(iterations)} exceeds its \`cap\` ${Number(cap)} (${recordPath}) — ITER_OVER_CAP. ` +
+        `A run that obeys check-loop.mjs stops at an iteration <= its cap (CONTINUE needs iter < cap; STOP_CAP fires at the ` +
+        `first iter >= cap), so this run iterated past its cap; do not commit it.`
+    );
+  }
   if (mismatches.length > 0) {
     for (const m of mismatches) console.log(`RED — ${m}`);
     return 1;
@@ -266,8 +367,8 @@ function gate(recordPath) {
 
   console.log(
     `GREEN — loop-record's decision ${decision} (${recordPath}) is re-derivable in mode ${rederivedMode}: a live re-run of ` +
-      `check-loop.mjs against ${cited} with --iter ${iterations} --cap ${cap} reproduces it verbatim, and the ` +
-      `record's mode agrees. NOTE (P0): this proves the decision is RE-DERIVABLE from the cited ` +
+      `check-loop.mjs against ${cited} with --iter ${iterations} --cap ${cap} reproduces it verbatim, the ` +
+      `record's mode agrees, and its cap is the one the run's marker recorded at Step 1a. NOTE (P0): this proves the decision is RE-DERIVABLE from the cited ` +
       `report${quick ? "" : "s"} — it does NOT prove ${quick ? "that report is" : "those reports are"} honest. A ` +
       `self-consistent fabricated ${quick ? "report" : "report pair"} still passes this check.`
   );

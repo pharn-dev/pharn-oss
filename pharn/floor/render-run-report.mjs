@@ -127,7 +127,7 @@ import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
 import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
-import { UNMEASURED_CAUSES } from "./gate-run-core.mjs";
+import { UNMEASURED_CAUSES, excludedFacts } from "./gate-run-core.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -577,6 +577,55 @@ function tokensSection(cost, absentReason = null) {
   ].join("\n");
 }
 
+/** 6.65.0 (audit CTX-14) — the always-loaded instruction set's size, as `/pharn-loop` Step 1a recorded it with
+ *  `check-instruction-files.mjs --report` into `.pharn/pharn-loop/<name>/instruction-files.json` (the
+ *  pre-run-status.txt precedent). Rendered only from a `reported` document whose counts are non-negative safe
+ *  integers — every number inline passed that test; nothing else of the document is shown. Anything else is one
+ *  `n/a` line. An ESTIMATE of the checker's MODEL of the loader, never a measurement, and never added to the table. */
+export const INSTRUCTION_SET_FILE = "instruction-files.json";
+function instructionSetLines(repo, name) {
+  const rel = `.pharn/pharn-loop/${name}/${INSTRUCTION_SET_FILE}`;
+  const text = readTextOrNull(join(repo, ".pharn", "pharn-loop", name, INSTRUCTION_SET_FILE));
+  const head = "**Always-loaded instruction set — an ESTIMATE, not a measurement.**";
+  if (text === null) {
+    return [
+      head,
+      "",
+      na(`no \`${rel}\` — \`/pharn-loop\` records it at Step 1a (\`check-instruction-files.mjs --report\`); \`/pharn-ship\` records none`),
+    ];
+  }
+  const doc = readJsonText(text);
+  const count = (v) => Number.isSafeInteger(v) && v >= 0;
+  const ok =
+    doc !== null &&
+    doc.schema === "pharn-instruction-files/1" &&
+    doc.mode === "report" &&
+    doc.verdict === "reported" &&
+    count(doc.estimated_tokens) &&
+    count(doc.total_bytes) &&
+    Array.isArray(doc.files);
+  if (!ok) return [head, "", na(`\`${rel}\` is not a \`reported\` instruction-files document, so no estimate is shown`)];
+  return [
+    head,
+    "",
+    `~${doc.estimated_tokens} tokens (${doc.total_bytes} bytes over ${doc.files.length} file(s)), taken once at the run's start ` +
+      "by `pharn/floor/check-instruction-files.mjs --report`. The figure is bytes / 4 (`LIMITS.md §1c`) over that checker's",
+    "model of what Claude Code loads into every context (`LIMITS.md §3e`) — a model, not a measurement of the loader.",
+    "By that model those files ride in the prefix of the run's requests, so they would already sit inside the input",
+    "and cache counts above — never add this figure to them.",
+  ];
+}
+
+/** `JSON.parse` of a text that must be a plain object, or null (the readJson rule, over text already read). */
+function readJsonText(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A stored `executions` view with the shape the emitter writes — checked here only so a hand-edited `cost.json` can
  *  never crash this renderer; whether the view AGREES with the facts is `check-cost-ledger.mjs`'s rule 9. */
 function executionsShapeOk(ex) {
@@ -778,6 +827,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push(`- verify: ${na("no verify-report.json — the run stopped before a verify, or it was blocked")}`);
   } else {
     out.push(...verdictLines("verify", verify.verdict, VERIFY_VERDICTS));
+    out.push(...exclusionLines(isRecord(verify.gate_run) ? verify.gate_run.excluded : null, "verify"));
     out.push(...notMeasuredLines(verify, "verify"));
     const fg = Array.isArray(verify.failing_gates) ? verify.failing_gates : [];
     out.push("");
@@ -796,6 +846,8 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     out.push(`- regress: ${na("no regression-report.json — the run stopped before a regress, or it was blocked")}`);
   } else {
     out.push(...verdictLines("regress", regress.verdict, REGRESS_VERDICTS));
+    const head = isRecord(regress.gate_run) ? regress.gate_run.head : null;
+    out.push(...exclusionLines(isRecord(head) ? head.excluded : null, "regress"));
     out.push(...notMeasuredLines(regress, "regress"));
     const rg = Array.isArray(regress.regressions) ? regress.regressions : [];
     out.push("");
@@ -811,10 +863,39 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
  *  unparsed block is one line naming the re-run command, never an invented row. Any other report: no lines. */
 function reconcileLines(verify, failing) {
   if (verify.verdict !== "FAIL" || !failing.includes(RECONCILE_GATE_ID)) return [];
+  // 6.65.0 (LOOP-3): the checker's INCONCLUSIVE exit is not a detected escape — the heading says so when the gate's
+  // recorded exit is exactly 2 (own-property read of a plain `gates` object, L15), as check-loop.mjs's cause does.
+  const g = verify.gates;
+  const inconclusive = isRecord(g) && Object.hasOwn(g, RECONCILE_GATE_ID) && g[RECONCILE_GATE_ID] === 2;
   return [
-    "- reconcile — why the gate failed:",
+    inconclusive
+      ? "- reconcile — INCONCLUSIVE (exit 2): the checker could not decide, so no escape was detected and none was ruled out:"
+      : "- reconcile — why the gate failed:",
     "",
     ...reconcileDetailLines(verify.reconcile_detail).map((l) => (l === "" ? "" : indent(l, "  "))),
+  ];
+}
+
+/** 6.65.0 (audit LOOP-4) — the discovered gates the project's `pharn.config.json` `gates.exclude` removed, DIRECTLY under
+ *  the stage's verdict line, so a green over fewer gates never reads as a green over all of them: verify's
+ *  `gate_run.excluded`, regress's `gate_run.head.excluded` (the base side runs the head's set). Read through
+ *  gate-run-core.mjs excludedFacts (one reader, L35); an id renders inline only as an ALLOWLIST member, anything else
+ *  is counted, never shown. No block → no line, so a report without one renders as before. */
+function exclusionLines(block, stage) {
+  const x = excludedFacts(block);
+  if (x === null) return [];
+  const where = x.declaredHere
+    ? "the project's `pharn.config.json` `gates.exclude`"
+    : "a declaration whose source is not one this report recognizes";
+  const covers =
+    stage === "verify"
+      ? "this verdict covers only the gates that ran; an excluded gate is evidence neither way"
+      : "a regression in an excluded gate cannot be seen here";
+  return [
+    `  - ${x.count} discovered gate(s) EXCLUDED and NOT RUN by ${where}: ` +
+      (x.ids.length ? x.ids.map((id) => `\`${id}\``).join(", ") : "(no allowlisted id to show)") +
+      (x.unlisted > 0 ? ` (+${x.unlisted} id(s) outside the allowlist, not rendered)` : "") +
+      ` — ${covers}.`,
   ];
 }
 
@@ -1139,7 +1220,7 @@ export function renderRunReport(name, opts = {}) {
 
   const bodyBySection = {
     "## Outcome": outcomeSection(cost, staleReason),
-    "## Tokens — stage x iteration x model": tokensSection(cost, staleReason),
+    "## Tokens — stage x iteration x model": [tokensSection(cost, staleReason), "", ...instructionSetLines(repo, name)].join("\n"),
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Entry gates (background)": entrySection(cost, staleReason),
     "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason: staleReason }),

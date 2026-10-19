@@ -1,5 +1,5 @@
 // .dev/floor/frontmatter-readers.test.mjs — the .dev/floor frontmatter readers agree with pharn/floor/frontmatter-core.mjs
-// (6.64.4, frontmatter-parser-parity — audit ENF-3 / ENF-4).
+// (6.65.2, frontmatter-parser-parity — audit ENF-3 / ENF-4).
 //
 // The dev twin of pharn/floor/frontmatter-core.test.mjs's two closures. L31: the second copy of an obligation needs its
 // own enumeration, and a pharn/floor test must not reach into .dev/ (a user's install ships pharn/floor without .dev/).

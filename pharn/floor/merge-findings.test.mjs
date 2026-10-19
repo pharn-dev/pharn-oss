@@ -22,7 +22,7 @@ import { tmpdir } from "node:os";
 // ENUMERATION is the deliverable and the rules must range over it (L29/L36). Importing the CLI module is
 // safe because its CLI body sits behind `if (import.meta.main)`. BASIS_ENUM comes from the emitter so the
 // two `basis` strings merge-findings duplicates cannot drift silently (L31).
-import { BACKSTOP_ENUM } from "./merge-findings.mjs";
+import { BACKSTOP_ENUM, SEVERITY_ENUM, TYPE_OK } from "./merge-findings.mjs";
 import { BASIS_ENUM } from "./render-review-assignments.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -752,4 +752,65 @@ test("a sources[] entry carries backstop with the TRUSTED scalars, before the fr
     const s = JSON.parse(readFileSync(out, "utf8"))[0].sources[0];
     assert.deepEqual(Object.keys(s), ["source", "severity", "backstop", "problem", "evidence"]);
   });
+});
+
+// ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — finding-shape.md's enums against the sets this checker uses ─────────
+// The contract states the severity enum twice (the YAML object and the field-trust table) and lists the `type` values
+// as an OPEN list ("FINDING | CONSTITUTION_VIOLATION | ..."). merge-findings.mjs restates the severity set and checks
+// `type` by SHAPE (TYPE_OK), not membership. These tests parse the contract text and compare: set EQUALITY for severity
+// (both directions, L36), and for type the honest binding a shape regex allows — every listed value passes TYPE_OK and
+// the list is still open. Each parser throws when its anchor is missing, so a reworded line cannot parse to an empty
+// set and pass (L60). BOUND (L43): this certifies that the contract and the code AGREE, never that the enum is right.
+const FINDING_SHAPE = join(here, "..", "pharn-contracts", "finding-shape.md");
+
+function contractSeverities(text) {
+  const yaml = /^\s*severity: ([a-z]+(?: \| [a-z]+)*) # /m.exec(text);
+  if (!yaml) throw new Error("finding-shape.md: the `severity: a | b | c # …` line of the object block was not found");
+  const row = /^\| `severity` +\| [^|]*\| membership in `\{([a-z]+(?:, [a-z]+)*)\}` +\|/m.exec(text);
+  if (!row) throw new Error("finding-shape.md: the `severity` row of the field-trust table was not found");
+  return { yaml: yaml[1].split(" | ").sort(), table: row[1].split(", ").sort() };
+}
+
+function contractTypes(text) {
+  // Tokens are read loosely (any non-space, non-pipe run) so TYPE_OK, not this parser, judges their shape.
+  const m = /^\s*type: "<enum>" # ((?!\.\.\.)[^\s|]+(?: \| (?!\.\.\.)[^\s|]+)*)( \| \.\.\.)?\s*$/m.exec(text);
+  if (!m) throw new Error('finding-shape.md: the `type: "<enum>" # A | B | ...` line of the object block was not found');
+  return { listed: m[1].split(" | "), open: m[2] !== undefined };
+}
+
+test("✧ ARCH-9 — finding-shape.md's severity enum (object line AND table row) equals merge-findings SEVERITY_ENUM", () => {
+  const { yaml, table } = contractSeverities(readFileSync(FINDING_SHAPE, "utf8"));
+  const code = [...SEVERITY_ENUM].sort();
+  assert.deepEqual(yaml, code, "the contract's `severity:` line and merge-findings.mjs SEVERITY_ENUM differ — edit both");
+  assert.deepEqual(table, code, "the contract's `severity` table row and merge-findings.mjs SEVERITY_ENUM differ — edit both");
+});
+
+test("✧ ARCH-9 negative controls — a severity added to or removed from the contract, or a missing anchor, fails", () => {
+  const text = readFileSync(FINDING_SHAPE, "utf8");
+  const code = [...SEVERITY_ENUM].sort();
+  const added = text.replace("severity: blocking | important | minor", "severity: blocking | important | minor | trivial");
+  assert.notDeepEqual(contractSeverities(added).yaml, code);
+  const removed = text.replace("membership in `{blocking, important, minor}`", "membership in `{blocking, minor}`");
+  assert.notDeepEqual(contractSeverities(removed).table, code);
+  assert.throws(() => contractSeverities(text.replace(/^\s*severity: .*$/m, "")), /object block was not found/);
+  assert.throws(() => contractSeverities(text.replace(/^\| `severity` .*$/m, "")), /table was not found/);
+});
+
+test("✧ ARCH-9 — every `type` the contract lists passes merge-findings TYPE_OK, and the contract's list is still OPEN", () => {
+  const { listed, open } = contractTypes(readFileSync(FINDING_SHAPE, "utf8"));
+  assert.ok(listed.length >= 1);
+  for (const t of listed) assert.ok(TYPE_OK(t), `contract type "${t}" fails merge-findings.mjs TYPE_OK — it would be dropped`);
+  assert.ok(
+    open,
+    "finding-shape.md now lists `type` as a CLOSED enum (no trailing `...`): merge-findings.mjs TYPE_OK is only a shape " +
+      "regex, so export a type set there and bind it here with set equality"
+  );
+});
+
+test("✧ ARCH-9 negative controls — a listed type TYPE_OK refuses, a closed list, and a missing anchor each fail", () => {
+  const text = readFileSync(FINDING_SHAPE, "utf8");
+  const bad = contractTypes(text.replace("# FINDING | CONSTITUTION_VIOLATION | ...", "# FINDING | lens-note | ..."));
+  assert.ok(!bad.listed.every((t) => TYPE_OK(t)), "a lower-case type must fail the shape check");
+  assert.equal(contractTypes(text.replace("CONSTITUTION_VIOLATION | ...", "CONSTITUTION_VIOLATION")).open, false);
+  assert.throws(() => contractTypes(text.replace(/^\s*type: "<enum>".*$/m, "")), /was not found/);
 });

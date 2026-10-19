@@ -25,6 +25,14 @@ decisions below are **model decisions, not human approvals**.
 11. `/pharn-dev-verify` run 3 → `FAIL`. Run 4 → **`FAIL`**, which is `verify-report.json`. Both runs failed on `test`
     only: 2 and then 7 slow integration tests in four files this increment does not touch, at machine load averages of
     48–272. Every other gate was 0, including `reconcile` `CLEAN`.
+12. Before the push, `origin/main` had moved again: #361 (6.64.4), #360 (6.65.0, group D's `loop-honest-stop`) and
+    #363 (6.65.1). The branch merged it a second time and renumbered to **6.65.2**: `SKILLS_VERSION`, the badge, the
+    CHANGELOG heading, and every `6.64.4` cite this increment had added.
+    - Two code conflicts were resolved by keeping both sides' imports: `check-loop-decision.mjs` and `loop-closeout.mjs`
+      (main added `basename`/`resolve` and `ALLOWLIST`/`excludedFacts`; this branch added `fieldEntries`).
+    - Main's CHANGELOG sections are byte-for-byte unchanged.
+    - After that merge, these ran again: the affected suites (269/269), `validate`, the non-test `npm run check` gates
+      and `check:changelog-entry`. Regress and verify did **not** run again on this tree.
 
 **Where the run ended:** at a RED verify verdict on the final tree (`test`). The cause is load-sensitive timing tests,
 not a defect this run found in the increment. That is a reading of logs, not a verdict, so the report states it as

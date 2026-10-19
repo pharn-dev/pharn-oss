@@ -241,7 +241,7 @@ function resolveStage(stages, stage) {
 // line parse + quote-strip as `count-grillers.mjs`'s `frontmatterRole` and `.dev/floor/check-config.mjs`
 // — a STRUCTURED read of the structured location, never a substring grep (L6). The key match is EXACT,
 // which is what keeps `model_tier:` from ever being read as `model:`. One leading BOM is stripped first
-// (frontmatter-core.mjs `stripBom`, 6.64.4), as those readers now do: a BOM'd command used to read as having
+// (frontmatter-core.mjs `stripBom`, 6.65.2), as those readers now do: a BOM'd command used to read as having
 // no `model:` at all.
 function frontmatterModelEffort(rawText) {
   const text = stripBom(rawText);

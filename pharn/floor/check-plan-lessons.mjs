@@ -18,7 +18,7 @@
 //
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
 // FLOOR (what the exit code guarantees): the field is PRESENT, declared EXACTLY ONCE across the structured
-//   header (6.64.4 — a repeat is refused, never resolved to one copy), WELL-FORMED, every cited id RESOLVES
+//   header (6.65.2 — a repeat is refused, never resolved to one copy), WELL-FORMED, every cited id RESOLVES
 //   to a real lesson heading, and every cited id is REFERENCED in the plan BODY. All five are
 //   enum/regex/membership/count tests.
 // ADVISORY (what it can NEVER check): whether the lessons were GENUINELY applied, and whether a `none`
@@ -97,7 +97,7 @@ function clean(v) {
     .trim();
 }
 
-// Both parsers return `{ values, body }` — EVERY declared value in their region, in file order (6.64.4: the gate
+// Both parsers return `{ values, body }` — EVERY declared value in their region, in file order (6.65.2: the gate
 // refuses more than one, so a parser must never stop at the first), plus the plan's BODY REGION. `body` is
 // deterministically delimited (never "the whole file"): the header region that carries the declaration is
 // EXCLUDED, so the declaration line can never satisfy its own sub-check (D). The line grammar is frontmatter-core.mjs's
@@ -200,7 +200,7 @@ function gate(planPath, lessonsPath) {
     );
   }
 
-  // (A2) UNIQUENESS (6.64.4, frontmatter-parser-parity — audit ENF-4). A repeated declaration is REFUSED, never read.
+  // (A2) UNIQUENESS (6.65.2, frontmatter-parser-parity — audit ENF-4). A repeated declaration is REFUSED, never read.
   // Before this, the FIRST copy was gated while YAML, a JS object assignment and frontmatter-core.mjs `readField`
   // all keep the LAST — so `applied_lessons: none` followed by `applied_lessons: [L9999]` was GREEN on the copy every
   // other reader discards. Choosing the last copy instead would only move the disagreement to a first-wins reader;

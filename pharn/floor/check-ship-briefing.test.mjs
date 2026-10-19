@@ -23,6 +23,63 @@ import { FM_RE, readField } from "./frontmatter-core.mjs";
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(here, "check-ship-briefing.mjs");
 
+// ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — verify-report.md's verdict table rows against VERIFY_ENUM ────────
+// pharn/pharn-contracts/verify-report.md lists, per consumer, the `verdict` set it accepts; both briefing modules keep
+// their own VERIFY_ENUM (exported for this binding — both run their CLI behind `import.meta.main`). Each module's set
+// must EQUAL its own row (L36); the parser throws on a missing header or a malformed row (L60). BOUND (L43): agreement
+// between the contract and the code, never that the set is right.
+const VERIFY_REPORT = join(here, "..", "pharn-contracts", "verify-report.md");
+
+/** The per-consumer `verdict` table → Map(basename → sorted values). Throws on a missing header or a malformed row. */
+function contractVerdictTable(text) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => /^\|\s*consumer\s*\|\s*accepted `verdict` set\s*\|\s*on a value outside it\s*\|\s*$/.test(l));
+  if (h < 0) throw new Error("verify-report.md: the per-consumer `verdict` table header was not found");
+  const rows = new Map();
+  for (let i = h + 2; i < lines.length && lines[i].startsWith("|"); i++) {
+    const cells = lines[i]
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    const file = /^`(?:[^`]*\/)?([^`/]+\.mjs)`$/.exec(cells[0] ?? "");
+    if (!file || !/^`[A-Z_]+`(?: · `[A-Z_]+`)*$/.test(cells[1] ?? ""))
+      throw new Error(`verify-report.md: malformed verdict-table row: ${lines[i]}`);
+    rows.set(
+      file[1],
+      cells[1]
+        .split(" · ")
+        .map((t) => t.slice(1, -1))
+        .sort()
+    );
+  }
+  if (rows.size === 0) throw new Error("verify-report.md: the verdict table has no rows");
+  return rows;
+}
+
+for (const [name, mod] of [
+  ["check-ship-briefing.mjs", checker],
+  ["render-ship-briefing.mjs", renderer],
+]) {
+  test(`✧ ARCH-9 — verify-report.md's ${name} row equals ${name} VERIFY_ENUM`, () => {
+    const row = contractVerdictTable(readFileSync(VERIFY_REPORT, "utf8")).get(name);
+    assert.ok(row, `verify-report.md's verdict table has no ${name} row`);
+    assert.ok(mod.VERIFY_ENUM instanceof Set, `${name} no longer exports VERIFY_ENUM as a Set`);
+    assert.deepEqual([...mod.VERIFY_ENUM].sort(), row, `${name} VERIFY_ENUM and its verify-report.md row differ — edit both`);
+  });
+
+  test(`✧ ARCH-9 negative controls (${name}) — a value added to or removed from the row, or a missing header, fails`, () => {
+    const text = readFileSync(VERIFY_REPORT, "utf8");
+    const code = [...mod.VERIFY_ENUM].sort();
+    const line = text.split("\n").find((l) => new RegExp("^\\|\\s*`[^`]*" + name.replace(".", "\\.") + "`").test(l));
+    assert.ok(line, `the ${name} row must exist for the mutants to mean anything`);
+    const added = text.replace(line, line.replace("`INCONCLUSIVE`", "`INCONCLUSIVE` · `SKIPPED`"));
+    assert.notDeepEqual(contractVerdictTable(added).get(name), code);
+    const removed = text.replace(line, line.replace("`INCOMPLETE` · ", ""));
+    assert.notDeepEqual(contractVerdictTable(removed).get(name), code);
+    assert.throws(() => contractVerdictTable(text.replace("accepted `verdict` set", "accepted set")), /header was not found/);
+  });
+}
+
 function scratchDir() {
   return mkdtempSync(join(tmpdir(), "check-ship-briefing-"));
 }
@@ -284,7 +341,7 @@ test("usage error: no path argument", () => {
   assert.equal(r.status, 1);
 });
 
-// ✧ ENF-4 (6.64.4): readHeaderField keeps the LAST copy of a repeated key in both shapes — the copy check-spec.mjs
+// ✧ ENF-4 (6.65.2): readHeaderField keeps the LAST copy of a repeated key in both shapes — the copy check-spec.mjs
 // reads with frontmatter-core.mjs `readField` — and its bullet-header fences are plan-files-core.mjs `fenceStates`.
 // Before, both copies returned the FIRST copy, so on a SPEC re-approved by appending `state: Approved` under
 // `state: Draft` the briefing reported Draft while the gate read Approved. Each row's expected value differs from what

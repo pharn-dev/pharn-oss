@@ -412,7 +412,9 @@ test("★ ReDoS fix did not narrow detection: nested group WITH a source → sti
 // ---------------------------------------------------------------------------
 // ✧ COPY-PAIR PIN — the three scan-code-* scanners share the ARGUMENT SPAN by DELIBERATE duplication
 // (the check-provenance.mjs precedent: separate copies, pinned to agree by test rather than shared through
-// an import, because these scanners are independently-runnable floor scripts with no shared core).
+// an import, because these scanners were independently-runnable floor scripts with no shared core). Since
+// 6.65.1 all three import sink-span-core.mjs for the driver that RUNS each pattern, but each still declares
+// its own SPAN literal, so this pin still has something to hold.
 //
 // L20: a lesson whose only remedy is discipline WILL recur, and the second occurrence is the trigger to give
 // it a floor check. This IS that second occurrence — the SPAN constant and its bound paragraph have now been
@@ -430,3 +432,38 @@ test("✧ PIN: all three scan-code-* scanners declare a byte-identical SPAN", ()
   });
   assert.equal(new Set(spans).size, 1, `SPAN drifted across the copy-pair:\n${files.map((f, i) => `  ${f}: ${spans[i]}`).join("\n")}`);
 });
+
+// ---------------------------------------------------------------------------
+// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.65.1). The same reasoning
+// as the block of that name in scan-code-injection.test.mjs: through 6.64.2 a line cost O(sinks × length) —
+// `fetch(`×16000 (96 KB) took 3.6 s — and the driver in sink-span-core.mjs now skips every sink inside a failed
+// sink's span. (old: killed) marks a shape the 6.64.2 scanner does not finish within this timeout, measured once in
+// .dev/features/scanner-redos-bounds/MEASUREMENTS.md; the other shapes are the new driver's own adversarial inputs.
+// Membership verdict, never a stopwatch; the twins prove detection did not narrow.
+const MANY_TIMEOUT_MS = 5000;
+const L200K = 200_000;
+const MANY_SINK_SHAPES = [
+  { n: "`fetch(`×33k, 200 KB (old: killed)", line: "fetch(".repeat(L200K / 6), want: { found: false, hits: [] } },
+  { n: "`axios.get(`×20k, 200 KB (old: killed)", line: "axios.get(".repeat(L200K / 10), want: { found: false, hits: [] } },
+  { n: "`fetch()`×28k — every span fails at once", line: "fetch()".repeat(L200K / 7), want: { found: false, hits: [] } },
+  {
+    n: "`fetch(`×33k then a request source (a hit)",
+    line: "fetch(".repeat(L200K / 6) + "req.query.u",
+    want: { found: true, hits: [{ line: 1, kind: "fetch" }] },
+  },
+  {
+    n: "`fetch()`×28k then `fetch(req.query.u)` (a hit at the LAST sink)",
+    line: "fetch()".repeat(L200K / 7) + "fetch(req.query.u)",
+    want: { found: true, hits: [{ line: 1, kind: "fetch" }] },
+  },
+];
+for (const s of MANY_SINK_SHAPES) {
+  test(`★ ReDoS: one line, ${s.n} → the scan COMPLETES (not killed)`, () => {
+    withCode(s.line + "\n", (p) => {
+      const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: MANY_TIMEOUT_MS });
+      assert.equal(r.signal, null, `scan did not terminate within ${MANY_TIMEOUT_MS}ms — a sink scan is super-linear again`);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), s.want);
+    });
+  });
+}

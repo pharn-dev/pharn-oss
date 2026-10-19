@@ -34,7 +34,7 @@ export const QUICK_ANCHOR_RE = /^## Quick mode\b/m;
  * The leading `---` frontmatter of `text` as a flat {key: value} map (a value's surrounding double quotes are
  * removed; a line without `key:` is ignored; the last copy of a repeated key wins), or null when there is no
  * frontmatter block. The anchor and the line grammar are the product core's (`matchFrontmatter`, `fieldEntries` —
- * 6.64.4), so a leading BOM and CRLF are tolerated as every floor reader tolerates them.
+ * 6.65.2), so a leading BOM and CRLF are tolerated as every floor reader tolerates them.
  */
 export function frontmatterFields(text) {
   const m = matchFrontmatter(text);
