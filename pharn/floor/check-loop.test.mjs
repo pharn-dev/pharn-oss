@@ -335,7 +335,11 @@ test("★ exact membership: an 'ac-evidence' substring in another gate id, or in
   assert.equal(o.terminal_cause, null);
 });
 
-test("✧ L36 CLOSURE — terminal_cause takes exactly {unmeasured, ac-evidence, reconcile} on STOP_TERMINAL and null otherwise", () => {
+// 6.65.0 (audit LOOP-3): check-bash-reconcile.mjs's INCONCLUSIVE exit 2, recorded under the gate id.
+const VRECONCILE_INCONCLUSIVE = { feature: "x", gates: { reconcile: 2 }, verdict: "FAIL", failing_gates: ["reconcile"] };
+const CAUSES = ["ac-evidence", "reconcile", "reconcile-inconclusive", "unmeasured"];
+
+test("✧ L36 CLOSURE — terminal_cause takes exactly the four causes on STOP_TERMINAL and null otherwise", () => {
   const seen = new Map();
   const cases = [
     [PASS, CLEAN, 1, 3],
@@ -344,23 +348,72 @@ test("✧ L36 CLOSURE — terminal_cause takes exactly {unmeasured, ac-evidence,
     [VAC_DELIVERY, CLEAN, 1, 3],
     [VAC_EVIDENCE, CLEAN, 1, 3],
     [VRECONCILE, CLEAN, 1, 3],
+    [VRECONCILE_INCONCLUSIVE, CLEAN, 1, 3],
     [{ ...PASS, verdict: "INCONCLUSIVE" }, CLEAN, 1, 3],
     [{ ...PASS, verdict: "BOGUS" }, CLEAN, 1, 3],
   ];
   for (const [v, rg, i, c] of cases) {
     const o = json(decide(v, rg, i, c));
     seen.set(o.decision + ":" + o.terminal_cause, true);
-    if (o.decision === "STOP_TERMINAL") assert.ok(["unmeasured", "ac-evidence", "reconcile"].includes(o.terminal_cause), JSON.stringify(o));
+    if (o.decision === "STOP_TERMINAL") assert.ok(CAUSES.includes(o.terminal_cause), JSON.stringify(o));
     else assert.equal(o.terminal_cause, null, JSON.stringify(o));
   }
   const causes = [...seen.keys()]
     .filter((k) => k.startsWith("STOP_TERMINAL:"))
     .map((k) => k.split(":")[1])
     .sort();
-  assert.deepEqual(causes, ["ac-evidence", "reconcile", "unmeasured"], "every cause is reachable");
+  assert.deepEqual(causes, CAUSES, "every cause is reachable");
   const src = readFileSync(CL, "utf8");
   const assigned = [...src.matchAll(/terminal_cause = "([^"]+)"/g)].map((m) => m[1]).sort();
-  assert.deepEqual(assigned, ["ac-evidence", "reconcile", "unmeasured"], "no cause is assigned outside the closed set");
+  assert.deepEqual(assigned, CAUSES, "no cause is assigned outside the closed set");
+});
+
+test("★ LOOP-3 — a reconcile gate that exited 2 (INCONCLUSIVE) stops as reconcile-inconclusive, never as a detected escape", () => {
+  for (const [label, spec] of [
+    ["full", null],
+    ["quick", QUICK_SPEC],
+  ]) {
+    const r = decide(VRECONCILE_INCONCLUSIVE, CLEAN, 1, 3, spec);
+    assert.equal(r.status, 4, label);
+    const o = json(r);
+    assert.equal(o.decision, "STOP_TERMINAL", label);
+    assert.equal(o.terminal_cause, "reconcile-inconclusive", label);
+    assert.match(o.reason, /could not decide/, label);
+    assert.match(o.reason, /no escape was detected/, label);
+    assert.doesNotMatch(o.reason, /erase the detected escape/, label);
+  }
+  // control: exit 1 (an escape) keeps `reconcile` and its own reason
+  const o = json(decide(VRECONCILE, CLEAN, 1, 3));
+  assert.equal(o.terminal_cause, "reconcile");
+  assert.match(o.reason, /erase the detected escape/);
+});
+
+test("★ LOOP-3 — only an OWN `reconcile` key holding exactly the number 2 reads inconclusive; anything else keeps `reconcile`", () => {
+  const variants = [
+    ["exit 1", { reconcile: 1 }],
+    ["exit 3", { reconcile: 3 }],
+    ["the string '2'", { reconcile: "2" }],
+    ["no reconcile key", { test: 2 }],
+    ["gates absent", undefined],
+    ["gates null", null],
+    ["gates an array", [2]],
+    ["gates a string", "reconcile: 2"],
+    ["an inherited key", Object.create({ reconcile: 2 })],
+  ];
+  for (const [label, gates] of variants) {
+    const v = { feature: "x", verdict: "FAIL", failing_gates: ["reconcile"] };
+    if (gates !== undefined) v.gates = gates;
+    const o = json(decide(v, CLEAN, 1, 3));
+    assert.equal(o.decision, "STOP_TERMINAL", label);
+    assert.equal(o.terminal_cause, "reconcile", label);
+  }
+  // `gates.reconcile === 2` without reconcile in failing_gates never stops terminally on reconcile
+  const o = json(decide({ ...VFAIL, gates: { test: 1, reconcile: 2 } }, CLEAN, 1, 3));
+  assert.equal(o.decision, "CONTINUE");
+  assert.equal(o.terminal_cause, null);
+  // ac-evidence still wins over an inconclusive reconcile
+  const both = { feature: "x", gates: { reconcile: 2 }, verdict: "FAIL", failing_gates: ["ac-evidence", "reconcile"] };
+  assert.equal(json(decide(both, CLEAN, 1, 3)).terminal_cause, "ac-evidence");
 });
 
 test("★ STOP_GREEN is unreachable with any AC id in failing_gates — the verdict it rides on is FAIL, whatever the cap", () => {

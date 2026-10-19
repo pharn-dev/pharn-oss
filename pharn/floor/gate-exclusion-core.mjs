@@ -27,8 +27,9 @@
 // a later change reads `test-infra-changed` at /pharn-verify (pharn-contracts/ac-tests.md).
 //
 // WHAT IT DOES NOT DO (P0): it does not make excluding a gate safe — an excluded gate does not run, and its absence is
-// DISCLOSED (the stamp's `excluded` block, both reports, VERIFY.md, REGRESSION.md), never evidence either way. It does
-// not filter an explicit `--gates` string. The file is agent-editable project input: the pin narrows a later change
+// DISCLOSED (the stamp's `excluded` block, both reports, VERIFY.md, REGRESSION.md, and since 6.65.0 /pharn-loop's
+// RUN-REPORT.md, closeout document and commit message, read through gate-run-core.mjs excludedFacts), never evidence
+// either way. It does not filter an explicit `--gates` string. The file is agent-editable project input: the pin narrows a later change
 // and never proves who wrote the declaration (L43).
 //
 // TRUST (P2): the file is untrusted DATA — parsed as JSON, keys tested by own-property (L15), values used only as

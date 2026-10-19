@@ -674,6 +674,126 @@ test("6.55.0 — a stop on the reconcile terminal cause names the reconcile reas
   }
 });
 
+test("★ 6.65.0 LOOP-3 — a reconcile gate that exited 2 is headed INCONCLUSIVE, never 'why the gate failed'", () => {
+  const root = scratch();
+  try {
+    const detail = { state: "parsed", exit: 2, verdict: "INCONCLUSIVE", escapes: [], escapes_total: 0, merged_count: 0 };
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "FAIL", gates: { reconcile: 2 }, failing_gates: ["reconcile"], reconcile_detail: detail },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(md, /- reconcile — INCONCLUSIVE \(exit 2\): the checker could not decide, so no escape was detected/);
+    assert.doesNotMatch(md, /reconcile — why the gate failed/);
+    // control: exit 1, a string "2", and an absent `gates` keep the old heading
+    for (const gates of [{ reconcile: 1 }, { reconcile: "2" }, undefined]) {
+      const v = { verdict: "FAIL", failing_gates: ["reconcile"], reconcile_detail: { ...detail, exit: 1, verdict: "ESCAPE" } };
+      if (gates !== undefined) v.gates = gates;
+      feature(root, "feat", { "cost.json": costJson(), "verify-report.json": v });
+      const other = renderRunReport("feat", { repo: root });
+      assert.match(other, /- reconcile — why the gate failed:/, JSON.stringify(gates));
+      assert.doesNotMatch(other, /INCONCLUSIVE \(exit 2\)/, JSON.stringify(gates));
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("★ 6.65.0 LOOP-4 — the excluded gates are named under each verdict line; no block, no line", () => {
+  const root = scratch();
+  try {
+    const block = { declared_in: "pharn.config.json#gates.exclude", ids: ["test:e2e", "e2e"] };
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "PASS", failing_gates: [], gate_run: { excluded: block } },
+      "regression-report.json": {
+        verdict: "no-regressions",
+        regressions: [],
+        gate_run: { head: { excluded: { ...block, ids: ["e2e"] } } },
+      },
+    });
+    const md = renderRunReport("feat", { repo: root });
+    assert.match(
+      md,
+      /- verify: `PASS`\n {2}- 2 discovered gate\(s\) EXCLUDED and NOT RUN by the project's `pharn\.config\.json` `gates\.exclude`: `test:e2e`, `e2e` — this verdict covers only the gates that ran/
+    );
+    assert.match(
+      md,
+      /- regress: `no-regressions`\n {2}- 1 discovered gate\(s\) EXCLUDED and NOT RUN by .*: `e2e` — a regression in an excluded gate cannot be seen here\./
+    );
+    assert.deepEqual(headings(md), [...SECTIONS]);
+    // an id outside the allowlist is counted, never rendered; an unknown source is named as such
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": {
+        verdict: "PASS",
+        failing_gates: [],
+        gate_run: { excluded: { declared_in: "x", ids: ["e2e", "`rm -rf`\n## X"] } },
+      },
+    });
+    const odd = renderRunReport("feat", { repo: root });
+    assert.match(
+      odd,
+      /2 discovered gate\(s\) EXCLUDED and NOT RUN by a declaration whose source is not one this report recognizes: `e2e` \(\+1 id\(s\) outside the allowlist, not rendered\)/
+    );
+    assert.doesNotMatch(odd, /rm -rf/);
+    assert.deepEqual(headings(odd), [...SECTIONS]);
+    // L34 control: no block (or no gate_run at all) → no exclusion line anywhere
+    feature(root, "feat", {
+      "cost.json": costJson(),
+      "verify-report.json": { verdict: "PASS", failing_gates: [], gate_run: {} },
+      "regression-report.json": { verdict: "no-regressions", regressions: [] },
+    });
+    assert.doesNotMatch(renderRunReport("feat", { repo: root }), /EXCLUDED and NOT RUN/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("★ 6.65.0 CTX-14 — ## Tokens shows the Step-1a instruction-set estimate; a missing or unusable record is one n/a line", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": costJson() });
+    const tokens = (md) => md.split("## Tokens")[1].split("\n## ")[0];
+    // absent → n/a naming who records it
+    let md = renderRunReport("feat", { repo: root });
+    assert.match(tokens(md), /Always-loaded instruction set — an ESTIMATE/);
+    assert.match(tokens(md), /n\/a — no `\.pharn\/pharn-loop\/feat\/instruction-files\.json` — `\/pharn-loop` records it at Step 1a/);
+    // a real --report document, as the pinned Step-1a line writes it
+    const dir = join(root, ".pharn", "pharn-loop", "feat");
+    mkdirSync(dir, { recursive: true });
+    const real = spawnSync(process.execPath, [join(here, "check-instruction-files.mjs"), "--report"], { cwd: REPO, encoding: "utf8" });
+    assert.equal(real.status, 0, real.stderr);
+    writeFileSync(join(dir, "instruction-files.json"), real.stdout);
+    const doc = JSON.parse(real.stdout);
+    md = renderRunReport("feat", { repo: root });
+    assert.ok(
+      tokens(md).includes(`~${doc.estimated_tokens} tokens (${doc.total_bytes} bytes over ${doc.files.length} file(s))`),
+      tokens(md)
+    );
+    assert.match(tokens(md), /never add this figure to them/);
+    assert.deepEqual(headings(md), [...SECTIONS]);
+    // unusable documents → n/a, never a number
+    for (const bad of [
+      "{ not json",
+      JSON.stringify({ ...doc, verdict: "inconclusive" }),
+      JSON.stringify({ ...doc, estimated_tokens: "7360" }),
+      JSON.stringify({ ...doc, estimated_tokens: -1 }),
+      JSON.stringify({ ...doc, total_bytes: { toString: 1 } }),
+      JSON.stringify({ ...doc, schema: "x" }),
+      JSON.stringify({ ...doc, files: "CLAUDE.md" }),
+      "[1,2]",
+    ]) {
+      writeFileSync(join(dir, "instruction-files.json"), bad);
+      const t = tokens(renderRunReport("feat", { repo: root }));
+      assert.match(t, /is not a `reported` instruction-files document/, bad);
+      assert.doesNotMatch(t, / tokens \(\d+ bytes/, bad);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("★ 6.59.0 — a stop on an UNMEASURED gate names it beside the verdict: verify's unmeasured_gates, regress's timed-out sides", () => {
   const root = scratch();
   try {
