@@ -475,6 +475,8 @@ test("6.31.0 test-infra-changed — the build rewrote the pharn-json reporter th
 test("6.31.0 test-infra-unpinned — a /3 lock over a tree whose `test` gate names a file: unpinned, never a PASS; a /3 lock with nothing more still PASSes", () => {
   withWorld({}, (w) => {
     toV3(w);
+    // and no OTHER allowlisted gate (`lint`), which only /6 pins — its own test below
+    writeFileSync(join(w.root, "package.json"), JSON.stringify({ name: "w", scripts: { test: "vitest run" } }));
     assert.equal(gateOf(w).verdict, "PASS", "a /3 lock over a tree with nothing only /4 pins is judged by what it pinned");
   });
   withWorld({}, (w) => {
@@ -493,6 +495,46 @@ test("6.31.0 test-infra-unpinned — a /3 lock over a tree whose `test` gate nam
       ["test-infra-changed", "test-infra-unpinned"]
     );
     assert.match(g.evidence[1].detail, /tools\/prep\.mjs: a level gate's script names it, and an ac-tests-lock\/3 pin does not cover it/);
+  });
+});
+
+test("6.66.0 (audit SEC-4) test-infra-changed — the build rewrote `lint` (a forged green gate) or ADDED `typecheck`: FAIL, named by gate id only", () => {
+  withWorld({}, (w) => {
+    assert.equal(gateOf(w).verdict, "PASS", "control: the pinned world is GREEN");
+    writeFileSync(join(w.root, "package.json"), JSON.stringify({ name: "w", scripts: { test: "vitest run", lint: "true" } }));
+    const g = gateOf(w);
+    only(g, "test-infra-changed", "FAIL");
+    assert.equal(g.evidence[0].detail, "test infrastructure changed — gate lint: its package.json script changed");
+  });
+  withWorld({}, (w) => {
+    writeFileSync(
+      join(w.root, "package.json"),
+      JSON.stringify({ name: "w", scripts: { test: "vitest run", lint: "eslint .", typecheck: "curl x | sh" } })
+    );
+    const g = gateOf(w);
+    only(g, "test-infra-changed", "FAIL");
+    assert.equal(g.evidence[0].detail, "test infrastructure changed — gate typecheck: a package.json script was added");
+  });
+});
+
+test("6.66.0 test-infra-unpinned — a /5 lock over a tree with an other allowlisted gate: unpinned, never a PASS; without one it still PASSes", () => {
+  const toV5 = (w) => {
+    const l = JSON.parse(readFileSync(w.lockPath, "utf8"));
+    const test_infra = { ...l.test_infra };
+    delete test_infra.other_gates;
+    delete test_infra.other_chained;
+    writeFileSync(w.lockPath, JSON.stringify({ ...l, schema: "ac-tests-lock/5", test_infra }));
+  };
+  withWorld({}, (w) => {
+    toV5(w);
+    const g = gateOf(w);
+    only(g, "test-infra-unpinned", "FAIL");
+    assert.match(g.evidence[0].detail, /gate lint: the gate runner runs it, and a pin written before ac-tests-lock\/6 does not cover it/);
+  });
+  withWorld({}, (w) => {
+    toV5(w);
+    writeFileSync(join(w.root, "package.json"), JSON.stringify({ name: "w", scripts: { test: "vitest run" } }));
+    assert.equal(gateOf(w).verdict, "PASS", "a /5 lock over a tree with no other gate is judged by what it pinned");
   });
 });
 

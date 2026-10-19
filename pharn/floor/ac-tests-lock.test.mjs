@@ -67,7 +67,17 @@ test("--write then --check is GREEN; the lock's shape is the closed key set, dig
     for (const f of lock.files) assert.equal(f.sha256, sha256RegularFile(join(root, f.path)));
     assert.equal(lock.red_run, null);
     // no package.json and no runner config in this world: the pin records the level and nothing else
-    assert.deepEqual(lock.test_infra, { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null, exclude: [] });
+    assert.deepEqual(lock.test_infra, {
+      levels: ["unit"],
+      gates: [],
+      chained: [],
+      configs: [],
+      script_files: [],
+      jest: null,
+      exclude: [],
+      other_gates: [],
+      other_chained: [],
+    });
     assert.equal(lockShapeError(lock, NAME), null);
     const r = cli(root, ["--check", NAME]); // the DEFAULT --base, exercised (L41)
     assert.equal(r.code, 0, r.out);
@@ -230,12 +240,12 @@ const redRunFor = (lock) => ({
   acs: [{ id: "AC-1", tests: ["tests/ac/one.test.js::AC-1: t"] }],
 });
 
-test("/5: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
+test("/6: --write writes mode test-first with bootstrap null; a well-formed red_run bound to the files checks GREEN", () => {
   const root = world();
   try {
     cli(root, ["--write", NAME]);
     const lock = lockOf(root);
-    assert.equal(lock.schema, "ac-tests-lock/5");
+    assert.equal(lock.schema, "ac-tests-lock/6");
     assert.equal(lock.mode, "test-first");
     assert.equal(lock.bootstrap, null);
     writeLockJson(root, { ...lock, red_run: redRunFor(lock) });
@@ -409,7 +419,7 @@ test("bootstrap: --write-bootstrap records mode bootstrap, no mapping, no files,
     assert.match(w.out, /BOOTSTRAP .* WEAKER than test-first/);
     const lock = lockOf(root);
     assert.deepEqual(lock, {
-      schema: "ac-tests-lock/5",
+      schema: "ac-tests-lock/6",
       feature: NAME,
       mode: "bootstrap",
       spec: { spec_id: NAME, spec_content_hash: pinOf(spec) },
@@ -535,6 +545,15 @@ function infraWorld() {
   writeFileSync(join(root, "vitest.config.ts"), "export default {}\n");
   return root;
 }
+/** infraWorld's manifest without its one OTHER allowlisted gate (`lint`): the tree a pre-6.66.0 lock reads as before. */
+const dropOtherGates = (root) => writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
+/** A /6 lock as a 6.36.0–6.65.x floor wrote it: schema /5, no `other_*` sections. */
+const toV5 = (lock) => {
+  const test_infra = { ...lock.test_infra };
+  delete test_infra.other_gates;
+  delete test_infra.other_chained;
+  return { ...lock, schema: "ac-tests-lock/5", test_infra };
+};
 
 test("/4 --write pins the test infrastructure; --check REDs a changed script, config or results format, naming it", () => {
   const cases = [
@@ -615,7 +634,7 @@ test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a re
     writeLockJson(root, { ...lock, schema: "ac-tests-lock/2", test_infra: null });
     const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
     assert.equal(rec.code, 2, rec.out);
-    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/5 test-first lock/);
+    assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock/);
     writeLockJson(root, { ...lock, test_infra: null });
     const u = cli(root, ["--check", NAME]);
     assert.equal(u.code, 2, u.out);
@@ -743,13 +762,14 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
     const lock = lockOf(root);
     const v3 = { ...toV3(lock), red_run: redRunFor(lock) };
     writeLockJson(root, v3);
+    dropOtherGates(root); // no other allowlisted gate either (6.66.0 reads one as unpinned — its own test)
     const g = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(g.code, 0, g.out);
     assert.match(g.out, /the test-infrastructure pin holds/);
-    // a red run is recorded on a /4 lock only (re-running --write is cheap there)
+    // a red run is recorded on a current-schema lock only (re-running --write is cheap there)
     const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
     assert.equal(rec.code, 2, rec.out);
-    assert.match(rec.out, /ac-tests-lock\/3 test-first; a red run is recorded on an ac-tests-lock\/5 test-first lock — re-run --write/);
+    assert.match(rec.out, /ac-tests-lock\/3 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock — re-run --write/);
     // closed per schema: a /4-shaped pin under /3, and a /3-shaped one under /4, are unusable, never a verdict
     writeLockJson(root, { ...v3, test_infra: lock.test_infra });
     const u3 = cli(root, ["--check", NAME]);
@@ -776,6 +796,7 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
       "RED — test infrastructure unpinned — tools/reporter.mjs: a level gate's script names it, and an ac-tests-lock/3 pin does not cover it",
       "RED — test infrastructure unpinned — .npmrc: a package-manager config, which an ac-tests-lock/3 pin does not cover",
       "RED — test infrastructure unpinned — package.json's jest key: an ac-tests-lock/3 pin does not cover it",
+      "RED — test infrastructure unpinned — gate lint: the gate runner runs it, and a pin written before ac-tests-lock/6 does not cover it",
     ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -787,7 +808,7 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
 const declare = (root, exclude) =>
   writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" }, gates: { exclude } }));
 const toV4 = (lock) => {
-  const test_infra = { ...lock.test_infra };
+  const { test_infra } = toV5(lock);
   delete test_infra.exclude;
   return { ...lock, schema: "ac-tests-lock/4", test_infra };
 };
@@ -823,6 +844,7 @@ test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, R
     const lock = lockOf(root);
     const v4 = { ...toV4(lock), red_run: redRunFor(lock) };
     writeLockJson(root, v4);
+    dropOtherGates(root); // no other allowlisted gate either (6.66.0 reads one as unpinned — its own test)
     const g = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(g.code, 0, g.out);
     declare(root, []);
@@ -838,7 +860,7 @@ test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, R
     );
     const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
     assert.equal(rec.code, 2, rec.out);
-    assert.match(rec.out, /ac-tests-lock\/4 test-first; a red run is recorded on an ac-tests-lock\/5 test-first lock — re-run --write/);
+    assert.match(rec.out, /ac-tests-lock\/4 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock — re-run --write/);
     // closed per schema: a /5-shaped pin under /4, and a /4-shaped one under /5, are unusable, never a verdict
     writeLockJson(root, { ...v4, test_infra: lock.test_infra });
     assert.match(cli(root, ["--check", NAME]).out, /test_infra is not exactly \{chained, configs, gates, jest, levels, script_files\}/);
@@ -847,6 +869,92 @@ test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, R
       cli(root, ["--check", NAME]).out,
       /test_infra is not exactly \{chained, configs, exclude, gates, jest, levels, script_files\}/
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 6.66.0 (audit SEC-4): /6 pins every other allowlisted gate's command; a /5 lock is still read ───────────────
+
+test("6.66.0 /6 — --write pins every other allowlisted gate; --check REDs a rewritten `lint` and an ADDED `typecheck`, by id only", () => {
+  const root = infraWorld();
+  try {
+    const w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 0, w.out);
+    assert.match(w.out, /; 1 other allowlisted gate\(s\) and 0 script\(s\) they chain to$/m);
+    assert.deepEqual(lockOf(root).test_infra.other_gates, [{ id: "lint", script: "eslint .", pre: null, post: null }]);
+    assert.equal(cli(root, ["--check", NAME]).code, 0);
+    writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run", lint: "true", typecheck: "curl x | sh" } }));
+    const r = cli(root, ["--check", NAME]);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(
+      r.out.split("\n").filter((l) => l.startsWith("RED — test infrastructure")),
+      [
+        "RED — test infrastructure changed — gate lint: its package.json script changed",
+        "RED — test infrastructure changed — gate typecheck: a package.json script was added",
+      ]
+    );
+    assert.ok(
+      !/curl|true/.test(
+        r.out
+          .split("\n")
+          .filter((l) => l.startsWith("RED"))
+          .join("\n")
+      ),
+      "no script text"
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.66.0 MIGRATION — a /5 lock is still read: GREEN with no other gate, RED `unpinned` (never `changed`) with one; no red run is recorded on it", () => {
+  const root = infraWorld();
+  try {
+    cli(root, ["--write", NAME]);
+    const lock = lockOf(root);
+    const v5 = { ...toV5(lock), red_run: redRunFor(lock) };
+    writeLockJson(root, v5);
+    // infraWorld has `lint`: what an in-flight /5 lock reads after the update — RED, the remedy is re-running /pharn-test
+    const r = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(r.code, 1, r.out);
+    assert.deepEqual(
+      r.out.split("\n").filter((l) => l.startsWith("RED — test infrastructure")),
+      [
+        "RED — test infrastructure unpinned — gate lint: the gate runner runs it, and a pin written before ac-tests-lock/6 does not cover it",
+      ]
+    );
+    dropOtherGates(root);
+    const g = cli(root, ["--check", NAME, "--require-red-run"]);
+    assert.equal(g.code, 0, `no other gate: exactly as before — ${g.out}`);
+    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    assert.equal(rec.code, 2, rec.out);
+    assert.match(rec.out, /ac-tests-lock\/5 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock — re-run --write/);
+    // closed per schema: a /6-shaped pin under /5, and a /5-shaped one under /6, are unusable, never a verdict
+    writeLockJson(root, { ...v5, test_infra: lock.test_infra });
+    const u5 = cli(root, ["--check", NAME]);
+    assert.equal(u5.code, 2, u5.out);
+    assert.match(u5.out, /test_infra is not exactly \{chained, configs, exclude, gates, jest, levels, script_files\}/);
+    writeLockJson(root, { ...v5, schema: "ac-tests-lock/6" });
+    const u6 = cli(root, ["--check", NAME]);
+    assert.equal(u6.code, 2, u6.out);
+    assert.match(
+      u6.out,
+      /test_infra is not exactly \{chained, configs, exclude, gates, jest, levels, other_chained, other_gates, script_files\}/
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("6.66.0 --write REFUSES an other gate it cannot pin (exit 2), naming the script, and writes no lock", () => {
+  const root = infraWorld();
+  try {
+    writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { test: "vitest run", lint: ["eslint"] } }));
+    const w = cli(root, ["--write", NAME]);
+    assert.equal(w.code, 2, w.out);
+    assert.match(w.out, /package\.json script "lint" is not a string/);
+    assert.equal(existsSync(lockPathOf(root)), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

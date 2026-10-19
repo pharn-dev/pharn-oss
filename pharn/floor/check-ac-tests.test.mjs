@@ -668,6 +668,8 @@ test("NOTE, never a RED — package.json / pharn.config.json in PLAN.md stay exi
       const notes = r.out.split("\n").filter((l) => l.startsWith("NOTE — "));
       assert.equal(notes.length, 1, r.out);
       assert.match(notes[0], /the build may change it \(a dependency, say\), but not the level gates' scripts/);
+      // 6.66.0 (audit SEC-4): the planner is told every allowlisted gate's script is pinned, an added one included
+      assert.match(notes[0], /any other allowlisted gate's script \(lint, typecheck, build, …\).*adding one included/);
       assert.match(notes[0], /ADVISORY: this checker cannot see which part the build will change\./);
       assert.match(r.out, /^GREEN — /m);
     } finally {
