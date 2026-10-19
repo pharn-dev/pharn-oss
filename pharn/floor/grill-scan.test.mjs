@@ -79,6 +79,39 @@ test("refusals exit 2 with nothing on stdout: usage, missing plan, a directory, 
   });
 });
 
+test("★ each scan-plan-* scanner refuses a symlink, a directory and a FIFO from ONE descriptor; a regular file still scans (6.67.1)", () => {
+  // CodeQL js/file-system-race: the scanners check the type and read through one O_NOFOLLOW|O_NONBLOCK descriptor. A
+  // symlink to a real plan is now refused rather than followed (grill-scan itself already refuses one, above); a FIFO
+  // must be refused WITHOUT blocking, so every spawn is bounded. The regular-file row is the control for each scanner.
+  withPlan(HITS, (p, dir) => {
+    const link = join(dir, "link.md");
+    symlinkSync(p, link);
+    const sub = join(dir, "d");
+    mkdirSync(sub);
+    const fifo = join(dir, "fifo.md");
+    assert.equal(spawnSync("mkfifo", [fifo]).status, 0, "mkfifo");
+    for (const { id } of GRILL_SCANS) {
+      const script = join(HERE, `scan-plan-${id}.mjs`);
+      const run = (target) => spawnSync(process.execPath, [script, target], { encoding: "utf8", timeout: 20000 });
+      const control = run(p);
+      assert.equal(control.status, 0, `${id}: the regular file scans (${control.stderr})`);
+      assert.ok(Array.isArray(JSON.parse(control.stdout).hits), `${id}: the control prints its document`);
+      for (const [kind, target] of [
+        ["symlink", link],
+        ["directory", sub],
+        ["fifo", fifo],
+        ["missing", join(dir, "absent.md")],
+      ]) {
+        const r = run(target);
+        assert.equal(r.error, undefined, `${id} ${kind}: the scanner blocked or failed to start`);
+        assert.equal(r.status, 1, `${id} ${kind}: exit ${r.status}`);
+        assert.equal(r.stdout, "", `${id} ${kind}: nothing on stdout`);
+        assert.equal(r.stderr, `scan-plan-${id}: target file not found (or not a regular file): ${target}\n`, `${id} ${kind}`);
+      }
+    }
+  });
+});
+
 test("a scanner that fails, prints no JSON, or prints the wrong shape is a refusal (fail-closed)", () => {
   withPlan(CLEAN, (p, dir) => {
     const fake = join(dir, "scanners");
