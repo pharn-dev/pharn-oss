@@ -86,6 +86,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { stripBom } from "./frontmatter-core.mjs";
 
 // ── The enumeration IS the deliverable (L29 / L36) ───────────────────────────────────────────────────
 // The closed stage → product-command map. Every pass below iterates THIS object; no pass re-derives the
@@ -239,8 +240,11 @@ function resolveStage(stages, stage) {
 // Parse a command file's frontmatter `model:` / `effort:`. Same `---` fence + `^([A-Za-z0-9_]+):\s*(.*)$`
 // line parse + quote-strip as `count-grillers.mjs`'s `frontmatterRole` and `.dev/floor/check-config.mjs`
 // — a STRUCTURED read of the structured location, never a substring grep (L6). The key match is EXACT,
-// which is what keeps `model_tier:` from ever being read as `model:`.
-function frontmatterModelEffort(text) {
+// which is what keeps `model_tier:` from ever being read as `model:`. One leading BOM is stripped first
+// (frontmatter-core.mjs `stripBom`, 6.64.3), as those readers now do: a BOM'd command used to read as having
+// no `model:` at all.
+function frontmatterModelEffort(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return {};
   const end = text.indexOf("\n---", 3);
   if (end === -1) return {};

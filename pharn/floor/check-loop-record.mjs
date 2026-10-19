@@ -93,7 +93,7 @@
 // Exit: 0 (GREEN) only when every check above holds; 1 (RED) on every refusal (fail-closed).
 
 import { readFileSync } from "node:fs";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
 import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 
@@ -151,9 +151,9 @@ function envelope(text) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fields = new Map();
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], kv[2].trim().replace(/^(["'])(.*)\1$/, "$2"));
+  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.64.3); the last copy of a repeated key wins.
+  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+    fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
   return fields;
 }

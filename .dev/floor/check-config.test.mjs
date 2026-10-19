@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -164,6 +164,32 @@ test("agreement GREEN: command frontmatter matching the config exits 0", () => {
     assert.match(r.stdout, /GREEN — config valid; 3\/3 wired stage/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ENF-3 (6.64.3): a leading UTF-8 BOM used to make a dev command's `model:`/`effort:` unreadable. Twin of the GREEN
+// case above with every command BOM'd; the mismatch control proves the BOM'd frontmatter is really read (L60).
+test("✧ ENF-3: BOM'd dev commands are read as their clean twins (agreement GREEN; a BOM'd mismatch still REDs)", () => {
+  const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+  for (const [planModel, status] of [
+    ["opus", 0],
+    ["sonnet", 1],
+  ]) {
+    const { dir, configPath } = withConfig(VALID);
+    try {
+      const cmdDir = writeCommands(dir, {
+        plan: { model: planModel, effort: "high" },
+        build: { model: "sonnet", effort: "high" },
+        review: { model: "opus", effort: "high" },
+      });
+      for (const f of readdirSync(cmdDir)) writeFileSync(join(cmdDir, f), bom + readFileSync(join(cmdDir, f), "utf8"));
+      const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+      assert.equal(r.status, status, r.stdout + r.stderr);
+      if (status === 0) assert.match(r.stdout, /GREEN — config valid; 3\/3 wired stage/);
+      else assert.match(r.stdout, /"sonnet"/, "the BOM'd mismatch must be read as a mismatch, not as an absent model");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 

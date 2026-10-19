@@ -215,6 +215,24 @@ test("CRLF frontmatter registers (parity with validate.mjs's slice/trim/split li
   });
 });
 
+// ENF-3 (6.64.3): a leading UTF-8 BOM used to hide the declaration (0 registered). Twin pair (L4), plus agreement
+// with validate.mjs on the same file.
+test("✧ ENF-3: a BOM'd griller registers as its clean twin does, and validate.mjs counts it too", () => {
+  const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+  for (const [name, body] of [
+    ["clean.md", REAL_GRILLER],
+    ["bom.md", bom + REAL_GRILLER],
+  ]) {
+    withRepo({ [`pharn-pipeline/${name}`]: body }, (root) => {
+      const r = run(root);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), { registered: 1, grillers: [`pharn-pipeline/${name}`] });
+      const v = spawnSync(process.execPath, [join(here, "validate.mjs"), root], { encoding: "utf8" });
+      assert.match(v.stdout, /\b1 capabilities checked/, `${name}: validate.mjs must count the same file`);
+    });
+  }
+});
+
 test("a real griller under an EXCLUDED segment (.dev/floor/) is not a capability → 0", () => {
   withRepo({ ".dev/floor/fake-griller.md": REAL_GRILLER }, (root) => {
     const r = run(root);

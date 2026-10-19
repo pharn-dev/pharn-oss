@@ -56,7 +56,8 @@
 import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
+import { fenceStates } from "./plan-files-core.mjs";
 
 const HEADING_RE = /^#{1,6}[ \t]+\S/;
 const REGRESS_ENUM = new Set(["no-regressions", "regressions", "inconclusive"]);
@@ -120,28 +121,27 @@ function readEnvelopeValue(raw) {
   return isQuotedScalar(trimmed) ? yamlUnscalar(trimmed) : clean(raw);
 }
 
-// duplicated: render-ship-briefing.mjs's readHeaderField
+// duplicated: render-ship-briefing.mjs's readHeaderField (6.64.3: LAST copy wins, as check-spec.mjs reads the SPEC;
+// the line grammar is frontmatter-core.mjs's; bullet-header fences are plan-files-core.mjs's `fenceStates`)
 export function readHeaderField(text, field) {
   const fm = text.match(FM_RE);
-  if (fm) {
-    for (const line of fm[1].split(/\r?\n/)) {
-      const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-      if (kv && kv[1] === field) return clean(kv[2]);
-    }
-    return undefined;
+  if (fm) return lastValue(fieldEntries(fm[1].split(/\r?\n/)), field);
+  const lines = text.split(/\r?\n/);
+  const fenced = fenceStates(lines);
+  const header = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (fenced[i]) continue;
+    if (HEADING_RE.test(lines[i])) break;
+    header.push(lines[i]);
   }
-  let inFence = false;
-  for (const line of text.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    if (HEADING_RE.test(line)) break;
-    const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === field) return clean(kv[2]);
-  }
-  return undefined;
+  return lastValue(fieldEntries(header, BULLET_FIELD_LINE_RE), field);
+}
+
+// duplicated: render-ship-briefing.mjs's lastValue
+function lastValue(entries, field) {
+  let found;
+  for (const { key, raw } of entries) if (key === field) found = clean(raw);
+  return found;
 }
 
 // duplicated: render-ship-briefing.mjs's grillVerdictLine (★ trust-fence fix: fenced blocks skipped,
@@ -236,10 +236,8 @@ export function readEnvelope(text) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fields = new Map(); // Map, never a plain object indexed by an arbitrary key (L15)
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], readEnvelopeValue(kv[2]));
-  }
+  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.64.3); the last copy of a repeated key wins.
+  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) fields.set(key, readEnvelopeValue(raw));
   return fields;
 }
 

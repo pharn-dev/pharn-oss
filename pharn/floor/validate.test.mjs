@@ -57,6 +57,51 @@ version: 0.1.0
 # A sample product capability
 `;
 
+// ── ENF-3 (6.64.3): a leading UTF-8 BOM no longer hides a capability ──────────────────────────────────────────
+// Before the fix a BOM defeated `startsWith("---")`, so a capability with blocking findings was "not a capability"
+// and validate printed GREEN — 0 capabilities checked (reproduced at d5453a17). Each case is a twin pair (L4): the
+// BOM'd file must produce exactly what its clean twin produces, so the test passes only because of the strip.
+const BOM = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+
+function twinRun(files) {
+  return withRepo(files, (root) => {
+    const r = run(root);
+    return { status: r.status, stdout: r.stdout.split(root).join("<root>") };
+  });
+}
+
+function bomd(files) {
+  return Object.fromEntries(Object.entries(files).map(([k, v]) => [k, k.endsWith(".md") && v.startsWith("---") ? BOM + v : v]));
+}
+
+test("✧ ENF-3: a BOM'd capability with blocking findings REDs exactly as its clean twin does", () => {
+  const noEvals = { "pharn-review/sample/sample.md": VALID_CAP };
+  const clean = twinRun(noEvals);
+  const withBom = twinRun(bomd(noEvals));
+  assert.equal(clean.status, 1, `precondition: the clean twin must RED; got:\n${clean.stdout}`);
+  assert.match(clean.stdout, /1 capabilities checked/);
+  assert.ok(bomd(noEvals)["pharn-review/sample/sample.md"].startsWith(BOM), "the mutant must carry the BOM, or this is vacuous");
+  assert.deepEqual(withBom, clean);
+});
+
+test("✧ ENF-3: a BOM'd valid capability is COUNTED (GREEN — 1), as its clean twin is", () => {
+  const valid = {
+    "pharn-review/sample/sample.md": VALID_CAP,
+    "pharn-review/sample/evals/cases/case-1.md": "# a case\n",
+    "pharn-review/sample/evals/expected/expected-1.md": "# expected\n",
+  };
+  const withBom = twinRun(bomd(valid));
+  assert.equal(withBom.status, 0, withBom.stdout);
+  assert.match(withBom.stdout, /FLOOR: GREEN — 1 capabilities checked/);
+  assert.deepEqual(withBom, twinRun(valid));
+});
+
+test("✧ ENF-3: the strip is not a mask — a BOM'd file with no frontmatter is still not a capability", () => {
+  const r = twinRun({ "pharn-review/sample/sample.md": `${BOM}# no frontmatter\n\nrole: lens\n` });
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /FLOOR: GREEN — 0 capabilities checked/);
+});
+
 // Locks the dev/product boundary on the floor: validate excludes .dev/ WHOLESALE (the move replaced the
 // old per-folder `floor/` special-case with a single `.dev/` segment). A role-bearing file anywhere under
 // .dev/ must NOT be counted; the one product capability at root must be. If either .dev/ file were counted
@@ -898,7 +943,9 @@ test("★ CHECK 6 NON-VACUITY: the RED disappears when CHECK 6's branch is disab
     assert.match(real.stdout, CHECK6_RE);
 
     // Mutant: same fixture, CHECK 6 disabled -> GREEN. This is what proves the RED was CHECK 6's.
-    withRepo({ "validate.mjs": mutant }, (mutantRoot) => {
+    // validate.mjs imports its BOM strip from the shared core (6.64.3), so the mutant needs the core beside it.
+    const core = readFileSync(join(here, "frontmatter-core.mjs"), "utf8");
+    withRepo({ "validate.mjs": mutant, "frontmatter-core.mjs": core }, (mutantRoot) => {
       const m = spawnSync(process.execPath, [join(mutantRoot, "validate.mjs"), root], { encoding: "utf8" });
       assert.equal(m.status, 0, `with CHECK 6 disabled the same fixture must be GREEN; got:\n${m.stdout}`);
       assert.doesNotMatch(m.stdout, CHECK6_RE);

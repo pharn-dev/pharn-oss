@@ -321,6 +321,25 @@ test("CRLF line endings trim the same way and keep their bytes", () => {
   assert.equal(t.text, (FM + PRE + PROC + NOTES).replace(/\n/g, "\r\n"));
 });
 
+// ENF-3 (6.64.3): a leading UTF-8 BOM used to read as kind-missing (the deep members were kept — fail-closed, but out
+// of parity with validate.mjs and count-grillers.mjs, which now count a BOM'd griller). Twin pair (L4): the BOM'd
+// griller trims exactly as its clean twin, and the BOM stays as the output's first character (lossless bytes).
+test("✧ ENF-3: a BOM'd pharn-owned griller reads pharn-owned and trims as its clean twin, keeping the BOM", () => {
+  const bom = String.fromCharCode(0xfeff); // never a literal: it would be invisible in every diff
+  const clean = FM + PRE + PROC + SECTION["layer-1"] + SECTION["guarantee-audit"] + NOTES;
+  assert.equal(frontmatterKind(bom + clean), "pharn-owned");
+  const twin = trimGriller(clean);
+  const t = trimGriller(bom + clean);
+  assert.deepEqual(t.omitted, twin.omitted);
+  assert.deepEqual(t.omitted, ["layer-1", "guarantee-audit"], "precondition: the twin really trims");
+  assert.equal(t.deep, true);
+  assert.equal(t.whole, null);
+  assert.equal(t.text, bom + twin.text);
+  // not a mask: a BOM'd unclosed frontmatter still keeps the whole file
+  const unclosed = `${bom}---\nname: x\nrole: griller\n\n## Guarantee audit\nx\n`;
+  assert.deepEqual(trimGriller(unclosed), { text: unclosed, omitted: [], whole: "unclosed-frontmatter", deep: "kind-missing" });
+});
+
 const WHOLE_CASES = [
   ["unclosed-frontmatter", "---\nname: x\nrole: griller\n\n## Guarantee audit\nx\n"],
   ["unclosed-fence", FM + PRE + "## Guarantee audit\n```\nnever closed\n"],

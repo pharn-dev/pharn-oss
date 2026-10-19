@@ -91,7 +91,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 
 // Resolve the sibling CLI RELATIVE TO THIS FILE (import.meta.url), never the cwd — so this check behaves
@@ -131,9 +131,8 @@ function envelope(text) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fields = new Map();
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], kv[2].trim().replace(/^(["'])(.*)\1$/, "$2"));
+  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+    fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
   return fields;
 }

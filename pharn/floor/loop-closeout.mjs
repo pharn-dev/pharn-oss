@@ -94,7 +94,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { FEATURE_SLUG_RE, SHA_RE } from "./gate-run-core.mjs";
-import { FM_RE, stripBom, readField } from "./frontmatter-core.mjs";
+import { FM_RE, fieldEntries, stripBom, readField } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 import { cleanScalar } from "./mark-phase.mjs";
 import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
@@ -275,9 +275,8 @@ export function readEnvelope(text) {
   const m = stripBom(text).match(FM_RE);
   if (!m) return null;
   const fields = new Map();
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], kv[2].trim().replace(/^(["'])(.*)\1$/, "$2"));
+  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+    fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
   return fields;
 }
