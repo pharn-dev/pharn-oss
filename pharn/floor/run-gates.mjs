@@ -191,7 +191,7 @@ const LOCK_GRACE_MS = 30000;
  *  call claim a fresh lock and skip the reap. */
 let heldLock = null;
 
-// THE FLUSH RULE (6.20.4; this CLI since 6.66.1, TST-5): emit sets process.exitCode and unwinds with EMITTED, a
+// THE FLUSH RULE (6.20.4; this CLI since 6.67.1, TST-5): emit sets process.exitCode and unwinds with EMITTED, a
 // module-private sentinel only the top-level catch below swallows; the process then ends naturally, after Node has
 // drained stdout. Ending with an immediate exit call dropped queued writes past the pipe's 64 KiB buffer on a
 // platform whose piped stdout is asynchronous (darwin), and build-gate, stage-verify, stage-regress, stage-runtime and

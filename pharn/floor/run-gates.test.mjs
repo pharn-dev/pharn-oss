@@ -724,7 +724,7 @@ test("the lock is RELEASED after a normal call, so the next call proceeds", () =
   );
 });
 
-test("the lock is RELEASED after a REFUSAL emitted while it is held — the sentinel exit keeps emit()'s release (6.66.1, TST-5)", () => {
+test("the lock is RELEASED after a REFUSAL emitted while it is held — the sentinel exit keeps emit()'s release (6.67.1, TST-5)", () => {
   // emit() ends by setting process.exitCode and unwinding with a sentinel (the flush rule); the release must still
   // happen on every emission, not only on the success path. A glob-shaped file entry is refused AFTER the lock is
   // taken (run --next), so this is an emission with the lock held. Negative control, run once by hand: with the

@@ -7,8 +7,15 @@
   check-loop and check-red-run because on darwin a piped document past 64 KiB was cut at exit. Convert them to the
   repo's existing exit forms, add them to `cli-stdout-flush.test.mjs`'s FLUSH_CLIS (static pin, crash test, >64 KiB
   pipe round-trip), and correct that test's header, which claims every other floor CLI's spawner reads only an exit
-  status or a first line. Exit codes and output bytes stay identical. Patch bump to 6.66.1 (planned
-  as 6.65.1; #363, #365 and #364 merged first, so it was renumbered at each merge of `origin/main`).
+  status or a first line. Exit codes and output bytes stay identical. Patch bump to 6.67.1 (planned
+  as 6.65.1; #363, #365, #364 and #366 merged first, so it was renumbered at each merge of `origin/main`).
+- follow-up on the PR (coordinator, CodeQL js/file-system-race #23–#27): the five `scan-plan-*` scanners' moved
+  `existsSync`/`statSync` check followed by `readFileSync` becomes ONE descriptor — `openSync(O_RDONLY|O_NOFOLLOW|
+O_NONBLOCK)`, `fstatSync(fd).isFile()`, `readFileSync(fd)`, `closeSync` in `finally` — the griller-extract.mjs
+  (6.60.1) / check-loop-decision.mjs (6.65.0) form, inline (no exported helper exists). ENOENT, ENOTDIR and ELOOP
+  keep the "target file not found (or not a regular file)" message; a symlink is now refused rather than followed
+  (grill-scan.mjs already refuses one). A table test in `grill-scan.test.mjs` runs all five over a symlink, a
+  directory and a FIFO.
 - layer(s): product floor (`pharn/floor/`), build apparatus (`.dev/guides/`), repo meta
 - constitution_refs: [P0, P5, P6, P7]
 - mode: LIGHT (batch 2026-10-19, group H) — no stage commands; plan, edit with tests, `npm run check`, validate.
@@ -72,6 +79,7 @@ two-field object. Reported to the orchestrator as a follow-up; not converted her
 - `pharn/floor/scan-plan-pii.mjs`
 - `pharn/floor/scan-plan-secrets.mjs`
 - `pharn/floor/cli-stdout-flush.test.mjs`
+- `pharn/floor/grill-scan.test.mjs`
 - `.dev/guides/floor-gates.md`
 - `SKILLS_VERSION`
 - `README.md` — the version badge only (`check:badge`)
