@@ -76,8 +76,9 @@ reads as CLEAN); Pass B targets `function`/arrow bodies only (a method shorthand
 `return null` reads as CLEAN); a `}` inside a template/regex literal in a body can skew the brace-match. **This is
 NOT a completeness proof** — that is the advisory layer, never this floor.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` — but the
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The lens runner has LANDED —
+> `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each lens writing
+> its own `findings.json` — but the
 > lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the scanner's own tests and
 > this lens's eval. The guarantee is "the scanner IS deterministic", not "the model always ran it".
 
@@ -156,7 +157,7 @@ reaches an enum-gated field). That the lens **emits** it at all, and emits it cl
   Pass B masks comments/strings). Named precisely: **"detects the presence of a `TODO`/`FIXME`/`not
 implemented`(-style throw or `NotImplemented*`)/`STUB`/`PLACEHOLDER` marker, or an empty `function`/arrow body, at
   line N."** Bounded: it detects MARKERS + an EMPTY-BODY SHAPE, not "this code is incomplete" and not "this code is
-  complete." **Two clocks:** the scanner's output is floor; the model's inline invocation of it (pre-runner) is
+  complete." **Two clocks:** the scanner's output is floor; the model's inline invocation of it is
   advisory orchestration, backstopped by the scanner's tests + the eval.
 - **Is a marker/empty body a REAL placeholder vs. an intentional stub / legitimate no-op? Is unmarked, non-empty code
   actually incomplete? Stub-return detection?** → **ADVISORY.** Irreducible judgment; surfaced, never gates. **No

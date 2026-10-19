@@ -88,8 +88,9 @@ branch than the deref, or a same-named binding in a later scope, can skew it; an
 template/regex literal in the scanned span can skew the paren-match. **This is NOT null-safety analysis** — that
 is the advisory layer, never this floor.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` — but
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The lens runner has LANDED —
+> `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each lens writing
+> its own `findings.json` — but
 > the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the scanner's own tests
 > and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model always ran it".
 
@@ -169,7 +170,7 @@ named residual (`finding-shape.md` §Emission-enforcement audit; `LIMITS.md §2`
   no free text — comment or backtick — moves the verdict). Named precisely: **"detects a value bound from a fixed
   set of null-returning source methods whose FIRST subsequent use is a raw `.`/`[` deref (not `?.`) with no
   intervening guard."** Bounded: it detects a SHAPE, not "this value is truly null" and not "the code is
-  null-safe." **Two clocks:** the scanner's output is floor; the model's inline invocation of it (pre-runner) is
+  null-safe." **Two clocks:** the scanner's output is floor; the model's inline invocation of it is
   advisory orchestration, backstopped by the scanner's tests + the eval.
 - **Is the null truly reachable? Is a guard needed? Custom/optional-param sources? Full data-flow?** → **ADVISORY.**
   Irreducible judgment; surfaced, never gates. **No control-/data-flow analysis is claimed.**

@@ -72,8 +72,9 @@ code is **cryptographically correct / secure**. "Detected a weak-crypto primitiv
 **"the crypto is correct" is not** — novel/aliased algorithm references, split literals, or a weak primitive
 from an unlisted library evade a fixed regex set.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` (the
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The lens runner has
+> LANDED — `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each
+> lens writing its own `findings.json` (the
 > per-GRILLER runner is still deferred, P7) — but the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by
 > the scanner's own tests and this lens's eval. The guarantee is "the scanner IS deterministic", not "the
 > model always ran it".
@@ -155,7 +156,7 @@ injection, stays **advisory** — the named residual (`finding-shape.md` §Emiss
   precisely: **"detects known-weak-crypto-primitive patterns (MD5/SHA-1/DES/RC4/deprecated-createCipher/ECB/
   insecure-random/hardcoded-IV-salt) in the code deterministically."** Bounded: it detects a pattern, not "a real
   vulnerability", not the algorithm's context, and not "the crypto is correct / secure". **Two clocks:** the
-  scanner's output is floor; the model's inline invocation of it (pre-runner) is advisory orchestration,
+  scanner's output is floor; the model's inline invocation of it is advisory orchestration,
   backstopped by the scanner's tests + the eval.
 - **Is a flagged primitive actually misused here? Is the code's crypto correct overall?** → **ADVISORY.**
   Irreducible judgment; surfaced, never gates.

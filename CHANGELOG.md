@@ -23,6 +23,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.64.2] - 2026-10-19
+
+### Fixed
+
+- **Shipped prose no longer says `/pharn-review` spawns one subagent per lens, and `pharn/ARCHITECTURE.md` §4 now
+  places `.claude/agents/`.**
+  - What changed: 19 lens bodies now say that Step 4 spawns one subagent per lens family
+    (`pharn/floor/lens-family-map.json`), each lens writing its own `findings.json`. That is the "Two clocks" blockquote
+    in 18 lenses and two sentences in `race-condition`. The word "isolated" goes, because a grouped lens shares its
+    context with its family. The `(pre-runner)` label goes from the guarantee-audit bullet of 16 of those lenses. The
+    headers of `pharn/floor/merge-findings.mjs`, `count-lenses.mjs` and `catalogue-installed-skills.mjs`, one line of
+    `/pharn-review`'s claims block ("the installed-skill catalogue each lens group runs") and the README's cost bullet
+    say the same.
+  - The trusted-doc edits were applied by the maintainer before the build, with a patch script generated from the
+    plan: `pharn/ARCHITECTURE.md` §4 gains a tree row for `.claude/agents/` and a sentence saying PHARN's subagent types
+    are `.claude/agents/pharn-*.md` definitions, such as `pharn-review-lens` (this closes the 6.64.0 follow-up
+    `architecture-agents-dir`). `LIMITS.md` §3a now says a small fix fans out to every lens with a non-empty review set,
+    one subagent per lens family, and that `--quick` does not change the review's lens fan-out. `THREAT-MODEL.md` §2
+    surface 8 names the lens-group subagent as the one that lists installed skills.
+  - Why: `.dev/features/review-lens-grouping/REVIEW.md` A1, and the 6.64.0 follow-ups `subagent-per-lens-sweep` and
+    `architecture-agents-dir`. 6.64.0 left the lens bodies alone only because the grouped eval measured their bytes, and
+    that measurement is recorded. `(pre-runner)` has been false since the lens runner landed, and §3a's "every lens"
+    since the scanner prefilter (#64).
+  - Not changed: any lens procedure, scanner, finding output, eval, frontmatter or `version:`; the agent definition
+    `.claude/agents/pharn-review-lens.md`; the family map and its helper; `MIN_CLI`. The three grillers that say
+    `(pre-runner)` keep it, because `/pharn-grill` still applies each griller inline.
+  - Checked by: the plan's sweep table (153 hits of 15 pinned `git grep` patterns at the base, each with one
+    disposition) and the post-build greps. No checker reads these sentences, so their truth is advisory. `docs:check`
+    and the stage-load budget stay green.
+  - Bounds: the 6.64.0 grouped-eval and probe results describe the pre-edit lens bytes and are not re-run. The sweep
+    covers what its 15 patterns match. The grill's re-run of its line-wrap pass found one more sentence of this kind,
+    in the header of `pharn/floor/installed-skills-core.mjs` ("each `/pharn-review` lens … now read this catalogue
+    first"), which is left for a follow-up.
+
 ## [6.64.1] - 2026-10-19
 
 ### Fixed

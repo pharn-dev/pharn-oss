@@ -156,15 +156,16 @@ reaches an enum-gated field). That the lens **emits** it at all, and emits it cl
   **NOT** a runtime guarantee that "no race exists."
   - **Honest about the exit codes (the "assert exit codes" discipline).** `check-structural.mjs` is deterministic
     and returns exit **0** (GREEN) on a conforming finding and exit **1** (RED) on a laundered/suppressed one.
-    The isolated lens runner has since LANDED — `/pharn-review` Step 4 spawns one subagent per lens, each writing
-    its own `findings.json`, and `finding-shape.md` §Emission now records the 3c wiring as landed — but **no
+    The lens runner has since LANDED — `/pharn-review` Step 4 spawns one subagent per lens family
+    (`pharn/floor/lens-family-map.json`), each lens writing its own `findings.json`, and `finding-shape.md` §Emission
+    now records the 3c wiring as landed — but **no
     `actual.json` is committed** for this lens. So at build/verify time the exit-code trip-wire is still exercised
     by a **hand-constructed `actual.json`** (a demonstration, not a committed product file and not an automated
     gate over the lens's _emitted_ output). This is the honest "two clocks": the checker IS deterministic; the
     model's act of running the lens and emitting a clean array remains **advisory** — nothing on the floor forces
     the lens to run.
 - **Two clocks (honest).** The eval's structural check is FLOOR (a deterministic verdict over a _provided_
-  output). The live runner has landed (`/pharn-review` spawns one subagent per lens), but the lens's **act** of
+  output). The live runner has landed (`/pharn-review` spawns one subagent per lens family), but the lens's **act** of
   judging + emitting is still **advisory orchestration**, backstopped by the eval's structural[] trip-wire. The
   guarantee is "`check-structural.mjs` IS deterministic," not "the model always ran / judged correctly."
 - **"This lens ensures no race conditions / concurrency-safe code."** → **struck (the disease).** It **surfaces**

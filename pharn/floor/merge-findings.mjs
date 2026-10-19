@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // pharn/floor/merge-findings.mjs — deterministic merge + dedup of per-lens findings.json (CONSTITUTION P0/P2/P5).
 //
-// PURPOSE. A parallel /pharn-review spawns one subagent per lens; each emits its own findings.json
+// PURPOSE. A parallel /pharn-review spawns one subagent per lens family (pharn/floor/lens-groups.mjs); each lens emits
+// its own findings.json
 // (the JSON array defined by pharn-contracts/finding-shape.md §Emission). This helper ASSEMBLES those
 // N arrays into ONE merged findings.json and DEDUPS — two lenses reporting the same problem-class at
 // the same location collapse to one finding. It is the ONLY floor-grade part of a parallel review:

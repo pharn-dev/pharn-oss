@@ -92,8 +92,9 @@ assembly. **This is NOT taint analysis** — full data-flow taint tracing is the
 yields >1 hit (a rare same-line-two-calls case — SSRF has no genuinely-nested canonical sink like
 `path-traversal`'s `fs.readFile(path.join(…))`). Emit one finding per hit.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` (the per-GRILLER
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The lens runner has
+> LANDED — `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each
+> lens writing its own `findings.json` (the per-GRILLER
 > runner is still deferred, P7) — but the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the
 > scanner's own tests and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model
 > always ran it".
@@ -178,7 +179,7 @@ the named residual (`finding-shape.md` §Emission-enforcement audit; `LIMITS.md 
   construction** (no free text can suppress a hit). Named precisely: **"detects a recognized HTTP-request source
   reaching a recognized outbound-request URL sink (fetch/http(s)/axios) on line N."** Bounded: it detects a
   SHAPE, not "a real exploitable SSRF" and not "SSRF-safe". **Two clocks:** the scanner's output is floor; the
-  model's inline invocation of it (pre-runner) is advisory orchestration, backstopped by the scanner's tests +
+  model's inline invocation of it is advisory orchestration, backstopped by the scanner's tests +
   the eval. **Per-family coverage layering (honest):** all three sink families (`fetch` / `http(s).get|request` /
   `axios(.verb)`) are pinned by `pharn/floor/scan-code-ssrf.test.mjs`; the `http-request` and bare-`axios(`
   branches have **no dedicated lens eval** (the four lens evals bind P2 + the trust-fence at the `fetch` /

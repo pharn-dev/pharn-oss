@@ -97,8 +97,9 @@ another call on the same line as an await, and — because backticks are **not**
 block is (correctly) flagged — it is genuinely outside the `try` body. **This is NOT control-flow analysis** —
 that is the advisory layer, never this floor.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` — but
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic verdict). The lens runner has LANDED —
+> `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each lens writing
+> its own `findings.json` — but
 > the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the scanner's own tests
 > and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model always ran it".
 
@@ -187,7 +188,7 @@ input reaches an enum-gated field). That the lens **emits** it at all, and emits
   `pharn/ARCHITECTURE.md §2` primitive #3), and **injection-immune by construction**. Named precisely: **"detects an
   `await <ident>(` or a `JSON.parse(` that is not lexically inside a `try {…}` block in this file and not
   `.catch(`-guarded on its line."** Bounded: it detects a SHAPE, not "this op needs handling" and not "the code is
-  reliable." **Two clocks:** the scanner's output is floor; the model's inline invocation of it (pre-runner) is
+  reliable." **Two clocks:** the scanner's output is floor; the model's inline invocation of it is
   advisory orchestration, backstopped by the scanner's tests + the eval.
 - **Is error handling actually NEEDED here vs a best-effort / caller-handled path? A roster-external throwing
   call? A cross-file rejection? Full control-flow?** → **ADVISORY** / out of scope. Irreducible judgment;

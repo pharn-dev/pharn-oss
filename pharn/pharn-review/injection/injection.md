@@ -72,8 +72,9 @@ real guarantee; **"the code has no injection" is not** — a bare untrusted vari
 line-local regex set. **This is NOT taint analysis** — full data-flow taint tracing is the advisory layer, never
 this floor.
 
-> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The isolated lens runner has LANDED —
-> `/pharn-review` Step 4 spawns **one subagent per lens**, each writing its own `findings.json` (the per-GRILLER
+> **Two clocks (be honest).** The scanner's **output** is FLOOR (a deterministic regex verdict). The lens runner has
+> LANDED — `/pharn-review` Step 4 spawns **one subagent per lens family** (`pharn/floor/lens-family-map.json`), each
+> lens writing its own `findings.json` (the per-GRILLER
 > runner is still deferred, P7) — but the lens's **act** of invoking the scanner is **advisory orchestration**, backstopped by the
 > scanner's own tests and this lens's eval. The guarantee is "the scanner IS deterministic", not "the model
 > always ran it".
@@ -153,7 +154,7 @@ the named residual (`finding-shape.md` §Emission-enforcement audit; `LIMITS.md 
   construction**. Named precisely: **"detects an obvious concat/interpolation of a variable into a recognized
   query/command/HTML sink."** Bounded: it detects a SHAPE, not "a real exploitable injection" and not
   "injection-safe". **Two clocks:** the scanner's output is floor; the model's inline invocation of it
-  (pre-runner) is advisory orchestration, backstopped by the scanner's tests + the eval.
+  is advisory orchestration, backstopped by the scanner's tests + the eval.
 - **Is the operand actually untrusted? Is sanitization done elsewhere? Full taint tracing? Is the code
   injection-free?** → **ADVISORY.** Irreducible judgment; surfaced, never gates. **No taint analysis is
   claimed.**
