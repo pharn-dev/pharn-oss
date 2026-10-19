@@ -23,6 +23,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.65.0] - 2026-10-19
+
+### Added
+
+- **`/pharn-build`'s seam-config step is a pinned floor script that `/pharn-loop` pre-approves, and the loop
+  pre-approves the Skill tool only for the five stage commands it runs itself** (`SKILLS_VERSION` 6.64.3 →
+  **6.65.0**, minor: a new product floor script; audit 2026-10-12 LOOP-5 and SEC-6).
+  - What changed:
+    - New `pharn/floor/seam-config-materialize.mjs` replaces Step 2c's inline `node -e` line. It writes the
+      `seam` block of `pharn.config.json` to `.pharn/seam-config.json` — the documented default when the file is
+      absent or has no `seam` block — and `check-seam-config.mjs` still validates it on the next line. It HALTs
+      (exit 1, nothing written) on an unreadable file, invalid JSON, a failed scratch write, and, new in this
+      release, a file whose top level is not a JSON object: the old line crashed on `null` and silently used the
+      default for an array, a string or a number.
+    - `/pharn-loop`'s `allowed-tools` grants that line exactly, so an inline build no longer stops on a
+      permission prompt there. Corrects CHANGELOG [6.61.0], whose "Not covered" list said this line was left out
+      of the grant and might prompt.
+    - The bare `Skill` grant became `Skill(pharn-spec *)`, `Skill(pharn-plan *)`, `Skill(pharn-grill *)`,
+      `Skill(pharn-test *)` and `Skill(pharn-build *)`: the loop invokes `/pharn-grill` itself on every run, and the
+      other four when a stage falls back to running inline.
+  - Why: an unattended loop that ran `/pharn-build` inline waited on a prompt for the seam line (the 6.58.0
+    incident class). And the bare `Skill` grant pre-approved every skill in the project that declares its own
+    `allowed-tools`, a user's `.claude/skills/` drop included, which then loads as instructions
+    (`THREAT-MODEL.md §2` surface 8).
+  - Measured before choosing the scoped form: Claude Code 2.1.303, `claude -p`, default permission mode, scratch
+    projects (`.dev/features/loop-grant-seam-skill/PROBE.md`). A command's `Skill(<name> *)` grant was honored and
+    matched by name: a target declaring `allowed-tools` was denied with no grant or with another name's grant, and ran
+    with its own. A target declaring no `allowed-tools`, as the five stage commands do today, ran with no grant at
+    all. So the five grants change nothing today; they keep the inline stages prompt-free if that behavior changes.
+  - Checked by: `pharn/floor/seam-config-materialize.test.mjs` covers every branch, feeds each written file to
+    `check-seam-config.mjs`, and runs the replaced one-liner over the same inputs (same exit and bytes where behavior
+    is kept; the non-object change asserted on both sides). `.dev/floor/command-hygiene.test.mjs` drops the loop
+    grant's one exclusion, requires the Skill grants to equal the set derived from the loop's routing table and its
+    own "invoke `/pharn-…`" text, and fails a bare `Skill`, an extra or a missing name, the no-argument spelling,
+    and a `node -e` line.
+  - Not covered (ADVISORY):
+    - Whether Claude Code honors the grant is harness behavior: one probe, one version, `-p` only, command-file
+      targets only.
+    - The grant matches by name, so whatever skill or command answers to one of those five names runs under it.
+    - A skill that declares no `allowed-tools` loads through the Skill tool with no grant at all, in any session.
+      That is Claude Code's behavior, not this grant's, and nothing here changes it.
+
 ## [6.64.3] - 2026-10-19
 
 ### Fixed
