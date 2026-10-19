@@ -107,7 +107,8 @@ Searched (tracked files, excluding `CHANGELOG.md` released entries and `.dev/fea
 `origin/main` moved to 6.66.0 (#364) during the build. It added `### Declaring the base install (6.66.0)` inside "The
 pipeline" and moved the generated floor count to 140. The merge carries that subsection into `docs/pipeline.md` at
 the same place, regenerates the CURRENT-STATE block, and renumbers this change to **6.66.1**. The verbatim check was
-re-run against `origin/main:README.md` (82,330 bytes); README after: 24,851 bytes.
+re-run against `origin/main:README.md` (82,330 bytes); README after: 24,851 bytes. `main` then moved to 6.67.1
+(badge and generated count only, in README), so a second merge renumbered this change to **6.67.2**.
 
 ## Open questions
 

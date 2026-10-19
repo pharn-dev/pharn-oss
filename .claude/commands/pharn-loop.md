@@ -57,7 +57,11 @@ allowed-tools:
     "Glob",
     "Grep",
     "Agent",
-    "Skill",
+    "Skill(pharn-spec *)",
+    "Skill(pharn-plan *)",
+    "Skill(pharn-grill *)",
+    "Skill(pharn-test *)",
+    "Skill(pharn-build *)",
     "Bash(node pharn/floor/feature-name.mjs --fresh)",
     "Bash(git rev-parse HEAD)",
     "Bash(git symbolic-ref --short -q HEAD)",
@@ -138,6 +142,7 @@ allowed-tools:
     "Bash(node pharn/floor/check-test-stage.mjs *)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/*/PLAN.md)",
     "Bash(node pharn/floor/reconcile-baseline.mjs --anchor --by pharn-build)",
+    "Bash(node pharn/floor/seam-config-materialize.mjs)",
     "Bash(node pharn/floor/check-seam-config.mjs .pharn/seam-config.json)",
     "Bash(node pharn/floor/apply-plan-deletions.mjs --feature *)",
     "Bash(node pharn/floor/build-gate.mjs --feature * --mode targeted --timeout-ms 540000 --budget-ms 570000)",
@@ -145,7 +150,7 @@ allowed-tools:
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-build.md --target pharn/features/*/BUILD.md)",
   ]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.13.0"
+version: "0.13.1"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -185,9 +190,13 @@ Load the trusted prefix and obey it:
 - **No prompt from Claude Code either (6.58.0).** Never use a tool that puts a question or a plan approval to the person during a run. The
   frontmatter `allowed-tools` pre-approves, for this run's one turn, exactly the shell lines this command, its two
   parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`, `/pharn-plan`, `/pharn-test`,
-  `/pharn-build`) pin — each `<placeholder>` a `*` — plus the file, Agent and Skill tools, so Claude Code does not
-  stop to ask permission for them (6.61.0: no prefix grant; the seam-config `node -e` line of `/pharn-build` is left
-  out and may prompt). **ADVISORY (P0):** that the grant is honored is Claude Code's behavior, not PHARN's floor, and
+  `/pharn-build`) pin — each `<placeholder>` a `*` — plus the file and Agent tools and the Skill tool for those five
+  commands only (`Skill(<name> *)`), so Claude Code does not stop to ask permission for them (6.61.0: no prefix
+  grant). The Skill grant matches by name: whatever skill or command answers to one of those five names runs under
+  it, and no other skill is pre-approved, so one that declares its own `allowed-tools` still prompts. One that
+  declares none needed no grant at all in the one probe made (Claude Code 2.1.303), so a skill of that shape — a
+  user's `.claude/skills/` drop included — can load without any grant; the five grants keep the inline stages
+  prompt-free if that changes. **ADVISORY (P0):** that the grant is honored is Claude Code's behavior, not PHARN's floor, and
   a deny or ask rule of the person's still wins. Claude Code's docs do not say whether the grant reaches a stage
   agent, so a stage agent running the project's own commands (its test runner, its build) follows the session's
   permission mode: when nobody will be there, run the loop in a mode that does not prompt for those (auto mode, or

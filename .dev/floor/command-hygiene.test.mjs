@@ -40,6 +40,7 @@ import {
   LOOP_ROWS,
   FIX_LIST_FIELDS,
   BRIEF_PROMPT_PREFIX,
+  INVOCATIONS,
   STAGE_CONFIG_KEYS,
   modesOf,
   renderBrief,
@@ -5614,14 +5615,28 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
 // EXACTLY one pinned subcommand with its `<placeholder>`s turned into `*` (`grantFor`), and the set is DERIVED: the
 // Bash grants must EQUAL the derived set (closure both ways, L36). The domain also gained the four stages the loop
 // may run INLINE in its own turn when routing falls back (`stage-agent.mjs start` exits 3) — their lines run in the
-// grant's turn, so leaving them out would stall an unattended run. One line is excluded by name (LOOP_GRANT_EXCLUDED).
+// grant's turn, so leaving them out would stall an unattended run.
+//
+// 6.67.0 (loop-grant-seam-skill — audit LOOP-5, SEC-6): no line is excluded any more. `/pharn-build`'s seam-config
+// `node -e` line, whose quoted JavaScript the subcommand split could not read, became the pinned
+// `node pharn/floor/seam-config-materialize.mjs`, granted exactly like every other line. And the Skill tool is no longer
+// granted whole: the Skill grants are DERIVED too — one `Skill(<name> *)` per command the loop runs in its own turn
+// through the Skill tool (LOOP_SKILL_COMMANDS), equal both ways (L36). A bare `Skill` pre-approved every skill that
+// declares its own `allowed-tools` (measured: .dev/features/loop-grant-seam-skill/PROBE.md).
 const LOOP_RUN_FILES = ["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md", "pharn-grill.md"];
 const LOOP_INLINE_STAGE_FILES = ["pharn-spec.md", "pharn-plan.md", "pharn-test.md", "pharn-build.md"];
-const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent", "Skill"];
-// `/pharn-build`'s seam-config line: quoted JavaScript holding `;` and `|`, which the subcommand split reads as
-// separators; a `node -e` grant with a wildcard would pre-approve arbitrary code, and 6.58.0's prefix grants did not
-// cover it either. It may prompt in an inline build — stated in the command.
-const LOOP_GRANT_EXCLUDED = [{ file: "pharn-build.md", prefix: 'node -e "const fs=require(' }];
+const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent"];
+
+/** The commands a loop run invokes in its own turn (L29 — one enumeration, derived, never hand-listed): every stage
+ *  the routing table can send INLINE on a start exit 3 (`INVOCATIONS["pharn-loop"]`, both modes), plus every command
+ *  the loop family's own text tells the orchestrator to "invoke `/pharn-…`" (the floor-only grill). */
+const INVOKE_RE = /\binvoke `\/(pharn-[a-z-]+)/gi;
+function loopSkillCommands(familyText) {
+  const routed = Object.values(INVOCATIONS["pharn-loop"]).flatMap((byStage) => Object.keys(byStage));
+  const invoked = [...familyText.matchAll(INVOKE_RE)].map((m) => m[1]);
+  return [...new Set([...routed, ...invoked])].sort();
+}
+const skillGrantFor = (name) => `Skill(${name} *)`;
 
 /** The `allowed-tools` flow list from a command's frontmatter, or null when absent. Entries are YAML scalars, double-
  *  quoted (JSON escapes) or single-quoted (`''` escapes) — Prettier picks single quotes for an entry holding `"`. */
@@ -5676,12 +5691,10 @@ function loopGrantOffenders(grants, lines) {
   return out;
 }
 
-const isExcludedLoopLine = (file, text) => LOOP_GRANT_EXCLUDED.some((x) => x.file === file && text.startsWith(x.prefix));
-
 const loopRunLines = () =>
   [...LOOP_RUN_FILES, ...LOOP_INLINE_STAGE_FILES].flatMap((file) =>
     shellLines(readFileSync(join(COMMANDS_DIR, file), "utf8"))
-      .filter((l) => l.kind === "fence" && !isExcludedLoopLine(file, l.text))
+      .filter((l) => l.kind === "fence")
       .map((l) => ({ file, ...l }))
   );
 
@@ -5700,23 +5713,88 @@ test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line 
   assert.deepEqual(loopGrantOffenders(grants, lines), []);
   // 6.61.0 closure (L36): the Bash grants ARE the derived exact set — no prefix rule, nothing wider, nothing missing.
   assert.deepEqual([...grants.filter((g) => g.startsWith("Bash("))].sort(), derivedLoopGrants(lines));
-  // The exclusion is real and names exactly one pinned line (non-vacuous, L34/L60).
-  const excluded = LOOP_GRANT_EXCLUDED.flatMap(({ file }) =>
-    shellLines(readFileSync(join(COMMANDS_DIR, file), "utf8")).filter((l) => l.kind === "fence" && isExcludedLoopLine(file, l.text))
+  // 6.67.0: the seam-config step is in the domain as its pinned script line, and no `node -e` line is left in it.
+  assert.ok(
+    lines.some((l) => l.file === "pharn-build.md" && l.text.startsWith("node pharn/floor/seam-config-materialize.mjs")),
+    "non-vacuous: /pharn-build's seam-config line is a pinned line of the domain"
   );
-  assert.equal(excluded.length, LOOP_GRANT_EXCLUDED.length, "each LOOP_GRANT_EXCLUDED entry matches exactly one pinned line");
+  assert.deepEqual(
+    lines.filter((l) => /^node -e\b/.test(l.text)).map((l) => `${l.file}:${l.line}`),
+    [],
+    "no inline `node -e` line in the loop's domain (a wildcard grant for one would pre-approve arbitrary code)"
+  );
   // The scanners' view (withoutGrant, top of file) really drops the grant and nothing else of the frontmatter.
   const raw = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
   assert.equal(allowedTools(withoutGrant(raw)), null, "withoutGrant removes the allowed-tools list");
   assert.match(withoutGrant(raw), /^writes: \[/m, "and keeps the rest of the frontmatter");
-  // The non-Bash grants are a closed set: a new tool in the grant is a reviewed change, not a drift.
+  // The other grants are a closed set: a new tool in the grant is a reviewed change, not a drift. The Skill grants are
+  // checked on their own below (6.67.0), so the bare `Skill` is no longer a member.
   assert.deepEqual(
-    grants.filter((g) => !g.startsWith("Bash(")),
+    grants.filter((g) => !g.startsWith("Bash(") && !g.startsWith("Skill")),
     LOOP_NON_BASH_GRANTS
   );
+  // 6.67.0 (SEC-6): the Skill grants EQUAL the derived set — one `Skill(<name> *)` per command the run invokes inline.
+  assert.deepEqual(loopSkillGrantOffenders(grants, commandFamilyText(COMMANDS_DIR, "pharn-loop.md")), []);
   // Only the loop carries a grant: the gated /pharn-ship keeps its prompts, and no part declares its own.
   for (const f of productCommandFiles().filter((x) => x !== "pharn-loop.md"))
     assert.equal(allowedTools(readFileSync(join(COMMANDS_DIR, f), "utf8")), null, `${f} declares no allowed-tools`);
+});
+
+/** Offenders for the Skill grants: a bare `Skill`, a Skill grant outside the derived set, or a derived one missing. */
+function loopSkillGrantOffenders(grants, familyText) {
+  const want = loopSkillCommands(familyText).map(skillGrantFor);
+  const have = grants.filter((g) => g === "Skill" || g.startsWith("Skill("));
+  const out = [];
+  for (const g of have) if (!want.includes(g)) out.push(`Skill grant ${g} names no command the loop invokes inline`);
+  for (const g of want) if (!have.includes(g)) out.push(`missing Skill grant ${g}`);
+  return out;
+}
+
+test("✧ loop-grant-seam-skill: the Skill grants are derived, closed both ways, and the rule DISCRIMINATES (L36/L60)", () => {
+  const family = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
+  const commands = loopSkillCommands(family);
+  // Non-vacuity, per source of the derivation: the routing table gives the four routed stages, and the family's own
+  // "invoke `/pharn-…`" text gives the floor-only grill (an anchor that went missing would silently drop it).
+  assert.deepEqual(commands, ["pharn-build", "pharn-grill", "pharn-plan", "pharn-spec", "pharn-test"]);
+  assert.ok(
+    [...family.matchAll(INVOKE_RE)].some((m) => m[1] === "pharn-grill"),
+    "the grill is found through the family's own invoke phrase"
+  );
+  const live = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
+  assert.deepEqual(loopSkillGrantOffenders(live, family), []);
+  // Negative controls — each must turn the rule red.
+  const nonSkill = live.filter((g) => !g.startsWith("Skill"));
+  const skill = live.filter((g) => g.startsWith("Skill"));
+  assert.ok(
+    loopSkillGrantOffenders([...nonSkill, "Skill"], family).some((o) => o.includes("Skill grant Skill ")),
+    "a bare Skill (every skill) fails"
+  );
+  assert.ok(
+    loopSkillGrantOffenders([...live, "Skill(pharn-review *)"], family).some((o) => o.includes("pharn-review")),
+    "a Skill grant for a command the loop never invokes inline fails"
+  );
+  assert.ok(
+    loopSkillGrantOffenders([...nonSkill, ...skill.filter((g) => g !== "Skill(pharn-grill *)")], family).some((o) =>
+      o.includes("missing Skill grant Skill(pharn-grill *)")
+    ),
+    "a missing derived grant fails"
+  );
+  assert.ok(
+    loopSkillGrantOffenders([...nonSkill, ...skill.map((g) => g.replace(" *)", ")"))], family).length > 0,
+    "the exact-match spelling (no arguments) fails: every inline invocation carries arguments"
+  );
+  // The seam-config step restored as an inline `node -e` line is covered by no grant (LOOP-5's prompt, re-created).
+  const res = live.filter((g) => g.startsWith("Bash(")).map(bashGrantRe);
+  const oldSeamLine = `node -e "const fs=require('fs');const seam=1"`;
+  assert.equal(
+    subcommands(oldSeamLine).every((sub) => res.some((re) => re.test(sub))),
+    false,
+    "a `node -e` line is pre-approved by nothing"
+  );
+  assert.ok(
+    res.some((re) => re.test("node pharn/floor/seam-config-materialize.mjs")),
+    "control: the pinned seam line is"
+  );
 });
 
 test("✧ loop-no-prompts: the grant rule DISCRIMINATES — uncovered lines and unused grants fail, compounds split", () => {
