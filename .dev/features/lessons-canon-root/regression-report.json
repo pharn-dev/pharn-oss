@@ -1,10 +1,15 @@
 {
-  "base": "6b49cafdb6c98da52e01fafd72b93b1335021e44",
+  "base": "dcf7b43d9928342ef74bcde3e4cf13cc258a2198",
   "inside": [
     ".claude/commands/pharn-dev-memory-promote.md",
     ".claude/commands/pharn-loop.md",
     ".claude/commands/pharn-memory-promote.md",
     ".claude/commands/pharn-plan.md",
+    ".dev/features/lessons-canon-root/GRILL.md",
+    ".dev/features/lessons-canon-root/PLAN.md",
+    ".dev/features/lessons-canon-root/REGRESSION.md",
+    ".dev/features/lessons-canon-root/REVIEW.md",
+    ".dev/features/lessons-canon-root/regression-report.json",
     ".dev/floor/check-lessons-index.mjs",
     ".dev/floor/check-provenance.mjs",
     ".dev/floor/check-provenance.test.mjs",
@@ -17,6 +22,8 @@
     "CHANGELOG.md",
     "README.md",
     "SKILLS_VERSION",
+    "pharn/floor/canon-root.mjs",
+    "pharn/floor/canon-root.test.mjs",
     "pharn/floor/check-lessons-index.mjs",
     "pharn/floor/check-lessons-index.test.mjs",
     "pharn/floor/check-provenance.mjs",
@@ -24,11 +31,7 @@
     "pharn/floor/gen-lessons-index.mjs",
     "pharn/floor/gen-lessons-index.test.mjs",
     "pharn/floor/lessons-index-core.mjs",
-    "pharn/floor/lessons-index-core.test.mjs",
-    ".dev/features/lessons-canon-root/GRILL.md",
-    ".dev/features/lessons-canon-root/PLAN.md",
-    "pharn/floor/canon-root.mjs",
-    "pharn/floor/canon-root.test.mjs"
+    "pharn/floor/lessons-index-core.test.mjs"
   ],
   "outside_gates": {
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
@@ -37,7 +40,7 @@
     },
     "tests": {
       "base": 1,
-      "head": 1
+      "head": 0
     },
     "validate": {
       "base": 0,
