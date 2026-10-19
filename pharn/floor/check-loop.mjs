@@ -2,7 +2,7 @@
 // pharn/floor/check-loop.mjs — the deterministic STOP-DECISION CORE for the product `/pharn-loop` command.
 //
 // Floor/eval infrastructure — NOT a Capability (no `role:`; it lives in this floor-ignored dir, exactly
-// like check-ship.mjs / check-verify.mjs / check-regress.mjs). It owns the WHOLE deterministic
+// like check-verify.mjs / check-regress.mjs). It owns the WHOLE deterministic
 // stop/continue decision of the product loop so the maximum surface is in tested Node, not in the
 // command's prose. The command (.claude/commands/pharn-loop.md) owns only the I/O side-effects (running
 // the stages, writing artifacts, the git steps); this helper computes whether the loop STOPS or CONTINUES.
@@ -34,7 +34,7 @@
 //   line), which runs before this file at the decision and again at the commit gate.
 //
 // A SIBLING OF check-ship.mjs, NOT AN OVERLOAD OF IT (P3 — one axis per file):
-//   check-ship.mjs is the DEV loop's stop core (Design A): it CONTINUEs on ANY not-floor-green verdict up
+//   .dev/floor/check-ship.mjs is the DEV loop's stop core (Design A; dev apparatus, so no install has it): it CONTINUEs on ANY not-floor-green verdict up
 //   to the cap, its VERIFY_VERDICTS set does NOT include INCOMPLETE, and it has no terminal outcome. This
 //   file is the PRODUCT loop's stop core (Design C). The two tables still differ on three axes —
 //   INCOMPLETE is accepted here, STOP_TERMINAL (exit 4) exists here, and a reconcile red is terminal here —

@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// pharn/floor/check-ship.mjs — the deterministic STOP-DECISION CORE for the `/pharn-dev-ship --loop` mode.
+// .dev/floor/check-ship.mjs — the deterministic STOP-DECISION CORE for the `/pharn-dev-ship --loop` mode.
 //
-// Floor/eval infrastructure — NOT a Capability (no `role:`; the floor capability count stays 1, exactly
-// like pharn/floor/check-verify.mjs / pharn/floor/check-regress.mjs / .dev/floor/check-variance.mjs / check-structural.mjs,
-// which live in this floor-ignored dir). It owns the WHOLE deterministic stop/continue decision of the
-// loop so the maximum surface is in tested Node, not in the command's prose. The command
+// Floor/eval infrastructure — NOT a Capability (no `role:`, like pharn/floor/check-verify.mjs /
+// pharn/floor/check-regress.mjs / .dev/floor/check-variance.mjs). DEV APPARATUS: its one consumer is the dev command
+// `/pharn-dev-ship`, which no install receives, so it lives in `.dev/floor/` (6.65.3; it sat in pharn/floor/ before,
+// and every install copied it — audit 2026-10-12 ARCH-5). The product loop's stop core is pharn/floor/check-loop.mjs.
+// It owns the WHOLE deterministic stop/continue decision of the loop so the maximum surface is in tested Node, not in
+// the command's prose. The command
 // (.claude/commands/pharn-dev-ship.md, `--loop` mode) owns only the I/O side-effects (running the stages, applying
 // fixes, writing artifacts); this helper computes whether the loop STOPS or CONTINUES.
 //
@@ -43,7 +45,7 @@
 // child process, no network. The decision is PROVABLY independent of any tainted field.
 //
 // Usage:
-//   node pharn/floor/check-ship.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
+//   node .dev/floor/check-ship.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
 //
 // Exit: 0 STOP_GREEN · 1 STOP_CAP · 2 INCONCLUSIVE (bad input, fail-closed) · 3 CONTINUE.
 

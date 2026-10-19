@@ -1180,7 +1180,7 @@ export function completenessFromStamp(stamp) {
 }
 
 /** The advisory `gate_run` block both reports carry. It was additive: when 6.8.0 added it, every consumer of those
- *  reports then read named fields only (verified by reading each: check-loop.mjs, check-ship.mjs,
+ *  reports then read named fields only (verified by reading each: check-loop.mjs, .dev/floor/check-ship.mjs,
  *  check-loop-decision.mjs, check-ship-briefing.mjs, render-ship-briefing.mjs, render-run-report.mjs,
  *  ship-outcome-core.mjs — none validated a closed key set); check-loop-fresh.mjs (6.10.0) reads
  *  `gate_run.stamp_sha256` by name. A consumer added since is not covered by either reading.

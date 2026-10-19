@@ -2,7 +2,7 @@
 //
 // NO network, NO git, NO claude -p. We compose findings.json arrays in an os.tmpdir() scratch dir and
 // assert the public surface (exit code + stdout JSON + the written out.json bytes) by subprocess,
-// mirroring check-ship.test.mjs. The ★ tests are the reason the merge is allowed to be called FLOOR (P0):
+// mirroring .dev/floor/check-ship.test.mjs. The ★ tests are the reason the merge is allowed to be called FLOOR (P0):
 //   • dedup groups strictly by the enum-gated key (type,rule_id,file); a different rule_id at the same
 //     line does NOT merge (the key is rule_id-precise, never the free-text problem);
 //   • output bytes are INVARIANT under input-file order AND intra-array order (determinism, P5);

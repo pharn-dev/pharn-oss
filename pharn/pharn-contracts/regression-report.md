@@ -108,7 +108,7 @@ same set**, `{no-regressions, regressions, inconclusive}`:
 
 | consumer                               | on a value outside the set             |
 | -------------------------------------- | -------------------------------------- |
-| `pharn/floor/check-ship.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `.dev/floor/check-ship.mjs`            | `INCONCLUSIVE`, exit 2 — fail-closed   |
 | `pharn/floor/check-loop.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed   |
 | `pharn/floor/render-ship-briefing.mjs` | the honest literal `n/a` in the render |
 | `pharn/floor/check-ship-briefing.mjs`  | RED (shape)                            |
