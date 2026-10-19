@@ -15,7 +15,9 @@ come from the single code block this text was moved from, so the entry they name
 ```bash
 # THE /pharn-loop STOP CORE — Design C over the FLOOR verdicts, in a table chosen by the SPEC's kind (6.28.0).
 # Decides every stop: INCONCLUSIVE (exit 2, bad input) · STOP_TERMINAL (4: unmeasured, an ac-evidence red, a reconcile
-# red — `terminal_cause` names which) · the green (0) · CONTINUE (3, a measurable red under the cap) · STOP_CAP (1).
+# red — `terminal_cause` names which; 6.65.0: `reconcile-inconclusive` when the reconcile gate's recorded exit is exactly
+# 2, the checker's INCONCLUSIVE, so nothing was detected) · the green (0) · CONTINUE (3, a measurable red under the
+# cap) · STOP_CAP (1).
 # THE STRUCTURAL CLAIM, restated exactly: its inputs are the two verdict reports, --iter / --cap, and ONE token of the
 # feature's own SPEC — its spec_kind, read by pharn/floor/loop-mode-core.mjs (the one kind reading check-spec.mjs
 # --spec-kind prints) from the SPEC.md beside the verify report — which chooses the table: verify-only for `quick`
@@ -140,6 +142,10 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # the SPEC's kind selects, read in any state (Step 6a's Draft revert never touches the kind line) — else RED
 # MODE_MISMATCH: a run invoked without --quick over a quick SPEC ends there, uncommitted. Agreement between files,
 # never provenance (L43); a quick line cites verify-report.json alone.
+# Since 6.65.0 (audit LOOP-2) it also reads the cap the run OPENED with — `.pharn/pharn-loop/<name>/active.json`, the
+# Stop guard's marker, located from the record's own pharn/features/<name>/ path, lstat-regular — and REDs CAP_MISMATCH
+# (record cap ≠ marker cap), CAP_UNWITNESSED (no usable marker: fail-closed; the closeout runs it before its --close,
+# and a blocked record is skipped first) and ITER_OVER_CAP (iterations > cap). Agreement, never provenance.
 # Runs strictly AFTER a stop exists and gates only /pharn-loop's Step 6c commit, never the stop: a green stop whose
 # re-derivation is RED is not committed ("not committed: decision unverifiable"). BOUND, and the point: it proves the
 # decision is RE-DERIVABLE from the cited reports, NOT that the reports are honest — a self-consistent forged pair
@@ -162,7 +168,8 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # still-Approved SPEC) · 5 record RED · 2 refused, nothing ran · else a crash, never a commit decision. ship-closeout
 # runs run-stop, run-marker --close, rev-parse HEAD (or `unknown`), ledger + check + report (quick read from the
 # run-start marker); exit 0 always (nothing gates) · 2 refused; it holds NO git write (a source scan). The shared steps
-# live once in closeout-core.mjs. Last stdout line: one JSON document, closed keys. FLOOR: tested code over floor
+# live once in closeout-core.mjs. Last stdout line: one JSON document, closed keys (6.65.0: loop-closeout's gains
+# `excluded_gates`, the gates.exclude ids of the final verify / full-mode regress, also a third commit-message paragraph). FLOOR: tested code over floor
 # verdicts (the green-token enum, the two checkers' exits); ADVISORY: that a run invokes the line and runs no git of its
 # own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.44.0]).
 node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]

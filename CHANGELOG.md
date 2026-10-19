@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.64.5] - 2026-10-19
+## [6.65.1] - 2026-10-19
 
 ### Fixed
 
@@ -76,6 +76,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - missing-timeout: about 3.6× on `fetch(`×N.
 
     They use other mechanisms and are left to the named follow-up `scanner-redos-sweep-2`.
+
+## [6.65.0] - 2026-10-19
+
+### Changed
+
+- **`/pharn-loop`'s run report, closeout and summary now name the gates a project's `gates.exclude` removed, and the
+  run report shows the always-loaded instruction set's token estimate.** Audit findings LOOP-4 and CTX-14 (2026-10-12).
+  - What changed: `RUN-REPORT.md`'s `## Verdicts` gets one line under each verdict naming the excluded gate ids
+    (verify's `gate_run.excluded`, regress's `gate_run.head.excluded`). `pharn/floor/loop-closeout.mjs` gets a new
+    closed document key, `excluded_gates`, and when a green commit ran without excluded gates its message gets a third
+    paragraph naming them. The `/pharn-loop` Step 7 summary repeats them. Before this, a `STOP_GREEN` over a suite
+    minus `e2e` read as a full green everywhere except `VERIFY.md` and `REGRESSION.md`. One reader serves all three:
+    `excludedFacts` in `pharn/floor/gate-run-core.mjs`. Ids appear inline only as allowlist members.
+  - `/pharn-loop` Step 1a gets one new pinned line, `node pharn/floor/check-instruction-files.mjs --report`, which
+    writes to `.pharn/pharn-loop/<name>/instruction-files.json`. Its exact grant line is added to `allowed-tools`, and
+    it never stops the run. `RUN-REPORT.md`'s `## Tokens` shows the estimate (bytes / 4) below the token table. The
+    files are already inside the input counts above it; an unusable record renders as `n/a`.
+  - Bounds: the figure is an estimate of `check-instruction-files.mjs`'s model of the loader, not a measurement
+    (`LIMITS.md §1c`, §3e). `/pharn-ship` records none and its report says so; follow-up `ship-instruction-set`.
+    Whether the reports' `excluded` block is truthful is the stamp's own bound (`gate-run-record.md`). The listing
+    gates nothing.
+
+### Fixed
+
+- **A loop record's `cap` must now be the cap the run opened with, and an inconclusive reconcile gate no longer reads
+  as a detected escape.** Audit findings LOOP-2 and LOOP-3 (2026-10-12).
+  - LOOP-2: `pharn/floor/check-loop-decision.mjs`, which gates `/pharn-loop`'s commit, re-derived the decision with
+    the record's own `cap`, which the model types. A record `cap: 7` over a run opened with `--cap 3` stayed GREEN. The
+    check now reads the Stop guard's marker, `.pharn/pharn-loop/<name>/active.json`, written by
+    `require-loop-record.cjs --open <name> --cap <M>` at Step 1a. Three new REDs:
+    - `CAP_MISMATCH` when the two caps differ;
+    - `CAP_UNWITNESSED` when no usable marker exists (fail-closed). The closeout runs the check before its own
+      `--close`, every run opens the marker before its feature directory exists, and a blocked record is skipped
+      first;
+    - `ITER_OVER_CAP` when `iterations` exceeds `cap`.
+  - LOOP-3: `pharn/floor/check-loop.mjs` gains the terminal cause `reconcile-inconclusive`. It applies when the
+    reconcile gate's recorded exit is exactly 2 (`check-bash-reconcile.mjs`'s INCONCLUSIVE, for example no
+    baseline), and the reason now says nothing was detected. The decision stays `STOP_TERMINAL`.
+    `RUN-REPORT.md` heads that block INCONCLUSIVE, and `/pharn-loop` Step 5 routes the new cause like `reconcile`.
+    The contracts (`verify-report.md`, `loop-record.md`, `reconciliation-record.md`) say the same.
+  - Bounds: the cap check is agreement between two files the run can write, never provenance. A typed
+    `iterations` that is too low still passes. Re-checking a record by hand after the run's Final step closed the
+    marker is RED `CAP_UNWITNESSED`. A reconcile checker that crashed exits 1, its ESCAPE code, so it still reads
+    `reconcile`. Not done: cross-checking `iterations` against the run's stage markers (follow-up
+    `loop-iterations-markers`).
 
 ## [6.64.4] - 2026-10-19
 

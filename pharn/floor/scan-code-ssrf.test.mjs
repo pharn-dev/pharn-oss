@@ -413,7 +413,7 @@ test("★ ReDoS fix did not narrow detection: nested group WITH a source → sti
 // ✧ COPY-PAIR PIN — the three scan-code-* scanners share the ARGUMENT SPAN by DELIBERATE duplication
 // (the check-provenance.mjs precedent: separate copies, pinned to agree by test rather than shared through
 // an import, because these scanners were independently-runnable floor scripts with no shared core). Since
-// 6.64.5 all three import sink-span-core.mjs for the driver that RUNS each pattern, but each still declares
+// 6.65.1 all three import sink-span-core.mjs for the driver that RUNS each pattern, but each still declares
 // its own SPAN literal, so this pin still has something to hold.
 //
 // L20: a lesson whose only remedy is discipline WILL recur, and the second occurrence is the trigger to give
@@ -434,7 +434,7 @@ test("✧ PIN: all three scan-code-* scanners declare a byte-identical SPAN", ()
 });
 
 // ---------------------------------------------------------------------------
-// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.64.5). The same reasoning
+// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.65.1). The same reasoning
 // as the block of that name in scan-code-injection.test.mjs: through 6.64.2 a line cost O(sinks × length) —
 // `fetch(`×16000 (96 KB) took 3.6 s — and the driver in sink-span-core.mjs now skips every sink inside a failed
 // sink's span. (old: killed) marks a shape the 6.64.2 scanner does not finish within this timeout, measured once in

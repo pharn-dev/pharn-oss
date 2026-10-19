@@ -1,9 +1,9 @@
 # SHIP — scanner-redos-bounds
 
-Branch `fix/scanner-redos-bounds`, batch 2026-10-19 group C, mode SHIP. Final version **6.64.5**: planned as 6.64.3,
-renumbered twice as `main` released its own 6.64.3 and 6.64.4. The second merge (`origin/main` 661f3470) came after
-the regress and verify runs recorded here. It brought only other files and released CHANGELOG sections, and was
-followed by the fast gates listed in the PR.
+Branch `fix/scanner-redos-bounds`, batch 2026-10-19 group C, mode SHIP. Final version **6.65.1**: planned as 6.64.3,
+renumbered three times as `main` released its own 6.64.3, 6.64.4 and 6.65.0. The second and third merges
+(`origin/main` 661f3470, then 6.65.0) came after the regress and verify runs recorded here. They brought only other
+files and released CHANGELOG sections. Each was followed by the fast gates and this increment's five suites.
 
 ## Stages run, in order
 
@@ -35,11 +35,14 @@ followed by the fast gates listed in the PR.
 ## Where the run ended
 
 By `/pharn-dev-ship`'s rule, the verify `FAIL` is a **RED-verdict STOP**, recorded here as such. The verdict is not
-reinterpreted. **GATE 2** is delegated to the orchestrator under COMMON.md. This agent's reading is that the
-failure is environmental: the red test is outside the change, red at base too, and the machine was overloaded. That
-reading is advisory. The PR is opened so CI can give the clean measurement, and the decision to merge, fix or abandon
-belongs to the orchestrator and, finally, the maintainer. This is a model decision under delegation, not a human
-approval.
+reinterpreted. This agent's reading was that the failure is environmental: the red test is outside the change, red
+at base too, and the machine was overloaded. That reading is advisory. The PR was opened so CI could give the clean
+measurement.
+
+**GATE 2: MERGE on green CI.** The batch orchestrator made this decision as a model decision under the maintainer's
+delegation (COMMON.md), not as a human approval. Its stated reason: the verify `FAIL` is load-timing noise in files
+this increment did not touch, also red at base, and CI is the measurement. The merge itself is the orchestrator's
+and is conditional on CI being green; this agent merges nothing.
 
 - review: `.dev/features/scanner-redos-bounds/REVIEW.md` (advisory)
 - grill: `.dev/features/scanner-redos-bounds/GRILL.md` (advisory)

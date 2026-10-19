@@ -41,8 +41,8 @@
 - `pharn/floor/scan-code-ssrf.test.mjs` — same — test
 - `pharn/floor/scan-code-path-traversal.test.mjs` — same — test
 - `pharn/floor/scan-code-n-plus-one.test.mjs` — ★ long-chain / long-identifier / many-`(` / many-loops ReDoS tests + the frozen-oracle differential + oracle-mutant controls — test
-- `SKILLS_VERSION` — patch bump: planned 6.64.2 → 6.64.3, renumbered to 6.64.5 after `main` released 6.64.3 and 6.64.4 — repo-meta
-- `CHANGELOG.md` — new `[6.64.5]` section (planned as `[6.64.3]`), `### Fixed` — repo-meta
+- `SKILLS_VERSION` — patch bump: planned 6.64.2 → 6.64.3, renumbered to 6.65.1 after `main` released 6.64.3, 6.64.4 and 6.65.0 — repo-meta
+- `CHANGELOG.md` — new `[6.65.1]` section (planned as `[6.64.3]`), `### Fixed` — repo-meta
 - `README.md` — regenerated `## Current state` (floor checker count +1) via `npm run docs:generate` — generated
 - `.dev/features/scanner-redos-bounds/PLAN.md` — this plan
 - `.dev/features/scanner-redos-bounds/GRILL.md` — grill artifact

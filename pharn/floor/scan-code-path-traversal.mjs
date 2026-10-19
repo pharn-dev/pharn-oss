@@ -69,7 +69,7 @@
 //   in the remaining line length. Measured across 11 adversarial paren families — `((a)`, `(a)`, `((a))`, `()`,
 //   `(x,(y)`, unclosed `(`×N, bare `)`×N, deep `(`×N a `)`×N, up to ~480 KB lines: all linear (2× input → ~2×
 //   time), worst family 2.93 ms at 480 KB.
-//   THE PER-LINE COST (re-derived in 6.64.5 for the driver that runs the pattern now — L24). Through 6.64.2 the
+//   THE PER-LINE COST (re-derived in 6.65.1 for the driver that runs the pattern now — L24). Through 6.64.2 the
 //   scanner called `re.test(line)`, and the engine retried the whole pattern at every position where a sink
 //   callee can start, so a line cost O(sink-callee occurrences × line length): `path.join(`×8000 (80 KB) took
 //   1.5 s, ~4× per doubling (TST-2, the 2026-10-12 review). The regex is unchanged; `lineMatches()` in

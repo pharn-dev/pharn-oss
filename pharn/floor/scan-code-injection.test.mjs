@@ -406,7 +406,7 @@ test("✧ L9: a parameterized query stays clean", () =>
   withCode('db.query("SELECT * FROM t WHERE id = $1", [id]);\n', (p) => assert.equal(json(run(p)).found, false)));
 
 // ---------------------------------------------------------------------------
-// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.64.5).
+// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.65.1).
 //
 // Through 6.64.2 `re.test(line)` retried the pattern at every sink start and re-scanned the span each time, so a
 // line cost O(sinks × length): `query(`×8000 (48 KB) took 1.0 s, ~4× per doubling, and one minified line hung the

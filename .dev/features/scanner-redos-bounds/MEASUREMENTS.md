@@ -28,8 +28,8 @@ interval lookup (O(hits × intervals)) is quadratic by construction. On 9000 one
 ## 2. After: the ★ shapes through the real CLI, 6.64.2 against this change, 5 s timeout
 
 `oldnew.mjs` spawns each scanner's CLI on a one-line file. "same" means the two stdout documents are byte-equal.
-This change ships as 6.64.5. It was built as 6.64.3 and renumbered twice, as `main` released its own 6.64.3
-and 6.64.4.
+This change ships as 6.65.1. It was built as 6.64.3 and renumbered three times, as `main` released its own
+6.64.3, 6.64.4 and 6.65.0.
 
 | scanner        | shape                                              | 6.64.2    | new    | output |
 | -------------- | -------------------------------------------------- | --------- | ------ | ------ |
