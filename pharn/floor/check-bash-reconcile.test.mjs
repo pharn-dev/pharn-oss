@@ -902,6 +902,8 @@ test("✧ the shipped claim says NON-ADVERSARIAL everywhere it is stated (P0 —
     "pharn/floor/check-bash-reconcile.mjs": /NON-ADVERSARIAL|non-adversarial/,
     "pharn/pharn-contracts/reconciliation-record.md": /non-adversarial/i,
     "README.md": /non-adversarial/i,
+    "docs/guarantees.md": /non-adversarial/i,
+    "docs/limitations.md": /non-adversarial/i,
     "CLAUDE.md": /NON-ADVERSARIAL|non-adversarial/,
     ".dev/features/bash-write-reconciler/proposed/LIMITS.md.patch": /NON-ADVERSARIAL|non-adversarial/,
   };
