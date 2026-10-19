@@ -23,6 +23,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.66.0] - 2026-10-19
+
+### Added
+
+- **A project can declare `/pharn-regress`'s base install in `pharn.config.json` — `{"regress": {"install": …}}` — so a
+  full `/pharn-loop` can finish over a project with no lockfile or with two lockfile families.**
+  - What changed:
+    - **The key.** `regress.install` is one of `none`, `head-node-modules`, `npm`, `pnpm`, `yarn`, `bun`: a closed set,
+      never a command, read by the new `pharn/floor/regress-install-config-core.mjs` (own-property reads, every
+      refusal quoted through the total `shown()`). `stage-regress.mjs` reads it from the project root only when the
+      invocation passed neither `--install` nor `--no-install` and the base commit has a `package.json`. Precedence:
+      argv, then the declaration, then the lockfile table.
+    - **The values.** `none` skips the install, and the `base-install-unreliable` rule applies as for `--no-install`. A
+      family runs that family's frozen command from the existing table, and only when its lockfile is in the base
+      commit. `head-node-modules` runs no install and makes the base checkout's `node_modules` a link to the project's
+      own installed `node_modules`, checked with `lstat` (a symlink or a missing directory refuses). The unreliable-install
+      mask does not apply to it, and its evidence is never reused.
+    - **Disclosure.** `regression-report.json` gains an additive `base_install` block (`{declared_in, value}`), after
+      `base_source`, only when the declaration decided this invocation's fresh base, so every other report keeps its
+      bytes. `REGRESSION.md`'s install line names the declaration, and for `head-node-modules` states the
+      approximation in fixed text with no path.
+    - **Refusal.** A declaration that cannot be read or cannot answer the run (a family absent at the base, no real
+      `node_modules` for `head-node-modules`, a base commit that tracks its own `node_modules`, a link that cannot be
+      made) is the new `unusable install-config-invalid`; `/pharn-loop` already maps every `unusable` to S9. The fixed
+      `install-unresolved` question now names the declaration; its options are unchanged.
+    - **Text.** `stage-exit.md` ("The `regress` install command") and `regression-report.md` specify it;
+      `/pharn-regress` names it, `/pharn-loop`'s regress mapping names it as the way to pre-answer
+      `install-unresolved`, and the README has "Declaring the base install". `pharn-regress.md`'s byte ceiling rises
+      to 25,600 (23,140 measured + 10%, next 512).
+  - Why: audit finding LOOP-11. `resolveInstall` asked whenever a base had a `package.json` and not exactly one lockfile
+    family; `/pharn-loop` maps that question to S10 and its granted regress line passes no install flag, so such a
+    project could never finish a full loop.
+  - Why `head-node-modules` and not only `none`: for the common case — a library with devDependencies and no lockfile —
+    `none` leaves the base without dependencies, so every gate that needs them is red at the base, and the first gate
+    red at head (a pre-existing red, or an iteration that broke an outside test) is refused `base-install-unreliable`,
+    an S9 stop. A test pins that. `head-node-modules` measures the base with HEAD's dependency tree instead, so such a
+    run reaches a verdict and the loop iterates on a regression.
+  - Not covered:
+    - `head-node-modules` is an approximation: a regression caused purely by a dependency change is red on both sides
+      and reads `pre_existing`. It costs regress's attribution, not the loop's green: `/pharn-verify`'s threshold is
+      absolute over every gate at HEAD. It re-admits, opt-in and disclosed, the dependency borrowing that 6.50.x's
+      out-of-project base checkout removed by default.
+    - The link is writable: a base gate that writes under `node_modules` (a cache) writes the project's tree. Only the
+      root `node_modules` is linked; a workspace's nested ones are not.
+    - Because `none` and `head-node-modules` evidence is never reused, every `/pharn-loop` iteration that does not take
+      its base from the entry gates runs the whole base side again. That cost was not measured.
+    - No non-frozen install (`npm install`) is offered: resolving dependency versions at run time could turn a new
+      upstream break red at base and read a head regression as `pre_existing`.
+    - The declaration is not pinned at `/pharn-test`: the test-infrastructure pin covers what decides `/pharn-verify`'s
+      AC gate, and this decides only regress's base. In an installed project a build cannot write `pharn.config.json`
+      with the write tools (the 6.61.0 setter refusal and the reserved surface); a Bash write is detected, never
+      prevented, by the reconcile gate. In a dev checkout a plan may scope it.
+    - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
+      can for the table's own inferred install.
+
 ## [6.65.2] - 2026-10-19
 
 ### Fixed
