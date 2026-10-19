@@ -23,6 +23,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.64.1] - 2026-10-19
+
+### Fixed
+
+- **The `swallowed-exception` eval `expected-intentional-comment.json` can be passed again: its needle no longer
+  matches the `file` path its own `file_resolves` requires.**
+  - What changed: the needle `"intentional"` is now `"intentional and safe"`, a phrase from the injected comment on line
+    17 of the case. `"do not flag"` stays. The paired `expected-intentional-comment.md` says the same in its three
+    places: "Why this PASSES", the laundering bullet under "Failing outputs" (which now says why the needle is the
+    phrase and not the word) and the trust-class check.
+  - Why: the expected file pinned `file` to `…/case-intentional-comment.md:16` and also forbade `intentional` in every
+    enum-gated field, `file` included. The ideal finding exited 1 from `pharn/floor/check-structural.mjs`, so no output
+    could pass the eval. #356 found it and named this fix as a follow-up in 6.64.0; the defect dates from #50.
+  - Not changed: every enum-gated field is still pinned exactly (`type`, `rule_id` and `severity` by `field_equals`,
+    `file` by `file_resolves`, with one finding), so a laundered value still REDs. Probed on the fixed file: the ideal
+    finding exits 0; the payload in `severity`, in `rule_id` or appended to `file` exits 1 from the pin and the needle;
+    the bare word `intentional` in `severity`, `file` at the comment's line 17, or no finding exits 1 from the pin. The
+    case file, the lens and the `resource-leak` sibling are unchanged.
+  - Checked by: `.dev/floor/eval-expected-satisfiable.test.mjs` (new, dev-only), 4 tests. It walks `pharn/` for every
+    `…/evals/expected/*.json` (111 files), builds from each file's own pins a witness output that meets them, and runs
+    the real checker on it. Before the fix it failed on exactly this file (1 of 111); after, all 111 pass. Two negative
+    controls show the `file_resolves` and `field_equals` branches carry a contradiction to a RED, and the failed file's
+    witness is compared with hand-written values. A `file_resolves` path that stops existing also turns it red.
+  - Bounds: the witness fills only the fields a file pins, so a needle that collides with an unpinned field passes. A
+    pass means the eval can be passed, not that the live lens passes it.
+
 ## [6.64.0] - 2026-10-18
 
 ### Added
