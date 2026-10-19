@@ -30,7 +30,8 @@ or unreadable, halt and ask (P6).
   existing installs read: `.dev/guides/versioning.md`.
 - Planning a change to, running or citing a floor CLI (`pharn/floor/`, `.dev/floor/`, `.claude/hooks/`): its `##`
   section in `.dev/guides/floor-{checks,gates,ac-tests,orchestration}.md` (`grep -n '<file>' .dev/guides/floor-*.md`).
-- Planning or editing a `.claude/commands/pharn-*.md` product command or part: `.dev/guides/product-commands.md`.
+- Planning or editing a `.claude/commands/pharn-*.md` product command or part, or a `.claude/agents/pharn-*.md`
+  definition: `.dev/guides/product-commands.md`.
 - Changing a lessons step, `check-plan-lessons`, a lessons index or memory-bank handling: `.dev/guides/lessons.md`.
 - A `docs:check` RED or an `ENUM_ERROR`: `.dev/guides/generated-docs.md`.
 - Proposing a product capability catalog or `/pharn-eval`: `.dev/guides/deferred-decisions.md`.
@@ -81,7 +82,7 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   `pharn/pharn-review/`); the product-floor checkers `pharn/floor/*.mjs` (not their `*.test.mjs`); the
   four trusted docs (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`, `THREAT-MODEL.md`, `LIMITS.md`);
   and the product `.claude/` surface (`pharn-*` — non-`pharn-dev-*` — commands, `.cjs` hooks,
-  `settings.json`).
+  `settings.json`, `.claude/agents/pharn-*.md`).
 - **Bump size (SemVer over the product surface):** **patch** = a correction/clarification to bytes that
   already shipped; **minor** = a newly shipped capability / command / checker; **major** = a breaking
   shape change (a contract / finding-shape / frontmatter change that invalidates existing installs).

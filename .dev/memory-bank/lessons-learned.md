@@ -2379,3 +2379,18 @@ type: floor · concepts: [differential-testing, shared-oracle, verification-fide
 - commit: `1e0ff70aeb49e3aba6e1ed9110411791ace1c645`
 - source: .dev/features/grill-griller-slim/REVIEW.md finding 2 + § Lesson candidates, Candidate A
 - promoted: 2026-10-18 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L75 — A sweep line that names its phrases but not its hits cannot be checked — record each hit with a disposition, and let grill re-run the grep
+
+type: process · concepts: [sweep-scope, declaration-audit, enumeration, doc-drift, lesson-recurrence]
+
+**Lesson.** A plan's sweep declaration that names its search phrases but not their hits cannot be checked by any later stage, and it fails exactly where the hits fall outside the plan's `## Files`. Measured in `review-lens-grouping`: the PLAN's L33 line said claims that expire on landing "were swept (`fan-out`, `subagent per lens`, `68k`, `prefix`)". At the reviewed commit that one phrase matched 21 lines in 20 shipped files, 19 lens bodies and `pharn/floor/merge-findings.mjs:4`, and two more sites said the same in other words (`pharn/floor/count-lenses.mjs:5`, `README.md:877`). Every one still described one subagent per lens after the increment replaced that behaviour. None was edited or listed: the hits lay outside `## Files` and the plan's "no lens changes" scope, so they were dropped without a word. `/pharn-dev-grill` read the line and could not catch it, because `check-plan-lessons.mjs` verifies that L33 is cited and referenced, never what its sweep found; an independent `/pharn-dev-review` re-ran the grep. Remedy: the sweep declaration lists each phrase with every hit (`path:line`) and one disposition per hit (edited, follow-up `<slug>`, or still true), and `/pharn-dev-grill` re-runs each phrase's grep over the product surface and REDs on a hit with no disposition (set membership, primitive #3).
+
+**Why it matters.** [[L33]] says a repair pass misses variant spellings, [[L49]] that a completed-sweep claim is verified only where a checker exists and should state its coverage boundary, and [[L50]] that a sweep must also enumerate the cites of a broken referent. This plan applied L33's phrase discipline and still dropped every hit: a stated phrase list declares a method, not coverage, and it reads as thoroughness. Unlike L49's remedy (state the boundary) and L50's (sweep by referent), this one is checkable, because the hits are a set a grep recomputes, so a hit with no disposition is a membership failure, not a judgment. **Bound (P0), and the remedy's status per [[L46]]:** the check is not built, so until `/pharn-dev-grill` re-runs the phrases this is a PENDING-remedy lesson and the sweep stays discipline. Built, it would still see only the phrases a plan names, never a variant spelling the plan omits (`count-lenses.mjs:5` and `README.md:877` here), which stays L33's residual. **Honest trigger (P7):** a recurrence inside the L33 → L50 family, found by review before merge.
+
+**Provenance.**
+
+- feature: `review-lens-grouping`
+- commit: `829d097ec3e4624cf790f83dce45de89d571e115`
+- source: .dev/features/review-lens-grouping/REVIEW.md A1 + § Lesson candidate
+- promoted: 2026-10-18 via gated `/pharn-dev-memory-promote` (human-approved).

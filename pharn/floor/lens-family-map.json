@@ -1,0 +1,16 @@
+{
+  "doc": "Which /pharn-review lenses share one subagent (review-lens-grouping, review finding CTX-3 (b)). Each family runs as one subagent; families and members are listed in run order. The rule, as approved at GATE 1 (2026-10-18): a family never mixes a scanner-bound lens with a scanner-less one, as lens-scanner-map.json records them, because a scanner-less lens takes the whole target; trust-fence, the attempt-0 injection probe, is alone; the six security lenses are each alone; the other scanner-bound lenses are grouped by what forces them to change. pharn/floor/lens-groups.mjs reads this map and the assignment record and prints the groups; lens-groups.test.mjs pins every invariant against count-lenses.mjs and lens-scanner-map.json. In an install the map is a superset of the installed lenses: a member that is not installed is ignored, and an installed lens the map does not name runs alone. One context per family means one hostile file in any member's review set reaches every member (PLAN.md Design 1, the per-family table).",
+  "families": [
+    { "family": "async-resources", "lenses": ["missing-await", "missing-timeout", "n-plus-one", "resource-leak"] },
+    { "family": "error-handling", "lenses": ["missing-error-handling", "null-deref", "off-by-one", "swallowed-exception"] },
+    { "family": "hygiene", "lenses": ["copy-paste-drift", "duplicated-logic", "magic-values", "placeholder-as-done"] },
+    { "family": "whole-target", "lenses": ["hallucinated-api", "input-validation", "race-condition"] },
+    { "family": "injection", "lenses": ["injection"] },
+    { "family": "insecure-crypto", "lenses": ["insecure-crypto"] },
+    { "family": "path-traversal", "lenses": ["path-traversal"] },
+    { "family": "secrets-in-code", "lenses": ["secrets-in-code"] },
+    { "family": "ssrf", "lenses": ["ssrf"] },
+    { "family": "unsafe-deserialization", "lenses": ["unsafe-deserialization"] },
+    { "family": "trust-fence", "lenses": ["trust-fence"] }
+  ]
+}

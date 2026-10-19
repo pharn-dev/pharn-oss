@@ -1,0 +1,43 @@
+{
+  "base": "0fefcb8a8a6ddf2ae05f3c64ddcc124221b281ce",
+  "inside": [
+    ".claude/agents/pharn-review-lens.md",
+    ".claude/commands/pharn-review.md",
+    ".dev/features/review-lens-grouping/GRILL.md",
+    ".dev/features/review-lens-grouping/MEASUREMENTS.md",
+    ".dev/features/review-lens-grouping/PLAN.md",
+    ".dev/features/review-lens-grouping/REGRESSION.md",
+    ".dev/features/review-lens-grouping/REVIEW.md",
+    ".dev/features/review-lens-grouping/VERIFY.md",
+    ".dev/features/review-lens-grouping/regression-report.json",
+    ".dev/features/review-lens-grouping/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/review-lens-agent.test.mjs",
+    ".dev/floor/stage-load-budget.test.mjs",
+    ".dev/guides/product-commands.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/lens-family-map.json",
+    "pharn/floor/lens-groups.mjs",
+    "pharn/floor/lens-groups.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}

@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-74 lessons · 74 tagged · 0 malformed · 0 untagged · ~52639 tokens total
+75 lessons · 75 tagged · 0 malformed · 0 untagged · ~53372 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -98,4 +98,5 @@ L71 | scoping  | writes-scope,plan-shape,lesson-recurrence,glob,floor-escalation
 L72 | process  | enumeration,referent-binding,shared-parser,test-blindspot                                      | Renaming a member of a shared decision's return enum is an API change — a caller outside the plan that compares against the old literal silently takes the other branch | 2026-10-07 | ~438
 L73 | floor    | path-identity,case-folding,symlink,refusal-path,lesson-recurrence                              | A refusal or classification that guards a filesystem action must compare the target's on-disk identity, not its lexical spelling — a case-folding volume and a symlinked parent make two spellings name one file | 2026-10-11 | ~845
 L74 | floor    | differential-testing,shared-oracle,verification-fidelity,false-green,lesson-recurrence         | A differential probe is independent only where its reference decides — a predicate the probe borrows from the checker under test hides that predicate's errors | 2026-10-18 | ~584
+L75 | process  | sweep-scope,declaration-audit,enumeration,doc-drift,lesson-recurrence                          | A sweep line that names its phrases but not its hits cannot be checked — record each hit with a disposition, and let grill re-run the grep | 2026-10-18 | ~733
 ```
