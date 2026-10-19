@@ -1,6 +1,12 @@
 {
-  "base": "d5453a170a68a1b7842bf633b8638eb02dcd61cb",
+  "base": "94ad252baef07e219db9adfccad83df2c40e2e58",
   "inside": [
+    ".dev/features/scanner-redos-bounds/GRILL.md",
+    ".dev/features/scanner-redos-bounds/MEASUREMENTS.md",
+    ".dev/features/scanner-redos-bounds/PLAN.md",
+    ".dev/features/scanner-redos-bounds/REGRESSION.md",
+    ".dev/features/scanner-redos-bounds/REVIEW.md",
+    ".dev/features/scanner-redos-bounds/regression-report.json",
     "CHANGELOG.md",
     "README.md",
     "SKILLS_VERSION",
@@ -12,9 +18,6 @@
     "pharn/floor/scan-code-path-traversal.test.mjs",
     "pharn/floor/scan-code-ssrf.mjs",
     "pharn/floor/scan-code-ssrf.test.mjs",
-    ".dev/features/scanner-redos-bounds/GRILL.md",
-    ".dev/features/scanner-redos-bounds/MEASUREMENTS.md",
-    ".dev/features/scanner-redos-bounds/PLAN.md",
     "pharn/floor/sink-span-core.mjs",
     "pharn/floor/sink-span-core.test.mjs"
   ],
