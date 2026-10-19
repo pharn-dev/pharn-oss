@@ -78,6 +78,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     - A declaration does not set `installOverride`, so loop entry-gate evidence can still serve as base evidence, as it
       can for the table's own inferred install.
 
+## [6.64.3] - 2026-10-19
+
+### Fixed
+
+- **Three floor checkers import the feature-slug grammar instead of keeping a copy, and five small audit findings are
+  closed** (`SKILLS_VERSION` 6.64.2 → **6.64.3**, patch; audit 2026-10-12 ARCH-4, TST-6, ENF-5, SEC-7 test part,
+  ARCH-5 cites).
+  - ENF-5: `pharn/floor/run-marker.mjs`, `ac-tests-lock.mjs` and `check-test-stage.mjs` import `FEATURE_SLUG_RE` from
+    `gate-run-core.mjs` and drop their private copies; their refusal messages print the same pattern. The parity test
+    in `gate-run-core.test.mjs` now also reads, without editing, the copies an import cannot reach: `RUN_NAME_RE` in
+    the human-only hooks `set-writes-scope.cjs` and `enforce-writes-scope.cjs`, and the pattern
+    `.claude/commands/pharn-ship-close.md` names. A new test pins that the three modules import the constant and
+    declare none. `mark-phase.mjs` and `render-run-report.mjs` still keep their copies, covered by the same test.
+  - SEC-7 (test part): `.claude/hooks/hook-wiring.test.cjs` fails when `.claude/settings.json`, or
+    `.claude/settings.local.json` when present, carries a `disableAllHooks` key, which would switch off both write
+    guards without touching their wiring. A user-level `~/.claude/settings.json` is not checked. The matching
+    `LIMITS.md` §6 sentence, which also names MCP write tools, is a proposed human patch
+    (`.dev/features/audit-small-fixes/HUMAN-PATCH.md`), not part of these bytes.
+  - TST-6: `.dev/floor/check-skills-version-recorded.test.mjs` no longer runs the checker against the live repo under
+    the real clock (`npm run check:changelog` already does). The two default tests (`now`, `targetDir`) run against
+    fixtures, and the live-repo non-vacuity test is gone with the live run it backed.
+  - ARCH-4: the README's Quick start says the `@pharn-dev/pharn` installer needs Node 24.2 or newer and refuses older,
+    not Node 20.
+  - ARCH-5: the header comments of `pharn/floor/check-ship.mjs`, `check-verify.mjs` and `check-regress.mjs` cite
+    `.dev/floor/check-variance.mjs` and `.claude/commands/pharn-dev-ship.md` (`/pharn-dev-ship --loop`), the paths
+    that exist. `check-ship.mjs` does not move here.
+
 ## [6.64.2] - 2026-10-19
 
 ### Fixed

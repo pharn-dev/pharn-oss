@@ -41,7 +41,8 @@
 // so a crafted alias cannot redirect the write outside the state root or age a marker it does not own.
 //
 // `<name>` is the slug grammar the deny message's RUN block also uses to decide whether a suggested close
-// command is safe to print (`^[a-z0-9][a-z0-9-]{0,63}$`) — a name failing it is refused here too, so a
+// command is safe to print (`^[a-z0-9][a-z0-9-]{0,63}$`, imported here as gate-run-core.mjs `FEATURE_SLUG_RE`;
+// gate-run-core.test.mjs pins the hook's own copy equal to it) — a name failing it is refused here too, so a
 // marker this writer creates always satisfies the grammar the reader trusts.
 //
 // NO NEW CONTRACT (P7): the guard reads only a path and an age, and this header is the module's spec —
@@ -75,6 +76,7 @@ import "./runtime-floor.mjs";
 import { lstatSync, mkdirSync, writeFileSync, rmSync, realpathSync } from "node:fs";
 import { join, dirname, parse as pathParse } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 // workTreeRoot() is a DELIBERATE COPY of the function of the same name in the three pre-write hooks — a
 // shared module would be a new control-surface file (L31). run-marker must anchor on the project tree,
@@ -117,7 +119,6 @@ export const RUN_MARKER_COMMANDS = ["pharn-review", "pharn-ship"];
 
 const SCHEMA = "pharn-run-active/1";
 const MARKER = "active.json";
-const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 function lstatOrNull(p) {
   try {
@@ -165,8 +166,8 @@ function validateArgs(root, command) {
 export function openRun({ root, command, name, sessionId, now } = {}) {
   const argErr = validateArgs(root, command);
   if (argErr) return { ok: false, reason: argErr };
-  if (typeof name !== "string" || !NAME_RE.test(name)) {
-    return { ok: false, reason: `invalid name: ${JSON.stringify(name)} (must match ${NAME_RE})` };
+  if (typeof name !== "string" || !FEATURE_SLUG_RE.test(name)) {
+    return { ok: false, reason: `invalid name: ${JSON.stringify(name)} (must match ${FEATURE_SLUG_RE})` };
   }
   if (symlinkOnPath(root, command, name)) {
     return { ok: false, reason: "refusing a marker path through a symlink" };
@@ -190,8 +191,8 @@ export function openRun({ root, command, name, sessionId, now } = {}) {
 export function closeRun({ root, command, name } = {}) {
   const argErr = validateArgs(root, command);
   if (argErr) return { ok: false, reason: argErr };
-  if (typeof name !== "string" || !NAME_RE.test(name)) {
-    return { ok: false, reason: `invalid name: ${JSON.stringify(name)} (must match ${NAME_RE})` };
+  if (typeof name !== "string" || !FEATURE_SLUG_RE.test(name)) {
+    return { ok: false, reason: `invalid name: ${JSON.stringify(name)} (must match ${FEATURE_SLUG_RE})` };
   }
   if (symlinkOnPath(root, command, name)) {
     return { ok: false, reason: "refusing a marker path through a symlink" };
@@ -205,7 +206,7 @@ export function closeRun({ root, command, name } = {}) {
 }
 
 // A filesystem refusal, rendered from values this module already validated (the command is a member of the
-// closed enum, the name matched NAME_RE) plus the error CODE — a short token — never the raw message.
+// closed enum, the name matched FEATURE_SLUG_RE) plus the error CODE — a short token — never the raw message.
 function fsReason(what, command, name, e) {
   const code = e && typeof e.code === "string" && /^[A-Z0-9_]{1,40}$/.test(e.code) ? e.code : "error";
   return `${what} .pharn/${command}/${name}/${MARKER} (${code}) — check what is on that path under .pharn/ (a file where a directory belongs, or a permission) and fix it by hand; no marker was written or removed`;
