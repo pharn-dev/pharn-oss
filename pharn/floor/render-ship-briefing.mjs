@@ -91,7 +91,7 @@ const HEADING_RE = /^#{1,6}[ \t]+\S/;
 // mechanism `check-spec.mjs` / `check-plan-lessons.mjs` use.
 
 const REGRESS_ENUM = new Set(["no-regressions", "regressions", "inconclusive"]);
-const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
+export const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 
 function stripQuotes(v) {
   return v.replace(/^["']|["']$/g, "");
