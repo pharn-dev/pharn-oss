@@ -121,7 +121,8 @@ State these honestly; do not pretend tiered loading solves them.
 
 ### 3a. Cost scales with fan-out breadth, not change size — and that is backwards
 
-A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
+A 3-line typo fix still fans out to every lens with a non-empty review set, one subagent per lens family,
+each loading its lenses' rules + the diff. Tiered loading
 optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
 _breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
@@ -139,7 +140,7 @@ the largest practical token problem and it is not yet solved.
 > the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned
 > `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
 > chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
-> proportionality, and `/pharn-review`'s lens fan-out is unchanged.
+> proportionality, and `--quick` does not change `/pharn-review`'s lens fan-out.
 >
 > **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model
 > writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every

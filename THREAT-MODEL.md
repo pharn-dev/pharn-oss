@@ -55,7 +55,7 @@ memory, is an agent operating on hostile input. The concrete surface:
    endpoint is a legal hole in egress pointed at a text sink that returns text = an exfiltration
    channel.
 8. **user-installed Claude Code skill** — a `.claude/skills/<name>/SKILL.md` the user dropped into
-   their own repo. `/pharn-build`, full `/pharn-grill` and each `/pharn-review` lens subagent list these through a
+   their own repo. `/pharn-build`, full `/pharn-grill` and each `/pharn-review` lens-group subagent list these through a
    body-free catalogue (`pharn/floor/catalogue-installed-skills.mjs`, over the same discovery as
    `pharn/floor/scan-installed-skills.mjs`) and feed the model the catalogue's descriptions plus the bodies of the
    skills they select (`pharn/pharn-core/installed-skill-selection/`), all as untrusted context. Same delivery
