@@ -399,3 +399,39 @@ test("✧ PIN: all three scan-code-* scanners declare a byte-identical SPAN", ()
   });
   assert.equal(new Set(spans).size, 1, `SPAN drifted across the copy-pair:\n${files.map((f, i) => `  ${f}: ${spans[i]}`).join("\n")}`);
 });
+
+// ---------------------------------------------------------------------------
+// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.64.3). The same reasoning
+// as the block of that name in scan-code-injection.test.mjs: through 6.64.2 a line cost O(sinks × length) —
+// `path.join(`×8000 (80 KB) took 1.5 s — and the driver in sink-span-core.mjs now skips every sink inside a failed
+// sink's span. (old: killed) marks a shape the 6.64.2 scanner does not finish within this timeout, measured once in
+// .dev/features/scanner-redos-bounds/MEASUREMENTS.md; the other shapes are the new driver's own adversarial inputs.
+// Membership verdict, never a stopwatch; the twins prove detection did not narrow.
+const MANY_TIMEOUT_MS = 5000;
+const L200K = 200_000;
+const MANY_SINK_SHAPES = [
+  { n: "`path.join(`×20k, 200 KB (old: killed)", line: "path.join(".repeat(L200K / 10), want: { found: false, hits: [] } },
+  { n: "`.sendFile(`×20k, 200 KB (old: killed)", line: ".sendFile(".repeat(L200K / 10), want: { found: false, hits: [] } },
+  { n: "`fs.a(`×40k, 200 KB (old: killed)", line: "fs.a(".repeat(L200K / 5), want: { found: false, hits: [] } },
+  { n: "`fs.a()`×33k — every span fails at once", line: "fs.a()".repeat(L200K / 6), want: { found: false, hits: [] } },
+  {
+    n: "`path.join(`×20k then a request source (a hit)",
+    line: "path.join(".repeat(L200K / 10) + "req.body.p",
+    want: { found: true, hits: [{ line: 1, kind: "path-join" }] },
+  },
+  {
+    n: "`fs.a()`×33k then `fs.readFile(req.params.f)` (a hit at the LAST sink)",
+    line: "fs.a()".repeat(L200K / 6) + "fs.readFile(req.params.f)",
+    want: { found: true, hits: [{ line: 1, kind: "fs-path" }] },
+  },
+];
+for (const s of MANY_SINK_SHAPES) {
+  test(`★ ReDoS: one line, ${s.n} → the scan COMPLETES (not killed)`, () => {
+    withCode(s.line + "\n", (p) => {
+      const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: MANY_TIMEOUT_MS });
+      assert.equal(r.signal, null, `scan did not terminate within ${MANY_TIMEOUT_MS}ms — a sink scan is super-linear again`);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), s.want);
+    });
+  });
+}

@@ -404,3 +404,58 @@ test("✧ L9: .concat OUTSIDE any sink stays clean — the sink is what makes it
 
 test("✧ L9: a parameterized query stays clean", () =>
   withCode('db.query("SELECT * FROM t WHERE id = $1", [id]);\n', (p) => assert.equal(json(run(p)).found, false)));
+
+// ---------------------------------------------------------------------------
+// ★ ReDoS REGRESSION — MANY SINKS ON ONE LINE (TST-2, the 2026-10-12 review; fixed in 6.64.3).
+//
+// Through 6.64.2 `re.test(line)` retried the pattern at every sink start and re-scanned the span each time, so a
+// line cost O(sinks × length): `query(`×8000 (48 KB) took 1.0 s, ~4× per doubling, and one minified line hung the
+// injection lens, which runs this scanner from Bash. The driver in sink-span-core.mjs skips every sink inside a
+// failed sink's span. Each shape below is ONE line; the sizes are chosen so the 6.64.2 scanner is KILLED at this
+// timeout on the shapes marked (old: killed) — measured once, not maintained, in
+// .dev/features/scanner-redos-bounds/MEASUREMENTS.md — while the new one finishes in well under a second. The
+// unmarked shapes are the NEW driver's own adversarial inputs (L24): many short failing spans, each tested once,
+// and a quoted string whose scan runs past its span. The verdict is a membership test (the scan COMPLETED or the
+// OS killed it), never a stopwatch, which is also why a red terminates instead of hanging `npm test`. The
+// true-positive twins prove the speed was not bought by narrowing detection.
+const MANY_TIMEOUT_MS = 5000;
+const L200K = 200_000;
+const CLEAN_RESULT = { found: false, hits: [] };
+const MANY_SINK_SHAPES = [
+  { n: "`query(`×33k, 200 KB (old: killed)", line: "query(".repeat(L200K / 6), want: CLEAN_RESULT },
+  { n: "`exec(`×40k, 200 KB (old: killed)", line: "exec(".repeat(L200K / 5), want: CLEAN_RESULT },
+  { n: "`.innerHTML=`×91k, 1 MB (old: killed)", line: ".innerHTML=".repeat(1_000_000 / 11), want: CLEAN_RESULT },
+  { n: "`query()`×28k — every span fails at once", line: "query()".repeat(L200K / 7), want: CLEAN_RESULT },
+  {
+    n: '`query(")` then `query(x)`×25k — the quote scan runs past its span',
+    line: 'query(")' + "query(x)".repeat(L200K / 8),
+    want: CLEAN_RESULT,
+  },
+  { n: "`.innerHTML=x;`×15k — every html span ends at its `;`", line: ".innerHTML=x;".repeat(L200K / 13), want: CLEAN_RESULT },
+  // The true-positive twins.
+  {
+    n: "`query(`×33k then a concat (a hit)",
+    line: "query(".repeat(L200K / 6) + '"a" + b',
+    want: { found: true, hits: [{ line: 1, kind: "sql-injection" }] },
+  },
+  {
+    n: '`query()`×28k then `query("a" + b)` (a hit at the LAST sink)',
+    line: "query()".repeat(L200K / 7) + 'query("a" + b)',
+    want: { found: true, hits: [{ line: 1, kind: "sql-injection" }] },
+  },
+  {
+    n: "`.innerHTML=`×91k then a concat (an html hit)",
+    line: ".innerHTML=".repeat(1_000_000 / 11) + '"a" + b',
+    want: { found: true, hits: [{ line: 1, kind: "html-injection" }] },
+  },
+];
+for (const s of MANY_SINK_SHAPES) {
+  test(`★ ReDoS: one line, ${s.n} → the scan COMPLETES (not killed)`, () => {
+    withCode(s.line + "\n", (p) => {
+      const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: MANY_TIMEOUT_MS });
+      assert.equal(r.signal, null, `scan did not terminate within ${MANY_TIMEOUT_MS}ms — a sink scan is super-linear again`);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), s.want);
+    });
+  });
+}

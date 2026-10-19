@@ -23,6 +23,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.64.3] - 2026-10-19
+
+### Fixed
+
+- **The injection, SSRF, path-traversal and N+1 scanners no longer slow down quadratically on one long line or
+  one long receiver chain.**
+  - What changed:
+    - `scan-code-injection.mjs`, `scan-code-ssrf.mjs` and `scan-code-path-traversal.mjs` run each pattern through
+      `pharn/floor/sink-span-core.mjs`, a new shared driver. The regexes are unchanged. Each regex runs at one sink
+      at a time. When it fails there, the driver skips every later sink inside that sink's span, because each of
+      them must fail too. The span ends at the call's own `)`, or at the next `;` for html-injection. The proof,
+      and what it needs from each sink regex, are in the driver's header. At import, the driver also refuses a
+      pattern whose span does not match its skip limit.
+    - `scan-code-n-plus-one.mjs` runs its query regex only where a match can start. After a failed start it skips
+      the rest of that receiver chain. It tests the `.forEach`/`.map` header backwards from each `(` instead of
+      re-running a regex over the whole header, and it looks query hits up in one coverage array instead of scanning
+      every loop interval.
+    - The scanners' output is unchanged, and their headers now give the re-derived cost.
+  - Why: the 2026-10-12 review (TST-2, TST-3), whose shapes this PR reproduced first:
+    - `query(`×8000 (48 KB): 1.0 s; `fetch(`×16000 (96 KB): 3.6 s; `path.join(`×8000 (80 KB): 1.5 s;
+    - `a.`×10000 (20 KB) in the N+1 scanner: 1.1 s, and ×80000 did not finish in 30 s.
+
+    Each grew about 4× per doubling. The 6.62.0 prefilter timeout does not bound a lens subagent that runs a
+    scanner itself. Two more quadratic steps were found and fixed along the way: html-injection's `[^;]*?` span
+    (`.innerHTML=`×N) and the N+1 header test on many `(`.
+
+  - Checked by:
+    - **★ ReDoS tests** in the four scanner suites spawn the real CLI over 200 KB to 1 MB lines under a 5 s timeout.
+      Each passes when the scan finishes and fails if the timeout kills it. The 6.64.2 scanners were killed on 13 of
+      these shapes; the new ones finish in about 60–830 ms (`.dev/features/scanner-redos-bounds/MEASUREMENTS.md`).
+      The other shapes are the new driver's own worst cases, and each true-positive twin must still find its hit.
+    - **★ Differential tests** compare each new `scanText` with a frozen copy of the 6.64.2 one, written into the
+      test file and importing nothing from the scanner. The inputs are the lens eval cases (three of the four lenses),
+      every `.mjs` file under `pharn/floor/`, near-miss lines and seeded fuzz. **Negative controls** show this corpus
+      catches a driver that skips too far, and catches an N+1 copy changed at each edge the new code re-decides.
+    - **A one-time comparison, not a maintained check**, found identical output, old against new:
+      - over all 2,999 tracked text files, for all four scanners;
+      - over 300,000 fuzzed lines for each sink scanner;
+      - over 3,000 fuzzed texts for N+1.
+  - Bounds (ADVISORY):
+    - "Same verdict as 6.64.2" is argued and tested over a fixed corpus, not guaranteed.
+    - "Linear" is the derived bound, measured on the named shapes, not a floor property.
+    - The skip assumes three things of every sink regex: it consumes no stop character of its span, each start has
+      one end, and no sink starts inside another sink's match. A new sink that breaks one of these can drop a hit,
+      and the differential sees it only if its alphabet holds that sink.
+    - A receiver chain of about 1.5 million links (3 MB) still overflows V8's regex stack in the N+1 scanner. The
+      scan then throws, as it did in 6.64.2.
+  - Not covered: the same sweep found `scan-code-missing-error-handling.mjs` and `scan-code-missing-timeout.mjs`
+    super-linear too:
+    - missing-error-handling: about 2.9× per doubling on `try{`×N and 6.2× on `await x(`×N;
+    - missing-timeout: about 3.6× on `fetch(`×N.
+
+    They use other mechanisms and are left to the named follow-up `scanner-redos-sweep-2`.
+
 ## [6.64.2] - 2026-10-19
 
 ### Fixed
