@@ -214,6 +214,26 @@ Each id must be one of the gates PHARN discovers (`test`, `lint`, `format:check`
 - A criterion whose level only an excluded gate runs (an `e2e` criterion with `e2e` excluded) is refused at
   `/pharn-plan`. Re-specify it at another level, or keep the gate.
 
+### Declaring the base install (6.66.0)
+
+`/pharn-regress` installs dependencies into a checkout of the base commit with your one lockfile's frozen command
+(`npm ci`, …). With no lockfile, or with two lockfile families, it has to ask how — and `/pharn-loop` cannot ask, so
+it stops. Declare the answer once in `pharn.config.json`:
+
+```json
+{ "regress": { "install": "head-node-modules" } }
+```
+
+- `npm`, `pnpm`, `yarn` or `bun` — use that family's frozen install (its lockfile must be in the base commit).
+- `none` — install nothing. If your project declares dependencies, a gate that needs them is red at the base, and a
+  gate red at both base and head stops the stage (`base-install-unreliable`).
+- `head-node-modules` — install nothing, and let the base checkout use your project's installed `node_modules`. The
+  base is then measured with your current dependencies, so a regression caused only by a dependency change is not
+  attributed to the change; the report says so. This is the usual choice for a library that commits no lockfile.
+
+A `--install` or `--no-install` you pass yourself wins. Commit the declaration before the run, as for
+`gates.exclude`.
+
 ### Acceptance-criteria tests, before the build
 
 For a SPEC filled from the template, `/pharn-plan` maps each acceptance criterion to a test file and the public

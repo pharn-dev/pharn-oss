@@ -102,6 +102,13 @@ Searched (tracked files, excluding `CHANGELOG.md` released entries and `.dev/fea
 - No capability changes. The one test edit extends an existing ✧ surface list. `npm run check` (incl. `npm test`) and
   `node pharn/floor/validate.mjs .` are the gates.
 
+## Merge note (after build)
+
+`origin/main` moved to 6.66.0 (#364) during the build. It added `### Declaring the base install (6.66.0)` inside "The
+pipeline" and moved the generated floor count to 140. The merge carries that subsection into `docs/pipeline.md` at
+the same place, regenerates the CURRENT-STATE block, and renumbers this change to **6.66.1**. The verbatim check was
+re-run against `origin/main:README.md` (82,330 bytes); README after: 24,851 bytes.
+
 ## Open questions
 
 - None blocking. Bump size is decided above (patch), with the reason.

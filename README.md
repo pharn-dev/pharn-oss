@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.65.3-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.66.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -299,7 +299,8 @@ bounds is in [`LIMITS.md`](./LIMITS.md).
 ## More documentation
 
 - [`docs/pipeline.md`](./docs/pipeline.md) — how the workflow works, the stages and what binds them, quick mode,
-  your own SPEC template, per-test results, excluding a gate, acceptance-criteria tests, and the capability tour.
+  your own SPEC template, per-test results, excluding a gate, declaring the base install, acceptance-criteria tests,
+  and the capability tour.
 - [`docs/guarantees.md`](./docs/guarantees.md) — every guarantee with the check behind it, its bounds, and why a
   hook is not the same as a line in `CLAUDE.md`.
 - [`docs/limitations.md`](./docs/limitations.md) — what PHARN does not do today.
@@ -326,7 +327,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 139** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 140** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

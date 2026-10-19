@@ -169,7 +169,9 @@ Keyed by stage; `regress` and `verify` are its members.
 - **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `unrepresentable-path`, `git-failed`,
   `child-crashed`, `child-refused`, `no-progress`, `progress-malformed`, `base-worktree-unplaceable`
   (regress-base-integrity: the temp directory that holds the base checkout is inside the project, or could not be
-  created — `pharn/floor/base-worktree.mjs`). A progress record of schema `pharn-stage-regress-progress/4` carries the
+  created — `pharn/floor/base-worktree.mjs`), `install-config-invalid` (6.66.0: the project's `pharn.config.json`
+  `regress.install` cannot be read or cannot answer this run — see "The `regress` install command" below). A progress
+  record of schema `pharn-stage-regress-progress/4` carries the
   base's source and its checkout path; a resumed record whose path is not this project's temp-root checkout is
   `progress-malformed`, and an older schema is refused the same way (re-run fresh).
 
@@ -227,6 +229,20 @@ entirely; no `package.json` at all needs no install):
 Zero or two-or-more families present → `question install-unresolved`. The same four lines, with the same
 labels, are the `INSTALL_RULE` table in `stage-regress-core.mjs`'s own header — this section cites that
 table rather than re-deriving it (P4), so the two never say something different.
+
+**The declared answer (6.66.0).** A project may answer that question once, in `pharn.config.json`:
+`{"regress": {"install": <value>}}`, one of `none`, `head-node-modules`, `npm`, `pnpm`, `yarn`, `bun` — a closed set,
+never a command. It is read from the project root only when the invocation passed neither `--install` nor
+`--no-install` and the base commit has a `package.json`; precedence is argv, then the declaration, then the table
+above. `none` skips the install (the `base-install-unreliable` rule applies exactly as to `--no-install`). A family runs
+that family's line above, and only when its lockfile is at the base commit. `head-node-modules` runs no install and
+links the base checkout's `node_modules` to the project's own installed one, so the base is measured with HEAD's
+dependency tree: a regression caused purely by a dependency change reads `pre_existing`, the report's `base_install`
+block and `REGRESSION.md` say so (`regression-report.md`), and such evidence is never reused. A declaration that cannot
+be read, a family absent at the base, or a `head-node-modules` without a real `node_modules` directory is `unusable
+install-config-invalid`. The grammar, the values' meaning and every bound — no `/pharn-test` pin, the writable link,
+the root `node_modules` only — are `pharn/floor/regress-install-config-core.mjs`'s and
+`stage-regress-core.mjs` `DECLARED_INSTALL_VALUES`'s headers.
 
 ## The budget (`--budget-ms`) and `continue`
 
