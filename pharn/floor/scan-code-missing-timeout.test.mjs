@@ -270,3 +270,46 @@ test("fail-closed: no argument → nonzero exit, nothing on stdout", () => {
   assert.notEqual(r.status, 0);
   assert.equal(r.stdout.trim(), "");
 });
+
+// ---------------------------------------------------------------------------
+// ★ ReDoS REGRESSION — QUADRATIC SHAPES (scanner-redos-sweep-2, fixed in 6.71.1). Through 6.71.0 each call re-scanned
+// to EOF for its `)`, re-tested its whole argument span, and counted newlines from offset 0 for its line, so each shape
+// below cost O(N²): `fetch(`×10k (60 KB) took 2.5 s in-process. The scanner now pairs parens, lists indicator starts
+// and lists newlines once per file (its header, "COST"). (old: killed) marks a shape the frozen 6.71.0 CLI did not
+// finish within this timeout at this size, measured once in .dev/features/scanner-redos-sweep-2/MEASUREMENTS.md.
+// Membership verdict (completed vs killed), not a stopwatch — though at heart it is a wall-clock cap, with about 2×
+// headroom measured under heavy parallel load; each row also pins the verdict, so a fast WRONG answer is red too. The `{ timeout }` row is the twin: suppression still reaches through 33k nested calls.
+const REDOS_TIMEOUT_MS = 5000;
+const L400K = 400_000;
+const nested = (n, mid) => "fetch(".repeat(n) + mid + ")".repeat(n);
+const N33K = Math.floor(L400K / 12);
+const QUADRATIC_SHAPES = [
+  { n: "`fetch(`×66k unbalanced, one line (old: killed)", body: "fetch(".repeat(L400K / 6), hits: 0, line: () => 1 },
+  { n: "`fetch(`×33k nested and balanced (old: killed)", body: nested(N33K, ""), hits: N33K, line: () => 1 },
+  {
+    n: "`fetch(`×33k nested, `{ timeout }` innermost — every call suppressed (old: killed)",
+    body: nested(N33K, "{ timeout }"),
+    hits: 0,
+    line: () => 1,
+  },
+  { n: "`fetch()`×57k on one line (old: killed)", body: "fetch()".repeat(L400K / 7), hits: Math.floor(L400K / 7), line: () => 1 },
+  {
+    n: "`fetch(a)`×44k, one per line (old: killed)",
+    body: "fetch(a)\n".repeat(L400K / 9),
+    hits: Math.floor(L400K / 9),
+    line: (i) => i + 1,
+  },
+];
+for (const s of QUADRATIC_SHAPES) {
+  test(`★ ReDoS: ${s.n} → the scan COMPLETES (not killed) with the same verdict`, () => {
+    withCode(s.body + "\n", (p) => {
+      const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: REDOS_TIMEOUT_MS, maxBuffer: 1 << 26 });
+      assert.equal(r.signal, null, `scan did not terminate within ${REDOS_TIMEOUT_MS}ms — the scan is super-linear again`);
+      assert.equal(r.status, 0);
+      const out = json(r);
+      assert.equal(out.found, s.hits > 0);
+      assert.equal(out.hits.length, s.hits);
+      out.hits.forEach((h, i) => assert.deepEqual(h, { line: s.line(i), kind: "missing-timeout" }));
+    });
+  });
+}

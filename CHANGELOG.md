@@ -23,6 +23,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.71.1] - 2026-10-20
+
+### Fixed
+
+- **The missing-timeout and missing-error-handling scanners no longer slow down quadratically.**
+  - What changed:
+    - `scan-code-missing-timeout.mjs` pairs every `(` with its `)` in one pass, lists where timeout indicators start
+      once, and lists the file's newlines once. Each call then costs three lookups: its `)`, an indicator inside its
+      arguments (a binary search), and its line (a binary search). Through 6.71.0 each call re-scanned to the end of
+      the file for its `)`, re-tested its whole argument text, and counted newlines from the top.
+    - `scan-code-missing-error-handling.mjs` pairs every `{` with its `}` in one pass, merges the `try` body ranges
+      once, lists the newlines once, and tests a line for `.catch(` at most once. Each `await` or `JSON.parse(` then
+      costs two binary searches. Through 6.71.0 each `try {` re-scanned to the end of the file, each risky op looped
+      over every `try` range and counted newlines from the top, and each `await` re-tested its whole line.
+    - The regexes and the output are unchanged. Each scanner's header gives the re-derived cost, and each step's
+      comment says why it returns what the old step returned.
+  - Why: the named follow-up `scanner-redos-sweep-2`, deferred from 6.65.1 (CHANGELOG [6.65.1]). Reproduced first,
+    in-process on this machine: `fetch(`×10,000 (60 KB) took 2.5 s and ×40,000 took 31 s; `await x(`×10,000 (80 KB)
+    took 1.7 s and ×40,000 took 36 s; `try{`×40,000 took 15 s.
+  - Checked by:
+    - **★ ReDoS tests** in both scanner suites spawn the real CLI over 230–400 KB inputs under a 5 s timeout and pin
+      the verdict. The frozen 6.71.0 CLIs were killed on 12 of these shapes; the new ones finished in about 0.2–1.5 s
+      on a heavily loaded machine (`.dev/features/scanner-redos-sweep-2/MEASUREMENTS.md`). Four more rows pin shapes
+      that were already linear: one guard lookup over 100k `try{}` ranges, and `await` before long dotted chains.
+    - **★ Differential tests** (`pharn/floor/scan-code-missing-differential.test.mjs`) compare each new `scanText`
+      with a frozen copy of the 6.71.0 one, written into the test file and importing nothing from the scanners. The
+      inputs are both lenses' eval cases, every `.mjs` file under `pharn/floor/`, near-misses and seeded fuzz.
+      **Negative controls** apply one source edit each to a copy of a new scanner, 14 in all (among them a queue
+      instead of a stack, an unbalanced open paired to the end, unmerged guard ranges, an indicator without word
+      boundaries, and lookups off by one), and show the corpus catches every one.
+    - **A one-time comparison, not a maintained check**, found identical output, old against new, over all 3,109
+      tracked text files and 100,000 fuzzed texts, for both scanners.
+  - Bounds (ADVISORY):
+    - "Same verdict as 6.71.0" is argued and tested over a corpus (deterministic for a given tree), not guaranteed.
+    - The ★ rows are a 5 s wall-clock cap with about 2× headroom measured under heavy load, so a much slower runner
+      could flake them.
+    - "Linear" is the derived bound (O(n log n) worst case per file, from the binary searches), measured on the
+      named shapes, not a floor property.
+
 ## [6.71.0] - 2026-10-20
 
 ### Security
