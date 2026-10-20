@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-76 lessons · 76 tagged · 0 malformed · 0 untagged · ~54076 tokens total
+77 lessons · 77 tagged · 0 malformed · 0 untagged · ~54700 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -100,4 +100,5 @@ L73 | floor    | path-identity,case-folding,symlink,refusal-path,lesson-recurren
 L74 | floor    | differential-testing,shared-oracle,verification-fidelity,false-green,lesson-recurrence         | A differential probe is independent only where its reference decides — a predicate the probe borrows from the checker under test hides that predicate's errors | 2026-10-18 | ~584
 L75 | process  | sweep-scope,declaration-audit,enumeration,doc-drift,lesson-recurrence                          | A sweep line that names its phrases but not its hits cannot be checked — record each hit with a disposition, and let grill re-run the grep | 2026-10-18 | ~733
 L76 | contract | doc-drift,single-source,restatement,lesson-recurrence,floor-escalation                         | A mechanism restated in N capability bodies needs a sweep each time its owner changes — on the second sweep, replace the restatement with a cite and pin its absence | 2026-10-19 | ~704
+L77 | process  | dev-product-boundary,dependency-direction,redundant-identity,remedy-design,lesson-correction   | A dependency-direction rule forbids one arrow, not both — before keeping a copy-pair because an install strips one side, check whether the stripped side can import the shipped one | 2026-10-20 | ~624
 ```
