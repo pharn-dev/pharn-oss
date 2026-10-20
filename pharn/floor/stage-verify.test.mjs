@@ -1535,3 +1535,14 @@ test("★ WIRING (reuse, L45) — the COMMITTED pharn-regress.md and pharn-verif
     assert.ok(!spawned(fx, "verify", from).includes("typecheck"), "the committed lines reach the reuse path");
   });
 });
+
+test("the virtual-clock preload refuses a configuration it cannot honour, so a budget test never runs on the real clock", () => {
+  for (const query of ["", "?git=ls-files", "?git=ls-files&ms=0", "?ms=3000"]) {
+    const r = spawnSync(process.execPath, ["--import", `${pathToFileURL(VIRTUAL_CLOCK).href}${query}`, "-e", ""], {
+      encoding: "utf8",
+      env: CLEAN_ENV,
+    });
+    assert.notEqual(r.status, 0, `query ${JSON.stringify(query)} must not load`);
+    assert.match(r.stderr, /virtual-clock preload: needs \?git=/, query);
+  }
+});

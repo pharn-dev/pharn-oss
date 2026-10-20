@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { recordFile } from "./node-test-results-reporter.mjs";
+import pharnTestResults, { recordFile } from "./node-test-results-reporter.mjs";
 import { parseResults } from "../../pharn/floor/test-results-formats.mjs";
 import { buildRecord } from "../../pharn/floor/test-results-core.mjs";
 
@@ -176,4 +176,56 @@ test("★ WIRING — pharn-dev-regress.md pins the reporter capture line and the
     /--per-test tests --base-tests \.pharn\/pharn-dev-regress\/base-tests\.json --head-tests \.pharn\/pharn-dev-regress\/head-tests\.json/
   );
   assert.ok(text.includes("node-test-results-reporter.mjs"), "the command names the reporter");
+});
+
+/** The reporter's default export over a scripted event stream — the same function node calls, fed the event shapes
+ *  measured above, so its own lines run in this process (a nested `node --test` is outside this run's coverage). */
+async function report(events, cwd = "/r/p") {
+  const before = process.cwd;
+  process.cwd = () => cwd;
+  try {
+    let out = "";
+    for await (const chunk of pharnTestResults(
+      (async function* () {
+        yield* events;
+      })()
+    ))
+      out += chunk;
+    return JSON.parse(out);
+  } finally {
+    process.cwd = before;
+  }
+}
+const ev = (type, data) => ({ type, data });
+
+test("the reporter function over a scripted stream: ancestry, statuses, suites, numbering, and a fileless failure", async () => {
+  const f = "/r/p/t/a.test.mjs";
+  const doc = await report([
+    ev("test:start", { file: f, nesting: 0, name: "grp" }),
+    ev("test:start", { file: f, nesting: 1, name: "x" }),
+    ev("test:pass", { file: f, nesting: 1, name: "x", details: { type: "test" } }),
+    ev("test:start", { file: f, nesting: 1, name: "x" }),
+    ev("test:fail", { file: f, nesting: 1, name: "x", details: { type: "test", error: { failureType: "testCodeFailure" } } }),
+    ev("test:pass", { file: f, nesting: 1, name: "s", skip: true, details: { type: "test" } }),
+    ev("test:fail", { file: f, nesting: 1, name: "t", todo: true, details: { type: "test" } }),
+    ev("test:fail", { file: f, nesting: 0, name: "grp", details: { type: "suite", error: { failureType: "subtestsFailed" } } }),
+    ev("test:fail", { file: f, nesting: 0, name: "hooked", details: { type: "suite", error: { failureType: "hookFailed" } } }),
+    ev("test:pass", { file: f, nesting: 0, name: "", details: { type: "test" } }),
+    ev("test:fail", { nesting: 0, name: "no file", details: { type: "test" } }),
+    ev("test:fail", { nesting: 0, name: "no file, todo", todo: true, details: { type: "test" } }),
+    ev("test:diagnostic", { message: "ignored" }),
+  ]);
+  assert.equal(doc.schema, "pharn-test-results/1");
+  assert.equal(doc.suite_errors, 1, "a failing event with no file counts once; a todo one does not");
+  assert.deepEqual(
+    doc.tests.map((t) => `${t.status} ${t.file} ${t.path.join(" > ")}`),
+    [
+      "passed t/a.test.mjs grp > x",
+      "failed t/a.test.mjs grp > x #2",
+      "skipped t/a.test.mjs grp > s",
+      "skipped t/a.test.mjs grp > t",
+      "failed t/a.test.mjs hooked",
+      "passed t/a.test.mjs (unnamed)",
+    ]
+  );
 });

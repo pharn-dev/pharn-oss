@@ -1123,3 +1123,11 @@ test("✧ L60 NEGATIVE CONTROL — with the new-failure rule removed, the masked
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("an unknown subcommand is inconclusive exit 2, and its usage text names the --per-test flags", () => {
+  const r = run(["nope"]);
+  assert.equal(r.status, 2);
+  const o = json(r);
+  assert.equal(o.verdict, "inconclusive");
+  assert.match(o.reason, /--per-test <gate-id> --base-tests <file> --head-tests <file>/);
+});
