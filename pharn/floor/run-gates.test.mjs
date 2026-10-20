@@ -724,6 +724,30 @@ test("the lock is RELEASED after a normal call, so the next call proceeds", () =
   );
 });
 
+test("the lock is RELEASED after a REFUSAL emitted while it is held — the sentinel exit keeps emit()'s release (6.67.1, TST-5)", () => {
+  // emit() ends by setting process.exitCode and unwinding with a sentinel (the flush rule); the release must still
+  // happen on every emission, not only on the success path. A glob-shaped file entry is refused AFTER the lock is
+  // taken (run --next), so this is an emission with the lock held. Negative control, run once by hand: with the
+  // release removed from emit(), the first assertion below fails (the refusal leaves `lock` behind).
+  withRepo(
+    (dir) => {
+      assert.equal(cli(dir, initArgs()).code, 0);
+      const statePath = join(dir, OUT, "state.json");
+      const rec = JSON.parse(readFileSync(statePath, "utf8"));
+      rec.entries[0].files = ["src/*.js"];
+      writeFileSync(statePath, JSON.stringify(rec, null, 2));
+      const r = cli(dir, runArgs());
+      assert.equal(r.code, 2, r.raw);
+      assert.equal(r.json.reason_code, "bad-scope-json");
+      assert.ok(!existsSync(join(dir, OUT, "lock")), "the lock survived a refusal emitted while it was held");
+      // The next call is refused for the same reason. Not a discriminator on its own — a left lock names a dead pid,
+      // so it would be recovered as stale — which is why the existsSync assertion above is the one that decides.
+      assert.equal(cli(dir, runArgs()).json.reason_code, "bad-scope-json");
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
 // ---------------------------------------------------------------------------------------------------
 // finalize
 // ---------------------------------------------------------------------------------------------------

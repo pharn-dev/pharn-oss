@@ -21,7 +21,9 @@
 //                present and bound to its files and mapped ACs, else `ac-never-red`; its test-infrastructure pin holds,
 //                else `test-infra-changed`, and a lock without one (/2, /1) is `test-infra-unpinned` — so is a /3 lock
 //                whose level gates now reach something the /4 pin covers and it does not (a chained script, a file a
-//                script names, a `jest` key, a package-manager config; 6.31.0); every level gate
+//                script names, a `jest` key, a package-manager config; 6.31.0), and so is a /5, /4 or /3 lock over a
+//                tree with any OTHER allowlisted gate (`lint`, `typecheck`, `build`, …), whose command only the /6 pin
+//                covers (6.68.0, audit SEC-4 — a rewritten or added one is `test-infra-changed`); every level gate
 //                read ran as the pinned command (`source: discover`, `npm run <id>`, no shell), else
 //                `test-infra-changed`. Per AC, over every gate its level maps to that is in the head stamp: a record
 //                refused is item 01's own reason (unmeasured), and so is a per-test anomaly in a file mapped to that AC

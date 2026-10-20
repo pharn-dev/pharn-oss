@@ -369,7 +369,7 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   a Bash-run `git` call bypasses fix #7, and no checker would catch one added later. Every git call here is a
   **read**: Step 3a's `git rev-parse HEAD` (inside the closeout, whose source a test scans for the known git-write
   spellings), and quick mode item 7's base resolution.
-- **Advisory, the parts (6.32.0; the stages part 6.68.0):** this command reads `pharn-ship-quick.md` only for a
+- **Advisory, the parts (6.32.0; the stages part 6.69.0):** this command reads `pharn-ship-quick.md` only for a
   `--quick` run, with the pending start, `pharn-ship-stages.md` once, when the run resumes after GATE 1, and
   this file once, with step 7's first `/pharn-verify` call that exits other than `5` or at an earlier STOP
   once `<name>` exists — each again after a compaction. That you read each there, in full, and follow it is your own
@@ -379,7 +379,7 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   a part at that point, or at all, and never a sentence that sends you to a part without its path. A part is read from
   disk at its point, so a write to it earlier in the run changes what the run follows, as a write to a stage's command
   does before that stage runs. A part that does not load ends the run before its next write.
-- **The re-read after a compaction (6.68.0):** `pharn/floor/command-section.mjs` prints one section of this command by
+- **The re-read after a compaction (6.69.0):** `pharn/floor/command-section.mjs` prints one section of this command by
   its heading rules and refuses any file but a regular, non-symlinked `pharn-*.md` directly in `.claude/commands` —
   floor (regex, equality and realpath identity, tested). That you run it after a compaction, and re-read the parts, is
   your own discipline, and its heading model is not checked against a renderer.

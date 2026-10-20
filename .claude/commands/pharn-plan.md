@@ -290,7 +290,8 @@ for such a SPEC is a `spec-kind` RED. Exit **0** → continue. Exit **2** → th
      `test-infra-changed` at `/pharn-verify`, and `/pharn-loop` stops (S13) with no rebuild that clears it. A root
      runner or package-manager config (`vite.config.ts`, `.npmrc`, …) or a file a level gate's script names (a
      `pharn-json` reporter, a runner script — 6.31.0) in PLAN.md is a **`test-infra-in-plan`** RED. When the
-     feature genuinely needs a runner, config or test-script change, **split it**: spec that change as a
+     feature genuinely needs a runner, config or test-script change — or, since 6.68.0, to change or ADD any
+     allowlisted gate script (`lint`, `typecheck`, `build`, …) — **split it**: spec that change as a
      `spec_kind: test-infra` increment first (through `/pharn-ship` — `/pharn-loop` never approves one), then plan
      this feature without it. `package.json` / `pharn.config.json` may stay (a dependency is an ordinary build
      change); the checker prints an **advisory** `NOTE —` line for them and never changes its exit code, because it

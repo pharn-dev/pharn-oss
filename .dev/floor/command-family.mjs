@@ -3,7 +3,7 @@
 // WHAT A PART IS. `/pharn-loop` and `/pharn-ship` keep the text a run needs only at one point in its own file under
 // `.claude/commands/`: `pharn-<cmd>-quick.md` (read only for a `--quick` run, at entry) and `pharn-<cmd>-close.md`
 // (read once: the loop's at its first stop, ship's with step 7's return marker after the first verify or at an earlier
-// STOP). Since 6.68.0 `/pharn-ship` has a third, `pharn-ship-stages.md` (`## Running a stage`, Step 2 after GATE 1 and
+// STOP). Since 6.69.0 `/pharn-ship` has a third, `pharn-ship-stages.md` (`## Running a stage`, Step 2 after GATE 1 and
 // Step 2b, read once after the SPEC is approved). A part is recognized ONLY by its frontmatter — `part_of: <parent file
 // stem>` and `part: quick | stages | close` — never by its name (L6: a structural fact is read from its structured location), and that
 // frontmatter is the ONE record of which parts a command has (L35): this module, the tests and the capability catalog
@@ -32,7 +32,7 @@ export const PART_KINDS = Object.freeze(["quick", "stages", "close"]);
 /** The heading whose section a quick part is spliced to the end of. */
 export const QUICK_ANCHOR_RE = /^## Quick mode\b/m;
 
-/** The heading whose section a stages part is spliced to the end of (6.68.0: `/pharn-ship`'s stages after GATE 1). */
+/** The heading whose section a stages part is spliced to the end of (6.69.0: `/pharn-ship`'s stages after GATE 1). */
 export const STAGES_ANCHOR_RE = /^## Step 2 — /m;
 
 /** `text` with `body` inserted at the end of the `##` section `anchor` starts; throws when the anchor is missing. */

@@ -119,7 +119,7 @@
 // test asserts the two agree on totals over the same bytes, with the class-name mapping made explicit
 // (D4), so the pair cannot drift silently while both exist. Agreement is ALL it proves ([[L43]]): it
 // stayed GREEN while both under-counted. The ★ per-request tests over
-// `fixtures/cost-ledger/usage-snapshots/` are what bind the rule to transcript shapes actually seen.
+// `test-fixtures/cost-ledger/usage-snapshots/` are what bind the rule to transcript shapes actually seen.
 //
 // Usage:
 //   node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>]

@@ -345,7 +345,7 @@ last three feeds `check-loop.mjs`'s inputs.
   that a run read a part at that point, or at all, and never a sentence that sends you to a part without its path. A
   part is read from disk at its point, so a write to it earlier in the run changes what the run follows, as a write to
   a stage's command does before that stage runs. A part that does not load ends the run with nothing committed.
-- **The re-read after a compaction (6.68.0):** `pharn/floor/command-section.mjs` prints one section of this command by
+- **The re-read after a compaction (6.69.0):** `pharn/floor/command-section.mjs` prints one section of this command by
   its heading rules and refuses any file but a regular, non-symlinked `pharn-*.md` directly in `.claude/commands` —
   floor (regex, equality and realpath identity, tested), and the bound the grant's `*` for it relies on. That you run
   it after a compaction, and re-read the parts, is your own discipline, and its heading model is not checked against a

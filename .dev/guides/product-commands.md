@@ -24,7 +24,7 @@ still holds the rules every session needs; this file adds detail and does not ov
   per command. It never judges meaning — a paraphrased claim passes, and a block's presence is not its
   truth. **Raising a ceiling is a deliberate, visible diff to that table in the PR that needs it** (the
   rule: measured bytes + 10%, rounded up to the next multiple of 512), never a quiet edit to turn a red test
-  green. Since 6.68.0 the table also holds a row per `pharn-dev-*` command and its closure ranges over every
+  green. Since 6.69.0 the table also holds a row per `pharn-dev-*` command and its closure ranges over every
   `pharn-*.md`, so a dev command's bytes are budgeted by the same rule; the description, vocabulary and claims-block
   rules still apply to product commands only, and slimming the dev commands is the follow-up `dev-command-slim`.
 - **A stage's LOAD SET is budgeted too (stage-load-budget, review finding CTX-2).** A command's file is not all a
@@ -51,7 +51,7 @@ still holds the rules every session needs; this file adds detail and does not ov
   their entry-to-stop steps in their own file and two parts beside it: `pharn-<cmd>-quick.md` (the `--quick` deltas,
   read only for a `--quick` run, at entry) and `pharn-<cmd>-close.md` (the stop steps, the claims block and the Final
   step, read once — the loop's at its first stop, ship's with step 7's return marker after the first verify or at an
-  earlier STOP). Since 6.68.0 `/pharn-ship` has a third, `pharn-ship-stages.md` (`part: stages`): `## Running a stage`,
+  earlier STOP). Since 6.69.0 `/pharn-ship` has a third, `pharn-ship-stages.md` (`part: stages`): `## Running a stage`,
   Step 2 after GATE 1 as one `###` section per item (Step 2.1–2.8) and Step 2b, read once when the run resumes after
   GATE 1 (its structural backstop then decides whether the SPEC is Approved); what that saves is the text held until GATE 1, never the peak after it (a part read stays in
   context). A part is a `.claude/commands/pharn-*.md` file — `pharn/ARCHITECTURE.md §4` keeps stages in commands,
@@ -66,7 +66,7 @@ true`, `user-invocable: false` — documented keys; the one live probe was incon
   fenced line, heading or long paragraph sits in two files of a command, each pointer's load-condition and not-loaded
   sentences, and that no other command text names a part — NOT the file of a body line under an unchanged heading.
   FLOOR: the text and the file names; ADVISORY: that a run reads a part at its point, or at all.
-- **After a compaction, the orchestrators re-read the step in progress (6.68.0).** A compaction summarises the turn
+- **After a compaction, the orchestrators re-read the step in progress (6.69.0).** A compaction summarises the turn
   that carried the invoked command, so `/pharn-ship` and `/pharn-loop` each open with one paragraph, before their first
   `##` section: re-read the section of the command the step in progress belongs to with one pinned line,
   `node pharn/floor/command-section.mjs .claude/commands/<this command> '<heading>'`, then every part read so far, and

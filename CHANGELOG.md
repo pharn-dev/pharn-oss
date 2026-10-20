@@ -23,13 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.68.0] - 2026-10-20
+## [6.69.0] - 2026-10-20
 
 ### Added
 
 - **`/pharn-ship`'s stages after GATE 1 moved into a third part, read once the SPEC is approved, with one section per
   stage; a new floor script prints one section of a command, and `/pharn-ship` and `/pharn-loop` re-read the step in
-  progress with it after a compaction** (`SKILLS_VERSION` 6.67.0 → **6.68.0**, minor: a new product floor script;
+  progress with it after a compaction** (`SKILLS_VERSION` 6.68.0 → **6.69.0**, minor: a new product floor script;
   audit 2026-10-12 ARCH-7 and CTX-4/CTX-5).
   - What changed:
     - New part `.claude/commands/pharn-ship-stages.md` (`part: stages`). It holds `## Running a stage`, Step 2 from
@@ -71,6 +71,97 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `pharn-*.md` command file, and its closure and byte rules (BUDGET R1/R2) now cover the nine dev commands, each at its
   measured bytes + 10%, rounded up to 512. The description, vocabulary and claims-block rules still apply to product
   commands only. Dev apparatus; no bump of its own.
+
+## [6.68.0] - 2026-10-20
+
+### Changed
+
+- **The AC-TESTS lock now pins the command of every allowlisted gate `/pharn-verify` runs, not only the AC level
+  gates (lock schema `ac-tests-lock/6`; audit SEC-4).**
+  - What changed:
+    - Before, the test-infrastructure pin covered only `test` and the e2e gates. A plan that named `package.json`
+      got only an advisory NOTE, and its build could rewrite `scripts.lint` or `scripts.typecheck` to `true`, which
+      forges a green gate, or to any command. The AC gate stayed PASS.
+    - `pharn/floor/test-infra-core.mjs` now records two more sections. `other_gates` holds the script, `pre` and
+      `post` of every other ALLOWLIST gate `package.json` has: `lint`, `typecheck`, `type-check`, `build`,
+      `format:check`, `lint:md`, and an e2e gate when no e2e AC is mapped. `other_chained` holds the scripts those
+      gates chain to, found by the same token pass and hop bound. The pinned gates are now every gate
+      discovery finds, an excluded one included, so they cover every gate verify runs; a closure test checks that.
+    - A rewritten, removed or ADDED allowlisted gate script reads `test-infra-changed` at `ac-tests-lock.mjs --check`
+      (`lock-red` at the test-stage gate) and at the AC gate (verify FAIL; `/pharn-loop` stops S13). So does a changed
+      `pre`/`post` script or chained script. Each is named by gate id and never by script text. Adding a gate
+      counts too: a feature that introduces a first `typecheck` script must be its own `spec_kind: test-infra`
+      increment. `/pharn-test`, `/pharn-plan`, `/pharn-build` and `check-ac-tests.mjs`'s `package.json` NOTE now say
+      this.
+    - `--write` refuses (exit 2) an allowlisted gate script that is not a string, and a chain from one past 8 hops.
+  - **Upgrading with a feature in progress:**
+    - A lock written by `/pharn-test` before 6.68.0 (`/5`, `/4` or `/3`) is still read. Every other allowlisted gate
+      the project has, and each script those chain to, now reads `unpinned`. It never reads as changed and never as
+      GREEN. Almost every project has a `lint` script.
+    - So a feature that ran `/pharn-test` before the update and has not passed verify yet sees `lock-red` at
+      `/pharn-build`'s test-stage gate and `test-infra-unpinned` at `/pharn-verify` (FAIL), and `/pharn-loop` stops
+      S13.
+    - The remedy: set the build aside (revert or stash it) and re-run `/pharn-test`, which writes `/6`. A project
+      with no allowlisted gate besides the AC level gates reads exactly as before.
+    - Rolling back: a floor older than 6.68.0 reads a `/6` lock as unusable, never GREEN.
+  - `/pharn-ship --quick` and `/pharn-loop --quick` get the same pin. A `spec_kind: quick` SPEC is test-first, so it
+    runs the same `/pharn-test` and the same AC gate.
+  - Bounds:
+    - Detection, never prevention. The changed command has already run when the pin is recomputed: in
+      `/pharn-build`'s build gate (every `/pharn-loop` iteration too), on regress's head side, and in verify.
+    - For a gate no AC level maps to, only the command is pinned. The files its script names (`tsup src/index.ts`,
+      `node tools/lint.mjs`) and its own configs (`eslint.config.*`, `tsconfig.json`, a Prettier config) are not.
+      They are usually source a feature edits.
+    - A `spec_kind: test-infra` (bootstrap) or legacy SPEC still pins nothing.
+    - The `LIMITS.md §9` sentence that says this is a human-only edit, proposed in
+      `.dev/features/test-infra-pin-all-gates/HUMAN-PATCH.md`.
+
+## [6.67.2] - 2026-10-20
+
+### Changed
+
+- **`check-ship.mjs` and its test move from `pharn/floor/` to `.dev/floor/`, so new installs no longer receive the
+  dev loop's stop core; the cost-ledger test fixtures move from `pharn/floor/fixtures/` to
+  `pharn/floor/test-fixtures/`** (audit 2026-10-12, ARCH-5 — the part #359's header-cite fix left open).
+  - Why: `check-ship.mjs` is read only by `/pharn-dev-ship`, a dev command no install receives, yet the installer
+    copies every non-test `.mjs` under `pharn/floor/`. Its consumers — `.claude/commands/pharn-dev-ship.md`, the
+    `verify-report.md` and `regression-report.md` consumer tables (the `check-ship.mjs` rows stay, with the new path),
+    and comment cites in eight product-floor files — now name `.dev/floor/check-ship.mjs`. The ARCH-9 binding test
+    moved with it and still compares the contract row with the checker's live verdict set.
+  - The fixtures were already outside every install (pharn-cli excludes both `fixtures/` and `test-fixtures/` under
+    the floor); the move puts them in the one directory this repo's install-modelling tests already drop. Their four
+    reading tests and the comment cites follow.
+  - Not covered: an existing install keeps its copy of `check-ship.mjs` until `pharn update`, which reports it as a
+    file upstream no longer ships. Nothing installed reads it, so `MIN_CLI` does not move. "Nothing installed reads
+    it" is a grep over this tree at this commit, not a floor check.
+
+## [6.67.1] - 2026-10-20
+
+### Fixed
+
+- **`run-gates.mjs`, `count-verifiers.mjs` and the five `scan-plan-*.mjs` scanners no longer end with an immediate
+  `process.exit`, so a JSON document past 64 KiB reaches the floor caller that parses it whole (audit TST-5).** On
+  darwin, where piped stdout is asynchronous, the old ending cut each document at 65,536 bytes — measured on all
+  seven. Every caller (build-gate, stage-verify, stage-regress, stage-runtime and entry-gates for run-gates;
+  stage-verify for count-verifiers; grill-scan for the scanners) refused an unparseable document, so the failure was a
+  false refusal, never a false pass. run-gates now ends like stage-regress: `emit` sets `process.exitCode` and throws
+  a sentinel that only the top-level handler swallows. A crash still prints its stack and exits 2. `emit` still
+  releases the gate lock on every emission. A crash still leaves the lock, so the next call's stale-lock recovery
+  stops any orphaned gate group before it re-runs the entry. The other six set `process.exitCode = main()`. Exit
+  codes and output bytes are unchanged. `pharn/floor/cli-stdout-flush.test.mjs` now covers all seven: a static pin,
+  a crash test, and a >64 KiB pipe round-trip each. A new run-gates test checks that the lock is gone after a refusal
+  emitted while the lock was held. The test file's header claimed that every other floor CLI's spawner read only an
+  exit status or a first line. It now names the set's callers. It also names, as an open list, the parsed CLIs still
+  outside the set: `count-grillers`, `count-lenses` and `check-model-config`. Their documents are small, and
+  converting them is a follow-up.
+- **The five `scan-plan-*.mjs` scanners now check and read their plan through one file descriptor, and refuse a
+  symlinked plan (CodeQL `js/file-system-race`).** Each one used to test the path (`existsSync`, `statSync().isFile()`)
+  and then read it by name, so the file could be swapped between the two. Now each opens it once with
+  `O_NOFOLLOW | O_NONBLOCK`, checks `fstat` for a regular file, and reads from that descriptor — the form
+  `griller-extract.mjs` (6.60.1) and `check-loop-decision.mjs` (6.65.0) use. A missing path, a directory or a FIFO
+  gets the same exit 1 and message as before, and a FIFO no longer blocks. A symlink, which used to be followed, now
+  gets that message too. `grill-scan.mjs`, the scanners' floor caller, already refused a symlinked plan. A new table
+  test in `grill-scan.test.mjs` runs all five scanners over a symlink, a directory, a FIFO and a missing path.
 
 ## [6.67.0] - 2026-10-19
 

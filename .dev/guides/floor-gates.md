@@ -160,6 +160,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # process.exitCode (the first three unwind with a module-private sentinel only their top-level catch swallows) —
 # never by an immediate exit, which dropped queued stdout: on darwin a piped verdict was cut at 64 KiB, and
 # check-loop-fresh.mjs check E JSON.parses check-verify's through spawnSync. A crash still exits non-zero.
+# Since 6.67.1 (audit TST-5) run-gates (sentinel; a crash still exits 2), count-verifiers and the five scan-plan-*
+# scanners (`process.exitCode = main()`) are in the set too — each is JSON-parsed by a floor caller. run-gates' emit
+# still releases the lock on every emission; a crash still leaves it for the stale-lock recovery and its orphan reap.
+# Parsed CLIs still outside the set are named, openly, in the test file's header.
 # pharn/floor/cli-stdout-flush.test.mjs pins the set statically (the platform-independent guard) and round-trips
 # >64 KiB through a pipe (which discriminates only where piped stdout is asynchronous — not on CI's Linux).
 node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name>

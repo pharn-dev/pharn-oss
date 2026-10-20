@@ -219,7 +219,7 @@ node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md '<heading>'
   execute code the build wrote, with no prompt: run an unattended loop only where that is acceptable (a sandbox, a
   container, a throwaway checkout). The compaction re-read's `*` leaves only the heading free: its file is fixed to
   this command, and `command-section.mjs` reads nothing but a regular `pharn-*.md` directly in `.claude/commands`
-  (6.68.0). What it does not widen: no `node` script outside the pinned lines is
+  (6.69.0). What it does not widen: no `node` script outside the pinned lines is
   pre-approved, the two write guards still judge every Write and Edit (fix #2, fix #7), and in an installed project
   the setter refuses a plan that names PHARN's own files (`.claude/hooks/set-writes-scope.cjs`, header).
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the

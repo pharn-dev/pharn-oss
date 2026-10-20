@@ -1,0 +1,44 @@
+{
+  "base": "5b468d6680808eb30bc03f6bcc8d1d2493c9730f",
+  "inside": [
+    ".claude/commands/pharn-build.md",
+    ".claude/commands/pharn-plan.md",
+    ".claude/commands/pharn-test.md",
+    ".dev/guides/floor-ac-tests.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/ac-gate-core.mjs",
+    "pharn/floor/ac-gate-core.test.mjs",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/ac-tests-lock.test.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-ac-tests.test.mjs",
+    "pharn/floor/check-red-run.test.mjs",
+    "pharn/floor/test-infra-core.mjs",
+    "pharn/floor/test-infra-core.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md",
+    ".dev/features/test-infra-pin-all-gates/GRILL.md",
+    ".dev/features/test-infra-pin-all-gates/HUMAN-PATCH.md",
+    ".dev/features/test-infra-pin-all-gates/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

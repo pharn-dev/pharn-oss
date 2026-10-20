@@ -501,7 +501,7 @@ node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<
 ## `command-section.mjs` — re-read one section of a command after a compaction
 
 ```bash
-# THE SECTION EXTRACTOR (6.68.0, ship-step2-part — audit ARCH-7, CTX-4/CTX-5). /pharn-ship and /pharn-loop each pin one
+# THE SECTION EXTRACTOR (6.69.0, ship-step2-part — audit ARCH-7, CTX-4/CTX-5). /pharn-ship and /pharn-loop each pin one
 # line of it, before their first ## section: after a compaction, re-read the section of the command the step in
 # progress belongs to, then every part read so far; read the whole file if the line fails. It prints the ##–######
 # heading whose text is the operand (or starts with it and a space) through the line before the next heading of the
