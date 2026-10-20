@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-20: **Add a pharn-ci diff-coverage gate to pull requests.** Extends the existing `check` job in
+  `.github/workflows/ci.yml` to run coverage (Node's `--experimental-test-coverage`, no new devDependency) and gate
+  on it via `pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c` (threshold 100 in `.pharn/ci.yml`); a
+  second workflow, `.github/workflows/pharn-ci-comment.yml`, posts the sticky PR comment via `workflow_run` so fork
+  PRs (read-only token) still get it. Node's own coverage only reports files a test actually loaded, so a
+  brand-new file with zero tests won't appear in the report at all — a known, accepted gap, not a bug.
+
 ## [6.71.2] - 2026-10-20
 
 ### Fixed

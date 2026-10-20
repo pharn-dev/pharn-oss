@@ -502,10 +502,11 @@ test("--show refuses when nothing has been anchored", () => {
   assert.match(r.stderr, /run --anchor first/);
 });
 
-test("✧ the record path is under .pharn/, which is gitignored — the baseline is never committed", () => {
+test("✧ the record path is under .pharn/, which is gitignored by default — the baseline is never committed", () => {
   assert.ok(RECORD_PATH.startsWith(".pharn/"), "the baseline must be disposable runtime state");
   const gi = readFileSync(resolve(HERE, "..", "..", ".gitignore"), "utf8");
-  assert.match(gi, /^\.pharn\/$/m, "this repo must still gitignore .pharn/ for that to hold");
+  assert.match(gi, /^\.pharn\/\*$/m, "this repo must still gitignore .pharn/ contents by default for that to hold");
+  assert.doesNotMatch(gi, /^!\.pharn\/reconcile\b/m, "the reconcile baseline directory must never be carved out of the default ignore");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────

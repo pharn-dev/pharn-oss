@@ -1,0 +1,4 @@
+# pharn-ci settings. The pharn-ci Action and `pharn-ci check` both read this file.
+coverage:
+  file: coverage/lcov.info
+  threshold: 100
