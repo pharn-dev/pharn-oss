@@ -54,7 +54,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `docs/lessons-index.md` was regenerated. L31 and L35 are unchanged (canon is append-only). Dev-only: no
   `SKILLS_VERSION` bump.
 
-
 ### Changed
 
 - 2026-10-20: **Bump prettier to 3.9.10 and github/codeql-action to 4.39.0 (init and analyze together), and
