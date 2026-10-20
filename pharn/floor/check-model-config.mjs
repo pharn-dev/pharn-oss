@@ -437,4 +437,7 @@ function main() {
   return 1;
 }
 
-process.exit(main());
+// THE FLUSH RULE (6.20.4; this CLI since 6.71.1): the exit code is SET and the process ends naturally, after Node has
+// drained stdout — stage-agent-core.mjs JSON.parses `resolve`'s document through spawnSync, and an immediate exit
+// dropped queued writes past a pipe's 64 KiB buffer on darwin. pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();
