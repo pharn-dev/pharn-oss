@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.67.3] - 2026-10-20
+## [6.68.1] - 2026-10-20
 
 ### Changed
 
@@ -48,6 +48,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `docs/guarantees.md` and `docs/limitations.md`.
   - Bounds: nothing holds the README to 25 KB from here; its size was measured once, not gated. The moved text was
     compared with the old README by a one-off script, not by a gate.
+
+## [6.68.0] - 2026-10-20
+
+### Changed
+
+- **The AC-TESTS lock now pins the command of every allowlisted gate `/pharn-verify` runs, not only the AC level
+  gates (lock schema `ac-tests-lock/6`; audit SEC-4).**
+  - What changed:
+    - Before, the test-infrastructure pin covered only `test` and the e2e gates. A plan that named `package.json`
+      got only an advisory NOTE, and its build could rewrite `scripts.lint` or `scripts.typecheck` to `true`, which
+      forges a green gate, or to any command. The AC gate stayed PASS.
+    - `pharn/floor/test-infra-core.mjs` now records two more sections. `other_gates` holds the script, `pre` and
+      `post` of every other ALLOWLIST gate `package.json` has: `lint`, `typecheck`, `type-check`, `build`,
+      `format:check`, `lint:md`, and an e2e gate when no e2e AC is mapped. `other_chained` holds the scripts those
+      gates chain to, found by the same token pass and hop bound. The pinned gates are now every gate
+      discovery finds, an excluded one included, so they cover every gate verify runs; a closure test checks that.
+    - A rewritten, removed or ADDED allowlisted gate script reads `test-infra-changed` at `ac-tests-lock.mjs --check`
+      (`lock-red` at the test-stage gate) and at the AC gate (verify FAIL; `/pharn-loop` stops S13). So does a changed
+      `pre`/`post` script or chained script. Each is named by gate id and never by script text. Adding a gate
+      counts too: a feature that introduces a first `typecheck` script must be its own `spec_kind: test-infra`
+      increment. `/pharn-test`, `/pharn-plan`, `/pharn-build` and `check-ac-tests.mjs`'s `package.json` NOTE now say
+      this.
+    - `--write` refuses (exit 2) an allowlisted gate script that is not a string, and a chain from one past 8 hops.
+  - **Upgrading with a feature in progress:**
+    - A lock written by `/pharn-test` before 6.68.0 (`/5`, `/4` or `/3`) is still read. Every other allowlisted gate
+      the project has, and each script those chain to, now reads `unpinned`. It never reads as changed and never as
+      GREEN. Almost every project has a `lint` script.
+    - So a feature that ran `/pharn-test` before the update and has not passed verify yet sees `lock-red` at
+      `/pharn-build`'s test-stage gate and `test-infra-unpinned` at `/pharn-verify` (FAIL), and `/pharn-loop` stops
+      S13.
+    - The remedy: set the build aside (revert or stash it) and re-run `/pharn-test`, which writes `/6`. A project
+      with no allowlisted gate besides the AC level gates reads exactly as before.
+    - Rolling back: a floor older than 6.68.0 reads a `/6` lock as unusable, never GREEN.
+  - `/pharn-ship --quick` and `/pharn-loop --quick` get the same pin. A `spec_kind: quick` SPEC is test-first, so it
+    runs the same `/pharn-test` and the same AC gate.
+  - Bounds:
+    - Detection, never prevention. The changed command has already run when the pin is recomputed: in
+      `/pharn-build`'s build gate (every `/pharn-loop` iteration too), on regress's head side, and in verify.
+    - For a gate no AC level maps to, only the command is pinned. The files its script names (`tsup src/index.ts`,
+      `node tools/lint.mjs`) and its own configs (`eslint.config.*`, `tsconfig.json`, a Prettier config) are not.
+      They are usually source a feature edits.
+    - A `spec_kind: test-infra` (bootstrap) or legacy SPEC still pins nothing.
+    - The `LIMITS.md §9` sentence that says this is a human-only edit, proposed in
+      `.dev/features/test-infra-pin-all-gates/HUMAN-PATCH.md`.
 
 ## [6.67.2] - 2026-10-20
 
