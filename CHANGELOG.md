@@ -50,6 +50,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `/pharn-dev-ship` Step 2c is the follow-up `dev-ship-surface-bump`. Apparatus and repo meta only, so there is no
     `SKILLS_VERSION` bump.
 
+## [6.67.2] - 2026-10-20
+
+### Changed
+
+- **`check-ship.mjs` and its test move from `pharn/floor/` to `.dev/floor/`, so new installs no longer receive the
+  dev loop's stop core; the cost-ledger test fixtures move from `pharn/floor/fixtures/` to
+  `pharn/floor/test-fixtures/`** (audit 2026-10-12, ARCH-5 — the part #359's header-cite fix left open).
+  - Why: `check-ship.mjs` is read only by `/pharn-dev-ship`, a dev command no install receives, yet the installer
+    copies every non-test `.mjs` under `pharn/floor/`. Its consumers — `.claude/commands/pharn-dev-ship.md`, the
+    `verify-report.md` and `regression-report.md` consumer tables (the `check-ship.mjs` rows stay, with the new path),
+    and comment cites in eight product-floor files — now name `.dev/floor/check-ship.mjs`. The ARCH-9 binding test
+    moved with it and still compares the contract row with the checker's live verdict set.
+  - The fixtures were already outside every install (pharn-cli excludes both `fixtures/` and `test-fixtures/` under
+    the floor); the move puts them in the one directory this repo's install-modelling tests already drop. Their four
+    reading tests and the comment cites follow.
+  - Not covered: an existing install keeps its copy of `check-ship.mjs` until `pharn update`, which reports it as a
+    file upstream no longer ships. Nothing installed reads it, so `MIN_CLI` does not move. "Nothing installed reads
+    it" is a grep over this tree at this commit, not a floor check.
+
 ## [6.67.1] - 2026-10-20
 
 ### Fixed
