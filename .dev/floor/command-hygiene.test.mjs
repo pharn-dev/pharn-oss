@@ -5825,6 +5825,7 @@ test("✧ loop-scope-hardening: the live grant pre-approves NO line outside the 
     "node pharn/floor/x.mjs --feature a", // the same, with arguments shaped like a pinned line's
     "node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-memory-promote.md --target memory-bank/lessons-learned.md",
     "node .claude/hooks/set-writes-scope.cjs --allow-pharn-surface --from-plan pharn/features/x/PLAN.md",
+    "node .claude/hooks/set-writes-scope.cjs --allow-exec-config --from-plan pharn/features/x/PLAN.md", // hook-hardening-batch
     "node .claude/hooks/enforce-writes-scope.cjs",
     "node pharn/floor/reconcile-baseline.mjs --anchor",
     "echo x > pharn/floor/check-loop.mjs",

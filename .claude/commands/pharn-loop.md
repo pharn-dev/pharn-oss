@@ -207,7 +207,8 @@ Load the trusted prefix and obey it:
   execute code the build wrote, with no prompt: run an unattended loop only where that is acceptable (a sandbox, a
   container, a throwaway checkout). What it does not widen: no `node` script outside the pinned lines is
   pre-approved, the two write guards still judge every Write and Edit (fix #2, fix #7), and in an installed project
-  the setter refuses a plan that names PHARN's own files (`.claude/hooks/set-writes-scope.cjs`, header).
+  the setter refuses a plan that names PHARN's own files, a CI workflow or a git hooks directory
+  (`.claude/hooks/set-writes-scope.cjs`, header).
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the
   working tree) and decides what to merge.
 - **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (the project's suite at HEAD, and a

@@ -2959,3 +2959,79 @@ test("✧ a 100k-segment payload path is judged in linear time and still denied 
   assert.ok(ms < 10000, `the hook took ${ms} ms over a 100k-segment path`);
   assert.equal(r.status, 2, "a path that is not the scoped file stays denied");
 });
+
+// --- NO INPUT (audit TST-4, 2026-10-12; hook-hardening-batch). Before the human-applied patch, readStdin() turned a read
+// error into "" and the caller parsed `readStdin() || "{}"`, so an empty or unreadable stdin became `{}` — not a write —
+// and the hook exited 0. The ★ tests are RED until .dev/features/hook-hardening-batch/apply.py has run, GREEN after.
+test("★ TST-4: an EMPTY stdin denies (exit 2) with the fixed 'empty input' detail, never exit 0", () => {
+  const r = spawnSync(process.execPath, [HOOK], { input: "", cwd: tmp(), encoding: "utf8" });
+  assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
+  assert.match(r.stderr, /hook input is not a usable PreToolUse JSON object \(empty input\)/);
+});
+
+test("★ TST-4: an UNREADABLE stdin (a directory descriptor) denies with the fixed 'stdin could not be read' detail", () => {
+  const fd = fs.openSync(tmp(), "r"); // readFileSync(0) on a directory throws EISDIR — the read-error branch
+  try {
+    const r = spawnSync(process.execPath, [HOOK], { stdio: [fd, "pipe", "pipe"], cwd: tmp(), encoding: "utf8" });
+    assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
+    assert.match(r.stderr, /\(stdin could not be read\)/);
+    assert.doesNotMatch(r.stderr, /\(empty input\)/, "the read-error branch, not the empty-input one");
+  } finally {
+    fs.closeSync(fd);
+  }
+});
+
+test("TST-4 control: a whitespace-only stdin denies as invalid JSON, before the patch and after it", () => {
+  const r = spawnSync(process.execPath, [HOOK], { input: "   \n", cwd: tmp(), encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /\(invalid JSON\)/);
+});
+
+// ✧ PINS for the two copies the patch adds or changes in both guards (L31).
+test("✧ PIN (TST-4): readStdin() is byte-equal in both guards and reports a read error as null, never as an empty string", () => {
+  const fn = (file) => {
+    const m = fs.readFileSync(file, "utf8").match(/\nfunction readStdin\(\) \{[\s\S]*?\n\}/);
+    assert.ok(m, `${file} must declare a top-level \`function readStdin() { … }\``);
+    return m[0];
+  };
+  assert.equal(fn(HOOK), fn(FIX2), "readStdin() has drifted — update both (L31)");
+  assert.match(fn(HOOK), /return null;/);
+  assert.doesNotMatch(fn(HOOK), /return "";/);
+  for (const file of [HOOK, FIX2]) {
+    const src = fs.readFileSync(file, "utf8");
+    assert.match(src, /^if \(raw === null\) denyMalformedHookInput\("stdin could not be read"\);$/m, file);
+    assert.match(src, /^if \(raw === ""\) denyMalformedHookInput\("empty input"\);$/m, file);
+    assert.doesNotMatch(src, /\|\| "\{\}"/, `${file} must not read a missing payload as {}`);
+  }
+});
+
+test("✧ PIN (TST-11): both guards register the same fail-closed uncaughtException handler, before any statement but the requires", () => {
+  const handler = (file) => {
+    const src = fs.readFileSync(file, "utf8");
+    const m = src.match(/^process\.on\("uncaughtException", \(\) => \{\n[\s\S]*?\n\}\);$/m);
+    assert.ok(m, `${file} must register a top-level process.on("uncaughtException", …)`);
+    const head = src.slice(src.indexOf('"use strict";'), m.index);
+    const code = head.split("\n").filter((l) => l.trim() !== "" && !l.trim().startsWith("//"));
+    for (const l of code) {
+      assert.ok(l === '"use strict";' || /^const \w+ = require\("[a-z:]+"\);$/.test(l), `${file}: \`${l}\` runs before the handler`);
+    }
+    return m[0];
+  };
+  const norm = (h) => h.replace(/process\.stderr\.write\("[^"]*"\);/, "process.stderr.write(MESSAGE);");
+  const [e, p] = [handler(HOOK), handler(FIX2)];
+  assert.equal(norm(p), norm(e), "the two handlers differ beyond their message — update both (L31)");
+  assert.match(e, /\n {2}process\.exit\(2\);\n\}\);$/);
+  assert.match(p, /the trusted-path guard failed while deciding; the write is denied — fail-closed/);
+});
+
+// The backstop set-writes-scope.cjs's executable-config refusal leaves to this hook (hook-hardening-batch): a plan entry
+// that reaches `.github/workflows/` through a symlinked parent is judged at the target the write reaches, which is not
+// in the scope. GREEN before and after the patch — it pins existing behaviour the setter's header now relies on.
+test("scoped mode: a write through a symlinked parent into .github/workflows/ is denied as out of scope", () => {
+  const cwd = seedInstalledProject(tmp());
+  fs.mkdirSync(join(cwd, ".github", "workflows"), { recursive: true });
+  fs.symlinkSync(join(".github", "workflows"), join(cwd, "ci"));
+  setScope(cwd, ["ci/deploy.yml", "src/a.ts"]);
+  assert.equal(hook(cwd, "ci/deploy.yml").status, 2, "the alias reaches .github/workflows/deploy.yml, outside the scope");
+  assert.equal(hook(cwd, "src/a.ts").status, 0, "control: an ordinary scoped path is allowed");
+});
