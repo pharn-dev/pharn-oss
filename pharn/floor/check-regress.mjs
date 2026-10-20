@@ -67,7 +67,10 @@
 //                    build (the L17 floor check). Omit it and nothing is exempt on that axis (fail-closed).
 //                    Exemptions are always REPORTED in `escape_exempt`, never silently dropped.
 //   node pharn/floor/check-regress.mjs verdict <base-results.json> <head-results.json> [--base <ref>] [--inside <list>]
+//        [--per-test <gate-id> --base-tests <file> --head-tests <file>]
 //   node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
+//     --per-test   : the positional path only (6.72.0; all three flags or none): compare one gate PER TEST, below.
+//                    Refused on the stamp path — /pharn-regress's wiring is the follow-up `regress-per-test-product`.
 //     <list>       : comma/whitespace-separated repo-relative paths
 //     <eval-pairs> : comma/whitespace-separated "EXPECTED::ACTUAL" tokens (the committed eval pairs)
 //     results.json : a flat { "<gate-id>": <exit-code int>, ... } map written by the command
@@ -89,6 +92,24 @@
 // floor op. stage-regress.mjs refuses a comma or newline path before building it — the named residual
 // `regress-inside-echo-list`. The CLI runs only under `import.meta.main`, so importing this file runs nothing.
 //
+// THE OPT-IN PER-TEST COMPARISON (6.72.0, load-flake-regress). One gate's exit code says nothing about WHICH tests
+// failed, so a gate red at base hid every NEW failure at head behind `pre_existing`: a load-red base masked 11 real head
+// failures in one recorded /pharn-dev-regress run (.dev/features/frontmatter-parser-parity/REGRESSION.md). With
+// `--per-test <gate> --base-tests <b> --head-tests <h>` the two files are `pharn-test-results/1` documents
+// (test-results-record.md's `pharn-json`), read and checked by test-results-core.mjs's own `readResultsFile` +
+// `parseResults` + `buildRecord` — one grammar (L35), with the gate's exit from each map as that record's exit. For
+// that gate only, base != 0 && head != 0 becomes a REGRESSION when some test FAILED at head whose base status is not
+// `failed` (passed, skipped, or absent from the base record), or head reports more suite errors than base; otherwise it
+// stays `pre_existing`. Every other row of the table is unchanged, and the report adds `per_test`. FAIL-CLOSED (P5),
+// exit 2: the flags not all present, the gate missing from either map, a record the builder refuses (unreadable,
+// malformed, over a cap, failures under exit 0), a record with anomalies (ambiguous identity), and — L34 — a gate that
+// exited non-zero whose record holds no failed test and no suite error: its red is not accounted for, so no comparison
+// over that record may claim it. The direction is deliberate: under load a test red at head only, or one absent at
+// base because its file died there, now reads as a regression where the gate used to read `pre_existing` — a false
+// RED in place of a false GREEN. BOUND (P0): the records are unauthenticated files the caller names (L43); the
+// comparison is floor over what they say, never proof of what ran. Test ids are repository text, carried in
+// `per_test.new_failures` as untrusted DATA that no floor op reads. Without `--per-test` the output is unchanged.
+//
 // A FIFTH BOUND ON THE SCOPE RULE, for its two callers (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop`
 // or `/pharn-ship` run, `stage-regress.mjs` and `quick-scope-core.mjs` pass `partitionScope` the changed paths the run's
 // PRE-RUN SNAPSHOT recorded with the bytes they still hold (pre-run-snapshot-core.mjs). An undeclared one is REPORTED
@@ -101,6 +122,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { isConcrete } from "./plan-files-core.mjs";
+import { buildRecord, readResultsFile } from "./test-results-core.mjs";
+import { parseResults } from "./test-results-formats.mjs";
 
 // --- The ESCAPE-EXEMPT sets (the floor check for lessons-learned L17). -----------------------------
 // `scope` computes `escaped` over `git diff <base>`, which answers "what CHANGED since base" — but it is
@@ -563,6 +586,67 @@ function readSideStamp(path, side, label) {
   return { ok: true, stamp: parsed, sha256: createHash("sha256").update(raw).digest("hex") };
 }
 
+// --- THE PER-TEST COMPARISON (6.72.0) — see the header, THE OPT-IN PER-TEST COMPARISON. ---------------------------
+const PER_TEST_FLAGS = ["--per-test", "--base-tests", "--head-tests"];
+
+/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: test-results-core.mjs's own
+ *  read + parse + build over a `pharn-test-results/1` document, then the two refusals only a COMPARISON needs (an
+ *  ambiguous test, and a red the record does not account for — L34). `{ok, record}` or `{ok: false, reason_code,
+ *  reason}`. No child process; the file is read under the builder's byte cap, never followed or evaluated. */
+function readTestsRecord(path, gate, exit, label) {
+  const f = readResultsFile(path);
+  if (!f.ok) return { ok: false, reason_code: "per-test-record-refused", reason: `${label} (${path}): ${f.reason}` };
+  let doc;
+  try {
+    doc = JSON.parse(f.bytes.toString("utf8"));
+  } catch (e) {
+    return { ok: false, reason_code: "per-test-record-refused", reason: `${label} (${path}) is not valid JSON: ${e.message}` };
+  }
+  const parsed = parseResults("pharn-json", doc, []);
+  if (!parsed.ok) return { ok: false, reason_code: "per-test-record-refused", reason: `${label} (${path}): ${parsed.reason}` };
+  const sha = createHash("sha256").update(f.bytes).digest("hex");
+  const record = buildRecord({ gate, format: "pharn-json", exit, sha, parsed });
+  if (!record.ok) return { ok: false, reason_code: "per-test-record-refused", reason: `${label} (${path}): ${record.reason}` };
+  if (record.anomalies.length) {
+    return {
+      ok: false,
+      reason_code: "per-test-record-refused",
+      reason: `${label} (${path}) holds ${record.anomalies.length} test(s) whose identity or status is ambiguous (first: ${record.anomalies[0].reason_code}) — a per-test comparison needs every test given plainly`,
+    };
+  }
+  if (exit !== 0 && record.counts.failed === 0 && record.suite_errors === 0) {
+    return {
+      ok: false,
+      reason_code: "per-test-unaccounted-red",
+      reason: `gate ${JSON.stringify(gate)} exited ${exit} on the ${label.split(" ")[0]} side, but ${label} records no failed test and no suite error — that red is not accounted for, so no per-test comparison can classify it`,
+    };
+  }
+  return { ok: true, record };
+}
+
+/** The per-test comparison of two records of ONE gate (pure). `new_failures` = every test FAILED at head whose base
+ *  status is not `failed` (`passed`, `skipped`, or `absent` from the base record), in head-record (id) order;
+ *  `still_failing` counts the tests failed on both sides; `suite_errors_added` is head's count above base's. */
+export function comparePerTest(base, head) {
+  const baseStatus = new Map(base.tests.map((t) => [t.id, t.status]));
+  const newFailures = [];
+  let stillFailing = 0;
+  for (const t of head.tests) {
+    if (t.status !== "failed") continue;
+    const was = baseStatus.has(t.id) ? baseStatus.get(t.id) : "absent";
+    if (was === "failed") stillFailing++;
+    else newFailures.push({ id: t.id, base: was });
+  }
+  const side = (r) => ({ ...r.counts, suite_errors: r.suite_errors });
+  return {
+    base: side(base),
+    head: side(head),
+    new_failures: newFailures,
+    still_failing: stillFailing,
+    suite_errors_added: head.suite_errors > base.suite_errors,
+  };
+}
+
 function runVerdict(positional, args) {
   const basePath = positional[0];
   const headPath = positional[1];
@@ -570,6 +654,34 @@ function runVerdict(positional, args) {
   const inside = parseList(flag(args, "--inside"));
   const baseStampPath = flag(args, "--base-stamp");
   const headStampPath = flag(args, "--head-stamp");
+  const perTestGiven = PER_TEST_FLAGS.filter((f) => args.includes(f));
+  const perTest = perTestGiven.length
+    ? { gate: flag(args, "--per-test"), basePath: flag(args, "--base-tests"), headPath: flag(args, "--head-tests") }
+    : null;
+  if (perTest) {
+    const values = [perTest.gate, perTest.basePath, perTest.headPath];
+    if (perTestGiven.length !== PER_TEST_FLAGS.length || values.some((v) => v === undefined || v === "" || v.startsWith("--"))) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: "--per-test <gate-id>, --base-tests <file> and --head-tests <file> must be supplied together, each with a value",
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+    if (baseStampPath !== undefined || headStampPath !== undefined) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason:
+            "--per-test compares the positional results maps only; the stamp path has no per-test wiring yet (follow-up regress-per-test-product)",
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+  }
 
   let base;
   let head;
@@ -676,6 +788,35 @@ function runVerdict(positional, args) {
     );
   }
 
+  // The per-test gate's two records (positional path only — the stamp path refused the flags above). Read after the
+  // gate-set check, so a missing gate is named as such rather than as a mismatch.
+  let perTestBlock = null;
+  let perTestCmp = null;
+  if (perTest) {
+    if (!Object.hasOwn(base.value, perTest.gate)) {
+      emit(
+        {
+          verdict: "inconclusive",
+          reason: `--per-test names gate ${JSON.stringify(perTest.gate)}, which is not in the results maps`,
+          reason_code: "usage-error",
+        },
+        2
+      );
+    }
+    const br = readTestsRecord(perTest.basePath, perTest.gate, base.value[perTest.gate], "base tests record");
+    if (!br.ok) emit({ verdict: "inconclusive", reason: br.reason, reason_code: br.reason_code }, 2);
+    const hr = readTestsRecord(perTest.headPath, perTest.gate, head.value[perTest.gate], "head tests record");
+    if (!hr.ok) emit({ verdict: "inconclusive", reason: hr.reason, reason_code: hr.reason_code }, 2);
+    perTestCmp = comparePerTest(br.record, hr.record);
+    perTestBlock = {
+      gate: perTest.gate,
+      base: perTestCmp.base,
+      head: perTestCmp.head,
+      new_failures: perTestCmp.new_failures,
+      still_failing: perTestCmp.still_failing,
+    };
+  }
+
   const outsideGates = {};
   const regressions = [];
   const preExisting = [];
@@ -683,7 +824,9 @@ function runVerdict(positional, args) {
     const b = base.value[id];
     const h = head.value[id];
     outsideGates[id] = { base: b, head: h };
-    if (b !== 0)
+    if (b !== 0 && h !== 0 && perTest && id === perTest.gate && (perTestCmp.new_failures.length || perTestCmp.suite_errors_added))
+      regressions.push(id); // red at both sides, but a test failed at head that did not fail at base — never masked
+    else if (b !== 0)
       preExisting.push(id); // already red at baseline — not the feature's fault
     else if (h !== 0) regressions.push(id); // GREEN → RED outside the feature = regression
     // else b === 0 && h === 0 → OK
@@ -761,6 +904,7 @@ function runVerdict(positional, args) {
       ...timedOutBlock,
       verdict,
       ...(gate_run ? { gate_run } : {}),
+      ...(perTestBlock ? { per_test: perTestBlock } : {}),
     },
     regressions.length ? 1 : 0
   );
@@ -784,7 +928,7 @@ function main() {
     {
       verdict: "inconclusive",
       reason:
-        "usage: check-regress.mjs scope --changed <list> --declared <list> [--tests <list>] [--eval-pairs <list>] | verdict <base-results.json> <head-results.json> [--base <ref>] [--inside <list>] | verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]",
+        "usage: check-regress.mjs scope --changed <list> --declared <list> [--tests <list>] [--eval-pairs <list>] | verdict <base-results.json> <head-results.json> [--base <ref>] [--inside <list>] [--per-test <gate-id> --base-tests <file> --head-tests <file>] | verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]",
     },
     2
   );

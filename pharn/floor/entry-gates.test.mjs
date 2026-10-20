@@ -286,8 +286,17 @@ function sandbox({ gates = {}, config = null, noPackage = false } = {}) {
 function cli(dir, ...args) {
   return spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: "utf8" });
 }
-const start = (dir, t = "60000") => cli(dir, "--start", "--feature", FEATURE, "--timeout-ms", t);
-function wait(dir, budget = "60000") {
+// LOAD HEADROOM (load-flake-regress): a fixture gate is one short `node` process, but under parallel agent load the
+// batch recorded this file failing with a `continue` where a verdict was expected and a result file that "never
+// appeared" — the 60 s --wait budget and the 15 s / 10 s polls can be outrun. Both ceilings cost nothing when the gates
+// finish — --wait returns at the result, a poll at its condition — so they are 5 minutes and 2 minutes.
+// Kept EQUAL to each other, so the foreground drain's arithmetic (elapsed + timeout <= budget) is what it was. A test
+// that wants a timeout or a `continue` passes its own small value.
+const GATE_TIMEOUT_MS = "300000";
+const WAIT_BUDGET_MS = "300000";
+const POLL_CEILING_MS = 120000; // waitForFile / untilEvent: polls that return as soon as their condition holds
+const start = (dir, t = GATE_TIMEOUT_MS) => cli(dir, "--start", "--feature", FEATURE, "--timeout-ms", t);
+function wait(dir, budget = WAIT_BUDGET_MS) {
   const r = cli(dir, "--wait", "--feature", FEATURE, "--budget-ms", budget);
   const doc = JSON.parse(r.stdout);
   assert.equal(documentDefect(doc), null, `every printed document is well-formed: ${r.stdout}`);
@@ -307,7 +316,7 @@ function gone(pid) {
     return e.code === "ESRCH";
   }
 }
-function waitForFile(p, ms = 15000) {
+function waitForFile(p, ms = POLL_CEILING_MS) {
   const until = Date.now() + ms;
   while (!existsSync(p) && Date.now() < until) execFileSync("sleep", ["0.1"]);
   assert.ok(existsSync(p), `${p} never appeared`);
@@ -774,8 +783,8 @@ const OBS_ENV = (() => {
   return e;
 })();
 const ocli = (dir, ...args) => spawnSync(process.execPath, [CLI, ...args], { cwd: dir, encoding: "utf8", env: OBS_ENV });
-const ostart = (dir, t = "60000") => ocli(dir, "--start", "--feature", FEATURE, "--timeout-ms", t);
-function owait(dir, budget = "60000") {
+const ostart = (dir, t = GATE_TIMEOUT_MS) => ocli(dir, "--start", "--feature", FEATURE, "--timeout-ms", t);
+function owait(dir, budget = WAIT_BUDGET_MS) {
   const r = ocli(dir, "--wait", "--feature", FEATURE, "--budget-ms", budget);
   return { status: r.status, doc: JSON.parse(r.stdout), stderr: r.stderr, stdout: r.stdout };
 }
@@ -784,7 +793,7 @@ const mark = (dir, kind) =>
 const entryFile = (dir) => join(dir, ".pharn/cost", FEATURE, ENTRY_FILE);
 const events = (dir) => readEntryEvents(entryFile(dir)).records;
 /** The runner appends its segment-end just AFTER result.json, so a reader that saw the result may be a moment early. */
-function untilEvent(dir, pred, ms = 10000) {
+function untilEvent(dir, pred, ms = POLL_CEILING_MS) {
   const until = Date.now() + ms;
   while (!events(dir).some(pred) && Date.now() < until) execFileSync("sleep", ["0.05"]);
   assert.ok(events(dir).some(pred), "the expected observation was written");

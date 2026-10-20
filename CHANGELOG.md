@@ -23,7 +23,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.72.0] - 2026-10-20
+
 ### Added
+
+- **`check-regress.mjs verdict` can compare one gate test by test, so a red base no longer hides a new failure at
+  head.**
+  - What changed: the positional verdict path takes `--per-test <gate> --base-tests <file> --head-tests <file>`. The
+    two files are `pharn-test-results/1` documents (the `pharn-json` format of `test-results-record.md`), read by the
+    existing record builder. For that gate, red at base and at head is a regression when a test failed at head that
+    did not fail at base (passed, skipped or absent there), or head has more suite errors. Otherwise it stays
+    `pre_existing`. Every other row is unchanged, and the report gains an advisory `per_test` block
+    (`regression-report.md`).
+  - Fail-closed, exit 2: the flags incomplete or on the stamp path (`usage-error`), a record that is unreadable,
+    malformed, over a cap, contradicts its exit or holds an anomaly (`per-test-record-refused`), and a red gate whose
+    record shows no failure (`per-test-unaccounted-red`).
+  - Why: `/pharn-dev-regress` ran the whole outside suite as one `tests` exit code. A base made red by machine load
+    classed it `pre_existing` and hid 11 real head failures in one recorded run. `/pharn-dev-regress` now runs the
+    outside suite through a node:test reporter (`.dev/floor/node-test-results-reporter.mjs`) and passes the flags.
+  - The trade, stated: under load a test that is red at head only now reads as a regression, a false RED where the
+    single exit code gave a false GREEN.
+  - Not covered: `/pharn-regress` is unchanged. The stamp path refuses the flags; wiring it needs the base checkout's
+    root, which the stamp does not record, and `check-loop-fresh.mjs` re-derives that verdict from the stamps. That
+    is the follow-up `regress-per-test-product`.
 
 - 2026-10-20: **Lesson L77 corrects the example L31 and L35 rest on.** Both called the `check-provenance` and
   `lessons-index-core` dev/product pairs copies that could not be merged because an install ships `pharn/floor/`
@@ -40,6 +62,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Prettier 3.9.10 also rewrites two `*italic*` spans to `_italic_` in
   `.dev/measurements/token-cost-2026-08-18.md` (format:check RED otherwise). No product-surface change; no
   `SKILLS_VERSION` bump.
+
+### Fixed
+
+- **The floor's timing tests are made independent of machine load where a test can be.** Under parallel agent
+  sessions (load averages 40–270) they failed in every PR of the 2026-10-19/20 batch, while passing alone and in CI, so
+  `/pharn-dev-verify` and `/pharn-dev-regress` gave FAIL verdicts that had to be overridden. Measured on one stress
+  profile (three parallel copies of the five files plus 24 CPU burners): 8 of 300 tests failed in every copy before,
+  0 of 300 after, at load averages up to 199 (before: up to 262). A ceiling is still a ceiling, so this is a
+  measurement, not a guarantee. The fixes change no behavioural assertion; each is one of four kinds:
+  - **An injected clock.** The two budget-clock tests run the stage with a test-only preload
+    (`pharn/floor/test-fixtures/virtual-clock/preload.mjs`). In that process `Date.now()` moves only by a fixed step
+    after one named `git` call. The mutant and the controls still flip.
+  - **The command's own protocol.** The tests that execute the pinned `/pharn-regress` and `/pharn-verify` lines
+    follow a `5 continue` with the pinned `--resume` line, as the commands prescribe. A single call could stop inside
+    the lines' 30 s window: `entry-base-evidence.test.mjs` then read a null report.
+  - **Headroom.** A run with one deliberately hung gate uses a 20 s timeout instead of 1.5 s, and its hung gate waits
+    until it is killed. The `entry-gates` ceilings are now 5 minutes, and the run-gates timeout test 10 s.
+  - **Polling.** Fixed sleeps became polls on the condition, with generous ceilings.
+  - Changed test files: `stage-verify`, `stage-regress`, `entry-base-evidence`, `entry-gates` and `run-gates`. These
+    are tests only, and this entry ships no change to the stages themselves.
 
 ## [6.71.3] - 2026-10-20
 

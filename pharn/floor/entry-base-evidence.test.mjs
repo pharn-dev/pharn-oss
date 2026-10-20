@@ -61,6 +61,7 @@ const START = pinned("pharn-loop.md", /^\s*node pharn\/floor\/entry-gates\.mjs -
 const WAIT = pinned("pharn-loop.md", /^\s*node pharn\/floor\/entry-gates\.mjs --wait /);
 const SNAPSHOT = pinned("pharn-loop.md", /^\s*node pharn\/floor\/pre-run-snapshot\.mjs --capture /);
 const REGRESS = pinned("pharn-regress.md", /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/);
+const REGRESS_RESUME = pinned("pharn-regress.md", /^\s*node pharn\/floor\/stage-regress\.mjs --resume --budget-ms \d+\s*$/);
 const LOOP_RECORD = join(ROOT, ".claude", "hooks", "require-loop-record.cjs");
 const RUN_MARKER = join(HERE, "run-marker.mjs");
 const CHECK_REGRESS = join(HERE, "check-regress.mjs");
@@ -199,10 +200,15 @@ function build(fx, { plan = ["src/index.js", "src/new.test.js"], edits = {} } = 
   for (const [p, c] of Object.entries(edits)) fx.w(p, c);
 }
 
-/** One regress through the pinned line (or `argv`); its exit, report, block and what it counted. */
+/** One regress through the pinned line (or `argv`), then — on each `5 continue` — the pinned `--resume` line, as
+ *  pharn-regress.md prescribes, until a terminal exit; its exit, report, block and what it counted across them. The
+ *  pinned window is B − N of REAL time (30 s at 540000/570000), so under machine load the fresh line can stop at 5, and
+ *  a single call then had no report: the recorded batch flakes ("TypeError reading `source` of a null record",
+ *  load-flake-regress). Counts span every call, and a budget pause never re-runs a finished step. */
 function regress(fx, argv = REGRESS) {
   const from = lines(fx).length;
-  const r = node(fx, argv);
+  let r = node(fx, argv);
+  for (let i = 0; i < 20 && r.code === 5; i++) r = node(fx, REGRESS_RESUME);
   let json = null;
   try {
     json = JSON.parse(r.stdout);

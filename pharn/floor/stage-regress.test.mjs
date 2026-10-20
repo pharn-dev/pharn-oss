@@ -29,7 +29,7 @@ import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { REGRESS_PATHS, PROGRESS_SCHEMA, validateProgress } from "./stage-regress-core.mjs";
 import { RECORD_BASENAME } from "./regress-base-reuse-core.mjs";
 import { readWork, WORK_FILE } from "./stage-work.mjs";
@@ -44,6 +44,13 @@ import { SCHEMA as GATE_RUN_SCHEMA, logBasename } from "./gate-run-core.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "stage-regress.mjs");
 const COMMAND = join(HERE, "..", "..", ".claude", "commands", "pharn-regress.md");
+const VIRTUAL_CLOCK = join(HERE, "test-fixtures", "virtual-clock", "preload.mjs");
+// A run with ONE deliberately hung gate needs a --timeout-ms every OTHER step (an install, a gate, each a fresh `node`)
+// finishes well inside, at any load: 1500 ms did not at load ~190 (the recorded batch flakes at ~:2207 and ~:2948).
+// 20 s leaves each such step (one short process) many seconds of room even there — an estimate, not a measurement;
+// the hung gate now waits until it is killed, so the timeout, not its own sleep, decides when it ends
+// (load-flake-regress).
+const HUNG_GATE_TIMEOUT_MS = "20000";
 const CHECK_LOOP_FRESH = join(HERE, "check-loop-fresh.mjs");
 const CHECK_VERIFY = join(HERE, "check-verify.mjs");
 const FEATURE = "demo";
@@ -196,6 +203,25 @@ function cli(dir, args, opts = {}) {
     /* a crash path */
   }
   return { code: r.status, json, raw: (r.stdout || "") + (r.stderr || "") };
+}
+
+/** pharn-regress.md's pinned `--resume` line — the command's answer to a `5 continue`. */
+function pinnedResume() {
+  const lines = readFileSync(COMMAND, "utf8")
+    .split(/\r?\n/)
+    .filter((l) => /^\s*node pharn\/floor\/stage-regress\.mjs --resume --budget-ms \d+\s*$/.test(l));
+  assert.equal(lines.length, 1, `expected exactly one pinned --resume line in pharn-regress.md, found ${lines.length}`);
+  return lines[0].trim();
+}
+
+/** Runs a pinned fresh line through `sh -c`, then the pinned resume line on every `5 continue`, as the command
+ *  prescribes, until a terminal exit. The pinned window is B − N of REAL time (30 s at 540000/570000), so under machine
+ *  load one invocation can stop at 5; a test that ran the fresh line once read that as a failure (load-flake-regress). */
+function runPinned(line, opts) {
+  const resume = pinnedResume();
+  let r = spawnSync("sh", ["-c", line], opts);
+  for (let i = 0; i < 20 && r.status === 5; i++) r = spawnSync("sh", ["-c", resume], opts);
+  return r;
 }
 
 function freshArgs(base, extra = []) {
@@ -1058,12 +1084,13 @@ test("A3 (round 2) — a hard kill DURING `git worktree add` leaves git's own lo
     execFileSync("git", ["commit", "-q", "-m", "slow checkout"], { cwd: dir });
     const base = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
     execFileSync("git", ["config", "filter.slow.clean", "cat"], { cwd: dir });
-    execFileSync("git", ["config", "filter.slow.smudge", "sleep 30; cat"], { cwd: dir });
+    execFileSync("git", ["config", "filter.slow.smudge", "sleep 120; cat"], { cwd: dir }); // outlives any wait below
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x){return x;}\n");
 
     const child = spawn(process.execPath, [CLI, ...freshArgs(base)], { cwd: dir, env: CLEAN_ENV, stdio: "ignore", detached: true });
     const t0 = Date.now();
-    while (baseCheckouts(dir).length === 0 && Date.now() - t0 < 30000) {
+    // The base checkout comes after the whole HEAD side, which a loaded machine can stretch past 30 s: poll, generously.
+    while (baseCheckouts(dir).length === 0 && Date.now() - t0 < 180000) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     await new Promise((resolve) => setTimeout(resolve, 1000)); // inside the smudge filter's sleep: mid-checkout
@@ -1123,26 +1150,22 @@ test("N2 (round 2) — a render crash after cleanup: the resumed run reports NO 
 });
 
 // THE BUDGET CLOCK (GATE-2 round 2) — `elapsed` is measured from the top of runFresh, so the opening fast
-// work counts. A PATH shim makes exactly one call slow: phaseBase's `git status --porcelain` (no --base, a
+// work counts. The injected clock makes exactly one call slow: phaseBase's `git status --porcelain` (no --base, a
 // dirty tree). With a 2 s window (budget − timeout), 3 s of opening work alone forbids the SECOND head gate,
 // so the fresh invocation continues at "drain-head". Under the pre-round-2 clock (started after head init),
 // elapsed after a sub-second first gate fits the window and the second gate started (the edit that turns
-// this red: moving `invocationStart` back into makeBudget). Control: the same shim under a 60 s window runs
-// through to `done`, so the stop above is the budget's, not the shim's.
+// this red: moving `invocationStart` back into makeBudget). Control: the same clock under a 60 s window runs
+// through to `done`, so the stop above is the budget's, not the clock's.
 test("budget clock (round 2) — the opening fast work counts against --budget-ms", () => {
-  const shimDir = mkdtempSync(join(tmpdir(), "sr-gitshim-"));
-  const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
-  writeFileSync(
-    join(shimDir, "git"),
-    `#!/bin/sh\nif [ "$#" -eq 2 ] && [ "$1" = status ] && [ "$2" = --porcelain ]; then sleep 3; fi\nexec "${realGit}" "$@"\n`
-  );
-  chmodSync(join(shimDir, "git"), 0o755);
-  const env = { ...CLEAN_ENV, PATH: `${shimDir}:${CLEAN_ENV.PATH}` };
+  // THE CLOCK IS INJECTED (load-flake-regress): the virtual-clock preload makes each `git status --porcelain` (exactly
+  // those two args) cost 3 s of the stage's Date.now() and everything else cost nothing, where the old PATH shim slept
+  // for real — so the 60 s control window no longer depends on how fast a loaded machine runs the rest.
+  const preload = `${pathToFileURL(VIRTUAL_CLOCK).href}?git=status,--porcelain&exact=1&ms=3000`;
   const run = (dir, budgetMs) => {
     const r = spawnSync(
       process.execPath,
-      [CLI, "--feature", FEATURE, "--timeout-ms", "30000", "--budget-ms", String(budgetMs), "--no-install"],
-      { cwd: dir, encoding: "utf8", env }
+      ["--import", preload, CLI, "--feature", FEATURE, "--timeout-ms", "30000", "--budget-ms", String(budgetMs), "--no-install"],
+      { cwd: dir, encoding: "utf8", env: CLEAN_ENV }
     );
     let json = null;
     try {
@@ -1169,7 +1192,6 @@ test("budget clock (round 2) — the opening fast work counts against --budget-m
     }
   } finally {
     for (const d of dirs) rmSync(d, { recursive: true, force: true });
-    rmSync(shimDir, { recursive: true, force: true });
   }
 });
 
@@ -1398,7 +1420,7 @@ test("★ WIRING — pharn-regress.md's pinned fresh line, executed verbatim, re
       npm_config_update_notifier: "false",
     };
     const start = Date.now();
-    const r = spawnSync("sh", ["-c", sub], { cwd: dir, encoding: "utf8", env });
+    const r = runPinned(sub, { cwd: dir, encoding: "utf8", env });
     const durationMs = Date.now() - start;
     let doc = null;
     try {
@@ -2199,9 +2221,9 @@ const NEVER_RECORDED = [
     why: "a timed-out base gate",
     scripts: {
       test: "node count.mjs test && node --test",
-      typecheck: 'node count.mjs typecheck && node -e "if (/pharn-regress-base-/.test(process.cwd())) setTimeout(() => {}, 5000)"',
+      typecheck: 'node count.mjs typecheck && node -e "if (/pharn-regress-base-/.test(process.cwd())) setTimeout(() => {}, 600000)"',
     },
-    args: (fx) => ["--feature", FEATURE, "--timeout-ms", "1500", "--install", INSTALL_CMD, "--base", fx.base],
+    args: (fx) => ["--feature", FEATURE, "--timeout-ms", HUNG_GATE_TIMEOUT_MS, "--install", INSTALL_CMD, "--base", fx.base],
   },
 ];
 
@@ -2301,7 +2323,7 @@ test("crash — a kill during drain-base of a MISS run, then a fresh run: no rec
       detached: true,
     });
     const t0 = Date.now();
-    while (counterLines(fx).filter((l) => l === "typecheck base").length < 2 && Date.now() - t0 < 60000) {
+    while (counterLines(fx).filter((l) => l === "typecheck base").length < 2 && Date.now() - t0 < 180000) {
       await new Promise((res) => setTimeout(res, 100));
     }
     assert.ok(counterLines(fx).filter((l) => l === "typecheck base").length >= 2, "the kill must land during the second run's base gates");
@@ -2457,7 +2479,7 @@ test("★ WIRING (reuse) — pharn-regress.md's pinned line, run twice in one de
     const line = `${pinned.replaceAll("<name>", FEATURE).trim()} --base ${base}`;
     const run = () => {
       const from = counterLines(fx).length;
-      const r = spawnSync("sh", ["-c", line], { cwd: fx.dir, encoding: "utf8", env });
+      const r = runPinned(line, { cwd: fx.dir, encoding: "utf8", env });
       const doc = JSON.parse(r.stdout);
       assert.equal(doc.status, "done", r.stdout + r.stderr);
       const report = JSON.parse(readFileSync(join(fx.dir, doc.report), "utf8"));
@@ -2948,7 +2970,7 @@ test("★ P1-B (f1b) — everything committed, merge-base == HEAD: refused no-ch
 });
 
 test("★ P2-C (f2) — a timed-out base gate under a red head is inconclusive (base-timed-out); under a green head it masks nothing", () => {
-  const slow = "export function add(a, b) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 4000); return a + b; }\n";
+  const slow = "export function add(a, b) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 600000); return a + b; }\n";
   for (const [label, headSrc, verdict] of [
     ["red head", BROKEN_ADD, "inconclusive"],
     ["green head (control)", "export function add(a, b) { return a + b; }\nexport const fast = true;\n", "no-regressions"],
@@ -2956,7 +2978,7 @@ test("★ P2-C (f2) — a timed-out base gate under a red head is inconclusive (
     const { dir, base } = repo({ committed: { "src/index.js": slow, "src/other.test.js": OUTSIDE_ADD_TEST } });
     try {
       writeFileSync(join(dir, "src", "index.js"), headSrc);
-      const r = cli(dir, ["--feature", FEATURE, "--timeout-ms", "1500", "--no-install", "--base", base]);
+      const r = cli(dir, ["--feature", FEATURE, "--timeout-ms", HUNG_GATE_TIMEOUT_MS, "--no-install", "--base", base]);
       assert.equal(r.code, 0, `${label}: ${r.raw}`);
       assert.equal(r.json.verdict, verdict, label);
       const report = JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));

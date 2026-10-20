@@ -517,22 +517,28 @@ test("a TIMEOUT records 124 + timed_out, and the whole PROCESS GROUP is dead aft
       // which is precisely what the process-group kill exists to prevent.
       const gate = `sh -c 'sleep 60 & echo $! > ${marker}; wait'`;
       cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", `${gate}::slow`]);
-      const r = cli(dir, runArgs(700));
+      // 10 s, not 700 ms: the timeout must outlive `sh` starting and writing its marker, which a loaded machine can
+      // stretch past 700 ms (load-flake-regress). The gate itself sleeps 60 s, so the timeout still decides.
+      const r = cli(dir, runArgs(10000));
       assert.equal(r.code, 0);
       assert.equal(r.json.exit, 124, "a timeout must record 124");
       assert.equal(r.json.timed_out, true);
 
       const pid = Number(readFileSync(marker, "utf8").trim());
       assert.ok(Number.isInteger(pid) && pid > 0, "the fixture never recorded a grandchild pid");
-      // Give the SIGKILL escalation a moment, then assert the grandchild is gone.
-      execFileSync("sh", ["-c", "sleep 3"]);
-      let alive = true;
-      try {
-        process.kill(pid, 0);
-      } catch {
-        alive = false;
-      }
-      assert.equal(alive, false, `the grandchild ${pid} survived the group kill`);
+      // Poll for the SIGKILL escalation instead of a fixed 3 s: the grandchild must be GONE, and a loaded machine can
+      // take longer than 3 s to reap it. A survivor (a group the kill missed) sleeps 60 s, past the 30 s ceiling.
+      const isAlive = () => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const until = Date.now() + 30000;
+      while (isAlive() && Date.now() < until) execFileSync("sleep", ["0.1"]);
+      assert.equal(isAlive(), false, `the grandchild ${pid} survived the group kill`);
     },
     { scripts: { test: "true" } }
   );
@@ -1187,7 +1193,9 @@ test("a SYMLINK or a FIFO at the results path is never followed or blocked on �
       cli(dir, initArgs());
       const t0 = Date.now();
       drainWith(dir, {});
-      assert.ok(Date.now() - t0 < 20000, `${mode}: the runner blocked`);
+      // A BLOCK is caught by drainWith's 60 s per-call bound (it throws); this total only has to stay below "forever"
+      // with headroom for a loaded machine's several calls, which can outrun 20 s (load-flake-regress).
+      assert.ok(Date.now() - t0 < 120000, `${mode}: the runner blocked`);
       assert.equal(stamp(dir).runs.find((r) => r.id === "test").results_sha256, null, mode);
     });
   }
@@ -2320,13 +2328,15 @@ test("audit P3-J — finalize REFUSES `tree-changed-between-gates` when the firs
   // Control (L34): the untouched record finalizes — every other test here drains one.
 });
 
-/** A gate that runs once for ~30 s (recording its pid under the git-ignored state root), and exits 0 at once after. */
+/** A gate that runs once until it is killed (recording its pid under the git-ignored state root), and exits 0 at once
+ *  after. It used to exit by itself after 30 s, which a loaded machine could reach before the test killed it
+ *  (load-flake-regress); every test that starts it kills it, in its `finally` at the latest. */
 const SLOW_GATE = `const fs = require("fs");
 fs.mkdirSync(".pharn/m", { recursive: true });
 if (fs.existsSync(".pharn/m/once")) process.exit(0);
 fs.writeFileSync(".pharn/m/once", "");
 fs.writeFileSync(".pharn/m/pid", String(process.pid));
-setTimeout(() => {}, 30000);
+setTimeout(() => {}, 600000);
 `;
 
 function alive(pid) {
@@ -2355,7 +2365,7 @@ async function startSlowRun(dir) {
   const runner = spawn(process.execPath, [CLI, ...runArgs()], { cwd: dir, stdio: "ignore" });
   const exited = new Promise((r) => runner.once("exit", (code, signal) => r({ code, signal })));
   const pidFile = join(dir, ".pharn/m/pid");
-  const up = await waitFor(() => existsSync(pidFile) && existsSync(join(dir, OUT, "lock.child")), 20000);
+  const up = await waitFor(() => existsSync(pidFile) && existsSync(join(dir, OUT, "lock.child")), 120000);
   assert.ok(up, "fixture: the slow gate never started");
   return { runner, exited, gate: Number(readFileSync(pidFile, "utf8")) };
 }
@@ -2415,7 +2425,7 @@ test("audit P3-P — SIGTERM, SIGINT and SIGHUP are FORWARDED to the gate's grou
       run.runner.kill(sig);
       const ex = await run.exited;
       assert.equal(ex.signal, sig, `${sig}: the runner must die by the signal it was sent`);
-      assert.ok(await waitFor(() => !alive(gate), 5000), `${sig}: the gate kept running after its runner was signalled`);
+      assert.ok(await waitFor(() => !alive(gate), 60000), `${sig}: the gate kept running after its runner was signalled`);
       assert.ok(!existsSync(join(dir, OUT, "lock")), `${sig}: the lock was left behind`);
       assert.ok(!existsSync(join(dir, OUT, "lock.child")), `${sig}: the sidecar was left behind`);
       const st = JSON.parse(readFileSync(join(dir, OUT, "state.json"), "utf8"));

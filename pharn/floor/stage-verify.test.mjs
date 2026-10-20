@@ -22,7 +22,6 @@ import {
   rmSync,
   symlinkSync,
   copyFileSync,
-  chmodSync,
   readdirSync,
   renameSync,
   realpathSync,
@@ -31,7 +30,7 @@ import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { EXIT_CODE, REGISTRY, allReasonCodes, validateStageExit, statusForExitCode, substituteArgv } from "./stage-exit-core.mjs";
 import { VERIFY_PATHS, PROGRESS_SCHEMA, PHASES, RESUMABLE_PHASES, validateProgress } from "./stage-verify-core.mjs";
 import { validateStamp, logBasename } from "./gate-run-core.mjs";
@@ -44,6 +43,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
 const COMMAND = join(REPO, ".claude", "commands", "pharn-verify.md");
 const CLI_SRC = join(HERE, "stage-verify.mjs");
+const VIRTUAL_CLOCK = join(HERE, "test-fixtures", "virtual-clock", "preload.mjs");
 const CHECK_LOOP_FRESH = join(HERE, "check-loop-fresh.mjs");
 const FEATURE = "demo";
 const FEATURE_DIR = `pharn/features/${FEATURE}`;
@@ -179,8 +179,8 @@ function withFixture(opts, fn) {
 }
 
 /** THE runner (G6). Runs the FIXTURE's own copy of the script, as an install does. */
-function runCli(dir, args, { env = CLEAN_ENV } = {}) {
-  const r = spawnSync(process.execPath, ["pharn/floor/stage-verify.mjs", ...args], { cwd: dir, encoding: "utf8", env });
+function runCli(dir, args, { env = CLEAN_ENV, nodeArgs = [] } = {}) {
+  const r = spawnSync(process.execPath, [...nodeArgs, "pharn/floor/stage-verify.mjs", ...args], { cwd: dir, encoding: "utf8", env });
   return checked(r);
 }
 
@@ -219,10 +219,18 @@ test("★ WIRING — pharn-verify.md's pinned fresh line, executed verbatim, rea
   assert.ok(Number(m[1]) < Number(m[2]) && Number(m[2]) < 600000, "N < B < 600000");
   const line = pinned[0].replaceAll("<name>", FEATURE).trim();
   assert.doesNotMatch(line, /<[a-z][^>]*>/, `an unsubstituted placeholder remains in: ${line}`);
+  // The pinned window is B − N of REAL time (30 s at 540000/570000), so under machine load the fresh line can stop at
+  // `5 continue`. The command's own answer to a 5 is its pinned --resume line, run until a terminal exit — the test
+  // runs exactly that, so the WIRING holds at any load and also executes the resume line (load-flake-regress).
+  const resumes = text.split(/\r?\n/).filter((l) => /^\s*node pharn\/floor\/stage-verify\.mjs --resume --budget-ms \d+\s*$/.test(l));
+  assert.equal(resumes.length, 1, `expected exactly one pinned --resume line in pharn-verify.md, found ${resumes.length}`);
+  const resume = resumes[0].trim();
 
   withFixture({}, ({ dir }) => {
     const start = Date.now();
-    const r = checked(spawnSync("sh", ["-c", line], { cwd: dir, encoding: "utf8", env: CLEAN_ENV }));
+    let r = checked(spawnSync("sh", ["-c", line], { cwd: dir, encoding: "utf8", env: CLEAN_ENV }));
+    for (let i = 0; i < 20 && r.code === 5; i++)
+      r = checked(spawnSync("sh", ["-c", resume], { cwd: dir, encoding: "utf8", env: CLEAN_ENV }));
     const wallMs = Date.now() - start;
     t.diagnostic(`★ WIRING wall time: ${wallMs} ms for the pinned line (discovered test gate + reconcile, legacy SPEC)`);
     assert.equal(r.code, 0, r.raw);
@@ -1110,27 +1118,16 @@ test("★ budget — --budget-ms 1 advances exactly ONE slow step per invocation
 });
 
 test("★ budget clock — the opening work counts: a slow first `git ls-files` exhausts a 2 s window; the old-clock mutant does not", () => {
-  const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
-  const run = (budgetMs, cliSource = null) => {
-    const shimDir = mkdtempSync(join(tmpdir(), "sv-gitshim-"));
-    const marker = join(shimDir, "slowed");
-    // ONLY the first `ls-files` of the run is slow — the stage's own pairs listing, before init; every later one
-    // (the runner's fingerprints) is fast, so the stop is the budget's reading of the OPENING work.
-    writeFileSync(
-      join(shimDir, "git"),
-      `#!/bin/sh\nif [ "$1" = ls-files ] && [ ! -f '${marker}' ]; then : > '${marker}'; sleep 3; fi\nexec "${realGit}" "$@"\n`
+  // THE CLOCK IS INJECTED (load-flake-regress): the stage process runs with the virtual-clock preload, so ONLY the first
+  // `git ls-files` (the stage's own pairs listing, before init) costs time — 3 s of it — and nothing else costs any. The
+  // old PATH shim slept for real, so the mutant's work AFTER the opening call had to fit a real 2 s window, which machine
+  // load broke (the recorded batch flake at ~:1112). The decision under test is still the code's alone.
+  const run = (budgetMs, cliSource = null) =>
+    withFixture({ cliSource }, ({ dir }) =>
+      runCli(dir, fresh(["--gates", "true::a,true::b", "--budget-ms", String(budgetMs)]), {
+        nodeArgs: ["--import", `${pathToFileURL(VIRTUAL_CLOCK).href}?git=ls-files&ms=3000&once=1`],
+      })
     );
-    chmodSync(join(shimDir, "git"), 0o755);
-    try {
-      return withFixture({ cliSource }, ({ dir }) =>
-        runCli(dir, fresh(["--gates", "true::a,true::b", "--budget-ms", String(budgetMs)]), {
-          env: { ...CLEAN_ENV, PATH: `${shimDir}:${CLEAN_ENV.PATH}` },
-        })
-      );
-    } finally {
-      rmSync(shimDir, { recursive: true, force: true });
-    }
-  };
   const stopped = run(32000);
   assert.equal(stopped.code, 5, stopped.raw);
   assert.equal(stopped.doc.phase, "drain");
@@ -1512,14 +1509,24 @@ test("★ WIRING (reuse, L45) — the COMMITTED pharn-regress.md and pharn-verif
     /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/
   );
   const verifyLine = pinnedLine(COMMAND, /^node pharn\/floor\/stage-verify\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/);
+  // Each command answers a `5 continue` with its pinned --resume line; the pinned window is 30 s of REAL time, so under
+  // machine load one fresh call can stop at 5 (measured: this test failed 3 of 3 under the load-flake-regress stress).
+  const regressResume = pinnedLine(REGRESS_COMMAND, /^\s*node pharn\/floor\/stage-regress\.mjs --resume --budget-ms \d+\s*$/);
+  const verifyResume = pinnedLine(COMMAND, /^\s*node pharn\/floor\/stage-verify\.mjs --resume --budget-ms \d+\s*$/);
+  const drained = (line, resume, opts) => {
+    let r = spawnSync("sh", ["-c", line], opts);
+    for (let i = 0; i < 20 && r.status === 5; i++) r = spawnSync("sh", ["-c", resume], opts);
+    return r;
+  };
   withReuseFixture({}, (fx) => {
     openDeliveryRun(fx.dir);
     // The fixture has no lockfile and no origin; the committed line resolves its own base (a dirty tree -> HEAD) and
     // its install question is answered with --no-install exactly as the command's question round-trip would.
-    const reg = spawnSync("sh", ["-c", `${regressLine} --no-install`], { cwd: fx.dir, encoding: "utf8", env: fx.env });
+    const opts = { cwd: fx.dir, encoding: "utf8", env: fx.env };
+    const reg = drained(`${regressLine} --no-install`, regressResume, opts);
     assert.equal(reg.status, 0, reg.stdout + reg.stderr);
     const from = counterLen(fx);
-    const ver = checked(spawnSync("sh", ["-c", verifyLine], { cwd: fx.dir, encoding: "utf8", env: fx.env }));
+    const ver = checked(drained(verifyLine, verifyResume, opts));
     assert.equal(ver.code, 0, ver.raw);
     assert.deepEqual(
       readReport(fx.dir).gate_reuse.reused.map((r) => r.id),
@@ -1527,4 +1534,15 @@ test("★ WIRING (reuse, L45) — the COMMITTED pharn-regress.md and pharn-verif
     );
     assert.ok(!spawned(fx, "verify", from).includes("typecheck"), "the committed lines reach the reuse path");
   });
+});
+
+test("the virtual-clock preload refuses a configuration it cannot honour, so a budget test never runs on the real clock", () => {
+  for (const query of ["", "?git=ls-files", "?git=ls-files&ms=0", "?ms=3000"]) {
+    const r = spawnSync(process.execPath, ["--import", `${pathToFileURL(VIRTUAL_CLOCK).href}${query}`, "-e", ""], {
+      encoding: "utf8",
+      env: CLEAN_ENV,
+    });
+    assert.notEqual(r.status, 0, `query ${JSON.stringify(query)} must not load`);
+    assert.match(r.stderr, /virtual-clock preload: needs \?git=/, query);
+  }
 });

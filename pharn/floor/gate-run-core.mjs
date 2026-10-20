@@ -191,6 +191,8 @@ export const REASON_CODES = Object.freeze([
   "lock-busy",
   "output-hash-mismatch",
   "path-containment",
+  "per-test-record-refused",
+  "per-test-unaccounted-red",
   "reconcile-not-last",
   "regress-verify-tree-mismatch",
   "report-malformed",
