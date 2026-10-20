@@ -21,3 +21,9 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    # codeql-action/init and /analyze must share one version; separate PRs fail
+    # Analyze with "Loaded a configuration file for version X, but running Y".
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"

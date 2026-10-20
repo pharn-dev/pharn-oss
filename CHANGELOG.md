@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-10-20: **Bump prettier to 3.9.10 and github/codeql-action to 4.39.0 (init and analyze together), and
+  group `github/codeql-action*` in Dependabot.** Dependabot's separate #352/#354 PRs each moved only one
+  CodeQL step and failed Analyze with a version mismatch; this PR applies both bumps plus prettier from #353.
+  No product-surface change; no `SKILLS_VERSION` bump.
+
 ## [6.71.3] - 2026-10-20
 
 ### Added
