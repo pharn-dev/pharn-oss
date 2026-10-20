@@ -173,6 +173,25 @@ node pharn/floor/check-verify.mjs --stamp <stamp.json> --feature <name>
 node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
 ```
 
+### `check-regress.mjs verdict --per-test` — one gate compared test by test (6.72.0)
+
+```bash
+# POSITIONAL PATH ONLY: the stamp path refuses the flags (usage-error, naming the follow-up regress-per-test-product),
+# so /pharn-regress and every product report are unchanged. /pharn-dev-regress passes them for its outside `tests` gate:
+# Step 2 runs `node --test` through .dev/floor/node-test-results-reporter.mjs on each side (an ABSOLUTE path into the
+# working tree — the base checkout has no reporter of its own), Step 3 adds the three flags. The files are
+# pharn-test-results/1 documents, read by test-results-core.mjs's readResultsFile + parseResults + buildRecord (one
+# grammar). For that gate, red on BOTH sides is a REGRESSION when a test failed at head whose base status is not
+# `failed` (passed / skipped / absent), or head has more suite errors; otherwise `pre_existing`. Every other row is
+# unchanged; the report adds `per_test` (regression-report.md). Fail-closed, exit 2: usage-error,
+# per-test-record-refused (unreadable, malformed, over a cap, failures under exit 0, an anomaly),
+# per-test-unaccounted-red (a red gate whose record shows no failure — L34). Why: a load-red base masked 11 real head
+# failures behind one `tests` exit code (.dev/features/frontmatter-parser-parity/REGRESSION.md). The trade is stated:
+# under load a test red at head only now reads as a regression (a false RED instead of a false GREEN).
+node pharn/floor/check-regress.mjs verdict <base.json> <head.json> --base <ref> --inside <list> \
+  --per-test tests --base-tests <base-tests.json> --head-tests <head-tests.json>
+```
+
 ## `stage-regress.mjs` — the /pharn-regress stage script
 
 ```bash

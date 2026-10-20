@@ -856,3 +856,270 @@ test("✧ P3-O(a) — check-regress.mjs keeps no private slug grammar: it import
   }
   assert.equal(run(["scope", "--changed", "src/a.ts", "--declared", "src/a.ts", "--feature", "my-feat"]).status, 0, "CONTROL");
 });
+
+// ------------------------------------------------------------------- verdict --per-test (6.72.0) ---
+// A gate red at base used to hide every NEW head failure behind `pre_existing` (load-flake-regress; the recorded run:
+// .dev/features/frontmatter-parser-parity/REGRESSION.md, 11 real head failures under a load-red base). With --per-test
+// the two `pharn-test-results/1` documents decide that row per test.
+
+const doc = (tests, suite_errors = 0) => ({
+  schema: "pharn-test-results/1",
+  suite_errors,
+  tests: tests.map(([file, title, status]) => ({ file, path: [title], status })),
+});
+const SLOW_RED = ["t/slow.test.mjs", "slow", "failed"]; // the load-red test, failed on both sides
+const B1_OK = ["t/b.test.mjs", "b1", "passed"];
+const B1_RED = ["t/b.test.mjs", "b1", "failed"];
+
+/** Writes the two maps and the two documents (a document `null` = no file; a string = raw bytes) and runs `verdict`
+ *  with --per-test over them, plus `extra` argv. */
+function perTest({ base, head, baseDoc, headDoc, extra = [], args = null }) {
+  const dir = mkdtempSync(join(tmpdir(), "regress-pt-"));
+  try {
+    const p = (n) => join(dir, n);
+    writeFileSync(p("base.json"), JSON.stringify(base));
+    writeFileSync(p("head.json"), JSON.stringify(head));
+    for (const [n, d] of [
+      ["base-tests.json", baseDoc],
+      ["head-tests.json", headDoc],
+    ]) {
+      if (d !== null) writeFileSync(p(n), typeof d === "string" ? d : JSON.stringify(d));
+    }
+    const argv = args
+      ? args(p)
+      : [
+          "verdict",
+          p("base.json"),
+          p("head.json"),
+          "--per-test",
+          "tests",
+          "--base-tests",
+          p("base-tests.json"),
+          "--head-tests",
+          p("head-tests.json"),
+          ...extra,
+        ];
+    return run(argv);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("★ per-test: a NEW head failure under a red base is a REGRESSION — the masking the exit-code row hid", () => {
+  const r = perTest({ base: { tests: 1 }, head: { tests: 1 }, baseDoc: doc([SLOW_RED, B1_OK]), headDoc: doc([SLOW_RED, B1_RED]) });
+  assert.equal(r.status, 1, r.stdout);
+  const o = json(r);
+  assert.equal(o.verdict, "regressions");
+  assert.deepEqual(o.regressions, ["tests"]);
+  assert.deepEqual(o.pre_existing, []);
+  assert.deepEqual(o.per_test.new_failures, [{ id: "t/b.test.mjs::b1", base: "passed" }]);
+  assert.equal(o.per_test.still_failing, 1);
+  assert.deepEqual(o.per_test.base, { passed: 1, failed: 1, skipped: 0, suite_errors: 0 });
+  assert.deepEqual(o.per_test.head, { passed: 0, failed: 2, skipped: 0, suite_errors: 0 });
+  // CONTROL: the same maps without --per-test read exactly what they always did — the masked verdict.
+  const dir = mkdtempSync(join(tmpdir(), "regress-pt-ctl-"));
+  try {
+    writeFileSync(join(dir, "b.json"), JSON.stringify({ tests: 1 }));
+    writeFileSync(join(dir, "h.json"), JSON.stringify({ tests: 1 }));
+    const c = json(run(["verdict", join(dir, "b.json"), join(dir, "h.json")]));
+    assert.equal(c.verdict, "no-regressions");
+    assert.deepEqual(c.pre_existing, ["tests"]);
+    assert.equal(Object.hasOwn(c, "per_test"), false, "no per_test block without the flags");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("per-test: the SAME failing set on both sides stays pre_existing (exit 0), and the block is reported", () => {
+  const r = perTest({ base: { tests: 1 }, head: { tests: 1 }, baseDoc: doc([SLOW_RED, B1_OK]), headDoc: doc([SLOW_RED, B1_OK]) });
+  assert.equal(r.status, 0, r.stdout);
+  const o = json(r);
+  assert.equal(o.verdict, "no-regressions");
+  assert.deepEqual(o.pre_existing, ["tests"]);
+  assert.deepEqual(o.per_test.new_failures, []);
+  assert.equal(o.per_test.still_failing, 1);
+});
+
+test("per-test: a head failure that was SKIPPED or ABSENT at base is new, and says which", () => {
+  for (const [baseRow, want] of [
+    [["t/b.test.mjs", "b1", "skipped"], "skipped"],
+    [null, "absent"],
+  ]) {
+    const baseDoc = doc(baseRow ? [SLOW_RED, baseRow] : [SLOW_RED]);
+    const r = perTest({ base: { tests: 1 }, head: { tests: 1 }, baseDoc, headDoc: doc([SLOW_RED, B1_RED]) });
+    assert.equal(r.status, 1, `${want}: ${r.stdout}`);
+    assert.deepEqual(json(r).per_test.new_failures, [{ id: "t/b.test.mjs::b1", base: want }]);
+  }
+});
+
+test("per-test: more suite errors at head than at base is a regression; the same count is not", () => {
+  const more = perTest({ base: { tests: 1 }, head: { tests: 1 }, baseDoc: doc([SLOW_RED]), headDoc: doc([SLOW_RED], 1) });
+  assert.equal(more.status, 1, more.stdout);
+  assert.deepEqual(json(more).per_test.new_failures, []);
+  const same = perTest({ base: { tests: 1 }, head: { tests: 1 }, baseDoc: doc([SLOW_RED], 1), headDoc: doc([SLOW_RED], 1) });
+  assert.equal(same.status, 0, same.stdout);
+});
+
+test("per-test: the other rows of the table are unchanged — 0/0 OK, 0/1 regression, 1/0 a fix (still listed pre_existing)", () => {
+  const green = doc([B1_OK]);
+  const red = doc([B1_RED]);
+  for (const [b, h, bd, hd, code, verdict, pre] of [
+    [0, 0, green, green, 0, "no-regressions", []],
+    [0, 1, green, red, 1, "regressions", []],
+    [1, 0, red, green, 0, "no-regressions", ["tests"]],
+  ]) {
+    const r = perTest({ base: { tests: b, validate: 0 }, head: { tests: h, validate: 0 }, baseDoc: bd, headDoc: hd });
+    assert.equal(r.status, code, `${b}/${h}: ${r.stdout}`);
+    const o = json(r);
+    assert.equal(o.verdict, verdict, `${b}/${h}`);
+    assert.deepEqual(o.pre_existing, pre, `${b}/${h}`);
+    assert.deepEqual(o.outside_gates.validate, { base: 0, head: 0 }, "another gate is untouched");
+  }
+});
+
+test("★ per-test FAIL-CLOSED: every refusal is inconclusive exit 2 with its reason code, never a classification", () => {
+  const ok = doc([SLOW_RED, B1_OK]);
+  const both = { base: { tests: 1 }, head: { tests: 1 } };
+  const cases = [
+    [
+      "only two of the three flags",
+      {
+        ...both,
+        baseDoc: ok,
+        headDoc: ok,
+        args: (p) => ["verdict", p("base.json"), p("head.json"), "--per-test", "tests", "--base-tests", p("base-tests.json")],
+      },
+      "usage-error",
+    ],
+    [
+      "a flag with no value",
+      {
+        ...both,
+        baseDoc: ok,
+        headDoc: ok,
+        args: (p) => [
+          "verdict",
+          p("base.json"),
+          p("head.json"),
+          "--base-tests",
+          p("base-tests.json"),
+          "--head-tests",
+          p("head-tests.json"),
+          "--per-test",
+        ],
+      },
+      "usage-error",
+    ],
+    [
+      "a flag whose value is the next flag",
+      {
+        ...both,
+        baseDoc: ok,
+        headDoc: ok,
+        args: (p) => [
+          "verdict",
+          p("base.json"),
+          p("head.json"),
+          "--per-test",
+          "--base-tests",
+          p("base-tests.json"),
+          "--head-tests",
+          p("head-tests.json"),
+        ],
+      },
+      "usage-error",
+    ],
+    ["the gate is in neither map", { base: { validate: 1 }, head: { validate: 1 }, baseDoc: ok, headDoc: ok }, "usage-error"],
+    ["a base record that is absent", { ...both, baseDoc: null, headDoc: ok }, "per-test-record-refused"],
+    ["a head record that is not JSON", { ...both, baseDoc: ok, headDoc: "{not json" }, "per-test-record-refused"],
+    [
+      "a record of another schema",
+      { ...both, baseDoc: ok, headDoc: { schema: "x/1", suite_errors: 0, tests: [] } },
+      "per-test-record-refused",
+    ],
+    [
+      "a failed test under exit 0 (the builder's exit cross-check)",
+      { base: { tests: 0 }, head: { tests: 1 }, baseDoc: ok, headDoc: ok },
+      "per-test-record-refused",
+    ],
+    [
+      "a test with a status outside the closed set (an anomaly)",
+      { ...both, baseDoc: ok, headDoc: doc([SLOW_RED, ["t/b.test.mjs", "b1", "flaky"]]) },
+      "per-test-record-refused",
+    ],
+    ["★ L34: a red gate whose record accounts for no failure", { ...both, baseDoc: ok, headDoc: doc([B1_OK]) }, "per-test-unaccounted-red"],
+    ["★ L34: the same on the base side, an EMPTY record", { ...both, baseDoc: doc([]), headDoc: ok }, "per-test-unaccounted-red"],
+  ];
+  for (const [label, opts, code] of cases) {
+    const r = perTest(opts);
+    assert.equal(r.status, 2, `${label}: ${r.stdout}`);
+    const o = json(r);
+    assert.equal(o.verdict, "inconclusive", label);
+    assert.equal(o.reason_code, code, `${label}: ${o.reason}`);
+  }
+});
+
+test("★ per-test is REFUSED on the stamp path — /pharn-regress's wiring is a named follow-up, not a silent no-op", () => {
+  const dir = mkdtempSync(join(tmpdir(), "regress-pt-stamp-"));
+  try {
+    const r = run([
+      "verdict",
+      "--base-stamp",
+      join(dir, "b"),
+      "--head-stamp",
+      join(dir, "h"),
+      "--base",
+      SHA,
+      "--per-test",
+      "test",
+      "--base-tests",
+      join(dir, "x"),
+      "--head-tests",
+      join(dir, "y"),
+    ]);
+    assert.equal(r.status, 2);
+    assert.equal(json(r).reason_code, "usage-error");
+    assert.match(json(r).reason, /regress-per-test-product/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ L60 NEGATIVE CONTROL — with the new-failure rule removed, the masked case reads no-regressions again", () => {
+  // The fixture is a scratch copy of check-regress.mjs and its import closure, never a write to the repo.
+  const dir = mkdtempSync(join(tmpdir(), "regress-pt-mut-"));
+  try {
+    const seen = new Set();
+    const queue = ["check-regress.mjs"];
+    while (queue.length) {
+      const m = queue.shift();
+      if (seen.has(m)) continue;
+      seen.add(m);
+      for (const [, from, bare] of readFileSync(join(here, m), "utf8").matchAll(
+        /from "\.\/([a-z0-9-]+\.mjs)"|import "\.\/([a-z0-9-]+\.mjs)"/g
+      ))
+        queue.push(from ?? bare);
+    }
+    for (const m of seen) writeFileSync(join(dir, m), readFileSync(join(here, m)));
+    const src = readFileSync(join(here, "check-regress.mjs"), "utf8");
+    const anchor = "(perTestCmp.new_failures.length || perTestCmp.suite_errors_added)";
+    assert.ok(src.includes(anchor), "mutation anchor not found");
+    writeFileSync(join(dir, "check-regress.mjs"), src.replace(anchor, "(perTestCmp.suite_errors_added)"));
+    const tmp = mkdtempSync(join(tmpdir(), "regress-pt-mutin-"));
+    try {
+      const p = (n) => join(tmp, n);
+      writeFileSync(p("b.json"), JSON.stringify({ tests: 1 }));
+      writeFileSync(p("h.json"), JSON.stringify({ tests: 1 }));
+      writeFileSync(p("bt.json"), JSON.stringify(doc([SLOW_RED, B1_OK])));
+      writeFileSync(p("ht.json"), JSON.stringify(doc([SLOW_RED, B1_RED])));
+      const argv = ["verdict", p("b.json"), p("h.json"), "--per-test", "tests", "--base-tests", p("bt.json"), "--head-tests", p("ht.json")];
+      const mutant = spawnSync(process.execPath, [join(dir, "check-regress.mjs"), ...argv], { encoding: "utf8" });
+      assert.equal(JSON.parse(mutant.stdout).verdict, "no-regressions", "the mutant masks the new failure");
+      assert.equal(json(run(argv)).verdict, "regressions", "the real checker does not");
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
