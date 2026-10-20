@@ -2409,3 +2409,18 @@ type: contract · concepts: [doc-drift, single-source, restatement, lesson-recur
 - commit: `e940ff2685ba7c1c8245e5e8e22c13299db8788a`
 - source: .dev/features/subagent-per-lens-sweep/REVIEW.md R1 + § Lesson candidate; .dev/features/subagent-per-lens-sweep/GRILL.md P3 (Coupling)
 - promoted: 2026-10-19 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L77 — A dependency-direction rule forbids one arrow, not both — before keeping a copy-pair because an install strips one side, check whether the stripped side can import the shipped one
+
+type: process · concepts: [dev-product-boundary, dependency-direction, redundant-identity, remedy-design, lesson-correction]
+
+**Lesson.** A dependency-direction constraint forbids one arrow, never both. [[L35]] cited the `check-provenance` and `lessons-index-core` dev/product pairs as copies that must both exist, "which cannot be merged because a user's install ships `pharn/floor/` without `.dev/`", and [[L31]] described them as deliberate copy-pairs. That reason forbids only an import from `pharn/` into `.dev/`. The other direction was already in use (at the parent of 6.69.0, nine non-test `.dev/floor/*.mjs` files imported `pharn/floor/runtime-floor.mjs`), and `lessons-canon-root` (6.69.0) merged both pairs by making the four `.dev/floor/` lessons files thin wrappers over the product modules, with a closure test that refuses any grammar declaration in a wrapper. Remedy: before keeping a copy-pair "because the install strips one side", check whether the stripped side can import the shipped one; if it can, the copy is L35's redundant second copy, not L31's obligatory pair.
+
+**Why it matters.** This corrects the example both lessons rest on, not their rules. L35's question ("must the second copy exist?") was right, and its own example answered it wrongly because the reason given was never tested against the arrow it actually forbids. L31's rule still governs copies that genuinely must both exist, and the obligation set it asked for still stands as `LESSONS_SWEEP_WIRING`; but its named code pairs are no longer copies. A reader of L31 or L35 alone still meets the stale example, because canon is append-only by this command: read them together with this entry. **Bound (P0):** discipline only; nothing checks which import directions a copy-pair's stated reason rules out. **Honest trigger (P7):** the stale reason was found while applying L35 in `lessons-canon-root`'s PLAN ("Applied lessons", L35) and recorded in its `REVIEW.md` "Proposed lesson candidate".
+
+**Provenance.**
+
+- feature: `lessons-canon-root`
+- commit: `54171c3d774038e6c9386d44e478d575df347311`
+- source: .dev/features/lessons-canon-root/REVIEW.md § Proposed lesson candidate + .dev/features/lessons-canon-root/SHIP.md lesson: deferred
+- promoted: 2026-10-20 via gated `/pharn-dev-memory-promote` (human-approved).

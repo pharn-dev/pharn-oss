@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-20: **Lesson L77 corrects the example L31 and L35 rest on.** Both called the `check-provenance` and
+  `lessons-index-core` dev/product pairs copies that could not be merged because an install ships `pharn/floor/`
+  without `.dev/`; that reason forbids only the `pharn/` → `.dev/` import, and 6.69.0 merged both pairs as `.dev/`
+  wrappers. L77 was promoted through `/pharn-dev-memory-promote` with the maintainer's accept, and
+  `docs/lessons-index.md` was regenerated. L31 and L35 are unchanged (canon is append-only). Dev-only: no
+  `SKILLS_VERSION` bump.
+
 ### Changed
 
 - 2026-10-20: **Bump prettier to 3.9.10 and github/codeql-action to 4.39.0 (init and analyze together), and
