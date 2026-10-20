@@ -271,7 +271,7 @@ Named and bounded, per `LIMITS.md` register.
    intellectual change size. `files changed` correlates with cost essentially not at all (r = 0.055) — a warning
    that both size proxies are crude.
 6. **The $6.21 fixed floor is a fitted intercept — inferred, not measured.** With churn spanning 2→3,772 lines
-   over 23 points it is an extrapolation toward zero. The *measured* floor evidence is PR #98 ($3.58 for 2 lines)
+   over 23 points it is an extrapolation toward zero. The _measured_ floor evidence is PR #98 ($3.58 for 2 lines)
    and PR #100 ($9.95 for 55 lines).
 7. **r² = 0.409 leaves 59% of cost variance unexplained**, and the residual is **not** attributed to fan-out here.
    Iteration count, task difficulty, and human back-and-forth are uncontrolled.
@@ -301,7 +301,7 @@ Revisit only if a workload appears where reads stop dominating** (the nested 10.
 
 ### Fan-out proportionality — **§3a's severity does not justify automatic breadth-scaling; `quick-mode` is adequate**
 
-The per-line penalty is real (18.1×) and the floor is real ($3.58 for one line). But the *absolute* stake is small:
+The per-line penalty is real (18.1×) and the floor is real ($3.58 for one line). But the _absolute_ stake is small:
 the entire fixed component across 23 features is **$142.75**, and the median feature is $17.59. Automatic
 breadth-scaling by change size would key on `churn`, and `churn` explains only 41% of cost variance while
 `files changed` explains ~0 — **the signal an automatic scaler would need is not reliable enough to scale on**,

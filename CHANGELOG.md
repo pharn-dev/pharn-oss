@@ -32,6 +32,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `docs/lessons-index.md` was regenerated. L31 and L35 are unchanged (canon is append-only). Dev-only: no
   `SKILLS_VERSION` bump.
 
+### Changed
+
+- 2026-10-20: **Bump prettier to 3.9.10 and github/codeql-action to 4.39.0 (init and analyze together), and
+  group `github/codeql-action*` in Dependabot.** Dependabot's separate #352/#354 PRs each moved only one
+  CodeQL step and failed Analyze with a version mismatch; this PR applies both bumps plus prettier from #353.
+  Prettier 3.9.10 also rewrites two `*italic*` spans to `_italic_` in
+  `.dev/measurements/token-cost-2026-08-18.md` (format:check RED otherwise). No product-surface change; no
+  `SKILLS_VERSION` bump.
+
 ## [6.71.3] - 2026-10-20
 
 ### Added
