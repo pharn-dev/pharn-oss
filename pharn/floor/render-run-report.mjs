@@ -929,7 +929,7 @@ function notMeasuredLines(report, stage) {
 /** The two reports' closed verdict enums (check-verify.mjs, check-regress.mjs), restated ONLY as the render guard, as
  *  AC_VERDICTS is below. A verdict is the one untrusted value this section puts in an INLINE span, and a string can
  *  carry a newline an inline span cannot hold (the header's EXCEPTION), so only a member is rendered inline. A THIRD
- *  copy (check-loop.mjs and check-ship.mjs keep their own; none is exported), accepted because drift fails SAFE: a
+ *  copy (check-loop.mjs and .dev/floor/check-ship.mjs keep their own; none is exported), accepted because drift fails SAFE: a
  *  verdict added upstream renders `unknown` here, with its value quoted — never inline, never dropped. */
 const VERIFY_VERDICTS = new Set(["FAIL", "INCOMPLETE", "INCONCLUSIVE", "PASS"]);
 const REGRESS_VERDICTS = new Set(["inconclusive", "no-regressions", "regressions"]);

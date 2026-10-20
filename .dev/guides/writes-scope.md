@@ -188,7 +188,7 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   - **Operator flags precede the mode.** `--allow-claude-dir` / `--allow-pharn-surface` / `--allow-exec-config` after
     `--from-plan` / `--from-frontmatter` is refused, so a pre-approved line ending in `*` cannot carry an opt-in.
     Pass them first: `node .claude/hooks/set-writes-scope.cjs --allow-claude-dir --from-plan <PLAN.md>`.
-- **One more refusal (6.69.0, hook-hardening-batch — review SEC-5).** In an installed project a `--from-plan` scope
+- **One more refusal (6.70.0, hook-hardening-batch — review SEC-5).** In an installed project a `--from-plan` scope
   naming a CI workflow (`.github/workflows/**`) or a git hooks directory (`.husky/**`, and every `core.hooksPath`
   inside the project) writes nothing and exits 1, unless `--allow-exec-config` is passed before the mode. Code there
   runs after the run that wrote it (the next push, the next git command), which is what the refusal is about; it is

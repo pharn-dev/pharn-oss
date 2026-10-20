@@ -519,7 +519,7 @@ test("★ 6.59.0 — a signal exit the runner did NOT cause, and exits 2/125, st
 
 test("★ 6.59.0 — the POSITIONAL map keeps its table: 124/126/127 are plain failures there (the dev twin is unchanged)", () => {
   // The positional map carries exits alone — nothing says how a run ended — so the new row never fires there, and
-  // /pharn-dev-verify (which types the map) and check-ship.mjs see byte-identical output.
+  // /pharn-dev-verify (which types the map) and .dev/floor/check-ship.mjs see byte-identical output.
   withResults({ test: 124, lint: 127, build: 126 }, (p) => {
     const r = run([p, "--feature", "demo"]);
     assert.equal(r.status, 1);

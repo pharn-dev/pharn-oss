@@ -1,14 +1,14 @@
 // pharn/floor/render-cost-ledger.test.mjs — hermetic tests for the cost-ledger emitter.
 //
 // THE COMMITTED FIXTURES THIS FILE STAGES, and their provenance is deliberately different:
-//   * `fixtures/cost-ledger/single-session.jsonl` — DERIVED from this repo's own `loop-decision-integrity`
+//   * `test-fixtures/cost-ledger/single-session.jsonl` — DERIVED from this repo's own `loop-decision-integrity`
 //     run, stripped to `usage` + ids. Real numbers, so the ✧ parity test below compares two
 //     implementations over bytes a platform actually wrote.
-//   * `fixtures/cost-ledger/with-subagents/` — HAND-AUTHORED from the observed record shape. No third-party
+//   * `test-fixtures/cost-ledger/with-subagents/` — HAND-AUTHORED from the observed record shape. No third-party
 //     transcript bytes are committed. It exists because the real `loop-decision-integrity` transcript has
 //     ZERO sidechain records, so it structurally cannot exercise the subagent path — the L41/L34 blind
 //     spot, closed here rather than named and left.
-//   * `fixtures/cost-ledger/usage-snapshots/` — HAND-AUTHORED from three measured records whose transcript
+//   * `test-fixtures/cost-ledger/usage-snapshots/` — HAND-AUTHORED from three measured records whose transcript
 //     lines DISAGREE (6.24.1); described where the reader's own tests live, transcript-core.test.mjs.
 // (`session-continued.jsonl`, the fourth, is check-cost-ledger.test.mjs's.)
 //
@@ -67,7 +67,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "render-cost-ledger.mjs");
 const RECORD_CLI = join(HERE, "render-cost-record.mjs");
 const CHECK_CLI = join(HERE, "check-cost-ledger.mjs");
-const FIXTURES = join(HERE, "fixtures", "cost-ledger");
+const FIXTURES = join(HERE, "test-fixtures", "cost-ledger");
 const REAL_SESSION = "51a7441d-0e03-4066-8d1c-be5a2d419121";
 const SUB_SESSION = "00000000-0000-4000-8000-00000000cafe";
 
@@ -806,7 +806,7 @@ test("✧ PARITY: ledger totals equal render-cost-record totals over the SAME by
 
 // ---------------------------------------------------------------- ★ completed usage (6.24.1)
 //
-// `fixtures/cost-ledger/usage-snapshots/` (described in transcript-core.test.mjs, where the rule's own
+// `test-fixtures/cost-ledger/usage-snapshots/` (described in transcript-core.test.mjs, where the rule's own
 // tests live) holds one request written as 8, 8, 163, one re-appended later with zeroed counts, and one
 // whose early line a forked subagent's transcript copies. These tests pin what the LEDGER does with them:
 // the ledger is a consumer of the one owner, and L52's set is every consumer, not the owner alone.
@@ -1923,7 +1923,7 @@ test("LAYOUT (L41): the file write AND --stdout both emit exactly serializeLedge
 
 // ── ROUTED STAGES (6.27.0, stage-model-routing) — `markers[].route` and a stage agent's rows ─────────────
 //
-// `fixtures/cost-ledger/with-routed-stage/` — HAND-AUTHORED in the 2.1.281 record shape the plan's Discovery
+// `test-fixtures/cost-ledger/with-routed-stage/` — HAND-AUTHORED in the 2.1.281 record shape the plan's Discovery
 // read (identity fields only): a parent session on `claude-opus-5-5`, and ONE stage agent's file on
 // `claude-sonnet-5` whose records carry BOTH `agentId` (the id) and `attributionAgent: "general-purpose"`
 // (the agent TYPE, which 2.1.281 writes there), plus the `agent-<id>.meta.json` sibling the platform writes.

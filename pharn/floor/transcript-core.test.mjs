@@ -9,7 +9,7 @@
 // The marked groups:
 //   ★ COMPLETED USAGE — the lines of one request need not carry the same usage (measured 2026-09-26), so a
 //     request's usage is its line with the greatest `output_tokens`. Pinned over
-//     `fixtures/cost-ledger/usage-snapshots/`, which holds the three measured shapes that the old first-line
+//     `test-fixtures/cost-ledger/usage-snapshots/`, which holds the three measured shapes that the old first-line
 //     rule gets wrong or a last-line rule would.
 //   ★ IDENTITY — a request's identity and timestamp are its FIRST line's, so membership and attribution,
 //     which key on the timestamp, do not move with the usage.
@@ -97,7 +97,7 @@ test("transcriptFiles returns .jsonl only, sorted, and skips an unreadable subtr
 
 // ─── ★ COMPLETED USAGE — the lines of one request need not agree (6.24.1) ────────────────────────────
 //
-// `fixtures/cost-ledger/usage-snapshots/` is HAND-AUTHORED from records measured on real transcripts on
+// `test-fixtures/cost-ledger/usage-snapshots/` is HAND-AUTHORED from records measured on real transcripts on
 // 2026-09-26 (.dev/measurements/cost-dedup-usage-2026-09-26.md). A, B and C copy the numbers and the usage
 // shape of three measured requests; D and E are ordinary lines with chosen numbers:
 //   A req_fx_snapshots    — three lines reading output 8, 8, 163; the first two carry no thinking detail
@@ -109,7 +109,7 @@ test("transcriptFiles returns .jsonl only, sorted, and skips an unreadable subtr
 // reads all three right.
 
 const SNAP_SESSION = "00000000-0000-4000-8000-00000000beef";
-const SNAP_FIXTURE = join(here, "fixtures", "cost-ledger", "usage-snapshots");
+const SNAP_FIXTURE = join(here, "test-fixtures", "cost-ledger", "usage-snapshots");
 const SNAP_PARENT = join(SNAP_FIXTURE, `${SNAP_SESSION}.jsonl`);
 const SNAP_FORK = join(SNAP_FIXTURE, SNAP_SESSION, "subagents", "agent-fff3333333333333.jsonl");
 

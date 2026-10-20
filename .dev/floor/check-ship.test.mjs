@@ -1,4 +1,4 @@
-// pharn/floor/check-ship.test.mjs — hermetic tests for the `/ship --loop` stop-decision core.
+// .dev/floor/check-ship.test.mjs — hermetic tests for the `/pharn-dev-ship --loop` stop-decision core.
 //
 // NO `claude -p`, NO git, NO network. The decision reads two small report objects ({verdict, …}) we
 // compose in an os.tmpdir() scratch dir + two integer flags. We assert the public surface (exit code +
@@ -183,9 +183,9 @@ test("fail-closed: a known flag missing its value → INCONCLUSIVE, exit 2", () 
 // pharn/pharn-contracts/verify-report.md lists, per consumer, the `verdict` set it accepts; check-ship.mjs restates its
 // own in VERIFY_VERDICTS. The CLI runs main() on import, so the set is read where the checker states it: its refusal of
 // an off-contract verdict prints `is not one of {…}` from the very Set it tests membership in. Set EQUALITY (L36), so an
-// extra value on either side fails. Written to survive a move of this checker and its test (group L, 2026-10-19
-// batch): the contract is found by walking up to the directory that holds it, and the row is matched by the basename
-// `check-ship.mjs`, not by its path. Removing the row fails loudly, which is what a binding is for. BOUND (L43): it
+// extra value on either side fails. It survived the move of this checker and its test from pharn/floor/ to
+// .dev/floor/ (6.67.2): the contract is found by walking up to the directory that holds it, and the row is matched by
+// the basename `check-ship.mjs`, not by its path. Removing the row fails loudly, which is what a binding is for. BOUND (L43): it
 // certifies agreement between the contract and the code, never that the set is right.
 function findContract(rel) {
   for (let d = here; ; d = dirname(d)) {

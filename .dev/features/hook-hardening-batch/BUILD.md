@@ -118,3 +118,20 @@ run end to end: no checkout holds G yet. Its two string tests are in `main()`.
   - The hook suites alone: 525 / 525.
 - In this worktree, unpatched: the three hook test files ran 462 tests, 425 pass, and 37 fail, all of them the new or
   changed tests listed above.
+
+## After merging origin/main (2026-10-20, before the apply)
+
+- The orchestrator approved route A1 (REVIEW). As step 1, the agent-written half was committed and `origin/main`
+  (`038d71d8`, 6.68.1) was merged in. That brought group G's 6.68.0 (#369) and the README slim (#371).
+- Conflicts were limited to `CHANGELOG.md`, `SKILLS_VERSION` and the README badge, and all three were resolved.
+  `[6.69.0]` is taken by #372, so this increment was renumbered **6.70.0**: the CHANGELOG heading, `SKILLS_VERSION`, the
+  badge, `pharn/floor/README.md` and the dev guide. Nothing in `apply.py` names this release's number, so its hashes did
+  not move.
+- **The five targets after the merge:** each one's sha256 equals its pinned BEFORE hash (no merged PR touched them).
+- **`apply.py`'s G check now passes:** one `## [6.68.0]` heading, `other_gates` present in `test-infra-core.mjs`.
+- **A read-only precheck** (`.pharn/hhb-tools/precheck.py`, which imports `apply.py` and calls `patched()` without
+  writing) reported every result equal to its pinned AFTER hash: `PRECHECK OK`.
+- **No README cite to repoint:** neither the patched prose nor this increment's records cite a README section that #371
+  moved.
+- The build's reconcile epoch is now stale (the merge happened after the anchor). REVIEW A1 steps 3–4 open a fresh one
+  after the applied files are committed.

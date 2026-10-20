@@ -38,8 +38,9 @@
 // H2 wB: a build scoped to it wrote a reporter that said `passed`). `package.json` / `pharn.config.json` get an ADVISORY
 // `NOTE —` line and no RED, never changing the exit code: the build may legitimately change a dependency, and this
 // checker cannot see WHICH part of the file the build will change — every part the pin reads (the level gates'
-// scripts, the scripts they chain to, the `jest` key, the `testResults` formats and, since 6.36.0, the `gates.exclude`
-// list) is still compared at verify.
+// scripts, the scripts they chain to, the `jest` key, the `testResults` formats, since 6.36.0 the `gates.exclude`
+// list, and since 6.68.0 every other allowlisted gate's script with its pre/post and chained scripts — audit SEC-4) is
+// still compared at verify, after the gates have run (detection, never prevention).
 //
 // THE FEATURE'S OWN AC ARTIFACTS STAY OUT OF THE BUILD'S SCOPE (6.31.0, `ac-artifact-in-plan`): a PLAN.md `## Files`
 // entry the setter would scope to THIS feature's AC-TESTS.md or AC-TESTS.lock.json is RED. The lock is what the AC gate
@@ -298,7 +299,7 @@ export function checkMapping({ acTestsText, specText, planText, others, acArtifa
       );
     } else if (kind === "manifest") {
       notes.push(
-        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts, the scripts they chain to, package.json's \`jest\` key, the \`testResults\` formats or the \`gates.exclude\` list /pharn-test pinned — that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
+        `PLAN.md \`## Files\` names ${shown(entry)}: the build may change it (a dependency, say), but not the level gates' scripts, their pre/post scripts, the scripts they chain to, package.json's \`jest\` key, the \`testResults\` formats, the \`gates.exclude\` list or (6.68.0) any other allowlisted gate's script (lint, typecheck, build, …), its pre/post scripts or the scripts it chains to — adding one included — that /pharn-test pinned; that reads test-infra-changed at /pharn-verify. ADVISORY: this checker cannot see which part the build will change.`
       );
     } else if (k !== null && namedKeys.has(k)) {
       red(
