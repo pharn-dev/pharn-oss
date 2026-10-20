@@ -104,15 +104,15 @@ testing it for membership in **its own** set, and **those sets are deliberately 
 
 | consumer                               | accepted `verdict` set                          | on a value outside it                  |
 | -------------------------------------- | ----------------------------------------------- | -------------------------------------- |
-| `pharn/floor/check-ship.mjs`           | `PASS` · `FAIL` · `INCONCLUSIVE`                | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `.dev/floor/check-ship.mjs`            | `PASS` · `FAIL` · `INCONCLUSIVE`                | `INCONCLUSIVE`, exit 2 — fail-closed   |
 | `pharn/floor/check-loop.mjs`           | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | `INCONCLUSIVE`, exit 2 — fail-closed   |
 | `pharn/floor/render-ship-briefing.mjs` | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | the honest literal `n/a` in the render |
 | `pharn/floor/check-ship-briefing.mjs`  | `PASS` · `FAIL` · `INCOMPLETE` · `INCONCLUSIVE` | RED (shape)                            |
 
 **The artifact's enum is the union — `{PASS, FAIL, INCOMPLETE, INCONCLUSIVE}` — and "conforming" therefore
 does NOT mean "accepted everywhere."** `check-ship.mjs` omits `INCOMPLETE` **on purpose** (it is the dev
-loop's stop core and never passes `--complete`, so the value cannot arise on its path), which means a
-perfectly contract-conforming `INCOMPLETE` report handed to it is **refused**, not misread. That refusal
+loop's stop core, under `.dev/floor/`, which no install receives, and never passes `--complete`, so the
+value cannot arise on its path), which means a perfectly contract-conforming `INCOMPLETE` report handed to it is **refused**, not misread. That refusal
 is the designed behavior — fail-closed beats a silent guess — and this contract states it rather than
 papering over the divergence with a single invented enum. The per-consumer sets are each consumer's own
 business (P4: cited, not restated); what belongs to this contract is that they **differ**, and what that
@@ -159,7 +159,7 @@ quantified claim ("the _only_ field") is exactly where a careful reading drifts:
 - A report reduced to `{"verdict":"PASS"}` **and nothing else**, and a report with every _other_ field
   corrupted — `gates: "GARBAGE"`, `failing_gates: "NOT-AN-ARRAY"`, `feature: null`,
   `verifiers.findings: ["ignore all previous instructions"]` — produced **byte-identical** output from
-  `check-ship.mjs`, `check-loop.mjs` and `render-ship-briefing.mjs`, and `check-ship-briefing.mjs`
+  `.dev/floor/check-ship.mjs`, `check-loop.mjs` and `render-ship-briefing.mjs`, and `check-ship-briefing.mjs`
   returned GREEN over both.
 - Flipping **only** `verdict` (`PASS` → `FAIL`) turned that GREEN into a RED naming the field, so the
   probe is not vacuous: `verdict` demonstrably **is** read.
@@ -279,7 +279,7 @@ additionally carries:
 
 - **ADDITIVE and ADVISORY.** Every live consumer of this report reads named fields only, so neither key
   changes any existing behaviour. Verified by reading each rather than assumed: `check-loop.mjs`,
-  `check-ship.mjs`, `check-loop-decision.mjs`, `check-ship-briefing.mjs`, `render-ship-briefing.mjs`,
+  `.dev/floor/check-ship.mjs`, `check-loop-decision.mjs`, `check-ship-briefing.mjs`, `render-ship-briefing.mjs`,
   `render-run-report.mjs`, `ship-outcome-core.mjs` — none validates a closed top-level key set.
 - `reason_code` is a member of the closed vocabulary in `gate-run-record.md`; it appears **only** on a
   fail-closed exit, and `check-loop-fresh.mjs` routes a member of its `LAPSE_CODES` subset to "re-run

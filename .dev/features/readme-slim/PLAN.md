@@ -108,7 +108,7 @@ Searched (tracked files, excluding `CHANGELOG.md` released entries and `.dev/fea
 pipeline" and moved the generated floor count to 140. The merge carries that subsection into `docs/pipeline.md` at
 the same place, regenerates the CURRENT-STATE block, and renumbers this change to **6.66.1**. The verbatim check was
 re-run against `origin/main:README.md` (82,330 bytes); README after: 24,851 bytes. `main` then moved to 6.67.1
-(badge and generated count only, in README), so a second merge renumbered this change to **6.67.2**.
+(badge and generated count only, in README), so a second merge renumbered this change to **6.67.2**, and a third (main at 6.67.2, #368) to **6.67.3**.
 
 ## Open questions
 

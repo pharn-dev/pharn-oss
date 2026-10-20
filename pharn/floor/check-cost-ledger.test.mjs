@@ -34,7 +34,7 @@ import { markerLine } from "./mark-phase.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "check-cost-ledger.mjs");
-const FIXTURES = join(HERE, "fixtures", "cost-ledger");
+const FIXTURES = join(HERE, "test-fixtures", "cost-ledger");
 const REAL_SESSION = "51a7441d-0e03-4066-8d1c-be5a2d419121";
 
 /**
@@ -1048,7 +1048,7 @@ test("deriveLedger returns renderLedger's ledger BYTE-FOR-BYTE, plus the after-w
 // ===================================================================================================
 // --verify-transcript at each request's COMPLETED usage (6.24.1)
 //
-// `fixtures/cost-ledger/usage-snapshots/` holds requests whose transcript lines disagree (described in
+// `test-fixtures/cost-ledger/usage-snapshots/` holds requests whose transcript lines disagree (described in
 // transcript-core.test.mjs). `--verify-transcript` reaches the one owner of the counting rule through
 // `deriveLedger`, and compares ROW by row: the four classes that do not grow across a request's lines
 // exactly, `output` / `output_thinking` as recorded <= re-derived ([[L58]], [[L63]]). Below is a WARN, not

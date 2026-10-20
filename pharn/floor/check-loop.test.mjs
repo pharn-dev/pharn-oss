@@ -2,7 +2,7 @@
 //
 // NO `claude -p`, NO git, NO network. The decision reads two small report objects ({verdict, …}) we
 // compose in an os.tmpdir() scratch dir + two integer flags. We assert the public surface (exit code +
-// stdout JSON) by subprocess, mirroring check-ship.test.mjs / check-verify.test.mjs.
+// stdout JSON) by subprocess, mirroring .dev/floor/check-ship.test.mjs / check-verify.test.mjs.
 //
 // The ★ tests are load-bearing — they are the whole reason an UNATTENDED `/pharn-loop` is legal (P0):
 //   • any measurable red (verify FAIL / INCOMPLETE, a regression) under the cap → CONTINUE (3); at the
