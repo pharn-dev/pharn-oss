@@ -66,7 +66,7 @@ node pharn/floor/check-structural.mjs <expected.json> <actual.json> [repoDir]
 # this checker used to gate the FIRST copy while YAML and frontmatter-core.mjs `readField` keep the LAST, so
 # `none` followed by `[L9999]` was GREEN. The RED names counts and regions only, never a value. A line in the
 # body or inside a header fence is still not a declaration (L6). The LOOP.md / BRIEFING.md envelope readers
-# do NOT refuse a repeat (they agree on the last copy); that refusal is a named follow-up.
+# refuse ANY repeated key since 6.71.3 (frontmatter-core.mjs frontmatterEntries; see floor-orchestration.md).
 node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 ```
 

@@ -125,6 +125,33 @@ test("extra frontmatter keys and extra body sections are IGNORED, not RED", () =
   assert.equal(r.status, 0, r.out);
 });
 
+// ── ★ a repeated envelope key (6.71.3, envelope-duplicate-keys) ──────────────────────────────────────────
+// Each case appends ONE line to a record that is GREEN as built (the control), so the repeat is the only change. The
+// two values are both valid tokens, so no other rule can be what fires; the refusal names the key and the count and
+// never the value.
+const withLine = (line) => record().replace("\n---\n\n# LOOP", `\n${line}\n---\n\n# LOOP`);
+
+test("★ a repeated `decision` (two valid tokens) → RED naming the key ×2, never a value; the unrepeated twin → GREEN", () => {
+  assert.equal(run(record()).status, 0, "control: the record as built is GREEN");
+  const r = run(withLine("decision: STOP_CAP"));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /repeats `decision` ×2/);
+  assert.doesNotMatch(r.out, /STOP_CAP/, "the refusal quotes keys and counts, never a value");
+});
+
+test("★ a repeated EXTRA key (`blocked`) → RED; one `blocked` → GREEN — 'ignored' covers the value, not the multiplicity", () => {
+  const once = record({ fm: { decision: "INCONCLUSIVE", blocked: "no-slug" } });
+  assert.equal(run(once).status, 0, "control: one blocked key is ignored, GREEN");
+  const r = run(once.replace("\n---\n\n# LOOP", "\nblocked: other\n---\n\n# LOOP"));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /repeats `blocked` ×2/);
+});
+
+test("★ a `decision:` line repeated only in the BODY is data, not a repeat (L6) → GREEN", () => {
+  const r = run(record({ body: "\ndecision: STOP_CAP\n" }));
+  assert.equal(r.status, 0, r.out);
+});
+
 // ── decision: exact enum membership; CONTINUE is deliberately excluded ────────────────────────────────
 
 test("decision CONTINUE → RED (a record is written only at a STOP)", () => {

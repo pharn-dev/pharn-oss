@@ -78,10 +78,11 @@ export function matchFrontmatter(text) {
 // `readValue` or `scalar`.
 //
 // WHAT IT DOES NOT DO (P0): it does not REFUSE a duplicated key. LAST-wins, as a JS object assignment and YAML
-// both resolve it. Since 6.65.2 (frontmatter-parser-parity, audit ENF-4) the refusal lives in ONE consumer:
-// check-plan-lessons.mjs REDs a repeated `applied_lessons`, because it gates that one field and choosing either
-// copy would certify a declaration some other reader discards. Every other reader still chooses the last copy.
-// The LOOP.md and BRIEFING.md envelope readers do not refuse a repeat; that is a named follow-up, not an oversight.
+// both resolve it — the reading the SPEC readers (check-spec, check-plan-spec-agree) rely on. Two families refuse
+// instead, each in its own consumer: check-plan-lessons.mjs REDs a repeated `applied_lessons` (6.65.2,
+// frontmatter-parser-parity, audit ENF-4), because it gates that one field and choosing either copy would certify a
+// declaration some other reader discards; and the five LOOP.md / BRIEFING.md envelope readers refuse ANY repeated
+// key (6.71.3, envelope-duplicate-keys), through `frontmatterEntries` below.
 
 function stripQuotes(v) {
   return v.replace(/^["']|["']$/g, "");
@@ -156,6 +157,44 @@ export function fieldEntries(lines, re = FIELD_LINE_RE) {
     if (kv) out.push({ key: kv[1], raw: kv[2] });
   }
   return out;
+}
+
+// ── The ENVELOPE reader (6.71.3, envelope-duplicate-keys — the ENF-4 follow-up 6.65.2 deferred) ────────────────────
+//
+// WHY IT LIVES HERE (the trigger, P7). Five floor modules read the `---` envelope of a LOOP.md or BRIEFING.md —
+// check-loop-record, check-ship-briefing, check-loop-decision, loop-closeout, render-cost-ledger — and each carried
+// its own `text.match(FM_RE)` + `fieldEntries(...)` loop that let the LAST copy of a repeated key win. They agreed
+// with each other, but a person reading the file top-down saw the FIRST copy (a briefing with `verify_verdict: "PASS"`
+// above `verify_verdict: "FAIL"` checked GREEN against a FAIL report), and a YAML 1.2 parser refuses the file, mapping
+// keys being unique there. Nothing ranged over the five (L31). Each now reads its envelope through this one function
+// and refuses when `repeated` is non-empty: the two checkers RED, the three consumers read the envelope as absent.
+// frontmatter-core.test.mjs holds the closure: the set of modules calling `frontmatterEntries(` EQUALS its
+// ENVELOPE_READERS list, and every other `fieldEntries(` caller is a listed header reader with its reason.
+//
+// It returns the entries AND the repeats, not a Map, on purpose: each reader keeps its own VALUE rule (the briefing
+// decodes `yamlScalar` output, the ledger strips an unmatched quote, the loop readers strip a matched pair only), and
+// whether a repeat REDs or reads as "no envelope" is the reader's verdict, not this core's.
+
+/**
+ * A leading frontmatter block's `key: value` entries (`fieldEntries` over `FIELD_LINE_RE`, in file order, values
+ * untrimmed) plus every key that occurs more than once, each once, in first-occurrence order, as `{ key, count }`.
+ * `null` when `text` is not a string or has no leading frontmatter (a leading BOM is stripped first). Pure.
+ */
+export function frontmatterEntries(text) {
+  if (typeof text !== "string") return null;
+  const m = matchFrontmatter(text);
+  if (!m) return null;
+  const entries = fieldEntries(m[1].split(/\r?\n/));
+  const counts = new Map(); // a Map, never a plain object keyed by file content (L15)
+  for (const { key } of entries) counts.set(key, (counts.get(key) ?? 0) + 1);
+  const repeated = [];
+  for (const [key, count] of counts) if (count > 1) repeated.push({ key, count });
+  return { entries, repeated };
+}
+
+/** `a ×2, b ×3` — a repeat list for a refusal message: keys (line-grammar identifiers) and counts, never a value. */
+export function describeRepeats(repeated) {
+  return repeated.map(({ key, count }) => `\`${key}\` ×${count}`).join(", ");
 }
 
 /**

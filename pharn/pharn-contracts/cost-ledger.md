@@ -301,7 +301,8 @@ the checker checks only that `dropped` is an array:
 **`outcome` is copied VERBATIM from the `LOOP.md` envelope** (`pharn/pharn-contracts/loop-record.md` —
 cited, not restated, P4), read from the `---`-fenced frontmatter only and never grepped from the body. The
 ledger introduces **no second source of truth** for the decision. Its shape is deliberately general enough
-that `/pharn-ship` fits later without a schema change.
+that `/pharn-ship` fits later without a schema change. An envelope with no `decision`, or (6.71.3) one that repeats
+any key, declares nothing: no copy is resolved, and the outcome is derived instead (below), with `source` saying so.
 
 **There is no `commit` field, and its absence is deliberate.** `LOOP.md`'s `commit` is HEAD _before_ the
 loop commits, so it is the base — which is what `base_sha` already carries. A green run's `cost.json`
@@ -807,7 +808,8 @@ counts only when it follows the latest `pharn-build` stage-start of the same ite
 with no such build the reports are not current. (b) **No repeat:** a stage other than a verdict stage
 started twice at one iteration makes the outcome `undetermined` (above). `/pharn-ship` starts every
 (stage, iteration) at most once; the verdict stages are exempt because `/pharn-loop`'s freshness re-run
-starts them again inside one iteration, and a loop ledger with no `LOOP.md` reaches this derivation.
+starts them again inside one iteration, and a loop ledger whose `LOOP.md` is absent or declares no single readable
+`decision` reaches this derivation.
 **Why:** iteration numbers restart at 1 in every run, so a quick run whose run-start was skipped, after an
 earlier run that never wrote its run-stop, joined that run's window, and the earlier `pharn-regress@1`
 completed the pair for its own `pharn-verify@1`: the derivation returned `gate2` over a regress check that

@@ -33,6 +33,7 @@ import {
   cpSync,
   existsSync,
   appendFileSync,
+  rmSync,
 } from "node:fs";
 import { markerLine } from "./mark-phase.mjs";
 import { tmpdir } from "node:os";
@@ -727,6 +728,22 @@ test("a blocked stop carries its `blocked` key through verbatim", () => {
     ["---", "decision: INCONCLUSIVE", "iterations: 1", "blocked: no-gates", "---", "", "# LOOP", ""].join("\n")
   );
   assert.equal(readOutcome(join(dir, "LOOP.md")).blocked, "no-gates");
+});
+
+test("★ 6.71.3: a repeated envelope key -> null, never one copy copied; the unrepeated twin -> its decision", () => {
+  const root = mkdtempSync(join(tmpdir(), "cost-ledger-dup-"));
+  try {
+    const p = join(root, "LOOP.md");
+    const rec = (extra) => ["---", "decision: STOP_GREEN", "iterations: 2", ...extra, "---", "", "# LOOP", ""].join("\n");
+    writeFileSync(p, rec([]));
+    assert.deepEqual(readOutcome(p), { decision: "STOP_GREEN", iterations: 2, source: "LOOP.md" }, "control");
+    writeFileSync(p, rec(["decision: STOP_CAP"]));
+    assert.equal(readOutcome(p), null, "a repeated decision: no declared outcome, whichever copy a reader would pick");
+    writeFileSync(p, rec(["blocked: a", "blocked: b"]));
+    assert.equal(readOutcome(p), null, "a repeated extra key is refused the same way");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("no LOOP.md -> outcome is null, not invented", () => {

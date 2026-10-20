@@ -117,7 +117,7 @@ import { readFileSync, existsSync, openSync, fstatSync, closeSync, constants } f
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { basename, dirname, join, resolve } from "node:path";
-import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
+import { describeRepeats, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 
 // Resolve the sibling CLI RELATIVE TO THIS FILE (import.meta.url), never the cwd — so this check behaves
@@ -203,16 +203,17 @@ function cleanScalar(v, maxLen) {
 }
 
 // Read the envelope from the `---`-fenced frontmatter ONLY — never grepped from the file at large
-// (lessons-learned L6). Returns a Map, mirroring check-loop-record.mjs (no plain-object key indexing —
-// lessons-learned L15).
+// (lessons-learned L6), through frontmatter-core.mjs's `frontmatterEntries` (6.71.3), which also reports every
+// repeated key. Returns `{ fields, repeated }` (a Map, mirroring check-loop-record.mjs — no plain-object key
+// indexing, lessons-learned L15), or null with no frontmatter.
 function envelope(text) {
-  const m = text.match(FM_RE);
-  if (!m) return null;
+  const fm = frontmatterEntries(text);
+  if (fm === null) return null;
   const fields = new Map();
-  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+  for (const { key, raw } of fm.entries) {
     fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
-  return fields;
+  return { fields, repeated: fm.repeated };
 }
 
 function gate(recordPath) {
@@ -223,10 +224,19 @@ function gate(recordPath) {
     return red(`loop-record is unreadable (${recordPath}): ${e.message}`);
   }
 
-  const fields = envelope(text);
-  if (fields === null) {
+  const env = envelope(text);
+  if (env === null) {
     return red(`loop-record has no \`---\`-fenced YAML frontmatter (${recordPath}) — cannot read its envelope.`);
   }
+  // A repeated envelope key (6.71.3) is refused BEFORE the blocked-stop skip below: either copy could be the one a
+  // re-derivation reads, and a repeated `blocked` must not reach SKIPPED GREEN. Keys and counts only, never a value.
+  if (env.repeated.length > 0) {
+    return red(
+      `loop-record's frontmatter repeats ${describeRepeats(env.repeated)} (${recordPath}) — an envelope with a repeated ` +
+        `key is not re-derivable; every key appears at most once (pharn/pharn-contracts/loop-record.md).`
+    );
+  }
+  const fields = env.fields;
 
   const decision = fields.get("decision");
   if (!cleanScalar(decision, 32) || !DECISION_ENUM.has(decision)) {

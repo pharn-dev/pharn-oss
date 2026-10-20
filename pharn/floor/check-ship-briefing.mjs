@@ -56,7 +56,7 @@
 import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
+import { BULLET_FIELD_LINE_RE, FM_RE, describeRepeats, fieldEntries, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { fenceStates } from "./plan-files-core.mjs";
 
 const HEADING_RE = /^#{1,6}[ \t]+\S/;
@@ -232,13 +232,21 @@ function carriesAcTestsMode(version) {
   return major > 0 || minor >= 2;
 }
 
-export function readEnvelope(text) {
-  const m = text.match(FM_RE);
-  if (!m) return null;
+// The envelope through frontmatter-core.mjs's `frontmatterEntries` (6.71.3): `{ fields, repeated }`, or null with no
+// frontmatter. A repeated key is never resolved to one copy — `gate()` REDs it (contract: "The rule of the contract",
+// envelope shape), because the floor would certify one copy while a person reads the other.
+function envelope(text) {
+  const fm = frontmatterEntries(text);
+  if (fm === null) return null;
   const fields = new Map(); // Map, never a plain object indexed by an arbitrary key (L15)
-  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.65.2); the last copy of a repeated key wins.
-  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) fields.set(key, readEnvelopeValue(raw));
-  return fields;
+  for (const { key, raw } of fm.entries) fields.set(key, readEnvelopeValue(raw));
+  return { fields, repeated: fm.repeated };
+}
+
+/** The envelope's fields as `gate()` reads them; null with no frontmatter OR a repeated key (never one copy). */
+export function readEnvelope(text) {
+  const env = envelope(text);
+  return env === null || env.repeated.length > 0 ? null : env.fields;
 }
 
 function gate(briefingPath) {
@@ -249,10 +257,15 @@ function gate(briefingPath) {
     return fail(`briefing is unreadable (${briefingPath}): ${e.message}`);
   }
 
-  const fields = readEnvelope(text);
-  if (fields === null) {
+  const env = envelope(text);
+  if (env === null) {
     return fail(`briefing has no \`---\`-fenced YAML frontmatter (${briefingPath}) — see pharn/pharn-contracts/ship-briefing.md`);
   }
+  if (env.repeated.length > 0) {
+    red("envelope", `frontmatter repeats ${describeRepeats(env.repeated)} — every field appears at most once`);
+    return fail2(briefingPath);
+  }
+  const fields = env.fields;
 
   const REQUIRED = [
     "feature",

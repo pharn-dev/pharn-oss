@@ -123,7 +123,8 @@ node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loo
 # means full; it records the run's INVOCATION, never a copy of check-loop.mjs's JSON — with ONE cross-field rule:
 # STOP_GREEN_QUICK requires mode: quick, STOP_GREEN forbids it) plus an unambiguous `## Handoff` —
 # exactly `### investigated`, `### learned`, `### next_steps`, in that order, no extras/duplicates, each with
-# a non-blank body. ADVISORY (never checked BY THIS CHECKER): whether the Handoff is TRUE, whether `decision`
+# a non-blank body. Since 6.71.3 every frontmatter key appears at most once — a repeat, an extra key's included, is
+# RED (keys and counts named, never a value). ADVISORY (never checked BY THIS CHECKER): whether the Handoff is TRUE, whether `decision`
 # AGREES with what check-loop.mjs emitted (check-loop-decision.mjs, below, is the one that asks), or whether
 # any run reads it. NOT an input to check-loop.mjs — the record can never influence the stop. Exits non-zero
 # on RED.
@@ -138,6 +139,7 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # never a sibling import) with the record's own `iterations` and `cap` and compares tokens. A mismatch, a missing or
 # malformed report, or a NON-BLOCKED record with no `cap` (optional to check-loop-record.mjs, required here) is RED,
 # fail-closed. A blocked stop (INCONCLUSIVE + a `blocked` key) never consulted check-loop.mjs and is SKIPPED, GREEN.
+# A repeated envelope key (6.71.3) is RED, checked BEFORE that skip, so a repeated `blocked` never reads as SKIPPED.
 # Since 6.28.0 the record's optional `mode` (absent = full) must ALSO equal the mode the live re-run reports — the table
 # the SPEC's kind selects, read in any state (Step 6a's Draft revert never touches the kind line) — else RED
 # MODE_MISMATCH: a run invoked without --quick over a quick SPEC ends there, uncommitted. Agreement between files,
@@ -171,7 +173,9 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # runs run-stop, run-marker --close, rev-parse HEAD (or `unknown`), ledger + check + report (quick read from the
 # run-start marker); exit 0 always (nothing gates) · 2 refused; it holds NO git write (a source scan). The shared steps
 # live once in closeout-core.mjs. Last stdout line: one JSON document, closed keys (6.65.0: loop-closeout's gains
-# `excluded_gates`, the gates.exclude ids of the final verify / full-mode regress, also a third commit-message paragraph). FLOOR: tested code over floor
+# `excluded_gates`, the gates.exclude ids of the final verify / full-mode regress, also a third commit-message paragraph).
+# loop-closeout reads a LOOP.md whose envelope repeats a key (6.71.3) as no envelope: `decision unverifiable`, exit 4,
+# no commit, whatever the two checkers said. FLOOR: tested code over floor
 # verdicts (the green-token enum, the two checkers' exits); ADVISORY: that a run invokes the line and runs no git of its
 # own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.44.0]).
 node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]
@@ -327,7 +331,8 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # equivalent and none is claimed, because a ship stop is a human gate or an orchestrator STOP and no
 # checker computes either. The closed vocabulary lives in SHIP_DECISION_FORMS with a CLOSURE regex over
 # the stem (L36 — a parameterized value is where a variant spelling lands). No CLI: it is imported by
-# render-cost-ledger.mjs, which falls through to it only when no LOOP.md exists, so the loop's bytes do
+# render-cost-ledger.mjs, which falls through to it only when no LOOP.md declares a single readable `decision` (absent,
+# no `decision`, or — 6.71.3 — a repeated envelope key, never resolved to one copy), so the loop's bytes do
 # not move. NO CLI and no checker of its own, deliberately (P7): nothing invokes it directly and nothing
 # machine-reads its output but the emitter, so both would be additions with no trigger. The module header
 # is the spec and ship-outcome-core.test.mjs enforces it. Ships: bumps SKILLS_VERSION.
@@ -408,7 +413,8 @@ node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--m
 # PLAN.md by a curated structural heading-scan (matched against 34 sampled heading spellings from this
 # repo's own build history) and quoted verbatim; a miss degrades to an honest sentinel line, never a
 # guess. check-ship-briefing.mjs then re-verifies every frontmatter field against its LIVE sibling source
-# (cross-file equality, not merely shape) — a genuinely new floor primitive, surfaced by /pharn-ship as an
+# (cross-file equality, not merely shape; since 6.71.3 a repeated frontmatter key is RED, never resolved to the copy
+# that matches) — a genuinely new floor primitive, surfaced by /pharn-ship as an
 # ANNOTATION only: it never gates GATE 2, never issues a seal. ADVISORY (never checked): that the quoted
 # or (bounded, always-labeled) model-synthesized `## Why this design` section is accurate or sufficient.
 # See pharn/pharn-contracts/ship-briefing.md. Exits non-zero on RED.
