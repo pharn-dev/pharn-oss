@@ -497,3 +497,21 @@ node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <s
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --iteration <N> --timeout-ms <T> --budget-ms <B> [stage flags]
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --resume --budget-ms <B>
 ```
+
+## `command-section.mjs` — re-read one section of a command after a compaction
+
+```bash
+# THE SECTION EXTRACTOR (6.68.0, ship-step2-part — audit ARCH-7, CTX-4/CTX-5). /pharn-ship and /pharn-loop each pin one
+# line of it, before their first ## section: after a compaction, re-read the section of the command the step in
+# progress belongs to, then every part read so far; read the whole file if the line fails. It prints the ##–######
+# heading whose text is the operand (or starts with it and a space) through the line before the next heading of the
+# same or a higher level, outside fences and HTML comments, then `<!-- end of section: <heading line> -->`. Rules and
+# bounds: its header. It reads ONLY `.claude/commands/pharn-<name>.md` by spelling, in `<cwd>/.claude/commands` by
+# realpath, a regular file opened with O_NOFOLLOW — the bound /pharn-loop's grant
+# `Bash(node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md *)` relies on (file fixed, heading free, a
+# third operand is a usage refusal). Refused (exit 2, nothing on stdout): no such heading, two, an unclosed fence or
+# comment, an ambiguous indented fence, an end-line-shaped line in the section. NOT checked against a renderer.
+# Tests: pharn/floor/command-section.test.mjs (input kinds, refusals, every heading of both orchestrators' files);
+# the pinned paragraph and line: .dev/floor/command-hygiene.test.mjs. Ships: bumps SKILLS_VERSION. Exit: 0 / 2.
+node pharn/floor/command-section.mjs .claude/commands/<pharn-ship.md|pharn-loop.md> '<heading>'
+```

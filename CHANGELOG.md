@@ -23,6 +23,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.68.0] - 2026-10-20
+
+### Added
+
+- **`/pharn-ship`'s stages after GATE 1 moved into a third part, read once the SPEC is approved, with one section per
+  stage; a new floor script prints one section of a command, and `/pharn-ship` and `/pharn-loop` re-read the step in
+  progress with it after a compaction** (`SKILLS_VERSION` 6.67.0 → **6.68.0**, minor: a new product floor script;
+  audit 2026-10-12 ARCH-7 and CTX-4/CTX-5).
+  - What changed:
+    - New part `.claude/commands/pharn-ship-stages.md` (`part: stages`). It holds `## Running a stage`, Step 2 from
+      the structural backstop on and Step 2b. Each Step 2 item is now its own `###` section, Step 2.1 (the backstop,
+      the base, the run marker, the snapshot and the entry gates) to Step 2.8 (GATE 2), so the numbers the text cites
+      ("step 7") are headings. `pharn-ship.md` keeps the gates, Step 1, the quick pointer, Step 2's rules, `/pharn-spec`
+      (GATE 1) and the close pointer: 42,422 → 16,037 bytes.
+    - The part is read once, when the run resumes after GATE 1 — whatever the human answered — before the structural
+      backstop, which then decides whether the SPEC is Approved. If it does not load, the run STOPs there, through the
+      close part like any STOP once `<name>` exists.
+    - New `pharn/floor/command-section.mjs <file> <heading>` prints one section of a command file: the heading whose
+      text is the operand, or starts with it and a space, up to the next heading of the same or a higher level, both
+      outside fences and HTML comments, then an end line. It refuses (exit 2, nothing printed) a missing or ambiguous
+      heading, an unclosed fence or comment, and any file but a regular, non-symlinked `pharn-*.md` directly in
+      `.claude/commands`.
+    - Both orchestrators open with one paragraph: after a compaction, re-read the section of this file the step in
+      progress belongs to with a pinned line naming the command itself, then every part read so far; read the whole
+      file if the line fails. `/pharn-loop`'s `allowed-tools` gains that line,
+      `Bash(node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md *)`. **The grant's bound:** the `*`
+      leaves only the heading free; the file operand is fixed, a third operand is a usage refusal, and the script
+      reads only a regular `pharn-*.md` directly in `.claude/commands`.
+  - Why: Step 2 alone was 306 lines (≈19.6 KB) of a 42 KB command, and a compaction kept neither the command's text
+    nor any rule to re-read it — only the parts were re-read.
+  - What it saves, and what it does not: until GATE 1 a run holds the 16 KB main file instead of 42 KB, and a run
+    that is never resumed after GATE 1 never loads the other 30 KB. **The peak after GATE 1 does not drop** (a part read stays in
+    context; the pointer adds about 1.5 KB), and the stage load budget's total for `/pharn-ship` is the same bytes.
+  - Checked by: `pharn/floor/command-section.test.mjs` (each input kind the heading model reads, every refusal, the
+    CLI, and every heading of both orchestrators' files, which must resolve uniquely to a contiguous slice);
+    `.dev/floor/command-family.test.mjs` (the stages part in the part closure, its pointer's pinned load and
+    not-loaded sentences, its headings placed in it alone, its splice point); `.dev/floor/command-hygiene.test.mjs`
+    (the compaction paragraph and its one pinned line in each orchestrator, with a control per property; the grant
+    is the derived exact set, as before).
+  - Bounds: that a run re-reads anything after a compaction, or reads the part at its point, is advisory — no hook
+    sees a Read. The heading model is not checked against a markdown renderer; the fixture list and the committed
+    files are its evidence.
+  - Not done, named: `loop-step-sections` (`pharn-loop.md` Step 1 and `pharn-loop-close.md` Step 6 into `###`
+    sections) and `dev-command-slim` (`pharn-dev-memory-promote.md` Step 6, and the dev commands' descriptions).
+- 2026-10-20: **The `pharn-dev-*` commands now have byte ceilings.** `COMMAND_BYTE_CEILINGS` closes over every
+  `pharn-*.md` command file, and its closure and byte rules (BUDGET R1/R2) now cover the nine dev commands, each at its
+  measured bytes + 10%, rounded up to 512. The description, vocabulary and claims-block rules still apply to product
+  commands only. Dev apparatus; no bump of its own.
+
 ## [6.67.0] - 2026-10-19
 
 ### Added

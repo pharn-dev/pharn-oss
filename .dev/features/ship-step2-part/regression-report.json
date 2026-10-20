@@ -1,0 +1,42 @@
+{
+  "base": "dcf7b43d",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-close.md",
+    ".claude/commands/pharn-ship-stages.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/ship-step2-part/BUILD.md",
+    ".dev/features/ship-step2-part/GRILL.md",
+    ".dev/features/ship-step2-part/PLAN.md",
+    ".dev/floor/command-family.mjs",
+    ".dev/floor/command-family.test.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/stage-load-budget.test.mjs",
+    ".dev/guides/floor-orchestration.md",
+    ".dev/guides/product-commands.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/command-section.mjs",
+    "pharn/floor/command-section.test.mjs",
+    "pharn/floor/pre-run-snapshot.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions"
+}
