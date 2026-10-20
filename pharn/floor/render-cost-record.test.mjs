@@ -387,13 +387,13 @@ test("✦ DETERMINISM: rendering twice over unchanged bytes is byte-identical", 
 
 // ─── ★ COMPLETED USAGE — the record block over lines that disagree (6.24.1) ──────────────────────────
 //
-// `fixtures/cost-ledger/usage-snapshots/` holds one request written as 8, 8, 163, one re-appended later with
+// `test-fixtures/cost-ledger/usage-snapshots/` holds one request written as 8, 8, 163, one re-appended later with
 // zeroed counts, and one whose early line a forked subagent's transcript copies (described in full in
 // transcript-core.test.mjs, where the reader's per-request tests live). These tests pin what the RECORD
 // BLOCK does with them: it is a consumer of the one owner, and L52's set is every consumer.
 
 const SNAP_SESSION = "00000000-0000-4000-8000-00000000beef";
-const SNAP_FIXTURE = join(here, "fixtures", "cost-ledger", "usage-snapshots");
+const SNAP_FIXTURE = join(here, "test-fixtures", "cost-ledger", "usage-snapshots");
 
 /** Stage the committed fixture under a literal project-directory name (the ⚑ LOOKUP convention). */
 function stageSnapshots() {
