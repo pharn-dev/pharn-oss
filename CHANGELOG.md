@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- 2026-10-19: **Add a pharn-ci diff-coverage gate to pull requests.** Extends the existing `check` job in
+- 2026-10-20: **Add a pharn-ci diff-coverage gate to pull requests.** Extends the existing `check` job in
   `.github/workflows/ci.yml` to run coverage (Node's `--experimental-test-coverage`, no new devDependency) and gate
   on it via `pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c` (threshold 100 in `.pharn/ci.yml`); a
   second workflow, `.github/workflows/pharn-ci-comment.yml`, posts the sticky PR comment via `workflow_run` so fork
