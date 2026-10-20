@@ -1,0 +1,35 @@
+{
+  "base": "dd69efd5c6a1a1d5f63c3a2fdb5bda7e7ccd6c0c",
+  "inside": [
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/scan-code-missing-error-handling.mjs",
+    "pharn/floor/scan-code-missing-error-handling.test.mjs",
+    "pharn/floor/scan-code-missing-timeout.mjs",
+    "pharn/floor/scan-code-missing-timeout.test.mjs",
+    ".dev/features/scanner-redos-sweep-2/GRILL.md",
+    ".dev/features/scanner-redos-sweep-2/MEASUREMENTS.md",
+    ".dev/features/scanner-redos-sweep-2/PLAN.md",
+    "pharn/floor/scan-code-missing-differential.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

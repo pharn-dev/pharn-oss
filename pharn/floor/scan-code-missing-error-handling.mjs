@@ -58,6 +58,20 @@
 // scan-code-missing-error-handling.test.mjs — the backtick-laundering immunity cases AND the ≥3-backtick residual
 // bound — the whole reason this is FLOOR, not judgment.)
 //
+// COST (re-derived for 6.71.2 from this code, not carried over — the 6.71.0 form was quadratic): through 6.71.0 each
+// `try {` re-scanned to EOF for its `}` (so `try{`×N unbalanced was O(N²)), each risky op tested every try range, and
+// counted newlines from offset 0 for its line (O(hits × length)), and each await re-ran HANDLED_RE over its whole line
+// (so `await x(`×N on one line was O(N²)). Now the masks, the brace pairing, the newline list and the merged guard
+// intervals are each built once (the sort is O(t log t) over t try ranges), each `.catch` line test runs at most once
+// per line, and each risky op costs O(log n): one binary search for its guard, one for its line. TRY_RE, AWAIT_RE,
+// JSONPARSE_RE and HANDLED_RE each start on a literal at `\b` / `.`, and their variable parts (`\s*`, `\s+`,
+// `[\w$.]+`) give back at most their own run — a `[\w$.]+` chain with no `(` after it is retried once per character
+// it gave back, each retry failing on the next character — so the regex scans stay linear in the file. Per file:
+// O(n log n) in the worst case, measured linear (.dev/features/scanner-redos-sweep-2/MEASUREMENTS.md). The ★ ReDoS rows
+// in scan-code-missing-error-handling.test.mjs pin the measured shapes as a membership verdict (completed vs killed
+// under a timeout), and scan-code-missing-differential.test.mjs pins every finding equal to a frozen 6.71.0 copy over a
+// corpus that is deterministic for a given tree (it includes every .mjs under pharn/floor/) — evidence, not a proof; the equivalence arguments are in the comments at each step.
+//
 // MULTI-LINE MASKING PRESERVES LINE COUNT (P5): the mask replaces comment/string characters with spaces but PRESERVES
 // newlines, so 1-based line numbers map 1:1 to the original.
 //
@@ -238,26 +252,37 @@ export function scanText(text) {
 
   const maskedForSuppression = maskTemplateInteriors(masked);
 
-  // --- Helpers (reused from scan-code-swallowed-exception.mjs) -------------------------------------------------
-  // Brace-match the delimiter that closes `open` at `openIdx` over the MASKED text. Returns the closing index, or -1
-  // if unbalanced (an unbalanced `try {` contributes no range — it can never SUPPRESS a hit).
-  function matchDelim(s, openIdx, open, close) {
-    let depth = 0;
-    for (let i = openIdx; i < s.length; i++) {
-      if (s[i] === open) depth++;
-      else if (s[i] === close) {
-        depth--;
-        if (depth === 0) return i;
-      }
+  // --- Helpers (each computed ONCE per file — see "COST" in the header) -----------------------------------------
+  // closeOf[i] = the index of the `}` that closes the `{` at i in the SUPPRESSION copy, or -1 if that `{` is unbalanced
+  // (an unbalanced `try {` contributes no range — it can never SUPPRESS a hit). One forward pass with a stack: a `{`
+  // pushes, a `}` pops and pairs; a `}` that finds the stack EMPTY is skipped, because every `{` to its left is already
+  // paired. This is exactly what 6.71.0's per-open depth scan returned (the first index after the `{` where the count
+  // of `{` minus `}` falls back to 0), and an open left on the stack at EOF is exactly that scan's -1.
+  const closeOf = new Int32Array(maskedForSuppression.length).fill(-1);
+  {
+    const stack = [];
+    for (let i = 0; i < maskedForSuppression.length; i++) {
+      const ch = maskedForSuppression[i];
+      if (ch === "{") stack.push(i);
+      else if (ch === "}" && stack.length) closeOf[stack.pop()] = i;
     }
-    return -1;
   }
 
-  function lineAt(s, idx) {
-    let line = 1;
-    for (let i = 0; i < idx && i < s.length; i++) if (s[i] === "\n") line++;
-    return line;
+  // newlineAt = every `\n` offset in `masked`, ascending (mask() keeps every newline at its own index, so these are the
+  // original file's line breaks). firstAtOrAbove(a, x) = the number of entries of the ascending array a below x.
+  const newlineAt = [];
+  for (let i = masked.indexOf("\n"); i !== -1; i = masked.indexOf("\n", i + 1)) newlineAt.push(i);
+  function firstAtOrAbove(a, x) {
+    let lo = 0;
+    let hi = a.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (a[mid] < x) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
+  const lineAt = (idx) => 1 + firstAtOrAbove(newlineAt, idx);
 
   // --- PASS 1: TRY-body char ranges (FIXED regex + brace-match — P5) -------------------------------------------
   // SUPPRESSION read: a try range GUARDS (suppresses) a hit, so it runs over `maskedForSuppression` (template
@@ -271,15 +296,28 @@ export function scanText(text) {
     let m;
     while ((m = TRY_RE.exec(maskedForSuppression)) !== null) {
       const braceOpen = m.index + m[0].length - 1; // index of the body's '{'
-      const braceClose = matchDelim(maskedForSuppression, braceOpen, "{", "}");
+      const braceClose = closeOf[braceOpen];
       if (braceClose === -1) continue; // unbalanced — no range (never suppresses a hit; documented bound)
       tryRanges.push([braceOpen, braceClose]);
     }
   }
+  // GUARDED iff p sits strictly inside some try BODY (after the '{', before the matching '}') — i.e. p is in the union
+  // of the integer intervals [o + 1, c - 1]. That union is built once: sorted by start, overlapping or touching
+  // intervals merged (the same set of positions, so the same answer as testing every range), and a query is one binary
+  // search for the last interval starting at or before p.
+  const guardLo = [];
+  const guardHi = [];
+  for (const [o, c] of [...tryRanges].sort((a, b) => a[0] - b[0])) {
+    const lo = o + 1;
+    const hi = c - 1;
+    if (lo > hi) continue; // `try {}` — no position strictly inside
+    const last = guardHi.length - 1;
+    if (last >= 0 && lo <= guardHi[last] + 1) guardHi[last] = Math.max(guardHi[last], hi);
+    else (guardLo.push(lo), guardHi.push(hi));
+  }
   function guarded(p) {
-    // GUARDED iff p sits strictly inside some try BODY (after the '{', before the matching '}').
-    for (const [o, c] of tryRanges) if (p > o && p < c) return true;
-    return false;
+    const k = firstAtOrAbove(guardLo, p + 1) - 1; // the last interval with lo <= p
+    return k >= 0 && p <= guardHi[k];
   }
 
   // --- PASS 2: risky ops NOT guarded (FIXED regexes — P5) ------------------------------------------------------
@@ -300,6 +338,14 @@ export function scanText(text) {
   // blanked) — NOT `masked` — so a backtick `.catch(` in string text can never MANUFACTURE same-line handling that
   // silences a real unguarded await (P2; see maskTemplateInteriors). Line numbers are identical (newlines preserved).
   const maskedForSuppressionLines = maskedForSuppression.split("\n");
+  // handledOn[line - 1]: HANDLED_RE's answer for that line, tested at most once. HANDLED_RE has no `g` flag, so testing
+  // the same line again would return the same value; 6.71.0 re-tested a long line once per await on it (O(hits × line)).
+  const handledOn = new Array(maskedForSuppressionLines.length);
+  function handled(line) {
+    const i = line - 1;
+    if (handledOn[i] === undefined) handledOn[i] = HANDLED_RE.test(maskedForSuppressionLines[i] ?? "");
+    return handledOn[i];
+  }
 
   // Dedup-key separator: the NUL byte. Built via `fromCharCode` so the SOURCE stays printable ASCII — the
   // convention pharn/floor/merge-findings.mjs states at its own NUL constant. A RAW NUL byte here makes the
@@ -316,8 +362,8 @@ export function scanText(text) {
   const hits = [];
   function consider(p, kind, applyCatch) {
     if (guarded(p)) return;
-    const line = lineAt(masked, p);
-    if (applyCatch && HANDLED_RE.test(maskedForSuppressionLines[line - 1] ?? "")) return; // same-line .catch → handled (await only)
+    const line = lineAt(p);
+    if (applyCatch && handled(line)) return; // same-line .catch → handled (await only)
     const key = `${line}${NUL}${kind}`;
     if (seen.has(key)) return;
     seen.add(key);
