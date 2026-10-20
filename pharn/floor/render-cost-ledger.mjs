@@ -138,7 +138,7 @@ import { homedir } from "node:os";
 import { findTranscriptDirs, sessionScan } from "./transcript-core.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar, markerLine } from "./mark-phase.mjs";
 import { isRouteToken } from "./route-token-core.mjs";
-import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
+import { frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import {
   runWindow,
@@ -546,7 +546,8 @@ export function attribute(markers, ts, sessionId) {
 }
 
 /** Read `outcome` from the LOOP.md ENVELOPE only — never grepped from the body (L6). A `decision:` line
- *  in prose is DATA about a record, not a declaration of one. Returns null when there is no record. */
+ *  in prose is DATA about a record, not a declaration of one. Returns null when there is no record, no
+ *  `decision`, or a repeated envelope key (6.71.1). */
 export function readOutcome(loopPath) {
   let text;
   try {
@@ -554,12 +555,14 @@ export function readOutcome(loopPath) {
   } catch {
     return null;
   }
-  const m = text.match(FM_RE);
-  if (!m) return null;
+  // frontmatter-core.mjs's `frontmatterEntries` (6.71.1), the one reader check-loop-record.mjs reads this envelope
+  // with. A repeated key is never resolved to one copy: the envelope reads as absent (null), exactly as one with no
+  // `decision` does, so no declared outcome is copied and the caller falls through to the derived one — whose
+  // `source` then says so. The value rule below is unchanged.
+  const fm = frontmatterEntries(text);
+  if (fm === null || fm.repeated.length > 0) return null;
   const fields = new Map(); // a Map, never a plain object keyed by arbitrary input (L15)
-  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.65.2), the one check-loop-record.mjs reads this
-  // envelope with; the last copy of a repeated key wins, as there. The value rule below is unchanged.
-  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+  for (const { key, raw } of fm.entries) {
     fields.set(key, raw.trim().replace(/^["']|["']$/g, ""));
   }
   const decision = fields.get("decision");

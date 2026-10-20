@@ -365,9 +365,17 @@ function outcomePreamble(cost, o) {
     ];
   }
   if (source === "verdicts+markers") {
+    // WHY it was derived, said truthfully for both emitters (6.71.1). `/pharn-ship` writes no `LOOP.md`, ever. A
+    // `/pharn-loop` ledger derives only when its `LOOP.md` is absent or carries no single readable `decision` —
+    // no `decision` line, or (6.71.1) a repeated envelope key, which render-cost-ledger.mjs `readOutcome` refuses to
+    // resolve to one copy. "writes no `LOOP.md`" was false in the second case, so the reason is command-aware.
+    const why =
+      cost && cost.command === SHIP_COMMAND
+        ? [`${commandLabel(cost)} writes no`, "`LOOP.md` to copy one from."]
+        : ["this run has no `LOOP.md` with a", "single readable `decision` to copy one from."];
     return [
-      `The \`decision\` below was **DERIVED** by the ledger, because ${commandLabel(cost)} writes no`,
-      "`LOOP.md` to copy one from. It is read from this run's own verdict reports and phase markers —",
+      `The \`decision\` below was **DERIVED** by the ledger, because ${why[0]}`,
+      `${why[1]} It is read from this run's own verdict reports and phase markers —`,
       "never from `SHIP.md` prose, which is a roll-up ABOUT a run, not a declaration of one.",
       "",
       "**The two forms are not equally strong (P0), and this report does not average them.**",

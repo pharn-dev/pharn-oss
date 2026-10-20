@@ -1574,6 +1574,27 @@ test("Outcome: a DERIVED decision carries the floor/advisory split BESIDE the va
   }
 });
 
+// 6.71.1 (envelope-duplicate-keys, GATE 1 Q3): the derived preamble's REASON is command-aware, each case the other's
+// control. `/pharn-ship` writes no LOOP.md, ever — its sentence is byte-unchanged. A `/pharn-loop` ledger derives only
+// when its LOOP.md is absent or carries no single readable `decision` (a repeated envelope key included), so
+// "writes no `LOOP.md`" would be false there.
+test("Outcome: the DERIVED reason is true for both emitters — ship 'writes no LOOP.md'; loop 'no single readable decision'", () => {
+  const root = scratch();
+  try {
+    feature(root, "feat", { "cost.json": shipCost() });
+    const ship = renderRunReport("feat", { repo: root });
+    assert.match(ship, /because `\/pharn-ship` writes no\n`LOOP\.md` to copy one from\. It is read from/);
+    assert.doesNotMatch(ship, /single readable `decision`/);
+    const loopDerived = costJson({ outcome: { decision: "gate2", iterations: 1, source: "verdicts+markers" } });
+    feature(root, "feat", { "cost.json": loopDerived, "LOOP.md": LOOP_MD });
+    const loop = renderRunReport("feat", { repo: root });
+    assert.match(loop, /\*\*DERIVED\*\* by the ledger, because this run has no `LOOP\.md` with a\nsingle readable `decision` to copy/);
+    assert.doesNotMatch(loop, /writes no\n`LOOP\.md` to copy one from/, "never claims /pharn-loop writes no LOOP.md");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Outcome: a DECLARED decision keeps the loop's wording — the loop's bytes do not move", () => {
   const root = scratch();
   try {

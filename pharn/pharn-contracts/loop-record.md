@@ -246,6 +246,13 @@ than lenient: **nothing downstream reads this record as a gate**, so there is no
 a smuggled field to reach. The one place an extra token _would_ matter — an extra `###` under
 `## Handoff` — is exactly the place this contract closes above.
 
+**Every frontmatter key appears at most once (6.71.1), an extra key included.** A repeated key is refused, never
+resolved to one copy: `check-loop-record.mjs` and `check-loop-decision.mjs` RED it (keys and counts only), and the two
+consumers read the envelope as absent — `loop-closeout.mjs` stops at `decision unverifiable` without committing, and
+`render-cost-ledger.mjs` copies no declared outcome. Reading the last copy, as every reader once did, certified a value
+a person reading the file top-down never sees, and YAML 1.2 rejects such a mapping. "Ignored" above is about an extra
+key's **value**, not its multiplicity.
+
 **`cap` and `mode` are the exceptions to "nothing downstream reads this record as a gate", and they are scoped
 narrowly.** `check-loop-record.mjs` — this contract's own checker — treats `cap` as it treats any other optional
 value: shape-validated when present, otherwise ignored, never RED for its absence; `mode` likewise, plus its one
@@ -257,7 +264,8 @@ guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field
 ## The rule of the contract (P0)
 
 - **FLOOR (deterministic, `pharn/floor/check-loop-record.mjs`):** given a record, the envelope's four
-  mandatory fields and its optional `cap` and `mode` are shape-valid, `decision` and `mode` are a consistent pair,
+  mandatory fields and its optional `cap` and `mode` are shape-valid, no frontmatter key repeats, `decision` and
+  `mode` are a consistent pair,
   and the Handoff's structure is exactly as specified — enum membership, anchored regexes over control-char-guarded
   values, and heading-list equality (`pharn/ARCHITECTURE.md §2` primitive #3).
   **This is the verdict GIVEN a record handed to the checker.** That a record is ever written, or ever

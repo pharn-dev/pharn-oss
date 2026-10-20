@@ -28,7 +28,8 @@
 //  1. check-loop-record.mjs <LOOP.md>. RED without --after-repair → exit 5, NOTHING else run (the ≤1 repair; still
 //     advisory — the flag is the model's to pass). With it, a RED is reported and the close goes on.
 //  2. The envelope, read with the checkers' own grammar (FM_RE after stripBom; `key: value`, surrounding quotes
-//     stripped; cleanScalar before every enum/regex — L14). A value outside its enum/regex reads as null.
+//     stripped; cleanScalar before every enum/regex — L14). A value outside its enum/regex reads as null; so does
+//     every field when any envelope key repeats (6.71.1 — frontmatter-core.mjs `frontmatterEntries`).
 //  3. A blocked stop (decision INCONCLUSIVE + a `blocked` key — check-loop-decision.mjs's own skip rule) → `N/A`.
 //     Every other → check-loop-decision.mjs <LOOP.md>: exit 0 GREEN, anything else RED.
 //  4–7. closeout-core.mjs: run-stop marker, render-cost-ledger --command /pharn-loop --base-sha <base>,
@@ -96,7 +97,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { FEATURE_SLUG_RE, SHA_RE, ALLOWLIST, excludedFacts } from "./gate-run-core.mjs";
-import { FM_RE, fieldEntries, stripBom, readField } from "./frontmatter-core.mjs";
+import { FM_RE, frontmatterEntries, stripBom, readField } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 import { cleanScalar } from "./mark-phase.mjs";
 import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
@@ -319,14 +320,16 @@ export function undoArgs(list, branch) {
 
 // ── the record ───────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The envelope as check-loop-decision.mjs reads it: FM_RE after stripBom, `key: value`, surrounding quotes
- *  stripped. A Map (L15). null when there is no frontmatter or the input is not a string. */
+/** The envelope as check-loop-decision.mjs reads it: frontmatter-core.mjs `frontmatterEntries` (FM_RE after
+ *  stripBom, `key: value`), surrounding quotes stripped. A Map (L15). null when there is no frontmatter, the input is
+ *  not a string, or — 6.71.1 — any key repeats: a repeated key is never resolved to one copy, so `recordFacts` reads
+ *  all-null, the green gate stops at `decision unverifiable` (exit 4, no commit), and a null `mode` reads as full in
+ *  the non-gate steps (a regress side is read, a report is rendered) — the path an invalid `mode` already took. */
 export function readEnvelope(text) {
-  if (typeof text !== "string") return null;
-  const m = stripBom(text).match(FM_RE);
-  if (!m) return null;
+  const fm = frontmatterEntries(text);
+  if (fm === null || fm.repeated.length > 0) return null;
   const fields = new Map();
-  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+  for (const { key, raw } of fm.entries) {
     fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
   return fields;

@@ -141,6 +141,34 @@ test("RED: no frontmatter at all", () => {
   }
 });
 
+// ★ 6.71.1 (envelope-duplicate-keys) — the reproduced shape: `verify_verdict: "PASS"` above `verify_verdict: "FAIL"`
+// against a FAIL report. The last copy equals the report, so before 6.71.1 this checked GREEN while a person reading
+// the briefing saw PASS first. The control is the same briefing with the one FAIL line only — GREEN.
+test("★ RED envelope: a repeated field (PASS above FAIL, report FAIL) — never resolved to the copy that matches", () => {
+  const dir = scratchDir();
+  try {
+    writeGoodFixture(dir);
+    writeFileSync(join(dir, "verify-report.json"), JSON.stringify({ verdict: "FAIL" }));
+    const one = GOOD_FM.replace('verify_verdict: "PASS"', 'verify_verdict: "FAIL"');
+    writeFileSync(join(dir, "BRIEFING.md"), one + "\n" + GOOD_BODY);
+    const control = run(join(dir, "BRIEFING.md"));
+    assert.equal(control.status, 0, `control: ${control.stdout}`);
+    const two = GOOD_FM.replace('verify_verdict: "PASS"', 'verify_verdict: "PASS"\nverify_verdict: "FAIL"');
+    writeFileSync(join(dir, "BRIEFING.md"), two + "\n" + GOOD_BODY);
+    const r = run(join(dir, "BRIEFING.md"));
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /RED — envelope: frontmatter repeats `verify_verdict` ×2/);
+    assert.doesNotMatch(r.stdout, /"PASS"|"FAIL"/, "keys and counts only, never a value");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("readEnvelope: a repeated key reads as no envelope (null); the unrepeated block reads its fields", () => {
+  assert.equal(checker.readEnvelope(GOOD_FM).get("verify_verdict"), "PASS", "control");
+  assert.equal(checker.readEnvelope(GOOD_FM.replace('feature: "feat"', 'feature: "feat"\nfeature: "other"')), null);
+});
+
 test("RED: a missing required field", () => {
   const dir = scratchDir();
   try {

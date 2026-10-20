@@ -23,6 +23,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.71.1] - 2026-10-20
+
+### Fixed
+
+- **A key repeated in a `LOOP.md` or `BRIEFING.md` frontmatter envelope is refused by every reader, never resolved to
+  one copy** (audit 2026-10-12 ENF-4, the follow-up 6.65.2 deferred).
+  - What failed: the five envelope readers kept the LAST copy of a repeated key. They agreed with each other, but not
+    with a person reading the file top-down. Reproduced at 6.71.0: a briefing with `verify_verdict: "PASS"` above
+    `verify_verdict: "FAIL"` checked GREEN against a FAIL report, and a `LOOP.md` with `decision: STOP_GREEN` above
+    `decision: STOP_CAP` passed `check-loop-record.mjs`. A YAML 1.2 parser rejects both files outright.
+  - What changed: `frontmatter-core.mjs` gains `frontmatterEntries(text)`, which returns the envelope's entries and
+    every repeated key. All five readers use it. `check-loop-record.mjs`, `check-loop-decision.mjs` and
+    `check-ship-briefing.mjs` RED a repeat, naming keys and counts, never a value. `check-loop-decision.mjs` checks
+    for a repeat before its blocked-stop skip, so a repeated `blocked` no longer reads as SKIPPED GREEN.
+    `loop-closeout.mjs` reads the envelope as absent and stops at `not committed: decision unverifiable` (exit 4)
+    without committing. `render-cost-ledger.mjs` copies no declared outcome. The refusal covers every key, extra keys
+    such as `blocked` included. "Extra keys are ignored" in `loop-record.md` still holds for a key's value. The
+    `loop-record.md`, `ship-briefing.md` and `cost-ledger.md` contracts now say so. `briefing_contract_version` stays `0.2.0`, because the renderer never emits a repeat.
+  - `render-run-report.mjs`: a derived outcome no longer says `/pharn-loop` "writes no `LOOP.md`". When the ledger
+    falls through to a derived outcome for a `/pharn-loop` run, the report now says the run "has no `LOOP.md` with a
+    single readable `decision`". That covers a repeated key, and also the older case of a `LOOP.md` with no `decision`
+    line. The `/pharn-ship` sentence is unchanged.
+  - Tests: one per reader, each with the unrepeated record as its negative control, and each run once against the
+    6.71.0 reader to confirm it failed there. A closure in `frontmatter-core.test.mjs` requires the set of
+    `frontmatterEntries(` callers to equal the five readers. Every other direct `fieldEntries(` caller must be a listed
+    PLAN/SPEC header reader.
+  - Bounds: the closure is lexical. The "no committed record repeats a key" measurement covers this repository's one
+    `LOOP.md`, not an install's records. A record already written is not re-checked by later stages, but if an install
+    does hold one with a repeat, it now REDs or reads as absent wherever it is read. `readField`, which the SPEC
+    readers use, still reads the last copy, by design.
+
 ## [6.71.0] - 2026-10-20
 
 ### Security

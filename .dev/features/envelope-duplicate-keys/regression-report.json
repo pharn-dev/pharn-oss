@@ -1,0 +1,48 @@
+{
+  "base": "dd69efd59f968200650116cae9e0a5afb9cc4936",
+  "inside": [
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/floor-orchestration.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-loop-decision.mjs",
+    "pharn/floor/check-loop-decision.test.mjs",
+    "pharn/floor/check-loop-record.mjs",
+    "pharn/floor/check-loop-record.test.mjs",
+    "pharn/floor/check-ship-briefing.mjs",
+    "pharn/floor/check-ship-briefing.test.mjs",
+    "pharn/floor/frontmatter-core.mjs",
+    "pharn/floor/frontmatter-core.test.mjs",
+    "pharn/floor/loop-closeout.mjs",
+    "pharn/floor/loop-closeout.test.mjs",
+    "pharn/floor/render-cost-ledger.mjs",
+    "pharn/floor/render-cost-ledger.test.mjs",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/floor/render-run-report.test.mjs",
+    "pharn/pharn-contracts/loop-record.md",
+    "pharn/pharn-contracts/ship-briefing.md",
+    ".dev/features/envelope-duplicate-keys/BUILD.md",
+    ".dev/features/envelope-duplicate-keys/GRILL.md",
+    ".dev/features/envelope-duplicate-keys/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

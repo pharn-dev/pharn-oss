@@ -93,7 +93,7 @@
 // Exit: 0 (GREEN) only when every check above holds; 1 (RED) on every refusal (fail-closed).
 
 import { readFileSync } from "node:fs";
-import { FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
+import { FM_RE, describeRepeats, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 
@@ -147,15 +147,17 @@ function cleanScalar(v, maxLen) {
 // is DATA ABOUT the record, not a DECLARATION of it. Returns a Map (L15: no plain-object key indexing).
 // Surrounding quotes are stripped; a trailing ` # comment` is NOT — the envelope is machine-written and
 // exact, and stripping would add a laundering surface for no benefit.
+// The envelope is read through frontmatter-core.mjs's `frontmatterEntries` (6.71.1), which also reports every key
+// that occurs more than once. A repeat is REFUSED by `gate()` below, never resolved to one copy (contract: "Extra keys
+// and sections are IGNORED" — each key at most once). Returns `{ fields, repeated }`, or null with no frontmatter.
 function envelope(text) {
-  const m = text.match(FM_RE);
-  if (!m) return null;
+  const fm = frontmatterEntries(text);
+  if (fm === null) return null;
   const fields = new Map();
-  // The line grammar is frontmatter-core.mjs's `fieldEntries` (6.65.2); the last copy of a repeated key wins.
-  for (const { key, raw } of fieldEntries(m[1].split(/\r?\n/))) {
+  for (const { key, raw } of fm.entries) {
     fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
-  return fields;
+  return { fields, repeated: fm.repeated };
 }
 
 // The Handoff scan is DELEGATED to loop-record-core.mjs, never re-derived here. The core also returns
@@ -175,14 +177,23 @@ function gate(recordPath) {
   }
 
   // ── (A) The envelope — read from the structured location only (L6) ─────────────────────────────────
-  const fields = envelope(text);
-  if (fields === null) {
+  const env = envelope(text);
+  if (env === null) {
     return red(
       `loop-record has no \`---\`-fenced YAML frontmatter (${recordPath}) — the envelope ` +
         `(decision, iterations, commit, date) is read ONLY from frontmatter, never from the body. ` +
         `See pharn/pharn-contracts/loop-record.md.`
     );
   }
+  // (A0) Every envelope key at most once (6.71.1). A repeat is refused, never resolved to one copy: the floor read the
+  // LAST copy while a person reads the first, and YAML 1.2 rejects the mapping. Keys and counts only, never a value.
+  if (env.repeated.length > 0) {
+    return red(
+      `loop-record's frontmatter repeats ${describeRepeats(env.repeated)} (${recordPath}) — every envelope key, an ` +
+        `extra one included, appears at most once. Keep one line per key. See pharn/pharn-contracts/loop-record.md.`
+    );
+  }
+  const fields = env.fields;
 
   for (const key of ["decision", "iterations", "commit", "date"]) {
     if (!fields.has(key)) {

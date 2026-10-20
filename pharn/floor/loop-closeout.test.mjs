@@ -42,6 +42,7 @@ import {
   isLoopBranchOf,
   parseArgs,
   phasePath,
+  readEnvelope,
   recordFacts,
   stageListPath,
   undoArgs,
@@ -787,6 +788,38 @@ test("recordFacts reads the envelope as the checkers do: quotes stripped, BOM an
   assert.equal(recordFacts("no frontmatter").decision, null);
   assert.equal(recordFacts(null).decision, null);
   assert.deepEqual(GREEN_TOKENS, { full: "STOP_GREEN", quick: "STOP_GREEN_QUICK" });
+});
+
+// ── ★ a repeated envelope key (6.71.1, envelope-duplicate-keys) ──────────────────────────────────────────────────────
+const repeatedDecision = () => loopRecord().replace("decision: STOP_GREEN\n", "decision: STOP_GREEN\ndecision: STOP_GREEN\n");
+
+test("★ readEnvelope / recordFacts: a repeated key reads as NO envelope (all null); the unrepeated twin reads its decision", () => {
+  assert.equal(readEnvelope(loopRecord()).get("decision"), "STOP_GREEN", "control");
+  assert.equal(readEnvelope(repeatedDecision()), null);
+  assert.deepEqual(recordFacts(repeatedDecision()), { decision: null, mode: null, blocked: null, hasBlocked: false, iterations: null });
+  // An EXTRA key repeated is refused the same way — the multiplicity rule covers every key.
+  assert.equal(
+    recordFacts(loopRecord({ blocked: "no-slug" }).replace("blocked: no-slug\n", "blocked: no-slug\nblocked: x\n")).decision,
+    null
+  );
+});
+
+test("★ a green record with a repeated key never commits, even past two GREEN checkers: decision unverifiable, exit 4", () => {
+  // The stub answers every child exit 0, so check-loop-record and check-loop-decision both read GREEN here: the
+  // refusal measured is the closeout's OWN reading. The control is the ★ exit-0 green-commit test above — the same
+  // fixture and stub, the record unrepeated — which commits.
+  const fx = fixture({ record: repeatedDecision() });
+  try {
+    const { doc, out } = close(fx, { run: stub().run });
+    assert.equal(doc.exit, EXIT.OWED, out);
+    assert.equal(doc.outcome, "not committed: decision unverifiable");
+    assert.equal(doc.decision, null);
+    assert.equal(doc.mode, null, "a null mode: the non-gate steps read it as full (a regress side, a report)");
+    assert.equal(fx.hasBranch("pharn-loop/demo"), false, "no branch was created");
+    assert.equal(sh(fx.dir, "rev-parse", "HEAD").stdout.trim(), fx.base, "no commit was made");
+  } finally {
+    fx.done();
+  }
 });
 
 test("the decision vocabulary equals check-loop-record.mjs's and check-loop-decision.mjs's own", () => {

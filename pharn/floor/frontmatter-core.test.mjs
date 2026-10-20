@@ -16,7 +16,17 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom, matchFrontmatter, readField, readValue } from "./frontmatter-core.mjs";
+import {
+  BULLET_FIELD_LINE_RE,
+  FM_RE,
+  describeRepeats,
+  fieldEntries,
+  frontmatterEntries,
+  stripBom,
+  matchFrontmatter,
+  readField,
+  readValue,
+} from "./frontmatter-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BOM = "﻿";
@@ -52,9 +62,11 @@ const CONSUMERS = [
 
 // A module that tests the frontmatter fence, by any of the spellings the floor uses: the shared anchor, the matcher,
 // the loose `startsWith("---")` of the validate.mjs family, or a private regex literal anchored on `^---`.
-const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|startsWith\("---"|\/\^---/;
-// A module that strips the BOM before that test: it calls stripBom, or reads through matchFrontmatter (which does).
-const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(/;
+// Since 6.71.1 a call to frontmatterEntries counts too: it reads through matchFrontmatter.
+const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|\bfrontmatterEntries\(|startsWith\("---"|\/\^---/;
+// A module that strips the BOM before that test: it calls stripBom, or reads through matchFrontmatter (which does) or
+// frontmatterEntries (which calls matchFrontmatter).
+const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(|\bfrontmatterEntries\(/;
 // The `key: value` line grammar as a regex literal: `^(` or `^-[ \t]+(` followed by the `[A-Za-z_]` key class. It
 // matches FIELD_LINE_RE, BULLET_FIELD_LINE_RE and the key-class variants the retired copies used; it deliberately does
 // not match validate.mjs's family grammar `^([A-Za-z0-9_]+):`, a separate, mirrored model (see the core's header).
@@ -244,6 +256,95 @@ test("readField: LAST-wins across a duplicated key, exact key match, undefined w
   assert.equal(readField("spec_ids: a\nspec_id2: b", "spec_id"), undefined, "a key is matched exactly, never by prefix");
   assert.equal(readField("a: 1", "spec_id"), undefined);
   assert.equal(readField('spec_content_hash: ""\nspec_content_hash: ' + "a".repeat(64), "spec_content_hash"), "a".repeat(64));
+});
+
+// ── The ENVELOPE reader (6.71.1, envelope-duplicate-keys): frontmatterEntries ────────────────────────────────────────
+
+test("frontmatterEntries: null without frontmatter or a string; entries are fieldEntries' own; repeats in first-seen order", () => {
+  assert.equal(frontmatterEntries(null), null);
+  assert.equal(frontmatterEntries(7), null);
+  assert.equal(frontmatterEntries("# no frontmatter\n\na: 1\n"), null);
+  const block = "a: 1\nb: x\na: 2\nc: y\na: 3\nb: z";
+  const got = frontmatterEntries(`---\n${block}\n---\n\nbody: not a field\n`);
+  assert.deepEqual(got.entries, fieldEntries(block.split("\n")), "the entries are exactly fieldEntries over the block");
+  assert.deepEqual(got.repeated, [
+    { key: "a", count: 3 },
+    { key: "b", count: 2 },
+  ]);
+  // Negative control (L60): the same block with each key once reports no repeat — the count is what fires.
+  assert.deepEqual(frontmatterEntries("---\na: 1\nb: x\nc: y\n---\n").repeated, []);
+  // A BOM is stripped first (matchFrontmatter), and a CRLF block reads the same.
+  assert.deepEqual(frontmatterEntries(`${BOM}---\r\na: 1\r\na: 2\r\n---\r\n`).repeated, [{ key: "a", count: 2 }]);
+  // A key matched only in the BODY is not an envelope key (L6).
+  assert.deepEqual(frontmatterEntries("---\na: 1\n---\n\na: 2\n").repeated, []);
+  // An inherited prototype name is a key like any other, never a lookup into Object.prototype (L15).
+  assert.deepEqual(frontmatterEntries("---\ntoString: 1\nconstructor: 2\ntoString: 3\n---\n").repeated, [{ key: "toString", count: 2 }]);
+});
+
+test("describeRepeats: keys and counts only", () => {
+  assert.equal(
+    describeRepeats([
+      { key: "a", count: 2 },
+      { key: "b", count: 3 },
+    ]),
+    "`a` ×2, `b` ×3"
+  );
+  assert.equal(describeRepeats([]), "");
+});
+
+// ✧ CLOSURE (6.71.1 — L29, L31, L36). The LOOP.md / BRIEFING.md envelope readers are materialised HERE. The set of
+// non-test floor modules that CALL `frontmatterEntries(` must EQUAL this list (both directions), and every module that
+// calls `fieldEntries(` directly must be a listed HEADER reader with its reason — so a new envelope reader written with
+// `fieldEntries` (last-wins, no refusal) fails as an unclassified caller, and a listed reader that drops the helper
+// fails the equality. Each listed reader's REFUSAL is pinned behaviourally in its own test file (check-loop-record,
+// check-ship-briefing, check-loop-decision, loop-closeout, render-cost-ledger). BOUND (P0): lexical — a reader that
+// re-declares the line regex is caught by the line-grammar closure above; one that parses lines some third way is
+// caught by neither, only by review.
+const ENVELOPE_READERS = [
+  "check-loop-record.mjs",
+  "check-ship-briefing.mjs",
+  "check-loop-decision.mjs",
+  "loop-closeout.mjs",
+  "render-cost-ledger.mjs",
+];
+const HEADER_READERS = new Map([
+  ["render-ship-briefing.mjs", "reads a PLAN's / SPEC's own header (frontmatter or dev bullets), never an envelope"],
+  ["check-plan-lessons.mjs", "reads a PLAN header and refuses a repeated applied_lessons itself (6.65.2)"],
+  ["check-ship-briefing.mjs", "readHeaderField reads the PLAN/SPEC header; its envelope goes through frontmatterEntries"],
+]);
+/** A module's source minus whole-line comments — a mention in a comment is not a call. */
+const codeOf = (src) =>
+  src
+    .split("\n")
+    .filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))
+    .join("\n");
+const CALLS_ENVELOPE_RE = /\bfrontmatterEntries\(/;
+const CALLS_FIELD_ENTRIES_RE = /\bfieldEntries\(/;
+
+test("✧ CLOSURE (6.71.1): the frontmatterEntries callers ARE the envelope readers; every fieldEntries caller is classified", () => {
+  const code = new Map(nonTestFloorModules().map((f) => [f, codeOf(readFileSync(join(HERE, f), "utf8"))]));
+  const envelopeCallers = [...code].filter(([, c]) => CALLS_ENVELOPE_RE.test(c)).map(([f]) => f);
+  assert.deepEqual(
+    [...envelopeCallers].sort(),
+    [...ENVELOPE_READERS].sort(),
+    "the modules calling frontmatterEntries( must equal ENVELOPE_READERS"
+  );
+  const fieldCallers = [...code].filter(([, c]) => CALLS_FIELD_ENTRIES_RE.test(c)).map(([f]) => f);
+  assert.deepEqual(
+    fieldCallers.filter((f) => !HEADER_READERS.has(f)),
+    [],
+    "a module calls fieldEntries( directly but is not a listed header reader — an envelope reader must use frontmatterEntries"
+  );
+  for (const f of HEADER_READERS.keys())
+    assert.ok(fieldCallers.includes(f), `${f} is listed as a header reader but no longer calls fieldEntries(`);
+});
+
+test("✧ the closure's predicates DISCRIMINATE (L60): a call is seen, a comment mention is not", () => {
+  assert.match(codeOf("  const fm = frontmatterEntries(text);"), CALLS_ENVELOPE_RE);
+  assert.doesNotMatch(codeOf("// read through frontmatterEntries(text) since 6.71.1"), CALLS_ENVELOPE_RE);
+  assert.doesNotMatch(codeOf(" * frontmatterEntries(text) — a JSDoc line"), CALLS_ENVELOPE_RE);
+  assert.match(codeOf("for (const e of fieldEntries(lines)) x(e);"), CALLS_FIELD_ENTRIES_RE);
+  assert.doesNotMatch(codeOf("// fieldEntries(lines) is the line reader"), CALLS_FIELD_ENTRIES_RE);
 });
 
 // ✧ PARITY, EXECUTED (L52 — the set is named): the consumers that read a SPEC/PLAN pin field are check-spec.mjs (its

@@ -33,10 +33,11 @@ const CLEAN = { verdict: "no-regressions", regressions: [] };
 const REGR = { verdict: "regressions", regressions: ["floor/x.test.mjs"] };
 
 // Build a minimal LOOP.md — this checker reads only the envelope (frontmatter), never the body/Handoff.
+// An ARRAY value writes the key once per element, in order — the only way to build a repeated key (6.71.1).
 function loopRecord(fm) {
   const lines = Object.entries(fm)
     .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${k}: ${v}`);
+    .flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map((x) => `${k}: ${x}`));
   return `---\n${lines.join("\n")}\n---\n\n# LOOP — a feature\n\nbody prose, unread by this checker.\n`;
 }
 
@@ -128,6 +129,32 @@ test("★ a blocked stuck-point stop → GREEN, SKIPPED — never attempts re-de
       assert.match(r.out, /SKIPPED/);
     }
   );
+});
+
+// ── ★ a repeated envelope key (6.71.1, envelope-duplicate-keys) — refused before re-derivation AND before the skip ──
+const GENUINE_GREEN = { decision: "STOP_GREEN", iterations: "1", cap: "3", commit: "abc1234", date: "2026-09-21" };
+
+test("★ a genuine STOP_GREEN record with `decision` repeated (same token twice) → RED naming the repeat; unrepeated → GREEN", () => {
+  withFixture(GENUINE_GREEN, PASS, CLEAN, (r) => assert.equal(r.status, 0, `control: ${r.out}`));
+  // The SAME token twice: no other rule can fire, so the repeat alone is what REDs.
+  withFixture({ ...GENUINE_GREEN, decision: ["STOP_GREEN", "STOP_GREEN"] }, PASS, CLEAN, (r) => {
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /repeats `decision` ×2/);
+    assert.doesNotMatch(r.out, /^GREEN|DECISION_MISMATCH/m, "refused before any re-derivation");
+  });
+});
+
+test("★ a blocked stop with `blocked` repeated → RED, never SKIPPED GREEN; one `blocked` → GREEN SKIPPED", () => {
+  const blocked = { decision: "INCONCLUSIVE", iterations: "1", commit: "unknown", date: "2026-09-21" };
+  withFixture({ ...blocked, blocked: "no-slug" }, undefined, undefined, (r) => {
+    assert.equal(r.status, 0, `control: ${r.out}`);
+    assert.match(r.out, /SKIPPED/);
+  });
+  withFixture({ ...blocked, blocked: ["no-slug", "not-quick"] }, undefined, undefined, (r) => {
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /repeats `blocked` ×2/);
+    assert.doesNotMatch(r.out, /SKIPPED/);
+  });
 });
 
 test("★ `cap` genuinely matters: the SAME reports re-derive DIFFERENTLY under a wrong recorded cap", () => {
