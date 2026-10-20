@@ -50,7 +50,7 @@
 //   the dev twin's command prose does it by hand). `--complete`
 //   is OPTIONAL: ABSENT ⇒ the legacy 3-valued behavior byte-for-byte ({feature, gates, verdict,
 //   failing_gates}, verdict ∈ {PASS, FAIL, INCONCLUSIVE}), so dev /pharn-dev-verify (which passes no
-//   --complete) and check-ship.mjs are PROVABLY unaffected — an INCOMPLETE verdict cannot arise without
+//   --complete) and .dev/floor/check-ship.mjs are PROVABLY unaffected — an INCOMPLETE verdict cannot arise without
 //   the flag, and check-ship never receives the flag. (If an INCOMPLETE report ever reached check-ship,
 //   its VERIFY_VERDICTS set would treat it as unknown → INCONCLUSIVE, fail-closed — bounded, not silent.)
 //

@@ -22,7 +22,7 @@
 //   the same transcript bytes the output is byte-identical: no clock read, no randomness.
 //   window_start/window_end come from the records' OWN timestamps (each request's first line), never from
 //   Date.now(). So it is pinnable by test.
-// FLOOR (primitive #3, an integer compare — the `check-ship.mjs` `iter >= cap` precedent): a session id
+// FLOOR (primitive #3, an integer compare — the `.dev/floor/check-ship.mjs` `iter >= cap` precedent): a session id
 //   resolving to 2+ transcript directories is REFUSED, never resolved first-match-wins. Bounded, and
 //   stated: that is a property of THIS LOOKUP, not a proof the platform never reuses a session id.
 // FLOOR (primitive #3), the values this block reads (6.28.1). Which lines are requests at all is the reader's rule
