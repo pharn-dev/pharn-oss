@@ -25,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- 2026-10-20: **The verify, review and ship records of the 6.71.2 scanner fix are on `main`.** PR #377 was merged
+  before its builder pushed them, so `.dev/features/scanner-redos-sweep-2/` stopped at regress. `VERIFY.md`,
+  `verify-report.json`, `REVIEW.md` and `SHIP.md` are copied unchanged from that branch's last commit. Dev trail only.
 - 2026-10-20: **Add a pharn-ci diff-coverage gate to pull requests.** Extends the existing `check` job in
   `.github/workflows/ci.yml` to run coverage (Node's `--experimental-test-coverage`, no new devDependency) and gate
   on it via `pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c` (threshold 100 in `.pharn/ci.yml`); a
