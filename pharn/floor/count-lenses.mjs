@@ -39,14 +39,10 @@ const TARGET = process.argv[2] || ".";
 // `role: lens` in a stage command) stays covered by the wider segment.
 const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
 
+/** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {
   process.stderr.write("count-lenses: " + msg + "\n");
-  process.exit(1);
-}
-
-// Fail-closed (P5): a missing / non-directory target is an ERROR, never a silent empty count.
-if (!existsSync(TARGET) || !statSync(TARGET).isDirectory()) {
-  fail(`target dir not found (or not a directory): ${TARGET}`);
+  return 1;
 }
 
 // Recursive *.md collector — mirrors pharn/floor/validate.mjs `walk`.
@@ -101,21 +97,34 @@ function frontmatterRole(rawText) {
   return role;
 }
 
-const lenses = [];
-for (const file of walk(TARGET)) {
-  if (isExcluded(file)) continue;
-  let text;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    continue;
+function main() {
+  // Fail-closed (P5): a missing / non-directory target is an ERROR, never a silent empty count.
+  if (!existsSync(TARGET) || !statSync(TARGET).isDirectory()) {
+    return fail(`target dir not found (or not a directory): ${TARGET}`);
   }
-  // The ONLY membership test: enum equality against a frontmatter-gated field (P5). No content grep.
-  if (frontmatterRole(text) === "lens") {
-    lenses.push(relative(TARGET, file).replace(/\\/g, "/"));
-  }
-}
-lenses.sort();
 
-process.stdout.write(JSON.stringify({ registered: lenses.length, lenses }) + "\n");
-process.exit(0);
+  const lenses = [];
+  for (const file of walk(TARGET)) {
+    if (isExcluded(file)) continue;
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    // The ONLY membership test: enum equality against a frontmatter-gated field (P5). No content grep.
+    if (frontmatterRole(text) === "lens") {
+      lenses.push(relative(TARGET, file).replace(/\\/g, "/"));
+    }
+  }
+  lenses.sort();
+
+  process.stdout.write(JSON.stringify({ registered: lenses.length, lenses }) + "\n");
+  return 0;
+}
+
+// THE FLUSH RULE (6.20.4; this CLI since 6.71.1): the exit code is SET and the process ends naturally, after Node has
+// drained stdout — render-review-assignments.mjs and check-review-assignments.mjs JSON.parse this document through
+// spawnSync, and an immediate exit dropped queued writes past a pipe's 64 KiB buffer on darwin.
+// pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();
