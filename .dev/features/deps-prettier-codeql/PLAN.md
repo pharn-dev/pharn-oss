@@ -10,4 +10,5 @@
 - `package.json` — prettier ^3.9.10
 - `package-lock.json` — lockfile for prettier 3.9.10
 - `CHANGELOG.md` — [Unreleased] entry (maintainer-authored dep bump)
+- `.dev/measurements/token-cost-2026-08-18.md` — prettier 3.9.10 italic style (`*` → `_`)
 - `.dev/features/deps-prettier-codeql/PLAN.md` — this plan
