@@ -23,6 +23,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.68.1] - 2026-10-20
+
+### Changed
+
+- **The root README is cut from 82,330 to 24,851 bytes: its long sections moved, with their text unchanged, into
+  three pages under `docs/`** (audit 2026-10-12, ARCH-10).
+  - What failed: "Guaranteed vs advisory" (~18.2 KB), "The pipeline" with its five subsections (~17.9 KB) and
+    "Current limitations" (~15.8 KB) were ~64% of an ~81 KB README, so a newcomer had to read past them to reach a
+    first run.
+  - What changed: "Guaranteed vs advisory" and "Why not just CLAUDE.md or AGENTS.md?" moved to `docs/guarantees.md`;
+    "How the workflow works", "The pipeline" with its six subsections (6.66.0's "Declaring the base install"
+    included), the `--quick` detail from "Quick start" (now
+    "Quick mode") and "Capability coverage" moved to `docs/pipeline.md`; "Current limitations" moved to
+    `docs/limitations.md`. The README keeps what PHARN is, install and the Node requirement, the first run, what gets
+    installed, the commands table and the generated inventory, and adds a short guaranteed-vs-advisory summary and a
+    list of the pages. The moved text differs from the old README only in re-based links and three position words
+    that named the README's layout ("on this page", "the generated inventory above", "the current-state block …
+    below"). The README's new summary restates five of the table's guarantees in brief and links to the table; it adds none.
+  - Why this bumps: two shipped files cited a moved README section, `pharn/pharn-contracts/test-results-record.md`
+    (`README, "Per-test results"`) and a comment in `pharn/floor/test-infra-core.mjs`. Both now name
+    `docs/pipeline.md`. `LIMITS.md` is unchanged.
+  - Tests: the ✧ test that every statement of the reconcile claim says "non-adversarial" now also reads
+    `docs/guarantees.md` and `docs/limitations.md`.
+  - Bounds: nothing holds the README to 25 KB from here; its size was measured once, not gated. The moved text was
+    compared with the old README by a one-off script, not by a gate.
+
 ## [6.68.0] - 2026-10-20
 
 ### Changed
