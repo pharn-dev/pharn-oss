@@ -3,8 +3,9 @@
 // WHAT A PART IS. `/pharn-loop` and `/pharn-ship` keep the text a run needs only at one point in its own file under
 // `.claude/commands/`: `pharn-<cmd>-quick.md` (read only for a `--quick` run, at entry) and `pharn-<cmd>-close.md`
 // (read once: the loop's at its first stop, ship's with step 7's return marker after the first verify or at an earlier
-// STOP). A part is recognized ONLY by its frontmatter — `part_of: <parent file stem>`
-// and `part: quick | close` — never by its name (L6: a structural fact is read from its structured location), and that
+// STOP). Since 6.70.0 `/pharn-ship` has a third, `pharn-ship-stages.md` (`## Running a stage`, Step 2 after GATE 1 and
+// Step 2b, read once after the SPEC is approved). A part is recognized ONLY by its frontmatter — `part_of: <parent file
+// stem>` and `part: quick | stages | close` — never by its name (L6: a structural fact is read from its structured location), and that
 // frontmatter is the ONE record of which parts a command has (L35): this module, the tests and the capability catalog
 // all discover parts here, and no second list exists.
 //
@@ -12,8 +13,9 @@
 // docs:check), which reads `frontmatterFields()` to leave parts out of the command catalog — both under `.dev/`, which
 // no install receives. Every pin that asked "does /pharn-loop carry this line, in this order?" read one
 // file; after the move the answer spans three. `commandFamilyText()` splices each part back where its text sat before
-// the move — a quick part at the end of the parent's `## Quick mode` section, a close part at the end of the parent —
-// so those pins keep their meaning, and `.dev/floor/command-family.test.mjs` adds the rules that say WHERE each line
+// the move — a quick part at the end of the parent's `## Quick mode` section, a stages part at the end of its
+// `## Step 2 — ` section, a close part at the end of the parent — so those pins keep their meaning (one exception: the
+// stages part carries `## Running a stage`, which sat before `## Quick mode` and is now spliced after Step 2 item 1), and `.dev/floor/command-family.test.mjs` adds the rules that say WHERE each line
 // must live. Importing it from shipped code would break an install, which ships without `.dev/`; the test file pins
 // that no non-test file under `pharn/` or `.claude/hooks/` names this module.
 //
@@ -24,11 +26,23 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fieldEntries, matchFrontmatter, stripBom } from "../../pharn/floor/frontmatter-core.mjs";
 
-/** The two kinds of part, in splice order. */
-export const PART_KINDS = Object.freeze(["quick", "close"]);
+/** The three kinds of part, in splice order. */
+export const PART_KINDS = Object.freeze(["quick", "stages", "close"]);
 
 /** The heading whose section a quick part is spliced to the end of. */
 export const QUICK_ANCHOR_RE = /^## Quick mode\b/m;
+
+/** The heading whose section a stages part is spliced to the end of (6.70.0: `/pharn-ship`'s stages after GATE 1). */
+export const STAGES_ANCHOR_RE = /^## Step 2 — /m;
+
+/** `text` with `body` inserted at the end of the `##` section `anchor` starts; throws when the anchor is missing. */
+function spliceAtSectionEnd(text, anchor, body, what) {
+  const m = anchor.exec(text);
+  if (!m) throw new Error(what);
+  const next = text.indexOf("\n## ", m.index + 1);
+  const at = next === -1 ? text.length : next + 1;
+  return `${text.slice(0, at)}${body}${body.endsWith("\n") ? "" : "\n"}\n${text.slice(at)}`;
+}
 
 /**
  * The leading `---` frontmatter of `text` as a flat {key: value} map (a value's surrounding double quotes are
@@ -77,8 +91,9 @@ export function commandParts(dir, file) {
 
 /**
  * The command `file` with each part's text (frontmatter removed) spliced back where it sat before the move: a quick
- * part at the end of the parent's `## Quick mode` section, a close part at the end. A file with no parts is returned
- * unchanged. Throws — never splices somewhere else — when a quick part's anchor is missing, or a part's kind is not
+ * part at the end of the parent's `## Quick mode` section, a stages part at the end of its `## Step 2 — ` section, a
+ * close part at the end. A file with no parts is returned unchanged. Throws — never splices somewhere else — when a
+ * quick or stages part's anchor is missing, or a part's kind is not
  * in PART_KINDS (L60: an anchor that is not found must fail, not slice to the end).
  */
 export function commandFamilyText(dir, file) {
@@ -86,11 +101,19 @@ export function commandFamilyText(dir, file) {
   for (const p of commandParts(dir, file)) {
     const body = withoutFrontmatter(readFileSync(join(dir, p.file), "utf8"));
     if (p.part === "quick") {
-      const m = QUICK_ANCHOR_RE.exec(text);
-      if (!m) throw new Error(`${file}: a quick part (${p.file}) but no "## Quick mode" heading to splice it under`);
-      const next = text.indexOf("\n## ", m.index + 1);
-      const at = next === -1 ? text.length : next + 1;
-      text = `${text.slice(0, at)}${body}${body.endsWith("\n") ? "" : "\n"}\n${text.slice(at)}`;
+      text = spliceAtSectionEnd(
+        text,
+        QUICK_ANCHOR_RE,
+        body,
+        `${file}: a quick part (${p.file}) but no "## Quick mode" heading to splice it under`
+      );
+    } else if (p.part === "stages") {
+      text = spliceAtSectionEnd(
+        text,
+        STAGES_ANCHOR_RE,
+        body,
+        `${file}: a stages part (${p.file}) but no "## Step 2 — " heading to splice it under`
+      );
     } else if (p.part === "close") {
       text = `${text}${text.endsWith("\n") ? "" : "\n"}\n${body}`;
     } else {

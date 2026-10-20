@@ -4841,12 +4841,15 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 //
 // ── Honest scope (P0) ─────────────────────────────────────────────────────────────────────────────────
 // FLOOR (what a green run means): the five rules above hold for the product files on disk (fifteen at 6.32.0:
-//   eleven commands and four parts).
+//   eleven commands and four parts; sixteen at 6.70.0, with /pharn-ship's stages part). Since 6.70.0 (ship-step2-part,
+//   review finding ARCH-7) R1 and R2 also range over the `pharn-dev-*` commands — the table closes over every
+//   `pharn-*.md` on disk (`budgetedCommandFiles`), and each dev command's row is its measured bytes + 10%.
 // NOT guaranteed: it bounds BYTES and VOCABULARY, never meaning. A paraphrased claim ("ensures",
 //   "guarantees") passes R4 — named follow-up `description-claim-paraphrase`. R5 proves the block EXISTS,
 //   never that it is complete or true. A body within its ceiling can still have lost an instruction: the
-//   other pins in this file and the review hold that, not this section. The `pharn-dev-*` commands are
-//   outside it (slim-commands D8, follow-up `dev-command-slim`).
+//   other pins in this file and the review hold that, not this section. R3, R4 and R5 still do not apply to the
+//   `pharn-dev-*` commands, whose descriptions carry FLOOR/ADVISORY by design and whose claims are spread through
+//   their bodies (slim-commands D8, follow-up `dev-command-slim`).
 
 // 6.32.0 (orchestrator-context): the budget is per FILE on disk, a command's PARTS included — a part is inserted into
 // the run when its command reads it, so its bytes are budgeted like a command's. pharn-loop.md and pharn-ship.md were
@@ -4878,14 +4881,26 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes
   // measured, 3,473 over 24,064; raised by the rule (+10%, up to a multiple of 512).
   "pharn-review.md": 30720,
-  // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 40,551 bytes measured, 615 over 39,936 (the GATE-2
-  // review's R1–R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
-  "pharn-ship.md": 45056,
+  // ship-step2-part (6.70.0): `## Running a stage`, Step 2 after GATE 1 and Step 2b moved into the stages part, and the
+  // compaction rule and the stages pointer came in — 16,037 bytes measured (was 42,422); the row went DOWN by the rule.
+  "pharn-ship.md": 17920,
   "pharn-ship-close.md": 31232,
   "pharn-ship-quick.md": 12800,
+  "pharn-ship-stages.md": 33280, // 6.70.0 ship-step2-part: 29,967 B measured + 10% → next 512
   "pharn-spec.md": 27136,
   "pharn-test.md": 20480,
   "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
+  // ship-step2-part (6.70.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
+  // rounded up to 512. R3–R5 do not apply to them (header).
+  "pharn-dev-build.md": 15360, // 13,771 B
+  "pharn-dev-eval.md": 11264, // 9,907 B
+  "pharn-dev-grill.md": 25600, // 22,836 B
+  "pharn-dev-memory-promote.md": 50688, // 45,963 B
+  "pharn-dev-plan.md": 20480, // 18,512 B
+  "pharn-dev-regress.md": 22528, // 20,234 B
+  "pharn-dev-review.md": 10240, // 8,931 B
+  "pharn-dev-ship.md": 47104, // 42,526 B
+  "pharn-dev-verify.md": 27648, // 24,713 B
 });
 const DESCRIPTION_MAX_BYTES = 250;
 const CLAIM_VOCABULARY_RE = /\b(FLOOR|ADVISORY)\b|NEVER means|\(P[0-7]\)/;
@@ -4898,6 +4913,11 @@ const REVIEW_DESCRIPTION_BEFORE_SLIM =
 /** The product commands on disk: `pharn-*.md` minus `pharn-dev-*`, sorted. */
 function productCommandFiles() {
   return commandAndPartFiles().filter((f) => f.startsWith("pharn-") && !f.startsWith("pharn-dev-"));
+}
+
+/** Every command file R1/R2 budget (6.70.0): `pharn-*.md`, the `pharn-dev-*` commands included, sorted. */
+function budgetedCommandFiles() {
+  return commandAndPartFiles().filter((f) => f.startsWith("pharn-"));
 }
 
 /** One product FILE's bytes as the repository holds them — a part is budgeted on its own (R1–R4). */
@@ -4956,10 +4976,15 @@ function claimsHeadingCount(text) {
   return text.split(/\r?\n/).filter((t, i) => !fenced.has(i + 1) && CLAIMS_HEADING_RE.test(t)).length;
 }
 
-test("✧ BUDGET R1: the product commands on disk equal COMMAND_BYTE_CEILINGS' keys", () => {
-  const onDisk = productCommandFiles();
+test("✧ BUDGET R1: the command files on disk (dev commands included, 6.70.0) equal COMMAND_BYTE_CEILINGS' keys", () => {
+  const onDisk = budgetedCommandFiles();
   assert.deepEqual(budgetClosureOffenders(onDisk, COMMAND_BYTE_CEILINGS), []);
   assert.equal(onDisk.length, Object.keys(COMMAND_BYTE_CEILINGS).length);
+  // L34: both halves of the domain are present — the dev commands are not vacuously in.
+  assert.ok(onDisk.some((f) => f.startsWith("pharn-dev-")) && onDisk.some((f) => !f.startsWith("pharn-dev-")), "non-vacuous");
+  // CONTROL (6.70.0): a dev command with no row is red (the closure reaches it).
+  const noDev = Object.fromEntries(Object.entries(COMMAND_BYTE_CEILINGS).filter(([k]) => k !== "pharn-dev-ship.md"));
+  assert.deepEqual(budgetClosureOffenders(onDisk, noDev), ["pharn-dev-ship.md: on disk, no ceiling"]);
   // CONTROLS (L60): a table missing one key, and a table with an extra key, are both red.
   const [first, ...rest] = Object.keys(COMMAND_BYTE_CEILINGS);
   const missing = Object.fromEntries(rest.map((k) => [k, COMMAND_BYTE_CEILINGS[k]]));
@@ -4969,19 +4994,21 @@ test("✧ BUDGET R1: the product commands on disk equal COMMAND_BYTE_CEILINGS' k
   assert.notDeepEqual(budgetClosureOffenders([], COMMAND_BYTE_CEILINGS), []);
 });
 
-test("✧ BUDGET R2: every product command's body is within its measured ceiling", () => {
-  const offenders = productCommandFiles()
+test("✧ BUDGET R2: every command's body (dev commands included, 6.70.0) is within its measured ceiling", () => {
+  const offenders = budgetedCommandFiles()
     .map((f) => bodyBudgetOffender(f, productCommandText(f)))
     .filter(Boolean);
   assert.deepEqual(offenders, [], "raise a ceiling only as a deliberate, visible diff to COMMAND_BYTE_CEILINGS");
-  // CONTROL (L60): the real body plus the bytes that put it one over its ceiling is red.
-  const file = "pharn-ship.md";
-  const body = productCommandText(file);
-  const pad = "x".repeat(COMMAND_BYTE_CEILINGS[file] - commandBytes(body) + 1);
-  assert.equal(
-    bodyBudgetOffender(file, `${body}${pad}`),
-    `${file}: ${COMMAND_BYTE_CEILINGS[file] + 1} bytes > ceiling ${COMMAND_BYTE_CEILINGS[file]}`
-  );
+  // CONTROL (L60): the real body plus the bytes that put it one over its ceiling is red — a product and a dev command.
+  for (const file of ["pharn-ship.md", "pharn-dev-ship.md"]) {
+    const body = productCommandText(file);
+    const pad = "x".repeat(COMMAND_BYTE_CEILINGS[file] - commandBytes(body) + 1);
+    assert.equal(
+      bodyBudgetOffender(file, `${body}${pad}`),
+      `${file}: ${COMMAND_BYTE_CEILINGS[file] + 1} bytes > ceiling ${COMMAND_BYTE_CEILINGS[file]}`
+    );
+  }
+  const body = productCommandText("pharn-ship.md");
   // A CRLF checkout measures what the repository holds.
   assert.equal(commandBytes(body.replace(/\n/g, "\r\n")), commandBytes(body));
 });
@@ -5098,6 +5125,8 @@ const SHELL_VALUES = Object.freeze({
   "<resume.argv…>": "code-produced: the stage script's own printed resume.argv",
   "<chosen option's argv…>": "a registry-held flag plus the human's answer, single-quoted",
   "<stage>": "a closed choice: the --stage of the orchestrator's own pinned start line that crashed (R3's fallback)",
+  "<heading>":
+    "a heading of the command's own file, single-quoted (6.70.0); command-section.mjs refuses one with a control character and matches it as text only",
 });
 
 /** placeholder -> ["file:line", …] over [file, body] pairs. */
@@ -5856,4 +5885,79 @@ test("✧ loop-no-prompts: /pharn-loop stops in plan mode before Step 1a (the as
   assert.ok(at > 0, "the plan-mode stop line is pinned");
   assert.ok(at < text.search(/^### Step 1a\b/m), "the plan-mode stop precedes Step 1a");
   assert.ok(at < text.search(/^## Quick mode\b/m), "the plan-mode stop precedes the quick part's load rule");
+});
+
+// ── 6.70.0 (ship-step2-part, review findings CTX-4/CTX-5) — both orchestrators re-read the step in progress ──────
+// A compaction summarises the turn that carried the invoked command's text, and the commands re-read only their PARTS.
+// Each orchestrator's MAIN file now carries, before its first `##` section (so it is in view from the first turn), one
+// paragraph that sends the run back to the section of the step in progress through one pinned extractor line whose
+// file operand is that command itself, then to its parts, with a whole-file Read as the fallback. FLOOR: the text —
+// the paragraph's sentences, the one pinned line, its position. NOT claimed: that a run follows it.
+const COMPACTION_PINS = [
+  "**After a compaction of the conversation** — it keeps neither this command's text nor what you read — re-read, before the next step, the section of this file that the step in progress belongs to, with the line below",
+  "Then re-read every part this run has read, in full, as its pointer says.",
+  "If the line exits other than `0`, read this file in full with the Read tool instead.",
+];
+const compactionLine = (file) => `node pharn/floor/command-section.mjs .claude/commands/${file} '<heading>'`;
+
+function compactionOffenders(file, text) {
+  const out = [];
+  const first = text.search(/^## /m);
+  if (first < 0) return [`${file}: no ## section (L60: an anchor that is not found fails)`];
+  const head = text.slice(0, first).replace(/\s+/g, " ");
+  for (const pin of COMPACTION_PINS) if (!head.includes(pin)) out.push(`${file}: before its first ## section, lacks: ${pin}`);
+  const lines = shellLines(text).filter((l) => l.kind === "fence" && l.text.startsWith("node pharn/floor/command-section.mjs"));
+  if (lines.length !== 1 || lines[0].text !== compactionLine(file))
+    out.push(`${file}: must pin exactly one extractor line, ${JSON.stringify(compactionLine(file))}`);
+  else if (text.indexOf(compactionLine(file)) > first) out.push(`${file}: the extractor line sits after its first ## section`);
+  return out;
+}
+
+test("✧ 6.70.0 compaction re-read: /pharn-ship and /pharn-loop each pin the rule and ONE extractor line naming themselves", () => {
+  for (const file of ["pharn-ship.md", "pharn-loop.md"]) {
+    const text = withoutGrant(readFileSync(join(COMMANDS_DIR, file), "utf8"));
+    assert.deepEqual(compactionOffenders(file, text), [], file);
+    // CONTROLS (L60), one per property: each pinned sentence rewritten; the line pointed at another file; a second
+    // line; the line moved below the first ## section.
+    for (const pin of COMPACTION_PINS) {
+      const re = new RegExp(
+        pin
+          .split(/\s+/)
+          .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("\\s+")
+      );
+      assert.match(text, re, `anchor (L60): ${file} carries the pin`);
+      assert.ok(
+        compactionOffenders(file, text.replace(re, "CHANGED")).some((o) => o.includes("lacks:")),
+        `${file} without "${pin.slice(0, 40)}…" must be red`
+      );
+    }
+    const other = text.replace(compactionLine(file), compactionLine("pharn-verify.md"));
+    assert.ok(
+      compactionOffenders(file, other).some((o) => o.includes("must pin exactly one")),
+      `${file}: another file`
+    );
+    const twice = `${text}\n\`\`\`bash\n${compactionLine(file)}\n\`\`\`\n`;
+    assert.ok(
+      compactionOffenders(file, twice).some((o) => o.includes("must pin exactly one")),
+      `${file}: twice`
+    );
+    const lines = text.split("\n");
+    const at = lines.findIndex((l) => l === compactionLine(file));
+    const firstH = lines.findIndex((l) => /^## /.test(l));
+    assert.ok(at > 0 && firstH > at, "anchor (L60)");
+    const moved = [
+      ...lines.slice(0, at - 1),
+      ...lines.slice(at + 2, firstH + 1),
+      "",
+      "```bash",
+      compactionLine(file),
+      "```",
+      ...lines.slice(firstH + 1),
+    ];
+    assert.ok(
+      compactionOffenders(file, moved.join("\n")).some((o) => o.includes("after its first ##")),
+      `${file}: moved`
+    );
+  }
 });
