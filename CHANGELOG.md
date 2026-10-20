@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.70.0] - 2026-10-20
+## [6.71.0] - 2026-10-20
 
 ### Security
 
@@ -80,6 +80,131 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     A new item 10, with its §3 row, covers a model-written PLAN as the write-scope input.
 - The hook and trusted-doc edits were applied by the maintainer with a reviewed, sha256-pinned script that deleted
   itself (`.dev/features/hook-hardening-batch/`).
+
+## [6.70.0] - 2026-10-20
+
+### Added
+
+- 2026-10-20: **A pull request that changes a shipped product path now has to bump `SKILLS_VERSION`, or CI
+  fails** (audit 2026-10-12, ARCH-2). Before this, the rule was kept by care alone. `check:changelog-entry` compares
+  CHANGELOG text, and `check:changelog` and `check:badge` check that the copies of the version agree. None of them
+  compared a PR's changed paths with the product surface, so a product edit with only an `[Unreleased]` entry passed
+  every gate. That happened three times: `6c5ae8e`, `e4e8529` and `c338b9d` (lessons-learned L43).
+  - New `.dev/floor/check-surface-bump.mjs` lists the PR's own changed paths: its diff from the merge commit's first
+    parent in CI, or from the merge-base with `origin/main` locally, plus uncommitted and untracked files. If any
+    path is in the product surface and `SKILLS_VERSION` is unchanged, it fails with `NOT_BUMPED`. Files that a merge
+    from `main` brought in do not count, and a bump made in a different commit of the same PR does.
+  - The product surface is one constant, and a test binds it to the list in `CLAUDE.md` ("SKILLS_VERSION
+    discipline"), so neither can change alone. That list was rewritten as exact path patterns. It also gains
+    `pharn/floor/*.json`, the shipped data files (`lens-family-map.json`, `lens-scanner-map.json`,
+    `reconcile-ignore.json`) that the floor's checkers read at run time. `pharn/floor/README.md` stays out until the
+    maintainer confirms whether the installer ships it.
+  - Wired as `npm run check:surface-bump` (not in `npm run check`, because it needs a base) and as the CI step
+    "SKILLS_VERSION surface-bump check" on pull requests. Its test executes the committed CI lines in a shallow
+    checkout of a test merge commit.
+  - Measured before the build against the last 40 commits on `main`: 33 changed the product surface and all of them
+    bumped, and 7 changed none, so 0 false positives. Each of the three earlier misses fails the check.
+  - Bounds: the check proves only that `SKILLS_VERSION` moved. It does not prove the bump is the right size, or that
+    the listed set is exactly what an install receives. The new version's CHANGELOG section is checked by
+    `check:changelog` and `check:changelog-entry`. Direct pushes to `main` and admin merges skip it. Running it in
+    `/pharn-dev-ship` Step 2c is the follow-up `dev-ship-surface-bump`. Apparatus and repo meta only, so there is no
+    `SKILLS_VERSION` bump.
+- **`/pharn-ship`'s stages after GATE 1 moved into a third part, read once the SPEC is approved, with one section per
+  stage; a new floor script prints one section of a command, and `/pharn-ship` and `/pharn-loop` re-read the step in
+  progress with it after a compaction** (`SKILLS_VERSION` 6.69.0 → **6.70.0**, minor: a new product floor script;
+  audit 2026-10-12 ARCH-7 and CTX-4/CTX-5).
+  - What changed:
+    - New part `.claude/commands/pharn-ship-stages.md` (`part: stages`). It holds `## Running a stage`, Step 2 from
+      the structural backstop on and Step 2b. Each Step 2 item is now its own `###` section, Step 2.1 (the backstop,
+      the base, the run marker, the snapshot and the entry gates) to Step 2.8 (GATE 2), so the numbers the text cites
+      ("step 7") are headings. `pharn-ship.md` keeps the gates, Step 1, the quick pointer, Step 2's rules, `/pharn-spec`
+      (GATE 1) and the close pointer: 42,422 → 16,037 bytes.
+    - The part is read once, when the run resumes after GATE 1 — whatever the human answered — before the structural
+      backstop, which then decides whether the SPEC is Approved. If it does not load, the run STOPs there, through the
+      close part like any STOP once `<name>` exists.
+    - New `pharn/floor/command-section.mjs <file> <heading>` prints one section of a command file: the heading whose
+      text is the operand, or starts with it and a space, up to the next heading of the same or a higher level, both
+      outside fences and HTML comments, then an end line. It refuses (exit 2, nothing printed) a missing or ambiguous
+      heading, an unclosed fence or comment, and any file but a regular, non-symlinked `pharn-*.md` directly in
+      `.claude/commands`.
+    - Both orchestrators open with one paragraph: after a compaction, re-read the section of this file the step in
+      progress belongs to with a pinned line naming the command itself, then every part read so far; read the whole
+      file if the line fails. `/pharn-loop`'s `allowed-tools` gains that line,
+      `Bash(node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md *)`. **The grant's bound:** the `*`
+      leaves only the heading free; the file operand is fixed, a third operand is a usage refusal, and the script
+      reads only a regular `pharn-*.md` directly in `.claude/commands`.
+  - Why: Step 2 alone was 306 lines (≈19.6 KB) of a 42 KB command, and a compaction kept neither the command's text
+    nor any rule to re-read it — only the parts were re-read.
+  - What it saves, and what it does not: until GATE 1 a run holds the 16 KB main file instead of 42 KB, and a run
+    that is never resumed after GATE 1 never loads the other 30 KB. **The peak after GATE 1 does not drop** (a part read stays in
+    context; the pointer adds about 1.5 KB), and the stage load budget's total for `/pharn-ship` is the same bytes.
+  - Checked by: `pharn/floor/command-section.test.mjs` (each input kind the heading model reads, every refusal, the
+    CLI, and every heading of both orchestrators' files, which must resolve uniquely to a contiguous slice);
+    `.dev/floor/command-family.test.mjs` (the stages part in the part closure, its pointer's pinned load and
+    not-loaded sentences, its headings placed in it alone, its splice point); `.dev/floor/command-hygiene.test.mjs`
+    (the compaction paragraph and its one pinned line in each orchestrator, with a control per property; the grant
+    is the derived exact set, as before).
+  - Bounds: that a run re-reads anything after a compaction, or reads the part at its point, is advisory — no hook
+    sees a Read. The heading model is not checked against a markdown renderer; the fixture list and the committed
+    files are its evidence.
+  - Not done, named: `loop-step-sections` (`pharn-loop.md` Step 1 and `pharn-loop-close.md` Step 6 into `###`
+    sections) and `dev-command-slim` (`pharn-dev-memory-promote.md` Step 6, and the dev commands' descriptions).
+- 2026-10-20: **The `pharn-dev-*` commands now have byte ceilings.** `COMMAND_BYTE_CEILINGS` closes over every
+  `pharn-*.md` command file, and its closure and byte rules (BUDGET R1/R2) now cover the nine dev commands, each at its
+  measured bytes + 10%, rounded up to 512. The description, vocabulary and claims-block rules still apply to product
+  commands only. Dev apparatus; no bump of its own.
+
+### Fixed
+
+- 2026-10-20: **`docs/pipeline.md` now says the AC-TESTS lock pins every allowlisted gate's command, not only the
+  level gates'.** The sentence in "What verify proves about acceptance criteria" moved verbatim from the README in
+  6.68.1 (#371), while 6.68.0 (#369, audit SEC-4) widened the pin to `other_gates` and `other_chained`. It now adds
+  that clause, with its bound: for those gates only the command is pinned, not the files or configs it reads. The text
+  restates `pharn/pharn-contracts/ac-tests.md`; no claim is added. Hand-written docs, so no version bump.
+
+## [6.69.0] - 2026-10-20
+
+### Added
+
+- **One implementation of the lessons grammar: the product lessons floor takes the canon root as a parameter, the
+  four `.dev/floor/` twins are thin wrappers over it, and `/pharn-plan` regenerates the lessons index on `COLD` and
+  `STALE`** (audit 2026-10-12, ARCH-6 and CTX-8).
+  - ARCH-6, what failed: `lessons-index-core.mjs`, `check-lessons-index.mjs`, `gen-lessons-index.mjs` and
+    `check-provenance.mjs` each existed twice, in `pharn/floor/` and `.dev/floor/`, kept equal by hand and by ✧ text
+    pins. Measured at 6.65.2, the grammar code of each pair was identical. The real differences were the paths, the
+    regenerate hint, two header paragraphs, how an absent canon is read, the verdict names and the dev `commit` rule.
+    The product hard-coded `memory-bank/` and had no way to read another root.
+  - ARCH-6, what changed: a new `pharn/floor/canon-root.mjs` is the one parser for `--canon-root <dir>` (default
+    `memory-bank`; a repo-relative POSIX path, no `.`/`..` segment, no leading `-`). `lessons-index-core.mjs` takes a
+    profile (canon path, output path, generator, regenerate hint, two header paragraphs). Its default profile renders
+    the same bytes as before, and `productProfile()` runs the same root grammar. `check-lessons-index.mjs` and
+    `gen-lessons-index.mjs` accept `--canon-root`. An invalid value exits 2 and prints no verdict token.
+    `check-provenance.mjs` exports `checkProvenance()`, which validates the root it is given, builds its target list
+    under that root and gains `--strict-commit`, which refuses `unknown`. It now loads the runtime floor first and runs
+    only when invoked directly, so on a Node below the floor it exits 2 instead of checking.
+  - The `.dev/floor/` files keep their paths and exported APIs and now declare only the dev profile and what differs
+    there: canon must exist, the verdicts are `MISSING`/`DRIFT` over a committed page, and `commit` must be a SHA.
+    `docs/lessons-index.md` regenerates byte-identical.
+  - CTX-8, what failed: on `COLD`, `/pharn-plan` read `memory-bank/lessons-learned.md` in full (about 210 KB in this
+    repo) with an "optional" warm-up, and on `STALE` likewise. The product checker printed `NO_CANON` here, so this
+    repo could not run the product sweep on its own canon.
+  - CTX-8, what changed: `COLD` and `STALE` now run `node pharn/floor/gen-lessons-index.mjs .`, then the `--verdict`
+    line again. `GREEN` selects from the index and reads only the candidates; anything else falls back to canon in
+    full. `/pharn-loop`'s `allowed-tools` gains that one line. `/pharn-memory-promote` Step 6b's sentence about a
+    skipped refresh now says the next plan regenerates. With `--canon-root .dev/memory-bank`, the product checker
+    reads this repo's canon.
+  - Checked by: a canon-root grammar suite; per-CLI custom-root and no-flag cases (the default stays the production
+    path); `--strict-commit`, root-validation and import-runs-nothing cases. Each dev test file gets a closure that
+    refuses any top-level declaration in a wrapper beyond its profile, with negative controls. A dev test runs the
+    product checker on this repo's canon and requires a token other than `NO_CANON`. `LESSONS_SWEEP_WIRING` grows from
+    4 to 5. The retired text pins compared the two copies; with one copy there is nothing for them to compare.
+  - Bound: `--canon-root` changes which file these four CLIs read. Every other product canon path stays
+    `memory-bank/`: `check-plan-lessons`'s argument, the promote target and `/pharn-plan`'s "read canon" step. So the
+    flag does not relocate a project's memory-bank. The root check is lexical: a symlinked root is followed for
+    reading.
+  - Not covered: lessons L31 and L35 in `.dev/memory-bank/lessons-learned.md` still describe the check-provenance and
+    lessons-index pairs as copies that must both exist. Canon is not edited in this batch; the correction is recorded
+    as a deferred lesson candidate in `.dev/features/lessons-canon-root/SHIP.md`.
 
 ## [6.68.1] - 2026-10-20
 

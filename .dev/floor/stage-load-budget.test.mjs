@@ -53,8 +53,8 @@
 //   - that a path counts once through loadSet itself: L4's dedupe control exercises a Set, not loadSet, so a loadSet
 //     rewritten to an array would double-count a shared file and could stay under its ceiling. That error only
 //     over-counts (the safe direction); a known residual, kept at stage-load-budget's GATE 2.
-// The `pharn-dev-*` commands are outside this budget, as they are outside COMMAND_BYTE_CEILINGS (follow-up
-// `dev-command-slim`).
+// The `pharn-dev-*` commands are outside this budget. Since 6.70.0 each one's FILE has a byte ceiling in
+// COMMAND_BYTE_CEILINGS; their load sets are not budgeted (follow-up `dev-command-slim`).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

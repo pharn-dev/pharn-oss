@@ -283,7 +283,10 @@ verify report carries a per-AC table (id, level, matched tests, status, reason),
   `pre`/`post` scripts), their `testResults` format, and root `vitest`/`vite`/`playwright`/`jest` config files — and,
   since 6.31.0, the scripts those chain to (`npm run test:unit`), the files they name (your reporter, a runner
   script), a `jest` key in `package.json`, and a root `.npmrc`/`.yarnrc`/`.yarnrc.yml` — and, since 6.36.0, the
-  `gates.exclude` list in `pharn.config.json` ("Excluding a gate", above). A plan may not put the
+  `gates.exclude` list in `pharn.config.json` ("Excluding a gate", above) — and, since 6.68.0, the script (with its
+  `pre`/`post` scripts) of every other allowlisted gate verify runs (`lint`, `typecheck`, `build`, `format:check`,
+  `lint:md`) and the scripts those chain to; for those gates only the command is pinned, not the files or configs it
+  reads. A plan may not put the
   named files, those configs or the feature's own lock in the build's scope; it may still name `package.json` (a
   dependency is ordinary build work), and a change there to anything the lock pins fails verify. What the pin does not see — code the build writes can still
   switch off assertions or the reporter from inside the test process, and a setup file a config imports,

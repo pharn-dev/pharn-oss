@@ -7,7 +7,8 @@
 // except R1, whose job is to be the closed expectation (L36). Each rule is a function over a {file → text} map, so its
 // negative control runs the SAME predicate on a mutated copy (L60: one control per asserted property).
 //
-//   R1 closure — the parts on disk are exactly {pharn-loop: quick, close; pharn-ship: quick, close}, both ways; every
+//   R1 closure — the parts on disk are exactly {pharn-loop: quick, close; pharn-ship: quick, stages, close} (the stages
+//      part since 6.70.0), both ways; every
 //      `part_of:` names a command file that is not itself a part.
 //   R2 frontmatter — every part is hidden from both invocation paths (`disable-model-invocation: true`,
 //      `user-invocable: false`), is `kind: pharn-owned` / `trust: trusted`, and carries no `model:`, `effort:`, `reads:`
@@ -18,7 +19,8 @@
 //   R4 framing — a part's first line after its frontmatter is its `# ` title and its last line is
 //      `<!-- end of <stem> -->`, and its command's pointer names both, verbatim.
 //   R5 one load instruction — the command names the part's path exactly once, inside the pointer section its kind
-//      requires (quick → `## Quick mode`; close → the command's LAST `##` section), and that pointer carries the pinned
+//      requires (quick → `## Quick mode`; stages → `## Step 2 — `; close → the command's LAST `##` section), and that
+//      pointer carries the pinned
 //      sentences (POINTER_PINS): the Read, the trusted-text and untrusted-path sentences, the compaction re-read, and —
 //      per part — its loading condition and its not-loaded rule. Each pin has its own negative control.
 //   R5b no second load — a part's file name appears in no command text but its pointer (and, for a quick part, its
@@ -71,7 +73,7 @@ function partsOf(files) {
   return out;
 }
 
-const EXPECTED_PARTS = Object.freeze({ "pharn-loop": ["quick", "close"], "pharn-ship": ["quick", "close"] });
+const EXPECTED_PARTS = Object.freeze({ "pharn-loop": ["quick", "close"], "pharn-ship": ["quick", "stages", "close"] });
 
 // ── R1 ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 function closureOffenders(files) {
@@ -180,6 +182,7 @@ const POINTER_PINS = Object.freeze({
     "**If it does not load",
   ],
   quick: ["A run without `--quick` never reads it.", "Never run a quick run from memory of that file"],
+  stages: ["Read it once", "and never earlier", "is not a reason to read it"],
   close: ["Read it once", "and never earlier", "is not a reason to read it"],
   "pharn-loop-quick.md": [
     "When `--quick` is the first token, read it before Step 1a, in the same turn as the trusted prefix's `pharn/CONSTITUTION.md`",
@@ -194,6 +197,11 @@ const POINTER_PINS = Object.freeze({
   "pharn-ship-quick.md": [
     "Read it in the same turn as Step 1's pending-start line (two calls in one turn add no request), and before `/pharn-spec`",
     "**If it does not load, STOP before `/pharn-spec`.**",
+  ],
+  "pharn-ship-stages.md": [
+    "Read it once, when the run resumes after GATE 1, whatever the human answered there — before the structural backstop, which is its first step and decides whether the SPEC is Approved — and never earlier: not while `/pharn-spec` runs or before its approval form is answered",
+    "**If it does not load, STOP before the structural backstop.**",
+    "Never run the stages from memory of that file.",
   ],
   "pharn-ship-close.md": [
     "Read it once: with step 7's first `/pharn-verify` call that exits other than `5`",
@@ -236,6 +244,8 @@ function pointerOffenders(files) {
     }
     if (p.part === "quick" && !/^## Quick mode\b/.test(sec.heading))
       out.push(`${parentFile}: the quick part is named in "${sec.heading}", not in ## Quick mode`);
+    if (p.part === "stages" && !/^## Step 2 — /.test(sec.heading))
+      out.push(`${parentFile}: the stages part is named in "${sec.heading}", not in ## Step 2`);
     if (p.part === "close" && sec !== secs.at(-1))
       out.push(`${parentFile}: the close part is named in "${sec.heading}", not in the command's last ## section`);
     const body = main.slice(sec.start, sec.end).replace(/\s+/g, " ");
@@ -246,13 +256,13 @@ function pointerOffenders(files) {
 
 // ── R5b ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 // No second load instruction ANYWHERE: a part's file name may appear in command text only where this table says —
-// once in its command's pointer (R5 fixes that section), and, for a quick part, once in its sibling close part's
-// claims block, which states when each part is read. Every other `.md` in the commands directory — the other parts,
+// once in its command's pointer (R5 fixes that section), and, for a quick or stages part, once in its sibling close
+// part's claims block, which states when each part is read. Every other `.md` in the commands directory — the other parts,
 // every other command, the dev commands — must not name it. Bound: a sentence that sends a run to a part WITHOUT its
 // file name ("read the close part now") is not caught; the name is what a Read needs, and what this rule counts.
 function allowedMentions(p) {
   const at = { [`${p.parent}.md`]: { count: 1, section: null } };
-  if (p.part === "quick") at[`${p.parent}-close.md`] = { count: 1, section: "## What you may claim" };
+  if (p.part === "quick" || p.part === "stages") at[`${p.parent}-close.md`] = { count: 1, section: "## What you may claim" };
   return at;
 }
 
@@ -353,7 +363,21 @@ const PLACEMENT = Object.freeze({
     quickItems: 9,
   },
   "pharn-ship": {
-    main: ["## The two human gates", "## Step 1 — ", "## Running a stage", "## Quick mode — ", "## Step 2 — ", "## Step 2b — "],
+    main: ["## The two human gates", "## Step 1 — ", "## Quick mode — ", "## Step 2 — ", "## Closing the run"],
+    // 6.70.0: the stages after GATE 1, one `###` section per Step 2 item from the backstop on.
+    stages: [
+      "## Running a stage",
+      "## Step 2, after GATE 1 — ",
+      "### Step 2.1 — ",
+      "### Step 2.2 — ",
+      "### Step 2.3 — ",
+      "### Step 2.4 — ",
+      "### Step 2.5 — ",
+      "### Step 2.6 — ",
+      "### Step 2.7 — ",
+      "### Step 2.8 — ",
+      "## Step 2b — ",
+    ],
     close: [
       "## Step 2c — ",
       "## Step 2d — ",
@@ -395,17 +419,24 @@ function placementOffenders(files) {
     const main = files.get(`${parent}.md`);
     const close = files.get(`${parent}-close.md`);
     const quick = files.get(`${parent}-quick.md`);
-    if (main === undefined || close === undefined || quick === undefined) {
+    const stages = want.stages ? files.get(`${parent}-stages.md`) : "";
+    if (main === undefined || close === undefined || quick === undefined || stages === undefined) {
       out.push(`${parent}: a file of the command is missing`);
       continue;
     }
-    for (const h of want.main) {
-      if (countHeading(main, h) !== 1) out.push(`${parent}.md: must carry "${h}" exactly once`);
-      if (countHeading(close, h) + countHeading(quick, h) !== 0) out.push(`${parent}: "${h}" must stay in ${parent}.md`);
-    }
-    for (const h of want.close) {
-      if (countHeading(close, h) !== 1) out.push(`${parent}-close.md: must carry "${h}" exactly once`);
-      if (countHeading(main, h) + countHeading(quick, h) !== 0) out.push(`${parent}: "${h}" must live only in ${parent}-close.md`);
+    // Each heading list belongs to ONE file of the family and must appear in no other (the quick part holds none).
+    const owners = [
+      ["main", `${parent}.md`, main],
+      ["stages", `${parent}-stages.md`, stages],
+      ["close", `${parent}-close.md`, close],
+    ];
+    const all = [...owners, ["quick", `${parent}-quick.md`, quick]];
+    for (const [kind, name, text] of owners) {
+      for (const h of want[kind] ?? []) {
+        if (countHeading(text, h) !== 1) out.push(`${name}: must carry "${h}" exactly once`);
+        const elsewhere = all.filter(([, n]) => n !== name).reduce((a, [, , t]) => a + countHeading(t, h), 0);
+        if (elsewhere !== 0) out.push(`${parent}: "${h}" must live only in ${name}`);
+      }
     }
     const items = deltaItems(quick);
     const expect = Array.from({ length: want.quickItems }, (_, i) => i + 1);
@@ -458,16 +489,23 @@ const edit = (m, file, fn) => {
   return c;
 };
 
-test("R1 — the parts on disk are exactly the expected four, and every part_of names a command (closure, both ways)", () => {
-  assert.equal(partsOf(LIVE).length, 4, "L34: the part set is counted");
+test("R1 — the parts on disk are exactly the expected five, and every part_of names a command (closure, both ways)", () => {
+  assert.equal(partsOf(LIVE).length, 5, "L34: the part set is counted");
   assert.deepEqual(closureOffenders(LIVE), []);
-  // CONTROLS (L60): a fifth part, a dropped part, a part_of naming a missing command, a part naming a part.
+  // CONTROLS (L60): a sixth part, a dropped part, a part_of naming a missing command, a part naming a part.
   const fifth = clone(LIVE);
   fifth.set("pharn-verify-close.md", LIVE.get("pharn-loop-close.md").replace("part_of: pharn-loop", "part_of: pharn-verify"));
   assert.match(closureOffenders(fifth).join("\n"), /pharn-verify: has parts/);
   const dropped = clone(LIVE);
   dropped.delete("pharn-ship-quick.md");
-  assert.match(closureOffenders(dropped).join("\n"), /pharn-ship: parts \["close"\]/);
+  assert.match(closureOffenders(dropped).join("\n"), /pharn-ship: parts \["close","stages"\]/);
+  const noStages = clone(LIVE);
+  noStages.delete("pharn-ship-stages.md");
+  assert.match(closureOffenders(noStages).join("\n"), /pharn-ship: parts \["close","quick"\]/);
+  // A stages part on the loop, which is not expected to have one, is red too.
+  const loopStages = clone(LIVE);
+  loopStages.set("pharn-loop-stages.md", LIVE.get("pharn-ship-stages.md").replace("part_of: pharn-ship", "part_of: pharn-loop"));
+  assert.match(closureOffenders(loopStages).join("\n"), /pharn-loop: parts \["close","quick","stages"\]/);
   assert.match(
     closureOffenders(edit(LIVE, "pharn-loop-quick.md", (t) => t.replace("part_of: pharn-loop", "part_of: pharn-nope"))).join("\n"),
     /does not exist/
@@ -554,9 +592,19 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
   assert.match(pointerOffenders(movedQuick).join("\n"), /the quick part is named in "## Step 3/);
   const shipClosePath = ".claude/commands/pharn-ship-close.md";
   const movedClose = edit(LIVE, "pharn-ship.md", (t) =>
-    t.replace(shipClosePath, ".claude/commands/elsewhere.md").replace("## Step 2b — ", `Read \`${shipClosePath}\`.\n\n## Step 2b — `)
+    t
+      .replace(shipClosePath, ".claude/commands/elsewhere.md")
+      .replace("\n## Closing the run", `\nRead \`${shipClosePath}\`.\n\n## Closing the run`)
   );
   assert.match(pointerOffenders(movedClose).join("\n"), /the close part is named in "## Step 2 — /);
+  // CONTROL (6.70.0): the stages load moved out of ## Step 2 (into ## Step 1) is red.
+  const shipStagesPath = ".claude/commands/pharn-ship-stages.md";
+  const movedStages = edit(LIVE, "pharn-ship.md", (t) =>
+    t
+      .replace(shipStagesPath, ".claude/commands/elsewhere.md")
+      .replace("\n## Quick mode — ", `\nRead \`${shipStagesPath}\`.\n\n## Quick mode — `)
+  );
+  assert.match(pointerOffenders(movedStages).join("\n"), /the stages part is named in "## Step 1 — /);
   // REGRESSION (REVIEW.md FG1): the review's five pointer mutants — a load point moved or a not-loaded rule rewritten,
   // each of which left the 6.32.0 build's suite green — are each red now.
   const mutants = [
@@ -569,6 +617,11 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
     ["pharn-ship.md", "with step 7's first `/pharn-verify` call that exits other than `5`", "with `/pharn-plan`'s stage-start marker"],
     ["pharn-ship.md", "Read it in the same turn as Step 1's pending-start line", "Read it after GATE 2"],
     ["pharn-loop.md", "Commit nothing, create no branch, write no `LOOP.md`", "Write `LOOP.md` from the contract and commit it"],
+    // 6.70.0: the stages part's load point moved to entry, and its not-loaded rule loosened.
+    ["pharn-ship.md", "when the run resumes after GATE 1, whatever the human answered there", "at entry, before `/pharn-spec`"],
+    // GATE-2 review R1: loading only after an APPROVED SPEC would skip the backstop that detects a Draft one.
+    ["pharn-ship.md", "which is its first step and decides whether the SPEC is Approved", "once the SPEC is Approved"],
+    ["pharn-ship.md", "Never run the stages from memory of that file.", "Run the stages from what you remember."],
   ];
   for (const [file, from, to] of mutants) {
     const m = edit(LIVE, file, (t) => {
@@ -636,6 +689,12 @@ test("R5b — a part's file name appears only in its pointer (and a quick part's
   assert.match(mentionOffenders(moved).join("\n"), /names pharn-loop-quick\.md outside ## What you may claim/);
   const gone = edit(LIVE, "pharn-loop-close.md", (t) => t.replace("`pharn-loop-quick.md`", "the quick part"));
   assert.match(mentionOffenders(gone).join("\n"), /pharn-loop-close\.md: names pharn-loop-quick\.md 0 time\(s\), expected 1/);
+  // 6.70.0: the stages part is named once in ship's close claims block, and nowhere else — not in the quick part.
+  assert.ok(LIVE.get("pharn-ship-close.md").includes("`pharn-ship-stages.md`"), "anchor (L60): the claims block names it");
+  const stagesGone = edit(LIVE, "pharn-ship-close.md", (t) => t.replace("`pharn-ship-stages.md`", "the stages part"));
+  assert.match(mentionOffenders(stagesGone).join("\n"), /pharn-ship-close\.md: names pharn-ship-stages\.md 0 time\(s\), expected 1/);
+  const stagesInQuick = edit(LIVE, "pharn-ship-quick.md", (t) => `${t}\nRead pharn-ship-stages.md first.\n`);
+  assert.match(mentionOffenders(stagesInQuick).join("\n"), /pharn-ship-quick\.md: names pharn-ship-stages\.md 1 time/);
 });
 
 test("R6 — no fenced line, heading or long paragraph lives in two files of one command", () => {
@@ -675,6 +734,15 @@ test("R7 — the stop procedure lives in each close part, the deltas in each qui
   assert.match(placementOffenders(noAnchor).join("\n"), /no ## Quick mode section/);
   const lostItem = edit(LIVE, "pharn-loop-quick.md", (t) => t.replace(/^5\. \*\*/m, "5 **"));
   assert.match(placementOffenders(lostItem).join("\n"), /delta items/);
+  // 6.70.0: a stages heading copied back into the main file, or dropped from the stages part, is red; so is a missing
+  // stages file.
+  const stageBack = edit(LIVE, "pharn-ship.md", (t) => `${t}\n### Step 2.5 — \`/pharn-build\`, again\n`);
+  assert.match(placementOffenders(stageBack).join("\n"), /"### Step 2\.5 — " must live only in pharn-ship-stages\.md/);
+  const stageDropped = edit(LIVE, "pharn-ship-stages.md", (t) => t.replace(/^### Step 2\.6 — /m, "#### Step 2.6 — "));
+  assert.match(placementOffenders(stageDropped).join("\n"), /pharn-ship-stages\.md: must carry "### Step 2\.6 — " exactly once/);
+  const noStagesFile = clone(LIVE);
+  noStagesFile.delete("pharn-ship-stages.md");
+  assert.match(placementOffenders(noStagesFile).join("\n"), /pharn-ship: a file of the command is missing/);
 });
 
 test("R8 — no shipped file (a non-test file under pharn/ or .claude/hooks/) names the dev-only helper", () => {
@@ -691,33 +759,43 @@ test("R8 — no shipped file (a non-test file under pharn/ or .claude/hooks/) na
 // ── the helper itself ─────────────────────────────────────────────────────────────────────────────────────────────
 
 test("helper — commandFamilyText splices each part back where its text sat: quick inside ## Quick mode, close at the end", () => {
-  for (const [file, next] of [
-    ["pharn-loop.md", "\n## Step 3 — "],
-    ["pharn-ship.md", "\n## Step 2 — "],
+  for (const [file, next, kinds] of [
+    ["pharn-loop.md", "\n## Step 3 — ", ["quick", "close"]],
+    ["pharn-ship.md", "\n## Step 2 — ", ["quick", "stages", "close"]],
   ]) {
     const fam = commandFamilyText(COMMANDS_DIR, file);
     const parts = commandParts(COMMANDS_DIR, file);
     assert.deepEqual(
       parts.map((p) => p.part),
-      ["quick", "close"],
+      kinds,
       `${file}: its parts, in splice order`
     );
     const quickTitle = titleOf(LIVE.get(parts[0].file));
-    const closeTitle = titleOf(LIVE.get(parts[1].file));
+    const closeTitle = titleOf(LIVE.get(parts.at(-1).file));
     const qm = fam.search(/^## Quick mode — /m);
     assert.ok(
       qm >= 0 && fam.indexOf(quickTitle) > qm && fam.indexOf(quickTitle) < fam.indexOf(next),
       `${file}: quick spliced inside ## Quick mode`
     );
     assert.ok(fam.indexOf(closeTitle) > fam.indexOf(next), `${file}: close spliced after the entry-to-stop text`);
-    assert.ok(fam.trimEnd().endsWith(endLine(parts[1].file)), `${file}: the close part ends the family text`);
+    assert.ok(fam.trimEnd().endsWith(endLine(parts.at(-1).file)), `${file}: the close part ends the family text`);
     assert.equal(fam.includes("part_of:"), false, `${file}: no part's frontmatter is spliced in`);
   }
+  // 6.70.0: ship's stages part is spliced at the end of its ## Step 2 section — after the stages pointer, before
+  // ## Closing the run — so the backstop follows GATE 1's item and Step 2b precedes the close pointer.
+  const ship = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
+  const stagesTitle = titleOf(LIVE.get("pharn-ship-stages.md"));
+  const s2 = ship.search(/^## Step 2 — /m);
+  const pointer = ship.indexOf(".claude/commands/pharn-ship-stages.md");
+  const at = ship.indexOf(stagesTitle);
+  const closing = ship.search(/^## Closing the run/m);
+  assert.ok(s2 >= 0 && pointer > s2 && at > pointer && at < closing, "stages spliced inside ## Step 2, after its pointer");
+  assert.ok(ship.indexOf("**Structural backstop") > at && ship.search(/^## Step 2b — /m) < closing, "its text sits there");
   // A command with no parts reads as its own file.
   assert.equal(commandFamilyText(COMMANDS_DIR, "pharn-verify.md"), LIVE.get("pharn-verify.md"));
   assert.deepEqual(
     allParts(COMMANDS_DIR).map((p) => p.file),
-    ["pharn-loop-close.md", "pharn-loop-quick.md", "pharn-ship-close.md", "pharn-ship-quick.md"]
+    ["pharn-loop-close.md", "pharn-loop-quick.md", "pharn-ship-close.md", "pharn-ship-quick.md", "pharn-ship-stages.md"]
   );
 });
 
@@ -731,9 +809,16 @@ test("helper — a quick part with no ## Quick mode heading to splice under THRO
     // A part of an unknown kind throws too.
     const q = readFileSync(join(dir, "pharn-ship-quick.md"), "utf8");
     writeFileSync(join(dir, "pharn-ship-quick.md"), q.replace("part: quick", "part: middle"));
-    assert.throws(() => commandFamilyText(dir, "pharn-ship.md"), /is not one of quick, close/);
+    assert.throws(() => commandFamilyText(dir, "pharn-ship.md"), /is not one of quick, stages, close/);
+    writeFileSync(join(dir, "pharn-ship-quick.md"), q);
+    // 6.70.0: a stages part with no ## Step 2 heading to splice under throws too.
+    const ship = readFileSync(join(dir, "pharn-ship.md"), "utf8");
+    writeFileSync(join(dir, "pharn-ship.md"), ship.replace(/^## Step 2 — /m, "## Stage two — "));
+    assert.throws(() => commandFamilyText(dir, "pharn-ship.md"), /no "## Step 2 — " heading/);
+    writeFileSync(join(dir, "pharn-ship.md"), ship);
     // Removing a part removes it from the family (the command then reads as its own file).
     unlinkSync(join(dir, "pharn-ship-quick.md"));
+    unlinkSync(join(dir, "pharn-ship-stages.md"));
     unlinkSync(join(dir, "pharn-ship-close.md"));
     assert.equal(commandFamilyText(dir, "pharn-ship.md"), readFileSync(join(dir, "pharn-ship.md"), "utf8"));
   } finally {
