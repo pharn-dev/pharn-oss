@@ -10,8 +10,8 @@
 // Usage (run as a command's FIRST step, before any write):
 //   node .claude/hooks/set-writes-scope.cjs --from-frontmatter <capability-or-command.md> [--target <path>]
 //   node .claude/hooks/set-writes-scope.cjs --from-plan <PLAN.md>
-//   node .claude/hooks/set-writes-scope.cjs [--allow-claude-dir] [--allow-pharn-surface] --from-plan <PLAN.md>
-//                                                 # the two operator opt-ins, BEFORE the mode (see OPERATOR FLAGS)
+//   node .claude/hooks/set-writes-scope.cjs [--allow-claude-dir] [--allow-pharn-surface] [--allow-exec-config] --from-plan <PLAN.md>
+//                                                 # the three operator opt-ins, BEFORE the mode (see OPERATOR FLAGS)
 //   node .claude/hooks/set-writes-scope.cjs --clear   # run as a command's LAST step, after every write
 //
 // --clear DELETES .pharn/writes-scope.json, returning enforce-writes-scope.cjs to its DEFAULT. Since
@@ -68,8 +68,40 @@
 //     enforce-writes-scope.cjs `scanRuns()` applies, for the `pharn-loop` state directory only, read-only) a
 //     scope with that origin is refused, in every mode and posture, with no opt-in.
 //
-// OPERATOR FLAGS (loop-scope-hardening). --allow-claude-dir and --allow-pharn-surface are honored only BEFORE the mode; one
-// placed after `--from-plan` / `--from-frontmatter` is refused. A pre-approved command line (a `/pharn-*`
+// ONE MORE REFUSAL (hook-hardening-batch — review finding SEC-5 of 2026-10-12), layered after the PHARN-surface one and
+// writing nothing:
+//   • EXECUTABLE PROJECT CONFIG, from a plan. In an INSTALLED project a `--from-plan` scope may not name a CI workflow
+//     (`.github/workflows/**`) or a git hooks directory: `.husky/**`, and every directory a `core.hooksPath` value
+//     names inside the project. Code there runs OUTSIDE the run that wrote it — a workflow on the next push, with the
+//     repository's secrets; a hook on the next git command, in the person's own shell — so a model-written plan may
+//     not scope it. --allow-exec-config opts back in (an operator flag, independent of the other two). The dev
+//     checkout, an unsignalled tree and `--from-frontmatter` are unchanged.
+//     WHERE `core.hooksPath` IS READ, without running git (this setter starts no process): the repository found the way
+//     git looks for it, the nearest `.git` file, or `.git` directory holding a `HEAD`, at or above the project root (so
+//     a project in a subdirectory of a repository reads that repository's config) — its `config` (for a linked worktree, through the `.git` file's `gitdir:` line and
+//     that directory's `commondir`) and `config.worktree` — then `/etc/gitconfig`, `$XDG_CONFIG_HOME/git/config` (else
+//     `~/.config/git/config`) and `$GIT_CONFIG_GLOBAL` (else `~/.gitconfig`). Every value in every one of those files
+//     counts, so a later value cannot hide an earlier one. A relative value is resolved against that repository's
+//     work-tree top, as git resolves it (against the project root when there is no repository; `~/` against the home
+//     directory), and reserved, when it lies inside the project, at its written path and at its real path
+//     (`fs.realpathSync.native` of its nearest existing ancestor). NOT READ: `include` / `includeIf` targets,
+//     configuration passed through the environment or `-c`, and a system file at a non-default prefix. The walk up
+//     does not stop where git's GIT_CEILING_DIRECTORIES or a filesystem boundary would, and a `.git` file is followed
+//     without git's further validity checks. A `~user/` value is never inside the project and reserves
+//     nothing; neither does an empty one.
+//     FAIL-CLOSED where it reads: a `.git` that cannot be examined or followed to a config file, a file above that
+//     exists but is not a readable regular file, or a hooksPath value continued onto the next line with a trailing
+//     backslash refuses the plan rather than guess.
+//     What it does NOT do: it does not stop a plan's code from running DURING the run — the pinned gates run the
+//     project's tests, which execute code the build wrote — and it does not cover a hook manager configured elsewhere
+//     (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in `package.json`), what a workflow or an existing hook
+//     runs from elsewhere in the repository (a local action, a script), `package.json` scripts, which a feature
+//     legitimately edits, or another CI system's files. Plan entries are matched lexically (`toKey()`); an entry that
+//     reaches a reserved directory through a symlink is left to enforce-writes-scope.cjs, which judges the target a
+//     write reaches and denies it as out of scope.
+//
+// OPERATOR FLAGS (loop-scope-hardening). --allow-claude-dir, --allow-pharn-surface and --allow-exec-config are honored only
+// BEFORE the mode; one placed after `--from-plan` / `--from-frontmatter` is refused. A pre-approved command line (a `/pharn-*`
 // command's `allowed-tools`) carries a `*` after its mode, and `*` matches any text, so an opt-in accepted after
 // the mode could ride on a pre-approved line.
 //
@@ -94,6 +126,7 @@
 "use strict";
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 function fail(msg) {
@@ -108,6 +141,7 @@ function parseArgs(argv) {
   let target;
   let allowClaudeDir = false;
   let allowPharnSurface = false;
+  let allowExecConfig = false;
   let clear = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -119,7 +153,7 @@ function parseArgs(argv) {
       // needs one: otherwise the flag is swallowed as the positional `mode` and `--clear` silently
       // becomes an unknown-mode usage error instead of a clear.
       clear = true;
-    } else if (a === "--allow-claude-dir" || a === "--allow-pharn-surface") {
+    } else if (a === "--allow-claude-dir" || a === "--allow-pharn-surface" || a === "--allow-exec-config") {
       // Its OWN branch, ahead of the positional fallbacks — otherwise the flag is consumed as the
       // positional `mode` or `file` and silently breaks --from-plan / --from-frontmatter parsing. And only
       // BEFORE the mode (see OPERATOR FLAGS in the header).
@@ -131,7 +165,8 @@ function parseArgs(argv) {
         );
       }
       if (a === "--allow-claude-dir") allowClaudeDir = true;
-      else allowPharnSurface = true;
+      else if (a === "--allow-pharn-surface") allowPharnSurface = true;
+      else allowExecConfig = true;
     } else if (!mode) {
       mode = a;
     } else if (!file) {
@@ -140,7 +175,7 @@ function parseArgs(argv) {
       fail(`unexpected argument: ${a}`);
     }
   }
-  return { mode, file, target, allowClaudeDir, allowPharnSurface, clear };
+  return { mode, file, target, allowClaudeDir, allowPharnSurface, allowExecConfig, clear };
 }
 
 // The two pre-write guards' own control surface: the settings file that WIRES both PreToolUse hooks, and
@@ -194,6 +229,206 @@ function isReserved(rel) {
   if (key.startsWith(".claude/")) return true;
   if (key.startsWith("pharn/") && !rel.startsWith("pharn/features/")) return true;
   return false;
+}
+
+// ============================== EXECUTABLE PROJECT CONFIG (see the header, ONE MORE REFUSAL) ==================
+// The two directories reserved by name. Every `core.hooksPath` inside the project is added by execConfigDirKeys().
+const EXEC_CONFIG_DIRS = [".github/workflows", ".husky"];
+
+// True iff `rel` (a plan entry, root-relative as written) lies in one of `dirKeys` (toKey()-folded, root-relative).
+// "" is the project root itself, which reserves its top-level entries only: git runs a hook from that directory,
+// never from below it.
+function isExecConfig(rel, dirKeys) {
+  const key = toKey(rel);
+  return dirKeys.some((d) => (d === "" ? key !== "." && key !== ".." && !key.includes("/") : key === d || key.startsWith(d + "/")));
+}
+
+// The `core.hooksPath` values in one git config file's text. A line reader of git's config syntax: a leading BOM is
+// skipped, a line ends at `\n` or `\r\n` (a lone `\r` is a blank, as git reads it), a `[core]` header is matched
+// case-insensitively (`[core "x"]` is a subsection, not core), a `hooksPath` key in any letter case, `#`/`;` comments
+// outside quotes, and double quotes with `\\`, `\"`, `\n`, `\t` and `\b` escapes. A key with no `=` has no path and is skipped. A value continued onto
+// the next line with a trailing backslash is NOT followed: it comes back as null, which the caller refuses.
+function hooksPathValues(text) {
+  const out = [];
+  let section = null;
+  const lines = String(text)
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/);
+  for (const rawLine of lines) {
+    let line = rawLine.replace(/^[ \t\r]+/, "");
+    if (line.startsWith("[")) {
+      const h = /^\[[ \t]*([A-Za-z0-9.-]+)[ \t]*(?:"(?:[^"\\]|\\.)*"[ \t]*)?\]/.exec(line);
+      if (!h) {
+        section = null;
+        continue;
+      }
+      section = /"/.test(h[0]) ? null : h[1].toLowerCase();
+      line = line.slice(h[0].length).replace(/^[ \t\r]+/, "");
+    }
+    if (section !== "core") continue;
+    const m = /^hookspath[ \t\r]*=([\s\S]*)$/i.exec(line);
+    if (m) out.push(configValue(m[1]));
+  }
+  return out;
+}
+
+// One git config value, unquoted and unescaped; leading and trailing blanks outside quotes dropped. null when the value
+// continues onto the next line (a trailing backslash).
+function configValue(s) {
+  let out = "";
+  let blanks = "";
+  let quoted = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === "\\") {
+      if (i + 1 >= s.length) return null;
+      const n = s[++i];
+      out += blanks + (n === "n" ? "\n" : n === "t" ? "\t" : n === "b" ? "\b" : n);
+      blanks = "";
+    } else if (c === '"') {
+      out += blanks;
+      blanks = "";
+      quoted = !quoted;
+    } else if (!quoted && (c === "#" || c === ";")) {
+      break;
+    } else if (!quoted && (c === " " || c === "\t" || c === "\r")) {
+      if (out !== "") blanks += c;
+    } else {
+      out += blanks + c;
+      blanks = "";
+    }
+  }
+  return out;
+}
+
+// Every `core.hooksPath` value in the git config files named in the header; `top`, the work-tree top a relative value
+// is resolved against (the nearest of `root` and its ancestors holding a `.git` entry — git's own discovery, without
+// running git — or null when there is none); and a line per place the reading could not be completed (non-empty
+// `errors` refuses the plan — fail-closed). Absent optional files are skipped silently.
+function readHooksPathValues(root) {
+  const values = [];
+  const errors = [];
+  const files = [];
+  let top = null;
+  let dotGit = null;
+  for (let dir = path.resolve(root); ;) {
+    try {
+      const st = fs.statSync(path.join(dir, ".git"));
+      // Git walks past a `.git` directory that is not a repository; one with no HEAD is walked past here too. A `.git`
+      // file is followed as written.
+      if (!st.isDirectory() || fs.existsSync(path.join(dir, ".git", "HEAD"))) {
+        dotGit = st;
+        top = dir;
+        break;
+      }
+    } catch (e) {
+      if (!e || (e.code !== "ENOENT" && e.code !== "ENOTDIR")) {
+        errors.push(`${path.join(dir, ".git")} (could not be examined)`);
+        break;
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  if (dotGit) {
+    const dotGitPath = path.join(top, ".git");
+    let gitDir = null;
+    if (dotGit.isDirectory()) {
+      gitDir = dotGitPath;
+    } else if (dotGit.isFile()) {
+      try {
+        const m = /^gitdir:[ \t]*(.*?)[ \t]*$/m.exec(fs.readFileSync(dotGitPath, "utf8"));
+        if (m && m[1]) gitDir = path.resolve(top, m[1]);
+        else errors.push(`${dotGitPath} (a file with no \`gitdir:\` line)`);
+      } catch {
+        errors.push(`${dotGitPath} (a file that could not be read)`);
+      }
+    } else {
+      errors.push(`${dotGitPath} (neither a directory nor a file)`);
+    }
+    if (gitDir) {
+      let commonDir = gitDir;
+      try {
+        const c = fs.readFileSync(path.join(gitDir, "commondir"), "utf8").trim();
+        if (c) commonDir = path.resolve(gitDir, c);
+      } catch (e) {
+        if (!e || (e.code !== "ENOENT" && e.code !== "ENOTDIR")) errors.push(`${path.join(gitDir, "commondir")} (could not be read)`);
+      }
+      files.push({ file: path.join(commonDir, "config"), required: true });
+      files.push({ file: path.join(gitDir, "config.worktree"), required: false });
+    }
+  }
+  const home = os.homedir();
+  files.push({ file: "/etc/gitconfig", required: false });
+  files.push({
+    file: process.env.XDG_CONFIG_HOME
+      ? path.join(process.env.XDG_CONFIG_HOME, "git", "config")
+      : path.join(home, ".config", "git", "config"),
+    required: false,
+  });
+  files.push({ file: process.env.GIT_CONFIG_GLOBAL || path.join(home, ".gitconfig"), required: false });
+  for (const { file, required } of files) {
+    let st;
+    try {
+      st = fs.statSync(file);
+    } catch (e) {
+      if (required || !e || (e.code !== "ENOENT" && e.code !== "ENOTDIR")) errors.push(`${file} (could not be examined)`);
+      continue;
+    }
+    if (!st.isFile() && !(file === "/dev/null" && st.isCharacterDevice())) {
+      errors.push(`${file} (not a regular file)`);
+      continue;
+    }
+    let found;
+    try {
+      found = hooksPathValues(fs.readFileSync(file, "utf8"));
+    } catch {
+      errors.push(`${file} (could not be read)`);
+      continue;
+    }
+    if (found.includes(null))
+      errors.push(`${file} (a core.hooksPath value continues onto the next line, which this reader does not follow)`);
+    values.push(...found.filter((v) => v !== null));
+  }
+  return { values, errors, top };
+}
+
+// `p`'s real path: the nearest existing ancestor through fs.realpathSync.native, then the segments below it as written.
+function realPathOf(p) {
+  let head = path.resolve(p);
+  const tail = [];
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(head), ...tail);
+    } catch {
+      const parent = path.dirname(head);
+      if (parent === head) return path.resolve(p);
+      tail.unshift(path.basename(head));
+      head = parent;
+    }
+  }
+}
+
+// The toKey()-folded, root-relative keys of every reserved directory: EXEC_CONFIG_DIRS, and each hooksPath value inside
+// the project, at its written path and at its real path. A relative value is resolved against the work-tree top `top`
+// (as git does), else against the project root. A value outside the project reserves nothing here.
+function execConfigDirKeys(root, top, values) {
+  const keys = EXEC_CONFIG_DIRS.map(toKey);
+  const realRoot = realPathOf(root);
+  for (const v of values) {
+    if (v === "" || (v.startsWith("~") && v !== "~" && !v.startsWith("~/"))) continue;
+    const abs = path.resolve(top || root, v === "~" || v.startsWith("~/") ? path.join(os.homedir(), v.slice(1)) : v);
+    for (const [base, target] of [
+      [path.resolve(root), abs],
+      [realRoot, realPathOf(abs)],
+    ]) {
+      const rel = path.relative(base, target);
+      if (rel === "") keys.push("");
+      else if (rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel)) keys.push(toKey(rel.split(path.sep).join("/")));
+    }
+  }
+  return keys;
 }
 
 // The installed-project signal enforce-writes-scope.cjs reads, here at cwd (where this setter writes its record).
@@ -471,7 +706,7 @@ function pathsFromPlanFiles(file) {
 }
 
 function main() {
-  const { mode, file, target, allowClaudeDir, allowPharnSurface, clear } = parseArgs(process.argv);
+  const { mode, file, target, allowClaudeDir, allowPharnSurface, allowExecConfig, clear } = parseArgs(process.argv);
 
   // --clear is handled FIRST and returns, so it can never fall through into the scope-emitting path.
   if (clear) {
@@ -505,7 +740,7 @@ function main() {
 
   if (!mode || !file || (mode !== "--from-frontmatter" && mode !== "--from-plan")) {
     fail(
-      "usage: set-writes-scope.cjs [--allow-claude-dir] [--allow-pharn-surface] (--from-frontmatter <file.md> [--target <path>] | --from-plan <PLAN.md>)\n" +
+      "usage: set-writes-scope.cjs [--allow-claude-dir] [--allow-pharn-surface] [--allow-exec-config] (--from-frontmatter <file.md> [--target <path>] | --from-plan <PLAN.md>)\n" +
         "       set-writes-scope.cjs --clear"
     );
   }
@@ -552,6 +787,34 @@ function main() {
           `  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); pharn/** (except pharn/features/**), .claude/** and pharn.config.json are PHARN's floor, guards, commands and config, which judge a run and instruct its later stages, and a plan is untrusted input (CONSTITUTION P2).\n` +
           `  If you genuinely mean to change one of them (your own .claude/ commands or skills included): edit it yourself, outside the agent, or re-run this setter yourself with --allow-pharn-surface placed BEFORE --from-plan (an operator flag; no plan can set it). To update PHARN itself, use \`pharn update\`.\n` +
           `  Nothing was written; .pharn/writes-scope.json is unchanged.`
+      );
+    }
+  }
+
+  // Refuse executable project config from a plan, in an installed project (see the header, ONE MORE REFUSAL). Layered
+  // after the PHARN-surface refusal; the dev checkout and an unsignalled tree never read a git config file here.
+  if (mode === "--from-plan" && !allowExecConfig && isPharnInstalledProject()) {
+    const { values, errors, top } = readHooksPathValues(process.cwd());
+    if (errors.length) {
+      fail(
+        "refusing to scope from a plan: the git configuration that says where git hooks run could not be read\n" +
+          errors.map((l) => `  • ${l}`).join("\n") +
+          "\n" +
+          `  Declared in : ${file}\n` +
+          "  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion), where a plan may not scope a git hooks directory (core.hooksPath), and without these files the setter cannot tell which directory that is.\n" +
+          "  Fix: make each file above a readable regular file, or remove it; or re-run this setter yourself with --allow-exec-config placed BEFORE --from-plan (an operator flag; no plan can set it).\n" +
+          "  Nothing was written; .pharn/writes-scope.json is unchanged."
+      );
+    }
+    const dirKeys = execConfigDirKeys(process.cwd(), top, values);
+    const offenders = scope.filter((p) => isExecConfig(p, dirKeys));
+    if (offenders.length) {
+      fail(
+        `refusing to scope, from a plan, files whose code runs outside this run: ${offenders.join(", ")}\n` +
+          `  Declared in : ${file}\n` +
+          "  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); a CI workflow (.github/workflows/**) runs on the next push with the repository's secrets, and a git hooks directory (.husky/**, or a core.hooksPath inside the project) runs on the next git command in your own shell, so code a plan puts there outlives the run that wrote it, and a plan is untrusted input (CONSTITUTION P2).\n" +
+          "  If you genuinely mean to change one of them: edit it yourself, outside the agent, or re-run this setter yourself with --allow-exec-config placed BEFORE --from-plan (an operator flag; no plan can set it).\n" +
+          "  Nothing was written; .pharn/writes-scope.json is unchanged."
       );
     }
   }
