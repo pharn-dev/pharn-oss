@@ -143,7 +143,9 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # MODE_MISMATCH: a run invoked without --quick over a quick SPEC ends there, uncommitted. Agreement between files,
 # never provenance (L43); a quick line cites verify-report.json alone.
 # Since 6.65.0 (audit LOOP-2) it also reads the cap the run OPENED with — `.pharn/pharn-loop/<name>/active.json`, the
-# Stop guard's marker, located from the record's own pharn/features/<name>/ path, lstat-regular — and REDs CAP_MISMATCH
+# Stop guard's marker, located from the record's own pharn/features/<name>/ path, opened once with
+# O_RDONLY|O_NOFOLLOW|O_NONBLOCK and type-checked (fstat, a regular file) and read through that one descriptor, so a
+# symlink is never followed and the file cannot be swapped between check and read — and REDs CAP_MISMATCH
 # (record cap ≠ marker cap), CAP_UNWITNESSED (no usable marker: fail-closed; the closeout runs it before its --close,
 # and a blocked record is skipped first) and ITER_OVER_CAP (iterations > cap). Agreement, never provenance.
 # Runs strictly AFTER a stop exists and gates only /pharn-loop's Step 6c commit, never the stop: a green stop whose

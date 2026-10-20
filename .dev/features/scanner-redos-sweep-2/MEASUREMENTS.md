@@ -24,7 +24,7 @@ scanner at `dd69efd5` (6.71.0), with only its two sibling imports re-pointed.
 Linear in the old code already (each ≤ 7 ms at 40k): `try{ await x(`×N `}` (every op is guarded, so the old code
 returned before its per-hit line count), `try{}`×N then one await, and the three `AWAIT_RE` dotted-chain shapes below.
 
-## 2. In-process, new (6.71.1): linear within noise
+## 2. In-process, new (6.71.2): linear within noise
 
 | shape                    | 20k | 40k | 80k | 160k | 320k |
 | ------------------------ | --: | --: | --: | ---: | ---: |
@@ -54,7 +54,7 @@ one start costs O(chain); starts sit on distinct `await` words. Two ★ rows pin
 
 ## 4. ★ shapes — both CLIs under a 5 s `spawnSync` timeout (`killcheck.mjs 400000`)
 
-| scanner | shape                                 |   bytes | old (6.71.0)        | new (6.71.1)        |
+| scanner | shape                                 |   bytes | old (6.71.0)        | new (6.71.2)        |
 | ------- | ------------------------------------- | ------: | ------------------- | ------------------- |
 | timeout | `fetch(` unbalanced                   | 399,996 | KILLED              | found=false, 259 ms |
 | timeout | `fetch(` nested, balanced             | 233,331 | KILLED              | 33,333 hits, 365 ms |
@@ -73,7 +73,7 @@ one start costs O(chain); starts sit on distinct `await` words. Two ★ rows pin
 Added after the independent review (GATE-2 fix round, `killcheck2.mjs`, measured while the regress baseline suite ran
 in parallel — so the new times are higher):
 
-| scanner | shape                                        |   bytes | old (6.71.0)         | new (6.71.1)          |
+| scanner | shape                                        |   bytes | old (6.71.0)         | new (6.71.2)          |
 | ------- | -------------------------------------------- | ------: | -------------------- | --------------------- |
 | eh      | `try{}`×40k then `await x()`×20k per line    | 400,001 | KILLED               | 20,000 hits, 1,511 ms |
 | eh      | (`await` + 40-char dotted chain, no `(`)×10k | 470,000 | found=false, 1042 ms | found=false, 987 ms   |

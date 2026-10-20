@@ -109,7 +109,7 @@ test("agentToken / inlineToken build exactly the grammar's tokens, and refuse a 
 });
 
 // ✧ PARITY (L31) — AGENT_MODELS is a copy of a platform fact AND of the config checker's alias set. Read the
-// checker's SOURCE (it runs `process.exit(main())` at import, so it cannot be imported), find its one
+// checker's SOURCE (it runs `process.exitCode = main()` at import, so it cannot be imported), find its one
 // `MODEL_ALIASES` literal, and require AGENT_MODELS to equal it minus `inherit`. A new config alias then
 // fails here until someone decides how it routes.
 function checkerAliases(source) {

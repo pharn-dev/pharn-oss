@@ -1,4 +1,4 @@
-// pharn/floor/scan-code-missing-differential.test.mjs — the 6.71.1 linear rewrites of scan-code-missing-timeout.mjs and
+// pharn/floor/scan-code-missing-differential.test.mjs — the 6.71.2 linear rewrites of scan-code-missing-timeout.mjs and
 // scan-code-missing-error-handling.mjs return exactly what their 6.71.0 forms returned.
 //
 // NO `claude -p`, NO git, NO network. In-process, except that each negative control writes one mutated copy of a

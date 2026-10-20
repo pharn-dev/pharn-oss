@@ -19,11 +19,13 @@
 // count-verifiers (stage-verify) and the five plan scanners `scan-plan-*.mjs` (grill-scan), whose rows are derived
 // from the files on disk (form "main": `process.exitCode = main();`). Until then this header said every other floor
 // CLI's spawner read only an exit status or a first line, which was false for all seven.
-// NOT EVERY PARSED CLI IS HERE, and the list of the known ones outside it is OPEN (L47), never a count: a caller sweep
-// at 6.67.1 also found count-grillers (griller-extract.mjs), count-lenses (render-review-assignments.mjs,
-// check-review-assignments.mjs) and check-model-config (stage-agent-core.mjs) JSON-parsed and still ending with an
-// immediate exit. Their documents are a griller list, a lens list and one {model, effort} pair — bounded by what is
-// installed, not by the input — and converting them is a named follow-up, not done here.
+// Since 6.71.1 (the follow-up 6.67.1 named) the set also holds count-grillers (griller-extract.mjs), count-lenses
+// (render-review-assignments.mjs, check-review-assignments.mjs) and check-model-config (stage-agent-core.mjs, which
+// parses `resolve`), each ending `process.exitCode = main();` (form "main"). Their documents are a griller list, a lens
+// list and one {model, effort} pair — bounded by what is installed or configured, not by the reviewed input.
+// NOT EVERY PARSED CLI IS HERE, and the list of the ones outside it is OPEN (L47), never a count: a grep sweep at
+// 6.71.1 (`JSON.parse(` over a child's stdout in the non-test floor and hook files) found no parsed floor CLI outside
+// the set, but it sees only those spellings, so a parse through another name is not ruled out.
 //
 // WHAT THIS FILE CAN AND CANNOT PROVE, stated because it is not obvious:
 //   * The STATIC pin (no code line calls `process.exit(`) is the platform-independent guard — and a PROXY.
@@ -56,6 +58,10 @@ const SCANNERS = [
 const SCAN_FIXTURE_DIR = mkdtempSync(join(tmpdir(), "flush-scan-"));
 const SCAN_FIXTURE = join(SCAN_FIXTURE_DIR, "fixture.js");
 writeFileSync(SCAN_FIXTURE, 'const k = "AKIAIOSFODNN7EXAMPLE";\n');
+/** A valid model config for check-model-config's `resolve`, the mode its floor caller parses. A .json file, so the
+ *  count-* walkers (which read only *.md) see the directory as before. */
+const MODEL_CONFIG_FIXTURE = join(SCAN_FIXTURE_DIR, "model-config.json");
+writeFileSync(MODEL_CONFIG_FIXTURE, JSON.stringify({ models: { stages: { default: { model: "opus", effort: "high" } } } }));
 process.on("exit", () => rmSync(SCAN_FIXTURE_DIR, { recursive: true, force: true }));
 
 /** The plan scanners, from disk (THE SET's second derived half), each with one line it reports as a hit — the
@@ -83,6 +89,11 @@ const FLUSH_CLIS = [
   { file: "check-red-run.mjs", form: "exitCode", crashArgs: [] },
   { file: "run-gates.mjs", form: "sentinel-async", crashArgs: [], crashStatus: 2 },
   { file: "count-verifiers.mjs", form: "main", print: "write", crashArgs: [SCAN_FIXTURE_DIR] },
+  { file: "count-grillers.mjs", form: "main", print: "write", crashArgs: [SCAN_FIXTURE_DIR] },
+  { file: "count-lenses.mjs", form: "main", print: "write", crashArgs: [SCAN_FIXTURE_DIR] },
+  // `resolve` is the parsed path, and it prints with process.stdout.write (validate and agreement print with
+  // console.log, which no floor caller parses).
+  { file: "check-model-config.mjs", form: "main", print: "write", crashArgs: ["resolve", "plan", "--config", MODEL_CONFIG_FIXTURE] },
   ...PLAN_SCANNERS.map((file) => ({ file, form: "main", print: "write", crashArgs: [SCAN_FIXTURE] })),
   ...SCANNERS.map((file) => ({ file, form: "scanner", print: "write", crashArgs: [SCAN_FIXTURE] })),
 ];
@@ -229,6 +240,50 @@ test("★ count-verifiers — a >64 KiB membership document reaches a pipe whole
     const doc = JSON.parse(r.stdout);
     assert.equal(doc.registered, 800);
     assert.deepEqual(doc.verifiers, names);
+    t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+for (const [file, role, key] of [
+  ["count-grillers.mjs", "griller", "grillers"],
+  ["count-lenses.mjs", "lens", "lenses"],
+]) {
+  test(`★ ${file} — a >64 KiB membership document reaches a pipe whole (6.71.1)`, (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "flush-count-"));
+    try {
+      const names = Array.from({ length: 800 }, (_, i) => `${role}-${"x".repeat(80)}-${String(i).padStart(4, "0")}.md`);
+      for (const n of names) writeFileSync(join(dir, n), `---\nrole: ${role}\n---\n`);
+      const r = spawnSync(process.execPath, [join(HERE, file), dir], { encoding: "utf8" });
+      const bytes = Buffer.byteLength(r.stdout);
+      assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+      assert.equal(r.status, 0, r.stderr);
+      const doc = JSON.parse(r.stdout);
+      assert.equal(doc.registered, 800);
+      assert.deepEqual(doc[key], names);
+      t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("★ check-model-config — a >64 KiB `resolve` document reaches a pipe whole (6.71.1)", (t) => {
+  // `resolve` prints one {model, effort} pair. MODEL_ID_RE is a namespace bound (`claude-` + [a-z0-9-]) with no length
+  // cap, so a long full-id model string is a valid config and the one input-sized field of the document.
+  const dir = mkdtempSync(join(tmpdir(), "flush-mc-"));
+  try {
+    const model = `claude-${"a".repeat(70000)}`;
+    const config = join(dir, "pharn.config.json");
+    writeFileSync(config, JSON.stringify({ models: { stages: { default: { model, effort: "high" } } } }));
+    const r = spawnSync(process.execPath, [join(HERE, "check-model-config.mjs"), "resolve", "plan", "--config", config], {
+      encoding: "utf8",
+    });
+    const bytes = Buffer.byteLength(r.stdout);
+    assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), { model, effort: "high" });
     t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
   } finally {
     rmSync(dir, { recursive: true, force: true });

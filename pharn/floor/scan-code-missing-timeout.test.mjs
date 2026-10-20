@@ -272,7 +272,7 @@ test("fail-closed: no argument → nonzero exit, nothing on stdout", () => {
 });
 
 // ---------------------------------------------------------------------------
-// ★ ReDoS REGRESSION — QUADRATIC SHAPES (scanner-redos-sweep-2, fixed in 6.71.1). Through 6.71.0 each call re-scanned
+// ★ ReDoS REGRESSION — QUADRATIC SHAPES (scanner-redos-sweep-2, fixed in 6.71.2). Through 6.71.0 each call re-scanned
 // to EOF for its `)`, re-tested its whole argument span, and counted newlines from offset 0 for its line, so each shape
 // below cost O(N²): `fetch(`×10k (60 KB) took 2.5 s in-process. The scanner now pairs parens, lists indicator starts
 // and lists newlines once per file (its header, "COST"). (old: killed) marks a shape the frozen 6.71.0 CLI did not

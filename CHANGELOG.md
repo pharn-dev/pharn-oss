@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.71.1] - 2026-10-20
+## [6.71.2] - 2026-10-20
 
 ### Fixed
 
@@ -61,6 +61,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
       could flake them.
     - "Linear" is the derived bound (O(n log n) worst case per file, from the binary searches), measured on the
       named shapes, not a floor property.
+
+## [6.71.1] - 2026-10-20
+
+### Fixed
+
+- **`count-grillers.mjs`, `count-lenses.mjs` and `check-model-config.mjs` no longer end with an immediate
+  `process.exit`, so a JSON document past 64 KiB reaches the floor caller that parses it whole.** These are the three
+  parsed CLIs that 6.67.1 named as still outside the flush set. Their callers are `griller-extract.mjs` for
+  count-grillers, `render-review-assignments.mjs` and `check-review-assignments.mjs` for count-lenses, and
+  `stage-agent-core.mjs` for check-model-config's `resolve`. On darwin, where piped stdout is asynchronous, the old
+  ending cut each document at 65,536 bytes; this was measured for all three before the fix. Every caller refused an
+  unparseable document, so the failure was a false refusal, never a false pass. The documents are bounded by what is
+  installed or configured, so the case is rare. A `resolve` model id has no length cap, which is how the test reaches
+  it. Each CLI now ends with `process.exitCode = main()`. Exit codes and output bytes are unchanged, compared before
+  and after on 20 cases covering the success, missing-target, usage and RED paths. `pharn/floor/cli-stdout-flush.test.mjs`
+  covers the three with a static pin, a crash test and a >64 KiB pipe round-trip each. Its header no longer lists them
+  as outside the set. A grep sweep of the floor's JSON-parsing callers found no other parsed floor CLI outside the set,
+  and the header keeps that list open because the grep sees only the spellings it names.
+- 2026-10-20: **`.dev/guides/floor-orchestration.md` describes `check-loop-decision.mjs`'s run-marker read as it is
+  since 6.65.0.** It said "lstat-regular". The marker is opened once with `O_NOFOLLOW`, checked as a regular file
+  through `fstat`, and read through the same descriptor. Dev guide only.
+- 2026-10-20: **A proposed correction to lessons L31 and L35, for the maintainer.** Both lessons say the
+  `check-provenance` and `lessons-index-core` dev/product pairs cannot be merged because an install ships
+  `pharn/floor/` without `.dev/`, and 6.69.0 merged them. `.dev/features/parsed-cli-sentinel/LESSON-CANDIDATE.md`
+  holds a correcting entry (L77) with provenance that passed `check-provenance.mjs` in a dry run, plus an optional
+  in-place annotation. Canon is not edited; promotion is the maintainer's accept/deny through
+  `/pharn-dev-memory-promote`.
 
 ## [6.71.0] - 2026-10-20
 

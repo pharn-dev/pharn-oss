@@ -414,7 +414,7 @@ test("no argument → nonzero exit, no stdout (fail-closed)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// ★ ReDoS REGRESSION — QUADRATIC SHAPES (scanner-redos-sweep-2, fixed in 6.71.1). Through 6.71.0 each `try {` re-scanned
+// ★ ReDoS REGRESSION — QUADRATIC SHAPES (scanner-redos-sweep-2, fixed in 6.71.2). Through 6.71.0 each `try {` re-scanned
 // to EOF for its `}`, each risky op tested every try range and counted newlines from offset 0, and each await re-ran the
 // `.catch(` test over its whole line, so every row marked (old: killed) cost O(N²): `await x(`×10k (80 KB) took 1.7 s
 // in-process. The scanner now pairs braces, merges guard intervals, lists newlines and memoizes the `.catch(` test once

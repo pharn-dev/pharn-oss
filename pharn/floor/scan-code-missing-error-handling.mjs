@@ -58,7 +58,7 @@
 // scan-code-missing-error-handling.test.mjs — the backtick-laundering immunity cases AND the ≥3-backtick residual
 // bound — the whole reason this is FLOOR, not judgment.)
 //
-// COST (re-derived for 6.71.1 from this code, not carried over — the 6.71.0 form was quadratic): through 6.71.0 each
+// COST (re-derived for 6.71.2 from this code, not carried over — the 6.71.0 form was quadratic): through 6.71.0 each
 // `try {` re-scanned to EOF for its `}` (so `try{`×N unbalanced was O(N²)), each risky op tested every try range, and
 // counted newlines from offset 0 for its line (O(hits × length)), and each await re-ran HANDLED_RE over its whole line
 // (so `await x(`×N on one line was O(N²)). Now the masks, the brace pairing, the newline list and the merged guard

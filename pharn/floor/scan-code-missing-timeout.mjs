@@ -54,7 +54,7 @@
 //   • NOT SCOPE-AWARE: a `}` / `)` inside a template/regex literal within a call's arg span can skew the paren-match;
 //     an unbalanced call is skipped (documented bound). SINGLE-FILE; JS/TS-ish shapes.
 //
-// COST (re-derived for 6.71.1 from this code, not carried over — the 6.71.0 form was quadratic): through 6.71.0 each
+// COST (re-derived for 6.71.2 from this code, not carried over — the 6.71.0 form was quadratic): through 6.71.0 each
 // call re-scanned to EOF for its `)` (so `fetch(`×N unbalanced was O(N²)), re-sliced and re-tested its whole argument
 // span (so `fetch(fetch(…))` nested N deep was O(N²)), and counted newlines from offset 0 for its line (O(hits ×
 // length)). Now the masks, the paren pairing, the indicator-start list and the newline list are each ONE forward pass,

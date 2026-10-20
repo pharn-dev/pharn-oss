@@ -48,8 +48,8 @@
 - `pharn/floor/scan-code-missing-differential.test.mjs` — NEW: frozen-oracle differential + per-property mutant controls — test
 - `pharn/floor/scan-code-missing-timeout.test.mjs` — ★ ReDoS rows — test
 - `pharn/floor/scan-code-missing-error-handling.test.mjs` — ★ ReDoS rows — test
-- `SKILLS_VERSION` — patch bump 6.71.0 → 6.71.1 (renumbered against origin/main at PR time) — repo-meta
-- `CHANGELOG.md` — new `[6.71.1]` section, `### Fixed` — repo-meta
+- `SKILLS_VERSION` — patch bump, planned 6.71.0 → 6.71.1, renumbered to 6.71.2 after `main` released 6.71.1 (#376) — repo-meta
+- `CHANGELOG.md` — new `[6.71.2]` section (planned as `[6.71.1]`), `### Fixed` — repo-meta
 - `README.md` — version badge (`check:badge`) and anything `npm run docs:generate` regenerates — repo-meta / generated
 - `docs/capabilities/**` — only if `npm run docs:generate` changes it — generated
 - `.dev/features/scanner-redos-sweep-2/PLAN.md` — this plan
