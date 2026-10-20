@@ -82,7 +82,7 @@ export function matchFrontmatter(text) {
 // instead, each in its own consumer: check-plan-lessons.mjs REDs a repeated `applied_lessons` (6.65.2,
 // frontmatter-parser-parity, audit ENF-4), because it gates that one field and choosing either copy would certify a
 // declaration some other reader discards; and the five LOOP.md / BRIEFING.md envelope readers refuse ANY repeated
-// key (6.71.1, envelope-duplicate-keys), through `frontmatterEntries` below.
+// key (6.71.3, envelope-duplicate-keys), through `frontmatterEntries` below.
 
 function stripQuotes(v) {
   return v.replace(/^["']|["']$/g, "");
@@ -159,7 +159,7 @@ export function fieldEntries(lines, re = FIELD_LINE_RE) {
   return out;
 }
 
-// ── The ENVELOPE reader (6.71.1, envelope-duplicate-keys — the ENF-4 follow-up 6.65.2 deferred) ────────────────────
+// ── The ENVELOPE reader (6.71.3, envelope-duplicate-keys — the ENF-4 follow-up 6.65.2 deferred) ────────────────────
 //
 // WHY IT LIVES HERE (the trigger, P7). Five floor modules read the `---` envelope of a LOOP.md or BRIEFING.md —
 // check-loop-record, check-ship-briefing, check-loop-decision, loop-closeout, render-cost-ledger — and each carried

@@ -547,7 +547,7 @@ export function attribute(markers, ts, sessionId) {
 
 /** Read `outcome` from the LOOP.md ENVELOPE only — never grepped from the body (L6). A `decision:` line
  *  in prose is DATA about a record, not a declaration of one. Returns null when there is no record, no
- *  `decision`, or a repeated envelope key (6.71.1). */
+ *  `decision`, or a repeated envelope key (6.71.3). */
 export function readOutcome(loopPath) {
   let text;
   try {
@@ -555,7 +555,7 @@ export function readOutcome(loopPath) {
   } catch {
     return null;
   }
-  // frontmatter-core.mjs's `frontmatterEntries` (6.71.1), the one reader check-loop-record.mjs reads this envelope
+  // frontmatter-core.mjs's `frontmatterEntries` (6.71.3), the one reader check-loop-record.mjs reads this envelope
   // with. A repeated key is never resolved to one copy: the envelope reads as absent (null), exactly as one with no
   // `decision` does, so no declared outcome is copied and the caller falls through to the derived one — whose
   // `source` then says so. The value rule below is unchanged.

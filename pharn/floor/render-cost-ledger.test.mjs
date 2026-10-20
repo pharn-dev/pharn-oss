@@ -730,7 +730,7 @@ test("a blocked stop carries its `blocked` key through verbatim", () => {
   assert.equal(readOutcome(join(dir, "LOOP.md")).blocked, "no-gates");
 });
 
-test("★ 6.71.1: a repeated envelope key -> null, never one copy copied; the unrepeated twin -> its decision", () => {
+test("★ 6.71.3: a repeated envelope key -> null, never one copy copied; the unrepeated twin -> its decision", () => {
   const root = mkdtempSync(join(tmpdir(), "cost-ledger-dup-"));
   try {
     const p = join(root, "LOOP.md");

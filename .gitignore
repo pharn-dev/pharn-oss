@@ -1,9 +1,11 @@
 node_modules/
 .claude/settings.local.json
-.pharn/
+.pharn/*
+!.pharn/ci.yml
 runs/
 .env
 .DS_Store
+coverage/
 
 # Written by Codex's "import from Claude Code". PHARN-OSS targets Claude Code only for now;
 # these are imported copies (AGENTS.md mirrors CLAUDE.md, .codex/hooks mirrors .claude/hooks),

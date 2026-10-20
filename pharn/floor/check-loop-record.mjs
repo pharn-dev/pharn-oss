@@ -147,7 +147,7 @@ function cleanScalar(v, maxLen) {
 // is DATA ABOUT the record, not a DECLARATION of it. Returns a Map (L15: no plain-object key indexing).
 // Surrounding quotes are stripped; a trailing ` # comment` is NOT — the envelope is machine-written and
 // exact, and stripping would add a laundering surface for no benefit.
-// The envelope is read through frontmatter-core.mjs's `frontmatterEntries` (6.71.1), which also reports every key
+// The envelope is read through frontmatter-core.mjs's `frontmatterEntries` (6.71.3), which also reports every key
 // that occurs more than once. A repeat is REFUSED by `gate()` below, never resolved to one copy (contract: "Extra keys
 // and sections are IGNORED" — each key at most once). Returns `{ fields, repeated }`, or null with no frontmatter.
 function envelope(text) {
@@ -185,7 +185,7 @@ function gate(recordPath) {
         `See pharn/pharn-contracts/loop-record.md.`
     );
   }
-  // (A0) Every envelope key at most once (6.71.1). A repeat is refused, never resolved to one copy: the floor read the
+  // (A0) Every envelope key at most once (6.71.3). A repeat is refused, never resolved to one copy: the floor read the
   // LAST copy while a person reads the first, and YAML 1.2 rejects the mapping. Keys and counts only, never a value.
   if (env.repeated.length > 0) {
     return red(

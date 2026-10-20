@@ -301,7 +301,7 @@ the checker checks only that `dropped` is an array:
 **`outcome` is copied VERBATIM from the `LOOP.md` envelope** (`pharn/pharn-contracts/loop-record.md` —
 cited, not restated, P4), read from the `---`-fenced frontmatter only and never grepped from the body. The
 ledger introduces **no second source of truth** for the decision. Its shape is deliberately general enough
-that `/pharn-ship` fits later without a schema change. An envelope with no `decision`, or (6.71.1) one that repeats
+that `/pharn-ship` fits later without a schema change. An envelope with no `decision`, or (6.71.3) one that repeats
 any key, declares nothing: no copy is resolved, and the outcome is derived instead (below), with `source` saying so.
 
 **There is no `commit` field, and its absence is deliberate.** `LOOP.md`'s `commit` is HEAD _before_ the

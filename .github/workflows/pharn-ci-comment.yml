@@ -1,0 +1,36 @@
+name: pharn-ci comment
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pharn-ci-input
+          path: ${{ runner.temp }}/pharn-ci-input
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - id: pr
+        env:
+          PR_FILE: ${{ runner.temp }}/pharn-ci-input/pr-number
+        run: echo "number=$(tr -dc '0-9' < "$PR_FILE" | head -c 10)" >> "$GITHUB_OUTPUT"
+      - uses: pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c # v0.1.0
+        timeout-minutes: 5
+        with:
+          coverage-file: ${{ runner.temp }}/pharn-ci-input/coverage/lcov.info
+          pr-number: ${{ steps.pr.outputs.number }}
+          head-sha: ${{ github.event.workflow_run.head_sha }}
+          fail-on-threshold: false

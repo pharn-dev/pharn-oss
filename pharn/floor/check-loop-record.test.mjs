@@ -125,7 +125,7 @@ test("extra frontmatter keys and extra body sections are IGNORED, not RED", () =
   assert.equal(r.status, 0, r.out);
 });
 
-// ── ★ a repeated envelope key (6.71.1, envelope-duplicate-keys) ──────────────────────────────────────────
+// ── ★ a repeated envelope key (6.71.3, envelope-duplicate-keys) ──────────────────────────────────────────
 // Each case appends ONE line to a record that is GREEN as built (the control), so the repeat is the only change. The
 // two values are both valid tokens, so no other rule can be what fires; the refusal names the key and the count and
 // never the value.

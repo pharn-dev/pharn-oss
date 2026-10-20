@@ -412,3 +412,65 @@ test("no argument → nonzero exit, no stdout (fail-closed)", () => {
   assert.notEqual(r.status, 0);
   assert.equal(r.stdout.trim(), "");
 });
+
+// ---------------------------------------------------------------------------
+// ★ ReDoS REGRESSION — QUADRATIC SHAPES (scanner-redos-sweep-2, fixed in 6.71.2). Through 6.71.0 each `try {` re-scanned
+// to EOF for its `}`, each risky op tested every try range and counted newlines from offset 0, and each await re-ran the
+// `.catch(` test over its whole line, so every row marked (old: killed) cost O(N²): `await x(`×10k (80 KB) took 1.7 s
+// in-process. The scanner now pairs braces, merges guard intervals, lists newlines and memoizes the `.catch(` test once
+// per file (its header, "COST"). (old: killed) marks a shape the frozen 6.71.0 CLI did not finish within this timeout
+// at this size, measured once in .dev/features/scanner-redos-sweep-2/MEASUREMENTS.md. Which old cost each row reaches:
+// the unbalanced `try{` row the EOF re-scan; the one-line `await x(` rows the per-await `.catch(` line test; the
+// per-line rows the count from offset 0; the many-ranges-times-many-awaits row the loop over every try range (the
+// independent review measured that a scanner with only that loop restored passes every other row and is killed on
+// this one). The `try{}`×100k row and the three dotted-chain rows were linear in 6.71.0 too: the first pins a single
+// guard lookup over many ranges; the chain rows pin that AWAIT_RE's `[\w$.]+` gives a chain back once per start (one
+// start over a 400 KB chain, and 10k starts each over its own 40-character chain). Membership verdict (completed vs
+// killed), not a stopwatch — though at heart it is a wall-clock cap, with about 2× headroom measured under heavy
+// parallel load; each row also pins the verdict, so a fast WRONG answer is red too.
+const REDOS_TIMEOUT_MS = 5000;
+const L400K = 400_000;
+const AWAIT = { kind: "unguarded-await" };
+const QUADRATIC_SHAPES = [
+  { n: "`try{`×100k unbalanced, then an await (old: killed)", body: "try{".repeat(L400K / 4) + "await x()", want: [{ line: 1, ...AWAIT }] },
+  {
+    n: "`try{`×50k nested and balanced around an await (old: killed)",
+    body: "try{".repeat(L400K / 8) + "await x()" + "}".repeat(L400K / 8),
+    want: [],
+  },
+  { n: "`await x(`×50k on one line (old: killed)", body: "await x(".repeat(L400K / 8), want: [{ line: 1, ...AWAIT }] },
+  { n: "`await x(`×50k on one line ending in `.catch(` (old: killed)", body: "await x(".repeat(L400K / 8) + ".catch(", want: [] },
+  {
+    n: "`await x()`×40k, one per line (old: killed)",
+    body: "await x()\n".repeat(L400K / 10),
+    want: Array.from({ length: L400K / 10 }, (_, i) => ({ line: i + 1, ...AWAIT })),
+  },
+  {
+    n: "`JSON.parse(`×36k on one line (old: killed)",
+    body: "JSON.parse(".repeat(L400K / 11),
+    want: [{ line: 1, kind: "unguarded-json-parse" }],
+  },
+  {
+    n: "`try{}`×100k, then an await outside them all",
+    body: "try{}".repeat(L400K / 5) + "\nawait x()",
+    want: [{ line: 2, ...AWAIT }],
+  },
+  {
+    n: "`try{}`×40k, then `await x()`×20k one per line — every op against every range (old: killed)",
+    body: "try{}".repeat(40_000) + "\n" + "await x()\n".repeat(20_000),
+    want: Array.from({ length: 20_000 }, (_, i) => ({ line: i + 2, ...AWAIT })),
+  },
+  { n: "`await` + a 400 KB dotted chain with no `(`", body: "await " + "a.".repeat(L400K / 2), want: [] },
+  { n: "`await` + a 400 KB dotted chain ending in a call", body: "await " + "a.".repeat(L400K / 2) + "b(", want: [{ line: 1, ...AWAIT }] },
+  { n: "`await` + a 40-character dotted chain, ×10k starts, no `(`", body: ("await " + "a.".repeat(20) + " ").repeat(10_000), want: [] },
+];
+for (const s of QUADRATIC_SHAPES) {
+  test(`★ ReDoS: ${s.n} → the scan COMPLETES (not killed) with the same verdict`, () => {
+    withCode(s.body + "\n", (p) => {
+      const r = spawnSync(process.execPath, [SCANNER, p], { encoding: "utf8", timeout: REDOS_TIMEOUT_MS, maxBuffer: 1 << 26 });
+      assert.equal(r.signal, null, `scan did not terminate within ${REDOS_TIMEOUT_MS}ms — the scan is super-linear again`);
+      assert.equal(r.status, 0);
+      assert.deepEqual(json(r), { found: s.want.length > 0, hits: s.want });
+    });
+  });
+}

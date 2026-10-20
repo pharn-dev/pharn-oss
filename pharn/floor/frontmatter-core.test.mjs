@@ -62,7 +62,7 @@ const CONSUMERS = [
 
 // A module that tests the frontmatter fence, by any of the spellings the floor uses: the shared anchor, the matcher,
 // the loose `startsWith("---")` of the validate.mjs family, or a private regex literal anchored on `^---`.
-// Since 6.71.1 a call to frontmatterEntries counts too: it reads through matchFrontmatter.
+// Since 6.71.3 a call to frontmatterEntries counts too: it reads through matchFrontmatter.
 const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|\bfrontmatterEntries\(|startsWith\("---"|\/\^---/;
 // A module that strips the BOM before that test: it calls stripBom, or reads through matchFrontmatter (which does) or
 // frontmatterEntries (which calls matchFrontmatter).
@@ -258,7 +258,7 @@ test("readField: LAST-wins across a duplicated key, exact key match, undefined w
   assert.equal(readField('spec_content_hash: ""\nspec_content_hash: ' + "a".repeat(64), "spec_content_hash"), "a".repeat(64));
 });
 
-// ── The ENVELOPE reader (6.71.1, envelope-duplicate-keys): frontmatterEntries ────────────────────────────────────────
+// ── The ENVELOPE reader (6.71.3, envelope-duplicate-keys): frontmatterEntries ────────────────────────────────────────
 
 test("frontmatterEntries: null without frontmatter or a string; entries are fieldEntries' own; repeats in first-seen order", () => {
   assert.equal(frontmatterEntries(null), null);
@@ -292,7 +292,7 @@ test("describeRepeats: keys and counts only", () => {
   assert.equal(describeRepeats([]), "");
 });
 
-// ✧ CLOSURE (6.71.1 — L29, L31, L36). The LOOP.md / BRIEFING.md envelope readers are materialised HERE. The set of
+// ✧ CLOSURE (6.71.3 — L29, L31, L36). The LOOP.md / BRIEFING.md envelope readers are materialised HERE. The set of
 // non-test floor modules that CALL `frontmatterEntries(` must EQUAL this list (both directions), and every module that
 // calls `fieldEntries(` directly must be a listed HEADER reader with its reason — so a new envelope reader written with
 // `fieldEntries` (last-wins, no refusal) fails as an unclassified caller, and a listed reader that drops the helper
@@ -321,7 +321,7 @@ const codeOf = (src) =>
 const CALLS_ENVELOPE_RE = /\bfrontmatterEntries\(/;
 const CALLS_FIELD_ENTRIES_RE = /\bfieldEntries\(/;
 
-test("✧ CLOSURE (6.71.1): the frontmatterEntries callers ARE the envelope readers; every fieldEntries caller is classified", () => {
+test("✧ CLOSURE (6.71.3): the frontmatterEntries callers ARE the envelope readers; every fieldEntries caller is classified", () => {
   const code = new Map(nonTestFloorModules().map((f) => [f, codeOf(readFileSync(join(HERE, f), "utf8"))]));
   const envelopeCallers = [...code].filter(([, c]) => CALLS_ENVELOPE_RE.test(c)).map(([f]) => f);
   assert.deepEqual(
@@ -341,7 +341,7 @@ test("✧ CLOSURE (6.71.1): the frontmatterEntries callers ARE the envelope read
 
 test("✧ the closure's predicates DISCRIMINATE (L60): a call is seen, a comment mention is not", () => {
   assert.match(codeOf("  const fm = frontmatterEntries(text);"), CALLS_ENVELOPE_RE);
-  assert.doesNotMatch(codeOf("// read through frontmatterEntries(text) since 6.71.1"), CALLS_ENVELOPE_RE);
+  assert.doesNotMatch(codeOf("// read through frontmatterEntries(text) since 6.71.3"), CALLS_ENVELOPE_RE);
   assert.doesNotMatch(codeOf(" * frontmatterEntries(text) — a JSDoc line"), CALLS_ENVELOPE_RE);
   assert.match(codeOf("for (const e of fieldEntries(lines)) x(e);"), CALLS_FIELD_ENTRIES_RE);
   assert.doesNotMatch(codeOf("// fieldEntries(lines) is the line reader"), CALLS_FIELD_ENTRIES_RE);

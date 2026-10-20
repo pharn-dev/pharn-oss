@@ -246,7 +246,7 @@ than lenient: **nothing downstream reads this record as a gate**, so there is no
 a smuggled field to reach. The one place an extra token _would_ matter — an extra `###` under
 `## Handoff` — is exactly the place this contract closes above.
 
-**Every frontmatter key appears at most once (6.71.1), an extra key included.** A repeated key is refused, never
+**Every frontmatter key appears at most once (6.71.3), an extra key included.** A repeated key is refused, never
 resolved to one copy: `check-loop-record.mjs` and `check-loop-decision.mjs` RED it (keys and counts only), and the two
 consumers read the envelope as absent — `loop-closeout.mjs` stops at `decision unverifiable` without committing, and
 `render-cost-ledger.mjs` copies no declared outcome. Reading the last copy, as every reader once did, certified a value

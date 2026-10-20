@@ -23,7 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.71.1] - 2026-10-20
+## [6.71.3] - 2026-10-20
+
+### Added
+
+- 2026-10-20: **Add a pharn-ci diff-coverage gate to pull requests.** Extends the existing `check` job in
+  `.github/workflows/ci.yml` to run coverage (Node's `--experimental-test-coverage`, no new devDependency) and gate
+  on it via `pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c` (threshold 100 in `.pharn/ci.yml`); a
+  second workflow, `.github/workflows/pharn-ci-comment.yml`, posts the sticky PR comment via `workflow_run` so fork
+  PRs (read-only token) still get it. Node's own coverage only reports files a test actually loaded, so a
+  brand-new file with zero tests won't appear in the report at all — a known, accepted gap, not a bug.
 
 ### Fixed
 
@@ -40,7 +49,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `loop-closeout.mjs` reads the envelope as absent and stops at `not committed: decision unverifiable` (exit 4)
     without committing. `render-cost-ledger.mjs` copies no declared outcome. The refusal covers every key, extra keys
     such as `blocked` included. "Extra keys are ignored" in `loop-record.md` still holds for a key's value. The
-    `loop-record.md`, `ship-briefing.md` and `cost-ledger.md` contracts now say so. `briefing_contract_version` stays `0.2.0`, because the renderer never emits a repeat.
+    `loop-record.md`, `ship-briefing.md` and `cost-ledger.md` contracts now say so. `briefing_contract_version` stays
+    `0.2.0`, because the renderer never emits a repeat.
   - `render-run-report.mjs`: a derived outcome no longer says `/pharn-loop` "writes no `LOOP.md`". When the ledger
     falls through to a derived outcome for a `/pharn-loop` run, the report now says the run "has no `LOOP.md` with a
     single readable `decision`". That covers a repeated key, and also the older case of a `LOOP.md` with no `decision`
@@ -53,6 +63,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `LOOP.md`, not an install's records. A record already written is not re-checked by later stages, but if an install
     does hold one with a repeat, it now REDs or reads as absent wherever it is read. `readField`, which the SPEC
     readers use, still reads the last copy, by design.
+
+## [6.71.2] - 2026-10-20
+
+### Fixed
+
+- **The missing-timeout and missing-error-handling scanners no longer slow down quadratically.**
+  - What changed:
+    - `scan-code-missing-timeout.mjs` pairs every `(` with its `)` in one pass, lists where timeout indicators start
+      once, and lists the file's newlines once. Each call then costs three lookups: its `)`, an indicator inside its
+      arguments (a binary search), and its line (a binary search). Through 6.71.0 each call re-scanned to the end of
+      the file for its `)`, re-tested its whole argument text, and counted newlines from the top.
+    - `scan-code-missing-error-handling.mjs` pairs every `{` with its `}` in one pass, merges the `try` body ranges
+      once, lists the newlines once, and tests a line for `.catch(` at most once. Each `await` or `JSON.parse(` then
+      costs two binary searches. Through 6.71.0 each `try {` re-scanned to the end of the file, each risky op looped
+      over every `try` range and counted newlines from the top, and each `await` re-tested its whole line.
+    - The regexes and the output are unchanged. Each scanner's header gives the re-derived cost, and each step's
+      comment says why it returns what the old step returned.
+  - Why: the named follow-up `scanner-redos-sweep-2`, deferred from 6.65.1 (CHANGELOG [6.65.1]). Reproduced first,
+    in-process on this machine: `fetch(`×10,000 (60 KB) took 2.5 s and ×40,000 took 31 s; `await x(`×10,000 (80 KB)
+    took 1.7 s and ×40,000 took 36 s; `try{`×40,000 took 15 s.
+  - Checked by:
+    - **★ ReDoS tests** in both scanner suites spawn the real CLI over 230–400 KB inputs under a 5 s timeout and pin
+      the verdict. The frozen 6.71.0 CLIs were killed on 12 of these shapes; the new ones finished in about 0.2–1.5 s
+      on a heavily loaded machine (`.dev/features/scanner-redos-sweep-2/MEASUREMENTS.md`). Four more rows pin shapes
+      that were already linear: one guard lookup over 100k `try{}` ranges, and `await` before long dotted chains.
+    - **★ Differential tests** (`pharn/floor/scan-code-missing-differential.test.mjs`) compare each new `scanText`
+      with a frozen copy of the 6.71.0 one, written into the test file and importing nothing from the scanners. The
+      inputs are both lenses' eval cases, every `.mjs` file under `pharn/floor/`, near-misses and seeded fuzz.
+      **Negative controls** apply one source edit each to a copy of a new scanner, 14 in all (among them a queue
+      instead of a stack, an unbalanced open paired to the end, unmerged guard ranges, an indicator without word
+      boundaries, and lookups off by one), and show the corpus catches every one.
+    - **A one-time comparison, not a maintained check**, found identical output, old against new, over all 3,109
+      tracked text files and 100,000 fuzzed texts, for both scanners.
+  - Bounds (ADVISORY):
+    - "Same verdict as 6.71.0" is argued and tested over a corpus (deterministic for a given tree), not guaranteed.
+    - The ★ rows are a 5 s wall-clock cap with about 2× headroom measured under heavy load, so a much slower runner
+      could flake them.
+    - "Linear" is the derived bound (O(n log n) worst case per file, from the binary searches), measured on the
+      named shapes, not a floor property.
+
+## [6.71.1] - 2026-10-20
+
+### Fixed
+
+- **`count-grillers.mjs`, `count-lenses.mjs` and `check-model-config.mjs` no longer end with an immediate
+  `process.exit`, so a JSON document past 64 KiB reaches the floor caller that parses it whole.** These are the three
+  parsed CLIs that 6.67.1 named as still outside the flush set. Their callers are `griller-extract.mjs` for
+  count-grillers, `render-review-assignments.mjs` and `check-review-assignments.mjs` for count-lenses, and
+  `stage-agent-core.mjs` for check-model-config's `resolve`. On darwin, where piped stdout is asynchronous, the old
+  ending cut each document at 65,536 bytes; this was measured for all three before the fix. Every caller refused an
+  unparseable document, so the failure was a false refusal, never a false pass. The documents are bounded by what is
+  installed or configured, so the case is rare. A `resolve` model id has no length cap, which is how the test reaches
+  it. Each CLI now ends with `process.exitCode = main()`. Exit codes and output bytes are unchanged, compared before
+  and after on 20 cases covering the success, missing-target, usage and RED paths. `pharn/floor/cli-stdout-flush.test.mjs`
+  covers the three with a static pin, a crash test and a >64 KiB pipe round-trip each. Its header no longer lists them
+  as outside the set. A grep sweep of the floor's JSON-parsing callers found no other parsed floor CLI outside the set,
+  and the header keeps that list open because the grep sees only the spellings it names.
+- 2026-10-20: **`.dev/guides/floor-orchestration.md` describes `check-loop-decision.mjs`'s run-marker read as it is
+  since 6.65.0.** It said "lstat-regular". The marker is opened once with `O_NOFOLLOW`, checked as a regular file
+  through `fstat`, and read through the same descriptor. Dev guide only.
+- 2026-10-20: **A proposed correction to lessons L31 and L35, for the maintainer.** Both lessons say the
+  `check-provenance` and `lessons-index-core` dev/product pairs cannot be merged because an install ships
+  `pharn/floor/` without `.dev/`, and 6.69.0 merged them. `.dev/features/parsed-cli-sentinel/LESSON-CANDIDATE.md`
+  holds a correcting entry (L77) with provenance that passed `check-provenance.mjs` in a dry run, plus an optional
+  in-place annotation. Canon is not edited; promotion is the maintainer's accept/deny through
+  `/pharn-dev-memory-promote`.
 
 ## [6.71.0] - 2026-10-20
 

@@ -1574,7 +1574,7 @@ test("Outcome: a DERIVED decision carries the floor/advisory split BESIDE the va
   }
 });
 
-// 6.71.1 (envelope-duplicate-keys, GATE 1 Q3): the derived preamble's REASON is command-aware, each case the other's
+// 6.71.3 (envelope-duplicate-keys, GATE 1 Q3): the derived preamble's REASON is command-aware, each case the other's
 // control. `/pharn-ship` writes no LOOP.md, ever — its sentence is byte-unchanged. A `/pharn-loop` ledger derives only
 // when its LOOP.md is absent or carries no single readable `decision` (a repeated envelope key included), so
 // "writes no `LOOP.md`" would be false there.

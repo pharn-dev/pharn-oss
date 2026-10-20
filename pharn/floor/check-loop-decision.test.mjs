@@ -33,7 +33,7 @@ const CLEAN = { verdict: "no-regressions", regressions: [] };
 const REGR = { verdict: "regressions", regressions: ["floor/x.test.mjs"] };
 
 // Build a minimal LOOP.md — this checker reads only the envelope (frontmatter), never the body/Handoff.
-// An ARRAY value writes the key once per element, in order — the only way to build a repeated key (6.71.1).
+// An ARRAY value writes the key once per element, in order — the only way to build a repeated key (6.71.3).
 function loopRecord(fm) {
   const lines = Object.entries(fm)
     .filter(([, v]) => v !== undefined)
@@ -131,7 +131,7 @@ test("★ a blocked stuck-point stop → GREEN, SKIPPED — never attempts re-de
   );
 });
 
-// ── ★ a repeated envelope key (6.71.1, envelope-duplicate-keys) — refused before re-derivation AND before the skip ──
+// ── ★ a repeated envelope key (6.71.3, envelope-duplicate-keys) — refused before re-derivation AND before the skip ──
 const GENUINE_GREEN = { decision: "STOP_GREEN", iterations: "1", cap: "3", commit: "abc1234", date: "2026-09-21" };
 
 test("★ a genuine STOP_GREEN record with `decision` repeated (same token twice) → RED naming the repeat; unrepeated → GREEN", () => {

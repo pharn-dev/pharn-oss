@@ -790,7 +790,7 @@ test("recordFacts reads the envelope as the checkers do: quotes stripped, BOM an
   assert.deepEqual(GREEN_TOKENS, { full: "STOP_GREEN", quick: "STOP_GREEN_QUICK" });
 });
 
-// ── ★ a repeated envelope key (6.71.1, envelope-duplicate-keys) ──────────────────────────────────────────────────────
+// ── ★ a repeated envelope key (6.71.3, envelope-duplicate-keys) ──────────────────────────────────────────────────────
 const repeatedDecision = () => loopRecord().replace("decision: STOP_GREEN\n", "decision: STOP_GREEN\ndecision: STOP_GREEN\n");
 
 test("★ readEnvelope / recordFacts: a repeated key reads as NO envelope (all null); the unrepeated twin reads its decision", () => {

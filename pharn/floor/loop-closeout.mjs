@@ -29,7 +29,7 @@
 //     advisory — the flag is the model's to pass). With it, a RED is reported and the close goes on.
 //  2. The envelope, read with the checkers' own grammar (FM_RE after stripBom; `key: value`, surrounding quotes
 //     stripped; cleanScalar before every enum/regex — L14). A value outside its enum/regex reads as null; so does
-//     every field when any envelope key repeats (6.71.1 — frontmatter-core.mjs `frontmatterEntries`).
+//     every field when any envelope key repeats (6.71.3 — frontmatter-core.mjs `frontmatterEntries`).
 //  3. A blocked stop (decision INCONCLUSIVE + a `blocked` key — check-loop-decision.mjs's own skip rule) → `N/A`.
 //     Every other → check-loop-decision.mjs <LOOP.md>: exit 0 GREEN, anything else RED.
 //  4–7. closeout-core.mjs: run-stop marker, render-cost-ledger --command /pharn-loop --base-sha <base>,
@@ -322,7 +322,7 @@ export function undoArgs(list, branch) {
 
 /** The envelope as check-loop-decision.mjs reads it: frontmatter-core.mjs `frontmatterEntries` (FM_RE after
  *  stripBom, `key: value`), surrounding quotes stripped. A Map (L15). null when there is no frontmatter, the input is
- *  not a string, or — 6.71.1 — any key repeats: a repeated key is never resolved to one copy, so `recordFacts` reads
+ *  not a string, or — 6.71.3 — any key repeats: a repeated key is never resolved to one copy, so `recordFacts` reads
  *  all-null, the green gate stops at `decision unverifiable` (exit 4, no commit), and a null `mode` reads as full in
  *  the non-gate steps (a regress side is read, a report is rendered) — the path an invalid `mode` already took. */
 export function readEnvelope(text) {

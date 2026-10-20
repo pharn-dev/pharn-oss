@@ -87,7 +87,7 @@ as the equality check that produced it (see "The rule of the contract" below).
 
 - **FLOOR (deterministic, `pharn/floor/check-ship-briefing.mjs`):**
   1. **envelope shape** — every frontmatter field matches the table above (else `malformed`), and every frontmatter
-     key appears at most once (6.71.1): a repeated key is RED, never resolved to one copy, because the checker would
+     key appears at most once (6.71.3): a repeated key is RED, never resolved to one copy, because the checker would
      certify one copy while a reader of the briefing sees the other;
   2. **cross-file equality** — `spec_state`/`spec_id` (when not `n/a`) equal the current SPEC.md's own
      values; `regress_verdict` equals `regression-report.json`'s `.verdict`; `verify_verdict` equals

@@ -365,9 +365,9 @@ function outcomePreamble(cost, o) {
     ];
   }
   if (source === "verdicts+markers") {
-    // WHY it was derived, said truthfully for both emitters (6.71.1). `/pharn-ship` writes no `LOOP.md`, ever. A
+    // WHY it was derived, said truthfully for both emitters (6.71.3). `/pharn-ship` writes no `LOOP.md`, ever. A
     // `/pharn-loop` ledger derives only when its `LOOP.md` is absent or carries no single readable `decision` —
-    // no `decision` line, or (6.71.1) a repeated envelope key, which render-cost-ledger.mjs `readOutcome` refuses to
+    // no `decision` line, or (6.71.3) a repeated envelope key, which render-cost-ledger.mjs `readOutcome` refuses to
     // resolve to one copy. "writes no `LOOP.md`" was false in the second case, so the reason is command-aware.
     const why =
       cost && cost.command === SHIP_COMMAND

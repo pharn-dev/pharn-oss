@@ -141,8 +141,8 @@ test("RED: no frontmatter at all", () => {
   }
 });
 
-// ★ 6.71.1 (envelope-duplicate-keys) — the reproduced shape: `verify_verdict: "PASS"` above `verify_verdict: "FAIL"`
-// against a FAIL report. The last copy equals the report, so before 6.71.1 this checked GREEN while a person reading
+// ★ 6.71.3 (envelope-duplicate-keys) — the reproduced shape: `verify_verdict: "PASS"` above `verify_verdict: "FAIL"`
+// against a FAIL report. The last copy equals the report, so before 6.71.3 this checked GREEN while a person reading
 // the briefing saw PASS first. The control is the same briefing with the one FAIL line only — GREEN.
 test("★ RED envelope: a repeated field (PASS above FAIL, report FAIL) — never resolved to the copy that matches", () => {
   const dir = scratchDir();

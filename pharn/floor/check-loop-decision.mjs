@@ -203,7 +203,7 @@ function cleanScalar(v, maxLen) {
 }
 
 // Read the envelope from the `---`-fenced frontmatter ONLY — never grepped from the file at large
-// (lessons-learned L6), through frontmatter-core.mjs's `frontmatterEntries` (6.71.1), which also reports every
+// (lessons-learned L6), through frontmatter-core.mjs's `frontmatterEntries` (6.71.3), which also reports every
 // repeated key. Returns `{ fields, repeated }` (a Map, mirroring check-loop-record.mjs — no plain-object key
 // indexing, lessons-learned L15), or null with no frontmatter.
 function envelope(text) {
@@ -228,7 +228,7 @@ function gate(recordPath) {
   if (env === null) {
     return red(`loop-record has no \`---\`-fenced YAML frontmatter (${recordPath}) — cannot read its envelope.`);
   }
-  // A repeated envelope key (6.71.1) is refused BEFORE the blocked-stop skip below: either copy could be the one a
+  // A repeated envelope key (6.71.3) is refused BEFORE the blocked-stop skip below: either copy could be the one a
   // re-derivation reads, and a repeated `blocked` must not reach SKIPPED GREEN. Keys and counts only, never a value.
   if (env.repeated.length > 0) {
     return red(

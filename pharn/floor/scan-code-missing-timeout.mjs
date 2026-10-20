@@ -54,6 +54,18 @@
 //   • NOT SCOPE-AWARE: a `}` / `)` inside a template/regex literal within a call's arg span can skew the paren-match;
 //     an unbalanced call is skipped (documented bound). SINGLE-FILE; JS/TS-ish shapes.
 //
+// COST (re-derived for 6.71.2 from this code, not carried over — the 6.71.0 form was quadratic): through 6.71.0 each
+// call re-scanned to EOF for its `)` (so `fetch(`×N unbalanced was O(N²)), re-sliced and re-tested its whole argument
+// span (so `fetch(fetch(…))` nested N deep was O(N²)), and counted newlines from offset 0 for its line (O(hits ×
+// length)). Now the masks, the paren pairing, the indicator-start list and the newline list are each ONE forward pass,
+// and each call costs O(log n): one array read for its `)`, one binary search for an indicator start inside its span,
+// one for its line. CALL_RE and INDICATOR_RE each start on a literal keyword at `\b`, and their only variable parts
+// (`\s*` runs) give back at most their own run, so the regex scans stay linear in the file. Per file: O(n log n) in the
+// worst case, measured linear (.dev/features/scanner-redos-sweep-2/MEASUREMENTS.md). The ★ ReDoS rows in
+// scan-code-missing-timeout.test.mjs pin the measured shapes as a membership verdict (completed vs killed under a
+// timeout), and scan-code-missing-differential.test.mjs pins every finding equal to a frozen 6.71.0 copy over a corpus
+// that is deterministic for a given tree (it includes every .mjs under pharn/floor/) — evidence, not a proof; this paragraph's equivalence arguments are in the comments at each step.
+//
 // INJECTION-IMMUNE BY CONSTRUCTION (P2): DETECTION (the call-head regex + paren-match) runs over `masked` with
 // template literals INTACT, so it survives ```-fenced markdown fixtures. The SUPPRESSION read — the fixed-token
 // INDICATOR membership test over the call's args — runs over a SECOND copy in which template-literal STRING content
@@ -247,26 +259,37 @@ export function scanText(text) {
 
   const maskedForSuppression = maskTemplateInteriors(masked);
 
-  // --- Helpers ------------------------------------------------------------------------------------------------
-  // Match the delimiter that closes the `open` at `openIdx` in `s`, counting nesting over the MASKED text. Returns the
-  // closing index, or -1 if unbalanced. (Same idiom as scan-code-resource-leak.mjs — deferred dup, P7.)
-  function matchDelim(s, openIdx, open, close) {
-    let depth = 0;
-    for (let i = openIdx; i < s.length; i++) {
-      if (s[i] === open) depth++;
-      else if (s[i] === close) {
-        depth--;
-        if (depth === 0) return i;
-      }
+  // --- Helpers (each computed ONCE per file — see "COST" below) ------------------------------------------------
+  // closeOf[i] = the index of the `)` that closes the `(` at i in `masked`, or -1 if that `(` is unbalanced. One
+  // forward pass with a stack: a `(` pushes, a `)` pops and pairs. A `)` that finds the stack EMPTY is skipped — every
+  // `(` to its left is already paired, so it can close none of them. This is exactly what the per-open depth scan of
+  // 6.71.0 returned (the first index after the `(` where the count of `(` minus `)` falls back to 0), and an open left
+  // on the stack at EOF is exactly one whose depth never returns to 0 — that scan's -1.
+  const closeOf = new Int32Array(masked.length).fill(-1);
+  {
+    const stack = [];
+    for (let i = 0; i < masked.length; i++) {
+      const ch = masked[i];
+      if (ch === "(") stack.push(i);
+      else if (ch === ")" && stack.length) closeOf[stack.pop()] = i;
     }
-    return -1;
   }
 
-  function lineAt(s, idx) {
-    let line = 1;
-    for (let i = 0; i < idx && i < s.length; i++) if (s[i] === "\n") line++;
-    return line;
+  // newlineAt = every `\n` offset in `masked`, ascending (mask() keeps every newline at its own index, so these are the
+  // original file's line breaks). firstAtOrAbove(a, x) = the number of entries of the ascending array a below x.
+  const newlineAt = [];
+  for (let i = masked.indexOf("\n"); i !== -1; i = masked.indexOf("\n", i + 1)) newlineAt.push(i);
+  function firstAtOrAbove(a, x) {
+    let lo = 0;
+    let hi = a.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (a[mid] < x) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
+  const lineAt = (idx) => 1 + firstAtOrAbove(newlineAt, idx);
 
   // --- Fixed call set + indicator set (P5) --------------------------------------------------------------------
   // Call-head regex, anchored on LIBRARY / RECEIVER tokens (never a bare verb). The optional axios method group makes
@@ -281,21 +304,30 @@ export function scanText(text) {
     "g"
   );
   // FIXED, LENIENT timeout-indicator token set — presence of ANY (as a whole word in the call's args) ⇒ the call is CLEAN.
-  const INDICATOR_RE = /\b(?:timeout|signal|statement_timeout|query_timeout|maxTimeMS)\b/;
+  // Run `g` over the whole SUPPRESSION copy ONCE; `indicatorAt` holds every match's start, ascending. No `u` / `i` flag,
+  // deliberately: `\b` is the ASCII word boundary of 6.71.0's per-call `INDICATOR_RE.test(args)`, which this replaces.
+  const INDICATOR_RE = /\b(?:timeout|signal|statement_timeout|query_timeout|maxTimeMS)\b/g;
+  const indicatorAt = [];
+  for (let im; (im = INDICATOR_RE.exec(maskedForSuppression)) !== null;) indicatorAt.push(im.index);
 
   // --- Scan ---------------------------------------------------------------------------------------------------
   const hits = [];
   let m;
   while ((m = CALL_RE.exec(masked)) !== null) {
     const callOpen = m.index + m[0].length - 1; // the '(' of the matched call
-    const callClose = matchDelim(masked, callOpen, "(", ")");
+    const callClose = closeOf[callOpen];
     if (callClose === -1) continue; // unbalanced — cannot bound the args (documented bound)
     // SUPPRESSION read: the indicator test runs over `maskedForSuppression` (template interiors blanked) — NOT `masked`
     // — so a backtick arg's TEXT can never supply a fake indicator token that silences a real no-timeout call (P2; see
     // maskTemplateInteriors). Offsets are 1:1, so the SAME callOpen/callClose bound the args in both copies.
-    const args = maskedForSuppression.slice(callOpen + 1, callClose);
-    if (!INDICATOR_RE.test(args)) {
-      hits.push({ line: lineAt(masked, m.index), kind: "missing-timeout" });
+    // "Some indicator match starts in [callOpen + 1, callClose)" is the same test as 6.71.0's
+    // `INDICATOR_RE.test(maskedForSuppression.slice(callOpen + 1, callClose))`: every alternative is word characters
+    // between two `\b`, so a match is a whole maximal word run; and the characters at callOpen and callClose are `(` /
+    // `)` or a template blank in the suppression copy — non-word either way — so a word run inside the slice is a
+    // whole word in the file and the slice edges add or remove no `\b`.
+    const k = firstAtOrAbove(indicatorAt, callOpen + 1);
+    if (!(k < indicatorAt.length && indicatorAt[k] < callClose)) {
+      hits.push({ line: lineAt(m.index), kind: "missing-timeout" });
     }
   }
 

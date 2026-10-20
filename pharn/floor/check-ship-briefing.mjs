@@ -232,7 +232,7 @@ function carriesAcTestsMode(version) {
   return major > 0 || minor >= 2;
 }
 
-// The envelope through frontmatter-core.mjs's `frontmatterEntries` (6.71.1): `{ fields, repeated }`, or null with no
+// The envelope through frontmatter-core.mjs's `frontmatterEntries` (6.71.3): `{ fields, repeated }`, or null with no
 // frontmatter. A repeated key is never resolved to one copy — `gate()` REDs it (contract: "The rule of the contract",
 // envelope shape), because the floor would certify one copy while a person reads the other.
 function envelope(text) {
