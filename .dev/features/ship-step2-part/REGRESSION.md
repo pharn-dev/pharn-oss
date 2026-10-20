@@ -1,10 +1,11 @@
 # REGRESSION — ship-step2-part
 
-- base: `dcf7b43d` (main 6.67.0). The tree is an uncommitted working-tree build, so base = HEAD (Step 1.1).
-- inside: the 20 paths `regression-report.json` lists (`git diff --name-only dcf7b43d` plus untracked files).
+- base: `499f1f26` (origin/main 6.68.0, after the merge of origin/main into this branch). The tree is committed and
+  clean, so base = `git merge-base HEAD origin/main` (Step 1.1).
+- inside: the 22 paths `regression-report.json` lists (`git diff --name-only 499f1f26` plus untracked files).
 - declared: the 25 `## Files` paths of `PLAN.md`, read with `pharn/floor/plan-files-core.mjs`.
-- `check-regress.mjs scope`: exit 0. escaped: none. escape_exempt: `PLAN.md`, `GRILL.md` (this feature's own stage
-  artifacts). outside: 162 test files and 1 eval pair.
+- `check-regress.mjs scope`: exit 0. escaped: none. escape_exempt: 2 (this feature's own `PLAN.md` and `GRILL.md`).
+  outside: 162 test files and 1 eval pair.
 
 ## Gates (base → head, exit codes)
 
@@ -25,10 +26,11 @@ suite catches, nothing more.
 
 - The pinned `git worktree add` / `xargs` / `$?` forms ran as an argv-array node runner
   (`.pharn/ship-step2-part/regress.mjs`), because this worktree-isolated session refuses them. The base ran in a
-  detached worktree at `dcf7b43d` in the session scratchpad, removed afterwards.
-- The FIRST head run recorded `tests: 1`. It ran at the same time as the base run on a machine also running other
-  sessions' suites. One test failed: `entry-base-evidence.test.mjs` "★ equivalent environment" (`TypeError: Cannot read
-properties of null (reading 'source')`, after 80 s). That file passed alone at HEAD (14/14), passed in this build's
-  `npm run check` (5,696 pass, 0 fail), and the head gate set re-run alone recorded `tests: 0`. The map above is that
-  re-run. The first run's map and log are kept at `.pharn/pharn-dev-regress/head-results.run1.json` and
-  `head-tests.run1.log`. The flake is in a file this increment does not touch; it is recorded here, not counted.
+  detached worktree at the base commit in the session scratchpad, removed afterwards; base and head ran one after the
+  other.
+- This is the stage's SECOND run. The first, before the merge of origin/main and before the GATE-2 review fix to the
+  stages pointer, used base `dcf7b43d` (6.67.0). Its first head run recorded `tests: 1` while it ran at the same time as
+  the base run on a loaded machine: `entry-base-evidence.test.mjs` "★ equivalent environment" failed with a
+  `TypeError` after 80 s. That file passed alone (14/14), passed in `npm run check`, and the head gate set re-run alone
+  recorded `tests: 0` (verdict `no-regressions`). It is a timing flake in a file this increment does not touch. It is
+  recorded here, not counted, and it did not recur in this run.

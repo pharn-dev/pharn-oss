@@ -1,5 +1,5 @@
 {
-  "base": "dcf7b43d",
+  "base": "499f1f26",
   "inside": [
     ".claude/commands/pharn-loop-close.md",
     ".claude/commands/pharn-loop.md",
@@ -9,6 +9,8 @@
     ".dev/features/ship-step2-part/BUILD.md",
     ".dev/features/ship-step2-part/GRILL.md",
     ".dev/features/ship-step2-part/PLAN.md",
+    ".dev/features/ship-step2-part/REGRESSION.md",
+    ".dev/features/ship-step2-part/regression-report.json",
     ".dev/floor/command-family.mjs",
     ".dev/floor/command-family.test.mjs",
     ".dev/floor/command-hygiene.test.mjs",
