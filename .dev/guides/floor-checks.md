@@ -23,8 +23,8 @@ come from the single code block this text was moved from, so the entry they name
 # over `.md` AND `.json` — validate's
 # capability walk is `.md`-only, but the eval judges are `.json`. NOT pharn/floor (it holds the
 # intentional dev-refs + the deliberately-RED fixtures), NOT `.dev/`, and NOT the root docs — CLAUDE.md
-# and CHANGELOG.md correctly cite the DEV copy of a deliberate copy-pair (check-provenance,
-# check-lessons-index, gen-lessons-index, lessons-index-core live in BOTH floors on purpose), so a
+# and CHANGELOG.md correctly cite the DEV file of a pair (check-provenance, check-lessons-index,
+# gen-lessons-index, lessons-index-core exist in BOTH floors — since 6.69.0 the dev ones are wrappers), so a
 # repo-wide walk would report those correct sentences as drift. Existence-gated, and that gate cuts
 # both ways: it FORCED the 2.4.0 `scan-plan-*` relocation (moving the five scanners to `pharn/floor/`
 # is what made their canon cites flag here, driving the move to completion), while it still
@@ -214,7 +214,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 ## `pharn/floor/check-provenance.mjs` — product provenance
 
 ```bash
-# PRODUCT twin of check-provenance (below): validate a promotion candidate for a USER's memory-bank.
+# PRODUCT check-provenance (the dev wrapper is below): validate a promotion candidate for a USER's memory-bank.
 # Same primitive #3 checks; TARGET_ENUM is `memory-bank/{lessons-learned,pattern-library}.md` (the two
 # PRESCRIPTION files, deliberately NOT ARCHITECTURE §5's four state files), and COMMIT_RE additionally
 # admits the literal `unknown` — a user's project need not be a git repo, so an honest absence is a
@@ -229,11 +229,12 @@ node pharn/floor/feature-name.mjs [--fresh]
 # construction), it never proves the declaration named the APT member, and it never proves the WRITE
 # lands there — that is fix #7. Gated on the target-enum check passing, so a non-member target still
 # reports exactly one true reason.
-# A DELIBERATE second copy of .dev/floor/check-provenance.mjs, not a shared core (the alternative made
-# the gate's membership set a CLI argument); the two are pinned to agree on every shared constant by
-# ✧ tests in .dev/floor/check-provenance.test.mjs, which also assert the two TARGET_ENUMs/COMMIT_REs
-# differ deliberately. Exits non-zero on any RED.
-node pharn/floor/check-provenance.mjs <candidate.json> <canon-file.md>
+# ONE IMPLEMENTATION since 6.69.0 (audit ARCH-6): .dev/floor/check-provenance.mjs is a thin wrapper over
+# checkProvenance() here. `--canon-root <dir>` (default `memory-bank`; pharn/floor/canon-root.mjs owns the
+# grammar) moves the two-file target enum under <dir>; `--strict-commit` refuses `unknown`. BOUND: the flag
+# relocates nothing else — the promote command's target stays memory-bank/. Exits 1 on any RED, 2 on an
+# invalid --canon-root.
+node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <candidate.json> <canon-file.md>
 ```
 
 ## `pharn/floor/gen-lessons-index.mjs` / `check-lessons-index.mjs` — product lessons index
@@ -249,9 +250,14 @@ node pharn/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # DESIGN — the honest normal state of a fresh install; STALE is the only drift RED, because it is the only
 # state where the cache could MISLEAD a selection. Consistency, never correctness; and "the index was
 # consulted" NEVER means "the relevant lessons were read". Run by /pharn-plan's sweep (read) and
-# /pharn-memory-promote Step 6b (refresh, advisory, a Bash write outside fix #7 — L19).
-node pharn/floor/gen-lessons-index.mjs [target-dir]
-node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict]
+# /pharn-memory-promote Step 6b (refresh, advisory, a Bash write outside fix #7 — L19); since 6.69.0
+# /pharn-plan also regenerates on COLD/STALE and re-checks. ONE IMPLEMENTATION since 6.69.0: the core takes a
+# profile, and the dev pair below is a thin wrapper passing the dev one. `--canon-root <dir>` reads
+# <dir>/lessons-learned.md instead (output stays .pharn/; the header names the root and a regenerate hint
+# carrying the flag); invalid → exit 2, nothing on stdout. This repo dogfoods it with
+# `--canon-root .dev/memory-bank`. BOUND: the flag relocates nothing else in the product.
+node pharn/floor/gen-lessons-index.mjs [target-dir] [--canon-root <dir>]
+node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict] [--canon-root <dir>]
 ```
 
 ## `.dev/floor/check-provenance.mjs` — dev provenance
@@ -262,15 +268,11 @@ node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict]
 # control-char-free lowercase/digit/hyphen, <=32 chars). Both are REQUIRED on new candidates; legacy canon
 # entries are never scanned. SHAPE only — that the values DESCRIBE the entry is advisory (human-ratified at
 # the Step-5 gate), so a `type`-keyed filter is context selection, never a guarantee.
-# Carries the SAME canon-arg binding as the product twin (above), plus two patches BACK-PORTED in 3.0.6
-# that had shipped product-only for a whole release line — isGregorianDate (this copy accepted the
-# non-existent 2026-02-31) and the whitespace-free id check (it accepted `L99 extra`, and .trim()ed
-# "L1\n" into a COLLIDING token). The checker gating PHARN's OWN canon had been the weaker of the two.
-# The ✧ guard missed it because it compared `const` DECLARATIONS and both patches live in the validation
-# BODY (L31); check-provenance.test.mjs now adds a shared-FUNCTION-body pin and CROSS_COPY_BEHAVIOURS,
-# which EXECUTES both checkers on one input and requires the same verdict. NARROWED (L36): a PRESENCE
-# set over behaviours a review NAMED — it cannot DISCOVER an unnamed divergence, so a green run still
-# never means "the two copies behave identically".
+# A THIN WRAPPER since 6.69.0 (audit ARCH-6): it runs pharn/floor/check-provenance.mjs's checkProvenance()
+# with canonRoot `.dev/memory-bank` and strictCommit (a SHA only — this repo always has one). Before, it was a
+# hand-kept second copy that once missed two product patches for a whole release line (L31); the copy is
+# retired (L35), and a ✧ closure in check-provenance.test.mjs refuses any declaration in the wrapper but its
+# root, so the rules cannot grow back here.
 # Exits non-zero on any RED. /pharn-dev-memory-promote runs it before the human accept/deny gate (never writes on RED).
 node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 ```
@@ -373,6 +375,8 @@ node .dev/floor/check-specified-markers.mjs [target-dir] [--manifest <path>]
 # Both are folded into `npm run docs:generate` / `npm run docs:check` (the latter inside `npm run check`),
 # so promoting a lesson without regenerating is a loud RED. FLOOR: byte-equality (committed == recomputed)
 # — consistency, NOT that the index is true, and NEVER that anyone read a lesson. Exits non-zero on RED.
+# THIN WRAPPERS since 6.69.0 over the product pair (above) with the dev profile; they keep what differs here:
+# canon must exist, and the verdicts are MISSING / DRIFT / ENUM_ERROR over a COMMITTED page.
 node .dev/floor/gen-lessons-index.mjs [target-dir]
 node .dev/floor/check-lessons-index.mjs [target-dir]
 ```
@@ -396,6 +400,24 @@ node .dev/floor/check-lessons-index.mjs [target-dir]
 # individually and never `npm run check`, so `check`-only wiring would never fire on a PR; both wirings are
 # pinned by tests. Apparatus: no SKILLS_VERSION bump. Exits non-zero on RED.
 node .dev/floor/check-version-badge.mjs [target-dir]
+```
+
+## `check-surface-bump.mjs` — product paths vs SKILLS_VERSION, per PR
+
+```bash
+# RED when a PR changes a bump-triggering product path and leaves SKILLS_VERSION unchanged (audit 2026-10-12
+# ARCH-2; L43's named remedy: bind the version to its referent, not its copies to each other). FLOOR (enum/regex,
+# primitive #3): the changed paths are `git diff --no-renames --name-only -z <base>` (base -> working tree) plus
+# untracked files, matched against ONE constant, PRODUCT_SURFACE, which a test binds to CLAUDE.md's "bump-triggering
+# set" bullet by token-set equality in both directions; then a string compare of SKILLS_VERSION at base and head.
+# The base is the PR's own: CI passes `--base-ref HEAD^1` (the test merge's first parent), the npm script
+# `--merge-base origin/main`, so a merge from main is never this PR's change and a bump in a sibling commit counts.
+# Closed refusal set: BAD_USAGE | BASE_UNREADABLE | HEAD_UNREADABLE (exit 2), NOT_BUMPED (exit 1). It does NOT
+# re-check the new CHANGELOG section (check:changelog and check:changelog-entry own that; L35) and never judges the
+# bump's SIZE. Pull requests only: direct pushes and admin merges bypass it, and a PR runs its own copy. Wired as
+# `check:surface-bump` (NOT in `npm run check` — it needs a base) and as the ci.yml step "SKILLS_VERSION
+# surface-bump check"; both pinned, and the CI run block executed, by its test. Apparatus: no SKILLS_VERSION bump.
+node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
 ```
 
 ## `check-contributing-gates.mjs` — CONTRIBUTING gate list

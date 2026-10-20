@@ -65,27 +65,46 @@
 // by the human's read at the accept/deny gate plus the ADVISORY-only status of any `type`-keyed selection,
 // never by this file.
 //
-// Usage:  node pharn/floor/check-provenance.mjs <candidate.json> <canon-file.md>
-//   candidate.json : { target, id, type, concepts[], provenance: { feature, commit, source, date } }
-//                    (+ title/body — IGNORED)
-//   canon-file.md  : the target canon file to check id-uniqueness against
-//                    (a not-yet-created file => empty canon, no duplicates — the first-promotion case,
-//                     which is the NORMAL state in a project that has never promoted a lesson)
+// Usage:  node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <candidate.json> <canon-file.md>
+//   candidate.json  : { target, id, type, concepts[], provenance: { feature, commit, source, date } }
+//                     (+ title/body — IGNORED)
+//   canon-file.md   : the target canon file to check id-uniqueness against
+//                     (a not-yet-created file => empty canon, no duplicates — the first-promotion case,
+//                      which is the NORMAL state in a project that has never promoted a lesson)
+//   --canon-root    : the directory the two target files live in (default `memory-bank`; canon-root.mjs owns
+//                     the grammar and the bound — the flag relocates nothing else in the product). 6.69.0.
+//   --strict-commit : `commit` must be a SHA; the literal `unknown` is refused (6.69.0). The build apparatus's
+//                     wrapper, `.dev/floor/check-provenance.mjs`, runs this checker with `.dev/memory-bank` and
+//                     this flag — its repo always has a commit, so the escape would only weaken its provenance.
 //
-// Exit: 1 on any RED (prints each), 0 + "GREEN — ..." otherwise.
+// ONE IMPLEMENTATION (6.69.0). `.dev/floor/check-provenance.mjs` used to be a hand-kept second copy of this file,
+// held to it by ✧ text and behaviour pins (audit ARCH-6). It is now a thin wrapper over checkProvenance() below;
+// the dependency points `.dev/` -> `pharn/`, the only direction an install (which ships without `.dev/`) allows.
+//
+// Exit: 1 on any RED (prints each), 0 + "GREEN — ..." otherwise, 2 on an invalid `--canon-root` (stderr). On a Node
+// below the runtime floor it exits 2 before checking anything (runtime-floor.mjs) — a non-zero exit, so a caller
+// that reads only GREEN-or-not fails closed.
 
+import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
+import { DEFAULT_CANON_ROOT, parseCanonRoot, takeCanonRoot } from "./canon-root.mjs";
 
 // Enums / shapes — every branch is a membership / regex / presence test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These are the enum-gated / floor-verifiable fields (never body).
 //
-// TARGET_ENUM is the TWO PRESCRIPTION FILES, deliberately NOT the four canonical state files ARCHITECTURE
-// §5 names. `architecture-context` and `feature-catalog` RECORD; `lessons-learned` and `pattern-library`
-// PRESCRIBE — and only a prescription can steer a future build, which is what makes a poisoned entry
-// dangerous (THREAT-MODEL §2 #3). Widening this to §5's four would widen the gated write surface for no
+// The target enum is the TWO PRESCRIPTION FILES under the canon root, deliberately NOT the four canonical state
+// files ARCHITECTURE §5 names. `architecture-context` and `feature-catalog` RECORD; `lessons-learned` and
+// `pattern-library` PRESCRIBE — and only a prescription can steer a future build, which is what makes a poisoned
+// entry dangerous (THREAT-MODEL §2 #3). Widening this to §5's four would widen the gated write surface for no
 // gain. A test pins that it was not widened.
-const TARGET_ENUM = ["memory-bank/lessons-learned.md", "memory-bank/pattern-library.md"];
+export const TARGET_FILES = Object.freeze(["lessons-learned.md", "pattern-library.md"]);
+
+/** The target enum under a canon root (already validated by canon-root.mjs). */
+export function targetEnum(canonRoot = DEFAULT_CANON_ROOT) {
+  return TARGET_FILES.map((f) => `${canonRoot}/${f}`);
+}
+
 const REQUIRED_PROVENANCE = ["feature", "commit", "source", "date"]; // the mandatory per-entry schema
 
 // A git SHA (short or full) OR the literal `unknown`. The command supplies the real value via
@@ -95,6 +114,9 @@ const REQUIRED_PROVENANCE = ["feature", "commit", "source", "date"]; // the mand
 // a made-up 7-hex string that satisfies the regex and lies forever in canon — off the table. Case-exact:
 // `UNKNOWN` is NOT a member, so the escape stays a single deliberate spelling rather than a family.
 const COMMIT_RE = /^([0-9a-f]{7,40}|unknown)$/;
+// `--strict-commit`: a SHA only. The build apparatus's repo always has one, so admitting `unknown` there would
+// buy nothing and weaken its provenance.
+const STRICT_COMMIT_RE = /^[0-9a-f]{7,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/; // ISO calendar date
 
 // Shape match is necessary but not sufficient: DATE_RE admits 2026-02-30. Round-trip through the
@@ -247,12 +269,30 @@ function fail() {
   return 1;
 }
 
-function main() {
-  const candidatePath = process.argv[2];
-  const canonPath = process.argv[3];
+/**
+ * Check one candidate against one canon file. Prints each RED (or the GREEN line) and returns the exit code.
+ *
+ *   canonRoot     the directory the two target files live in (validated by canon-root.mjs; default `memory-bank`)
+ *   strictCommit  refuse the literal `unknown` as `commit`
+ *   self          the script path the usage line names
+ */
+export function checkProvenance(
+  candidatePath,
+  canonPath,
+  { canonRoot = DEFAULT_CANON_ROOT, strictCommit = false, self = "pharn/floor/check-provenance.mjs" } = {}
+) {
+  reds.length = 0; // per call: a caller may run several candidates in one process
+  // An importer passes the root as code, not argv — validate it here too, so the grammar has one gate (canon-root.mjs).
+  const root = parseCanonRoot(canonRoot);
+  if (!root.ok) {
+    console.log(`RED — ${root.reason}`);
+    return 2;
+  }
+  const TARGET_ENUM = targetEnum(root.root);
+  const commitRe = strictCommit ? STRICT_COMMIT_RE : COMMIT_RE;
 
   if (!candidatePath || !canonPath) {
-    console.log("RED — usage: node pharn/floor/check-provenance.mjs <candidate.json> <canon-file.md>");
+    console.log(`RED — usage: node ${self} <candidate.json> <canon-file.md>`);
     return 1;
   }
 
@@ -298,12 +338,14 @@ function main() {
     if ("source" in p && !nonEmptyString(p.source)) {
       red("provenance", `source must be a non-empty string, got ${JSON.stringify(p.source)}`);
     }
-    if ("commit" in p && !(typeof p.commit === "string" && COMMIT_RE.test(p.commit))) {
+    if ("commit" in p && !(typeof p.commit === "string" && commitRe.test(p.commit))) {
       red(
         "provenance",
-        `commit must match ${COMMIT_RE} (a git SHA, 7–40 hex, or the literal \`unknown\` when ` +
-          `\`git rev-parse HEAD\` cannot resolve one — never an empty field and never a fabricated SHA), ` +
-          `got ${JSON.stringify(p.commit)}`
+        strictCommit
+          ? `commit must match ${STRICT_COMMIT_RE} (a git SHA, 7–40 hex), got ${JSON.stringify(p.commit)}`
+          : `commit must match ${COMMIT_RE} (a git SHA, 7–40 hex, or the literal \`unknown\` when ` +
+              `\`git rev-parse HEAD\` cannot resolve one — never an empty field and never a fabricated SHA), ` +
+              `got ${JSON.stringify(p.commit)}`
       );
     }
     if ("date" in p) {
@@ -378,4 +420,19 @@ function main() {
   return 0;
 }
 
-process.exit(main());
+function main() {
+  const taken = takeCanonRoot(process.argv.slice(2));
+  if (!taken.ok) {
+    process.stderr.write(`check-provenance: ${taken.reason}\n`);
+    return 2;
+  }
+  const strictCommit = taken.rest.includes("--strict-commit");
+  const [candidatePath, canonPath] = taken.rest.filter((a) => a !== "--strict-commit");
+  return checkProvenance(candidatePath, canonPath, { canonRoot: taken.root, strictCommit });
+}
+
+// Run as CLI only when invoked directly — the `.dev/floor/` wrapper imports checkProvenance() and must not run
+// this file's main with its own argv. `import.meta.main` (never a `file://` + argv[1] compare).
+if (import.meta.main) {
+  process.exit(main());
+}

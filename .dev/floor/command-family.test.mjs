@@ -8,7 +8,7 @@
 // negative control runs the SAME predicate on a mutated copy (L60: one control per asserted property).
 //
 //   R1 closure — the parts on disk are exactly {pharn-loop: quick, close; pharn-ship: quick, stages, close} (the stages
-//      part since 6.69.0), both ways; every
+//      part since 6.70.0), both ways; every
 //      `part_of:` names a command file that is not itself a part.
 //   R2 frontmatter — every part is hidden from both invocation paths (`disable-model-invocation: true`,
 //      `user-invocable: false`), is `kind: pharn-owned` / `trust: trusted`, and carries no `model:`, `effort:`, `reads:`
@@ -364,7 +364,7 @@ const PLACEMENT = Object.freeze({
   },
   "pharn-ship": {
     main: ["## The two human gates", "## Step 1 — ", "## Quick mode — ", "## Step 2 — ", "## Closing the run"],
-    // 6.69.0: the stages after GATE 1, one `###` section per Step 2 item from the backstop on.
+    // 6.70.0: the stages after GATE 1, one `###` section per Step 2 item from the backstop on.
     stages: [
       "## Running a stage",
       "## Step 2, after GATE 1 — ",
@@ -597,7 +597,7 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
       .replace("\n## Closing the run", `\nRead \`${shipClosePath}\`.\n\n## Closing the run`)
   );
   assert.match(pointerOffenders(movedClose).join("\n"), /the close part is named in "## Step 2 — /);
-  // CONTROL (6.69.0): the stages load moved out of ## Step 2 (into ## Step 1) is red.
+  // CONTROL (6.70.0): the stages load moved out of ## Step 2 (into ## Step 1) is red.
   const shipStagesPath = ".claude/commands/pharn-ship-stages.md";
   const movedStages = edit(LIVE, "pharn-ship.md", (t) =>
     t
@@ -617,7 +617,7 @@ test("R4/R5 — every part is framed by its title and end line, and its command 
     ["pharn-ship.md", "with step 7's first `/pharn-verify` call that exits other than `5`", "with `/pharn-plan`'s stage-start marker"],
     ["pharn-ship.md", "Read it in the same turn as Step 1's pending-start line", "Read it after GATE 2"],
     ["pharn-loop.md", "Commit nothing, create no branch, write no `LOOP.md`", "Write `LOOP.md` from the contract and commit it"],
-    // 6.69.0: the stages part's load point moved to entry, and its not-loaded rule loosened.
+    // 6.70.0: the stages part's load point moved to entry, and its not-loaded rule loosened.
     ["pharn-ship.md", "when the run resumes after GATE 1, whatever the human answered there", "at entry, before `/pharn-spec`"],
     // GATE-2 review R1: loading only after an APPROVED SPEC would skip the backstop that detects a Draft one.
     ["pharn-ship.md", "which is its first step and decides whether the SPEC is Approved", "once the SPEC is Approved"],
@@ -689,7 +689,7 @@ test("R5b — a part's file name appears only in its pointer (and a quick part's
   assert.match(mentionOffenders(moved).join("\n"), /names pharn-loop-quick\.md outside ## What you may claim/);
   const gone = edit(LIVE, "pharn-loop-close.md", (t) => t.replace("`pharn-loop-quick.md`", "the quick part"));
   assert.match(mentionOffenders(gone).join("\n"), /pharn-loop-close\.md: names pharn-loop-quick\.md 0 time\(s\), expected 1/);
-  // 6.69.0: the stages part is named once in ship's close claims block, and nowhere else — not in the quick part.
+  // 6.70.0: the stages part is named once in ship's close claims block, and nowhere else — not in the quick part.
   assert.ok(LIVE.get("pharn-ship-close.md").includes("`pharn-ship-stages.md`"), "anchor (L60): the claims block names it");
   const stagesGone = edit(LIVE, "pharn-ship-close.md", (t) => t.replace("`pharn-ship-stages.md`", "the stages part"));
   assert.match(mentionOffenders(stagesGone).join("\n"), /pharn-ship-close\.md: names pharn-ship-stages\.md 0 time\(s\), expected 1/);
@@ -734,7 +734,7 @@ test("R7 — the stop procedure lives in each close part, the deltas in each qui
   assert.match(placementOffenders(noAnchor).join("\n"), /no ## Quick mode section/);
   const lostItem = edit(LIVE, "pharn-loop-quick.md", (t) => t.replace(/^5\. \*\*/m, "5 **"));
   assert.match(placementOffenders(lostItem).join("\n"), /delta items/);
-  // 6.69.0: a stages heading copied back into the main file, or dropped from the stages part, is red; so is a missing
+  // 6.70.0: a stages heading copied back into the main file, or dropped from the stages part, is red; so is a missing
   // stages file.
   const stageBack = edit(LIVE, "pharn-ship.md", (t) => `${t}\n### Step 2.5 — \`/pharn-build\`, again\n`);
   assert.match(placementOffenders(stageBack).join("\n"), /"### Step 2\.5 — " must live only in pharn-ship-stages\.md/);
@@ -781,7 +781,7 @@ test("helper — commandFamilyText splices each part back where its text sat: qu
     assert.ok(fam.trimEnd().endsWith(endLine(parts.at(-1).file)), `${file}: the close part ends the family text`);
     assert.equal(fam.includes("part_of:"), false, `${file}: no part's frontmatter is spliced in`);
   }
-  // 6.69.0: ship's stages part is spliced at the end of its ## Step 2 section — after the stages pointer, before
+  // 6.70.0: ship's stages part is spliced at the end of its ## Step 2 section — after the stages pointer, before
   // ## Closing the run — so the backstop follows GATE 1's item and Step 2b precedes the close pointer.
   const ship = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
   const stagesTitle = titleOf(LIVE.get("pharn-ship-stages.md"));
@@ -811,7 +811,7 @@ test("helper — a quick part with no ## Quick mode heading to splice under THRO
     writeFileSync(join(dir, "pharn-ship-quick.md"), q.replace("part: quick", "part: middle"));
     assert.throws(() => commandFamilyText(dir, "pharn-ship.md"), /is not one of quick, stages, close/);
     writeFileSync(join(dir, "pharn-ship-quick.md"), q);
-    // 6.69.0: a stages part with no ## Step 2 heading to splice under throws too.
+    // 6.70.0: a stages part with no ## Step 2 heading to splice under throws too.
     const ship = readFileSync(join(dir, "pharn-ship.md"), "utf8");
     writeFileSync(join(dir, "pharn-ship.md"), ship.replace(/^## Step 2 — /m, "## Stage two — "));
     assert.throws(() => commandFamilyText(dir, "pharn-ship.md"), /no "## Step 2 — " heading/);

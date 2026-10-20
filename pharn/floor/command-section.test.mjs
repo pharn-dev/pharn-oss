@@ -1,5 +1,5 @@
 // pharn/floor/command-section.test.mjs — the section extractor `/pharn-ship` and `/pharn-loop` re-read the step in
-// progress with after a compaction (6.69.0, ship-step2-part).
+// progress with after a compaction (6.70.0, ship-step2-part).
 //
 // What is pinned, one negative control per property (L60):
 //   - START: a column-0 `##`–`######` heading whose text equals the operand or starts with it and a space; `Step 1`

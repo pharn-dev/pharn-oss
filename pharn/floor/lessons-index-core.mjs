@@ -7,22 +7,24 @@
 // CONSTRUCTION — the comparison guard would be meaningless if the two sides rendered via different code
 // (P3: route the shared thing through one module; do not duplicate).
 //
-// A DELIBERATE SECOND COPY of .dev/floor/lessons-index-core.mjs, not a shared core — the same call
-// pharn/floor/check-provenance.mjs made, for the same reason: the alternative turns CANON_PATH / OUT_PATH
-// into CLI arguments, i.e. it makes the two surfaces' inputs and outputs caller-supplied. FOUR constants
-// diverge ON PURPOSE (see "THE FOUR DIVERGENCES" below); every OTHER shared constant must AGREE, and both
-// facts are pinned by the ✧ tests in .dev/floor/lessons-index-core.test.mjs.
+// THE ONE IMPLEMENTATION of the lessons grammar (6.69.0). Until then `.dev/floor/lessons-index-core.mjs` was a
+// hand-kept second copy, pinned to agree by ✧ text tests (audit ARCH-6). It is now a thin wrapper that imports
+// this module and passes a PROFILE (below) — the dependency points `.dev/` -> `pharn/`, the only direction an
+// install allows, since it ships `pharn/floor/` without `.dev/`. What differs between the surfaces is DATA in a
+// profile (paths, the regenerate hint, two header paragraphs) plus the caller's own reading of `no-canon`; the
+// parse and the render are this file's code alone.
 //
 // SCOPE NOTE (P3, stated rather than hidden). This module has TWO reasons to change: the canon ENTRY
 // contract (the `## L<n>` heading and the tag line) and the index ROW format (the rendered line). That is
 // two axes in one file. It is a KNOWN, ACCEPTED cost, taken because the parse and the render MUST live
-// behind one module or the "recompute == generate" property is lost. The dev copy carries the identical
-// note for the identical reason. The two concerns are kept in clearly separated sections below.
+// behind one module or the "recompute == generate" property is lost. The two concerns are kept in clearly
+// separated sections below.
 //
 // ════ WHAT THIS DOES AND DOES NOT BUY (P0 — say it, don't bury it) ════
 //
-// The property delivered downstream is that the CACHED index equals what this module recomputes from
-// canon. Read the narrowing carefully, because it is NOT the dev copy's guarantee:
+// The property delivered downstream, under the PRODUCT profile, is that the CACHED index equals what this
+// module recomputes from canon. Read the narrowing carefully, because it is NOT the dev surface's guarantee
+// (there the output is a COMMITTED page, held to byte-equality by its own checker):
 //
 //   - OUT_PATH is `.pharn/`, which is GITIGNORED runtime scratch. So this is a STALENESS check over a
 //     disposable CACHE — NOT the dev surface's "the COMMITTED index equals the recompute" byte-equality.
@@ -46,28 +48,71 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_CANON_ROOT, CANON_ROOT_FLAG, parseCanonRoot } from "./canon-root.mjs";
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
-// THE FOUR DIVERGENCES from .dev/floor/lessons-index-core.mjs — deliberate, and ✧-pinned as DIFFERENT
+// THE PROFILE — what a surface supplies; everything else in this file is shared code
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 //
-// 1. CANON_PATH — the USER's memory-bank, not the build apparatus's. FORCED: it must agree with what
-//    /pharn-plan already reads and with pharn/floor/check-provenance.mjs's TARGET_ENUM.
-// 2. OUT_PATH — `.pharn/` runtime scratch, not a committed `docs/` page. `docs/` in a user's repo is THE
-//    USER'S directory; writing there would be a scope claim on ground PHARN does not own. The cost of
-//    this choice is the narrowed property stated above, and it is stated, not hidden.
-// 3. REGEN — a bare `node` invocation, never an npm script (lessons-learned.md L2: a doc may cite only a
-//    LIVE op). A user's project need not be a Node project and has no `docs:generate` script.
-// 4. Absent / empty canon is a BENIGN NO-OP, not a throw. The dev copy refuses ("refusing to render an
-//    empty index as fact") — correct where canon always exists, hostile where it usually does not: a
-//    user's repo commonly has no memory-bank at all, and that is the honest normal state, not an error.
+//   canonPath   the canon file read (repo-relative, POSIX)
+//   outPath     the index file written / compared
+//   gen         the generator named in the rendered header
+//   regen       the regenerate command named in the header and in the checker's FIX line
+//   storageNote a header paragraph placed before the counts line ("" for none)
+//   columnsNote the header paragraph explaining the columns and markers
+//
+// A profile is CODE-SUPPLIED — this file's productProfile(), or a `.dev/floor/` wrapper's constant — never derived
+// from canon or from a model's reading of free text, so its notes are trusted text and are not put through the
+// title refusals. The CHECK-5 refusal in buildIndex() still runs over the whole rendered page, notes included.
+//
+// The PRODUCT profile, and why each value is what it is:
+// - canonPath — the USER's memory-bank (`memory-bank/`, or the `--canon-root` a caller passes; canon-root.mjs
+//   states that flag's bound). It must agree with what /pharn-plan reads and with check-provenance.mjs's targets.
+// - outPath — `.pharn/` runtime scratch, never a committed `docs/` page: `docs/` in a user's repo is THE USER'S
+//   directory, and writing there would be a scope claim on ground PHARN does not own. The cost is the narrowed
+//   property stated above.
+// - regen — a bare `node` invocation, never an npm script (lessons-learned.md L2: a doc may cite only a LIVE op);
+//   a user's project need not be a Node project. A non-default root carries its flag, so the hint stays runnable.
+// - absent / empty canon is a BENIGN NO-OP (`STATUS_NO_CANON`), not a throw: a user's repo commonly has no
+//   memory-bank at all, and that is the honest normal state. A caller for whom canon must exist (the dev
+//   surface) refuses on that status itself.
 
-// ─── Inputs / outputs (repo-relative, POSIX) ────────────────────────────────────────────────────────
-export const CANON_PATH = "memory-bank/lessons-learned.md";
-export const OUT_PATH = ".pharn/lessons-index.md";
+const PRODUCT_GEN = "pharn/floor/gen-lessons-index.mjs";
 
-const GEN = "pharn/floor/gen-lessons-index.mjs";
-const REGEN = "node pharn/floor/gen-lessons-index.mjs .";
+const PRODUCT_COLUMNS_NOTE = (absent, malformed) =>
+  `Columns: \`id | type | concepts | title | promoted | ~tokens\`. \`${absent}\` is rendered in THREE columns\n` +
+  `and does NOT mean the same thing in each. In \`type\`/\`concepts\`: \`${absent}\` = no tag line (an entry\n` +
+  `written before the tag line existed, or by hand — expected and benign). In \`promoted\`: \`${absent}\` = the\n` +
+  `entry has no \`- promoted: <date>\` line, which the \`untagged\` count above does not measure, so it is not\n` +
+  `a contradiction beside a \`0 untagged\` header. \`${malformed}\` = a tag line is\n` +
+  `present but failed its gate — that is unexpected; read the entry in canon. \`~tokens\` is\n` +
+  `\`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section (heading through the line before the next \`##\`), an\n` +
+  `ESTIMATE with a confidence band, never a measurement (\`LIMITS.md §1c\`). Titles are canon free text,\n` +
+  `reproduced verbatim as DATA.\n`;
+
+/**
+ * The product profile for a canon root (default: the user's `memory-bank`). The root goes through canon-root.mjs's
+ * grammar here as well as at the CLI, so an importer cannot build a profile the flag would refuse; a refused root
+ * THROWS (a caller bug, never a canon state).
+ */
+export function productProfile(root = DEFAULT_CANON_ROOT) {
+  const parsed = parseCanonRoot(root);
+  if (!parsed.ok) throw new Error(`lessons-index: ${parsed.reason}`);
+  root = parsed.root;
+  const regen = root === DEFAULT_CANON_ROOT ? `node ${PRODUCT_GEN} .` : `node ${PRODUCT_GEN} ${CANON_ROOT_FLAG} ${root} .`;
+  return Object.freeze({
+    canonPath: `${root}/lessons-learned.md`,
+    outPath: ".pharn/lessons-index.md",
+    gen: PRODUCT_GEN,
+    regen,
+    storageNote:
+      `**This file is a disposable CACHE.** It lives in gitignored \`.pharn/\` runtime scratch, so it is not\n` +
+      `committed and nothing durably pins it. Delete it freely; regenerate with \`${regen}\`. If your own\n` +
+      `linters or formatters scan \`.pharn/\`, exclude this path — a tool that rewrites it makes the cache\n` +
+      `disagree with canon for a reason that has nothing to do with canon.\n`,
+    columnsNote: PRODUCT_COLUMNS_NOTE(ABSENT, MALFORMED),
+  });
+}
 
 // `buildIndex` status values — a closed set the callers branch on by membership (P5), never by parsing a
 // message. `no-canon` is the honest normal state of a project that has promoted nothing yet.
@@ -85,6 +130,12 @@ export const CHARS_PER_TOKEN = 4;
 // existed, or by hand). `?` = a tag line IS present but failed its gate (unexpected — look at canon).
 export const ABSENT = "-";
 export const MALFORMED = "?";
+
+// The default (product) profile, and its two paths under their historical names. Declared here, below the
+// constants the profile's notes read, so nothing is read before it is initialized.
+export const PRODUCT_PROFILE = productProfile();
+export const CANON_PATH = PRODUCT_PROFILE.canonPath;
+export const OUT_PATH = PRODUCT_PROFILE.outPath;
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — the canon ENTRY contract (parsing). Changes when the entry shape changes.
@@ -182,7 +233,7 @@ function parseTagLine(line) {
 function assertSafeTitle(id, title) {
   if (title.includes("```")) {
     throw new Error(
-      `lessons-index: ${id}'s title contains a fence-closing sequence — refusing to render it into ${OUT_PATH} ` +
+      `lessons-index: ${id}'s title contains a fence-closing sequence — refusing to render it into the index ` +
         `(it would escape the code fence into live markdown)`
     );
   }
@@ -274,8 +325,11 @@ const pad = (s, w) => s + " ".repeat(Math.max(0, w - s.length));
  * The rows live inside a ```text fence deliberately: a lesson TITLE is canon free text and real titles
  * carry back-ticks and `||`. Inside a fence those are inert — no GFM table to mangle, no formatter
  * column-alignment pass to fight, no escaping that would alter canon's words.
+ *
+ * `profile` supplies the paths and the two surface-specific paragraphs (see "THE PROFILE" above); it defaults
+ * to the product profile, whose output is byte-identical to the pre-profile renderer's.
  */
-export function renderIndex(entries) {
+export function renderIndex(entries, profile = PRODUCT_PROFILE) {
   const tagged = entries.filter((e) => e.type !== ABSENT && e.type !== MALFORMED).length;
   const malformed = entries.filter((e) => e.type === MALFORMED).length;
   const untagged = entries.filter((e) => e.type === ABSENT).length;
@@ -290,11 +344,11 @@ export function renderIndex(entries) {
   );
 
   return (
-    `<!-- GENERATED by ${GEN} from ${CANON_PATH} — DO NOT EDIT. Regenerate: ${REGEN} -->\n` +
+    `<!-- GENERATED by ${profile.gen} from ${profile.canonPath} — DO NOT EDIT. Regenerate: ${profile.regen} -->\n` +
     `\n` +
     `# Lessons index\n` +
     `\n` +
-    `A derived, one-line-per-lesson address book for \`${CANON_PATH}\`. It exists so a stage can SELECT which\n` +
+    `A derived, one-line-per-lesson address book for \`${profile.canonPath}\`. It exists so a stage can SELECT which\n` +
     `lessons to fetch; canon stays the source of truth and the floor's verification target\n` +
     `(\`pharn/floor/check-plan-lessons.mjs\` reads canon, never this file).\n` +
     `\n` +
@@ -302,22 +356,10 @@ export function renderIndex(entries) {
     `applied, without fetching its full \`## L<n>\` entry from canon, is the P0 disease. "The index was\n` +
     `consulted" never means "the relevant lessons were read".\n` +
     `\n` +
-    `**This file is a disposable CACHE.** It lives in gitignored \`.pharn/\` runtime scratch, so it is not\n` +
-    `committed and nothing durably pins it. Delete it freely; regenerate with \`${REGEN}\`. If your own\n` +
-    `linters or formatters scan \`.pharn/\`, exclude this path — a tool that rewrites it makes the cache\n` +
-    `disagree with canon for a reason that has nothing to do with canon.\n` +
-    `\n` +
+    (profile.storageNote ? `${profile.storageNote}\n` : "") +
     `${entries.length} lessons · ${tagged} tagged · ${malformed} malformed · ${untagged} untagged · ~${totalTokens} tokens total\n` +
     `\n` +
-    `Columns: \`id | type | concepts | title | promoted | ~tokens\`. \`${ABSENT}\` is rendered in THREE columns\n` +
-    `and does NOT mean the same thing in each. In \`type\`/\`concepts\`: \`${ABSENT}\` = no tag line (an entry\n` +
-    `written before the tag line existed, or by hand — expected and benign). In \`promoted\`: \`${ABSENT}\` = the\n` +
-    `entry has no \`- promoted: <date>\` line, which the \`untagged\` count above does not measure, so it is not\n` +
-    `a contradiction beside a \`0 untagged\` header. \`${MALFORMED}\` = a tag line is\n` +
-    `present but failed its gate — that is unexpected; read the entry in canon. \`~tokens\` is\n` +
-    `\`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section (heading through the line before the next \`##\`), an\n` +
-    `ESTIMATE with a confidence band, never a measurement (\`LIMITS.md §1c\`). Titles are canon free text,\n` +
-    `reproduced verbatim as DATA.\n` +
+    profile.columnsNote +
     `\n` +
     "```text\n" +
     `${rows.join("\n")}\n` +
@@ -328,24 +370,25 @@ export function renderIndex(entries) {
 /**
  * Build the index for targetDir. Returns { status, entries, content }.
  *
- * `status === STATUS_NO_CANON` (with `entries: []`, `content: null`) when canon is absent/unreadable, OR
- * present with zero `## L<n> ` headings. Both are the HONEST NORMAL STATE of a project that has promoted
- * nothing yet — this is THE deliberate divergence from the dev copy, which throws on the same inputs
- * because on the build-apparatus surface canon always exists. Callers branch on the status by membership
- * (P5) and treat no-canon as a benign no-op, never an error.
+ * `status === STATUS_NO_CANON` (with `entries: []`, `content: null`) when canon is ABSENT (ENOENT/ENOTDIR),
+ * OR present with zero `## L<n> ` headings. On the product surface both are the HONEST NORMAL STATE of a
+ * project that has promoted nothing yet, and callers treat the status as a benign no-op. A caller for whom
+ * canon must exist (the dev wrapper — on the build-apparatus surface canon always exists) refuses on this
+ * status itself. Either way the branch is a membership test over the status (P5).
  *
  * Still THROWS (fail-closed, P5) when canon IS present and INVALID — a duplicate id, an unsafe title, or
- * the CHECK-5 hazard below. A present-but-broken canon is a real, loud error on both surfaces.
+ * the CHECK-5 hazard below — and on any read failure other than absence. A present-but-broken canon is a
+ * real, loud error on every surface.
  */
-export function buildIndex(targetDir) {
-  const abs = join(targetDir, CANON_PATH);
+export function buildIndex(targetDir, profile = PRODUCT_PROFILE) {
+  const abs = join(targetDir, profile.canonPath);
   let canonText;
   try {
     canonText = readFileSync(abs, "utf8");
   } catch (e) {
     // Membership over `e.code`, with the terminal fallback being RETHROW (P5, fail-closed). ONLY genuine
-    // ABSENCE is benign: on this product surface a missing memory-bank is the honest normal state of a
-    // fresh install, which is the deliberate divergence from the dev twin (that one throws). A bare catch
+    // ABSENCE is benign: on the product surface a missing memory-bank is the honest normal state of a
+    // fresh install. A bare catch
     // also swallowed EACCES / EISDIR on a canon that EXISTS and HOLDS lessons, returning NO_CANON — and
     // `/pharn-plan` then declares `applied_lessons: none` as though the user had no lessons at all. A
     // real I/O failure must fail closed, never present as an empty memory-bank.
@@ -358,19 +401,19 @@ export function buildIndex(targetDir) {
   if (entries.length === 0) {
     return { status: STATUS_NO_CANON, entries: [], content: null };
   }
-  const content = renderIndex(entries);
+  const content = renderIndex(entries, profile);
 
-  // `.pharn/` is NOT in pharn/floor/validate.mjs's EXCLUDE_SEGMENTS (which holds only .claude/commands,
-  // .dev, pharn/floor, node_modules and .git), so this generated file lands on the validate-SCANNED
-  // surface — exactly as `docs/` does on the dev surface (lessons-learned.md L10). This was RE-DERIVED for
-  // this OUT_PATH rather than copied: being gitignored does not exempt a file from validate's walk.
+  // Neither `.pharn/` (the product outPath) nor `docs/` (the dev one) is in pharn/floor/validate.mjs's
+  // EXCLUDE_SEGMENTS (which holds only .claude/commands, .dev, pharn/floor, node_modules and .git), so the
+  // generated file lands on the validate-SCANNED surface (lessons-learned.md L10) — being gitignored does not
+  // exempt a file from validate's walk.
   // validate CHECK 5 fires on any file containing BOTH `rule_id:` and `problem:` and lacking the
   // enum-gated/free-text split documentation — so a pair of canon titles could otherwise RED a user's
   // floor for a reason unrelated to their code. Refuse rather than emit it (fail-closed, P5).
   if (/rule_id:/.test(content) && /problem:/.test(content)) {
     throw new Error(
       `lessons-index: the rendered index contains both \`rule_id:\` and \`problem:\` (from canon free text) — ` +
-        `refusing to emit it, because ${OUT_PATH} sits on validate.mjs's scanned surface and would trip CHECK 5`
+        `refusing to emit it, because ${profile.outPath} sits on validate.mjs's scanned surface and would trip CHECK 5`
     );
   }
   return { status: STATUS_OK, entries, content };

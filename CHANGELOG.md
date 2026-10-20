@@ -23,13 +23,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.69.0] - 2026-10-20
+## [6.70.0] - 2026-10-20
 
 ### Added
 
+- 2026-10-20: **A pull request that changes a shipped product path now has to bump `SKILLS_VERSION`, or CI
+  fails** (audit 2026-10-12, ARCH-2). Before this, the rule was kept by care alone. `check:changelog-entry` compares
+  CHANGELOG text, and `check:changelog` and `check:badge` check that the copies of the version agree. None of them
+  compared a PR's changed paths with the product surface, so a product edit with only an `[Unreleased]` entry passed
+  every gate. That happened three times: `6c5ae8e`, `e4e8529` and `c338b9d` (lessons-learned L43).
+  - New `.dev/floor/check-surface-bump.mjs` lists the PR's own changed paths: its diff from the merge commit's first
+    parent in CI, or from the merge-base with `origin/main` locally, plus uncommitted and untracked files. If any
+    path is in the product surface and `SKILLS_VERSION` is unchanged, it fails with `NOT_BUMPED`. Files that a merge
+    from `main` brought in do not count, and a bump made in a different commit of the same PR does.
+  - The product surface is one constant, and a test binds it to the list in `CLAUDE.md` ("SKILLS_VERSION
+    discipline"), so neither can change alone. That list was rewritten as exact path patterns. It also gains
+    `pharn/floor/*.json`, the shipped data files (`lens-family-map.json`, `lens-scanner-map.json`,
+    `reconcile-ignore.json`) that the floor's checkers read at run time. `pharn/floor/README.md` stays out until the
+    maintainer confirms whether the installer ships it.
+  - Wired as `npm run check:surface-bump` (not in `npm run check`, because it needs a base) and as the CI step
+    "SKILLS_VERSION surface-bump check" on pull requests. Its test executes the committed CI lines in a shallow
+    checkout of a test merge commit.
+  - Measured before the build against the last 40 commits on `main`: 33 changed the product surface and all of them
+    bumped, and 7 changed none, so 0 false positives. Each of the three earlier misses fails the check.
+  - Bounds: the check proves only that `SKILLS_VERSION` moved. It does not prove the bump is the right size, or that
+    the listed set is exactly what an install receives. The new version's CHANGELOG section is checked by
+    `check:changelog` and `check:changelog-entry`. Direct pushes to `main` and admin merges skip it. Running it in
+    `/pharn-dev-ship` Step 2c is the follow-up `dev-ship-surface-bump`. Apparatus and repo meta only, so there is no
+    `SKILLS_VERSION` bump.
 - **`/pharn-ship`'s stages after GATE 1 moved into a third part, read once the SPEC is approved, with one section per
   stage; a new floor script prints one section of a command, and `/pharn-ship` and `/pharn-loop` re-read the step in
-  progress with it after a compaction** (`SKILLS_VERSION` 6.68.0 → **6.69.0**, minor: a new product floor script;
+  progress with it after a compaction** (`SKILLS_VERSION` 6.69.0 → **6.70.0**, minor: a new product floor script;
   audit 2026-10-12 ARCH-7 and CTX-4/CTX-5).
   - What changed:
     - New part `.claude/commands/pharn-ship-stages.md` (`part: stages`). It holds `## Running a stage`, Step 2 from
@@ -71,6 +95,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `pharn-*.md` command file, and its closure and byte rules (BUDGET R1/R2) now cover the nine dev commands, each at its
   measured bytes + 10%, rounded up to 512. The description, vocabulary and claims-block rules still apply to product
   commands only. Dev apparatus; no bump of its own.
+
+## [6.69.0] - 2026-10-20
+
+### Added
+
+- **One implementation of the lessons grammar: the product lessons floor takes the canon root as a parameter, the
+  four `.dev/floor/` twins are thin wrappers over it, and `/pharn-plan` regenerates the lessons index on `COLD` and
+  `STALE`** (audit 2026-10-12, ARCH-6 and CTX-8).
+  - ARCH-6, what failed: `lessons-index-core.mjs`, `check-lessons-index.mjs`, `gen-lessons-index.mjs` and
+    `check-provenance.mjs` each existed twice, in `pharn/floor/` and `.dev/floor/`, kept equal by hand and by ✧ text
+    pins. Measured at 6.65.2, the grammar code of each pair was identical. The real differences were the paths, the
+    regenerate hint, two header paragraphs, how an absent canon is read, the verdict names and the dev `commit` rule.
+    The product hard-coded `memory-bank/` and had no way to read another root.
+  - ARCH-6, what changed: a new `pharn/floor/canon-root.mjs` is the one parser for `--canon-root <dir>` (default
+    `memory-bank`; a repo-relative POSIX path, no `.`/`..` segment, no leading `-`). `lessons-index-core.mjs` takes a
+    profile (canon path, output path, generator, regenerate hint, two header paragraphs). Its default profile renders
+    the same bytes as before, and `productProfile()` runs the same root grammar. `check-lessons-index.mjs` and
+    `gen-lessons-index.mjs` accept `--canon-root`. An invalid value exits 2 and prints no verdict token.
+    `check-provenance.mjs` exports `checkProvenance()`, which validates the root it is given, builds its target list
+    under that root and gains `--strict-commit`, which refuses `unknown`. It now loads the runtime floor first and runs
+    only when invoked directly, so on a Node below the floor it exits 2 instead of checking.
+  - The `.dev/floor/` files keep their paths and exported APIs and now declare only the dev profile and what differs
+    there: canon must exist, the verdicts are `MISSING`/`DRIFT` over a committed page, and `commit` must be a SHA.
+    `docs/lessons-index.md` regenerates byte-identical.
+  - CTX-8, what failed: on `COLD`, `/pharn-plan` read `memory-bank/lessons-learned.md` in full (about 210 KB in this
+    repo) with an "optional" warm-up, and on `STALE` likewise. The product checker printed `NO_CANON` here, so this
+    repo could not run the product sweep on its own canon.
+  - CTX-8, what changed: `COLD` and `STALE` now run `node pharn/floor/gen-lessons-index.mjs .`, then the `--verdict`
+    line again. `GREEN` selects from the index and reads only the candidates; anything else falls back to canon in
+    full. `/pharn-loop`'s `allowed-tools` gains that one line. `/pharn-memory-promote` Step 6b's sentence about a
+    skipped refresh now says the next plan regenerates. With `--canon-root .dev/memory-bank`, the product checker
+    reads this repo's canon.
+  - Checked by: a canon-root grammar suite; per-CLI custom-root and no-flag cases (the default stays the production
+    path); `--strict-commit`, root-validation and import-runs-nothing cases. Each dev test file gets a closure that
+    refuses any top-level declaration in a wrapper beyond its profile, with negative controls. A dev test runs the
+    product checker on this repo's canon and requires a token other than `NO_CANON`. `LESSONS_SWEEP_WIRING` grows from
+    4 to 5. The retired text pins compared the two copies; with one copy there is nothing for them to compare.
+  - Bound: `--canon-root` changes which file these four CLIs read. Every other product canon path stays
+    `memory-bank/`: `check-plan-lessons`'s argument, the promote target and `/pharn-plan`'s "read canon" step. So the
+    flag does not relocate a project's memory-bank. The root check is lexical: a symlinked root is followed for
+    reading.
+  - Not covered: lessons L31 and L35 in `.dev/memory-bank/lessons-learned.md` still describe the check-provenance and
+    lessons-index pairs as copies that must both exist. Canon is not edited in this batch; the correction is recorded
+    as a deferred lesson candidate in `.dev/features/lessons-canon-root/SHIP.md`.
+
+## [6.68.1] - 2026-10-20
+
+### Changed
+
+- **The root README is cut from 82,330 to 24,851 bytes: its long sections moved, with their text unchanged, into
+  three pages under `docs/`** (audit 2026-10-12, ARCH-10).
+  - What failed: "Guaranteed vs advisory" (~18.2 KB), "The pipeline" with its five subsections (~17.9 KB) and
+    "Current limitations" (~15.8 KB) were ~64% of an ~81 KB README, so a newcomer had to read past them to reach a
+    first run.
+  - What changed: "Guaranteed vs advisory" and "Why not just CLAUDE.md or AGENTS.md?" moved to `docs/guarantees.md`;
+    "How the workflow works", "The pipeline" with its six subsections (6.66.0's "Declaring the base install"
+    included), the `--quick` detail from "Quick start" (now
+    "Quick mode") and "Capability coverage" moved to `docs/pipeline.md`; "Current limitations" moved to
+    `docs/limitations.md`. The README keeps what PHARN is, install and the Node requirement, the first run, what gets
+    installed, the commands table and the generated inventory, and adds a short guaranteed-vs-advisory summary and a
+    list of the pages. The moved text differs from the old README only in re-based links and three position words
+    that named the README's layout ("on this page", "the generated inventory above", "the current-state block …
+    below"). The README's new summary restates five of the table's guarantees in brief and links to the table; it adds none.
+  - Why this bumps: two shipped files cited a moved README section, `pharn/pharn-contracts/test-results-record.md`
+    (`README, "Per-test results"`) and a comment in `pharn/floor/test-infra-core.mjs`. Both now name
+    `docs/pipeline.md`. `LIMITS.md` is unchanged.
+  - Tests: the ✧ test that every statement of the reconcile claim says "non-adversarial" now also reads
+    `docs/guarantees.md` and `docs/limitations.md`.
+  - Bounds: nothing holds the README to 25 KB from here; its size was measured once, not gated. The moved text was
+    compared with the old README by a one-off script, not by a gate.
 
 ## [6.68.0] - 2026-10-20
 

@@ -23,9 +23,8 @@
   went down (45,056 → 17,920); R1/R2 range over every `pharn-*.md`; the compaction pins; `<heading>` joins
   `SHELL_VALUES`.
 - `pre-run-snapshot.test.mjs` reads ship's GATE-2 item through the family text (the one test the prototype run found).
-- Guides (`product-commands.md`, `floor-orchestration.md`), `SKILLS_VERSION` 6.68.0, CHANGELOG [6.68.0] (renumbered to 6.69.0 when the merge of origin/main brought #369's
-  6.68.0), README badge
-  and the regenerated current-state count (141 → 142 floor `.mjs` files).
+- Guides (`product-commands.md`, `floor-orchestration.md`), `SKILLS_VERSION` 6.68.0, CHANGELOG [6.68.0] (renumbered to 6.69.0, then to 6.70.0, as two merges of origin/main brought #369's 6.68.0 and #372's 6.69.0), README
+  badge and the regenerated current-state count.
 
 ## Decisions made at build
 

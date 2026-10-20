@@ -906,7 +906,7 @@ function beyondV3(pin) {
  *  `--check` as a RED). A /3, /4 or /5 pin over a tree the current pin cannot be computed on (a
  *  symlinked `.npmrc` or script-named file, a chain past MAX_CHAIN_HOPS, a gate exclusion that cannot be read) reads
  *  `changed`, not `unpinned`, deliberately: the refusal cannot tell a change the old pin covered from one only the new
- *  pin covers, so it keeps the stricter reading — stated in the contract and the README. */
+ *  pin covers, so it keeps the stricter reading — stated in the contract and in docs/pipeline.md. */
 export function testInfraReds({ recorded, root }) {
   const now = computeTestInfra({ root, levels: recorded.levels });
   if (!now.ok) return { changed: [`the test infrastructure cannot be pinned now: ${now.reason}`], unpinned: [] };

@@ -549,6 +549,9 @@ test(
 // so the dependency may only point `.dev/` -> product, never the reverse.
 const LESSONS_SWEEP_WIRING = [
   { file: "pharn-plan.md", role: "checks the index before selecting", re: /pharn\/floor\/check-lessons-index\.mjs\b[^\n]*--verdict/ },
+  // 6.69.0 (audit CTX-8): on COLD/STALE the plan stage REGENERATES the cache and re-checks, instead of reading
+  // canon in full with an "optional" warm-up. A fifth site with the same shape: the regeneration is a pinned line.
+  { file: "pharn-plan.md", role: "regenerates the index on COLD/STALE", re: /\n {5}node pharn\/floor\/gen-lessons-index\.mjs \.\n/ },
   { file: "pharn-dev-plan.md", role: "checks the index before selecting", re: /node\s+\.dev\/floor\/check-lessons-index\.mjs/ },
   { file: "pharn-memory-promote.md", role: "regenerates the index after a promotion", re: /node\s+pharn\/floor\/gen-lessons-index\.mjs/ },
   {
@@ -584,7 +587,11 @@ test("✧ the lessons-index wiring set is non-vacuous — every named command ex
   const present = new Set(commandFiles());
   const missing = LESSONS_SWEEP_WIRING.filter((s) => !present.has(s.file)).map((s) => s.file);
   assert.deepEqual(missing, [], `these wiring-set members name no live command file: ${missing.join(", ")}`);
-  assert.equal(LESSONS_SWEEP_WIRING.length, 4, "expected both surfaces x both sites (dev/product x check/regenerate)");
+  assert.equal(
+    LESSONS_SWEEP_WIRING.length,
+    5,
+    "expected both surfaces x both sites (dev/product x check/regenerate), plus /pharn-plan's COLD/STALE regeneration"
+  );
 });
 
 // ── The `applied_lessons` re-verification wiring (check-plan-lessons.mjs) ─────────────────────────────
@@ -4834,7 +4841,7 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
 //
 // ── Honest scope (P0) ─────────────────────────────────────────────────────────────────────────────────
 // FLOOR (what a green run means): the five rules above hold for the product files on disk (fifteen at 6.32.0:
-//   eleven commands and four parts; sixteen at 6.69.0, with /pharn-ship's stages part). Since 6.69.0 (ship-step2-part,
+//   eleven commands and four parts; sixteen at 6.70.0, with /pharn-ship's stages part). Since 6.70.0 (ship-step2-part,
 //   review finding ARCH-7) R1 and R2 also range over the `pharn-dev-*` commands — the table closes over every
 //   `pharn-*.md` on disk (`budgetedCommandFiles`), and each dev command's row is its measured bytes + 10%.
 // NOT guaranteed: it bounds BYTES and VOCABULARY, never meaning. A paraphrased claim ("ensures",
@@ -4874,16 +4881,16 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes
   // measured, 3,473 over 24,064; raised by the rule (+10%, up to a multiple of 512).
   "pharn-review.md": 30720,
-  // ship-step2-part (6.69.0): `## Running a stage`, Step 2 after GATE 1 and Step 2b moved into the stages part, and the
+  // ship-step2-part (6.70.0): `## Running a stage`, Step 2 after GATE 1 and Step 2b moved into the stages part, and the
   // compaction rule and the stages pointer came in — 16,037 bytes measured (was 42,422); the row went DOWN by the rule.
   "pharn-ship.md": 17920,
   "pharn-ship-close.md": 31232,
   "pharn-ship-quick.md": 12800,
-  "pharn-ship-stages.md": 33280, // 6.69.0 ship-step2-part: 29,967 B measured + 10% → next 512
+  "pharn-ship-stages.md": 33280, // 6.70.0 ship-step2-part: 29,967 B measured + 10% → next 512
   "pharn-spec.md": 27136,
   "pharn-test.md": 20480,
   "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
-  // ship-step2-part (6.69.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
+  // ship-step2-part (6.70.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
   // rounded up to 512. R3–R5 do not apply to them (header).
   "pharn-dev-build.md": 15360, // 13,771 B
   "pharn-dev-eval.md": 11264, // 9,907 B
@@ -4908,7 +4915,7 @@ function productCommandFiles() {
   return commandAndPartFiles().filter((f) => f.startsWith("pharn-") && !f.startsWith("pharn-dev-"));
 }
 
-/** Every command file R1/R2 budget (6.69.0): `pharn-*.md`, the `pharn-dev-*` commands included, sorted. */
+/** Every command file R1/R2 budget (6.70.0): `pharn-*.md`, the `pharn-dev-*` commands included, sorted. */
 function budgetedCommandFiles() {
   return commandAndPartFiles().filter((f) => f.startsWith("pharn-"));
 }
@@ -4969,13 +4976,13 @@ function claimsHeadingCount(text) {
   return text.split(/\r?\n/).filter((t, i) => !fenced.has(i + 1) && CLAIMS_HEADING_RE.test(t)).length;
 }
 
-test("✧ BUDGET R1: the command files on disk (dev commands included, 6.69.0) equal COMMAND_BYTE_CEILINGS' keys", () => {
+test("✧ BUDGET R1: the command files on disk (dev commands included, 6.70.0) equal COMMAND_BYTE_CEILINGS' keys", () => {
   const onDisk = budgetedCommandFiles();
   assert.deepEqual(budgetClosureOffenders(onDisk, COMMAND_BYTE_CEILINGS), []);
   assert.equal(onDisk.length, Object.keys(COMMAND_BYTE_CEILINGS).length);
   // L34: both halves of the domain are present — the dev commands are not vacuously in.
   assert.ok(onDisk.some((f) => f.startsWith("pharn-dev-")) && onDisk.some((f) => !f.startsWith("pharn-dev-")), "non-vacuous");
-  // CONTROL (6.69.0): a dev command with no row is red (the closure reaches it).
+  // CONTROL (6.70.0): a dev command with no row is red (the closure reaches it).
   const noDev = Object.fromEntries(Object.entries(COMMAND_BYTE_CEILINGS).filter(([k]) => k !== "pharn-dev-ship.md"));
   assert.deepEqual(budgetClosureOffenders(onDisk, noDev), ["pharn-dev-ship.md: on disk, no ceiling"]);
   // CONTROLS (L60): a table missing one key, and a table with an extra key, are both red.
@@ -4987,7 +4994,7 @@ test("✧ BUDGET R1: the command files on disk (dev commands included, 6.69.0) e
   assert.notDeepEqual(budgetClosureOffenders([], COMMAND_BYTE_CEILINGS), []);
 });
 
-test("✧ BUDGET R2: every command's body (dev commands included, 6.69.0) is within its measured ceiling", () => {
+test("✧ BUDGET R2: every command's body (dev commands included, 6.70.0) is within its measured ceiling", () => {
   const offenders = budgetedCommandFiles()
     .map((f) => bodyBudgetOffender(f, productCommandText(f)))
     .filter(Boolean);
@@ -5119,7 +5126,7 @@ const SHELL_VALUES = Object.freeze({
   "<chosen option's argv…>": "a registry-held flag plus the human's answer, single-quoted",
   "<stage>": "a closed choice: the --stage of the orchestrator's own pinned start line that crashed (R3's fallback)",
   "<heading>":
-    "a heading of the command's own file, single-quoted (6.69.0); command-section.mjs refuses one with a control character and matches it as text only",
+    "a heading of the command's own file, single-quoted (6.70.0); command-section.mjs refuses one with a control character and matches it as text only",
 });
 
 /** placeholder -> ["file:line", …] over [file, body] pairs. */
@@ -5880,7 +5887,7 @@ test("✧ loop-no-prompts: /pharn-loop stops in plan mode before Step 1a (the as
   assert.ok(at < text.search(/^## Quick mode\b/m), "the plan-mode stop precedes the quick part's load rule");
 });
 
-// ── 6.69.0 (ship-step2-part, review findings CTX-4/CTX-5) — both orchestrators re-read the step in progress ──────
+// ── 6.70.0 (ship-step2-part, review findings CTX-4/CTX-5) — both orchestrators re-read the step in progress ──────
 // A compaction summarises the turn that carried the invoked command's text, and the commands re-read only their PARTS.
 // Each orchestrator's MAIN file now carries, before its first `##` section (so it is in view from the first turn), one
 // paragraph that sends the run back to the section of the step in progress through one pinned extractor line whose
@@ -5906,7 +5913,7 @@ function compactionOffenders(file, text) {
   return out;
 }
 
-test("✧ 6.69.0 compaction re-read: /pharn-ship and /pharn-loop each pin the rule and ONE extractor line naming themselves", () => {
+test("✧ 6.70.0 compaction re-read: /pharn-ship and /pharn-loop each pin the rule and ONE extractor line naming themselves", () => {
   for (const file of ["pharn-ship.md", "pharn-loop.md"]) {
     const text = withoutGrant(readFileSync(join(COMMANDS_DIR, file), "utf8"));
     assert.deepEqual(compactionOffenders(file, text), [], file);

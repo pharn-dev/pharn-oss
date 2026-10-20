@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pharn/floor/command-section.mjs — print ONE section of a PHARN command file, so an orchestrator can re-read the step it
-// is on after a compaction without re-reading the whole command (6.69.0, ship-step2-part — review findings ARCH-7 and
+// is on after a compaction without re-reading the whole command (6.70.0, ship-step2-part — review findings ARCH-7 and
 // CTX-4/CTX-5 of 2026-10-12).
 //
 // WHY (P7 — a measured gap, not a hypothetical). A compaction of the conversation summarises the turn that carried the

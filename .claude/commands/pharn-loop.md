@@ -126,6 +126,7 @@ allowed-tools:
     "Bash(node pharn/floor/check-spec.mjs --hash pharn/features/*/SPEC.md)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-plan.md --target pharn/features/*/PLAN.md)",
     "Bash(node pharn/floor/check-lessons-index.mjs . --verdict)",
+    "Bash(node pharn/floor/gen-lessons-index.mjs .)",
     "Bash(node pharn/floor/check-ac-tests.mjs --spec pharn/features/*/SPEC.md)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-plan.md --target pharn/features/*/AC-TESTS.md)",
     "Bash(node pharn/floor/check-ac-tests.mjs pharn/features/*/AC-TESTS.md pharn/features/*/SPEC.md pharn/features/*/PLAN.md)",
@@ -219,7 +220,7 @@ node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md '<heading>'
   execute code the build wrote, with no prompt: run an unattended loop only where that is acceptable (a sandbox, a
   container, a throwaway checkout). The compaction re-read's `*` leaves only the heading free: its file is fixed to
   this command, and `command-section.mjs` reads nothing but a regular `pharn-*.md` directly in `.claude/commands`
-  (6.69.0). What it does not widen: no `node` script outside the pinned lines is
+  (6.70.0). What it does not widen: no `node` script outside the pinned lines is
   pre-approved, the two write guards still judge every Write and Edit (fix #2, fix #7), and in an installed project
   the setter refuses a plan that names PHARN's own files (`.claude/hooks/set-writes-scope.cjs`, header).
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the

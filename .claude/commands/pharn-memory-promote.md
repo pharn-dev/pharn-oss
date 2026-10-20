@@ -358,8 +358,8 @@ Refresh the lessons address book `/pharn-plan` selects from:
 node pharn/floor/gen-lessons-index.mjs .
 ```
 
-- It **never blocks**: if it fails or you skip it, the next `/pharn-plan` reads `STALE` and falls back to reading
-  canon in full.
+- It **never blocks**: if it fails or you skip it, the next `/pharn-plan` reads `STALE` and regenerates the index
+  itself.
 - **Skip it entirely when the target was `pattern-library.md`** — the index derives from
   `lessons-learned.md` only, so there is nothing to refresh.
 - If the project has no lessons yet the generator prints `no canon … nothing to index` and writes

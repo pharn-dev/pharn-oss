@@ -668,7 +668,7 @@ test("✧ REPORTED (R1) — ship --quick keeps and records the pre-run paths, sh
   const gate2 = quick.slice(quick.indexOf("**GATE 2 in quick mode**"));
   assert.match(gate2, /`pre-run unchanged` paths as quoted DATA/);
   assert.match(readFileSync(join(COMMANDS_DIR, "pharn-ship-close.md"), "utf8"), /`pre-run unchanged: <n>` from its `pre_run_snapshot`/);
-  // 6.69.0: ship's GATE-2 item sits in its stages part; the family text reads it wherever it lives.
+  // 6.70.0: ship's GATE-2 item sits in its stages part; the family text reads it wherever it lives.
   const ship = commandFamilyText(COMMANDS_DIR, "pharn-ship.md");
   const gate2At = ship.indexOf("1. **GATE 2 — post-verify decision.**");
   assert.ok(gate2At >= 0, "anchor (L60): ship's GATE-2 item is found");
