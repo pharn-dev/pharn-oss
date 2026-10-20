@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Fixed
+
+- 2026-10-20: **`docs/pipeline.md` now says the AC-TESTS lock pins every allowlisted gate's command, not only the
+  level gates'.** The sentence in "What verify proves about acceptance criteria" moved verbatim from the README in
+  6.68.1 (#371), while 6.68.0 (#369, audit SEC-4) widened the pin to `other_gates` and `other_chained`. It now adds
+  that clause, with its bound: for those gates only the command is pinned, not the files or configs it reads. The text
+  restates `pharn/pharn-contracts/ac-tests.md`; no claim is added. Hand-written docs, so no version bump.
+
 ### Added
 
 - 2026-10-20: **A pull request that changes a shipped product path now has to bump `SKILLS_VERSION`, or CI
