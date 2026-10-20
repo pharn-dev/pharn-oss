@@ -220,6 +220,21 @@
 const fs = require("fs");
 const path = require("path");
 
+// A LAST-RESORT backstop (audit TST-11, 2026-10-12): the copy enforce-writes-scope.cjs has carried since 6.24.0, pinned
+// to it by a test there. Registered before anything else runs, so an exception thrown anywhere in this process —
+// module setup, the payload decode, composing or writing a deny — exits 2 (deny) instead of 1, which Claude Code
+// treats as NON-BLOCKING: the write would proceed, a fail-OPEN. It writes only to stderr (never repeating a stdout
+// write that may be what just threw) and assumes nothing else still works. It cannot touch an allow, which is a plain
+// `process.exit(0)`.
+process.on("uncaughtException", () => {
+  try {
+    process.stderr.write("the trusted-path guard failed while deciding; the write is denied — fail-closed\n");
+  } catch {
+    /* best effort only — exiting 2 is what matters */
+  }
+  process.exit(2);
+});
+
 function realpathOr(p) {
   try {
     return fs.realpathSync(p);
@@ -754,11 +769,14 @@ function canonWriteAuthorized(relKey, root) {
   return toKey(parsed.scope[0]) === relKey;
 }
 
+// The raw payload, or null when stdin cannot be read — never "" for an error (audit TST-4, 2026-10-12): the caller
+// used to parse an empty result as `{}`, so an unreadable or empty stdin was not a write and the hook exited 0, a
+// fail-OPEN. Byte-equal to enforce-writes-scope.cjs's copy (pinned by a test there).
 function readStdin() {
   try {
     return fs.readFileSync(0, "utf8");
   } catch {
-    return "";
+    return null;
   }
 }
 
@@ -806,9 +824,13 @@ function denyMalformedHookInput(detail) {
 }
 
 const raw = readStdin();
+// A PreToolUse hook is always handed a payload, so no input is not "nothing to judge": an unreadable stdin and an empty
+// one both deny (audit TST-4), with fixed text — never a value read from the input.
+if (raw === null) denyMalformedHookInput("stdin could not be read");
+if (raw === "") denyMalformedHookInput("empty input");
 let payload;
 try {
-  payload = JSON.parse(raw || "{}");
+  payload = JSON.parse(raw);
 } catch {
   denyMalformedHookInput("invalid JSON");
 }

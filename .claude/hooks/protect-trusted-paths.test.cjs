@@ -818,15 +818,20 @@ test("✧ MUTANT: dropping the inode test re-opens the hard-link alias", () => {
   assert.equal(runIn(good, { tool_name: "Write", tool_input: { file_path: "alias.md" } }).status, 2);
 });
 
-test("✧ MUTANT: dropping the non-object payload guard makes a `null` payload exit 1 (fail-open)", () => {
+// Since hook-hardening-batch (audit TST-11) the mutant's crash reaches the uncaughtException handler, which exits 2,
+// so the guard is told apart from the crash by its message, not by the exit code alone (exit 1 before the handler).
+test("✧ MUTANT: dropping the non-object payload guard makes a `null` payload CRASH instead of being judged", () => {
   const sb = mutantSandbox(
     [],
     'if (!payload || typeof payload !== "object" || Array.isArray(payload)) denyMalformedHookInput("not a plain object");',
     ""
   );
   const r = spawnSync(process.execPath, [join(sb, ".claude", "hooks", "protect-trusted-paths.cjs")], { input: "null", encoding: "utf8" });
-  assert.equal(r.status, 1, "the mutant MUST exit 1 — a non-blocking error, i.e. the write proceeds");
-  assert.equal(spawnSync(process.execPath, [HOOK], { input: "null", encoding: "utf8" }).status, 2, "live hook denies fail-closed");
+  assert.notEqual(r.status, 0, "the mutant must not allow");
+  assert.doesNotMatch(r.stderr, /not a plain object/, "the mutant's exit is a crash, not the guard's deny");
+  const live = spawnSync(process.execPath, [HOOK], { input: "null", encoding: "utf8" });
+  assert.equal(live.status, 2, "live hook denies fail-closed");
+  assert.match(live.stderr, /\(not a plain object\)/, "and it is the guard that denies");
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -1107,4 +1112,47 @@ test("✧ a 100k-segment payload path is judged in linear time, with the same ve
   assert.notEqual(r.status, null, `the hook did not finish within 30 s (${ms} ms)`);
   assert.ok(ms < 10000, `the hook took ${ms} ms over a 100k-segment path`);
   assert.ok(r.status === 0 || r.status === 2, `exit ${r.status}: ${r.stderr}`);
+});
+
+// --- NO INPUT, AND A CRASH (audit TST-4 / TST-11, 2026-10-12; hook-hardening-batch). Before the human-applied patch,
+// readStdin() turned a read error into "" and the caller parsed `raw || "{}"`, so an empty or unreadable stdin became
+// `{}` — not a write — and the hook exited 0. And this hook had no uncaughtException handler, so a throw outside its
+// per-path try exited 1, which Claude Code treats as non-blocking. The ★ tests below are RED until
+// .dev/features/hook-hardening-batch/apply.py has run, GREEN after; the controls are GREEN on both sides.
+test("★ TST-4: an EMPTY stdin denies (exit 2) with the fixed 'empty input' detail, never exit 0", () => {
+  const r = spawnSync(process.execPath, [HOOK], { input: "", encoding: "utf8" });
+  assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
+  assert.match(r.stderr, /hook input is not a usable PreToolUse JSON object \(empty input\)/);
+});
+
+test("★ TST-4: an UNREADABLE stdin (a directory descriptor) denies with the fixed 'stdin could not be read' detail", () => {
+  const fd = fs.openSync(tmp(), "r"); // readFileSync(0) on a directory throws EISDIR — the read-error branch
+  try {
+    const r = spawnSync(process.execPath, [HOOK], { stdio: [fd, "pipe", "pipe"], encoding: "utf8" });
+    assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
+    assert.match(r.stderr, /\(stdin could not be read\)/);
+    assert.doesNotMatch(r.stderr, /\(empty input\)/, "the read-error branch, not the empty-input one");
+  } finally {
+    fs.closeSync(fd);
+  }
+});
+
+test("TST-4 control: a whitespace-only stdin denies as invalid JSON, before the patch and after it", () => {
+  const r = spawnSync(process.execPath, [HOOK], { input: "   \n", encoding: "utf8" });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /\(invalid JSON\)/);
+});
+
+test("★ TST-11: a throw after the handler is registered denies (exit 2) — the handler, not a crash", () => {
+  const anchor = "  process.exit(2);\n});\n\nfunction realpathOr(p) {";
+  const sb = mutantSandbox([], anchor, '  process.exit(2);\n});\nthrow new Error("injected");\n\nfunction realpathOr(p) {');
+  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "src/ok.md" } });
+  assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
+  assert.match(r.stderr, /the trusted-path guard failed while deciding; the write is denied — fail-closed/);
+});
+
+test("TST-11 control (L60): the same throw placed BEFORE the handler's registration exits 1 — what the handler prevents", () => {
+  const sb = mutantSandbox([], '"use strict";\n', '"use strict";\nthrow new Error("injected");\n');
+  const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "src/ok.md" } });
+  assert.equal(r.status, 1, `exit ${r.status}: ${r.stderr}`);
 });

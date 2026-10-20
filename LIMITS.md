@@ -162,6 +162,13 @@ loading does not cache between stages (fresh contexts naively cannot). Real cost
 `diff_size × (validators + verifiers + lenses + auditors) + rule_overlap` — both terms large,
 neither touched by tiered loading.
 
+**Read that formula as the design estimate, not as the measured cost model.** Its repetition term was measured in
+aggregate, never per rule file: over the window `.dev/measurements/token-cost-2026-08-18.md` §4 covers, 1.111 billion
+tokens were read from the prompt cache against 41.1 million written to it, and caching absorbed 82.6% of what the
+same tokens would have cost at the full input price. How many times a named rule file such as `security.md` is
+re-sent was not measured. What a run pays each time, measured later, is §3g: a fixed prefix for every fresh context,
+and the orchestrator's re-sends — two terms the formula does not name.
+
 ### 3c. Cold-start cliff
 
 First run (cold seam-record, cold memory, cold baseline, full seam-fallback chain for every seam)
@@ -204,6 +211,29 @@ in its record, and a plan names an instruction file only for a standing conventi
 Nothing deterministic stops a plan from naming `CLAUDE.md`, and no behavioural eval covers `/pharn-plan`. The
 deterministic backstop is §3e's `instruction-growth` gate at `/pharn-verify`. It bounds the bytes one change adds to
 the modelled set, never what a plan names, and never growth accumulated across changes that each stay under budget.
+
+### 3g. What was measured: a prefix per fresh context, times fan-out, plus the orchestrator's re-sends
+
+Every fresh context — a routed stage agent, a review lens-family subagent — pays a fixed prefix on its first request,
+before any stage work. And every orchestrator step that runs a pinned line is a model request of its own, carrying the
+orchestrator's whole context so far. Neither depends on the size of the change.
+
+- **The prefix, measured.** A fresh `general-purpose` agent's first request cache-wrote 68,223–129,646 tokens (median
+  91,759) over 29 agents in this repository (`.dev/measurements/pipeline-performance-audit-2026-09-29.md` §3). In
+  three real `/pharn-loop` runs in a user project on 6.35.0, every stage agent's first request carried
+  288,489–304,974 tokens; in the run measured in depth, about half of that prefix was the project's own instruction
+  files, by a bytes/4 estimate (`.dev/measurements/loop-wall-clock-2026-10-05.md` §3). The total scales with the
+  number of fresh contexts a run opens: five stage agents in a one-iteration full loop, one more per further
+  iteration.
+- **The orchestrator's re-sends, estimated.** Counted on the code of 2026-09-29, a green one-iteration full
+  `/pharn-loop` made at least 70 pinned or mandated orchestrator tool calls (a static lower bound, not the run's
+  request count; the pipeline-performance audit §4). The 57 of them that run a pinned line run one per turn, because
+  each branches on the exit code of the one before, so each is a model request that re-sends the orchestrator's
+  context. Later releases that folded pinned lines may have moved both figures. The run measured in depth made 52
+  orchestrator requests before it stopped in verify; the first carried 434,842 tokens.
+- **What this does not say.** Which of the two dominates a run is not established; of the prefix's composition only
+  the instruction-file share above is measured; no figure here is priced; and every token figure is the ledgers'
+  count, while a bytes-to-tokens conversion is an estimate (§1c).
 
 ---
 
@@ -277,6 +307,28 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
 - **True statement:** a `Bash` write is **not denied**, and is **not detected at the time it happens**. No
   `PostToolUse` hook is wired (`grep -c PostToolUse .claude/settings.json` → `0`), so nothing observes
   the write, and no record of it exists to reconcile later.
+- **`Bash` is not the only surface outside the matcher.** (a) A write made through an **MCP server's** tool — a
+  filesystem server's `write_file`, say — arrives under that tool's own `mcp__<server>__<tool>` name, which is none
+  of `Write|Edit|MultiEdit|NotebookEdit`; even where the matcher's pattern happens to match it, each hook's own
+  anchored `isWrite` test does not, so neither guard judges it; the after-the-fact reconciliation
+  below covers it exactly as it covers a `Bash` write, and no more. (b) **`"disableAllHooks": true`** in any settings
+  file Claude Code loads turns off every hook, both guards included, while the wiring stays exactly as committed.
+  `hook-wiring.test.cjs` RED-fails when either project file (`.claude/settings.json`, or `.claude/settings.local.json`
+  when present) carries the key — a test of this repository's own files, and tests never ship, so in an install
+  nothing PHARN ships checks either file; a user-level `~/.claude/settings.json` lies outside every repository.
+- **The setter's refusals of a plan are early, lexical and reachable through `Bash`.** In an installed project
+  `set-writes-scope.cjs --from-plan` refuses a plan that names PHARN's own installed files, a CI workflow
+  (`.github/workflows/**`) or a git hooks directory (`.husky/**`, or a `core.hooksPath` inside the project), unless
+  the operator passes the matching opt-in before the mode (`THREAT-MODEL.md §2` item 10). The setter runs through
+  `Bash`, so an agent holding `Bash` can pass the opt-in or write the scope record itself. It finds `core.hooksPath`
+  without running git: in the config of the repository holding the project (the nearest repository at or above it) and
+  its `config.worktree`, `/etc/gitconfig`, and the XDG and global user files. It does not follow `include` or
+  `includeIf`, read configuration passed through the environment or `-c`, or read a system file at another prefix, so
+  a hooks directory named only there is not refused. Other executable configuration is not refused at all: a hook
+  manager configured elsewhere (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in `package.json`), what a
+  workflow or an existing hook runs from elsewhere in the repository (a local action under `.github/actions/`, a
+  script, the project's own tests), another CI system's files, `package.json` scripts, or a tool configuration that
+  runs code.
 - **It IS detected AFTERWARDS, as of `SKILLS_VERSION` 4.0.0 — and detection is strictly weaker than
   prevention.** `/pharn-*build` anchors a content-hash baseline and `/pharn-*verify` runs
   `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the **live guards**, by
@@ -378,7 +430,10 @@ read off the wiring:
 6.1.0 anchors both commands on `${CLAUDE_PROJECT_DIR}`. The bounds that remain:
 
 - **A guard that cannot start, or that times out, still does not block.** That is Claude Code's documented
-  behaviour, and no hook can change it.
+  behaviour, and no hook can change it. What a running guard controls is its own exit, and both deny (exit 2) on
+  input they cannot use — an empty or unreadable stdin, invalid JSON, a payload that is not an object — and on an
+  uncaught exception, through a handler each registers before its first decision. A process
+  killed by a signal, or one that fails before that handler is registered, exits otherwise and does not block.
 - **The fix reaches an install only through its own `settings.json`.** `pharn update` never touches that
   file, so an install upgraded without editing it keeps the relative form and stays fail-open from every
   other directory. Upgrade the hooks first, then the two commands; roll back in the reverse order.
@@ -559,9 +614,16 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
 - **Agreement, never provenance.** The tests, the reporter config, the `package.json` scripts and
   `pharn.config.json` are agent-editable. `results-exit-contradiction`, the lock and the
   test-infrastructure pin NARROW a forged report and never close it: a self-consistent fabricated lock,
-  stamp and results set over the live tree passes. The pin also does not see, among others, a setup file
-  a config imports, configuration read from the environment, script chaining, npm's own configuration or
-  the runner's version (`pharn/floor/test-infra-core.mjs` states the full list).
+  stamp and results set over the live tree passes. Since 6.68.0 the pin covers the command of every
+  allowlisted gate the project has (its `package.json` script, `pre`/`post` scripts and the scripts it
+  chains to), not only the AC level gates'. It DETECTS a change at `/pharn-verify`; it never prevents one,
+  and by then the changed command has already run at the build gate, regress and verify. For a gate no AC
+  level maps to (`lint`, `typecheck`, `build`, …) it pins the command only, never what the command reads:
+  the files it names and its own configuration (`eslint.config.*`, `tsconfig.json`, a Prettier config)
+  stay agent-editable. The pin also does not see, among others, a setup file a config imports,
+  configuration read from the environment, a chain through another runner (`npm-run-all`, `turbo`), npm
+  configuration outside the project root or the runner's version (`pharn/floor/test-infra-core.mjs` states
+  the full list).
 - **Weaker and absent evidence are reported, never hidden.** A `spec_kind: test-infra` SPEC gets
   BOOTSTRAP evidence: no test was locked or shown red, and `spec_kind` sits inside the approval pin §1d
   already calls forgeable. A legacy SPEC gets no AC evidence, and verify reports it `not-applicable`.

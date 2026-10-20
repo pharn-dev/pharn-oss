@@ -66,6 +66,13 @@ memory, is an agent operating on hostile input. The concrete surface:
    hostile skill that talks a lens out of reporting a real finding is invisible, because a suppressed
    finding never reaches the human. Stated in full, with its carve-out, at
    `.claude/commands/pharn-review.md` Step 3b — cited, not restated (P4).
+   Whether such a skill needs a grant to run through the Skill tool was measured once, for a neighbouring case only:
+   in the probe behind CHANGELOG [6.67.0] (Claude Code 2.1.303, `-p`, one run per case), a command-file target that
+   declares no `allowed-tools` loaded with no grant and no permission denial; a `.claude/skills/` target, and an
+   interactive session's prompting, were not probed. That
+   is Claude Code's behaviour, not a PHARN grant. `/pharn-loop` pre-approves the Skill tool only as `Skill(pharn-spec *)`,
+   `Skill(pharn-plan *)`, `Skill(pharn-grill *)`, `Skill(pharn-test *)` and `Skill(pharn-build *)`; the grant
+   matches by name, so whatever answers to one of those five names runs under it.
 9. **the project's SPEC template** — `pharn.spec-template.md` at the project root (6.14.0). Its guidance
    comments are instructions `/pharn-spec` follows when it writes a SPEC, including under
    `--model-approve` in an unattended `/pharn-loop`, where no human reads the SPEC before it is planned.
@@ -73,6 +80,24 @@ memory, is an agent operating on hostile input. The concrete surface:
    memory-poisoning shape (3), aimed at intent instead of lessons. It is **trusted by path**, which is why
    the path is a constant rather than a `pharn.config.json` value. Stated in full, with its bounds, at
    `pharn/pharn-contracts/spec-template.md`, "The project template" — cited, not restated (P4).
+10. **a model-written PLAN as the write-scope input** — `/pharn-build` sets the writes-scope from the PLAN's
+    `## Files` (`set-writes-scope.cjs --from-plan`), and under `/pharn-loop` no human reads that PLAN before it is
+    built. So the plan decides which paths the write guard opens, and executable project configuration is in that
+    class: CI workflows, git hooks directories and `package.json` scripts all hold code that runs later. The setter
+    refuses a plan that scopes the guards' own control surface (in every project) and, in an installed project,
+    PHARN's own installed files (6.61.0), a CI workflow (`.github/workflows/**`) or a git hooks directory
+    (`.husky/**`, or a `core.hooksPath` inside the project), each unless the operator passes its opt-in before the
+    mode. What the last two buy is narrow: a plan cannot name a file under `.github/workflows/`, under `.husky/`, or
+    in a `core.hooksPath` directory the setter finds — the files that run on the next push with the repository's
+    secrets, or on the next git command in the person's shell. Other routes to code that runs after the run stay
+    open: a hook manager configured elsewhere (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in
+    `package.json`), and what a workflow or an existing hook runs from elsewhere in the repository (a local action,
+    a script, the project's own tests) — `LIMITS.md §6` lists them. Nor is any of this containment: code a plan writes
+    still runs during the run, because the pinned gates run the project's tests. `package.json` scripts are not
+    refused, since a feature legitimately edits `package.json`; a changed gate command is at most detected, at
+    `/pharn-verify`, by the test-infrastructure pin of a run that carries an AC lock, never prevented
+    (`LIMITS.md §9`). The bounds of the refusals — lexical, run through `Bash`, and reading only the git config files
+    the setter names — are in `LIMITS.md §6`.
 
 ---
 
@@ -91,6 +116,7 @@ Every answer reduces to the floor (P0) or is labeled a limit (`LIMITS.md`).
 | cross-model response    | egress-fenced + response returns in an untrusted fence + advisory-only (never gates ship)                                   | pre-egress (specified; ships with the guarded surface) + enum gate |
 | user-installed skill    | Enumerated deterministically, then fed to three stages as untrusted DATA. **Partial bound only:** for a lens whose `pharn/floor/lens-scanner-map.json` entry names a scanner, that scanner's MATCH is a regex verdict a skill cannot erase — but that covers only that it matched, never that the lens REPORTS it, and it does not exist at all for the scanner-less entries (read that membership from the map, not from here). See `.claude/commands/pharn-review.md` Step 3b | enum/regex — **ENUMERATION ONLY** (`scan-installed-skills.mjs`; its catalogue `catalogue-installed-skills.mjs` shares the discovery), and it **GATES NOTHING**: no proceed/stop/scope in any stage reads its output. **No primitive is specified or planned for this row** |
 | project SPEC template   | one fixed path, never read from config — a configurable pointer would itself be unguarded, agent-writable state; `check-spec.mjs` validates a MINIMUM shape before printing its reference and never authenticates the guidance text | pre-write hook — `protect-trusted-paths.cjs` denies it by path, whether or not the file exists, on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write reaches it and is detected only inside a build's anchor-to-verify window, which opens after `/pharn-spec` ran, and only for a non-adversarial writer on a file that is not git-ignored (`LIMITS.md §1d`, §6). A change landed by a merge, a pull or a human editor is obeyed as-is |
+| plan as write-scope input | the setter refuses a plan naming the control surface and, in an installed project, PHARN's installed files, a CI workflow or a git hooks directory; both write guards then enforce the scope it emits | enum/regex membership in a setter run through `Bash` — an opt-in, a forged record or a `Bash` write passes it (`LIMITS.md §6`). Hook managers configured elsewhere, files a workflow or hook runs from elsewhere, and `package.json` scripts are not refused; a changed gate command is at most detected, by the AC lock's pin (`LIMITS.md §9`) |
 
 ---
 

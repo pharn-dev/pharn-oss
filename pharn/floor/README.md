@@ -179,7 +179,10 @@ one, unless the operator passes `--allow-claude-dir`. Since 6.61.0 it also refus
 `pharn.config.json`) unless the operator passes `--allow-pharn-surface`, and a scope whose origin is a
 memory-promote command while a `/pharn-loop` run marker is open; it honors either opt-in only before the mode, and
 its `## Files` reader skips fenced code, refusing a list that reads differently depending on how a fence nests in a
-list item. These early refusals are not runtime enforcement;
+list item. Since 6.71.0 it also refuses, in an installed project, a `--from-plan` scope naming a CI workflow
+(`.github/workflows/**`) or a git hooks directory (`.husky/**`, or a `core.hooksPath` inside the project, read from
+the git config files its header names without running git) unless the operator passes `--allow-exec-config`, again
+only before the mode; a git config it cannot read refuses the plan. These early refusals are not runtime enforcement;
 **`enforce-writes-scope.cjs`** enforces whatever scope was emitted on every write. `.claude/commands/**`
 and the hooks' own `*.test.cjs` are deliberately in neither protected set nor the refusal set.
 **Bounded, and stated (P0):** the two `PreToolUse` hooks cover the `Write|Edit|MultiEdit|NotebookEdit` surface

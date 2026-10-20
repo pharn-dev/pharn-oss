@@ -919,11 +919,14 @@ function isClaudeState(target) {
   return hasClaudeUidSegment(target);
 }
 
+// The raw payload, or null when stdin cannot be read — never "" for an error (audit TST-4, 2026-10-12): the caller
+// used to parse an empty result as `{}`, so an unreadable or empty stdin was not a write and the hook exited 0, a
+// fail-OPEN. Byte-equal to protect-trusted-paths.cjs's copy (pinned by a test).
 function readStdin() {
   try {
     return fs.readFileSync(0, "utf8");
   } catch {
-    return "";
+    return null;
   }
 }
 
@@ -1261,9 +1264,14 @@ function denyMalformedHookInput(detail) {
   process.exit(2);
 }
 
+const raw = readStdin();
+// A PreToolUse hook is always handed a payload, so no input is not "nothing to judge": an unreadable stdin and an empty
+// one both deny (audit TST-4), with fixed text — never a value read from the input.
+if (raw === null) denyMalformedHookInput("stdin could not be read");
+if (raw === "") denyMalformedHookInput("empty input");
 let payload;
 try {
-  payload = JSON.parse(readStdin() || "{}");
+  payload = JSON.parse(raw);
 } catch {
   denyMalformedHookInput("invalid JSON");
 }

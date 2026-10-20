@@ -23,6 +23,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.71.0] - 2026-10-20
+
+### Security
+
+- **In an installed project, a plan can no longer scope a CI workflow or a git hooks directory.**
+  - What changed: `set-writes-scope.cjs --from-plan` refuses a scope naming `.github/workflows/**`, `.husky/**`, or
+    a directory a `core.hooksPath` value names inside the project. It writes nothing and exits 1, unless the operator
+    passes the new `--allow-exec-config` before the mode. It is independent of `--allow-pharn-surface` and
+    `--allow-claude-dir`. The dev checkout, an unsignalled tree and `--from-frontmatter` are unchanged.
+  - How `core.hooksPath` is found, without running git: from the config of the repository holding the project, found
+    the way git looks for it (the nearest `.git` file, or `.git` directory holding a `HEAD`, at or above the project,
+    so a project in a subdirectory of a repository is covered; the walk ignores `GIT_CEILING_DIRECTORIES`; a linked worktree's through its `.git` file and `commondir`), its `config.worktree`, `/etc/gitconfig`,
+    `$XDG_CONFIG_HOME/git/config` (else `~/.config/git/config`) and `$GIT_CONFIG_GLOBAL` (else `~/.gitconfig`). Every
+    value counts. A relative value is resolved against the repository's work-tree top, as git resolves it. Each is
+    reserved at its written path and at its real path, so a value naming a symlink also reserves the real directory.
+    A config file that exists but is not a readable regular file, a `.git` that cannot be followed, or a hooksPath
+    value continued onto the next line refuses the plan.
+  - Why (audit 2026-10-12, SEC-5): 6.61.0 refused PHARN's own files from a plan, and both write guards then allowed
+    a model-written plan to scope a workflow or a hook. Code there runs after the run: on the next push with the
+    repository's secrets, or on the next git command in the person's shell.
+  - Not covered: `include` / `includeIf` targets, configuration passed through the environment or `-c`, and a
+    system file at another prefix are not read. A hook manager configured elsewhere (`lefthook.yml`,
+    `.pre-commit-config.yaml`, hook settings in `package.json`), what a workflow or an existing hook runs from elsewhere
+    in the repository (a local action, a script, the project's tests), `package.json` scripts and other CI systems'
+    files are not refused. A non-root `core.hooksPath` reserves its whole subtree, although git runs only the files
+    directly in it; a `core.hooksPath` of `.` reserves every top-level entry.
+    Plan entries are matched by name (case- and Unicode-folded); a symlinked parent is left to
+    `enforce-writes-scope.cjs`, which judges the target a write reaches. A test now pins that this denies such a
+    write into `.github/workflows/`. Like every setter refusal, it runs through `Bash`, so an agent holding `Bash`
+    can pass the opt-in or write the scope record (`LIMITS.md §6`). It does not stop code from running during the
+    run: the pinned gates run the project's tests.
+
+### Fixed
+
+- **Both write guards deny an empty or unreadable stdin (audit TST-4).** `readStdin()` turned a read error into `""`
+  and the caller parsed an empty result as `{}`, which is not a write, so the hook exited 0. Measured: `</dev/null`
+  and `""` exited 0, while `"   "` exited 2. Both now deny with a fixed detail, `empty input` or
+  `stdin could not be read`. `readStdin()` is byte-equal in the two guards, pinned by a test.
+- **`protect-trusted-paths.cjs` denies when it crashes (audit TST-11).** It had no `uncaughtException` handler, so a
+  throw outside its per-path `try` exited 1, which Claude Code treats as non-blocking. It now registers the handler
+  `enforce-writes-scope.cjs` has carried since 6.24.0, right after its `require`s. A test pins that the two handlers
+  are the same apart from their message and that each is registered before any other statement. An existing
+  mutant test now tells the guard's deny from a crash by its message, since both exit 2.
+- **`LIMITS.md` and `THREAT-MODEL.md` catch up with the 2026-10-12 audit.**
+  - `LIMITS.md` §6 names MCP write tools and `disableAllHooks` as surfaces outside the matcher (SEC-7, drafted in
+    `audit-small-fixes`; its last sentence now says the `disableAllHooks` test guards this repository only, since
+    tests never ship), and states the bounds of the setter's plan refusals.
+  - `LIMITS.md` §7 says what a running guard controls: its exit on unusable input and on an uncaught exception.
+  - `LIMITS.md` §3b's cost formula is marked as the design estimate: its repetition term was measured in aggregate
+    and mostly absorbed by the prompt cache, never per rule file. A new §3g states what was measured (CTX-13): a
+    prefix per fresh context times the number of contexts, plus the orchestrator's re-sends.
+  - `LIMITS.md` §9 takes group G's text for the 6.68.0 test-infrastructure pin.
+  - `THREAT-MODEL.md` §2 item 8 adds the 6.67.0 probe result (a command-file target with no `allowed-tools` ran
+    with no grant; a `.claude/skills/` target was not probed) and the five scoped `Skill` grants.
+    A new item 10, with its §3 row, covers a model-written PLAN as the write-scope input.
+- The hook and trusted-doc edits were applied by the maintainer with a reviewed, sha256-pinned script that deleted
+  itself (`.dev/features/hook-hardening-batch/`).
+
 ## [6.70.0] - 2026-10-20
 
 ### Added

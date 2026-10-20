@@ -656,8 +656,9 @@ function seedInstalled(cwd, skillsVersion = "6.61.0") {
   return cwd;
 }
 
-// (1) OPERATOR FLAGS — both opt-ins, after the mode, in both modes: refused, nothing written.
-for (const flag of ["--allow-claude-dir", "--allow-pharn-surface"]) {
+// (1) OPERATOR FLAGS — every opt-in, after the mode: refused, nothing written. `--allow-exec-config` joined the set in
+// hook-hardening-batch, so its case is RED until that increment's apply.py has run.
+for (const flag of ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config"]) {
   test(`${flag} AFTER the mode is REFUSED and writes nothing (a granted line's trailing * cannot carry it)`, () => {
     const cwd = tmp();
     const r = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts"), flag);
@@ -669,10 +670,13 @@ for (const flag of ["--allow-claude-dir", "--allow-pharn-surface"]) {
   });
 }
 
-test("the usage line advertises --allow-pharn-surface, both opt-ins before the mode", () => {
+test("the usage line advertises all three opt-ins, before the mode", () => {
   const r = setter(tmp());
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /usage: set-writes-scope\.cjs \[--allow-claude-dir\] \[--allow-pharn-surface\] \(--from-frontmatter/);
+  assert.match(
+    r.stderr,
+    /usage: set-writes-scope\.cjs \[--allow-claude-dir\] \[--allow-pharn-surface\] \[--allow-exec-config\] \(--from-frontmatter/
+  );
 });
 
 // (2) PHARN'S OWN INSTALLED SURFACE — the members enforce-writes-scope.cjs's isReserved() names, re-spellings
@@ -962,4 +966,340 @@ test("✧ PIN: the setter's PROMOTE_COMMANDS equal protect-trusted-paths.cjs's (
   const mine = entries(SETTER);
   assert.equal(mine.length, 2, "non-vacuous: both promote commands");
   assert.deepEqual([...mine].sort(), [...entries(PROTECT_HOOK)].sort());
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+// hook-hardening-batch (review finding SEC-5 of 2026-10-12): in an INSTALLED project a `--from-plan` scope may not
+// name a CI workflow or a git hooks directory — `.github/workflows/**`, `.husky/**`, and every `core.hooksPath` inside
+// the project — unless the operator passes --allow-exec-config before the mode. Every ★ test below is RED until
+// .dev/features/hook-hardening-batch/apply.py has run (before it, the setter scopes all of these), GREEN after; the
+// controls are GREEN on both sides. Each run gets its own HOME, XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL, and each tree
+// its own repository (`.git/HEAD` and an empty `.git/config`), so neither a developer's git config nor a repository
+// above os.tmpdir() reaches a case that did not ask for it (L41).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+function execTree({ installed = true, git = true } = {}) {
+  const cwd = fs.realpathSync(tmp());
+  if (installed) seedInstalled(cwd);
+  if (git) gitDirWithConfig(cwd, "");
+  const home = fs.realpathSync(fs.mkdtempSync(join(os.tmpdir(), "pharn-sws-home-")));
+  return { cwd, home };
+}
+function execEnv(home, extra = {}) {
+  return {
+    ...process.env,
+    HOME: home,
+    XDG_CONFIG_HOME: join(home, ".config"),
+    GIT_CONFIG_GLOBAL: join(home, ".gitconfig"),
+    ...extra,
+  };
+}
+function setterIn({ cwd, home }, args, extraEnv = {}) {
+  return spawnSync(process.execPath, [SETTER, ...args], { cwd, encoding: "utf8", env: execEnv(home, extraEnv) });
+}
+function gitDirWithConfig(cwd, configText) {
+  fs.mkdirSync(join(cwd, ".git"), { recursive: true });
+  fs.writeFileSync(join(cwd, ".git", "HEAD"), "ref: refs/heads/main\n");
+  fs.writeFileSync(join(cwd, ".git", "config"), configText);
+}
+const EXEC_REFUSAL = /refusing to scope, from a plan, files whose code runs outside this run/;
+
+const EXEC_MEMBERS = [
+  ".github/workflows/ci.yml",
+  ".github/workflows/sub/deploy.yaml",
+  ".github/workflows",
+  ".husky/pre-commit",
+  ".husky/_/husky.sh",
+  ".GITHUB/Workflows/ci.yml",
+  ".Husky/pre-push",
+  ".husky./pre-commit",
+  "./.github/workflows/x.yml",
+  "src/../.github/workflows/x.yml",
+];
+for (const p of EXEC_MEMBERS) {
+  test(`★ installed project: --from-plan naming ${p} is REFUSED and writes nothing`, () => {
+    const t = execTree();
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", p)]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, EXEC_REFUSAL);
+    assert.ok(r.stderr.includes(p), "the offending entry is named");
+    assert.equal(scopeOf(t.cwd), null);
+  });
+}
+
+test("installed project: the neighbours of the class are NOT refused (controls)", () => {
+  const t = execTree();
+  const entries = [
+    ".github/dependabot.yml",
+    ".github/ISSUE_TEMPLATE/bug.md",
+    ".github/workflowsx/a.yml",
+    ".huskyrc",
+    "src/.husky/x",
+    "docs/.github/workflows/x.yml",
+  ];
+  const r = setterIn(t, ["--from-plan", planWith(t.cwd, ...entries)]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(scopeOf(t.cwd), entries);
+});
+
+test("★ a core.hooksPath in the repository's own .git/config is reserved, in any letter case, quoted or commented", () => {
+  for (const [config, hooked] of [
+    ["[core]\n\thooksPath = tools/git-hooks\n", "tools/git-hooks/pre-commit"],
+    ['[Core]\n  HOOKSPATH = "my hooks" # the team hooks\n', "my hooks/pre-push"],
+    ["[core] hookspath=.config/hooks ; trailing\n", ".config/hooks/commit-msg"],
+    ['[core]\n\thooksPath = "a\\\\b"\n', "a\\b/pre-commit"],
+  ]) {
+    const t = execTree();
+    gitDirWithConfig(t.cwd, config);
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", hooked)]);
+    assert.equal(r.status, 1, `${JSON.stringify(config)}: ${r.stderr}`);
+    assert.match(r.stderr, EXEC_REFUSAL);
+    const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", "tools/other.sh")]);
+    assert.equal(ok.status, 0, `control, ${JSON.stringify(config)}: ${ok.stderr}`);
+  }
+});
+
+test("a hooksPath under a SUBSECTION, another section or a key with no value is not core.hooksPath (controls)", () => {
+  const t = execTree();
+  gitDirWithConfig(t.cwd, '[core "x"]\n\thooksPath = sub\n[other]\n\thooksPath = other\n[core]\n\thooksPath\n');
+  const r = setterIn(t, ["--from-plan", planWith(t.cwd, "sub/pre-commit", "other/pre-commit")]);
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("★ every hooksPath value counts — a later one does not hide an earlier one", () => {
+  const t = execTree();
+  gitDirWithConfig(t.cwd, "[core]\n\thooksPath = first\n[core]\n\thooksPath = second\n");
+  for (const p of ["first/pre-commit", "second/pre-commit"]) {
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, p)]);
+    assert.equal(r.status, 1, `${p}: ${r.stderr}`);
+  }
+});
+
+test("★ a BOM before the first header, and lone-CR line ends, do not hide a hooksPath (git reads both)", () => {
+  for (const config of ["\uFEFF[core]\n\thooksPath = hooks\n", "[core]\r\thooksPath = hooks\r"]) {
+    const t = execTree();
+    gitDirWithConfig(t.cwd, config);
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "hooks/pre-commit")]);
+    assert.equal(r.status, 1, `${JSON.stringify(config)}: ${r.stderr}`);
+    assert.match(r.stderr, EXEC_REFUSAL);
+  }
+});
+
+test("★ FAIL-CLOSED: a hooksPath value continued onto the next line refuses the plan rather than read half of it", () => {
+  const t = execTree();
+  gitDirWithConfig(t.cwd, "[core]\n\thooksPath = ho\\\noks\n");
+  const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts")]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /a core\.hooksPath value continues onto the next line/);
+  assert.equal(scopeOf(t.cwd), null);
+});
+
+test("★ a project in a SUBDIRECTORY of a repository reads that repository's config, resolving against its top", () => {
+  const top = fs.realpathSync(tmp());
+  const home = fs.realpathSync(fs.mkdtempSync(join(os.tmpdir(), "pharn-sws-home-")));
+  gitDirWithConfig(top, "[core]\n\thooksPath = app/githooks\n");
+  const cwd = join(top, "app");
+  fs.mkdirSync(cwd);
+  seedInstalled(cwd);
+  const r = setterIn({ cwd, home }, ["--from-plan", planWith(cwd, "githooks/pre-commit")]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, EXEC_REFUSAL);
+  const ok = setterIn({ cwd, home }, ["--from-plan", planWith(cwd, "app/githooks/pre-commit", "src/a.ts")]);
+  assert.equal(ok.status, 0, `control: the value is resolved against the work-tree top, not the project: ${ok.stderr}`);
+});
+
+test("★ a lone CR inside a line is a blank, not a line end — it cannot move a hooksPath out of [core] (git agrees)", () => {
+  for (const config of ["[core]\n\tfoo = a\r[x]\n\thooksPath = hooks\n", "[core]\n\t# note\r[x]\n\thooksPath = hooks\n"]) {
+    const t = execTree();
+    gitDirWithConfig(t.cwd, config);
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "hooks/pre-commit")]);
+    assert.equal(r.status, 1, `${JSON.stringify(config)}: ${r.stderr}`);
+    assert.match(r.stderr, EXEC_REFUSAL);
+  }
+});
+
+test("★ a .git directory with no HEAD is not a repository: the walk goes on to the one above, as git's does", () => {
+  const top = fs.realpathSync(tmp());
+  const home = fs.realpathSync(fs.mkdtempSync(join(os.tmpdir(), "pharn-sws-home-")));
+  gitDirWithConfig(top, "[core]\n\thooksPath = app/hk\n");
+  const cwd = join(top, "app");
+  fs.mkdirSync(join(cwd, ".git"), { recursive: true });
+  fs.writeFileSync(join(cwd, ".git", "config"), "[core]\n");
+  seedInstalled(cwd);
+  const r = setterIn({ cwd, home }, ["--from-plan", planWith(cwd, "hk/pre-commit")]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, EXEC_REFUSAL);
+});
+
+test("★ a linked worktree's hooksPath is read through its .git file and commondir, and config.worktree counts too", () => {
+  const t = execTree({ git: false });
+  const common = join(t.home, "main-repo.git");
+  const wtDir = join(common, "worktrees", "w");
+  fs.mkdirSync(wtDir, { recursive: true });
+  fs.writeFileSync(join(common, "config"), "[core]\n\thooksPath = shared-hooks\n");
+  fs.writeFileSync(join(wtDir, "commondir"), "../..\n");
+  fs.writeFileSync(join(wtDir, "config.worktree"), "[core]\n\thooksPath = wt-hooks\n");
+  fs.writeFileSync(join(t.cwd, ".git"), `gitdir: ${wtDir}\n`);
+  for (const p of ["shared-hooks/pre-commit", "wt-hooks/pre-commit"]) {
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, p)]);
+    assert.equal(r.status, 1, `${p}: ${r.stderr}`);
+    assert.match(r.stderr, EXEC_REFUSAL);
+  }
+});
+
+test("★ a relative hooksPath in the global or XDG user config is reserved inside this project", () => {
+  for (const [rel, file] of [
+    [".gitconfig", "global-hooks"],
+    [join(".config", "git", "config"), "xdg-hooks"],
+  ]) {
+    const t = execTree();
+    fs.mkdirSync(join(t.home, ".config", "git"), { recursive: true });
+    fs.writeFileSync(join(t.home, rel), `[core]\n\thooksPath = ${file}\n`);
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, `${file}/pre-commit`)]);
+    assert.equal(r.status, 1, `${rel}: ${r.stderr}`);
+  }
+});
+
+test("★ an absolute hooksPath inside the project is reserved; one outside it reserves nothing here", () => {
+  const t = execTree();
+  gitDirWithConfig(t.cwd, `[core]\n\thooksPath = ${join(t.cwd, "abs-hooks")}\n[core]\n\thooksPath = ${join(t.home, "elsewhere")}\n`);
+  assert.equal(setterIn(t, ["--from-plan", planWith(t.cwd, "abs-hooks/pre-commit")]).status, 1);
+  const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "elsewhere/pre-commit")]);
+  assert.equal(ok.status, 0, ok.stderr);
+});
+
+test("★ a `~/` hooksPath resolves against the home directory", () => {
+  const t = execTree();
+  gitDirWithConfig(t.cwd, "[core]\n\thooksPath = ~/proj-hooks\n");
+  const r = setterIn({ cwd: t.cwd, home: t.cwd }, ["--from-plan", planWith(t.cwd, "proj-hooks/pre-commit")]);
+  assert.equal(r.status, 1, r.stderr);
+  const other = setterIn(t, ["--from-plan", planWith(t.cwd, "~other/x", "proj-hooks/pre-commit")]);
+  assert.equal(other.status, 0, `control: with HOME elsewhere, nothing is reserved here: ${other.stderr}`);
+});
+
+test("★ a hooksPath that names a symlink reserves the real directory too (L73)", () => {
+  const t = execTree();
+  fs.mkdirSync(join(t.cwd, "scripts", "hooks"), { recursive: true });
+  fs.symlinkSync(join("scripts", "hooks"), join(t.cwd, "hk"));
+  gitDirWithConfig(t.cwd, "[core]\n\thooksPath = hk\n");
+  for (const p of ["hk/pre-commit", "scripts/hooks/pre-commit"]) {
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, p)]);
+    assert.equal(r.status, 1, `${p}: ${r.stderr}`);
+  }
+  const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "scripts/build.sh")]);
+  assert.equal(ok.status, 0, ok.stderr);
+});
+
+test("★ a hooksPath equal to the project root reserves its top-level entries only", () => {
+  const t = execTree();
+  gitDirWithConfig(t.cwd, "[core]\n\thooksPath = .\n");
+  assert.equal(setterIn(t, ["--from-plan", planWith(t.cwd, "pre-commit")]).status, 1);
+  const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts")]);
+  assert.equal(ok.status, 0, ok.stderr);
+});
+
+test("★ FAIL-CLOSED: a git configuration that cannot be read refuses the plan, naming the file", () => {
+  const cases = [
+    [
+      "a .git file with no gitdir: line",
+      (t) => fs.writeFileSync(join(t.cwd, ".git"), "nonsense\n"),
+      /\.git \(a file with no `gitdir:` line\)/,
+    ],
+    [
+      "a repository's .git directory with no config",
+      (t) => {
+        fs.mkdirSync(join(t.cwd, ".git"));
+        fs.writeFileSync(join(t.cwd, ".git", "HEAD"), "ref: refs/heads/main\n");
+      },
+      /config \(could not be examined\)/,
+    ],
+    [
+      "a .git/config that is a directory",
+      (t) => {
+        fs.mkdirSync(join(t.cwd, ".git", "config"), { recursive: true });
+        fs.writeFileSync(join(t.cwd, ".git", "HEAD"), "ref: refs/heads/main\n");
+      },
+      /config \(not a regular file\)/,
+    ],
+    [
+      "a global config that is a directory",
+      (t) => {
+        gitDirWithConfig(t.cwd, "");
+        fs.mkdirSync(join(t.home, ".gitconfig"));
+      },
+      /\.gitconfig \(not a regular file\)/,
+    ],
+  ];
+  for (const [what, seed, detail] of cases) {
+    const t = execTree({ git: false });
+    seed(t);
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts")]);
+    assert.equal(r.status, 1, `${what}: ${r.stderr}`);
+    assert.match(r.stderr, /the git configuration that says where git hooks run could not be read/, what);
+    assert.match(r.stderr, detail, what);
+    assert.match(r.stderr, /--allow-exec-config placed BEFORE --from-plan/, what);
+    assert.equal(scopeOf(t.cwd), null, what);
+  }
+});
+
+test("absent optional git config files are skipped, and GIT_CONFIG_GLOBAL=/dev/null is accepted (controls)", () => {
+  const t = execTree();
+  const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts")], { GIT_CONFIG_GLOBAL: "/dev/null" });
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("★ --allow-exec-config BEFORE the mode opts back in; AFTER it the setter refuses", () => {
+  const t = execTree();
+  const ok = setterIn(t, ["--allow-exec-config", "--from-plan", planWith(t.cwd, ".github/workflows/ci.yml", ".husky/pre-commit")]);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.deepEqual(scopeOf(t.cwd), [".github/workflows/ci.yml", ".husky/pre-commit"]);
+  const t2 = execTree();
+  const late = setterIn(t2, ["--from-plan", planWith(t2.cwd, "src/a.ts"), "--allow-exec-config"]);
+  assert.equal(late.status, 1);
+  assert.match(late.stderr, /--allow-exec-config must come BEFORE the mode/);
+  assert.equal(scopeOf(t2.cwd), null);
+});
+
+test("★ --allow-exec-config also skips the git-config reading (the operator's way past an unreadable file)", () => {
+  const t = execTree({ git: false });
+  fs.writeFileSync(join(t.cwd, ".git"), "nonsense\n");
+  const r = setterIn(t, ["--allow-exec-config", "--from-plan", planWith(t.cwd, "src/a.ts")]);
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("★ each opt-in opens only its own class (--allow-pharn-surface and --allow-exec-config are independent)", () => {
+  const t = execTree();
+  const a = setterIn(t, ["--allow-pharn-surface", "--from-plan", planWith(t.cwd, ".husky/pre-commit")]);
+  assert.equal(a.status, 1);
+  assert.match(a.stderr, EXEC_REFUSAL);
+  const b = setterIn(t, ["--allow-exec-config", "--from-plan", planWith(t.cwd, "pharn/floor/x.mjs")]);
+  assert.equal(b.status, 1);
+  assert.match(b.stderr, /refusing to scope PHARN's own installed files from a plan/);
+});
+
+test("★ L27: each refusal names only remedies that work for it", () => {
+  const t = execTree();
+  const exec = setterIn(t, ["--from-plan", planWith(t.cwd, ".github/workflows/ci.yml")]);
+  assert.equal(exec.status, 1);
+  assert.match(exec.stderr, /edit it yourself, outside the agent/);
+  assert.match(exec.stderr, /--allow-exec-config placed BEFORE --from-plan/);
+  assert.doesNotMatch(exec.stderr, /pharn update|--allow-pharn-surface|Bash/);
+  const surface = setterIn(t, ["--from-plan", planWith(t.cwd, "pharn/floor/x.mjs")]);
+  assert.equal(surface.status, 1);
+  assert.doesNotMatch(surface.stderr, /--allow-exec-config/);
+});
+
+test("the dev checkout, an unsignalled tree and --from-frontmatter are UNCHANGED for the class, even with unreadable git config (controls)", () => {
+  for (const seed of [(d) => seedDevRepo(d), (d) => d]) {
+    const t = execTree({ installed: false, git: false });
+    seed(t.cwd);
+    fs.writeFileSync(join(t.cwd, ".git"), "nonsense\n");
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, ".github/workflows/ci.yml", ".husky/pre-commit")]);
+    assert.equal(r.status, 0, r.stderr);
+  }
+  const t = execTree();
+  const cap = join(t.cwd, "cap.md");
+  fs.writeFileSync(cap, ["---", 'writes: [".github/workflows/ci.yml"]', "---", ""].join("\n"));
+  const r = setterIn(t, ["--from-frontmatter", cap]);
+  assert.equal(r.status, 0, r.stderr);
 });

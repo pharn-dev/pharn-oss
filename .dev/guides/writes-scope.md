@@ -185,9 +185,24 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
     reopening) and refuses when the two lists differ. `pharn/floor/plan-files-core.mjs` holds the same rule
     (★ PARITY fixtures in `check-build-complete.test.mjs`). Not a CommonMark parser: indented code blocks, HTML
     blocks/comments, setext headings and `*`/`+` bullets are read as their lines look.
-  - **Operator flags precede the mode.** `--allow-claude-dir` / `--allow-pharn-surface` after
+  - **Operator flags precede the mode.** `--allow-claude-dir` / `--allow-pharn-surface` / `--allow-exec-config` after
     `--from-plan` / `--from-frontmatter` is refused, so a pre-approved line ending in `*` cannot carry an opt-in.
     Pass them first: `node .claude/hooks/set-writes-scope.cjs --allow-claude-dir --from-plan <PLAN.md>`.
+- **One more refusal (6.71.0, hook-hardening-batch — review SEC-5).** In an installed project a `--from-plan` scope
+  naming a CI workflow (`.github/workflows/**`) or a git hooks directory (`.husky/**`, and every `core.hooksPath`
+  inside the project) writes nothing and exits 1, unless `--allow-exec-config` is passed before the mode. Code there
+  runs after the run that wrote it (the next push, the next git command), which is what the refusal is about; it is
+  not containment, because the pinned gates already run code the build wrote. `core.hooksPath` is read without
+  running git, from the config of the repository holding the project (the nearest `.git` file, or `.git` directory
+  holding a `HEAD`, at or above it, through a
+  linked worktree's `.git` file and `commondir`), `config.worktree`, `/etc/gitconfig`, the XDG user file and
+  `$GIT_CONFIG_GLOBAL` (else `~/.gitconfig`), a relative value resolved against the work-tree top as git does;
+  `include` targets and environment or `-c` configuration are not read, and a config file that exists but cannot be
+  read, or a value continued onto the next line, refuses the plan. Hook managers configured elsewhere (`lefthook.yml`,
+  `.pre-commit-config.yaml`) are not refused. Plan entries are matched lexically; a symlinked parent is left to
+  enforce, which denies the target
+  a write reaches when it is not in the scope. The dev checkout is unaffected (no `skillsVersion`), so dev plans
+  still scope `.github/workflows/*.yml`.
 
 ## What under `.pharn/` is load-bearing
 
