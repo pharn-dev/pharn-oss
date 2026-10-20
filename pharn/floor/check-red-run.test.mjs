@@ -901,7 +901,7 @@ test("★ WIRING 6.36.0 — /pharn-test's pinned lines run GREEN over a project 
       assert.equal(r.status, 0, `${k}: ${lines[k]}\n${r.stdout}${r.stderr}`);
     }
     const lock = JSON.parse(readFileSync(join(dir, "pharn", "features", "demo", "AC-TESTS.lock.json"), "utf8"));
-    assert.equal(lock.schema, "ac-tests-lock/5");
+    assert.equal(lock.schema, "ac-tests-lock/6");
     assert.deepEqual(lock.test_infra.exclude, ["typecheck", "e2e"], "the WHOLE declared list is pinned");
   } finally {
     rmSync(dir, { recursive: true, force: true });

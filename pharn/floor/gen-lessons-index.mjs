@@ -27,13 +27,18 @@
 // scope withheld — but the MECHANISM is the one L19 documents, and a reader must not learn the wrong
 // lesson from it.
 //
-// Usage:  node pharn/floor/gen-lessons-index.mjs [targetDir]     (default: cwd)
+// Usage:  node pharn/floor/gen-lessons-index.mjs [targetDir] [--canon-root <dir>]     (default: cwd)
+//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.69.0; canon-root.mjs
+//                 owns the grammar and the bound). The output stays `.pharn/lessons-index.md`, and its header
+//                 names the root and a regenerate command that carries the flag. Invalid → exit 2, nothing
+//                 written.
 // Non-LLM, stdlib-only.
 
 import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { buildIndex, OUT_PATH, CANON_PATH, STATUS_NO_CANON } from "./lessons-index-core.mjs";
+import { buildIndex, productProfile, PRODUCT_PROFILE, STATUS_NO_CANON } from "./lessons-index-core.mjs";
+import { takeCanonRoot } from "./canon-root.mjs";
 
 /**
  * Generate the index under targetDir. Returns { status, entries, updated }.
@@ -42,15 +47,16 @@ import { buildIndex, OUT_PATH, CANON_PATH, STATUS_NO_CANON } from "./lessons-ind
  * `status: "no-canon"` — a benign no-op, never an error. A project that has promoted no lessons is the
  * common, honest state of a fresh install; refusing there would make the tool hostile on day one.
  *
- * Throws (fail-closed) only when canon IS present and INVALID.
+ * Throws (fail-closed) only when canon IS present and INVALID. `profile` (lessons-index-core.mjs) defaults to the
+ * product one.
  */
-export function generate(targetDir) {
-  const { status, entries, content } = buildIndex(targetDir);
+export function generate(targetDir, profile = PRODUCT_PROFILE) {
+  const { status, entries, content } = buildIndex(targetDir, profile);
   if (status === STATUS_NO_CANON) {
     return { status, entries, updated: false };
   }
 
-  const abs = join(targetDir, OUT_PATH);
+  const abs = join(targetDir, profile.outPath);
   mkdirSync(dirname(abs), { recursive: true });
 
   let current = null;
@@ -65,8 +71,15 @@ export function generate(targetDir) {
 }
 
 function main() {
-  const target = process.argv[2] || ".";
-  const { status, entries, updated } = generate(target);
+  const taken = takeCanonRoot(process.argv.slice(2));
+  if (!taken.ok) {
+    process.stderr.write(`gen-lessons-index: ${taken.reason}\n`);
+    process.exit(2);
+  }
+  const profile = productProfile(taken.root);
+  const { canonPath: CANON_PATH, outPath: OUT_PATH } = profile;
+  const target = taken.rest[0] || ".";
+  const { status, entries, updated } = generate(target, profile);
   if (status === STATUS_NO_CANON) {
     process.stdout.write(
       `lessons-index: no canon at ${CANON_PATH} (absent, or no lessons yet) — nothing to index; ${OUT_PATH} not written\n`

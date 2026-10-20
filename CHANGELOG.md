@@ -50,6 +50,120 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `/pharn-dev-ship` Step 2c is the follow-up `dev-ship-surface-bump`. Apparatus and repo meta only, so there is no
     `SKILLS_VERSION` bump.
 
+## [6.69.0] - 2026-10-20
+
+### Added
+
+- **One implementation of the lessons grammar: the product lessons floor takes the canon root as a parameter, the
+  four `.dev/floor/` twins are thin wrappers over it, and `/pharn-plan` regenerates the lessons index on `COLD` and
+  `STALE`** (audit 2026-10-12, ARCH-6 and CTX-8).
+  - ARCH-6, what failed: `lessons-index-core.mjs`, `check-lessons-index.mjs`, `gen-lessons-index.mjs` and
+    `check-provenance.mjs` each existed twice, in `pharn/floor/` and `.dev/floor/`, kept equal by hand and by ✧ text
+    pins. Measured at 6.65.2, the grammar code of each pair was identical. The real differences were the paths, the
+    regenerate hint, two header paragraphs, how an absent canon is read, the verdict names and the dev `commit` rule.
+    The product hard-coded `memory-bank/` and had no way to read another root.
+  - ARCH-6, what changed: a new `pharn/floor/canon-root.mjs` is the one parser for `--canon-root <dir>` (default
+    `memory-bank`; a repo-relative POSIX path, no `.`/`..` segment, no leading `-`). `lessons-index-core.mjs` takes a
+    profile (canon path, output path, generator, regenerate hint, two header paragraphs). Its default profile renders
+    the same bytes as before, and `productProfile()` runs the same root grammar. `check-lessons-index.mjs` and
+    `gen-lessons-index.mjs` accept `--canon-root`. An invalid value exits 2 and prints no verdict token.
+    `check-provenance.mjs` exports `checkProvenance()`, which validates the root it is given, builds its target list
+    under that root and gains `--strict-commit`, which refuses `unknown`. It now loads the runtime floor first and runs
+    only when invoked directly, so on a Node below the floor it exits 2 instead of checking.
+  - The `.dev/floor/` files keep their paths and exported APIs and now declare only the dev profile and what differs
+    there: canon must exist, the verdicts are `MISSING`/`DRIFT` over a committed page, and `commit` must be a SHA.
+    `docs/lessons-index.md` regenerates byte-identical.
+  - CTX-8, what failed: on `COLD`, `/pharn-plan` read `memory-bank/lessons-learned.md` in full (about 210 KB in this
+    repo) with an "optional" warm-up, and on `STALE` likewise. The product checker printed `NO_CANON` here, so this
+    repo could not run the product sweep on its own canon.
+  - CTX-8, what changed: `COLD` and `STALE` now run `node pharn/floor/gen-lessons-index.mjs .`, then the `--verdict`
+    line again. `GREEN` selects from the index and reads only the candidates; anything else falls back to canon in
+    full. `/pharn-loop`'s `allowed-tools` gains that one line. `/pharn-memory-promote` Step 6b's sentence about a
+    skipped refresh now says the next plan regenerates. With `--canon-root .dev/memory-bank`, the product checker
+    reads this repo's canon.
+  - Checked by: a canon-root grammar suite; per-CLI custom-root and no-flag cases (the default stays the production
+    path); `--strict-commit`, root-validation and import-runs-nothing cases. Each dev test file gets a closure that
+    refuses any top-level declaration in a wrapper beyond its profile, with negative controls. A dev test runs the
+    product checker on this repo's canon and requires a token other than `NO_CANON`. `LESSONS_SWEEP_WIRING` grows from
+    4 to 5. The retired text pins compared the two copies; with one copy there is nothing for them to compare.
+  - Bound: `--canon-root` changes which file these four CLIs read. Every other product canon path stays
+    `memory-bank/`: `check-plan-lessons`'s argument, the promote target and `/pharn-plan`'s "read canon" step. So the
+    flag does not relocate a project's memory-bank. The root check is lexical: a symlinked root is followed for
+    reading.
+  - Not covered: lessons L31 and L35 in `.dev/memory-bank/lessons-learned.md` still describe the check-provenance and
+    lessons-index pairs as copies that must both exist. Canon is not edited in this batch; the correction is recorded
+    as a deferred lesson candidate in `.dev/features/lessons-canon-root/SHIP.md`.
+
+## [6.68.1] - 2026-10-20
+
+### Changed
+
+- **The root README is cut from 82,330 to 24,851 bytes: its long sections moved, with their text unchanged, into
+  three pages under `docs/`** (audit 2026-10-12, ARCH-10).
+  - What failed: "Guaranteed vs advisory" (~18.2 KB), "The pipeline" with its five subsections (~17.9 KB) and
+    "Current limitations" (~15.8 KB) were ~64% of an ~81 KB README, so a newcomer had to read past them to reach a
+    first run.
+  - What changed: "Guaranteed vs advisory" and "Why not just CLAUDE.md or AGENTS.md?" moved to `docs/guarantees.md`;
+    "How the workflow works", "The pipeline" with its six subsections (6.66.0's "Declaring the base install"
+    included), the `--quick` detail from "Quick start" (now
+    "Quick mode") and "Capability coverage" moved to `docs/pipeline.md`; "Current limitations" moved to
+    `docs/limitations.md`. The README keeps what PHARN is, install and the Node requirement, the first run, what gets
+    installed, the commands table and the generated inventory, and adds a short guaranteed-vs-advisory summary and a
+    list of the pages. The moved text differs from the old README only in re-based links and three position words
+    that named the README's layout ("on this page", "the generated inventory above", "the current-state block …
+    below"). The README's new summary restates five of the table's guarantees in brief and links to the table; it adds none.
+  - Why this bumps: two shipped files cited a moved README section, `pharn/pharn-contracts/test-results-record.md`
+    (`README, "Per-test results"`) and a comment in `pharn/floor/test-infra-core.mjs`. Both now name
+    `docs/pipeline.md`. `LIMITS.md` is unchanged.
+  - Tests: the ✧ test that every statement of the reconcile claim says "non-adversarial" now also reads
+    `docs/guarantees.md` and `docs/limitations.md`.
+  - Bounds: nothing holds the README to 25 KB from here; its size was measured once, not gated. The moved text was
+    compared with the old README by a one-off script, not by a gate.
+
+## [6.68.0] - 2026-10-20
+
+### Changed
+
+- **The AC-TESTS lock now pins the command of every allowlisted gate `/pharn-verify` runs, not only the AC level
+  gates (lock schema `ac-tests-lock/6`; audit SEC-4).**
+  - What changed:
+    - Before, the test-infrastructure pin covered only `test` and the e2e gates. A plan that named `package.json`
+      got only an advisory NOTE, and its build could rewrite `scripts.lint` or `scripts.typecheck` to `true`, which
+      forges a green gate, or to any command. The AC gate stayed PASS.
+    - `pharn/floor/test-infra-core.mjs` now records two more sections. `other_gates` holds the script, `pre` and
+      `post` of every other ALLOWLIST gate `package.json` has: `lint`, `typecheck`, `type-check`, `build`,
+      `format:check`, `lint:md`, and an e2e gate when no e2e AC is mapped. `other_chained` holds the scripts those
+      gates chain to, found by the same token pass and hop bound. The pinned gates are now every gate
+      discovery finds, an excluded one included, so they cover every gate verify runs; a closure test checks that.
+    - A rewritten, removed or ADDED allowlisted gate script reads `test-infra-changed` at `ac-tests-lock.mjs --check`
+      (`lock-red` at the test-stage gate) and at the AC gate (verify FAIL; `/pharn-loop` stops S13). So does a changed
+      `pre`/`post` script or chained script. Each is named by gate id and never by script text. Adding a gate
+      counts too: a feature that introduces a first `typecheck` script must be its own `spec_kind: test-infra`
+      increment. `/pharn-test`, `/pharn-plan`, `/pharn-build` and `check-ac-tests.mjs`'s `package.json` NOTE now say
+      this.
+    - `--write` refuses (exit 2) an allowlisted gate script that is not a string, and a chain from one past 8 hops.
+  - **Upgrading with a feature in progress:**
+    - A lock written by `/pharn-test` before 6.68.0 (`/5`, `/4` or `/3`) is still read. Every other allowlisted gate
+      the project has, and each script those chain to, now reads `unpinned`. It never reads as changed and never as
+      GREEN. Almost every project has a `lint` script.
+    - So a feature that ran `/pharn-test` before the update and has not passed verify yet sees `lock-red` at
+      `/pharn-build`'s test-stage gate and `test-infra-unpinned` at `/pharn-verify` (FAIL), and `/pharn-loop` stops
+      S13.
+    - The remedy: set the build aside (revert or stash it) and re-run `/pharn-test`, which writes `/6`. A project
+      with no allowlisted gate besides the AC level gates reads exactly as before.
+    - Rolling back: a floor older than 6.68.0 reads a `/6` lock as unusable, never GREEN.
+  - `/pharn-ship --quick` and `/pharn-loop --quick` get the same pin. A `spec_kind: quick` SPEC is test-first, so it
+    runs the same `/pharn-test` and the same AC gate.
+  - Bounds:
+    - Detection, never prevention. The changed command has already run when the pin is recomputed: in
+      `/pharn-build`'s build gate (every `/pharn-loop` iteration too), on regress's head side, and in verify.
+    - For a gate no AC level maps to, only the command is pinned. The files its script names (`tsup src/index.ts`,
+      `node tools/lint.mjs`) and its own configs (`eslint.config.*`, `tsconfig.json`, a Prettier config) are not.
+      They are usually source a feature edits.
+    - A `spec_kind: test-infra` (bootstrap) or legacy SPEC still pins nothing.
+    - The `LIMITS.md §9` sentence that says this is a human-only edit, proposed in
+      `.dev/features/test-infra-pin-all-gates/HUMAN-PATCH.md`.
+
 ## [6.67.2] - 2026-10-20
 
 ### Changed

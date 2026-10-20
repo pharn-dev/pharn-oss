@@ -211,10 +211,11 @@ entries**: the checker never scans canon, so nothing here guarantees canon is un
    > divergence must not be "fixed" (P5, `.dev/memory-bank/lessons-learned.md` L27).** The product twin
    > halts here too (since 6.49.3), but its human may answer that the project has no commit, and it then
    > records the literal `unknown`, because a **user's** project need not be a git repo. This
-   > apparatus always is, and `.dev/floor/check-provenance.mjs`'s `COMMIT_RE = /^[0-9a-f]{7,40}$/`
-   > **rejects `unknown`** — a divergence `.dev/floor/check-provenance.test.mjs` pins on purpose. So
+   > apparatus always is, and `.dev/floor/check-provenance.mjs` runs the shared checker with `--strict-commit`
+   > semantics (`/^[0-9a-f]{7,40}$/`), which **rejects `unknown`** — a divergence
+   > `.dev/floor/check-provenance.test.mjs` pins on purpose. So
    > prescribing `unknown` here would print a remedy that guarantees a Step-3 RED and train a bypass; the
-   > terminal fallback is a **question**, which is what P5 asks for anyway. Do not widen `COMMIT_RE` to
+   > terminal fallback is a **question**, which is what P5 asks for anyway. Do not drop `--strict-commit` to
    > "complete" the parity — the stricter enum is the dev surface's deliberate advantage.
 
 ## Step 2 — Assemble the candidate (mechanics — provenance is deterministic, body is DATA)
@@ -477,7 +478,7 @@ It does not chain to another stage.
 
 - **"Every promoted entry carries valid, well-shaped provenance"** → **FLOOR** (`check-provenance.mjs`,
   enum/regex/presence). A candidate missing/malforming a mandatory field is rejected before any write.
-  **Stronger here than on the product surface, and deliberately:** `COMMIT_RE` admits **no** `unknown`, so
+  **Stronger here than on the product surface, and deliberately:** `--strict-commit` admits **no** `unknown`, so
   a dev entry that reaches canon carries a real SHA — the diff pointer `pharn/ARCHITECTURE.md §5` names is
   actually present, not merely honestly absent.
 - **"Canon did not change between discovery and the write"** → **FLOOR: content-hash** (primitive #2 — the
@@ -593,7 +594,7 @@ practice` passes every check above. The gate closed the **malformed**-title wind
   1. **`commit` cannot be captured** (`git rev-parse HEAD` fails — not a git repo, unborn `HEAD`, git
      unavailable) → **HALT and ask.** This is the **most load-bearing** entry here and the one place this
      command deliberately diverges from `/pharn-memory-promote`: the product twin writes the literal
-     `unknown`, which `.dev/floor/check-provenance.mjs`'s `COMMIT_RE` **rejects**, so prescribing it here
+     `unknown`, which `.dev/floor/check-provenance.mjs` (`--strict-commit`) **rejects**, so prescribing it here
      would be an unreachable remedy that trains a bypass (L27). See Step 1.4.
   2. **The surfacing artifact is ambiguous**, or **`feature` is not derivable** from a
      `.dev/features/<name>/…` path → **HALT and ask.** Never guess a feature name (Step 1.2).

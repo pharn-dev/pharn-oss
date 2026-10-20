@@ -189,13 +189,15 @@ node pharn/floor/ac-tests-lock.mjs --check <name>
 
 `--write` records every test file's sha256, AC-TESTS.md's digest and the SPEC pin (`pharn/pharn-contracts/ac-tests.md`,
 "The lock"), with `red_run: null` — and, since 6.20.0, the **test-infrastructure pin** (`test_infra`, lock schema
-`ac-tests-lock/5` since 6.36.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
+`ac-tests-lock/6` since 6.68.0): the `package.json` scripts of the gates your levels map to (with their `pre`/`post`
 scripts) and the scripts they chain to, their `testResults` formats, the files those scripts name (a `pharn-json`
 reporter, a runner script), `package.json`'s `jest` key, the root runner and package-manager configs in a closed
-name set, and `pharn.config.json`'s `gates.exclude` list ("The test-infrastructure pin"). Set up the runner, its
+name set, `pharn.config.json`'s `gates.exclude` list, and every other allowlisted gate's script (`lint`,
+`typecheck`, `build`, …) with the scripts it chains to ("The test-infrastructure pin"). A build that changes or ADDS
+one reads `test-infra-changed`. Set up the runner, its
 per-test results and any gate exclusion BEFORE this step, never after it.
 `--write` refuses an infrastructure it cannot pin (an unparseable `package.json` or `pharn.config.json`, a symlinked
-config or script-named file, a chain past the hop bound) — HALT on it. `--check` must print GREEN.
+config or script-named file, a chain past the hop bound, a gate script that is not a string) — HALT on it. `--check` must print GREEN.
 
 ## Step 5 — The red run (FLOOR — the runner picks the gates and the files, the checker decides)
 

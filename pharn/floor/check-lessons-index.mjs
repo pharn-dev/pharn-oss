@@ -11,8 +11,8 @@
 //   STALE      exit 1  a cache exists and DIFFERS from the recompute.
 //   ENUM_ERROR exit 1  canon is present and INVALID (duplicate id, unsafe title, CHECK-5 hazard).
 //
-// `NO_CANON` and `COLD` are GREEN **deliberately**, and this is the load-bearing divergence from the dev
-// copy. The cache is gitignored and disposable, so its absence is the normal COLD state of a fresh clone,
+// `NO_CANON` and `COLD` are GREEN **deliberately**, and this is the load-bearing difference from the dev
+// surface's wrapper (`.dev/floor/check-lessons-index.mjs`, which maps them to RED over a COMMITTED index). The cache is gitignored and disposable, so its absence is the normal COLD state of a fresh clone,
 // and a project that has promoted nothing is the honest normal state of a fresh install. Neither is an
 // error, and REDding on them would make every first run of /pharn-plan a false alarm. `STALE` is the only
 // drift RED because it is the only state in which the cache could actively MISLEAD a selection.
@@ -37,20 +37,23 @@
 //   - NOT that this checker is even INVOKED. It runs only if something runs it; /pharn-plan's Step 1 does,
 //     which is ADVISORY command orchestration, not a floor mechanism.
 //
-// Usage:  node pharn/floor/check-lessons-index.mjs [targetDir] [--verdict]
-//   --verdict  print ONLY the bare verdict token (one of the five above) and nothing else, so a caller
-//              can branch on set MEMBERSHIP rather than parse prose. The token is an ENUM value
-//              (primitive #3), the same machine-readable channel check-regress.mjs's `verdict` mode
-//              provides. The exit code is unchanged in both modes.
+// Usage:  node pharn/floor/check-lessons-index.mjs [targetDir] [--verdict] [--canon-root <dir>]
+//   --verdict     print ONLY the bare verdict token (one of the five above) and nothing else, so a caller
+//                 can branch on set MEMBERSHIP rather than parse prose. The token is an ENUM value
+//                 (primitive #3), the same machine-readable channel check-regress.mjs's `verdict` mode
+//                 provides. The exit code is unchanged in both modes.
+//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.69.0;
+//                 canon-root.mjs owns the grammar and the flag's bound — it relocates nothing else). An
+//                 invalid value exits 2 with the reason on stderr and NOTHING on stdout, so it can never
+//                 be read as a member of the verdict set.
 //
 // Non-LLM, stdlib-only, fail-closed.
 
 import "./runtime-floor.mjs";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { buildIndex, CANON_PATH, OUT_PATH, MALFORMED, STATUS_NO_CANON } from "./lessons-index-core.mjs";
-
-const FIX = "node pharn/floor/gen-lessons-index.mjs .";
+import { buildIndex, productProfile, PRODUCT_PROFILE, MALFORMED, STATUS_NO_CANON } from "./lessons-index-core.mjs";
+import { takeCanonRoot } from "./canon-root.mjs";
 
 // The closed verdict set. Exported so a test (and any caller) can assert membership rather than
 // string-match a message.
@@ -61,13 +64,15 @@ const RED_VERDICTS = ["STALE", "ENUM_ERROR"];
  * Check the cached index against a fresh recompute. Returns { verdict, findings, malformedCount } where
  * each finding is { type, file, problem } — the enum-gated (`type`, `file`) / free-text (`problem`) split
  * of `pharn/pharn-contracts/finding-shape.md`, cited not restated (P4). Pure — no process exit, so tests
- * can call it.
+ * can call it. `profile` (lessons-index-core.mjs) defaults to the product one.
  */
-export function checkLessonsIndex(targetDir) {
+export function checkLessonsIndex(targetDir, profile = PRODUCT_PROFILE) {
+  const CANON_PATH = profile.canonPath;
+  const OUT_PATH = profile.outPath;
   let expected;
   let malformedCount;
   try {
-    const { status, content, entries } = buildIndex(targetDir);
+    const { status, content, entries } = buildIndex(targetDir, profile);
     if (status === STATUS_NO_CANON) {
       return { verdict: "NO_CANON", findings: [], malformedCount: 0 };
     }
@@ -99,7 +104,14 @@ export function checkLessonsIndex(targetDir) {
 }
 
 function main() {
-  const args = process.argv.slice(2);
+  const taken = takeCanonRoot(process.argv.slice(2));
+  if (!taken.ok) {
+    process.stderr.write(`check-lessons-index: ${taken.reason}\n`);
+    process.exit(2);
+  }
+  const profile = productProfile(taken.root);
+  const { canonPath: CANON_PATH, outPath: OUT_PATH, regen: FIX } = profile;
+  const args = taken.rest;
   const verdictOnly = args.includes("--verdict");
   const target = args.find((a) => !a.startsWith("--")) || ".";
 
@@ -109,7 +121,7 @@ function main() {
     process.exit(1);
   }
 
-  const { verdict, findings, malformedCount } = checkLessonsIndex(target);
+  const { verdict, findings, malformedCount } = checkLessonsIndex(target, profile);
   const red = RED_VERDICTS.includes(verdict);
 
   if (verdictOnly) {

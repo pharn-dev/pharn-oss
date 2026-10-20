@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/test-infra-core.mjs — the TEST-INFRASTRUCTURE PIN: the parts of a project, other than the AC tests
 // themselves, that decide how those tests run and what they report. `/pharn-test`'s `ac-tests-lock.mjs --write` records
-// it in the lock's `test_infra` section (schema `ac-tests-lock/5` since 6.36.0; `/4` and `/3` are still read); `--check` and
+// it in the lock's `test_infra` section (schema `ac-tests-lock/6` since 6.68.0; `/5`, `/4` and `/3` are still read); `--check` and
 // `/pharn-verify`'s AC gate (ac-gate-core.mjs) recompute it from the live tree and compare. Contract:
 // pharn/pharn-contracts/ac-tests.md, "The test-infrastructure pin".
 //
@@ -49,6 +49,20 @@
 //                 an excluded `typecheck` or `build` changes what /pharn-verify runs as surely as an excluded `test`. A
 //                 declaration that cannot be read refuses the pin. A /4 or /3 pin never recorded it, so a NON-EMPTY live
 //                 declaration reads `unpinned` against one (and an empty one reads exactly as before 6.36.0).
+//   other_gates   (/6, 6.68.0 — audit SEC-4) { id, script, pre, post } for every OTHER gate the gate runner runs: each
+//                 ALLOWLIST id package.json `scripts` HAS (discoverGates) that is not in `gates` — `lint`, `typecheck`,
+//                 `build`, `format:check`, `lint:md`, and an e2e gate when no e2e AC is mapped — sorted by id. Before,
+//                 a build scoped to package.json could rewrite `scripts.lint` to `true` (a forged green gate) or to any
+//                 command and verify's AC gate stayed PASS. Excluded gates are NOT filtered out, as `gates` is not.
+//                 So gates ∪ other_gates is every gate discoverGates finds, an excluded one included — a superset
+//                 of what /pharn-verify runs when gates.exclude is non-empty (a closure test pins the equality).
+//   other_chained (/6) every script an other gate's value chains to, transitively, by the SAME token pass and hop bound,
+//                 not already pinned in `gates` / `chained` / `other_gates`: { id, script, pre, post }, sorted by id.
+//                 The other gates' walk records CHAINS ONLY, never the files their values name (below).
+//   A /5, /4 or /3 pin never recorded the other gates, so each one the live tree has, and each script they chain to,
+//   reads `unpinned` against it (never `changed`, never GREEN) — almost every project has a `lint` script, so an
+//   in-flight old lock reads `test-infra-unpinned` at the AC gate until /pharn-test is re-run. A tree with no other
+//   gate reads exactly as before 6.68.0.
 //
 // THE TOKEN PASS (6.31.0) — ONE closed, literal rule, never a shell parse (the reconcile precedent: parsing a shell
 // command is undecidable, and a verb list would be a heuristic P0 forbids calling a guarantee). scriptTokens() splits
@@ -88,9 +102,15 @@
 //     imports are never followed;
 //   • configuration read from the environment (`NODE_OPTIONS`, `npm_config_*`, a runner's own variables), and npm
 //     configuration outside the project root (the user and the global npmrc);
-//   • package.json fields other than the level gates' scripts, the scripts they chain to and `jest` — a `mocha` or
-//     `ava` key, `config` (a script reads it as `$npm_package_config_*`), `type`, `imports`, `exports`, `workspaces`,
-//     `overrides`, and dependencies (the runner's own version);
+//   • DETECTION, NEVER PREVENTION (6.68.0): a changed gate script is caught when the pin is recomputed — `--check` and
+//     verify's AC gate — and by then the changed command has already RUN: in /pharn-build's own build gate (every
+//     discovered gate but e2e, on each /pharn-loop iteration too), on regress's head side, and in verify itself;
+//   • what an OTHER gate's command READS (6.68.0): the files its value names (`tsup src/index.ts`, `node tools/lint.mjs`)
+//     and its own configuration (`eslint.config.*`, `tsconfig.json`, a Prettier or markdownlint config) — only the
+//     command is pinned, because those files are usually source a feature legitimately edits;
+//   • package.json fields other than the allowlisted gates' scripts, the scripts they chain to and `jest` —
+//     a `mocha` or `ava` key, `config` (a script reads it as `$npm_package_config_*`), `type`, `imports`, `exports`,
+//     `workspaces`, `overrides`, and dependencies (the runner's own version);
 //   • a chain the token pass does not read — through another runner (`npm-run-all`, `run-s`, `concurrently`,
 //     `turbo`), into another package (`--prefix`, `-w`, `yarn workspace`), after a flag whose value is a separate
 //     token between the manager and its command, or through `bun`;
@@ -107,7 +127,9 @@
 // FAIL-CLOSED COSTS, stated: a change it catches is `test-infra-changed` whether or not it was legitimate. So a SOURCE
 // file a test-reachable script names literally — a bundler's entry (`tsup src/index.ts` reached through
 // `"pretest": "npm run build"`), `node test.js` — is pinned, and a feature that edits it reads `test-infra-changed`;
-// a chained build step is pinned as a value, so a feature that edits the build script reads the same. The remedy is a
+// a chained build step is pinned as a value, so a feature that edits the build script reads the same; and since 6.68.0
+// a feature that changes ANY allowlisted gate's script — or ADDS one (a first `typecheck`), fail-closed, since an added
+// gate is a command the build chose just the same — reads `test-infra-changed` too. The remedy is a
 // human: name a directory, a glob or a config file instead, as its own `spec_kind: test-infra` increment. For an
 // ACCIDENTAL change, set the build aside and re-run /pharn-test; for an INTENDED one, re-running /pharn-test cannot
 // help (the rebuild makes the change again) — split it into a `spec_kind: test-infra` increment first. And it is
@@ -200,13 +222,26 @@ export function testInfraPathKind(entry) {
 }
 /** A pinned gate's `results` value: a format, or the refusal that stood in for one when the pin was taken. */
 export const RESULTS_VALUES = Object.freeze([...RESULTS_FORMATS, "config-invalid", "not-configured"].sort());
-/** `test_infra`'s closed key sets (L36): the /5 pin (6.36.0), and the /4 (6.31.0–6.35.x) and /3 (6.20.0–6.30.x) pins
- *  still read. */
-export const PIN_KEYS = Object.freeze(["chained", "configs", "exclude", "gates", "jest", "levels", "script_files"]);
+/** `test_infra`'s closed key sets (L36): the /6 pin (6.68.0), and the /5 (6.36.0–6.67.x), /4 (6.31.0–6.35.x) and /3
+ *  (6.20.0–6.30.x) pins still read. */
+export const PIN_KEYS = Object.freeze([
+  "chained",
+  "configs",
+  "exclude",
+  "gates",
+  "jest",
+  "levels",
+  "other_chained",
+  "other_gates",
+  "script_files",
+]);
+export const PIN_KEYS_V5 = Object.freeze(["chained", "configs", "exclude", "gates", "jest", "levels", "script_files"]);
 export const PIN_KEYS_V4 = Object.freeze(["chained", "configs", "gates", "jest", "levels", "script_files"]);
 export const PIN_KEYS_V3 = Object.freeze(["configs", "gates", "levels"]);
 export const GATE_KEYS = Object.freeze(["id", "post", "pre", "results", "script"]);
 export const CHAINED_KEYS = Object.freeze(["id", "post", "pre", "script"]);
+/** An `other_gates` entry (/6): a gate's command without a results format — no AC is read from it. */
+export const OTHER_GATE_KEYS = Object.freeze(["id", "post", "pre", "script"]);
 export const CONFIG_KEYS = Object.freeze(["path", "sha256"]);
 export const SCRIPT_FILE_KEYS = Object.freeze(["path", "sha256"]);
 
@@ -373,10 +408,13 @@ function valuesOf(scripts, id) {
  * candidates}` — the chained scripts `{id, script, pre, post}` sorted by id (the gates' own ids and pre/post names not
  * repeated), and every candidate path any pinned value names, sorted — or a refusal (a chained value that is not a
  * string, a chain past MAX_CHAIN_HOPS).
+ * `pinned` (6.68.0): script names already pinned elsewhere, which the walk neither records nor enters again — the other
+ * gates' walk passes every level gate, chained script and other gate, so a script reached from both sides is recorded
+ * once, in `chained`. `who` names the walk's start in a refusal.
  */
-export function scriptWalk({ scripts, gates }) {
+export function scriptWalk({ scripts, gates, pinned = [], who = "a level gate's scripts" }) {
   if (!isPlainObject(scripts)) return { ok: true, chained: [], candidates: [] };
-  const seen = new Set(gates.flatMap((g) => [g.id, `pre${g.id}`, `post${g.id}`]));
+  const seen = new Set([...pinned, ...gates.flatMap((g) => [g.id, `pre${g.id}`, `post${g.id}`])]);
   const chained = [];
   const candidates = new Set();
   let frontier = gates.map((g) => ({ values: [g.script, g.pre, g.post], hop: 0 }));
@@ -388,12 +426,11 @@ export function scriptWalk({ scripts, gates }) {
         for (const p of scriptPathCandidates(value)) candidates.add(p);
         for (const id of chainedIds(value)) {
           if (!Object.hasOwn(scripts, id) || seen.has(id)) continue;
-          if (id.length > MAX_NAME)
-            return { ok: false, reason: `a level gate's scripts chain to a script whose name is over ${MAX_NAME} characters` };
+          if (id.length > MAX_NAME) return { ok: false, reason: `${who} chain to a script whose name is over ${MAX_NAME} characters` };
           if (hop + 1 > MAX_CHAIN_HOPS) {
             return {
               ok: false,
-              reason: `a level gate's scripts chain deeper than ${MAX_CHAIN_HOPS} hops (at ${shown(id)}) — the pin refuses rather than reading part of the chain`,
+              reason: `${who} chain deeper than ${MAX_CHAIN_HOPS} hops (at ${shown(id)}) — the pin refuses rather than reading part of the chain`,
             };
           }
           const v = valuesOf(scripts, id);
@@ -465,6 +502,20 @@ function readGates(scripts, levels) {
     gates.push({ id, script: v.script, pre: v.pre, post: v.post });
   }
   return { ok: true, gates };
+}
+
+/** (6.68.0) The OTHER gates the gate runner discovers — every ALLOWLIST id the manifest has that is not a candidate
+ *  level gate for `levels` — each `{id, script, pre, post}`, sorted by id, or a refusal. */
+function readOtherGates(scripts, levels) {
+  const level = new Set(candidateGates(levels));
+  const gates = [];
+  for (const { id } of discoverGates(scripts)) {
+    if (level.has(id)) continue;
+    const v = valuesOf(scripts, id);
+    if (!v.ok) return v;
+    gates.push({ id, script: v.script, pre: v.pre, post: v.post });
+  }
+  return { ok: true, gates: gates.sort((a, b) => cmp(a.id, b.id)) };
 }
 
 /** Sort an object's keys (the canonical-form replacer): `Object.fromEntries` DEFINES each key, so a `__proto__` key
@@ -544,8 +595,8 @@ function requireInputs(fn, root, levels) {
 }
 
 /**
- * Compute the /5 pin over the live tree at `root` for the mapped `levels`. Both inputs are required (L41).
- * @returns {{ok: true, pin: {levels: string[], gates: object[], chained: object[], configs: {path: string, sha256: string}[], script_files: {path: string, sha256: string}[], jest: string|null, exclude: string[]}} | {ok: false, reason: string}}
+ * Compute the /6 pin over the live tree at `root` for the mapped `levels`. Both inputs are required (L41).
+ * @returns {{ok: true, pin: {levels: string[], gates: object[], chained: object[], configs: {path: string, sha256: string}[], script_files: {path: string, sha256: string}[], jest: string|null, exclude: string[], other_gates: object[], other_chained: object[]}} | {ok: false, reason: string}}
  */
 export function computeTestInfra({ root, levels }) {
   requireInputs("computeTestInfra", root, levels);
@@ -560,6 +611,15 @@ export function computeTestInfra({ root, levels }) {
   });
   const walk = scriptWalk({ scripts: m.scripts, gates });
   if (!walk.ok) return walk;
+  const og = readOtherGates(m.scripts, levels);
+  if (!og.ok) return og;
+  // The other gates' walk: chains only (its `candidates` are deliberately dropped — the header's NOT-caught list), and
+  // nothing the level walk already pinned is recorded twice. `chained` keeps its /5 meaning (what the LEVEL gates
+  // reach), so an other gate a level gate chains to (`"test": "npm run lint && vitest"`) sits in both `chained` and
+  // `other_gates` — the one overlap the shape allows; `other_chained` overlaps nothing.
+  const pinned = [...gates, ...walk.chained].flatMap((c) => [c.id, `pre${c.id}`, `post${c.id}`]);
+  const otherWalk = scriptWalk({ scripts: m.scripts, gates: og.gates, pinned, who: "an allowlisted gate's scripts" });
+  if (!otherWalk.ok) return otherWalk;
   const cfg = rootConfigs(root);
   if (!cfg.ok) return cfg;
   const named = scriptFilesOf(root, walk.candidates);
@@ -578,6 +638,8 @@ export function computeTestInfra({ root, levels }) {
       script_files: named.files,
       jest: jest.jest,
       exclude: ex.exclude,
+      other_gates: og.gates,
+      other_chained: otherWalk.chained,
     },
   };
 }
@@ -606,12 +668,12 @@ const exactKeys = (o, keys) =>
 const sortedUnique = (xs) => new Set(xs).size === xs.length && xs.join("\n") === [...xs].sort(cmp).join("\n");
 const isScriptValue = (v) => typeof v === "string" && v.length <= MAX_SCRIPT;
 
-/** Shape-check a recorded pin — closed at every level (L36), per schema: `{version: 5}` for `ac-tests-lock/5`,
- *  `{version: 4}` for `/4`, `{version: 3}` for `/3`. The version is required (L41). A reason string, or null when
- *  well-formed. */
+/** Shape-check a recorded pin — closed at every level (L36), per schema: `{version: 6}` for `ac-tests-lock/6`,
+ *  `{version: 5}` for `/5`, `{version: 4}` for `/4`, `{version: 3}` for `/3`. The version is required (L41). A reason
+ *  string, or null when well-formed. */
 export function pinShapeError(pin, { version } = {}) {
-  if (version !== 3 && version !== 4 && version !== 5) throw new TypeError("pinShapeError: `version` must be 3, 4 or 5");
-  const keys = version === 5 ? PIN_KEYS : version === 4 ? PIN_KEYS_V4 : PIN_KEYS_V3;
+  if (![3, 4, 5, 6].includes(version)) throw new TypeError("pinShapeError: `version` must be 3, 4, 5 or 6");
+  const keys = version === 6 ? PIN_KEYS : version === 5 ? PIN_KEYS_V5 : version === 4 ? PIN_KEYS_V4 : PIN_KEYS_V3;
   if (!exactKeys(pin, keys)) return `test_infra is not exactly {${keys.join(", ")}}`;
   if (!Array.isArray(pin.levels) || pin.levels.length === 0 || !pin.levels.every((l) => LEVELS.includes(l)) || !sortedUnique(pin.levels))
     return `test_infra.levels is not a non-empty, sorted, unique subset of {${LEVELS.join(", ")}}`;
@@ -657,6 +719,41 @@ export function pinShapeError(pin, { version } = {}) {
   if (exErr !== null) return `test_infra.exclude ${exErr}`;
   if (pin.exclude.join("\n") !== ALLOWLIST.filter((id) => pin.exclude.includes(id)).join("\n"))
     return "test_infra.exclude is not in ALLOWLIST order";
+  if (version === 5) return null;
+  return otherShapeError(pin);
+}
+
+/** (6.68.0) The /6 sections: `other_gates` — ALLOWLIST ids that are not a candidate level gate for the pin's levels;
+ *  `other_chained` — clean ids no other section holds. Each `{id, post, pre, script}` exactly, sorted and unique by id.
+ *  The one overlap allowed is `chained` ∩ `other_gates` (an other gate a level gate chains to). */
+function otherShapeError(pin) {
+  const level = new Set(candidateGates(pin.levels));
+  const entries = (name, xs, idOk, idWhy) => {
+    if (!Array.isArray(xs)) return `test_infra.${name} is not an array`;
+    for (const c of xs) {
+      if (!exactKeys(c, OTHER_GATE_KEYS)) return `a test_infra.${name} entry is not exactly {${OTHER_GATE_KEYS.join(", ")}}`;
+      if (!idOk(c.id)) return `a test_infra.${name} id is not ${idWhy}`;
+      if (!isScriptValue(c.script)) return `test_infra.${name} ${shown(c.id)}: script is not a string`;
+      for (const k of ["pre", "post"]) {
+        if (c[k] !== null && !isScriptValue(c[k])) return `test_infra.${name} ${shown(c.id)}: ${k} is not a string or null`;
+      }
+    }
+    return sortedUnique(xs.map((c) => c.id)) ? null : `test_infra.${name} is not unique and sorted by id`;
+  };
+  const og = entries(
+    "other_gates",
+    pin.other_gates,
+    (id) => typeof id === "string" && ALLOWLIST.includes(id) && !level.has(id),
+    "an allowlisted gate id outside the pinned levels' gates"
+  );
+  if (og) return og;
+  const levelIds = new Set(pin.gates.map((g) => g.id));
+  if (pin.other_gates.some((g) => levelIds.has(g.id))) return "a test_infra.other_gates id is pinned in test_infra.gates too";
+  const cleanId = (id) => typeof id === "string" && id !== "" && id.length <= MAX_NAME && !hasControl(id);
+  const oc = entries("other_chained", pin.other_chained, cleanId, "a clean, non-empty string");
+  if (oc) return oc;
+  const elsewhere = new Set([...pin.gates, ...pin.chained, ...pin.other_gates].map((c) => c.id));
+  if (pin.other_chained.some((c) => elsewhere.has(c.id))) return "a test_infra.other_chained id is pinned in another section too";
   return null;
 }
 
@@ -731,7 +828,50 @@ export function diffTestInfra(recorded, now) {
     for (const id of now.exclude)
       if (!recorded.exclude.includes(id)) out.push(`pharn.config.json gates.exclude: ${id} was added — discovery no longer runs it`);
   }
+  // /6 (6.68.0): every other allowlisted gate's command. A gate id is an ALLOWLIST member (inline is safe); a chained id
+  // is project text, quoted through shown().
+  if (Object.hasOwn(recorded, "other_gates")) {
+    const owas = byId(recorded.other_gates);
+    const ois = byId(now.other_gates);
+    for (const [id, g] of owas) {
+      const n = ois.get(id);
+      if (!n) out.push(`gate ${id}: its package.json script is gone`);
+      else {
+        if (n.script !== g.script) out.push(`gate ${id}: its package.json script changed`);
+        for (const k of ["pre", "post"]) {
+          if (n[k] !== g[k])
+            out.push(`gate ${id}: its ${k}${id} script ${g[k] === null ? "was added" : n[k] === null ? "is gone" : "changed"}`);
+        }
+      }
+    }
+    for (const id of ois.keys()) if (!owas.has(id)) out.push(`gate ${id}: a package.json script was added`);
+    const cwas = byId(recorded.other_chained);
+    const cis = byId(now.other_chained);
+    for (const [id, c] of cwas) {
+      const n = cis.get(id);
+      const at = `chained script ${shown(id)}`;
+      if (!n) out.push(`${at}: no allowlisted gate reaches it any more, or it is gone`);
+      else {
+        if (n.script !== c.script) out.push(`${at}: its value changed`);
+        for (const k of ["pre", "post"]) {
+          if (n[k] !== c[k]) out.push(`${at}: its ${k}-script ${c[k] === null ? "was added" : n[k] === null ? "is gone" : "changed"}`);
+        }
+      }
+    }
+    for (const id of cis.keys()) if (!cwas.has(id)) out.push(`chained script ${shown(id)}: an allowlisted gate now reaches it`);
+  }
   return out;
+}
+
+/** What the /6 pin covers that a /5, /4 or /3 pin could not (6.68.0): each other allowlisted gate the live tree has, and
+ *  each script those chain to — UNPINNED, never "changed". A tree with no other gate adds nothing. */
+function beyondV5(pin) {
+  return [
+    ...pin.other_gates.map((g) => `gate ${g.id}: the gate runner runs it, and a pin written before ac-tests-lock/6 does not cover it`),
+    ...pin.other_chained.map(
+      (c) => `chained script ${shown(c.id)}: an allowlisted gate runs it, and a pin written before ac-tests-lock/6 does not cover it`
+    ),
+  ];
 }
 
 /** What the /5 pin covers that a /4 or /3 pin could not (6.36.0): a NON-EMPTY declared gate exclusion — UNPINNED, never
@@ -760,17 +900,20 @@ function beyondV3(pin) {
 /** Recompute over `root` for the RECORDED levels and compare with `recorded` (a shape-valid pin): `{changed, unpinned}`
  *  (L6 — two fields, never one list split by prefix). `changed` holds the differences, or `[reason]` when the live pin
  *  cannot be computed (an unreadable manifest, a symlinked config or named file — itself a change from what was
- *  pinned). `unpinned` is empty for a /5 pin; for a /4 pin it names a non-empty declared gate exclusion (6.36.0); for a
- *  /3 pin it names that and what the live tree has that /4 pins and /3 did not (6.31.0 — the AC gate reads it as
- *  `test-infra-unpinned`, `--check` as a RED). A /3 or /4 pin over a tree the current pin cannot be computed on (a
+ *  pinned). `unpinned` is empty for a /6 pin; for a /5 pin it names every other allowlisted gate and the scripts those
+ *  chain to (6.68.0); for a /4 pin that and a non-empty declared gate exclusion (6.36.0); for a /3 pin all of that and
+ *  what the live tree has that /4 pins and /3 did not (6.31.0 — the AC gate reads it as `test-infra-unpinned`,
+ *  `--check` as a RED). A /3, /4 or /5 pin over a tree the current pin cannot be computed on (a
  *  symlinked `.npmrc` or script-named file, a chain past MAX_CHAIN_HOPS, a gate exclusion that cannot be read) reads
  *  `changed`, not `unpinned`, deliberately: the refusal cannot tell a change the old pin covered from one only the new
- *  pin covers, so it keeps the stricter reading — stated in the contract and the README. */
+ *  pin covers, so it keeps the stricter reading — stated in the contract and in docs/pipeline.md. */
 export function testInfraReds({ recorded, root }) {
   const now = computeTestInfra({ root, levels: recorded.levels });
   if (!now.ok) return { changed: [`the test infrastructure cannot be pinned now: ${now.reason}`], unpinned: [] };
-  if (Object.hasOwn(recorded, "exclude")) return { changed: diffTestInfra(recorded, now.pin), unpinned: [] };
-  if (Object.hasOwn(recorded, "script_files")) return { changed: diffTestInfra(recorded, now.pin), unpinned: beyondV4(now.pin) };
+  if (Object.hasOwn(recorded, "other_gates")) return { changed: diffTestInfra(recorded, now.pin), unpinned: [] };
+  if (Object.hasOwn(recorded, "exclude")) return { changed: diffTestInfra(recorded, now.pin), unpinned: beyondV5(now.pin) };
+  if (Object.hasOwn(recorded, "script_files"))
+    return { changed: diffTestInfra(recorded, now.pin), unpinned: [...beyondV4(now.pin), ...beyondV5(now.pin)] };
   const v3 = { ...now.pin, configs: now.pin.configs.filter((c) => isRunnerConfigName(c.path)) };
-  return { changed: diffTestInfra(recorded, v3), unpinned: [...beyondV3(now.pin), ...beyondV4(now.pin)] };
+  return { changed: diffTestInfra(recorded, v3), unpinned: [...beyondV3(now.pin), ...beyondV4(now.pin), ...beyondV5(now.pin)] };
 }
