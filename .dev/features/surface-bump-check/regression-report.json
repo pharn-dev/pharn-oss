@@ -1,0 +1,34 @@
+{
+  "base": "6b49cafdb6c98da52e01fafd72b93b1335021e44",
+  "inside": [
+    ".dev/features/surface-bump-check/GRILL.md",
+    ".dev/features/surface-bump-check/PLAN.md",
+    ".dev/floor/check-surface-bump.mjs",
+    ".dev/floor/check-surface-bump.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".github/workflows/ci.yml",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "package.json"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions"
+}

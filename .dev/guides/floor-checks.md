@@ -402,6 +402,24 @@ node .dev/floor/check-lessons-index.mjs [target-dir]
 node .dev/floor/check-version-badge.mjs [target-dir]
 ```
 
+## `check-surface-bump.mjs` — product paths vs SKILLS_VERSION, per PR
+
+```bash
+# RED when a PR changes a bump-triggering product path and leaves SKILLS_VERSION unchanged (audit 2026-10-12
+# ARCH-2; L43's named remedy: bind the version to its referent, not its copies to each other). FLOOR (enum/regex,
+# primitive #3): the changed paths are `git diff --no-renames --name-only -z <base>` (base -> working tree) plus
+# untracked files, matched against ONE constant, PRODUCT_SURFACE, which a test binds to CLAUDE.md's "bump-triggering
+# set" bullet by token-set equality in both directions; then a string compare of SKILLS_VERSION at base and head.
+# The base is the PR's own: CI passes `--base-ref HEAD^1` (the test merge's first parent), the npm script
+# `--merge-base origin/main`, so a merge from main is never this PR's change and a bump in a sibling commit counts.
+# Closed refusal set: BAD_USAGE | BASE_UNREADABLE | HEAD_UNREADABLE (exit 2), NOT_BUMPED (exit 1). It does NOT
+# re-check the new CHANGELOG section (check:changelog and check:changelog-entry own that; L35) and never judges the
+# bump's SIZE. Pull requests only: direct pushes and admin merges bypass it, and a PR runs its own copy. Wired as
+# `check:surface-bump` (NOT in `npm run check` — it needs a base) and as the ci.yml step "SKILLS_VERSION
+# surface-bump check"; both pinned, and the CI run block executed, by its test. Apparatus: no SKILLS_VERSION bump.
+node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
+```
+
 ## `check-contributing-gates.mjs` — CONTRIBUTING gate list
 
 ```bash
