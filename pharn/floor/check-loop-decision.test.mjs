@@ -140,7 +140,8 @@ test("★ a genuine STOP_GREEN record with `decision` repeated (same token twice
   withFixture({ ...GENUINE_GREEN, decision: ["STOP_GREEN", "STOP_GREEN"] }, PASS, CLEAN, (r) => {
     assert.equal(r.status, 1, r.out);
     assert.match(r.out, /repeats `decision` ×2/);
-    assert.doesNotMatch(r.out, /^GREEN|DECISION_MISMATCH/m, "refused before any re-derivation");
+    assert.doesNotMatch(r.out, /^GREEN/m, "never GREEN");
+    assert.doesNotMatch(r.out, /DECISION_MISMATCH/, "refused before any re-derivation");
   });
 });
 

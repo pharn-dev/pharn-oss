@@ -48,3 +48,22 @@ only.
 
 The gates ran from a scratch node runner, `.pharn/envelope-duplicate-keys/verify.mjs`, using argv arrays. The pinned
 `; t=$?` and `printf` forms are refused in an isolated worktree.
+
+## Re-run after the review fix (R1) and the `origin/main` merge
+
+`verify-report.json` above is run 1, kept verbatim. Run 2 came after `cost-ledger.md` (R1) and after merging
+`origin/main` at 6.71.2, and the branch is renumbered to 6.71.3. Run 2 also `check-verify.mjs` exit 1, FAIL:
+
+| gate                                     | run 2 | why                                                                                                                                                                                                                                                       |
+| ---------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test`                                   | **0** | 5878 of 5879 passed, 1 skipped. With less load, the timing tests passed.                                                                                                                                                                                  |
+| `validate`                               | 0     |                                                                                                                                                                                                                                                           |
+| `lint`                                   | 1     | The only error was in this run's own gitignored scratch, `.pharn/envelope-duplicate-keys/renumber-check.mjs` (`no-useless-assignment`). After the scratch sources were deleted, `npm run lint` exits 0.                                                   |
+| `lint:md`                                | 1     | The only error was in scratch, `.pharn/envelope-duplicate-keys/my-entry.md` (MD012). After deleting it, `npm run lint:md` exits 0.                                                                                                                        |
+| `format:check`                           | 0     |                                                                                                                                                                                                                                                           |
+| `structural:…expected-injection-comment` | 0     |                                                                                                                                                                                                                                                           |
+| `reconcile`                              | 1     | `ESCAPE`, one path. `pharn/pharn-contracts/cost-ledger.md` is `plan-widened-after-anchor`, the R1 fix recorded in PLAN "Amendment 1" and accepted at the delegated GATE 2. The merge's 24 paths are classified `merged`, not escapes. CI has no baseline. |
+
+The per-gate re-runs after the scratch cleanup (`lint` 0, `lint:md` 0, `format:check` 0) are single commands, not a
+new `check-verify.mjs` verdict. The floor verdict of record stays FAIL. Proceeding past it is a model decision under
+the delegated GATE 2.
