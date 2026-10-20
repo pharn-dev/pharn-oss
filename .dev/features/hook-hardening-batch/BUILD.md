@@ -135,3 +135,20 @@ run end to end: no checkout holds G yet. Its two string tests are in `main()`.
   moved.
 - The build's reconcile epoch is now stale (the merge happened after the anchor). REVIEW A1 steps 3–4 open a fresh one
   after the applied files are committed.
+
+## Second merge, the apply, and the fresh epoch (2026-10-20)
+
+- `origin/main` moved to `ce83d30c` (6.70.0: #370, #372, #373, #374) and was merged as `72c5484f`.
+  - Only `CHANGELOG.md` conflicted. This increment was renumbered **6.71.0**. Main's released sections are
+    byte-identical to `origin/main`'s.
+  - `pharn-loop.md`'s setter sentence merged cleanly beside #374's edits (61,237 B; ceiling 65,024).
+  - The five targets still matched the BEFORE hashes, and the precheck again read `PRECHECK OK`.
+- **The apply.** The maintainer ran `python3 .dev/features/hook-hardening-batch/apply.py` in this worktree at
+  `72c5484f`. It printed five `patched` lines and deleted itself.
+  - The agent checked each file's sha256 against the pinned AFTER hash: all five equal (protect `f3ef97c4…`, enforce
+    `0405e36a…`, setter `fc813107…`, LIMITS `fe998761…`, THREAT-MODEL `f886f616…`).
+  - The agent committed the five files and the script's deletion as one commit, `74638672`. Its message says those
+    bytes were written by the maintainer.
+- **Fresh epoch.** `/pharn-dev-build` Step 0 ran again over the committed tree: the setter from this PLAN, then
+  `reconcile-baseline.mjs --anchor --by pharn-dev-build` (3104 paths, scope 21 entries). Nothing was written between
+  that commit and this anchor. Regress and verify run in this epoch (REVIEW A1).

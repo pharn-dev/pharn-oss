@@ -134,6 +134,18 @@ pattern.
 Applied by the maintainer with `apply.py`, never by the agent: `.claude/hooks/protect-trusted-paths.cjs`,
 `.claude/hooks/enforce-writes-scope.cjs`, `.claude/hooks/set-writes-scope.cjs`, `LIMITS.md`, `THREAT-MODEL.md`.
 
+Added after the apply (2026-10-20), so `/pharn-dev-regress`'s scope check reads this increment's whole diff. The
+three hooks are listed as files this increment changes. The two trusted docs that the check already exempts are
+listed too. Every one of the five was written by the maintainer's run of `apply.py` and committed in `74638672`,
+before the fresh build anchor. No write tool can reach them, and a setter run over this list now needs
+`--allow-claude-dir`.
+
+- `.claude/hooks/protect-trusted-paths.cjs` — maintainer-applied (TST-4, TST-11).
+- `.claude/hooks/enforce-writes-scope.cjs` — maintainer-applied (TST-4).
+- `.claude/hooks/set-writes-scope.cjs` — maintainer-applied (SEC-5).
+- `LIMITS.md` — maintainer-applied.
+- `THREAT-MODEL.md` — maintainer-applied.
+
 ## Contracts satisfied
 
 - `pharn/pharn-contracts/reconciliation-record.md` §4a — the applied control-surface edits are committed before any
