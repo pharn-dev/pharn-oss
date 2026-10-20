@@ -162,7 +162,7 @@ test("rendering is deterministic — two runs over the same canon are byte-ident
 // ── DRIFT GUARDS (these read live files on purpose) ────────────────────────────────────────────────
 
 test("✧ P4: TYPE_ENUM here EQUALS the TYPE_ENUM in check-provenance.mjs (its single source of truth)", () => {
-  // Both live on the product surface since 6.66.0 — the dev files are thin wrappers that declare neither.
+  // Both live on the product surface since 6.69.0 — the dev files are thin wrappers that declare neither.
   const src = readFileSync(new URL("../../pharn/floor/check-provenance.mjs", import.meta.url), "utf8");
   const m = src.match(/const TYPE_ENUM = \[([^\]]*)\];/);
   assert.ok(m, "check-provenance.mjs must declare `const TYPE_ENUM = [...]`");
@@ -234,9 +234,9 @@ test("✧ CI actually INVOKES the drift check, and its step is not disabled by a
   // out-of-band approval signal. "The wiring is pinned" NEVER means "CI is guaranteed to run it".
 });
 
-// ── ✧ ONE IMPLEMENTATION (6.66.0, audit ARCH-6) — the three dev lessons-index files are thin wrappers ──
+// ── ✧ ONE IMPLEMENTATION (6.69.0, audit ARCH-6) — the three dev lessons-index files are thin wrappers ──
 //
-// Until 6.66.0 this file pinned a hand-kept second copy of pharn/floor/lessons-index-core.mjs to the product one:
+// Until 6.69.0 this file pinned a hand-kept second copy of pharn/floor/lessons-index-core.mjs to the product one:
 // shared constants and shared function bodies byte-identical, four constants and two functions deliberately
 // different. The copy is retired (lessons-learned L35); the dev files import the product modules and pass DEV_PROFILE.
 // What replaces the text pins is a CLOSURE over what each wrapper may declare (L36 — closure, not per-member
@@ -321,7 +321,7 @@ test("✧ the dev render is the SHARED renderer under DEV_PROFILE — identical 
 });
 
 test("✧ CTX-8 dogfood: the PRODUCT checker runs on THIS repo's canon with --canon-root, and is never NO_CANON", () => {
-  // Before 6.66.0 `node pharn/floor/check-lessons-index.mjs . --verdict` printed NO_CANON here — this repo's canon is
+  // Before 6.69.0 `node pharn/floor/check-lessons-index.mjs . --verdict` printed NO_CANON here — this repo's canon is
   // .dev/memory-bank/, so the product sweep could not be run on it at all. The flag reaches it. The token is COLD
   // or GREEN or STALE depending on this machine's gitignored cache; any of those proves canon was READ.
   const repo = fileURLToPath(new URL("../../", import.meta.url));

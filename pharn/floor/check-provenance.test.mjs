@@ -2,7 +2,7 @@
 // entry-tag checker.
 //
 // Run as a subprocess (mirrors check-structural.test.mjs / validate.test.mjs): we assert on its public surface
-// (exit code + RED/GREEN stdout). Since 6.66.0 the module also exports checkProvenance() / targetEnum() for the
+// (exit code + RED/GREEN stdout). Since 6.69.0 the module also exports checkProvenance() / targetEnum() for the
 // `.dev/floor/` wrapper, gated by `import.meta.main`; the import-runs-nothing case below pins that gate. Inputs are written to a fresh temp dir per run, and nothing touches any real memory-bank —
 // except the ✧ agreement test, which reads check-provenance.mjs and pharn-memory-promote.md by design
 // (P4 drift guard; see typeEnumFrom*). Both of those paths SHIP, so this suite stays runnable inside a
@@ -329,7 +329,7 @@ test("✧ TARGET_ENUM is EXACTLY the two prescription files — it was not widen
   // The port's single most consequential constant. ARCHITECTURE §5 names FOUR canonical state files;
   // this checker deliberately gates only the two that PRESCRIBE behavior. Derived from source, never
   // restated from the checker's prose, so a silent widening fails HERE.
-  // Since 6.66.0 the enum is the fixed file list under a canon root; the DEFAULT root (no flag — the production
+  // Since 6.69.0 the enum is the fixed file list under a canon root; the DEFAULT root (no flag — the production
   // path, L41) must yield exactly these two.
   assert.deepEqual([...TARGET_FILES], ["lessons-learned.md", "pattern-library.md"]);
   const target = targetEnum();
@@ -623,7 +623,7 @@ test("ROUND TRIP: an entry rendered from a GREEN candidate resolves in check-pla
   }
 });
 
-// ── 6.66.0: `--canon-root` and `--strict-commit` (audit ARCH-6 — the dev wrapper runs THIS code) ─────────
+// ── 6.69.0: `--canon-root` and `--strict-commit` (audit ARCH-6 — the dev wrapper runs THIS code) ─────────
 
 /** Run the CLI with extra flags in front of the two positional arguments. */
 function runFlags(flags, candidate, canonRel = canonRelFor(candidate)) {

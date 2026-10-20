@@ -186,7 +186,7 @@ test("a WARN about malformed tag lines never flips the GREEN verdict", () => {
   }
 });
 
-// ── 6.66.0: `--canon-root` (audit CTX-8 — a repo whose canon is not at memory-bank/ can run the sweep) ──
+// ── 6.69.0: `--canon-root` (audit CTX-8 — a repo whose canon is not at memory-bank/ can run the sweep) ──
 
 /** A temp repo whose canon lives under `root/` instead of memory-bank/. */
 function tmpRepoAt(root, canon) {

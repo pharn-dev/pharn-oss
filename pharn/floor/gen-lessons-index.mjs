@@ -28,7 +28,7 @@
 // lesson from it.
 //
 // Usage:  node pharn/floor/gen-lessons-index.mjs [targetDir] [--canon-root <dir>]     (default: cwd)
-//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.66.0; canon-root.mjs
+//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.69.0; canon-root.mjs
 //                 owns the grammar and the bound). The output stays `.pharn/lessons-index.md`, and its header
 //                 names the root and a regenerate command that carries the flag. Invalid → exit 2, nothing
 //                 written.

@@ -84,7 +84,7 @@ pharn/features/*/findings.json
 # The committed cost-ledger transcript fixtures are JSONL — one record per line, byte-exact. Prettier
 # does not understand `.jsonl`, and `--ignore-unknown` skips it; this entry makes the intent explicit so
 # a future formatter that DOES understand it cannot silently re-wrap the fixture the parity test pins.
-pharn/floor/fixtures/cost-ledger/
+pharn/floor/test-fixtures/cost-ledger/
 
 # Trusted spec docs: human-only, hook-protected. Excluded from the formatter
 # so style fixes can never mutate their content-hash (fix #4 / spec-drift).

@@ -2,7 +2,7 @@
 // .dev/floor/check-provenance.mjs — the PROVENANCE + DUPLICATE-ID + ENTRY-TAG checker for the build apparatus's
 // own memory-bank (`.dev/memory-bank/`), run by /pharn-dev-memory-promote before its human accept/deny gate.
 //
-// A THIN WRAPPER since 6.66.0 (audit ARCH-6). Every check — target enum, canon-arg binding, provenance shape,
+// A THIN WRAPPER since 6.69.0 (audit ARCH-6). Every check — target enum, canon-arg binding, provenance shape,
 // Gregorian date, whitespace-free and unique id, `type` enum, `concepts` shape — is
 // pharn/floor/check-provenance.mjs's checkProvenance(). This file used to be a hand-kept second copy of it; two
 // product-only patches once missed it for a whole release line (lessons-learned L31), which is why the copy is

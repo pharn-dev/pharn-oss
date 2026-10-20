@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // .dev/floor/gen-lessons-index.mjs — the lessons-index GENERATOR for the committed dev index (build apparatus).
 //
-// A THIN WRAPPER since 6.66.0 (audit ARCH-6): emits docs/lessons-index.md from .dev/memory-bank/lessons-learned.md
+// A THIN WRAPPER since 6.69.0 (audit ARCH-6): emits docs/lessons-index.md from .dev/memory-bank/lessons-learned.md
 // through pharn/floor/gen-lessons-index.mjs's generate(), under this surface's profile (./lessons-index-core.mjs).
 // Output is deterministic + idempotent (written only on a real change). The one thing it adds: canon MUST exist
 // here, so the shared generator's benign `no-canon` status is a throw — fail-closed, never an empty index.

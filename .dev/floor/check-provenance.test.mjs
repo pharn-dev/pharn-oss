@@ -2,7 +2,7 @@
 // entry-tag checker.
 //
 // Run as a subprocess (mirrors check-structural.test.mjs / validate.test.mjs): we assert only on its public
-// surface (exit code + RED/GREEN stdout). Since 6.66.0 the dev file is a thin wrapper over
+// surface (exit code + RED/GREEN stdout). Since 6.69.0 the dev file is a thin wrapper over
 // pharn/floor/check-provenance.mjs (`--canon-root .dev/memory-bank --strict-commit`), so this whole suite runs the
 // SHARED code under the dev settings. Inputs are written to a fresh temp dir per run (the plan scopes only the two floor files, not a
 // fixtures dir), and nothing touches the real memory-bank — except the ✧ agreement test, which reads
@@ -83,7 +83,7 @@ function runWith(candidate, canonText = CANON, canonRel = canonRelFor(candidate)
 
 const withProv = (overrides) => ({ ...VALID, provenance: { ...VALID.provenance, ...overrides } });
 
-// Derive the enum from the checker SOURCE rather than restating it here — see the ✧ note above. Since 6.66.0 the
+// Derive the enum from the checker SOURCE rather than restating it here — see the ✧ note above. Since 6.69.0 the
 // source is the shared product checker: the dev file is a thin wrapper that declares no enum of its own.
 function typeEnumFromChecker() {
   const src = readFileSync(PRODUCT_CHECK, "utf8");
@@ -435,9 +435,9 @@ test("the GREEN line labels the P0 bound: the VALUES being apt is advisory, only
   assert.match(r.stdout, /never aboutness/);
 });
 
-// ── ✧ ONE IMPLEMENTATION (6.66.0, audit ARCH-6) — the dev file is a thin wrapper, and stays one ─────────
+// ── ✧ ONE IMPLEMENTATION (6.69.0, audit ARCH-6) — the dev file is a thin wrapper, and stays one ─────────
 //
-// WHY THIS CHANGED. Until 6.66.0 `pharn/floor/check-provenance.mjs` and this directory's copy were two hand-kept
+// WHY THIS CHANGED. Until 6.69.0 `pharn/floor/check-provenance.mjs` and this directory's copy were two hand-kept
 // files pinned to agree by text tests (shared constants, shared function bodies) plus the behaviour set below. Two
 // product-only patches still missed the dev copy for a whole release line (L31). The copy is now retired (L35): the
 // dev file imports checkProvenance() and passes `{ canonRoot: ".dev/memory-bank", strictCommit: true }`.

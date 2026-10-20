@@ -24,7 +24,7 @@ come from the single code block this text was moved from, so the entry they name
 # capability walk is `.md`-only, but the eval judges are `.json`. NOT pharn/floor (it holds the
 # intentional dev-refs + the deliberately-RED fixtures), NOT `.dev/`, and NOT the root docs — CLAUDE.md
 # and CHANGELOG.md correctly cite the DEV file of a pair (check-provenance, check-lessons-index,
-# gen-lessons-index, lessons-index-core exist in BOTH floors — since 6.66.0 the dev ones are wrappers), so a
+# gen-lessons-index, lessons-index-core exist in BOTH floors — since 6.69.0 the dev ones are wrappers), so a
 # repo-wide walk would report those correct sentences as drift. Existence-gated, and that gate cuts
 # both ways: it FORCED the 2.4.0 `scan-plan-*` relocation (moving the five scanners to `pharn/floor/`
 # is what made their canon cites flag here, driving the move to completion), while it still
@@ -229,7 +229,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 # construction), it never proves the declaration named the APT member, and it never proves the WRITE
 # lands there — that is fix #7. Gated on the target-enum check passing, so a non-member target still
 # reports exactly one true reason.
-# ONE IMPLEMENTATION since 6.66.0 (audit ARCH-6): .dev/floor/check-provenance.mjs is a thin wrapper over
+# ONE IMPLEMENTATION since 6.69.0 (audit ARCH-6): .dev/floor/check-provenance.mjs is a thin wrapper over
 # checkProvenance() here. `--canon-root <dir>` (default `memory-bank`; pharn/floor/canon-root.mjs owns the
 # grammar) moves the two-file target enum under <dir>; `--strict-commit` refuses `unknown`. BOUND: the flag
 # relocates nothing else — the promote command's target stays memory-bank/. Exits 1 on any RED, 2 on an
@@ -250,8 +250,8 @@ node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <ca
 # DESIGN — the honest normal state of a fresh install; STALE is the only drift RED, because it is the only
 # state where the cache could MISLEAD a selection. Consistency, never correctness; and "the index was
 # consulted" NEVER means "the relevant lessons were read". Run by /pharn-plan's sweep (read) and
-# /pharn-memory-promote Step 6b (refresh, advisory, a Bash write outside fix #7 — L19); since 6.66.0
-# /pharn-plan also regenerates on COLD/STALE and re-checks. ONE IMPLEMENTATION since 6.66.0: the core takes a
+# /pharn-memory-promote Step 6b (refresh, advisory, a Bash write outside fix #7 — L19); since 6.69.0
+# /pharn-plan also regenerates on COLD/STALE and re-checks. ONE IMPLEMENTATION since 6.69.0: the core takes a
 # profile, and the dev pair below is a thin wrapper passing the dev one. `--canon-root <dir>` reads
 # <dir>/lessons-learned.md instead (output stays .pharn/; the header names the root and a regenerate hint
 # carrying the flag); invalid → exit 2, nothing on stdout. This repo dogfoods it with
@@ -268,7 +268,7 @@ node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict] [--canon-root 
 # control-char-free lowercase/digit/hyphen, <=32 chars). Both are REQUIRED on new candidates; legacy canon
 # entries are never scanned. SHAPE only — that the values DESCRIBE the entry is advisory (human-ratified at
 # the Step-5 gate), so a `type`-keyed filter is context selection, never a guarantee.
-# A THIN WRAPPER since 6.66.0 (audit ARCH-6): it runs pharn/floor/check-provenance.mjs's checkProvenance()
+# A THIN WRAPPER since 6.69.0 (audit ARCH-6): it runs pharn/floor/check-provenance.mjs's checkProvenance()
 # with canonRoot `.dev/memory-bank` and strictCommit (a SHA only — this repo always has one). Before, it was a
 # hand-kept second copy that once missed two product patches for a whole release line (L31); the copy is
 # retired (L35), and a ✧ closure in check-provenance.test.mjs refuses any declaration in the wrapper but its
@@ -375,7 +375,7 @@ node .dev/floor/check-specified-markers.mjs [target-dir] [--manifest <path>]
 # Both are folded into `npm run docs:generate` / `npm run docs:check` (the latter inside `npm run check`),
 # so promoting a lesson without regenerating is a loud RED. FLOOR: byte-equality (committed == recomputed)
 # — consistency, NOT that the index is true, and NEVER that anyone read a lesson. Exits non-zero on RED.
-# THIN WRAPPERS since 6.66.0 over the product pair (above) with the dev profile; they keep what differs here:
+# THIN WRAPPERS since 6.69.0 over the product pair (above) with the dev profile; they keep what differs here:
 # canon must exist, and the verdicts are MISSING / DRIFT / ENUM_ERROR over a COMMITTED page.
 node .dev/floor/gen-lessons-index.mjs [target-dir]
 node .dev/floor/check-lessons-index.mjs [target-dir]

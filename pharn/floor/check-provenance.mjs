@@ -72,12 +72,12 @@
 //                     (a not-yet-created file => empty canon, no duplicates — the first-promotion case,
 //                      which is the NORMAL state in a project that has never promoted a lesson)
 //   --canon-root    : the directory the two target files live in (default `memory-bank`; canon-root.mjs owns
-//                     the grammar and the bound — the flag relocates nothing else in the product). 6.66.0.
-//   --strict-commit : `commit` must be a SHA; the literal `unknown` is refused (6.66.0). The build apparatus's
+//                     the grammar and the bound — the flag relocates nothing else in the product). 6.69.0.
+//   --strict-commit : `commit` must be a SHA; the literal `unknown` is refused (6.69.0). The build apparatus's
 //                     wrapper, `.dev/floor/check-provenance.mjs`, runs this checker with `.dev/memory-bank` and
 //                     this flag — its repo always has a commit, so the escape would only weaken its provenance.
 //
-// ONE IMPLEMENTATION (6.66.0). `.dev/floor/check-provenance.mjs` used to be a hand-kept second copy of this file,
+// ONE IMPLEMENTATION (6.69.0). `.dev/floor/check-provenance.mjs` used to be a hand-kept second copy of this file,
 // held to it by ✧ text and behaviour pins (audit ARCH-6). It is now a thin wrapper over checkProvenance() below;
 // the dependency points `.dev/` -> `pharn/`, the only direction an install (which ships without `.dev/`) allows.
 //

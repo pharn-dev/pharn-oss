@@ -63,7 +63,7 @@ change the verdict for any project already configured that way, so it is left to
 Three things to know about the Jest format:
 
 - **The script needs a POSIX shell.** Jest has no config option for its JSON report, so the flags go in the `test`
-  script (README, "Per-test results"). That `${…:+…}` form needs a POSIX shell.
+  script (`docs/pipeline.md`, "Per-test results"). That `${…:+…}` form needs a POSIX shell.
 - **File arguments are patterns.** Jest reads the file arguments PHARN passes (`--stage ac-test` hands each gate its
   mapped files) as path patterns, not exact paths. So a similarly named test file can run too, and its tests enter
   the record, where a flaky or duplicate one is an anomaly (below) — reported, and deciding an AC only if it sits in a

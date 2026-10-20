@@ -42,7 +42,7 @@
 //                 can branch on set MEMBERSHIP rather than parse prose. The token is an ENUM value
 //                 (primitive #3), the same machine-readable channel check-regress.mjs's `verdict` mode
 //                 provides. The exit code is unchanged in both modes.
-//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.66.0;
+//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.69.0;
 //                 canon-root.mjs owns the grammar and the flag's bound — it relocates nothing else). An
 //                 invalid value exits 2 with the reason on stderr and NOTHING on stdout, so it can never
 //                 be read as a member of the verdict set.

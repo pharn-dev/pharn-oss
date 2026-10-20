@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // .dev/floor/check-lessons-index.mjs — the lessons-index DRIFT CHECKER for the COMMITTED dev index (build apparatus).
 //
-// A THIN WRAPPER since 6.66.0 (audit ARCH-6): the recompute and the byte comparison are
+// A THIN WRAPPER since 6.69.0 (audit ARCH-6): the recompute and the byte comparison are
 // pharn/floor/check-lessons-index.mjs's checkLessonsIndex(), run under this surface's profile
 // (./lessons-index-core.mjs, DEV_PROFILE). What this file owns is the committed-artifact VERDICT VOCABULARY, which
 // is genuinely different from the product's cache vocabulary:

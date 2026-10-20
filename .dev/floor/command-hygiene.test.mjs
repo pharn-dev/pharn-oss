@@ -549,7 +549,7 @@ test(
 // so the dependency may only point `.dev/` -> product, never the reverse.
 const LESSONS_SWEEP_WIRING = [
   { file: "pharn-plan.md", role: "checks the index before selecting", re: /pharn\/floor\/check-lessons-index\.mjs\b[^\n]*--verdict/ },
-  // 6.66.0 (audit CTX-8): on COLD/STALE the plan stage REGENERATES the cache and re-checks, instead of reading
+  // 6.69.0 (audit CTX-8): on COLD/STALE the plan stage REGENERATES the cache and re-checks, instead of reading
   // canon in full with an "optional" warm-up. A fifth site with the same shape: the regeneration is a pinned line.
   { file: "pharn-plan.md", role: "regenerates the index on COLD/STALE", re: /\n {5}node pharn\/floor\/gen-lessons-index\.mjs \.\n/ },
   { file: "pharn-dev-plan.md", role: "checks the index before selecting", re: /node\s+\.dev\/floor\/check-lessons-index\.mjs/ },

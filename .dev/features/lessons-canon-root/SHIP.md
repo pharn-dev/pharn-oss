@@ -20,6 +20,11 @@ Batch 2026-10-19, group J (audit ARCH-6, CTX-8). Branch `refactor/lessons-canon-
 9. `/pharn-dev-regress` (run 2, base `dcf7b43`) → `.verdict` `no-regressions`.
 10. `/pharn-dev-verify` → `.verdict` `PASS`. All seven gates exited 0: `test`, `validate`, `lint`, `format:check`,
     `lint:md`, `structural:…`, `reconcile` (`CLEAN`).
+11. After the PR opened, `origin/main` moved twice more: #367 (6.67.1), then #369 (6.68.0) and #371 (6.68.1). Both
+    were merged in, and the version was renumbered to **6.69.0**. That covers the CHANGELOG heading, `SKILLS_VERSION`,
+    the badge and every "since 6.66.0" cite this PR added in code, tests and guides. `PLAN.md`'s "Bump" section keeps
+    its original 6.66.0 as the plan's record. Fast gates, `validate` and the lessons suites were re-run after the
+    last merge.
 
 The run ended at GATE 2 (delegated). Next: commit and open a PR, per the batch brief. Nothing is merged.
 

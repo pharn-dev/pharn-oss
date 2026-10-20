@@ -1,5 +1,5 @@
 ---
-description: "Run PHARN's build loop in order so the human need not re-type or memorize it: /pharn-dev-plan → [human approves] → /pharn-dev-grill → /pharn-dev-build → /pharn-dev-regress → /pharn-dev-verify → /pharn-dev-review → [human decides]. GATED orchestration — the agent INVOKES each stage (advisory); WHETHER to proceed past a stage is read from that stage's STRUCTURAL floor verdict (/pharn-dev-grill's check-plan-lessons exit — its interrogation findings still gate nothing — then validate exit / regression-report.json .verdict / verify-report.json .verdict), NEVER the agent's judgment. Reuses the existing stage commands; reimplements none. Two human gates (plan acceptance, post-stop decision) are NON-NEGOTIABLE; NO --yolo. Default (gated) mode adds NO new floor primitive — every guarantee belongs to a sub-stage. The --loop mode iterates the chain (fix → regress → verify → review) until a floor-grade stop — /pharn-dev-verify PASS ∧ /pharn-dev-regress clean — or a bounded max-iteration cap, the stop computed by the tested pharn/floor/check-ship.mjs whose inputs are ONLY the two floor verdicts so /pharn-dev-review can NEVER gate the loop (structural, not discipline). FLOOR verdicts; ADVISORY orchestration."
+description: "Run PHARN's build loop in order so the human need not re-type or memorize it: /pharn-dev-plan → [human approves] → /pharn-dev-grill → /pharn-dev-build → /pharn-dev-regress → /pharn-dev-verify → /pharn-dev-review → [human decides]. GATED orchestration — the agent INVOKES each stage (advisory); WHETHER to proceed past a stage is read from that stage's STRUCTURAL floor verdict (/pharn-dev-grill's check-plan-lessons exit — its interrogation findings still gate nothing — then validate exit / regression-report.json .verdict / verify-report.json .verdict), NEVER the agent's judgment. Reuses the existing stage commands; reimplements none. Two human gates (plan acceptance, post-stop decision) are NON-NEGOTIABLE; NO --yolo. Default (gated) mode adds NO new floor primitive — every guarantee belongs to a sub-stage. The --loop mode iterates the chain (fix → regress → verify → review) until a floor-grade stop — /pharn-dev-verify PASS ∧ /pharn-dev-regress clean — or a bounded max-iteration cap, the stop computed by the tested .dev/floor/check-ship.mjs whose inputs are ONLY the two floor verdicts so /pharn-dev-review can NEVER gate the loop (structural, not discipline). FLOOR verdicts; ADVISORY orchestration."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -8,7 +8,7 @@ reads:
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
     ".dev/features/<name>/PLAN.md",
-    "pharn/floor/check-ship.mjs",
+    ".dev/floor/check-ship.mjs",
     ".dev/features/<name>/regression-report.json",
     ".dev/features/<name>/verify-report.json",
     ".dev/features/<name>/GRILL.md",
@@ -392,7 +392,7 @@ re-plan via a fresh `/pharn-dev-ship` run.
 2. **Read the floor stop — the decision is computed by the tested helper, NOT by you:**
 
    ```bash
-   node pharn/floor/check-ship.mjs .dev/features/<name>/verify-report.json .dev/features/<name>/regression-report.json --iter <N> --cap <M>
+   node .dev/floor/check-ship.mjs .dev/features/<name>/verify-report.json .dev/features/<name>/regression-report.json --iter <N> --cap <M>
    ```
 
    `<M>` is `--max-iter` (default **3**). Branch **only** on its **exit code** (a membership test, P5):
@@ -423,9 +423,9 @@ That exclusion is **structural** (the input does not exist), the fix#3 disease m
 merely promised.
 
 **Why a helper, not inline (the floor reduction).** The loop runs with **no human between iterations**,
-so its termination is safety-critical and must be **floor, not agent judgment**. `pharn/floor/check-ship.mjs`
+so its termination is safety-critical and must be **floor, not agent judgment**. `.dev/floor/check-ship.mjs`
 reduces the stop to enum-membership over the two floor verdicts + an integer `iter ≥ cap` compare
-(`pharn/ARCHITECTURE.md §2` primitive #3), hermetically tested (`pharn/floor/check-ship.test.mjs`). You **obey** its
+(`pharn/ARCHITECTURE.md §2` primitive #3), hermetically tested (`.dev/floor/check-ship.test.mjs`). You **obey** its
 exit code — advisory **compliance**, exactly as you obey `check-verify`.
 
 **Roll-up.** For a `--loop` run, `SHIP.md` (Step 3) additionally records the **iteration count**, each
@@ -490,7 +490,7 @@ iteration would record a verdict about bytes that are not the ones presented. It
 - **Net (gated mode):** the gated chain introduces **zero** new floor primitive — every guarantee belongs
   to a **sub-stage**; `/pharn-dev-ship` is convenience + two preserved human gates. **Step 2b does not
   change this net** — it adds a proposer and a human halt, not a primitive.
-- **Net (`--loop` mode):** adds **exactly one** new floor primitive — `pharn/floor/check-ship.mjs`, the tested
+- **Net (`--loop` mode):** adds **exactly one** new floor primitive — `.dev/floor/check-ship.mjs`, the tested
   stop core (justified, P7, by the loop's autonomy: no human between iterations). It guarantees the
   **stop** — floor-GREEN (`/pharn-dev-verify` PASS ∧ `/pharn-dev-regress` clean) or the cap, with `/pharn-dev-review` **structurally**
   excluded (no review input) — and **never** that a fix _works_ (advisory). Writing "`/pharn-dev-ship` ensures the

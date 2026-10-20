@@ -7,7 +7,7 @@
 // CONSTRUCTION — the comparison guard would be meaningless if the two sides rendered via different code
 // (P3: route the shared thing through one module; do not duplicate).
 //
-// THE ONE IMPLEMENTATION of the lessons grammar (6.66.0). Until then `.dev/floor/lessons-index-core.mjs` was a
+// THE ONE IMPLEMENTATION of the lessons grammar (6.69.0). Until then `.dev/floor/lessons-index-core.mjs` was a
 // hand-kept second copy, pinned to agree by ✧ text tests (audit ARCH-6). It is now a thin wrapper that imports
 // this module and passes a PROFILE (below) — the dependency points `.dev/` -> `pharn/`, the only direction an
 // install allows, since it ships `pharn/floor/` without `.dev/`. What differs between the surfaces is DATA in a

@@ -157,7 +157,7 @@ test("the emitted cache carries the generator's own regenerate hint, and it name
   }
 });
 
-// ── 6.66.0: `--canon-root` ─────────────────────────────────────────────────────────────────────────────
+// ── 6.69.0: `--canon-root` ─────────────────────────────────────────────────────────────────────────────
 
 const GEN_CLI = fileURLToPath(new URL("./gen-lessons-index.mjs", import.meta.url));
 

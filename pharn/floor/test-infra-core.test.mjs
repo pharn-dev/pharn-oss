@@ -16,11 +16,13 @@ import {
   EXECUTED_EXTENSIONS,
   LIFECYCLE_WORDS,
   MAX_CHAIN_HOPS,
+  OTHER_GATE_KEYS,
   PACKAGE_MANAGERS,
   PACKAGE_MANAGER_CONFIGS,
   PIN_KEYS,
   PIN_KEYS_V3,
   PIN_KEYS_V4,
+  PIN_KEYS_V5,
   PIN_MANIFESTS,
   RUN_WORDS,
   SCRIPT_FILE_KEYS,
@@ -43,6 +45,7 @@ import {
   sha256RegularFile,
   testInfraReds,
 } from "./test-infra-core.mjs";
+import { ALLOWLIST, discoverGates } from "./gate-run-core.mjs";
 
 const SCRIPT_SECRET = "vitest run --secret-7f3a";
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -84,8 +87,9 @@ const rewritePkg = (root, edit) => {
 };
 const HOLDS = { changed: [], unpinned: [] };
 
-test("the pin: the level gates' script values and results formats, the root runner configs — and NOT other scripts", () => {
+test("the pin: the level gates' script values and results formats, the root runner configs, every OTHER allowlisted gate's command (6.68.0) — and NOT other scripts", () => {
   withWorld({}, (root) => {
+    rewritePkg(root, (p) => (p.scripts.dev = "vite"));
     const pin = pinOf(root);
     assert.deepEqual(pin, {
       levels: ["unit"],
@@ -95,8 +99,10 @@ test("the pin: the level gates' script values and results formats, the root runn
       script_files: [],
       jest: null,
       exclude: [],
+      other_gates: [{ id: "lint", script: "eslint .", pre: null, post: null }],
+      other_chained: [],
     });
-    assert.equal(pinShapeError(pin, { version: 5 }), null);
+    assert.equal(pinShapeError(pin, { version: 6 }), null);
     assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS, "a pin holds over the tree it was taken from");
   });
 });
@@ -189,12 +195,14 @@ test("each change is named by gate id or path, never by script text (P2), and ea
     writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { "test:e2e": "playwright test", e2e: "playwright test" } }));
     assert.deepEqual(testInfraReds({ recorded: pin, root }).changed, ["gate e2e: a package.json script was added"]);
   });
-  // control: a non-level script and a dependency change are NOT test infrastructure
+  // control: a script NO gate runs or reaches and a dependency change are NOT test infrastructure (an allowlisted
+  // `lint` IS since 6.68.0 — its own test below)
   withWorld({}, (root) => {
+    rewritePkg(root, (p) => (p.scripts.dev = "vite"));
     const pin = pinOf(root);
     writeFileSync(
       join(root, "package.json"),
-      JSON.stringify({ scripts: { test: SCRIPT_SECRET, lint: "eslint --fix ." }, dependencies: { x: "1" } })
+      JSON.stringify({ scripts: { test: SCRIPT_SECRET, lint: "eslint .", dev: "vite --host" }, dependencies: { x: "1" } })
     );
     writeFileSync(join(root, "README.md"), "changed\n");
     assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS);
@@ -220,6 +228,15 @@ const RICH = {
   },
   pkg: { jest: { testEnvironment: "node", reporters: ["default"] } },
 };
+/** RICH without its one OTHER allowlisted gate (`lint`), for the readings that predate 6.68.0. */
+const RICH_NO_OTHER = { ...RICH, scripts: Object.fromEntries(Object.entries(RICH.scripts).filter(([k]) => k !== "lint")) };
+/** A /6 pin as a /5 lock records it: without the two `other_*` sections. */
+function asV5(pin) {
+  const v5 = { ...pin };
+  delete v5.other_gates;
+  delete v5.other_chained;
+  return v5;
+}
 
 test("6.31.0: the /4 pin — a chained script, the files the scripts name, the jest key and .npmrc, each recorded", () => {
   withWorld(RICH, (root) => {
@@ -245,7 +262,7 @@ test("6.31.0: the /4 pin — a chained script, the files the scripts name, the j
     ]);
     assert.match(pin.jest, /^[0-9a-f]{64}$/);
     assert.equal(JSON.stringify(pin).includes("testEnvironment"), false, "the jest key is a digest, never its value");
-    assert.equal(pinShapeError(pin, { version: 5 }), null);
+    assert.equal(pinShapeError(pin, { version: 6 }), null);
     assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS);
   });
 });
@@ -332,7 +349,7 @@ test("6.31.0: each /4 change is named and trips only itself (L52) — never a sc
   });
   // CONTROLS — none of these is test infrastructure the pin reads (each one alone)
   const controls = [
-    ["an unreached script", (r) => rewritePkg(r, (p) => (p.scripts.lint = "eslint --fix ."))],
+    ["a script no gate runs or reaches", (r) => rewritePkg(r, (p) => (p.scripts.dev = "vite"))],
     ["a dependency", (r) => rewritePkg(r, (p) => (p.dependencies = { x: "1" }))],
     ["a source file no script names", (r) => writeFileSync(join(r, "src/demo.js"), "export const f = () => 2;\n")],
     [
@@ -720,7 +737,7 @@ test("6.21.0: a case-variant runner config added after the pin is `a runner conf
       ["Vitest.config.mjs"],
       "a case-variant config present at pin time is pinned under its on-disk spelling"
     );
-    assert.equal(pinShapeError(pin, { version: 5 }), null, "and a pin recording that spelling is shape-valid");
+    assert.equal(pinShapeError(pin, { version: 6 }), null, "and a pin recording that spelling is shape-valid");
     writeFileSync(join(root, "Vitest.config.mjs"), "export default { test: { include: ['nomatch/**'] } }\n");
     assert.deepEqual(testInfraReds({ recorded: pin, root }).changed, ["Vitest.config.mjs: the runner config changed"]);
   });
@@ -842,13 +859,23 @@ test("REFUSED, never hashed through: a symlinked or non-regular config (L59); an
 
 test("no package.json pins no gates (a scratch project); inputs are required (L41)", () => {
   withWorld({ scripts: null, results: null, files: {} }, (root) => {
-    assert.deepEqual(pinOf(root), { levels: ["unit"], gates: [], chained: [], configs: [], script_files: [], jest: null, exclude: [] });
+    assert.deepEqual(pinOf(root), {
+      levels: ["unit"],
+      gates: [],
+      chained: [],
+      configs: [],
+      script_files: [],
+      jest: null,
+      exclude: [],
+      other_gates: [],
+      other_chained: [],
+    });
   });
   assert.throws(() => computeTestInfra({ levels: ["unit"] }), TypeError);
   assert.throws(() => computeTestInfra({ root: "/x", levels: [] }), TypeError);
   assert.throws(() => computeTestInfra({ root: "/x", levels: ["smoke"] }), TypeError);
   assert.throws(() => pinShapeError({}), TypeError, "the schema version is required");
-  assert.throws(() => pinShapeError({}, { version: 6 }), TypeError);
+  assert.throws(() => pinShapeError({}, { version: 7 }), TypeError);
 });
 
 const GOOD_V3 = {
@@ -949,7 +976,8 @@ test("6.36.0 — pinShapeError under /5: /4's shape plus `exclude`, a list of di
   const good = { ...GOOD_V4, exclude: ["typecheck", "e2e"] };
   assert.equal(pinShapeError(good, { version: 5 }), null);
   assert.equal(pinShapeError({ ...GOOD_V4, exclude: [] }, { version: 5 }), null, "nothing excluded is an empty list");
-  assert.deepEqual([...PIN_KEYS].sort(), ["chained", "configs", "exclude", "gates", "jest", "levels", "script_files"]);
+  assert.deepEqual([...PIN_KEYS_V5].sort(), ["chained", "configs", "exclude", "gates", "jest", "levels", "script_files"]);
+  assert.notEqual(pinShapeError({ ...good, other_gates: [], other_chained: [] }, { version: 5 }), null, "a /6-shaped pin under /5");
   const bad = [
     ["a /4-shaped pin under /5", GOOD_V4],
     ["exclude not an array", { ...good, exclude: "e2e" }],
@@ -991,9 +1019,10 @@ test("6.36.0 — the pin records the DECLARED gate exclusion; a change is CHANGE
 });
 
 test("6.36.0 MIGRATION — a /4 or /3 pin reads as before with no declaration, and `unpinned` (never `changed`) with one", () => {
-  withWorld({}, (root) => {
+  // no OTHER allowlisted gate here, so only the 6.36.0 reading is in play (6.68.0's has its own test)
+  withWorld({ scripts: { test: SCRIPT_SECRET } }, (root) => {
     const full = pinOf(root);
-    const v4 = { ...full };
+    const v4 = asV5(full);
     delete v4.exclude;
     const v3 = { levels: full.levels, gates: full.gates, configs: full.configs };
     assert.equal(pinShapeError(v4, { version: 4 }), null);
@@ -1023,12 +1052,12 @@ test("pinShapeError under /3 (6.20.0–6.29.x, still read): its own closed shape
 });
 
 test("6.31.0 MIGRATION — a /3 pin is judged by what it pinned; what only /4 pins is UNPINNED, never CHANGED (L6: two fields)", () => {
-  // a tree with nothing only /4 pins: a /3 pin holds exactly as before
-  withWorld({}, (root) => {
+  // a tree with nothing only /4 (or /6) pins: a /3 pin holds exactly as before
+  withWorld({ scripts: { test: SCRIPT_SECRET } }, (root) => {
     const { levels, gates, configs } = pinOf(root);
     assert.deepEqual(testInfraReds({ recorded: { levels, gates, configs }, root }), HOLDS);
   });
-  withWorld(RICH, (root) => {
+  withWorld(RICH_NO_OTHER, (root) => {
     const full = pinOf(root);
     const v3 = { levels: full.levels, gates: full.gates, configs: full.configs.filter((c) => isRunnerConfigName(c.path)) };
     assert.equal(pinShapeError(v3, { version: 3 }), null);
@@ -1058,6 +1087,286 @@ test("6.31.0 MIGRATION — a /3 pin is judged by what it pinned; what only /4 pi
     assert.equal(d.changed.length, 1);
     assert.match(d.changed[0], /^the test infrastructure cannot be pinned now: \.npmrc is a symlink/);
   });
+});
+
+// ── 6.68.0 (audit SEC-4): every OTHER allowlisted gate's command — other_gates, other_chained ────────────────────────
+
+/** A world whose scripts hold EVERY ALLOWLIST id (iterated, never hand-picked — L36/L52), plus a non-gate `dev`. */
+const ALL_GATES = () => ({
+  scripts: { ...Object.fromEntries(ALLOWLIST.map((id) => [id, `run-${id}`])), dev: "vite" },
+  results: { test: "vitest-json" },
+  files: {},
+});
+
+test("6.68.0 CLOSURE — the pinned gate set IS the set the gate runner discovers: gates ∪ other_gates == discoverGates, per level set", () => {
+  const levelSets = [["unit"], ["integration"], ["e2e"], ["e2e", "unit"]];
+  // every ALLOWLIST id present, then each single id dropped in turn, then a manifest of the `test` gate alone
+  const scriptSets = [
+    ALL_GATES().scripts,
+    ...ALLOWLIST.map((drop) => Object.fromEntries(Object.entries(ALL_GATES().scripts).filter(([k]) => k !== drop))),
+    { test: "vitest run" },
+  ];
+  for (const scripts of scriptSets) {
+    for (const levels of levelSets) {
+      withWorld({ ...ALL_GATES(), scripts }, (root) => {
+        const pin = pinOf(root, levels);
+        const pinned = [...pin.gates, ...pin.other_gates].map((g) => g.id).sort();
+        const run = discoverGates(scripts)
+          .map((g) => g.id)
+          .sort();
+        assert.deepEqual(pinned, run, `levels ${levels}: pinned == discovered`);
+        assert.deepEqual(
+          pin.gates.map((g) => g.id),
+          candidateGates(levels).filter((id) => Object.hasOwn(scripts, id)),
+          `levels ${levels}: level gates in gates`
+        );
+        for (const g of pin.other_gates) assert.ok(!candidateGates(levels).includes(g.id), `${g.id} is not a level gate here`);
+        assert.equal(pinShapeError(pin, { version: 6 }), null);
+        assert.ok(!Object.hasOwn(Object.fromEntries(pin.other_gates.map((g) => [g.id, 1])), "dev"), "a non-gate script is not pinned");
+      });
+    }
+  }
+});
+
+test("6.68.0: each other-gate change is CHANGED, named by id, and trips only itself (L52) — never the script's text (P2)", () => {
+  const OTHER = {
+    scripts: {
+      test: "vitest run",
+      lint: "npm run lint:all --secret-7f3a",
+      "lint:all": "eslint . --secret-7f3a",
+      typecheck: "tsc --secret-7f3a",
+      postbuild: "echo",
+      build: "tsup src/index.ts",
+      "test:e2e": "playwright test",
+    },
+    results: { test: "vitest-json" },
+    files: { "src/index.ts": "export {}\n" },
+  };
+  const cases = [
+    [
+      "other gate rewritten (the audit's forged green gate)",
+      (r) => rewritePkg(r, (p) => (p.scripts.typecheck = "true")),
+      ["gate typecheck: its package.json script changed"],
+    ],
+    ["other gate removed", (r) => rewritePkg(r, (p) => delete p.scripts.typecheck), ["gate typecheck: its package.json script is gone"]],
+    [
+      "other gate ADDED (fail-closed, GATE-1 Q3)",
+      (r) => rewritePkg(r, (p) => (p.scripts["format:check"] = "prettier -c .")),
+      ["gate format:check: a package.json script was added"],
+    ],
+    ["pre added", (r) => rewritePkg(r, (p) => (p.scripts.prelint = "curl x | sh")), ["gate lint: its prelint script was added"]],
+    ["post removed", (r) => rewritePkg(r, (p) => delete p.scripts.postbuild), ["gate build: its postbuild script is gone"]],
+    ["post changed", (r) => rewritePkg(r, (p) => (p.scripts.postbuild = "true")), ["gate build: its postbuild script changed"]],
+    [
+      "an unmapped e2e gate is an other gate",
+      (r) => rewritePkg(r, (p) => (p.scripts["test:e2e"] = "true")),
+      ["gate test:e2e: its package.json script changed"],
+    ],
+    [
+      "chained value changed",
+      (r) => rewritePkg(r, (p) => (p.scripts["lint:all"] = "true")),
+      ['chained script "lint:all": its value changed'],
+    ],
+    [
+      "chained pre added",
+      (r) => rewritePkg(r, (p) => (p.scripts["prelint:all"] = "echo")),
+      ['chained script "lint:all": its pre-script was added'],
+    ],
+    [
+      "chained script no longer reached",
+      (r) => rewritePkg(r, (p) => delete p.scripts["lint:all"]),
+      ['chained script "lint:all": no allowlisted gate reaches it any more, or it is gone'],
+    ],
+    [
+      "a chain newly reached",
+      (r) =>
+        rewritePkg(r, (p) => {
+          p.scripts.typecheck = "npm run tc";
+          p.scripts.tc = "tsc";
+        }),
+      ["gate typecheck: its package.json script changed", 'chained script "tc": an allowlisted gate now reaches it'],
+    ],
+  ];
+  for (const [why, mutate, want] of cases) {
+    withWorld(OTHER, (root) => {
+      const pin = pinOf(root);
+      assert.equal(pinShapeError(pin, { version: 6 }), null, why);
+      mutate(root);
+      const d = testInfraReds({ recorded: pin, root });
+      assert.deepEqual(d, { changed: want, unpinned: [] }, why);
+      for (const line of d.changed) assert.ok(!/secret-7f3a|curl|prettier/.test(line), `${why}: script text leaked: ${line}`);
+    });
+  }
+  // the pin's own sections, recorded
+  withWorld(OTHER, (root) => {
+    const pin = pinOf(root);
+    assert.deepEqual(
+      pin.other_gates.map((g) => [g.id, g.post]),
+      [
+        ["build", "echo"],
+        ["lint", null],
+        ["test:e2e", null],
+        ["typecheck", null],
+      ]
+    );
+    assert.deepEqual(pin.other_chained, [{ id: "lint:all", script: OTHER.scripts["lint:all"], pre: null, post: null }]);
+  });
+});
+
+test("6.68.0 STATED BOUND, probed: an other gate's NAMED FILES and its own configs are not pinned — only its command is", () => {
+  withWorld(
+    {
+      scripts: { test: "vitest run", build: "tsup src/index.ts", lint: "node tools/lint.mjs" },
+      files: { "src/index.ts": "export {}\n", "tools/lint.mjs": "process.exit(1)\n", "eslint.config.js": "export default []\n" },
+    },
+    (root) => {
+      const pin = pinOf(root);
+      assert.deepEqual(pin.script_files, [], "a non-level gate's named files are not script_files");
+      writeFileSync(join(root, "src/index.ts"), "export const x = 1;\n");
+      writeFileSync(join(root, "tools/lint.mjs"), "process.exit(0)\n");
+      writeFileSync(join(root, "eslint.config.js"), "export default [{ rules: {} }]\n");
+      assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS);
+      const named = scriptNamedFiles({ root, levels: ["unit"] });
+      assert.deepEqual(named, { ok: true, paths: [] }, "and the plan-time check does not list them");
+    }
+  );
+  // a script reached from BOTH a level gate and an other gate is recorded once, in `chained`, with its named files
+  withWorld(
+    { scripts: { test: "npm run lint && vitest run", lint: "node tools/lint.mjs" }, files: { "tools/lint.mjs": "1\n" } },
+    (root) => {
+      const pin = pinOf(root);
+      assert.deepEqual(
+        pin.chained.map((c) => c.id),
+        ["lint"]
+      );
+      assert.deepEqual(
+        pin.other_gates.map((g) => g.id),
+        ["lint"],
+        "the one allowed overlap: an other gate a level gate chains to"
+      );
+      assert.deepEqual(pin.other_chained, []);
+      assert.deepEqual(
+        pin.script_files.map((f) => f.path),
+        ["tools/lint.mjs"],
+        "reached from the level gate, so its named file IS pinned"
+      );
+      assert.equal(pinShapeError(pin, { version: 6 }), null);
+    }
+  );
+  const header = readFileSync(join(HERE, "test-infra-core.mjs"), "utf8").split("\nimport ")[0];
+  for (const needle of ["DETECTION, NEVER PREVENTION", "what an OTHER gate's command READS", "or ADDS one (a first `typecheck`)"])
+    assert.ok(header.includes(needle), `the header states: ${needle}`);
+});
+
+test("6.68.0: an other gate the pin cannot read REFUSES the pin, named by id; a chain from it past the hop bound refuses too", () => {
+  withWorld({ scripts: { test: "vitest run", lint: 1 } }, (root) => {
+    const r = computeTestInfra({ root, levels: ["unit"] });
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'package.json script "lint" is not a string');
+  });
+  const deep = { test: "vitest run", build: "npm run h0" };
+  for (let i = 0; i <= MAX_CHAIN_HOPS; i++) deep[`h${i}`] = `npm run h${i + 1}`;
+  withWorld({ scripts: deep }, (root) => {
+    const r = computeTestInfra({ root, levels: ["unit"] });
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /^an allowlisted gate's scripts chain deeper than 8 hops/);
+  });
+});
+
+test("6.68.0 MIGRATION — a /5, /4 or /3 pin reads as before with no other gate, and every other gate is UNPINNED (never CHANGED) with one", () => {
+  const variants = (full) => {
+    const v5 = asV5(full);
+    const v4 = { ...v5 };
+    delete v4.exclude;
+    const v3 = { levels: full.levels, gates: full.gates, configs: full.configs };
+    return [
+      ["/5", v5, 5],
+      ["/4", v4, 4],
+      ["/3", v3, 3],
+    ];
+  };
+  // no other gate: each old schema holds exactly as before
+  withWorld({ scripts: { test: SCRIPT_SECRET } }, (root) => {
+    for (const [why, pin, version] of variants(pinOf(root))) {
+      assert.equal(pinShapeError(pin, { version }), null, why);
+      assert.deepEqual(testInfraReds({ recorded: pin, root }), HOLDS, `${why}: no other gate`);
+    }
+  });
+  // `lint` chaining to `lint:all`: each old schema reads both UNPINNED, and a change to what it did pin is still CHANGED
+  withWorld({ scripts: { test: SCRIPT_SECRET, lint: "npm run lint:all", "lint:all": "eslint ." } }, (root) => {
+    const want = [
+      "gate lint: the gate runner runs it, and a pin written before ac-tests-lock/6 does not cover it",
+      'chained script "lint:all": an allowlisted gate runs it, and a pin written before ac-tests-lock/6 does not cover it',
+    ];
+    for (const [why, pin] of variants(pinOf(root)))
+      assert.deepEqual(testInfraReds({ recorded: pin, root }), { changed: [], unpinned: want }, why);
+    const pins = variants(pinOf(root));
+    rewritePkg(root, (p) => (p.scripts.test = "vitest run"));
+    for (const [why, pin] of pins)
+      assert.deepEqual(
+        testInfraReds({ recorded: pin, root }),
+        { changed: ["gate test: its package.json script changed"], unpinned: want },
+        why
+      );
+    // STATED EDGE: an old lock over a tree the /6 pin cannot be taken on reads CHANGED (the stricter reading), never
+    // `unpinned` and never GREEN
+    rewritePkg(root, (p) => (p.scripts.lint = 1));
+    for (const [why, pin] of pins)
+      assert.deepEqual(
+        testInfraReds({ recorded: pin, root }),
+        { changed: ['the test infrastructure cannot be pinned now: package.json script "lint" is not a string'], unpinned: [] },
+        why
+      );
+  });
+});
+
+test("6.68.0 — pinShapeError under /6: /5's shape plus other_gates and other_chained, closed at every level (L36)", () => {
+  const good = {
+    ...GOOD_V4,
+    exclude: [],
+    other_gates: [
+      { id: "build", script: "tsup", pre: null, post: "echo" },
+      { id: "lint", script: "npm run lint:all", pre: null, post: null },
+    ],
+    other_chained: [{ id: "lint:all", script: "eslint .", pre: null, post: null }],
+  };
+  assert.equal(pinShapeError(good, { version: 6 }), null);
+  assert.equal(pinShapeError({ ...good, other_gates: [], other_chained: [] }, { version: 6 }), null);
+  assert.deepEqual([...PIN_KEYS].sort(), [...PIN_KEYS_V5, "other_chained", "other_gates"].sort());
+  assert.deepEqual([...OTHER_GATE_KEYS].sort(), ["id", "post", "pre", "script"]);
+  // the one overlap allowed: an other gate a level gate chains to
+  assert.equal(pinShapeError({ ...good, chained: [{ id: "lint", script: "x", pre: null, post: null }] }, { version: 6 }), null);
+  const og = good.other_gates;
+  const bad = [
+    ["a /5-shaped pin under /6", { ...GOOD_V4, exclude: [] }],
+    ["other_gates not an array", { ...good, other_gates: {} }],
+    ["other_chained not an array", { ...good, other_chained: null }],
+    ["other gate extra key", { ...good, other_gates: [{ ...og[0], results: "vitest-json" }] }],
+    ["other gate missing key", { ...good, other_gates: [{ id: "build", script: "tsup", pre: null }] }],
+    ["other gate outside the allowlist", { ...good, other_gates: [{ ...og[0], id: "dev" }] }],
+    ["other gate a level gate for these levels", { ...good, other_gates: [{ ...og[0], id: "test" }] }],
+    ["other gate script not a string", { ...good, other_gates: [{ ...og[0], script: 1 }] }],
+    ["other gate pre not a string or null", { ...good, other_gates: [{ ...og[0], pre: false }] }],
+    ["other gates unsorted", { ...good, other_gates: [og[1], og[0]] }],
+    ["other gates duplicated", { ...good, other_gates: [og[0], og[0]] }],
+    ["other chained id empty", { ...good, other_chained: [{ ...good.other_chained[0], id: "" }] }],
+    ["other chained id with a control character", { ...good, other_chained: [{ ...good.other_chained[0], id: "a\u0007" }] }],
+    ["other chained extra key", { ...good, other_chained: [{ ...good.other_chained[0], x: 1 }] }],
+    ["other chained also an other gate", { ...good, other_chained: [{ id: "lint", script: "x", pre: null, post: null }] }],
+    ["other chained also chained", { ...good, other_chained: [{ id: "test:unit", script: "x", pre: null, post: null }] }],
+    ["other chained also a level gate", { ...good, other_chained: [{ id: "test", script: "x", pre: null, post: null }] }],
+  ];
+  for (const [why, pin] of bad) assert.notEqual(pinShapeError(pin, { version: 6 }), null, why);
+  // an other gate in `gates` too (a level gate outside the pinned levels' candidates)
+  const e2eOnly = {
+    ...good,
+    levels: ["e2e"],
+    gates: [{ id: "test", script: "v", pre: null, post: null, results: "vitest-json" }],
+    other_gates: [{ id: "test", script: "v", pre: null, post: null }],
+    other_chained: [],
+    chained: [],
+  };
+  assert.notEqual(pinShapeError(e2eOnly, { version: 6 }), null, "an id in both gates and other_gates");
 });
 
 test("GATE 2: .bash and .zsh are executed extensions — a script-named shell file of either kind is pinned", () => {

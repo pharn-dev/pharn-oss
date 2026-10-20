@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // .dev/floor/lessons-index-core.mjs — the DEV PROFILE of the lessons index (build apparatus).
 //
-// A THIN WRAPPER since 6.66.0 (audit ARCH-6). The grammar — the `## L<n>` heading, the tag line, the row format,
+// A THIN WRAPPER since 6.69.0 (audit ARCH-6). The grammar — the `## L<n>` heading, the tag line, the row format,
 // the title refusals, the CHECK-5 refusal — lives ONLY in pharn/floor/lessons-index-core.mjs. This file used to be
 // a hand-kept second copy of it, held equal by ✧ text pins; that copy is retired (lessons-learned L35: when one
 // fact is stored twice, retire the second copy). The dependency points `.dev/` -> `pharn/`, the only direction an
