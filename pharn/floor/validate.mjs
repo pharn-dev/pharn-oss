@@ -33,6 +33,19 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { stripBom } from "./frontmatter-core.mjs";
 
+// A CRASH IS INCONCLUSIVE, NEVER RED (6.72.1, audit TST-10 — lessons-learned L62's shape). An uncaught throw used to
+// exit 1, RED's own code, with no `FLOOR:` line, so a crash read as a RED with no findings. Now it prints one
+// `FLOOR: INCONCLUSIVE — crashed (<message>)` line and exits 2. Every consumer branches on zero vs non-zero, so 2 is
+// still "not GREEN" everywhere. The message is JSON-quoted (one line, visibly a value — the showPath reason below)
+// and only a string `message` is quoted (anything else renders as its `Object.prototype.toString` tag), so rendering
+// it cannot throw a second time. Bound: it covers a throw after this line; a failure while loading the static import
+// above still exits 1 with node's own trace.
+process.on("uncaughtException", (e) => {
+  const message = typeof e?.message === "string" ? e.message : Object.prototype.toString.call(e);
+  console.log(`FLOOR: INCONCLUSIVE — crashed (${JSON.stringify(message)})`);
+  process.exit(2);
+});
+
 const TARGET = process.argv[2] || ".";
 
 // The target is INPUT, and an unusable input is a RED — never a GREEN over zero files. A path that
