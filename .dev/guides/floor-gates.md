@@ -362,6 +362,11 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # verify-reuse-excluded-artifacts, a Bash writer can forge offer + stamp together (L19). LIMITS.md's "/pharn-verify re-runs
 # the project's own gates" is human-only and now partly stale — flagged, not edited. Contracts: gate-run-record.md
 # "Reused entries", verify-report.md "The additive gate_reuse block".
+# `test` IS NEVER REUSED, AND NOT ONLY FOR THE AC GATE (6.72.2, audit LOOP-8 closed won't-fix): regress HEAD runs `test`
+# over outside_tests only (test files unchanged since the base — never the feature's AC tests), so its files differ from
+# verify's whole-suite run and the identity misses it; a copied results file would hold no AC test. Prerequisite for any
+# reuse: the follow-up regress-per-test-product (regress runs the whole suite and judges outside tests per test).
+# Record: .dev/features/verify-test-reuse/PLAN.md.
 ```
 
 ## `stage-verify.mjs` — the /pharn-verify stage script

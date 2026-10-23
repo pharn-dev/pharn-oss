@@ -23,6 +23,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.72.2] - 2026-10-23
+
+### Changed
+
+- **The reason `/pharn-verify` never reuses the regress-HEAD `test` run is now stated in full: the two runs execute
+  different test files.**
+  - Audit LOOP-8 (2026-10-12) proposed reusing that run in verify by copying its per-test results file into verify's
+    out dir. Closed as won't-fix. `/pharn-regress`'s HEAD side runs `test` only over the test files not changed since
+    the base. This feature's own AC tests are always changed since the base, so that run never executes them, and a
+    copied results file would give the AC gate a record with no AC test in it. The execution identity already refuses
+    the match because the file lists differ.
+  - What changed: the `NON_REUSABLE_IDS` comment in `pharn/floor/gate-run-core.mjs` and the "Reused entries" section of
+    `pharn/pharn-contracts/gate-run-record.md`, which now also lists `instruction-growth` (in the set since 6.38.0).
+    No behaviour changes.
+  - Not done: one `test` run per iteration would need `/pharn-regress` to run the whole suite and judge the outside
+    tests one by one (the follow-up `regress-per-test-product`). That is a separate redesign, and its cost case has
+    not been measured.
+
 ## [6.72.0] - 2026-10-20
 
 ### Added
