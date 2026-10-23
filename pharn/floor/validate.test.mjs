@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -993,5 +993,28 @@ test("★ CHECK 6: a newline-bearing reads: value cannot forge a finding line", 
     const blocking = r.stdout.split("\n").filter((l) => l.trimStart().startsWith("- [blocking]"));
     assert.equal(blocking.length, 1, `the newline must be escaped, not rendered as a line break; got:\n${r.stdout}`);
     assert.match(r.stdout, /\\n/, "the control character must appear escaped");
+  });
+});
+
+// ── TST-10 (6.72.1): a crash is INCONCLUSIVE (exit 2), never a RED with no findings (exit 1) ─────────────────────────
+// The trigger: a `.md` file the walk lists but cannot read. statSync succeeds, the top-level readFileSync throws EACCES,
+// and nothing between them catches it.
+test("★ TST-10: an uncaught throw prints `FLOOR: INCONCLUSIVE — crashed (…)` and exits 2", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root reads a mode-000 file, so the crash cannot be produced");
+    return;
+  }
+  withRepo({ "pharn/pharn-review/sample/sample.md": VALID_CAP }, (root) => {
+    const file = join(root, "pharn/pharn-review/sample/sample.md");
+    chmodSync(file, 0o000);
+    try {
+      const r = run(root);
+      assert.equal(r.status, 2, `a crash must not share RED's exit code; got:\n${r.stdout}${r.stderr}`);
+      const lines = r.stdout.split("\n").filter((l) => l.startsWith("FLOOR:"));
+      assert.equal(lines.length, 1, `exactly one FLOOR line; got:\n${r.stdout}`);
+      assert.match(lines[0], /^FLOOR: INCONCLUSIVE — crashed \(".*EACCES.*"\)$/);
+    } finally {
+      chmodSync(file, 0o600);
+    }
   });
 });

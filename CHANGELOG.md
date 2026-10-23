@@ -23,6 +23,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.72.1] - 2026-10-23
+
+### Fixed
+
+- **Four small floor and shipped-prose fixes from the 2026-10-12 audit (LOW findings ENF-7, TST-7, TST-10, ARCH-11).**
+  - ENF-7: `check-spec.mjs` no longer counts a `##` line inside a column-0 fenced code block, HTML comment or
+    `<pre>`/`<script>`/`<style>`/`<textarea>` block as a required section, so a SPEC whose only `## Constraints` sits
+    in a code block is RED. It reads headings through the new `spec-template-core.mjs` `visibleH2Names()`, the block
+    model the template rules already used, with the same stated bounds. A templated SPEC whose base section is only
+    hidden now gets this RED as well as template rule 1's.
+  - TST-7: `check-bash-reconcile.mjs` removes every probe sandbox (`pharn-reconcile-*` under the temp dir) when the
+    process exits; before, each one was left behind (35 were found in one `$TMPDIR`). The removal never throws, so it
+    cannot change a verdict's exit code. A process killed by a signal it does not handle still leaves its sandbox.
+  - TST-10: `validate.mjs` prints `FLOOR: INCONCLUSIVE — crashed ("<message>")` and exits 2 on an uncaught throw.
+    Before, a crash exited 1, RED's code, with no `FLOOR:` line. Every consumer branches on zero vs non-zero, so 2
+    stays "not GREEN". A failure while loading its one static import still exits 1.
+  - ARCH-11: the `a11y`, `comprehension`, `documentation`, `error-handling` and `performance` grillers named the
+    scanner they decline to build as `.dev/floor/scan-plan-<x>.mjs`. The `scan-plan-*` scanners live in
+    `pharn/floor/` since 2.4.0, and an install has no `.dev/`, so the five now read `pharn/floor/scan-plan-<x>.mjs`.
+
+### Changed
+
+- **Repo-meta and dev-only LOW findings from the same audit (ENF-11, ENF-10, ARCH-14, SEC-12, SEC-9).**
+  - ENF-11: the `ci.yml` comment above the Bash-write reconciliation step no longer claims the step catches an
+    uncommitted change. In CI it reports `NO_BASELINE` and is green by construction; its no-baseline fallback only
+    catches something in a dirty local tree.
+  - ENF-10: `.dev/floor/check-config.mjs` gets no script of its own. Its test's "★ live ★" case already runs
+    `agreement` over the real config on every `npm test`, which `.dev/guides/floor-checks.md` now says.
+  - ARCH-14: `package.json` `keywords` drop `cursor` and `codex`; PHARN targets Claude Code only.
+  - SEC-12: `.gitignore` lists `.claude/worktrees/` (it was excluded only through `.git/info/exclude`). Prettier,
+    markdownlint and ESLint already ignored it.
+  - SEC-9: `SECURITY.md` says that gate scripts and `/pharn-regress`'s base install run with your full process
+    environment, and that the base install runs the BASE commit's install lifecycle scripts.
+  - Not done: ARCH-12 (move the committed `pharn/features/loop-decision-integrity/` dogfood run out of the product
+    tree), because `check-spec.test.mjs` reads its `SPEC.md` as a live fixture.
+
 ## [6.72.0] - 2026-10-20
 
 ### Added

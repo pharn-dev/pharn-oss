@@ -140,7 +140,7 @@
 //   build DID run, so there an absent baseline is a real refusal.
 
 import "./runtime-floor.mjs";
-import { readFileSync, writeFileSync, existsSync, statSync, lstatSync, mkdtempSync, mkdirSync, copyFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, lstatSync, mkdtempSync, mkdirSync, copyFileSync, rmSync } from "node:fs";
 import { resolve, join, basename } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -359,8 +359,30 @@ function askHookUnderScope(hookAbs, rel, root, scopeRecord) {
 // recorded nowhere (lessons-learned L42), so replaying with TODAY's markers would give a NOW answer and
 // replaying with none would give the PERMISSIVE answer — fail-open exactly where this checker knows
 // least. The strict answer is therefore the only defensible one for a probe with no history to consult.
+//
+// REMOVED ON EXIT (6.72.1, audit TST-7): every sandbox — the default probe's and each scope probe's, which is built
+// on this one — is recorded here when it is made, and the first one registers removeProbeSandboxes() on the
+// process's `exit` event. A `finally` at the caller would never run: emit() ends the process with process.exit().
+// The `exit` event fires on every way out (emit, a throw, the end of main), so 35 leaked `pharn-reconcile-*`
+// directories in one $TMPDIR stop accumulating. Bound: a process killed by a signal it does not handle (SIGKILL)
+// still leaves its sandbox behind.
+const probeSandboxes = [];
+// Removes every sandbox recorded so far and returns how many could NOT be removed. It never throws: it runs inside
+// the `exit` listener, after the verdict is printed, and a throw there would replace the verdict's exit code.
+export function removeProbeSandboxes() {
+  let failed = 0;
+  for (const dir of probeSandboxes.splice(0)) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      failed += 1;
+    }
+  }
+  return failed;
+}
 export function makeDefaultProbeSandbox(root) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-reconcile-"));
+  if (probeSandboxes.push(dir) === 1) process.once("exit", removeProbeSandboxes);
   const cfg = resolve(root, "pharn.config.json");
   if (existsSync(cfg)) {
     try {

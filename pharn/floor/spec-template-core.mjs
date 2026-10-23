@@ -212,7 +212,7 @@ const MAX_MARKERS = 3;
 const SPEC_TEMPLATE_MAX = 256; // longer than any <id>@sha256:<64-hex> the registry can hold; a bound, not a shape
 const SPEC_TEMPLATE_RE = /^([a-z0-9]+(?:-[a-z0-9]+)*)@sha256:([0-9a-f]{64})$/;
 
-/** An ATX h2 heading — the ONE heading regex; check-spec.mjs's headingsOf imports it too. */
+/** An ATX h2 heading — the ONE heading regex; check-spec.mjs's headingsOf reads it through visibleH2Names(). */
 export const H2_RE = /^##\s+(.+?)\s*$/;
 
 // An AC item start: column 0, `- **AC-<n>**`, then whitespace or the end of the line. `<n>` takes no leading zero,
@@ -321,6 +321,18 @@ function sectionsOf(body, firstLine) {
     if (cur) cur.lines.push({ n: firstLine + i, text, inBlock: inside[i] !== -1 });
   });
   return { sections, hidden };
+}
+
+/**
+ * The lowercased name of every VISIBLE `##` heading in a SPEC body, in order — sectionsOf()'s sections, so the same
+ * column-0 block model (fence, HTML comment, raw block) and the same stated bounds as the template rules. check-spec.mjs
+ * reads its base required sections through this (6.72.1, audit ENF-7): before, a `##` line inside a fenced example
+ * counted, so a SPEC whose only `## Constraints` sat in a code block was GREEN.
+ * @param {string} body
+ * @returns {string[]}
+ */
+export function visibleH2Names(body) {
+  return sectionsOf(body, 1).sections.map((s) => s.name);
 }
 
 // Are `words` present in `text` in this order, each as a whole word (case-sensitive)?

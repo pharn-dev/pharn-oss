@@ -33,6 +33,8 @@ come from the single code block this text was moved from, so the entry they name
 # stale ref appearing inside pharn/floor is not caught (indistinguishable there from an intentional
 # dev-ref); it is GREEN when the target has no pharn/floor at all; and its scope is silently empty when
 # the target has no pharn/ at all.
+# Exit: 0 GREEN (or GREEN-with-warnings) · 1 RED · 2 INCONCLUSIVE — an uncaught throw prints one
+# `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line).
 node pharn/floor/validate.mjs [target-dir]
 ```
 
@@ -344,6 +346,9 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # pharn-dev-grill.md could have gained a `model:` unnoticed the moment `grill` existed for the product
 # surface. Adding model:/effort: to a dev command means adding its stage to DEV_WIRED in the same edit.
 # Exits non-zero on RED.
+# INVOKER: no npm script and no CI step of its own. Its test's "★ live ★" case runs `agreement` over the REAL
+# pharn.config.json and .claude/commands, so `npm test` (in `npm run check`, and CI's Test step) gates it; a
+# separate script would run the same check twice. Run it by hand to see the verdict line.
 node .dev/floor/check-config.mjs [validate | resolve <stage> | agreement]
 ```
 

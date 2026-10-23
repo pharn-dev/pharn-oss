@@ -115,7 +115,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { FIELD_LINE_RE, FM_RE, readValue, stripBom } from "./frontmatter-core.mjs";
 import {
-  H2_RE,
+  visibleH2Names,
   isTemplated,
   checkTemplate,
   templatePath,
@@ -217,16 +217,15 @@ function pinHash(raw, body) {
     .digest("hex");
 }
 
-// The lowercased text of each `## ` (exactly h2) heading in the body — the first-match parse mechanism from
-// check-provenance.mjs's existingIds, re-implemented in-file (no sibling import, P3). `### foo` (h3) does not
-// match (the `\s+` after `##` rejects a third `#`).
+// The lowercased text of each VISIBLE `## ` (exactly h2) heading in the body. `### foo` (h3) does not match (the
+// `\s+` after H2_RE's `##` rejects a third `#`). VISIBLE since 6.72.1 (audit ENF-7): a `##` line inside a column-0
+// fenced code block, HTML comment or <pre>/<script>/<style>/<textarea> block is content, not a section, so a SPEC
+// whose only `## Constraints` sits in a fenced example is RED. Read through spec-template-core.mjs visibleH2Names(),
+// the block model the template rules already use (its header's WHICH HEADINGS EXIST bound applies here too: an
+// opener indented 1–3 columns, and an HTML block that ends at a blank line, still let a heading count — fail-open).
+// For a templated SPEC whose base section is ONLY hidden, this loop and template rule 1 now both RED it.
 function headingsOf(body) {
-  const out = [];
-  for (const line of body.split(/\r?\n/)) {
-    const hm = line.match(H2_RE);
-    if (hm) out.push(hm[1].toLowerCase());
-  }
-  return out;
+  return visibleH2Names(body);
 }
 
 function readText(path, label) {
