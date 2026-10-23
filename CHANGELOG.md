@@ -23,6 +23,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.72.3] - 2026-10-23
+
+### Fixed
+
+- **A commit hook that never returns no longer holds an unattended `/pharn-loop` close until the Bash tool kills it
+  (audit LOOP-9).**
+  - What changed: every git call `pharn/floor/loop-closeout.mjs` makes (the branch, the add, the commit with the
+    project's hooks, the undo) is bounded by `GIT_TIMEOUT_MS`, 240 s. Two stuck calls in a row end by 480 s, inside the
+    600 s Bash timeout the close part pins. Past the bound git is sent SIGTERM and the call reads non-zero, so a stuck
+    commit ends as the existing `not committed: commit failed`, exit 4, with the undo run. A stuck switch ends as
+    `branch failed`. Before, it was a crash with no outcome.
+  - Why SIGTERM and not SIGKILL, measured: a SIGKILLed commit left `.git/index.lock` behind, and the undo's reset and
+    checkout both failed on it. On SIGTERM git removes the lock and the undo works. A test pins each case.
+  - Bounds: the limit is per call, not per close, so several slow calls can still add up past the Bash timeout. The
+    hook process git started is not killed and keeps running, orphaned. A hook that legitimately takes longer than
+    240 s now reads `commit failed`. Floor and hook children (`closeout-core.mjs`) are still not bounded.
+- **`pharn/features/` holds only its README again, as that README says (audit ARCH-12).** This repo's own
+  `loop-decision-integrity` `/pharn-loop` run moved to `.dev/features/loop-decision-integrity-product/`. The
+  `check-spec.test.mjs` case that read its SPEC.md as a live legacy SPEC now reads a byte copy,
+  `pharn/floor/test-fixtures/check-spec/legacy-approved-SPEC.md`. The run's files are unchanged. Older CHANGELOG
+  sections and dated measurement reports still cite the old path, and stay as written.
+
 ## [6.72.0] - 2026-10-20
 
 ### Added

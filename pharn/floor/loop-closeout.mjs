@@ -86,7 +86,12 @@
 // • `git checkout - --` is right only while nothing checks out between the branch step and the undo (a commit hook
 //   that checks out sends it elsewhere — the same stated bound the close part carried).
 // • A crash after the commit step (a kill) cannot be told from one before it; the close part says to check by hand.
-// • A child that hangs regardless of stdin runs until the Bash tool's timeout kills the whole process (a crash).
+// • A floor or hook CHILD (closeout-core.mjs `runNode`) that hangs regardless of stdin runs until the Bash tool's
+//   timeout kills the whole process (a crash). A GIT call is bounded since 6.72.3 (audit LOOP-9): past
+//   `GIT_TIMEOUT_MS` git is sent SIGTERM and the call reads non-zero, so a stuck commit hook ends as `commit failed`
+//   (exit 4, the undo run) and a stuck switch as `branch failed` — the existing outcomes. The bound is per call, not
+//   per close (several slow calls can still sum past the Bash timeout); the hook process git started is not killed
+//   and runs on, orphaned; a hook slower than the bound reads `commit failed` even when it would have passed.
 //
 // NON-LLM. Node stdlib + floor cores. TRUST (P2): LOOP.md's envelope reaches a branch or an argv only as enum tokens
 // and digits; the body and Handoff are never read. Paths reach git NUL-separated through a file with
@@ -229,12 +234,30 @@ export function loopSteps(feature, base) {
 // ── git ──────────────────────────────────────────────────────────────────────────────────────────────────────
 const GIT_MAX_BUFFER = 1 << 28; // 256 MiB — the stage-runtime.mjs ceiling (a hook's output, a long list)
 
-/** One git call as an argument vector, stdin ignored. Never throws; `status` is a number or null. */
-export function gitRun(args, { literal = false } = {}) {
+/**
+ * The bound on ONE git call (6.72.3, audit LOOP-9). A commit runs the project's hooks, which may legitimately take
+ * minutes, so this is not stage-direct.mjs's 60 s setter bound; it is derived from the 600 s Bash timeout the close
+ * part pins: two stuck calls in a row (the commit, then the undo's `checkout -` with its post-checkout hook) end by
+ * 480 s, leaving 120 s for every other step. A call past it reads `status: null` — `branch failed`, `stage failed` or
+ * `commit failed` at its caller, exit 4 — never a new outcome.
+ */
+export const GIT_TIMEOUT_MS = 240_000;
+
+/** One git call as an argument vector, stdin ignored. Never throws; `status` is a number or null (a spawn error, a
+ *  signal, or `timeoutMs` passed). Killed with SIGTERM, not SIGKILL: git removes its `index.lock` on SIGTERM, and a
+ *  SIGKILLed commit left the lock behind so the undo's reset and checkout both failed (measured, 6.72.3). */
+export function gitRun(args, { literal = false, timeoutMs = GIT_TIMEOUT_MS } = {}) {
   const env = literal ? { ...process.env, GIT_LITERAL_PATHSPECS: "1" } : process.env;
   let r;
   try {
-    r = spawnSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env, maxBuffer: GIT_MAX_BUFFER });
+    r = spawnSync("git", args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      env,
+      maxBuffer: GIT_MAX_BUFFER,
+      timeout: timeoutMs,
+      killSignal: "SIGTERM",
+    });
   } catch (e) {
     return { status: null, stdout: "", stderr: "", error: e && typeof e.message === "string" ? e.message : "spawn failed" };
   }
