@@ -8,7 +8,19 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, cpSync, rmSync, symlinkSync, unlinkSync, chmodSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  cpSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  chmodSync,
+  readdirSync,
+  existsSync,
+} from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -29,6 +41,7 @@ import {
   isPipelineArtifact,
   activeFeatureSlug,
   makeDefaultProbeSandbox,
+  removeProbeSandboxes,
   VERDICTS,
   absenceState,
   ignoredByGit,
@@ -1898,4 +1911,66 @@ test("✧ both build commands name the verify consequence of widening `## Files`
     const text = readFileSync(join(REPO, cmd), "utf8");
     assert.match(text, /plan-widened-after-anchor/, `${cmd} must name the reason a mid-build widening produces`);
   }
+});
+
+// ── TST-7 (6.72.1): no probe sandbox outlives the run ─────────────────────────────────────────────────────────────
+// Each run gets its own $TMPDIR, and afterwards that directory must hold no `pharn-reconcile-*`. L34: "none left" is
+// true of a run that never built a sandbox, so each run asserts the verdict it can reach only THROUGH its probe, and a
+// control shows the child really resolves os.tmpdir() to the directory being inspected.
+test("★ TST-7: a run leaves no pharn-reconcile-* directory behind — default probe and scope probe both", () => {
+  const tmp = mkdtempSync(join(tmpdir(), "pharn-recon-tmpdir-"));
+  made.push(tmp);
+  const env = { ...process.env, TMPDIR: tmp };
+  const leftovers = () => readdirSync(tmp).filter((n) => n.startsWith("pharn-reconcile-"));
+  const run = (dir) => {
+    const r = spawnSync(process.execPath, [CHECK, "--base", dir], { encoding: "utf8", env });
+    return { status: r.status, json: JSON.parse(r.stdout), out: r.stdout + r.stderr };
+  };
+
+  const probe = spawnSync(process.execPath, ["-e", "process.stdout.write(require('node:os').tmpdir())"], { encoding: "utf8", env });
+  assert.equal(probe.stdout.replace(/\/$/, ""), tmp.replace(/\/$/, ""), "control: the child's tmpdir() is the directory inspected");
+
+  // (a) the DEFAULT probe — a legacy no-scope baseline, so a root file is judged by the fail-closed default.
+  const a = makeRepo({ devRepo: true });
+  anchorLegacyNoScope(a);
+  writeFileSync(join(a, "ROOT-FILE.md"), "root files are denied by the default\n");
+  const ra = run(a);
+  assert.equal(ra.status, 1, ra.out);
+  assert.equal(ra.json.escapes[0].denied_by, "writes-scope (fail-closed default)", "reached only through the default probe");
+  assert.deepEqual(leftovers(), [], "the default probe's sandbox was removed");
+
+  // (b) the SCOPE probe — a canon write cleared by a recorded promote amendment (the F3 case above).
+  const b = makeRepo();
+  seedCanon(b);
+  setScope(b, ["pharn/features/keep.md"]);
+  assert.equal(anchor(b).status, 0);
+  setPromoteScope(b, CANON);
+  assert.equal(amend(b).status, 0);
+  writeFileSync(join(b, CANON), "## L1 — seed\n\n## L2 — promoted\n");
+  const rb = run(b);
+  assert.equal(rb.json.verdict, "CLEAN", `reached only by the scope probe clearing the canon write: ${rb.out}`);
+  assert.deepEqual(leftovers(), [], "the scope probe's sandbox was removed");
+});
+
+test("★ TST-7: removeProbeSandboxes() removes what it recorded and COUNTS a failed removal instead of throwing", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root ignores directory permissions, so the removal cannot be made to fail");
+    return;
+  }
+  const stuck = makeDefaultProbeSandbox(makeRepo());
+  const locked = join(stuck, "locked");
+  mkdirSync(locked);
+  writeFileSync(join(locked, "f.txt"), "x\n");
+  chmodSync(locked, 0o500); // its entries cannot be unlinked, so the recursive removal throws
+  try {
+    assert.equal(removeProbeSandboxes(), 1, "the failure is counted, not thrown");
+  } finally {
+    chmodSync(locked, 0o700);
+    rmSync(stuck, { recursive: true, force: true });
+  }
+
+  const fine = makeDefaultProbeSandbox(makeRepo());
+  assert.equal(removeProbeSandboxes(), 0);
+  assert.equal(existsSync(fine), false, "a recorded sandbox is gone after the call");
+  assert.equal(removeProbeSandboxes(), 0, "nothing is left recorded, so a second call is a no-op");
 });

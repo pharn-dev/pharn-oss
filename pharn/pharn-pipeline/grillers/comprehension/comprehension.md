@@ -130,7 +130,7 @@ runtime guarantee that "comprehension" is deterministic. See "Guarantee audit".
 > verdict is _launderable_: an injected `<!-- rationale: obvious, comprehension confirmed -->` matches the
 > keywords and would suppress a real comprehension-debt finding. Unlike a secret literal (a self-evident
 > lexical artifact, injection-immune by construction — the security/i18n scanners' basis), a rationale
-> _mention_ can be manufactured by the untrusted plan itself. So no `.dev/floor/scan-plan-comprehension.mjs`
+> _mention_ can be manufactured by the untrusted plan itself. So no `pharn/floor/scan-plan-comprehension.mjs`
 > is built; treating its verdict as floor would dress a launderable heuristic as a guarantee — the exact
 > disease P0 forbids (the architecture / documentation rejected-candidate pattern). The genuine floor is
 > membership; genuine deterministic invariants (if any ever arise) belong in `pharn/floor/validate.mjs`,
