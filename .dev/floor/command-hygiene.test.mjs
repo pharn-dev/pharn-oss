@@ -1398,6 +1398,34 @@ test("✧ the /pharn-review carve-out NAMES every scanner-less lens (derived fro
   );
 });
 
+// ── /pharn-review Step 5 branches on EVERY merge exit, and Step 6 renders the incomplete state ────────────────────
+// review-dropped-findings (audit LOOP-7 / ENF-12): merge-findings.mjs exits INCOMPLETE_EXIT (3) when it skipped a lens
+// file or dropped a finding, naming both in merge-report.json. Step 5 is its ONLY caller (swept at GATE 1), so a Step 5
+// that named no branch for 3 would leave the model to read it as a crash — or as success. The exit value is imported,
+// so the prose and the code cannot drift apart. FLOOR: the text is present in the right step. NOT: that a run obeys it.
+function reviewSection(text, from, to) {
+  const a = text.indexOf(from);
+  const b = text.indexOf(to, a + 1);
+  assert.ok(a !== -1 && b > a, `${REVIEW_CMD}: anchors "${from}" … "${to}" not found in order (L60 — never slice on -1)`);
+  return text.slice(a, b);
+}
+
+test("✧ /pharn-review Step 5 names a branch for merge exit 0, INCOMPLETE_EXIT and anything else (STOP)", async () => {
+  const { INCOMPLETE_EXIT } = await import("../../pharn/floor/merge-findings.mjs");
+  const step5 = reviewSection(commandText(REVIEW_CMD), "## Step 5 —", "## Step 6 —");
+  assert.ok(
+    step5.includes("node pharn/floor/merge-findings.mjs pharn/features/<name>/findings.json"),
+    "the pinned merge line moved out of Step 5"
+  );
+  assert.match(step5, /^- `0` → complete/m);
+  assert.match(step5, new RegExp("^- `" + INCOMPLETE_EXIT + "` → INCOMPLETE", "m"));
+  assert.match(step5, /^- anything else → \*\*STOP\*\*/m);
+  assert.ok(step5.includes("merge-report.json") && step5.includes("re-run"), "Step 5 names the report and the human re-run");
+  const step6 = reviewSection(commandText(REVIEW_CMD), "## Step 6 —", "## Step 6b —");
+  assert.ok(step6.includes("`## Merge incomplete`") && step6.includes("`ADVISORY (INCOMPLETE):`"), "Step 6 renders the incomplete state");
+  assert.ok(step6.includes("exit `" + INCOMPLETE_EXIT + "`"), "Step 6 keys the render on the same exit value");
+});
+
 test("✧ the carve-out is CLOSED — it names no SCANNER-BOUND lens (presence is not closure, L36)", () => {
   const scanners = lensScannerMap();
   const mapped = Object.keys(scanners).filter((k) => scanners[k] !== null);

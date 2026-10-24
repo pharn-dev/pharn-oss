@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.73.0] - 2026-10-25
+
 ### Added
 
 - 2026-10-24: **`check:markers` now also REDs a "specified" hedge that nobody registered (audit 2026-10-12 ENF-8).**
@@ -36,6 +38,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   overclaim with no hedge or one hedged in other words stays invisible. Forward-looking claims are not swept (they
   share no phrase). An exemption hides its whole file or directory. An untracked local file carrying the phrase REDs
   locally while CI never sees it. Apparatus only, no `SKILLS_VERSION` bump.
+
+### Fixed
+
+- **`/pharn-review`'s merge no longer loses lens output silently: a lens file it cannot use and a finding it drops are
+  named, and the review says it is incomplete.** (`SKILLS_VERSION` 6.72.0 → **6.73.0**, minor: a new shipped
+  artifact and exit code.) Audit finding LOOP-7 / ENF-12.
+  - What was wrong, measured: a lens `findings.json` that was unreadable, not JSON or not an array made
+    `pharn/floor/merge-findings.mjs` exit 1 and write nothing, so one broken lens file erased every other lens's
+    findings, and Step 5 named no branch for it. A finding with a malformed enum-gated field was reported on stderr
+    only: a merge that dropped every finding wrote `[]` at exit 0, and `REVIEW.md` read clean. And a free-text value
+    such as `{"toString":1}` crashed the merge with a TypeError (`lessons-learned` L62).
+  - What changed: the merge skips an unusable input and still merges the rest. It now always writes
+    `merge-report.json` beside `findings.json` (`merge-report/v1`: `complete`, `unreadable[]` as
+    `{source, path, reason}`, `dropped[]` as `{source, failed, quoted}`). It exits `3` when either list is non-empty,
+    `0` when complete and `1` on a usage or write error. `findings.json` keeps its shape. `reason` and `failed` come
+    from closed, exported sets. Each dropped value is stored as one JSON-quoted, escaped line (U+2028/U+2029
+    included), capped at 400 characters, so a value holding `"\n## Verdict"` cannot end its quote in `REVIEW.md`.
+    A `source` or `path` that is not a clean single-line value (a lens directory name is part of the reviewed tree)
+    is recorded quoted the same way. The parser's error text, which quotes lens-file bytes, stays on stderr.
+  - `/pharn-review` Step 5 branches on the merge's exit: `0` → render; `3` → render the incomplete state; anything
+    else → stop. Step 6 renders a `## Merge incomplete` section and an `ADVISORY (INCOMPLETE):` verdict. The
+    recovery is the human's re-run, not an automatic retry.
+  - `merge-report.json` is a pipeline artifact like `findings.json`: it joins `check-regress.mjs`'s
+    `PIPELINE_ARTIFACTS`, `reconcile-ignore.json`'s `pipeline_artifacts.names`, `worktree-fingerprint.mjs`'s
+    `EXCLUDED_ARTIFACTS` and `.prettierignore`, so a review inside a pipeline feature does not read its own report
+    as an escape. `ALGO` is unchanged: the new exclusion moves a digest only for a tree holding this file, which no
+    earlier release wrote.
+  - Not covered: a lens file that was never written, or a stale one an earlier run left, is still `lens-groups.mjs`'s
+    `unwritten` (6.64.0); a stale file is merged. That `REVIEW.md` is rendered as Step 6 says is command
+    discipline: the floor part is the report, its quoting and the exit code.
 
 ## [6.72.3] - 2026-10-24
 

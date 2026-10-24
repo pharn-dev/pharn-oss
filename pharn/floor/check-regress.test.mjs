@@ -226,6 +226,7 @@ test("★ ENUMERATION (L23/L29): every machine-written JSON pipeline artifact is
     "assignments.json": "render-review-assignments.mjs",
     "cost.json": "render-cost-ledger.mjs",
     "findings.json": "merge-findings.mjs",
+    "merge-report.json": "merge-findings.mjs",
     "regression-report.json": "check-regress.mjs",
     "verify-report.json": "check-verify.mjs",
   };
