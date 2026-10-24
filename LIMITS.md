@@ -501,6 +501,10 @@ read off the wiring:
     files on a case-insensitive volume, so it is denied as the project's own (re-review R1) — and so is a
     sibling directory named like the project plus a trailing dot, although on APFS that is another
     directory: an over-block.
+- **In a dev checkout or an unsignalled tree, the one out-of-project place the Write tool reaches is this
+  session's own scratchpad (6.73.1, audit TST-12)**, recognised by the rule above, under any scope. The memory
+  folder and ordinary temp paths stay denied there, as does every path inside another git tree, and a Claude Code
+  that sends no usable `scratchpad_dir` and `session_id` gets no allowance.
 - **A run is open while `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a
   modification time within 24 h**, or while one of those three state directories is present but is not a
   readable directory — a file planted there holds the tree fail-closed until someone removes it. The
@@ -515,7 +519,7 @@ read off the wiring:
   directory's on-disk spelling, following a dangling symlink to the target it names, and applying `..` to
   a symlink's real parent — and denies the write if either target is denied. In a dev checkout or an
   unsignalled tree that, and a guard error now denying instead of crashing open, are the only verdict
-  changes, and both move toward deny; the first includes a path spelled with another letter case or
+  changes 6.24.0 made, and both move toward deny; the first includes a path spelled with another letter case or
   Unicode form than an existing directory, now also judged at that directory's own spelling. A hard link
   is not resolved,
   so the permissive default judges it by its own name; creating one needs `Bash`.
@@ -624,6 +628,12 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
   configuration read from the environment, a chain through another runner (`npm-run-all`, `turbo`), npm
   configuration outside the project root or the runner's version (`pharn/floor/test-infra-core.mjs` states
   the full list).
+- **Those commands run with your environment.** The project's gate scripts and `/pharn-regress`'s base install
+  (`npm ci` or the lockfile's equivalent, unless `--no-install`) run with your full process environment
+  (`pharn/floor/run-gates.mjs` passes `process.env` through), so any secret in it reaches the project's scripts.
+  The base install runs the install lifecycle scripts (`preinstall`, `postinstall`, `prepare` and the like) that
+  the BASE commit's manifest and lockfile name — the project's own, and its dependencies' as far as the package
+  manager runs them — with no `--ignore-scripts`, in that same environment.
 - **Weaker and absent evidence are reported, never hidden.** A `spec_kind: test-infra` SPEC gets
   BOOTSTRAP evidence: no test was locked or shown red, and `spec_kind` sits inside the approval pin §1d
   already calls forgeable. A legacy SPEC gets no AC evidence, and verify reports it `not-applicable`.

@@ -843,6 +843,10 @@ const toolInput = payload.tool_input || payload.toolInput || {};
 const isWrite = /^(Write|Edit|MultiEdit|NotebookEdit)$/i.test(toolName) || (!toolName && extractPaths(toolInput).length);
 
 if (isWrite) {
+  // A NUL byte in any payload path denies before either pass judges it (audit SEC-11, 2026-10-12). No file has such a
+  // name — Node's `fs` refuses it — so the passes below would judge a name that is no file a write can reach:
+  // `LIMITS.md\u0000x` resolved to itself, matched no trusted path, and was allowed. Fixed text; never echoed.
+  if (extractPaths(toolInput).some((p) => p.includes("\0"))) denyMalformedHookInput("a path contains a NUL byte");
   // Deny if EITHER the literal path (resolved against CWD, which is what a relative payload path means)
   // OR its symlink-canonicalized real target is protected. Evaluated per path and FAIL-CLOSED: if
   // deciding a path throws, that path is treated as protected rather than waved through.

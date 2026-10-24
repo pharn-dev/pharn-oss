@@ -136,10 +136,12 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 **`enforce-writes-scope.cjs` (fix #7)** is the runtime scope-enforcement hook: it denies any write
 outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
 tree (6.24.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
-before, and every denial it made before carries the same message; the only verdict changes there are
-toward deny (a write through a symlink is also judged at the target the filesystem reaches, a path spelled
+before, and every denial it made before carries the same message; the only verdict changes 6.24.0 made there
+are toward deny (a write through a symlink is also judged at the target the filesystem reaches, a path spelled
 differently from an existing directory is also judged at that directory's on-disk spelling, and a guard
-error denies). An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
+error denies). Since 6.73.1 one change goes the other way: there the Write tool also reaches this session's own
+scratchpad, recognised by the rule below, under any scope, and nothing else outside the project; when the call's
+payload identifies that scratchpad, the out-of-root denial gains one bullet naming it. An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
 fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
 run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
 or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies PHARN's own installed
