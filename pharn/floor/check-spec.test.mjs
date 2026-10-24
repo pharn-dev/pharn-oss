@@ -729,10 +729,11 @@ test("opt-in: a LEGACY spec (no spec_template) breaking every template rule is G
   assert.match(r.stdout, /^GREEN — spec valid; state "Draft"; 4 required sections present$/m);
 });
 
-test("opt-in: the committed legacy SPEC pharn/features/loop-decision-integrity/SPEC.md stays GREEN", () => {
-  const r = spawnSync(process.execPath, [CHECK, join(REPO, "pharn", "features", "loop-decision-integrity", "SPEC.md")], {
-    encoding: "utf8",
-  });
+// The fixture is a byte copy of this repo's own loop-decision-integrity run's SPEC.md (a pre-template, opt-in SPEC),
+// moved out of pharn/features/ to .dev/features/loop-decision-integrity-product/ in 6.72.3 (audit ARCH-12).
+test("opt-in: a committed legacy SPEC (test-fixtures/check-spec/legacy-approved-SPEC.md) stays GREEN", () => {
+  const legacy = join(REPO, "pharn", "floor", "test-fixtures", "check-spec", "legacy-approved-SPEC.md");
+  const r = spawnSync(process.execPath, [CHECK, legacy], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.stdout.trim(), 'GREEN — spec valid; state "Approved"; 4 required sections present; intent pinned');
 });
