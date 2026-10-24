@@ -296,30 +296,7 @@ from the floor verdicts on disk; that neither orchestrator's control flow uses t
 or sets a flag, it is scoped to one feature's record and quoted as DATA — and not zeroed. The quantifier is corrected in the heading
 ```
 
-## Applied, and a second patch
+## Applied
 
-`apply.py` was run by the maintainer at `1d16b36d`; every file matched its AFTER hash, the script deleted itself, and
-the agent committed the result as `279a19ca`. Everything above this section is the record of that patch.
-
-Renumbering by diff against `main` (6.72.3) then showed that `LIMITS.md` §7's new bullet cites the branch's
-provisional version, `(6.73.1, audit TST-12)`, which this PR will not carry. `apply-version-free.py` drops the
-version from that cite, so no later renumbering can make it false:
-
-```bash
-python3 .dev/features/audit-low-human-patch/apply-version-free.py --dry-run   # optional; writes nothing
-python3 .dev/features/audit-low-human-patch/apply-version-free.py
-```
-
-| file        | before          | after           | edits |
-| ----------- | --------------- | --------------- | ----- |
-| `LIMITS.md` | `577fb5c02d66…` | `66ff0327c2e1…` | 1     |
-
-```text
-LIMITS.md
-  before 577fb5c02d66dd4abf3ea6f812cb7105ac8bbcc271916a18abf55a63141cc6a8
-  after  66ff0327c2e15f2b7bf689e2a05a5055db18c8e8c4433f6eb23638c5c08ea812
-```
-
-Old text: `session's own scratchpad (6.73.1, audit TST-12)**` — new text: `session's own scratchpad (audit TST-12)**`.
-Same rules as the first script: it writes nothing unless both pins hold and the old text occurs exactly once; it
-deletes itself on success; do not commit — the agent commits it as one commit before any gate runs (L68).
+The maintainer ran `apply.py` at `1d16b36d`. Each of the four files matched its pinned AFTER hash (verified by the
+orchestrator and the agent), the script deleted itself, and the agent committed the result as `279a19ca`.
