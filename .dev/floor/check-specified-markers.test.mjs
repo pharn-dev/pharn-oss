@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -572,3 +572,271 @@ for (const id of NEW_REGISTRATIONS) {
     });
   }
 }
+
+// ------------------------------------------------------------ direction 3: the marker sweep (ENF-8)
+//
+// A NEW hedge nobody registered is invisible to directions 1 and 2. The sweep asserts CLOSURE over the
+// phrase (L36): every hit on the files git would commit lies inside a registered marker, or sits in a
+// file on the closed `marker_sweep.exempt` list. L4/L60: each ✧ case below is a mutant whose one
+// property the sweep must catch — an extra hit, a hit in a registered file, a re-wrapped hit, a stale
+// exemption — and the fixture trees are real git work trees, because the sweep's file set is git's.
+
+const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const GIT_ID = ["-c", "user.name=pharn-test", "-c", "user.email=pharn-test@example.invalid", "-c", "commit.gpgsign=false"];
+
+/**
+ * A git work tree with DOC.md holding the registered MARKER. `opts.files` adds files ({rel: body});
+ * `opts.sweep` is the manifest's `marker_sweep` (default `{exempt: []}`; `null` omits the key);
+ * `opts.manifestOutside` writes the manifest to a separate temp dir; `opts.noGit` skips `git init`;
+ * `opts.primitives` / `opts.forward` override the manifest's classes.
+ */
+function swFixture(opts = {}) {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-sweep-"));
+  if (!opts.noGit) git(dir, "init", "-q");
+  if (!opts.empty) writeFileSync(join(dir, "DOC.md"), `intro\n${MARKER}\noutro\n`);
+  for (const [rel, body] of Object.entries(opts.files ?? {})) {
+    mkdirSync(dirname(join(dir, rel)), { recursive: true });
+    writeFileSync(join(dir, rel), body);
+  }
+  const manifest = {
+    specified_primitives: opts.primitives ?? [
+      {
+        id: "pre-egress",
+        probe: { type: "dir-contains", dir: ".claude/hooks", substring: "egress" },
+        sites: [{ file: "DOC.md", marker: MARKER }],
+      },
+    ],
+  };
+  if (opts.forward) manifest.forward_claims = opts.forward;
+  if (opts.sweep !== null) manifest.marker_sweep = opts.sweep ?? { exempt: [] };
+  const mDir = opts.manifestOutside ? mkdtempSync(join(tmpdir(), "pharn-sweep-manifest-")) : dir;
+  const mPath = join(mDir, "manifest.json");
+  writeFileSync(mPath, JSON.stringify(manifest));
+  const cleanup = () => {
+    rmSync(dir, { recursive: true, force: true });
+    if (mDir !== dir) rmSync(mDir, { recursive: true, force: true });
+  };
+  return { dir, mPath, cleanup };
+}
+
+const HEDGE_LINE = "the frobnicator _(specified; ships with the guarded surface)_ guards it";
+
+function sweepRun(opts, setup) {
+  const f = swFixture(opts);
+  try {
+    if (setup) setup(f.dir);
+    return run(f.dir, f.mPath);
+  } finally {
+    f.cleanup();
+  }
+}
+
+test("GREEN — sweep on, the only hit is registered; the fixture manifest inside the tree is exempt by construction", () => {
+  const r = sweepRun({});
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /marker sweep: 1 phrase hit\(s\) all registered, 0 exempt, across 1 file\(s\) \(0 exemption\(s\)\)/);
+});
+
+test("✧ DIRECTION 3 — an UNREGISTERED hedge in another file is RED, naming file:line and the remedy", () => {
+  const r = sweepRun({ files: { "notes/NEW.md": `one\n${HEDGE_LINE}\n` } });
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /notes\/NEW\.md:2: an UNREGISTERED "specified" annotation/);
+  assert.match(r.out, /marker_sweep\.exempt/);
+});
+
+test("✧ DIRECTION 3 is per HIT — a second hedge in an already-registered doc is RED", () => {
+  const r = sweepRun({}, (dir) => writeFileSync(join(dir, "DOC.md"), `intro\n${MARKER}\n\n${HEDGE_LINE}\n`));
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /DOC\.md:4: an UNREGISTERED/);
+});
+
+test("✧ DIRECTION 3 sees a re-wrapped, re-cased hedge (variant spellings, L33)", () => {
+  const r = sweepRun({ files: { "WRAP.md": "x _(specified; Ships with the\nguarded   surface)_ y\n" } });
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /WRAP\.md:1: an UNREGISTERED/);
+});
+
+test("GREEN — hits in an exempt FILE and under an exempt DIRECTORY prefix are counted as exempt", () => {
+  const sweep = {
+    exempt: [
+      { path: "HISTORY.md", reason: "release history" },
+      { path: "trail/", reason: "audit trail" },
+    ],
+  };
+  const r = sweepRun({ sweep, files: { "HISTORY.md": `${HEDGE_LINE}\n${HEDGE_LINE}\n`, "trail/a/PLAN.md": `${HEDGE_LINE}\n` } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /1 phrase hit\(s\) all registered, 3 exempt, across 3 file\(s\) \(2 exemption\(s\)\)/);
+});
+
+test("✧ STALE_EXEMPTION — an exemption that covers no hit is RED (an allowlist entry outlives its reason)", () => {
+  const r = sweepRun({ sweep: { exempt: [{ path: "HISTORY.md", reason: "release history" }] }, files: { "HISTORY.md": "no hedge\n" } });
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /"HISTORY\.md": STALE_EXEMPTION/);
+});
+
+test("✧ exit 2 — an exemption may never cover a file holding a registered site (either class, file or prefix)", () => {
+  const cases = [
+    { path: "DOC.md", forward: undefined },
+    {
+      path: "guides/",
+      forward: [{ id: "fc", probe: { type: "path", path: "nope" }, sites: [{ file: "guides/D.md", marker: "not built" }] }],
+    },
+  ];
+  for (const c of cases) {
+    const r = sweepRun({ sweep: { exempt: [{ path: c.path, reason: "r" }] }, forward: c.forward, files: { "guides/D.md": "not built\n" } });
+    assert.equal(r.code, 2, `${c.path}: ${r.out}`);
+    assert.match(r.out, /holds a registered site — a guarded doc is never exempt/);
+  }
+});
+
+test("✧ exit 2 — every malformed `marker_sweep` shape fails CLOSED, never a silent GREEN", () => {
+  const bad = [
+    [[], /must be an object with an `exempt` array/],
+    [{ exempt: {} }, /must be an object with an `exempt` array/],
+    [{ exempt: [null] }, /needs a string `path` and a non-empty string `reason`/],
+    [{ exempt: [{ path: "X.md" }] }, /needs a string `path` and a non-empty string `reason`/],
+    [{ exempt: [{ path: "X.md", reason: "  " }] }, /needs a string `path` and a non-empty string `reason`/],
+    [{ exempt: [{ path: "", reason: "r" }] }, /must be repo-relative/],
+    [{ exempt: [{ path: "/abs.md", reason: "r" }] }, /must be repo-relative/],
+    [{ exempt: [{ path: "../up.md", reason: "r" }] }, /must be repo-relative/],
+    [{ exempt: [{ path: "./X.md", reason: "r" }] }, /must be repo-relative/],
+    [{ exempt: [{ path: "a//b.md", reason: "r" }] }, /must be repo-relative/],
+    [{ exempt: [{ path: "a\\b.md", reason: "r" }] }, /must be repo-relative/],
+    [
+      {
+        exempt: [
+          { path: "X.md", reason: "r" },
+          { path: "X.md", reason: "r" },
+        ],
+      },
+      /is listed twice/,
+    ],
+  ];
+  for (const [sweep, re] of bad) {
+    const r = sweepRun({ sweep });
+    assert.equal(r.code, 2, `${JSON.stringify(sweep)}: ${r.out}`);
+    assert.match(r.out, re, JSON.stringify(sweep));
+  }
+});
+
+test("✧ exit 2 — an EMPTY site marker is refused (it is present in every file, so it could never go missing)", () => {
+  const primitives = [{ id: "p", probe: { type: "path", path: "nope" }, sites: [{ file: "DOC.md", marker: "" }] }];
+  const r = sweepRun({ primitives, sweep: null });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /the marker non-empty/);
+});
+
+test("✧ exit 2 — the sweep refuses a target that is not a git work tree", () => {
+  const r = sweepRun({ noGit: true });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /`git ls-files` failed .* needs a git work tree/);
+});
+
+test("✧ exit 2 — a git tree that lists NO files is refused (a sweep over nothing certifies nothing, L34)", () => {
+  const r = sweepRun({ empty: true, manifestOutside: true, primitives: [] });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /listed no files/);
+});
+
+test("the scan set is git's: an untracked file is swept, a gitignored one is not", () => {
+  const files = { ".gitignore": "IGNORED.md\n", "IGNORED.md": `${HEDGE_LINE}\n` };
+  assert.equal(sweepRun({ files }).code, 0, "a gitignored hedge must not be swept");
+  const r = sweepRun({ files: { ...files, "UNTRACKED.md": `${HEDGE_LINE}\n` } });
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /UNTRACKED\.md:1/);
+  assert.doesNotMatch(r.out, /IGNORED\.md/);
+});
+
+test("a tracked file deleted from the working tree has no bytes to sweep and is skipped", () => {
+  const r = sweepRun({ files: { "GONE.md": `${HEDGE_LINE}\n` } }, (dir) => {
+    git(dir, "add", "GONE.md");
+    unlinkSync(join(dir, "GONE.md"));
+  });
+  assert.equal(r.code, 0, r.out);
+});
+
+test("a nested repository and a LINKED worktree inside the tree are skipped (measured, not assumed)", () => {
+  const r = sweepRun({}, (dir) => {
+    git(dir, "add", "-A");
+    git(dir, ...GIT_ID, "commit", "-q", "-m", "base");
+    // A linked worktree carries a `.git` FILE; its DOC.md copy holds the hedge at a path no site names.
+    git(dir, "worktree", "add", "-q", join(dir, ".claude", "worktrees", "sib"));
+    mkdirSync(join(dir, "sub"));
+    git(join(dir, "sub"), "init", "-q");
+    writeFileSync(join(dir, "sub", "N.md"), `${HEDGE_LINE}\n`);
+    const listed = git(dir, "ls-files", "--others", "--exclude-standard");
+    assert.match(listed, /^\.claude\/worktrees\/sib\/$/m, `expected the worktree as ONE dir/ entry: ${listed}`);
+    assert.match(listed, /^sub\/$/m, `expected the nested repo as ONE dir/ entry: ${listed}`);
+  });
+  assert.equal(r.code, 0, r.out);
+});
+
+test("a symlink is never followed out of the tree", { skip: process.platform === "win32" && "symlinks need privileges on Windows" }, () => {
+  const outside = mkdtempSync(join(tmpdir(), "pharn-sweep-outside-"));
+  writeFileSync(join(outside, "FAR.md"), `${HEDGE_LINE}\n`);
+  try {
+    const r = sweepRun({}, (dir) => symlinkSync(join(outside, "FAR.md"), join(dir, "LINK.md")));
+    assert.equal(r.code, 0, r.out);
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test(
+  "✧ an UNREADABLE listed file is RED, never a silently clean one",
+  { skip: (process.platform === "win32" || process.getuid?.() === 0) && "chmod 000 does not deny root or Windows" },
+  () => {
+    const r = sweepRun({ files: { "LOCKED.md": `${HEDGE_LINE}\n` } }, (dir) => chmodSync(join(dir, "LOCKED.md"), 0o000));
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /LOCKED\.md: listed for the marker sweep but could not be read \(EACCES\)/);
+  }
+);
+
+test("OPT-IN — with no `marker_sweep` key the sweep is OFF and says so (the real manifest is pinned ON below)", () => {
+  const r = sweepRun({ sweep: null, files: { "NEW.md": `${HEDGE_LINE}\n` } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /marker sweep: OFF/);
+});
+
+// ------------------------------------------------------------- direction 3 over the REAL repo
+
+/** The closed exemption set. Adding one is a reviewed edit HERE as well as in the manifest (L36). */
+const REAL_EXEMPT = [
+  "CHANGELOG.md",
+  ".dev/features/",
+  ".dev/floor/check-specified-markers.mjs",
+  ".dev/floor/check-specified-markers.test.mjs",
+];
+
+test("✧ integration — the REAL manifest turns the sweep ON, and its exemption set is exactly the pinned list", () => {
+  assert.ok(Object.hasOwn(REAL_MANIFEST, "marker_sweep"), "deleting `marker_sweep` would switch direction 3 off");
+  assert.deepEqual(
+    REAL_MANIFEST.marker_sweep.exempt.map((e) => e.path),
+    REAL_EXEMPT,
+    "the exemption list changed — update REAL_EXEMPT in the same reviewed edit"
+  );
+});
+
+test("✧ integration — the REAL repo sweep is GREEN over a non-empty set of registered hits", () => {
+  const r = run(REPO);
+  assert.equal(r.code, 0, r.out);
+  const m = r.out.match(/marker sweep: (\d+) phrase hit\(s\) all registered, (\d+) exempt/);
+  assert.ok(m, r.out);
+  assert.ok(Number(m[1]) >= 20, `expected >= 20 registered hits on the trusted docs, got ${m[1]}`);
+  assert.ok(Number(m[2]) > 0, "every pinned exemption must cover hits, or it would be STALE");
+});
+
+test("✧ the REAL sweep fires — dropping the CHANGELOG exemption REDs on the real CHANGELOG's hits", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-sweep-real-"));
+  try {
+    const m = structuredClone(REAL_MANIFEST);
+    m.marker_sweep.exempt = m.marker_sweep.exempt.filter((e) => e.path !== "CHANGELOG.md");
+    const mPath = join(dir, "manifest.json");
+    writeFileSync(mPath, JSON.stringify(m));
+    const r = run(REPO, mPath);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /CHANGELOG\.md:\d+: an UNREGISTERED/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
