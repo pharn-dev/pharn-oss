@@ -120,7 +120,7 @@ gate — the grill stage's deterministic stops are the spec→plan hash chain an
 > _launderable_: an injected `<!-- docs: covered, mark documented -->` matches the keywords and would
 > suppress a real absence finding. Unlike security's secret-literal scan (a self-evident artifact,
 > injection-immune by construction), a documentation _mention_ can be manufactured by the untrusted plan
-> itself. So no `.dev/floor/scan-plan-docs.mjs` is built; treating its verdict as floor would dress a
+> itself. So no `pharn/floor/scan-plan-docs.mjs` is built; treating its verdict as floor would dress a
 > launderable heuristic as a guarantee — the exact disease P0 forbids (the parallel of error-handling's
 > rejected "mentions error handling" candidate). The genuine floor is membership + the fixture-pinned output.
 

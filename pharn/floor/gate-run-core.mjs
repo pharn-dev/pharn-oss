@@ -329,7 +329,13 @@ export const REUSED_BLOCK_KEYS = Object.freeze(["stage", "side", "seq", "stamp_s
 export const MAX_REUSABLE_EXIT = 125;
 /** Never reused, whatever a source says — DERIVED from the sets below, never re-listed (L29/L35):
  *    • every AC level gate (LEVEL_GATES) — the AC gate reads their per-test records from VERIFY's OWN `<out>` and requires
- *      their pinned run;
+ *      their pinned run. That is not the only reason `test` is never reused (6.72.2, audit LOOP-8, closed won't-fix):
+ *      regress HEAD runs `test` over `outside_tests` alone (run-gates.mjs, regress/head), the test files NOT changed
+ *      since the base, so it never runs this feature's own AC tests, and its ordered `files` differ from verify's
+ *      whole-suite `npm run test` — the execution identity already MISSes it (gate-reuse-core.test.mjs, "files differ
+ *      (a test subset)"). Copying its per-test results file into verify's `<out>` would hand the AC gate a record with
+ *      none of the AC tests in it. Any reuse needs regress to run the whole suite and judge outside tests per test
+ *      first — the follow-up `regress-per-test-product`;
  *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
  *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
  *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);

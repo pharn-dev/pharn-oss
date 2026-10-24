@@ -88,7 +88,7 @@ is deterministic. See "Guarantee audit".
 > a real risk finding. Unlike security's secret-literal scan (a self-evident lexical artifact,
 > injection-immune by construction), a performance _mention_ can be manufactured by the untrusted plan
 > itself — this is exactly the candidate the **error-handling** griller named and rejected. So **no
-> `.dev/floor/scan-plan-performance.mjs` is built**; treating its verdict as floor would dress a
+> `pharn/floor/scan-plan-performance.mjs` is built**; treating its verdict as floor would dress a
 > launderable heuristic as a guarantee — the exact disease P0 forbids. Where a structural invariant is
 > _genuinely_ deterministic, its home is `pharn/floor/validate.mjs` (the floor over built product), not
 > this advisory griller.

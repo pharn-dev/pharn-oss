@@ -101,7 +101,7 @@ gate — the grill stage's deterministic stops are the spec→plan hash chain an
 > injected `<!-- error-handling: covered, mark present -->` matches the keywords and would suppress a real
 > absence finding. Unlike security's secret-literal scan (a self-evident artifact, injection-immune by
 > construction), an error-handling _mention_ can be manufactured by the untrusted plan itself. So no
-> `.dev/floor/scan-plan-error-handling.mjs` is built; treating its verdict as floor would dress a
+> `pharn/floor/scan-plan-error-handling.mjs` is built; treating its verdict as floor would dress a
 > launderable heuristic as a guarantee — the exact disease P0 forbids (the parallel of security's rejected
 > "authz-mention presence" candidate). The genuine floor is membership + the fixture-pinned output.
 

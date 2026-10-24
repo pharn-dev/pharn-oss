@@ -106,6 +106,30 @@ test("RED: a missing required section (no `## Constraints`) exits 1", () => {
   assert.match(r.stdout, /RED — section failed/);
 });
 
+// ENF-7 (6.72.1): a `##` line a renderer shows as code or a comment is not a section. Each RED case is a twin of the
+// GREEN control below it, differing only in the block around `## Constraints`, so the RED comes from the block.
+const BASE3 = bodyFrom(["Intent", "Scope", "Acceptance Criteria"]);
+for (const [label, wrapped] of [
+  ["inside a ``` fence", "```markdown\n## Constraints\n```\n"],
+  ["inside a ~~~ fence", "~~~\n## Constraints\n~~~\n"],
+  ["inside an HTML comment", "<!--\n## Constraints\n-->\n"],
+]) {
+  test(`★ ENF-7: a required section whose only heading sits ${label} is RED`, () => {
+    const r = runWith(makeSpec({ body: `${BASE3}${wrapped}` }));
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /RED — section failed/);
+    assert.match(r.stdout, /missing required `## Constraints` section/);
+  });
+}
+
+test("★ ENF-7 control: the same `## Constraints` outside any block, and a fenced example beside it, stay GREEN", () => {
+  for (const body of [`${BASE3}## Constraints\n`, `${BASE3}## Constraints\n\n\`\`\`markdown\n## Constraints\n\`\`\`\n`]) {
+    const r = runWith(makeSpec({ body }));
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /GREEN — spec valid; state "Draft"; 4 required sections present/);
+  }
+});
+
 test("RED: an invalid state (`state: Final`) exits 1", () => {
   const r = runWith(makeSpec({ state: "Final" }));
   assert.equal(r.status, 1);
