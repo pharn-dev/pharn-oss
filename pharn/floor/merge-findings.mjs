@@ -46,8 +46,8 @@
 // code and could be injected into LAUNDERING a needle (e.g. a multi-line instruction) into an
 // enum-gated field. Before grouping, every finding's enum-gated fields are structurally validated;
 // one that fails — a control-char/newline in rule_id, a file without :line, a bad type/severity — is
-// DROPPED and reported (never merged, never trusted). The validation admits the legitimate
-// file-qualified rule_id form ("security.md SEC-1", which contains a SPACE) while rejecting the
+// DROPPED (never merged, never trusted) and NAMED in merge-report.json (below), never only counted.
+// The validation admits the legitimate file-qualified rule_id form ("security.md SEC-1", which contains a SPACE) while rejecting the
 // multi-line laundering vector (it forbids control chars, not spaces) — see hasControlChar / isCleanScalar.
 //
 // OUTPUT SHAPE. Each merged finding is finding-shape-CONFORMANT on the six required fields
@@ -138,10 +138,38 @@
 //   - Each input is read as a finding-shape findings.json (a JSON ARRAY). The input's SOURCE lens id is
 //     derived deterministically from its path (parent dir name — the emission convention
 //     pharn/features/<name>/lenses/<lens>/findings.json), used only as trusted provenance in sources[].
-// Output:  writes <out.json> (2-space JSON + trailing newline, deterministic); prints
-//          {"merged":<int>,"inputs":<int>,"dropped":<int>} to stdout; exit 0 on success.
-// Fail-closed (P5): a missing <out>, or ANY input that is unreadable / not valid JSON / not an array,
-//          → exit non-zero, writing NOTHING to <out> (all inputs are validated before any write).
+// Output:  writes <out.json> (2-space JSON + trailing newline, deterministic), THEN the merge report
+//          `merge-report.json` beside it; prints
+//          {"merged":<int>,"inputs":<int>,"dropped":<int>,"unreadable":<int>,"backstop":{…}} to stdout.
+//
+// NOTHING A LENS WROTE IS LOST SILENTLY (review-dropped-findings, audit LOOP-7 / ENF-12). Before 6.73.0 an input
+// that was unreadable, not JSON or not an array killed the WHOLE merge (exit 1, nothing written — every other
+// lens's findings gone with it), and a finding dropped by the validation above was reported on stderr only, so a
+// merge that dropped every finding wrote `[]` at exit 0 and REVIEW.md read clean. Measured, both. Now:
+//   - an unusable input is SKIPPED and named in the report's `unreadable[]` as {source, path, reason}, `reason`
+//     from the closed UNREADABLE_REASONS. The parser's own message is NOT recorded: it quotes bytes of the lens
+//     file, which is untrusted (P2). It stays on stderr, as before.
+//   - a dropped finding is named in `dropped[]` as {source, failed, quoted}: `failed` lists, from the closed
+//     DROP_FIELDS, WHICH enum-gated checks failed (computed here — trusted); `quoted` holds the finding's six
+//     fields as UNTRUSTED DATA, each passed through quoteOneLine(): JSON-quoted so a newline or control character
+//     is an escape, never a line break, and capped at QUOTED_CAP. The quoting is done HERE, not by whoever renders
+//     REVIEW.md, so "a dropped value cannot end its `>` block and forge report structure" is a property of this
+//     function (validate.mjs's showPath, same reason) rather than of a model's care.
+//   - the report is ALWAYS written — `complete: true` with both lists empty on a complete merge — so a stale
+//     report from an earlier run is overwritten, and asserted silence is distinguishable from no report (L34).
+// Exit codes (a consumer branches on these; /pharn-review Step 5 is the only caller):
+//   0  complete: every input read, nothing dropped.
+//   3  INCOMPLETE (INCOMPLETE_EXIT): every READABLE input merged and both files written, but `unreadable[]` or
+//      `dropped[]` is non-empty. NOT a crash and NOT clean: a review over it must say what is missing. 3, not 2,
+//      because runtime-floor.mjs's Node-version refusal is exit 2 (printing nothing) for every floor CLI.
+//   1  usage error, or a write failed: nothing this run produced is usable (out.json is written first, so a
+//      failed report write leaves a fresh out.json beside a stale report — still exit 1, still unusable).
+// BOUND (P0): `complete: true` says every NAMED input was read and every finding in them validated. It says
+// nothing about a lens whose file was never passed (lens-groups.mjs's `unwritten` owns that), and a STALE file
+// an earlier run left IS merged — `unwritten` names it `stale`; this script cannot tell.
+// The report's bytes are deterministic like out.json's: `unreadable[]` sorts by (path, source, reason),
+// `dropped[]` by (source, JSON of `quoted`, failed); no array INDEX is recorded, since it would move when the
+// lens's array order does.
 
 import "./runtime-floor.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -205,9 +233,70 @@ function canonFile(v) {
   return s.replace(/^(.*:\d+):\d+$/, "$1");
 }
 
-// Coerce a free-text field to a carried-as-DATA string (never gates; never executed). Non-strings → "".
+// Coerce a free-text field to a carried-as-DATA string (never gates; never executed). null/undefined → "".
+// TOTAL (L62): `String(v)` THROWS on parsed JSON such as {"toString":1}, and before 6.73.0 that one value in one
+// lens's `problem` crashed the whole merge (uncaught TypeError, exit 1, nothing written — measured). The fallback,
+// Object.prototype.toString, cannot be overridden from JSON.
 function asText(v) {
-  return typeof v === "string" ? v : v == null ? "" : String(v);
+  if (typeof v === "string") return v;
+  if (v == null) return "";
+  try {
+    return String(v);
+  } catch {
+    return Object.prototype.toString.call(v);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The merge report (see the header's "NOTHING A LENS WROTE IS LOST SILENTLY"). Closed sets, exported so the tests
+// range over THESE enumerations (L29) and a closure test can require every emitted value to be a member (L36).
+export const UNREADABLE_REASONS = Object.freeze(["unreadable", "invalid-json", "not-an-array"]);
+export const DROP_FIELDS = Object.freeze(["not-an-object", "type", "rule_id", "severity", "file"]);
+export const QUOTED_CAP = 400;
+export const INCOMPLETE_EXIT = 3;
+export const REPORT_SCHEMA = "merge-report/v1";
+export const REPORT_NAME = "merge-report.json";
+
+// One untrusted value → ONE line of quoted DATA. JSON.stringify escapes every C0 control character (so "\n## x"
+// becomes the six characters \n## x inside quotes); U+2028/U+2029 are escaped too, because JSON.stringify leaves
+// them raw and some renderers break a line on them. Capped on the QUOTED form so the rendered line is bounded;
+// the suffix says how much was cut. Total: asText cannot throw, and neither can JSON.stringify on a string.
+// Built via fromCharCode so the SOURCE stays printable ASCII (the NUL convention above).
+const LS = String.fromCharCode(0x2028);
+const PS = String.fromCharCode(0x2029);
+export function quoteOneLine(v) {
+  const q = JSON.stringify(asText(v)).split(LS).join("\\u2028").split(PS).join("\\u2029");
+  return q.length <= QUOTED_CAP ? q : q.slice(0, QUOTED_CAP) + "…(+" + (q.length - QUOTED_CAP) + " chars)";
+}
+
+// Which enum-gated checks a finding fails, in DROP_FIELDS order. Empty → the finding is valid. The same four
+// validators that gated the merge before, now recorded per field instead of folded into one boolean.
+function failedChecks(f) {
+  if (!f || typeof f !== "object" || Array.isArray(f)) return ["not-an-object"];
+  const failed = [];
+  if (!TYPE_OK(f.type)) failed.push("type");
+  if (!RULE_ID_OK(f.rule_id)) failed.push("rule_id");
+  if (!SEVERITY_ENUM.has(f.severity)) failed.push("severity");
+  if (!FILE_OK(f.file)) failed.push("file");
+  return failed;
+}
+
+// A `source` / `path` in the report is rendered on a PLAIN line of REVIEW.md (Step 6), outside any quote. Both come
+// from the input path, and in an installed project `pharn/features/<name>/lenses/` sits inside the reviewed tree, so
+// a directory name can carry a newline. A clean scalar is kept as-is; anything else is recorded through quoteOneLine,
+// so the report never holds a raw line break in a field rendered as structure (GATE-2 review, this increment).
+function reportSafe(s) {
+  return isCleanScalar(s, 400) ? s : quoteOneLine(s);
+}
+
+const QUOTED_FIELDS = ["type", "rule_id", "severity", "file", "problem", "evidence"];
+// A dropped finding's six fields as quoted DATA. A non-object finding has no fields: its own rendering goes under
+// `problem` and the other five are the quoted empty string.
+function quotedFields(f) {
+  const isObj = f && typeof f === "object" && !Array.isArray(f);
+  const q = {};
+  for (const k of QUOTED_FIELDS) q[k] = quoteOneLine(isObj ? f[k] : k === "problem" ? f : "");
+  return q;
 }
 
 // The trusted source id for provenance: the emission convention is
@@ -353,22 +442,34 @@ if (import.meta.main) {
   const lensMapPath = FLAGS["--lens-map"] ?? join(dirname(fileURLToPath(import.meta.url)), "lens-scanner-map.json");
   const assignmentsPath = FLAGS["--assignments"] ?? join(dirname(outPath), "assignments.json");
 
-  // PHASE 1 — read + structurally validate EVERY input file before any write (fail-closed).
+  // PHASE 1 — read + structurally validate EVERY input file. An unusable one is SKIPPED and named in the report's
+  // `unreadable[]` (reason from UNREADABLE_REASONS) — never fatal, so one lens's broken file cannot erase every
+  // other lens's findings. The detail (which can quote lens-file bytes) goes to stderr only.
   const inputs = [];
+  const unreadable = [];
+  const skip = (p, reason, detail) => {
+    unreadable.push({ source: reportSafe(sourceIdOf(p)), path: reportSafe(p), reason });
+    process.stderr.write(`merge-findings: skipped input (${reason}): ${p} (${detail})\n`);
+  };
   for (const p of inPaths) {
     let raw;
     try {
       raw = readFileSync(p, "utf8");
     } catch (e) {
-      die(`cannot read input: ${p} (${e.code || e.message})`);
+      skip(p, "unreadable", e.code || e.message);
+      continue;
     }
     let arr;
     try {
       arr = JSON.parse(raw);
     } catch (e) {
-      die(`input is not valid JSON: ${p} (${e.message})`);
+      skip(p, "invalid-json", e.message);
+      continue;
     }
-    if (!Array.isArray(arr)) die(`input is not a JSON array (findings.json must be an array): ${p}`);
+    if (!Array.isArray(arr)) {
+      skip(p, "not-an-array", "findings.json must be an array");
+      continue;
+    }
     inputs.push({ source: sourceIdOf(p), findings: arr });
   }
 
@@ -380,23 +481,15 @@ if (import.meta.main) {
   // PHASE 2 — validate each finding's enum-gated fields; DROP + report the malformed (never fatal).
   // Group the survivors by the enum-gated key (type, rule_id, file).
   const groups = new Map(); // key -> { type, rule_id, file, sevRank, sources: [{source, problem, evidence}] }
-  let dropped = 0;
   const droppedReport = [];
 
   for (const { source, findings } of inputs) {
     for (const f of findings) {
-      const ok =
-        f &&
-        typeof f === "object" &&
-        !Array.isArray(f) &&
-        TYPE_OK(f.type) &&
-        RULE_ID_OK(f.rule_id) &&
-        FILE_OK(f.file) &&
-        SEVERITY_ENUM.has(f.severity);
-      if (!ok) {
-        dropped++;
-        // Report only enum-gated shape info + the source; never echo the (possibly hostile) free-text as guidance.
-        droppedReport.push({ source, type: f && typeof f === "object" ? f.type : typeof f, rule_id: f && f.rule_id, file: f && f.file });
+      const failed = failedChecks(f);
+      if (failed.length) {
+        // Named, never only counted: WHICH checks failed (trusted, computed here) + the six fields as one-line
+        // quoted DATA. The values are exactly the ones that failed validation, so they may carry a payload.
+        droppedReport.push({ source: reportSafe(source), failed, quoted: quotedFields(f) });
         continue;
       }
       // Canonicalize `file` (FIX 2) and case-fold+trim `rule_id` for KEYING ONLY (secondary) so trivial
@@ -454,15 +547,27 @@ if (import.meta.main) {
   });
   merged.sort((a, b) => cmp(a.file, b.file) || cmp(a.rule_id, b.rule_id) || cmp(a.type, b.type));
 
-  // PHASE 4 — write (deterministic bytes) + report.
+  // The report's two lists, in deterministic order (P5 — see the header).
+  unreadable.sort((a, b) => cmp(a.path, b.path) || cmp(a.source, b.source) || cmp(a.reason, b.reason));
+  for (const d of droppedReport) d.key = JSON.stringify(d.quoted);
+  droppedReport.sort((a, b) => cmp(a.source, b.source) || cmp(a.key, b.key) || cmp(a.failed.join(","), b.failed.join(",")));
+  const dropped = droppedReport.map(({ source, failed, quoted }) => ({ source, failed, quoted }));
+  const complete = unreadable.length === 0 && dropped.length === 0;
+  const reportPath = join(dirname(outPath), REPORT_NAME);
+
+  // PHASE 4 — write (deterministic bytes) + report. out.json FIRST, so a report on disk never describes a merge
+  // whose out.json failed to write (a failed report write is still exit 1).
   try {
     writeFileSync(outPath, JSON.stringify(merged, null, 2) + "\n");
+    writeFileSync(reportPath, JSON.stringify({ schema: REPORT_SCHEMA, complete, unreadable, dropped }, null, 2) + "\n");
   } catch (e) {
-    die(`cannot write output ${outPath}: ${e.message}`);
+    die(`cannot write output ${outPath} / ${reportPath}: ${e.message}`);
   }
-  if (droppedReport.length) {
-    process.stderr.write("merge-findings: dropped " + dropped + " malformed finding(s) (enum-gated validation failed):\n");
-    for (const d of droppedReport) process.stderr.write("  - " + JSON.stringify(d) + "\n");
+  if (dropped.length) {
+    process.stderr.write(
+      `merge-findings: dropped ${dropped.length} malformed finding(s) (enum-gated validation failed) — named in ${reportPath}:\n`
+    );
+    for (const d of dropped) process.stderr.write("  - " + JSON.stringify({ source: d.source, failed: d.failed }) + "\n");
   }
 
   // Name the degradation on stderr. Without this, an absent or unusable artifact silently turns every
@@ -479,6 +584,14 @@ if (import.meta.main) {
   for (const m of BACKSTOP_ENUM) backstopCounts[m] = 0;
   for (const f of merged) for (const s of f.sources) if (BACKSTOP_SET.has(s.backstop)) backstopCounts[s.backstop]++;
 
-  process.stdout.write(JSON.stringify({ merged: merged.length, inputs: inPaths.length, dropped, backstop: backstopCounts }) + "\n");
-  process.exit(0);
+  process.stdout.write(
+    JSON.stringify({
+      merged: merged.length,
+      inputs: inPaths.length,
+      dropped: dropped.length,
+      unreadable: unreadable.length,
+      backstop: backstopCounts,
+    }) + "\n"
+  );
+  process.exit(complete ? 0 : INCOMPLETE_EXIT);
 }

@@ -75,11 +75,13 @@ pharn/features/*/VERIFY.md
 # outside its scope, so a test-first dogfood run here failed its own `format:check` at verify, and a lock committed
 # by /pharn-loop Step 6c reddened `npm run check` (review finding, 6.20.5). assignments.json
 # (render-review-assignments.mjs) fails the same way; findings.json (merge-findings.mjs, objects only) passes today
-# and is listed before a primitive array makes it fail. check-regress.test.mjs's ★ enumeration requires every
+# and is listed before a primitive array makes it fail. merge-report.json (merge-findings.mjs, 6.73.0) carries a
+# `failed` string array, so it fails the same way. check-regress.test.mjs's ★ enumeration requires every
 # machine-written `.json` member of PIPELINE_ARTIFACTS to appear here.
 pharn/features/*/AC-TESTS.lock.json
 pharn/features/*/assignments.json
 pharn/features/*/findings.json
+pharn/features/*/merge-report.json
 
 # The committed cost-ledger transcript fixtures are JSONL — one record per line, byte-exact. Prettier
 # does not understand `.jsonl`, and `--ignore-unknown` skips it; this entry makes the intent explicit so

@@ -138,6 +138,7 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
   "REVIEW.md",
   "findings.json",
   "assignments.json",
+  "merge-report.json",
   "SHIP.md",
   "ship-record.json",
   "BRIEFING.md",
