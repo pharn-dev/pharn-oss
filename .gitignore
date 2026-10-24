@@ -6,6 +6,8 @@ runs/
 .env
 .DS_Store
 coverage/
+# Claude Code's own worktrees (other sessions' checkouts), formerly excluded only through .git/info/exclude.
+.claude/worktrees/
 
 # Written by Codex's "import from Claude Code". PHARN-OSS targets Claude Code only for now;
 # these are imported copies (AGENTS.md mirrors CLAUDE.md, .codex/hooks mirrors .claude/hooks),

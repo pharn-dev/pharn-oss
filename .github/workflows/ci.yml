@@ -78,12 +78,10 @@ jobs:
       - name: CONTRIBUTING gate-chain check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:contributing
-      # A fresh CI checkout has never anchored a reconciliation epoch, so this reports NO_BASELINE and
-      # exits 0 — green by design. It is wired here anyway because the ALWAYS-RECONCILED control surface
-      # (.claude/hooks/*, .claude/settings*.json, pharn/floor/*, .dev/floor/*, and since 6.53.0 the four
-      # trusted docs, CODEOWNERS, pharn.spec-template.md and memory-bank canon) falls back to committed
-      # blob ids with no baseline at all, so this step DOES catch an uncommitted change to one of them,
-      # or an untracked file added at one of those paths.
+      # In CI this step reports NO_BASELINE and exits 0, green by construction: a fresh checkout has never
+      # anchored a reconciliation epoch and holds no uncommitted change. It is wired so CI runs the same command
+      # as `npm run check`. Its no-baseline fallback (the always-reconciled control surface compared with
+      # committed blob ids) only catches something in a dirty local tree.
       - name: Bash-write reconciliation check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:reconcile
