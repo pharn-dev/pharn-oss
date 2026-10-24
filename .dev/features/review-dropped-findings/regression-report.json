@@ -1,7 +1,11 @@
 {
-  "base": "18037dd423b8339815d6944226213883f9a8151c",
+  "base": "01b0c9ca40e0c3cbcee9325461fb8f64cd3654af",
   "inside": [
     ".claude/commands/pharn-review.md",
+    ".dev/features/review-dropped-findings/GRILL.md",
+    ".dev/features/review-dropped-findings/PLAN.md",
+    ".dev/features/review-dropped-findings/REGRESSION.md",
+    ".dev/features/review-dropped-findings/regression-report.json",
     ".dev/floor/command-hygiene.test.mjs",
     ".prettierignore",
     "CHANGELOG.md",
@@ -12,9 +16,7 @@
     "pharn/floor/merge-findings.mjs",
     "pharn/floor/merge-findings.test.mjs",
     "pharn/floor/reconcile-ignore.json",
-    "pharn/floor/worktree-fingerprint.mjs",
-    ".dev/features/review-dropped-findings/GRILL.md",
-    ".dev/features/review-dropped-findings/PLAN.md"
+    "pharn/floor/worktree-fingerprint.mjs"
   ],
   "outside_gates": {
     "format:check": {
@@ -48,13 +50,13 @@
   "per_test": {
     "gate": "tests",
     "base": {
-      "passed": 5472,
+      "passed": 5479,
       "failed": 0,
       "skipped": 4,
       "suite_errors": 0
     },
     "head": {
-      "passed": 5475,
+      "passed": 5482,
       "failed": 0,
       "skipped": 1,
       "suite_errors": 0
