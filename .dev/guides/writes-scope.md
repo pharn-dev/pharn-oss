@@ -27,7 +27,11 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   `.pharn/**` (not `writes-scope.json`, which is setter-only), `pharn/features/**`, `.dev/features/**`,
   `pharn/pharn-*/**` (the dev-repo extras — matches the relocated module dirs but **not** `pharn/floor/` or
   the `pharn/` trusted docs) — exactly as before; `.dev/memory-bank/**`, `.dev/floor/**`, `pharn/floor/**`,
-  `.claude/**`, and root files stay **denied** until an explicit `writes:` declaration names them. An
+  `.claude/**`, and root files stay **denied** until an explicit `writes:` declaration names them. Outside the
+  project these two postures deny every path except **this session's own scratchpad** (6.73.1, audit TST-12),
+  recognised by the install posture's scratchpad rule below, in every mode — with no scope and under any set scope,
+  since a scope entry is root-relative and has no jurisdiction there; never a path in another git tree. Before
+  6.73.1 they denied the scratchpad too, and the deny body sent scratch writes to Bash. An
   **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) keeps that SAME
   fail-closed default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is
   open** (see the run-marker bullet below); **outside an open run it instead denies PHARN's own installed
@@ -95,9 +99,11 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   standing for at most 24 h. Tree-wide, not per-session — the scope record is already one per tree (L38),
   and a subagent a command spawns must be covered by the marker its own orchestrator opened. In a dev
   checkout or an unsignalled tree the guard never reads these markers, the default is the pre-6.24.0 one, and
-  every deny message the old hook printed is byte-identical; the only verdict changes there are toward deny
-  (a write through a symlink is also judged at the target it reaches, a path spelled differently from an
-  existing directory is also judged at that directory's on-disk spelling, and a guard error denies).
+  every deny message the old hook printed is byte-identical; the only verdict changes 6.24.0 made there are toward
+  deny (a write through a symlink is also judged at the target it reaches, a path spelled differently from an
+  existing directory is also judged at that directory's on-disk spelling, and a guard error denies). One later
+  change goes the other way (6.73.1, audit TST-12): this session's own scratchpad is allowed there, and the
+  out-of-root body gains one bullet naming it when the call's payload identifies it.
 
 ## The root every scope entry is relative to
 
@@ -123,10 +129,13 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
     itself, since neither becomes writable that way. Its **alias** variant (an installed project, a path that
     is another spelling of the project's own — re-review R1) says so and offers only "spell it as the project
     does" or a human write: no scope entry can name that spelling, and it is NOT scratch, so never Bash;
-  - **outside every git tree** (the agent scratchpad under `/private/tmp`, say) — no `writes:` entry can
+  - **outside every git tree** (a temp file under `/private/tmp`, say) — no `writes:` entry can
     express it and neither can the fail-closed default, so the only routes are putting the file inside the
     repo, or, **for genuinely temporary/scratch files and only those**, writing it through **Bash**, which
-    `PreToolUse` never sees. **In an installed project outside an open run this is no longer categorical**:
+    `PreToolUse` never sees. **In a dev checkout or an unsignalled tree (6.73.1)** this session's own
+    scratchpad is not denied at all, so a write there never reaches this body; for any other such path, when
+    the call's payload identifies the scratchpad, the body adds one bullet naming it as the scratch route ahead
+    of the Bash one (L27: absent when the payload names none). **In an installed project outside an open run this is no longer categorical**:
     this project's memory folder, this session's scratchpad or an ordinary temp path, in no other git tree,
     IS writable there under the permissive default, so for such a path the message says so and names what is
     holding it (the scope, an open run, or an unreadable run-state directory) instead of claiming nothing can

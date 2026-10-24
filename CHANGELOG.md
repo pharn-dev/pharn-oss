@@ -23,6 +23,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.73.1] - 2026-10-24
+
+### Fixed
+
+- **The write guards deny a NUL byte in a payload path and let a dev checkout reach the session's own scratchpad;
+  THREAT-MODEL and LIMITS name what they left out (audit 2026-10-12 LOW findings SEC-11, TST-12, SEC-13, SEC-9).**
+  The hook and trusted-doc bytes were written by the maintainer, who ran the reviewed, sha256-pinned
+  `.dev/features/audit-low-human-patch/apply.py`; the agent wrote the tests and the patch.
+  - SEC-11: `protect-trusted-paths.cjs` denies a write whose payload path holds a NUL byte (`file_path`, `path`,
+    `notebook_path` or a MultiEdit `edits[]` entry) before it judges the path, with the malformed-input message
+    `(a path contains a NUL byte)`, and does not echo the path. Before, `LIMITS.md\u0000x` exited 0, because no
+    trusted path has that name. Node's `fs` refuses such a name; the guard no longer relies on that.
+    `enforce-writes-scope.cjs` is unchanged and judges such a path by its scope like any other name.
+  - TST-12: in PHARN's dev repo and in an unsignalled tree, `enforce-writes-scope.cjs` allows a write strictly inside
+    this session's own scratchpad, recognised from the payload's `scratchpad_dir` and `session_id` by the rule an
+    installed project already used, with no scope set and under a set scope alike, and never inside another git tree.
+    It allows nothing else outside the project there: the auto-memory folder and ordinary temp paths stay denied.
+    When the payload names that scratchpad, the out-of-root denial gains one bullet pointing at it; otherwise the
+    message is unchanged. An installed project is unchanged: while a scope is set or a run is open, its scratchpad
+    stays denied.
+  - SEC-13: `THREAT-MODEL.md §5` names two more free-text channels that shipped commands already named: (4) a routed
+    stage agent's final text, returned into the orchestrator's context, and (5) a prior `/pharn-loop` run's
+    `## Handoff`, which no person reads first. Each item says where it is bounded.
+  - SEC-9 (LIMITS half): `LIMITS.md §9` says the project's gate scripts and `/pharn-regress`'s base install run with
+    your full process environment, and that the base install runs the install lifecycle scripts the BASE commit
+    names, as `SECURITY.md` has said since 6.72.1. `LIMITS.md §7` states the TST-12 change.
+  - Not done, named as follow-ups: the Write tool still cannot reach Claude Code's auto-memory folder from the dev
+    posture; an installed project's scratchpad stays denied while a scope is set or a run is open; and
+    `enforce-writes-scope.cjs` has no NUL rule of its own.
+
 ## [6.72.2] - 2026-10-23
 
 ### Changed

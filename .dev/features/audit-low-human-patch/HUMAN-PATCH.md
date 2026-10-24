@@ -1,6 +1,7 @@
 # HUMAN-PATCH — audit-low-human-patch
 
-<!-- GENERATED from apply.py by .pharn/audit-low-human-patch/build.py; edit apply.py and re-render, never this file. -->
+<!-- GENERATED from apply.py's EDITS and PINS by an agent-side render script, then formatted with Prettier; edit
+     apply.py and re-render, never this file. -->
 
 The readable twin of `apply.py`: every edit it makes to the four hook-protected files, with its reason. The agent
 may not write these files through any tool (CLAUDE.md hard constraint 1), so the maintainer applies them by running
@@ -27,12 +28,12 @@ the script. This file is for reading; the script's bytes are what count.
 3. Do not commit: hand back to the agent, which commits the four files and the script's deletion as one commit
    before it runs the gates (L68: `check:reconcile` reads an uncommitted trusted-doc edit as an escape).
 
-| file | before | after | edits |
-| --- | --- | --- | --- |
-| `.claude/hooks/enforce-writes-scope.cjs` | `0405e36a5107…` | `04abe70ef2bf…` | 6 |
-| `.claude/hooks/protect-trusted-paths.cjs` | `f3ef97c4bf2e…` | `e322a6bb37c9…` | 1 |
-| `LIMITS.md` | `fe998761b9dc…` | `577fb5c02d66…` | 3 |
-| `THREAT-MODEL.md` | `f886f6163643…` | `e267b13d90cb…` | 1 |
+| file                                      | before          | after           | edits |
+| ----------------------------------------- | --------------- | --------------- | ----- |
+| `.claude/hooks/enforce-writes-scope.cjs`  | `0405e36a5107…` | `04abe70ef2bf…` | 6     |
+| `.claude/hooks/protect-trusted-paths.cjs` | `f3ef97c4bf2e…` | `e322a6bb37c9…` | 1     |
+| `LIMITS.md`                               | `fe998761b9dc…` | `577fb5c02d66…` | 3     |
+| `THREAT-MODEL.md`                         | `f886f6163643…` | `e267b13d90cb…` | 1     |
 
 Full hashes (sha256):
 
