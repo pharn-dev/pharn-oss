@@ -1156,3 +1156,52 @@ test("TST-11 control (L60): the same throw placed BEFORE the handler's registrat
   const r = runIn(sb, { tool_name: "Write", tool_input: { file_path: "src/ok.md" } });
   assert.equal(r.status, 1, `exit ${r.status}: ${r.stderr}`);
 });
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+// SEC-11 (audit 2026-10-12, LOW): a payload path holding a NUL byte. No file has such a name — Node's `fs` refuses
+// one — so both passes used to judge a name that is no file a write can reach: `LIMITS.md\u0000x` matched no
+// trusted path and exited 0. The patch (.dev/features/audit-low-human-patch/HUMAN-PATCH.md) denies any such path
+// through the malformed-input deny, before either pass. The deny cases are EXPECTED TO FAIL until the maintainer
+// runs that patch's apply.py, and to PASS after; the controls pass on both sides.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+
+const NUL_PATHS = [
+  "LIMITS.md\u0000x",
+  "pharn/CONSTITUTION.md\u0000/../x",
+  ".claude/hooks/protect-trusted-paths.cjs\u0000",
+  ".github/CODEOWNERS\u0000.bak",
+  "README.md\u0000", // an ordinary path too: the deny is about the input, not about what it names
+  "src/a\u0000b.md",
+];
+
+function assertNulDeny(r, label) {
+  assert.equal(r.status, 2, `${label}: exit ${r.status}`);
+  assert.match(r.stderr, /hook input is not a usable PreToolUse JSON object \(a path contains a NUL byte\) — fail-closed/, label);
+  assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, "deny", label);
+  assert.ok(!r.stderr.includes("\u0000") && !r.stdout.includes("\\u0000"), `${label}: the path is never echoed`);
+}
+
+test("SEC-11: a NUL byte in a Write file_path is DENIED fail-closed, whatever the path names (relative and absolute)", () => {
+  for (const p of NUL_PATHS) assertNulDeny(run({ tool_name: "Write", tool_input: { file_path: p } }), JSON.stringify(p));
+  const abs = join(process.cwd(), "LIMITS.md") + "\u0000x";
+  assertNulDeny(run({ tool_name: "Write", tool_input: { file_path: abs } }), "absolute");
+});
+
+test("SEC-11: every path field the hook reads denies on a NUL — path, notebook_path, a MultiEdit edits[] entry, no tool name", () => {
+  assertNulDeny(run({ tool_name: "Edit", tool_input: { path: "LIMITS.md\u0000x" } }), "Edit path");
+  assertNulDeny(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: "THREAT-MODEL.md\u0000" } }), "notebook_path");
+  const edits = [{ file_path: "LIMITS.md\u0000x", old_string: "a", new_string: "b" }];
+  assertNulDeny(run({ tool_name: "MultiEdit", tool_input: { file_path: "src/ok.md", edits } }), "MultiEdit edits[]");
+  assertNulDeny(run({ tool_input: { file_path: "pharn/ARCHITECTURE.md\u0000" } }), "no tool_name");
+});
+
+test("SEC-11: in a sandbox whose trusted docs exist, a NUL-suffixed spelling of each is DENIED", () => {
+  const sb = sandbox(TRUSTED);
+  for (const t of TRUSTED) assertNulDeny(runIn(sb, { tool_name: "Write", tool_input: { file_path: `${t}\u0000x` } }), t);
+});
+
+test("SEC-11 controls: the same paths without a NUL keep their verdicts, and a non-write tool carrying a NUL is ignored", () => {
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: "src/a.md" } }).status, 0, "an ordinary path is allowed");
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: "LIMITS.md" } }).status, 2, "the trusted doc is denied");
+  assert.equal(run({ tool_name: "Read", tool_input: { file_path: "LIMITS.md\u0000x" } }).status, 0, "not a write: not judged");
+});
