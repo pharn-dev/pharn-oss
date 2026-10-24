@@ -80,6 +80,9 @@ constraint 1). The agent writes the tests, a sha256-pinned self-deleting `apply.
 - `.dev/features/audit-low-human-patch/PLAN.md` — this plan
 - `.dev/features/audit-low-human-patch/apply.py` — the maintainer-run, sha256-pinned, self-deleting patch
 - `.dev/features/audit-low-human-patch/HUMAN-PATCH.md` — its readable twin, rendered from it
+- `.dev/features/audit-low-human-patch/apply-version-free.py` — a second maintainer-run, sha256-pinned,
+  self-deleting patch (added after the first apply): LIMITS §7's new bullet cited the provisional version `6.73.1`,
+  which renumbering by diff against main (6.72.3) makes false; it drops the version from that cite
 - `.claude/hooks/protect-trusted-paths.test.cjs` — SEC-11 tests
 - `.claude/hooks/enforce-writes-scope.test.cjs` — TST-12 tests
 - `.dev/guides/writes-scope.md` — TST-12 restatement (dev/unsignalled posture, the scratch remedy)
