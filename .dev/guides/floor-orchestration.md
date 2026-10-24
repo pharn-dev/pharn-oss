@@ -175,7 +175,9 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # live once in closeout-core.mjs. Last stdout line: one JSON document, closed keys (6.65.0: loop-closeout's gains
 # `excluded_gates`, the gates.exclude ids of the final verify / full-mode regress, also a third commit-message paragraph).
 # loop-closeout reads a LOOP.md whose envelope repeats a key (6.71.3) as no envelope: `decision unverifiable`, exit 4,
-# no commit, whatever the two checkers said. FLOOR: tested code over floor
+# no commit, whatever the two checkers said. Since 6.72.3 (audit LOOP-9) every git call is bounded: past GIT_TIMEOUT_MS
+# (240 s) git gets SIGTERM (it removes its index.lock; SIGKILL left it and broke the undo), and a stuck commit hook ends
+# as `commit failed`, exit 4 — the hook itself runs on, orphaned. Node children stay unbounded. FLOOR: tested code over floor
 # verdicts (the green-token enum, the two checkers' exits); ADVISORY: that a run invokes the line and runs no git of its
 # own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.44.0]).
 node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]
