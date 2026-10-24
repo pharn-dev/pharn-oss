@@ -37,6 +37,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   share no phrase). An exemption hides its whole file or directory. An untracked local file carrying the phrase REDs
   locally while CI never sees it. Apparatus only, no `SKILLS_VERSION` bump.
 
+## [6.72.3] - 2026-10-24
+
+### Fixed
+
+- **A commit hook that never returns no longer holds an unattended `/pharn-loop` close until the Bash tool kills it
+  (audit LOOP-9).**
+  - What changed: every git call `pharn/floor/loop-closeout.mjs` makes (the branch, the add, the commit with the
+    project's hooks, the undo) is bounded by `GIT_TIMEOUT_MS`, 240 s. Two stuck calls in a row end by 480 s, inside the
+    600 s Bash timeout the close part pins. Past the bound git is sent SIGTERM and the call reads non-zero, so a stuck
+    commit ends as the existing `not committed: commit failed`, exit 4, with the undo run. A stuck switch ends as
+    `branch failed`. Before, it was a crash with no outcome.
+  - Why SIGTERM and not SIGKILL, measured: a SIGKILLed commit left `.git/index.lock` behind, and the undo's reset and
+    checkout both failed on it. On SIGTERM git removes the lock and the undo works. A test pins each case.
+  - Bounds: the limit is per call, not per close, so several slow calls can still add up past the Bash timeout. The
+    hook process git started is not killed and keeps running, orphaned. A hook that legitimately takes longer than
+    240 s now reads `commit failed`. Floor and hook children (`closeout-core.mjs`) are still not bounded.
+- **`pharn/features/` holds only its README again, as that README says (audit ARCH-12).** This repo's own
+  `loop-decision-integrity` `/pharn-loop` run moved to `.dev/features/loop-decision-integrity-product/`. The
+  `check-spec.test.mjs` case that read its SPEC.md as a live legacy SPEC now reads a byte copy,
+  `pharn/floor/test-fixtures/check-spec/legacy-approved-SPEC.md`. The run's files are unchanged. Older CHANGELOG
+  sections and dated measurement reports still cite the old path, and stay as written.
+
+## [6.72.2] - 2026-10-23
+
+### Changed
+
+- **The reason `/pharn-verify` never reuses the regress-HEAD `test` run is now stated in full: the two runs execute
+  different test files.**
+  - Audit LOOP-8 (2026-10-12) proposed reusing that run in verify by copying its per-test results file into verify's
+    out dir. Closed as won't-fix. `/pharn-regress`'s HEAD side runs `test` only over the test files not changed since
+    the base. This feature's own AC tests are always changed since the base, so that run never executes them, and a
+    copied results file would give the AC gate a record with no AC test in it. The execution identity already refuses
+    the match because the file lists differ.
+  - What changed: the `NON_REUSABLE_IDS` comment in `pharn/floor/gate-run-core.mjs` and the "Reused entries" section of
+    `pharn/pharn-contracts/gate-run-record.md`, which now also lists `instruction-growth` (in the set since 6.38.0).
+    No behaviour changes.
+  - Not done: one `test` run per iteration would need `/pharn-regress` to run the whole suite and judge the outside
+    tests one by one (the follow-up `regress-per-test-product`). That is a separate redesign, and its cost case has
+    not been measured.
+
 ## [6.72.1] - 2026-10-23
 
 ### Fixed
