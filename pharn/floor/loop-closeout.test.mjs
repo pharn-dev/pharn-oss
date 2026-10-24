@@ -30,6 +30,7 @@ import {
   COMMIT_BODY,
   DOC_KEYS,
   EXIT,
+  GIT_TIMEOUT_MS,
   GREEN_TOKENS,
   NOT_COMMITTED_REASONS,
   STAGE_ARTIFACTS,
@@ -39,6 +40,7 @@ import {
   commitArgs,
   commitGateArgs,
   createBranch,
+  gitRun,
   isLoopBranchOf,
   parseArgs,
   phasePath,
@@ -601,6 +603,82 @@ test("exit 4 — a failed commit hook → commit failed, then the undo: unstaged
     assert.equal(fx.hasBranch("pharn-loop/demo"), false);
     assert.equal(sh(fx.dir, "diff", "--cached", "--name-only").stdout, "", "the run's list is unstaged");
     assert.ok(existsSync(join(fx.dir, "src", "a.js")), "the change stays in the working tree");
+  } finally {
+    fx.done();
+  }
+});
+
+// LOOP-9 (6.72.3) — a commit hook that never returns. The REAL gitRun runs every git call (L41); only the bound's
+// length is shortened. Each property the outcome rests on is asserted on its own (L60): the hook ran (its marker), it
+// was cut short (the commit call returned long before its sleep), git released its lock (no index.lock) and the undo
+// therefore worked (back on the original branch, the loop branch gone, nothing staged).
+test("★ LOOP-9 — a commit hook that hangs is cut off at the bound: commit failed, exit 4, the undo runs clean", () => {
+  const fx = fixture();
+  try {
+    const before = fx.head();
+    const hook = join(fx.dir, ".git", "hooks", "pre-commit");
+    writeFileSync(hook, "#!/bin/sh\necho ran > hook-ran.txt\nexec sleep 120\n");
+    chmodSync(hook, 0o755);
+    const took = {};
+    const git = (args, o) => {
+      const t = Date.now();
+      const r = gitRun(args, { ...o, timeoutMs: 4000 });
+      took[args[0]] = Date.now() - t;
+      return r;
+    };
+    const { doc } = close(fx, { run: stub().run, git });
+    assert.equal(doc.outcome, "not committed: commit failed");
+    assert.equal(doc.exit, EXIT.OWED);
+    assert.ok(existsSync(join(fx.dir, "hook-ran.txt")), "the hook really ran");
+    assert.ok(took.commit >= 4000 && took.commit < 60_000, `the commit was cut off at the bound (${took.commit} ms)`);
+    assert.equal(existsSync(join(fx.dir, ".git", "index.lock")), false, "SIGTERM let git remove its lock");
+    assert.equal(fx.head(), before);
+    assert.equal(fx.hasBranch("pharn-loop/demo"), false);
+    assert.equal(sh(fx.dir, "diff", "--cached", "--name-only").stdout, "", "the run's list is unstaged");
+  } finally {
+    fx.done();
+  }
+});
+
+test("LOOP-9 — a git that hangs on every call: gitRun reads status null past the bound, and the switch is branch failed", () => {
+  const bin = realpathSync(mkdtempSync(join(tmpdir(), "loop-closeout-git-")));
+  const prev = process.env.PATH;
+  try {
+    writeFileSync(join(bin, "git"), "#!/bin/sh\nexec sleep 120\n");
+    chmodSync(join(bin, "git"), 0o755);
+    process.env.PATH = `${bin}:${prev}`;
+    const t = Date.now();
+    const r = gitRun(["status"], { timeoutMs: 500 });
+    assert.ok(Date.now() - t < 60_000, "returned at the bound, not at the sleep");
+    assert.equal(r.status, null);
+    assert.match(r.error, /ETIMEDOUT/);
+    const br = createBranch(FEATURE, { git: (args, o) => gitRun(args, { ...o, timeoutMs: 500 }) });
+    assert.equal(br.ok, false, "a timed-out switch maps onto the existing `branch failed`");
+  } finally {
+    process.env.PATH = prev;
+    rmSync(bin, { recursive: true, force: true });
+  }
+  assert.equal(GIT_TIMEOUT_MS, 240_000, "two stuck calls (480 s) fit inside the close part's 600 s Bash timeout");
+});
+
+// CONTROL — why SIGTERM and not stage-direct.mjs's SIGKILL: the same stuck commit killed with SIGKILL leaves git's
+// index.lock behind, which is what made the undo's reset and checkout fail when measured.
+test("CONTROL (LOOP-9) — a SIGKILLed commit leaves .git/index.lock; the SIGTERM above does not", () => {
+  const fx = fixture();
+  try {
+    const hook = join(fx.dir, ".git", "hooks", "pre-commit");
+    writeFileSync(hook, "#!/bin/sh\nexec sleep 120\n");
+    chmodSync(hook, 0o755);
+    assert.equal(sh(fx.dir, "add", "src/a.js").status, 0);
+    writeFileSync(join(fx.dir, stageListPath(FEATURE)), "src/a.js\0");
+    const r = spawnSync("git", commitArgs(stageListPath(FEATURE), FEATURE, "STOP_GREEN", "1"), {
+      cwd: fx.dir,
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 4000,
+      killSignal: "SIGKILL",
+    });
+    assert.equal(r.signal, "SIGKILL");
+    assert.equal(existsSync(join(fx.dir, ".git", "index.lock")), true);
   } finally {
     fx.done();
   }

@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [6.73.1] - 2026-10-24
+## [6.73.1] - 2026-10-25
 
 ### Fixed
 
@@ -52,6 +52,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - Not done, named as follow-ups: the Write tool still cannot reach Claude Code's auto-memory folder from the dev
     posture; an installed project's scratchpad stays denied while a scope is set or a run is open; and
     `enforce-writes-scope.cjs` has no NUL rule of its own.
+
+## [6.73.0] - 2026-10-25
+
+### Added
+
+- 2026-10-24: **`check:markers` now also REDs a "specified" hedge that nobody registered (audit 2026-10-12 ENF-8).**
+  `.dev/floor/check-specified-markers.mjs` gains a third direction, the marker sweep. On every file
+  `git ls-files --cached --others --exclude-standard` lists, each hit of the hedge phrase (matched across line wraps
+  and case) must lie inside a registered marker in the same file, or the file must be on the manifest's closed
+  `marker_sweep.exempt` list (`CHANGELOG.md`, `.dev/features/`, the checker and its test, each with a reason).
+  Otherwise it is RED with `file:line`. An exemption over a registered site's file is exit 2, one matching no hit is
+  RED, and a tree git cannot list is exit 2. On `main` today every hit on a claim-making doc was already registered;
+  the one other hit, a guide line about the marker, was reworded. Bounds: only the literal phrase is seen, so an
+  overclaim with no hedge or one hedged in other words stays invisible. Forward-looking claims are not swept (they
+  share no phrase). An exemption hides its whole file or directory. An untracked local file carrying the phrase REDs
+  locally while CI never sees it. Apparatus only, no `SKILLS_VERSION` bump.
+
+### Fixed
+
+- **`/pharn-review`'s merge no longer loses lens output silently: a lens file it cannot use and a finding it drops are
+  named, and the review says it is incomplete.** (`SKILLS_VERSION` 6.72.0 → **6.73.0**, minor: a new shipped
+  artifact and exit code.) Audit finding LOOP-7 / ENF-12.
+  - What was wrong, measured: a lens `findings.json` that was unreadable, not JSON or not an array made
+    `pharn/floor/merge-findings.mjs` exit 1 and write nothing, so one broken lens file erased every other lens's
+    findings, and Step 5 named no branch for it. A finding with a malformed enum-gated field was reported on stderr
+    only: a merge that dropped every finding wrote `[]` at exit 0, and `REVIEW.md` read clean. And a free-text value
+    such as `{"toString":1}` crashed the merge with a TypeError (`lessons-learned` L62).
+  - What changed: the merge skips an unusable input and still merges the rest. It now always writes
+    `merge-report.json` beside `findings.json` (`merge-report/v1`: `complete`, `unreadable[]` as
+    `{source, path, reason}`, `dropped[]` as `{source, failed, quoted}`). It exits `3` when either list is non-empty,
+    `0` when complete and `1` on a usage or write error. `findings.json` keeps its shape. `reason` and `failed` come
+    from closed, exported sets. Each dropped value is stored as one JSON-quoted, escaped line (U+2028/U+2029
+    included), capped at 400 characters, so a value holding `"\n## Verdict"` cannot end its quote in `REVIEW.md`.
+    A `source` or `path` that is not a clean single-line value (a lens directory name is part of the reviewed tree)
+    is recorded quoted the same way. The parser's error text, which quotes lens-file bytes, stays on stderr.
+  - `/pharn-review` Step 5 branches on the merge's exit: `0` → render; `3` → render the incomplete state; anything
+    else → stop. Step 6 renders a `## Merge incomplete` section and an `ADVISORY (INCOMPLETE):` verdict. The
+    recovery is the human's re-run, not an automatic retry.
+  - `merge-report.json` is a pipeline artifact like `findings.json`: it joins `check-regress.mjs`'s
+    `PIPELINE_ARTIFACTS`, `reconcile-ignore.json`'s `pipeline_artifacts.names`, `worktree-fingerprint.mjs`'s
+    `EXCLUDED_ARTIFACTS` and `.prettierignore`, so a review inside a pipeline feature does not read its own report
+    as an escape. `ALGO` is unchanged: the new exclusion moves a digest only for a tree holding this file, which no
+    earlier release wrote.
+  - Not covered: a lens file that was never written, or a stale one an earlier run left, is still `lens-groups.mjs`'s
+    `unwritten` (6.64.0); a stale file is merged. That `REVIEW.md` is rendered as Step 6 says is command
+    discipline: the floor part is the report, its quoting and the exit code.
+
+## [6.72.3] - 2026-10-24
+
+### Fixed
+
+- **A commit hook that never returns no longer holds an unattended `/pharn-loop` close until the Bash tool kills it
+  (audit LOOP-9).**
+  - What changed: every git call `pharn/floor/loop-closeout.mjs` makes (the branch, the add, the commit with the
+    project's hooks, the undo) is bounded by `GIT_TIMEOUT_MS`, 240 s. Two stuck calls in a row end by 480 s, inside the
+    600 s Bash timeout the close part pins. Past the bound git is sent SIGTERM and the call reads non-zero, so a stuck
+    commit ends as the existing `not committed: commit failed`, exit 4, with the undo run. A stuck switch ends as
+    `branch failed`. Before, it was a crash with no outcome.
+  - Why SIGTERM and not SIGKILL, measured: a SIGKILLed commit left `.git/index.lock` behind, and the undo's reset and
+    checkout both failed on it. On SIGTERM git removes the lock and the undo works. A test pins each case.
+  - Bounds: the limit is per call, not per close, so several slow calls can still add up past the Bash timeout. The
+    hook process git started is not killed and keeps running, orphaned. A hook that legitimately takes longer than
+    240 s now reads `commit failed`. Floor and hook children (`closeout-core.mjs`) are still not bounded.
+- **`pharn/features/` holds only its README again, as that README says (audit ARCH-12).** This repo's own
+  `loop-decision-integrity` `/pharn-loop` run moved to `.dev/features/loop-decision-integrity-product/`. The
+  `check-spec.test.mjs` case that read its SPEC.md as a live legacy SPEC now reads a byte copy,
+  `pharn/floor/test-fixtures/check-spec/legacy-approved-SPEC.md`. The run's files are unchanged. Older CHANGELOG
+  sections and dated measurement reports still cite the old path, and stay as written.
 
 ## [6.72.2] - 2026-10-23
 
