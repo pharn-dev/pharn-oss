@@ -355,21 +355,35 @@ node .dev/floor/check-config.mjs [validate | resolve <stage> | agreement]
 ## `check-specified-markers.mjs` — specified markers
 
 ```bash
-# Bind PHARN's own "(specified; ships with the guarded surface)" annotations to reality, BOTH ways.
+# Bind PHARN's own "specified" annotations (the not-yet-live hedges the manifest's sites quote) to
+# reality, in THREE directions.
 # The four trusted docs asserted floor primitives that do not exist as running checks (no pre-egress
 # hook; no archetype-maps manifest, so validate CHECK 7 never fires; no /pharn-estimate) and NOTHING
 # detected it — they are .prettierignore'd AND markdownlint-excluded, and no checker reads their prose.
-# FLOOR (enum/regex, primitive #3), two directions: (1) a primitive that SHIPS while its markers remain
+# FLOOR (enum/regex, primitive #3): (1) a primitive that SHIPS while its markers remain
 # → RED naming every site (the doc now UNDERSTATES a live protection — it fires exactly when the repo
 # gets BETTER, which is when nobody is looking); (2) a marker DELETED while the primitive is still
-# absent → RED (a silent return to overclaiming). Also checks `named_artifacts`: a doc citing a shipped
-# artifact by a name it does not have (the `security-secrets` → `secrets-in-code` drift).
+# absent → RED (a silent return to overclaiming); (3) since audit ENF-8, the MARKER SWEEP: every hit of
+# the hedge phrase (whitespace- and case-tolerant) on every file `git ls-files --cached --others
+# --exclude-standard` lists must lie inside a registered marker in the same file, or the file must be in
+# the manifest's closed `marker_sweep.exempt` list → otherwise RED naming file:line. An exemption that
+# covers a registered site's file is exit 2; one that matches no hit is RED (STALE_EXEMPTION); no git
+# work tree, or no files listed, is exit 2. Untracked files are swept too, so a local scratch note
+# carrying the phrase REDs `npm run check` on your machine while CI, which never sees it, stays GREEN —
+# the intended direction: it would RED the moment it was committed. Also checks `named_artifacts`: a
+# doc citing a shipped artifact by a name it does not have (the `security-secrets` → `secrets-in-code`
+# drift).
 # Membership comes from the STRUCTURED .dev/floor/specified-primitives.json, never from scanning prose
-# — L6, whose defect recurred inside this very increment's REVIEW.md.
-# NARROWED, and stated: it CANNOT DISCOVER a new overclaim (the manifest is a hand-maintained address
-# book — "the manifest checked out" NEVER means "the docs are true"), and the probe tests file
-# EXISTENCE, never that a hook is WIRED in settings.json or works. Apparatus: no SKILLS_VERSION bump.
-# Wired into `npm run check` as `check:markers`. Exits non-zero on RED; exit 2 on an unusable manifest.
+# — L6, whose defect recurred inside this very increment's REVIEW.md. The sweep scans prose only to
+# demand registration; a hit never becomes a site by being found.
+# NARROWED, and stated: it finds a new HEDGE only when it carries the literal phrase — an overclaim with
+# no hedge, or one hedged in other words, stays invisible ("the manifest checked out" NEVER means "the
+# docs are true"); FORWARD CLAIMS ARE NOT SWEPT (no invariant phrase; their generic words fill correct P7
+# policy sentences), so an unregistered forward claim stays invisible; each exemption hides its whole
+# file or directory; gitignored paths are not swept; and the probe tests file EXISTENCE, never that a
+# hook is WIRED in settings.json or works. Apparatus: no SKILLS_VERSION bump.
+# Wired into `npm run check` as `check:markers`. Exits non-zero on RED; exit 2 on an unusable manifest
+# or an unlistable tree.
 node .dev/floor/check-specified-markers.mjs [target-dir] [--manifest <path>]
 ```
 

@@ -4,10 +4,43 @@
     "Read by .dev/floor/check-specified-markers.mjs. STRUCTURED on purpose (lessons-learned L6): a",
     "membership fact is read from here, never by scanning doc prose for what looks like a marker.",
     "",
-    "ADDING AN ENTRY is what makes a new annotation guarded. Nothing discovers annotations; this file",
-    "is a hand-maintained list, so an unlisted overclaim is invisible to the checker. Stated in the",
+    "ADDING AN ENTRY is what makes a new annotation guarded. Since the `marker_sweep` (direction 3), a new",
+    "annotation that carries the phrase and is NOT listed here REDs the checker until it is registered or",
+    "its file is exempted below — the sweep demands registration, it never registers. What stays invisible:",
+    "an overclaim with no hedge at all, a hedge worded without the phrase, and every forward-looking claim",
+    "nobody registered (forward claims are NOT swept: they share no invariant phrase). Stated in the",
     "checker's header as its central limit."
   ],
+
+  "$marker_sweep_comment": [
+    "DIRECTION 3's closed allowlist. Each entry is a file (exact repo-relative path) or a directory prefix",
+    "ending in '/' whose hits of the phrase are prose ABOUT the marker, never an annotation. The `reason` is",
+    "for the reviewer; the checker never branches on it. Rules (all exit 2 or RED, never a silent pass): no",
+    "entry may cover a file holding a registered site of either class; an entry matching no hit is RED",
+    "(STALE_EXEMPTION); this manifest itself is exempt by construction. The test pins this exact set, so",
+    "adding an entry is a visible test edit. Every entry hides its WHOLE file or directory from the sweep."
+  ],
+
+  "marker_sweep": {
+    "exempt": [
+      {
+        "path": "CHANGELOG.md",
+        "reason": "Release history: entries describing how the annotations were added, corrected and checked quote the phrase."
+      },
+      {
+        "path": ".dev/features/",
+        "reason": "The build-loop audit trail (PLAN / GRILL / REVIEW / proposed patches of past increments) quotes the phrase as history and as proposed text a human later applied."
+      },
+      {
+        "path": ".dev/floor/check-specified-markers.mjs",
+        "reason": "The checker names its own vocabulary in its header and messages."
+      },
+      {
+        "path": ".dev/floor/check-specified-markers.test.mjs",
+        "reason": "The test fixtures quote the phrase to drive every direction."
+      }
+    ]
+  },
 
   "specified_primitives": [
     {
