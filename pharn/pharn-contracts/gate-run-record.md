@@ -138,7 +138,10 @@ the runner recorded its result and spawned nothing. The entry is:
 
 `validateStamp` admits exactly that shape — with an `exit` in 0..125, a completed process exit — only in a `verify`
 stamp, and never for an id in `NON_REUSABLE_IDS` (every
-AC level gate, every style gate, `reconcile`). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
+AC level gate, every style gate, `reconcile`, `instruction-growth`; the reasons are that constant's comment in
+`gate-run-core.mjs`). `test` could not be reused from regress HEAD even outside that set: regress HEAD runs it over the
+test files not changed since the base, never this feature's own AC tests, so its file list differs from verify's
+whole-suite run and the execution identity misses it (6.72.2, audit LOOP-8, closed won't-fix). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
 without them validates as before, and a floor older than 6.34.0 reads a reused entry as `entry-not-run` (a LAPSE code,
 so a re-run — the fail-closed direction). The in-progress record's `reuse` binding (the offered path and digest) is
 dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `.pharn/` state
