@@ -16,7 +16,10 @@
 //   symlink followed by `..`, is also judged at the target the filesystem reaches; a path spelled with
 //   another letter case or Unicode form than an EXISTING directory is also judged at that directory's
 //   on-disk spelling (both: see RESOLUTION, below); and a guard error denies (see A GUARD ERROR DENIES).
-//   Every write the pre-6.24.0 hook denied is still denied here, with a byte-identical message.
+//   Every write the pre-6.24.0 hook denied is still denied here, with a byte-identical message — with ONE exception,
+//   in the ALLOW direction (audit TST-12, 2026-10-12): a path strictly inside THIS session's own scratchpad, by the
+//   install posture's rule (2) (see THE OUT-OF-PROJECT PLACES), is allowed in every mode, and the out-of-root
+//   message gains one bullet naming that scratchpad when this call's payload names one the rule accepts.
 //
 //   UNSIGNALLED posture (neither signal): the same as DEV, on its own smaller default-safe-set. A tree with
 //   no positive signal either way keeps the old friction rather than relax a tree nobody has told this
@@ -108,7 +111,8 @@
 //     as an out-of-project path, so neither the out-of-project allow nor the Bash scratch remedy applies.
 // The fold also strips trailing dots and spaces, so a SIBLING named like the project plus a trailing dot is
 // denied too, although on APFS it is another directory: an over-block, accepted. The dev and unsignalled
-// postures deny every out-of-project path anyway, and keep their pre-6.24.0 message for it (D1).
+// postures deny every out-of-project path but this session's own scratchpad anyway, and keep their pre-6.24.0
+// message for it unless the payload names that scratchpad (D1; TST-12).
 //
 // JURISDICTION ROOT (hook-cwd-anchoring). ROOT is NOT the hook process's cwd. It is the first directory,
 // walking up from that cwd, that holds a `.git` entry or IS $CLAUDE_PROJECT_DIR — so a session whose Bash
@@ -681,6 +685,9 @@ function aliasesRoot(target) {
 //       the whole path, so a TMPDIR that itself points inside such a folder cannot widen the rule), never inside the
 //       Claude config directory (whichever of it and the temp root contains the other), and never inside the home
 //       directory when the home directory lies inside the temp root.
+// The DEV and UNSIGNALLED postures admit place (2) alone, by this same rule, in every mode — a scope is root-relative,
+// so it has no jurisdiction there (audit TST-12, 2026-10-12: those postures denied the agent's own scratchpad and
+// sent scratch writes to Bash). (1) and (3) stay install-only.
 // Both session path fields must already be in normal form — absolute, no `.` or `..` segment — or they grant
 // nothing.
 // Every root is resolved exactly as a write target is (resolveWriteTarget), so a root that does not exist yet
@@ -1025,7 +1032,8 @@ const OUT_OF_PROJECT_PLACES =
 // `alias` marks the install posture's refusal of another spelling of the project (see the header, ALIASES OF THE
 // PROJECT); `claudeState` marks the install posture's refusal of Claude Code's own state outside the project (THE
 // OUT-OF-PROJECT PLACES); `scratchpadKnown` is true iff this call's payload names a scratchpad the rule accepts as
-// this session's own (ownScratchpadDir()), which decides whether that body may offer the scratchpad as a route.
+// this session's own (ownScratchpadDir()), which decides whether the Claude-state body, or the dev/unsignalled
+// out-of-root body, may offer the scratchpad as a route.
 function denyMessage(blockedPath, scope, record, branch = "in-repo", ctx = {}) {
   const install = !!ctx.install;
   const runs = Array.isArray(ctx.runs) ? ctx.runs : [];
@@ -1136,6 +1144,9 @@ function denyMessage(blockedPath, scope, record, branch = "in-repo", ctx = {}) {
       `WHY: this path is NOT INSIDE the repo root (${shownRoot}), and every writes-scope entry is repo-root-relative — so no \`writes:\` declaration can name it, and neither can the fail-closed default. ${why}` +
       "FIX (pick one):\n" +
       "  • If this file BELONGS to the current work: put it INSIDE the repo, declare that path in `writes:`, and re-run the scope-setter.\n" +
+      (!install && ctx.scratchpadKnown
+        ? "  • If it is TEMPORARY/scratch: put it inside this session's own scratchpad, which the Write tool reaches in this posture under any scope (recognised only from the scratchpad_dir and session_id Claude Code passes to hooks).\n"
+        : "") +
       "  • If it is TEMPORARY/scratch: a path outside the repo is not this guard's jurisdiction — write it with the Bash tool, which `PreToolUse` never sees. That is a boundary, NOT a sanctioned bypass: never route an IN-repo write that way.\n" +
       "  • Otherwise: intentionally blocked (fail-closed). A human does the write by hand, outside the agent.\n" +
       "Scope file: .pharn/writes-scope.json (absence = fail-closed default-safe-set" +
@@ -1337,10 +1348,13 @@ if (isWrite) {
         // path is denied as the project's own, before the out-of-project rules can read it as outside.
         if (install && fromRoot !== "" && aliasesRoot(real)) deny(shown(String(p)), scope, record, "in-repo", { ...ctx, alias: true });
         const otherTree = fromRoot !== "" && insideSomeWorkTree(real);
+        // TST-12: the dev and unsignalled postures admit THIS session's own scratchpad, by rule (2), in every mode —
+        // and nothing else outside the project (THE OUT-OF-PROJECT PLACES).
+        if (!install && fromRoot !== "" && !otherTree && !ambiguous && isInOwnScratchpad(real, session)) return;
         const allowedRoot = install && fromRoot !== "" && !otherTree && !ambiguous && isAllowedOutOfRoot(real, session);
         if (mode === "permissive" && allowedRoot) return;
         const claudeState = install && fromRoot !== "" && !otherTree && !allowedRoot && isClaudeState(real);
-        const scratchpadKnown = claudeState && ownScratchpadDir(session) !== null;
+        const scratchpadKnown = (claudeState || !install) && ownScratchpadDir(session) !== null;
         deny(shown(String(p)), scope, record, otherTree ? "other-tree" : "out-of-root", {
           ...ctx,
           openWithout: allowedRoot,

@@ -186,7 +186,15 @@ whose metadata it cannot read cleanly. A skill whose description is narrower tha
 can be skipped, and its convention or its argument about a finding then never reaches the stage. The conservative
 rules in `pharn/pharn-core/installed-skill-selection/installed-skill-selection.md` narrow this; nothing structural
 closes it, and the catalogue's `ok` status means only "syntactically readable", never "a complete account".
-Measured in `.dev/features/selective-skill-reads/EVAL.md`, not bounded by it. The quantifier is corrected in the heading
+Measured in `.dev/features/selective-skill-reads/EVAL.md`, not bounded by it. (4) The **stage-report** channel
+(6.27.0): when `/pharn-ship` or `/pharn-loop` routes a stage to its own agent, the Agent tool returns that agent's
+final text into the orchestrator's context — a model consuming another model's free text. Only the exit code of
+`pharn/floor/stage-agent.mjs finish` and its closed first line are floor, and `/pharn-loop`'s stop is still decided
+from the floor verdicts on disk; that neither orchestrator's control flow uses the prose is its own discipline
+(`pharn-loop.md`, `pharn-ship-stages.md`). (5) The **handoff** channel
+(`pharn/pharn-contracts/loop-record.md`, Residual): `/pharn-loop` Step 1b reads the latest prior `LOOP.md`'s
+`## Handoff`, free text a past run wrote, and no person reads it first. Bounded — no branch reads it, it never gates
+or sets a flag, it is scoped to one feature's record and quoted as DATA — and not zeroed. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
