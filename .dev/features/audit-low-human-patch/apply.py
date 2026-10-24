@@ -175,10 +175,10 @@ EDITS = [
 """,
         r"""Measured in `.dev/features/selective-skill-reads/EVAL.md`, not bounded by it. (4) The **stage-report** channel
 (6.27.0): when `/pharn-ship` or `/pharn-loop` routes a stage to its own agent, the Agent tool returns that agent's
-final text into the orchestrator's context — a model consuming another model's free text. Control flow reads only
-the stage's `finish` exit code and its closed first line (`pharn/floor/stage-agent-core.mjs`), and the floor
-verdicts on disk still decide every stop; that the orchestrator never acts on the prose is its own discipline
-(`/pharn-loop`'s stage-agent bounds, `pharn-ship-stages.md`). (5) The **handoff** channel
+final text into the orchestrator's context — a model consuming another model's free text. Only the exit code of
+`pharn/floor/stage-agent.mjs finish` and its closed first line are floor, and `/pharn-loop`'s stop is still decided
+from the floor verdicts on disk; that neither orchestrator's control flow uses the prose is its own discipline
+(`pharn-loop.md`, `pharn-ship-stages.md`). (5) The **handoff** channel
 (`pharn/pharn-contracts/loop-record.md`, Residual): `/pharn-loop` Step 1b reads the latest prior `LOOP.md`'s
 `## Handoff`, free text a past run wrote, and no person reads it first. Bounded — no branch reads it, it never gates
 or sets a flag, it is scoped to one feature's record and quoted as DATA — and not zeroed. The quantifier is corrected in the heading
@@ -203,7 +203,7 @@ PINS = {
     ),
     "THREAT-MODEL.md": (
         "f886f61636438effca0c23aa7fac2c3a1f3b9a80a4f55ae7be6e387b3ae4e6e3",
-        "e267b13d90cbeaeba3368823ddda5ae707cb4f0ac622338888c4534e2343a0ac",
+        "922f953eb9d1f178b2a938bd2b066d0cfd5baab9843cd8440dc04d18e8dedf0f",
     ),
 }
 # END PINS
