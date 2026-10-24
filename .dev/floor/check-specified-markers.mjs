@@ -7,7 +7,8 @@
 // drives no SKILLS_VERSION bump. The dependency may only point .dev/ -> pharn/, never the reverse.
 //
 // Floor primitive (ARCHITECTURE §2): #3 (enum / regex — here, set membership by file EXISTENCE and by
-// exact SUBSTRING presence). No LLM, no classification, no heuristics, no network, no child_process.
+// exact SUBSTRING presence, plus one regex for the direction-3 sweep). No LLM, no classification, no
+// heuristics, no network. One child process: the sweep asks `git ls-files` which files to scan.
 //
 // WHY IT EXISTS (P7 — a real failure, not a hypothetical). The four trusted docs asserted, in the
 // present tense, floor primitives that do not exist as running checks: a `pre-egress` hook (no
@@ -29,6 +30,29 @@
 //      BETTER, which is precisely when nobody is looking for a doc bug.
 //   2. A MARKER IS DELETED, THE PRIMITIVE IS STILL ABSENT.  The doc silently returns to overclaiming —
 //      the original F7 defect. RED, naming the file and the missing marker.
+//   3. A NEW ANNOTATION NOBODY REGISTERED (the marker sweep, `marker_sweep` in the manifest).  Someone
+//      writes a fresh "specified; ships with the guarded surface" hedge and never adds a site, so
+//      directions 1 and 2 never look at it: when its primitive ships, the hedge silently understates;
+//      when someone deletes it, nothing notices. The sweep matches the phrase on every file git would
+//      commit (`git ls-files --cached --others --exclude-standard`), whitespace- and case-tolerant so a
+//      re-wrapped or re-cased hedge is still seen, and REDs each hit that does not lie wholly inside an
+//      occurrence of a registered `specified_primitives` marker in the SAME file — per hit, so a second
+//      hedge in an already-registered doc is caught too. This is a CLOSURE assertion over the phrase
+//      (lessons-learned L36), not a registration source: membership still comes only from the manifest
+//      (L6), and prose ABOUT the marker is never read as a site — it is a loud RED until a human lists
+//      the file in the closed `marker_sweep.exempt` allowlist with a reason. The trigger (P7): the
+//      manifest records two annotations (archetype-maps' ARCHITECTURE §4 site, constitution-injection)
+//      that sat unregistered until a hand sweep found them — audit 2026-10-12 ENF-8.
+//      Fail-closed: not a git work tree, or zero files listed, is exit 2 (a sweep over nothing certifies
+//      nothing, L34); an exemption that covers a file holding a registered site (of either class) is
+//      exit 2; an exemption that matches no hit is RED (STALE_EXEMPTION). The manifest file itself is
+//      exempt by construction — the address book has to quote every marker it registers. The key is
+//      optional (absent => no sweep, so a one-entry fixture manifest can drive directions 1 and 2 over
+//      real docs that also hold OTHER entries' hedges); the test suite pins that the REAL manifest
+//      declares it.
+//      Because the listing includes untracked, not-ignored files, a local scratch note carrying the
+//      phrase REDs `npm run check` on that machine while CI, which never sees the file, stays GREEN.
+//      That is the intended direction: the note would be caught the moment it was committed.
 //
 // THE SECOND CLASS: FORWARD-LOOKING CLAIMS (`forward_claims` in the manifest). A sentence like "the
 // checker that runs these is the NEXT increment" is TRUE when written and FALSE the moment the named
@@ -55,13 +79,25 @@
 // REVIEW.md while correcting an unrelated error: a substring search for finding objects counted the
 // remediation note that quoted the search pattern, inflating 6 findings to 7. A prose-scanning version
 // of THIS checker would have the identical bug — a CHANGELOG sentence quoting a marker would register
-// as a doc site. So the sites are enumerated, not discovered.
+// as a doc site. So the sites are enumerated, not discovered. Direction 3 does scan prose, but only to
+// demand that each hit BE enumerated (or exempted by a human); a hit never becomes a site by being found,
+// so the L6 failure turns into a loud RED instead of a silent registration.
 //
 // HONEST SCOPE (P0) — what this does NOT guarantee, stated because it is not obvious.
-//   * IT CANNOT DISCOVER A NEW OVERCLAIM. The manifest is a hand-maintained address book. A doc that
-//     starts asserting some OTHER non-existent primitive tomorrow is invisible here until a human adds
-//     the entry. "The manifest checked out" NEVER means "the docs are true" — the same bound the
-//     lessons index carries, and the reason this file is not called check-doc-accuracy.
+//   * IT DISCOVERS NEW HEDGES, NEVER NEW OVERCLAIMS. The sweep finds a new annotation only when it
+//     carries the literal phrase. A doc that asserts some OTHER non-existent primitive with no hedge at
+//     all, or hedges it in other words (THREAT-MODEL §4 item 5's `_Specified; the check is conditional…_`
+//     is a live example, registered by its own marker), is invisible until a human adds the entry.
+//     "The manifest checked out" NEVER means "the docs are true" — the same bound the lessons index
+//     carries, and the reason this file is not called check-doc-accuracy.
+//   * FORWARD CLAIMS ARE NOT SWEPT. They share no invariant phrase: the registered markers are one-off
+//     sentences, and the generic words ("next increment", "not yet built", "future increment") occur in
+//     dozens of correct P7 policy sentences the manifest deliberately leaves unregistered. A sweep would
+//     need a heuristic (P0/P5 forbid calling it a guarantee) or registrations of sentences that are
+//     true. An unregistered forward claim stays invisible here.
+//   * AN EXEMPTION HIDES ITS WHOLE FILE (or directory). A future hedge written into CHANGELOG.md or under
+//     .dev/features/ is not swept. The allowlist is a reviewed declaration whose exact set the test pins.
+//   * IGNORED PATHS ARE NOT SWEPT. Whatever `.gitignore` / `.git/info/exclude` hide is outside the scan.
 //   * THE PROBE TESTS EXISTENCE, NOT FUNCTION. `dir-contains` asks whether a file whose NAME contains a
 //     substring is present; `path` asks whether a path exists. Neither asks whether a hook is WIRED in
 //     .claude/settings.json, whether it is invoked, or whether it works. A stub named pre-egress.cjs
@@ -73,18 +109,28 @@
 //   * IT IS APPARATUS. Nothing on the floor forces `npm run check` to run it; that wiring is a
 //     convention this file cannot enforce about itself.
 //
-// TRUST (P2): the manifest is a trusted, human-reviewed apparatus file and the docs it reads are
-// trusted. No untrusted input is ingested; no free text steers a branch. Doc bytes are opaque DATA —
-// read, compared by `String.prototype.includes`, never parsed, interpreted, or executed.
+// TRUST (P2): the manifest is a trusted, human-reviewed apparatus file, and the docs its sites name are
+// trusted. The sweep is wider: it reads EVERY file git lists, untracked ones included, so its input may
+// be untrusted (code under review, a fetched file, a contributor's note). All file bytes are opaque DATA
+// — compared by `String.prototype.includes` and one regex, never parsed, interpreted, or executed. No
+// free text steers a branch: only match offsets, byte ranges and paths do. The one excerpt the sweep
+// prints (the line of an unregistered hit) goes through `JSON.stringify`, which escapes control
+// characters, so no terminal escape sequence reaches the output.
+//   Two further bounds of the sweep, stated: `git` inherits the caller's environment, so a run from
+// inside a git hook with GIT_DIR / GIT_INDEX_FILE set would list THAT index (no hook runs this checker
+// today); and a hit is covered only by a `specified_primitives` marker, never a forward-claim one — the
+// phrase is the specified class's vocabulary, so a forward-claim marker carrying it would RED.
 //
 // Usage:  node .dev/floor/check-specified-markers.mjs [targetDir] [--manifest <path>]
 //         targetDir defaults to cwd; --manifest defaults to the sibling specified-primitives.json and
 //         exists so the test suite can drive fixture manifests (an authored fixture passes by
 //         construction — L4 — so the RED paths must be reachable, not merely asserted).
-// Exit:   0 GREEN | 1 RED (a drifted annotation) | 2 the manifest itself is unusable (fail-closed)
+// Exit:   0 GREEN | 1 RED (a drifted annotation) | 2 the manifest itself is unusable, or the sweep cannot
+//         list the tree (fail-closed)
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, dirname, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, dirname, resolve, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -173,8 +219,10 @@ function validatePrimitive(p) {
     if (!site || typeof site !== "object") {
       throw new Error(`primitive ${p.id}: each site must be an object`);
     }
-    if (typeof site.file !== "string" || typeof site.marker !== "string") {
-      throw new Error(`primitive ${p.id}: each site needs string \`file\` and \`marker\` fields`);
+    // An EMPTY marker is present in every file (`includes("")` is always true), so direction 2 could
+    // never fire for it and the sweep would have nothing to cover — refused like any other unusable site.
+    if (typeof site.file !== "string" || typeof site.marker !== "string" || site.marker === "") {
+      throw new Error(`primitive ${p.id}: each site needs string \`file\` and \`marker\` fields, the marker non-empty`);
     }
   }
 }
@@ -199,6 +247,137 @@ function validateNamedArtifact(a) {
       if (typeof entry !== "string") {
         throw new Error(`named-artifact ${a.id}: each \`forbidden\` entry must be a string`);
       }
+    }
+  }
+}
+
+// ------------------------------------------------------------------ direction 3: the marker sweep
+
+// The specified-class vocabulary: the shortest substring every phrase-bearing hedge shares
+// (lessons-learned L33), with `\s+` between words so a markdown re-wrap does not hide a hit, and `i` so
+// a sentence-initial "Ships" does not either.
+const SWEEP_PHRASE = /ships\s+with\s+the\s+guarded\s+surface/gi;
+const sweep = Object.hasOwn(manifest, "marker_sweep") ? manifest.marker_sweep : undefined;
+
+/** An exemption path: an exact repo-relative file, or a directory prefix ending in `/`. */
+const exemptCovers = (path, rel) => (path.endsWith("/") ? rel.startsWith(path) : rel === path);
+
+function validateSweep(sw, siteFiles) {
+  if (!sw || typeof sw !== "object" || Array.isArray(sw) || !Array.isArray(sw.exempt)) {
+    throw new Error("`marker_sweep` must be an object with an `exempt` array");
+  }
+  const seen = new Set();
+  for (const e of sw.exempt) {
+    const path = e?.path;
+    if (typeof path !== "string" || typeof e.reason !== "string" || e.reason.trim() === "") {
+      throw new Error("each `marker_sweep.exempt` entry needs a string `path` and a non-empty string `reason`");
+    }
+    const segments = (path.endsWith("/") ? path.slice(0, -1) : path).split("/");
+    if (path.includes("\\") || segments.some((s) => s === "" || s === "." || s === "..")) {
+      throw new Error(
+        `marker_sweep exempt path ${JSON.stringify(path)} must be repo-relative, with no empty, '.', '..' or backslash segment`
+      );
+    }
+    if (seen.has(path)) throw new Error(`marker_sweep exempt path ${JSON.stringify(path)} is listed twice`);
+    seen.add(path);
+    const guarded = siteFiles.find((f) => exemptCovers(path, f));
+    if (guarded) {
+      throw new Error(
+        `marker_sweep exempt path ${JSON.stringify(path)} covers ${guarded}, which holds a registered site — a guarded doc is never exempt`
+      );
+    }
+  }
+}
+
+/** Every file git would commit: tracked, plus untracked-but-not-ignored. Fail-closed on no listing. */
+function listTree() {
+  let out;
+  try {
+    out = execFileSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard"], {
+      cwd: TARGET,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: 256 * 1024 * 1024,
+    });
+  } catch (e) {
+    const why = `${e.stderr ?? ""}`.trim().split("\n")[0] || e.message;
+    throw new Error(`marker sweep: \`git ls-files\` failed in ${TARGET} — the sweep needs a git work tree (${why})`, { cause: e });
+  }
+  const files = [...new Set(out.split("\0").filter(Boolean))];
+  if (files.length === 0) {
+    throw new Error(`marker sweep: \`git ls-files\` listed no files in ${TARGET} — a sweep over nothing certifies nothing`);
+  }
+  return files;
+}
+
+const sweepStats = { files: 0, hits: 0, exemptHits: 0 };
+
+/** Direction 3. Assumes `primitives` and `forward` already passed validatePrimitive. */
+function runSweep() {
+  const siteFiles = [...new Set([...primitives, ...forward].flatMap((p) => p.sites.map((s) => s.file)))];
+  validateSweep(sweep, siteFiles);
+  const markersByFile = new Map();
+  for (const p of primitives) {
+    for (const s of p.sites) markersByFile.set(s.file, [...(markersByFile.get(s.file) ?? []), s.marker]);
+  }
+  const exempt = sweep.exempt.map((e) => ({ path: e.path, hits: 0 }));
+  const manifestRel = relative(TARGET, MANIFEST).split(sep).join("/");
+
+  for (const rel of listTree()) {
+    if (rel === manifestRel) continue;
+    let st;
+    try {
+      st = lstatSync(join(TARGET, rel));
+    } catch {
+      continue; // listed (tracked) but deleted from the working tree: no bytes to scan
+    }
+    // Only regular files. A symlink is never followed out of the tree (a target inside it is listed
+    // itself), and git lists a nested repository — a sibling worktree, say — as one `dir/` entry, whose
+    // bytes belong to another tree.
+    if (!st.isFile()) continue;
+    let src;
+    try {
+      src = readFileSync(join(TARGET, rel), "utf8");
+    } catch (e) {
+      red(`${rel}: listed for the marker sweep but could not be read (${e.code}) — an unread file is never a clean one`);
+      continue;
+    }
+    const hits = [...src.matchAll(SWEEP_PHRASE)];
+    if (hits.length === 0) continue;
+    sweepStats.files++;
+    const ex = exempt.find((x) => exemptCovers(x.path, rel));
+    if (ex) {
+      ex.hits += hits.length;
+      sweepStats.exemptHits += hits.length;
+      continue;
+    }
+    sweepStats.hits += hits.length;
+    const ranges = [];
+    for (const m of markersByFile.get(rel) ?? []) {
+      for (let i = src.indexOf(m); i !== -1; i = src.indexOf(m, i + 1)) ranges.push([i, i + m.length]);
+    }
+    for (const h of hits) {
+      const start = h.index;
+      const end = start + h[0].length;
+      if (ranges.some(([a, b]) => start >= a && end <= b)) continue;
+      const line = src.slice(0, start).split("\n").length;
+      const text = src.split("\n")[line - 1].trim().slice(0, 140);
+      red(
+        `${rel}:${line}: an UNREGISTERED "specified" annotation — no registered marker covers it, so nothing ` +
+          `tells anyone when its primitive ships or when it is deleted.\n` +
+          `    line: ${JSON.stringify(text)}\n` +
+          `    fix: add it as a site of a \`specified_primitives\` entry (with a probe); if this text is ABOUT ` +
+          `the marker rather than an annotation, list the file in \`marker_sweep.exempt\` with a reason.`
+      );
+    }
+  }
+
+  for (const x of exempt) {
+    if (x.hits === 0) {
+      red(
+        `marker_sweep.exempt ${JSON.stringify(x.path)}: STALE_EXEMPTION — it covers no hit of the phrase. ` +
+          `Remove the entry; an allowlist entry that outlived its reason hides the next real hedge.`
+      );
     }
   }
 }
@@ -302,6 +481,8 @@ try {
       red(`${a.cited_in} cites \`${a.id}\`, but ${a.must_exist} does not exist — the doc names a missing artifact`);
     }
   }
+
+  if (sweep !== undefined) runSweep();
 } catch (e) {
   console.error(`RED (manifest unusable): ${e.message}`);
   process.exit(2);
@@ -312,20 +493,27 @@ function describe(probe) {
 }
 
 if (reds.length) {
-  console.error(`SPECIFIED-MARKERS: RED — ${reds.length} drifted annotation(s)\n`);
+  console.error(`SPECIFIED-MARKERS: RED — ${reds.length} finding(s)\n`);
   for (const r of reds) console.error(`  - ${r}`);
   console.error(
     `\nManifest: ${MANIFEST}\n` +
-      `This checks only the annotations and forward claims that manifest LISTS. It cannot discover a new ` +
-      `overclaim, or a forward-looking claim nobody registered (P0).`
+      `This checks the annotations and forward claims that manifest LISTS, and sweeps for unlisted hedges that ` +
+      `carry the literal phrase. It cannot discover an overclaim with no such hedge, or a forward-looking claim ` +
+      `nobody registered (P0).`
   );
   process.exit(1);
 }
 
+const sweepLine =
+  sweep === undefined
+    ? "marker sweep: OFF (the manifest declares no `marker_sweep`)"
+    : `marker sweep: ${sweepStats.hits} phrase hit(s) all registered, ${sweepStats.exemptHits} exempt, ` +
+      `across ${sweepStats.files} file(s) (${sweep.exempt.length} exemption(s))`;
 console.log(
   `SPECIFIED-MARKERS: GREEN — ${siteCount} annotation(s) across ${primitives.length} specified primitive(s) ` +
     `(${liveCount} now live), ${claimCount} forward-claim site(s) across ${forward.length} registered claim(s) ` +
-    `(${landedCount} now landed), ${named.length} named artifact(s) checked in ${TARGET}.\n` +
-    `NOTE (P0): this proves the LISTED annotations and claims still match reality. It never means the docs are ` +
-    `accurate — an overclaim or an expired claim not in the manifest is invisible here.`
+    `(${landedCount} now landed), ${named.length} named artifact(s) checked in ${TARGET}; ${sweepLine}.\n` +
+    `NOTE (P0): this proves the LISTED annotations and claims still match reality and, with the sweep on, that ` +
+    `every hedge carrying the phrase is listed or exempt. It never means the docs are accurate — an overclaim with no such hedge, or an expired ` +
+    `claim not in the manifest, is invisible here.`
 );

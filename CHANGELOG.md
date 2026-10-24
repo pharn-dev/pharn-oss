@@ -23,6 +23,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-24: **`check:markers` now also REDs a "specified" hedge that nobody registered (audit 2026-10-12 ENF-8).**
+  `.dev/floor/check-specified-markers.mjs` gains a third direction, the marker sweep. On every file
+  `git ls-files --cached --others --exclude-standard` lists, each hit of the hedge phrase (matched across line wraps
+  and case) must lie inside a registered marker in the same file, or the file must be on the manifest's closed
+  `marker_sweep.exempt` list (`CHANGELOG.md`, `.dev/features/`, the checker and its test, each with a reason).
+  Otherwise it is RED with `file:line`. An exemption over a registered site's file is exit 2, one matching no hit is
+  RED, and a tree git cannot list is exit 2. On `main` today every hit on a claim-making doc was already registered;
+  the one other hit, a guide line about the marker, was reworded. Bounds: only the literal phrase is seen, so an
+  overclaim with no hedge or one hedged in other words stays invisible. Forward-looking claims are not swept (they
+  share no phrase). An exemption hides its whole file or directory. An untracked local file carrying the phrase REDs
+  locally while CI never sees it. Apparatus only, no `SKILLS_VERSION` bump.
+
 ## [6.72.3] - 2026-10-24
 
 ### Fixed
