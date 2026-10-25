@@ -402,6 +402,29 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   approval signal, it is **harness-layer, environment-dependent, and not expressible in markdown
   methodology**. Until an environment supplies it, this stays a named limit, not a guarantee.
 
+- **An unattended `/pharn-loop` refuses to start without evidence of a sandbox (7.1.0), and that is all it does.**
+  The sandbox above stays harness-layer, and PHARN still does not implement one. What this version adds is a refusal:
+  `/pharn-loop`'s Step 1a runs `pharn/floor/check-run-isolation.mjs`, which stops the run (S15, `blocked: not-isolated`)
+  unless it finds a container marker and none of a fixed list of credentials, or the operator passed
+  `--accept-host-execution` (`pharn/pharn-contracts/loop-record.md`, "The isolation field"). The verdict over its probe
+  is floor (closed lists, string equality, set membership). That the environment really is isolated is not:
+  - **The evidence and the override are operator-fakeable by design.** `PHARN_ISOLATED=1`, a planted `/.dockerenv`, an
+    emptied `HOME`, and so is a project's own `.claude/settings.json` `env` block, which is project content. The check
+    binds the honest operator, not the hostile one. The override exists because the lists cannot know every sandbox
+    or every credential: an operator who knows their environment must be able to say so, and the record, the run
+    report and the commit message then repeat that they did.
+  - **The floor sees argv, never who typed the flag, and the record of it is run-writable.** The record, the run report
+    and the commit message repeat the witness file `pharn/.run/pharn-loop/<name>/isolation.json`. That file is
+    git-ignored `pharn/.run/` state that the Write tool reaches in every posture and that a `Bash` write reaches too,
+    and reconcile never sees it. So those lines name the flag faithfully only while nobody rewrites the witness, and
+    the record check's RED does not gate the commit. Agreement between files the run can write, never provenance.
+  - **The lists are closed and partial.** A token in a project `.env`, a keychain, a cloud metadata endpoint, or a
+    credential named nowhere on the list is not seen. A container the list does not recognize needs `PHARN_ISOLATED=1`.
+  - **The agent's own model credential is always present.** `ANTHROPIC_API_KEY` (or the session's `~/.claude/` login)
+    is how the agent runs at all, so a compromised run can still send data out through it. That exfiltration residual
+    is untouched by this stop.
+  - `/pharn-ship` runs no such check: a person approves its SPEC and decides at its end.
+
 **Why this is not one of §1's four irreducible limits.** It _is_ reducible — the sandbox above reduces
 it — just not by anything this repository can ship. §1's four cannot be reduced at all, which is what
 "irreducible" means there; folding this one in would dilute that word.
