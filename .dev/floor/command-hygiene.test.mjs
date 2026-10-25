@@ -173,7 +173,7 @@ const STEP_2B_GATES = [
 
 function step2bBlock() {
   const body = commandText("pharn-dev-build.md").replace(SKIP_RE, "");
-  const start = body.indexOf("SCOPE=.pharn/writes-scope.json");
+  const start = body.indexOf("SCOPE=pharn/.run/writes-scope.json");
   assert.notEqual(start, -1, "Step 2b's scope-reading block must still exist in pharn-dev-build.md");
   const end = body.indexOf("```", start);
   assert.notEqual(end, -1, "Step 2b's fenced block must be closed");
@@ -182,7 +182,7 @@ function step2bBlock() {
 
 for (const gate of STEP_2B_GATES) {
   test(`✧ Step 2b RUNS ${gate.tool} over the scoped paths, rather than naming it in prose`, () => {
-    assert.match(step2bBlock(), gate.re, `Step 2b must invoke ${gate.tool} on the paths it parsed from .pharn/writes-scope.json`);
+    assert.match(step2bBlock(), gate.re, `Step 2b must invoke ${gate.tool} on the paths it parsed from pharn/.run/writes-scope.json`);
   });
 
   // The other half, and the load-bearing one: an invocation with NO paths falls back to the tool's own
@@ -459,7 +459,7 @@ test(
   () => {
     assert.equal(lintedCount(["--no-globs", "CLAUDE.md"], REPO_ROOT), 1, "one named file must be one linted file");
     assert.equal(
-      lintedCount(["--no-globs", "LIMITS.md"], REPO_ROOT),
+      lintedCount(["--no-globs", "pharn/LIMITS.md"], REPO_ROOT),
       0,
       "an `ignores` entry must still beat an explicit path, or --no-globs would put the trusted docs within a fixer's reach"
     );
@@ -612,7 +612,7 @@ test("✧ the lessons-index wiring set is non-vacuous — every named command ex
 // The LESSONS-FILE ARGUMENT is the discriminating axis here, NOT the checker path. Unlike the index
 // pair above — where `.dev/floor/…` vs `pharn/floor/…` separates the copies — check-plan-lessons.mjs is
 // a SINGLE checker under pharn/floor/ that BOTH surfaces invoke. What must not cross the boundary is the
-// CANON it is pointed at: a dev command pointed at the user's `memory-bank/` (or a product command at
+// CANON it is pointed at: a dev command pointed at the user's `pharn/memory-bank/` (or a product command at
 // this repo's `.dev/memory-bank/`) would check the wrong canon and every other gate would stay green.
 // So each member pins its own full invocation, argument included.
 //
@@ -626,7 +626,7 @@ const PLAN_LESSONS_WIRING = [
   {
     file: "pharn-plan.md",
     role: "self-checks the declaration it just wrote",
-    re: new RegExp(`${CHECKER}\\s+\\S+\\s+memory-bank\\/lessons-learned\\.md`),
+    re: new RegExp(`${CHECKER}\\s+\\S+\\s+pharn\\/memory-bank\\/lessons-learned\\.md`),
   },
   {
     file: "pharn-dev-plan.md",
@@ -636,7 +636,7 @@ const PLAN_LESSONS_WIRING = [
   {
     file: "pharn-grill.md",
     role: "re-verifies a declaration it did not author",
-    re: new RegExp(`${CHECKER}\\s+\\S+\\s+memory-bank\\/lessons-learned\\.md`),
+    re: new RegExp(`${CHECKER}\\s+\\S+\\s+pharn\\/memory-bank\\/lessons-learned\\.md`),
   },
   {
     file: "pharn-dev-grill.md",
@@ -646,7 +646,7 @@ const PLAN_LESSONS_WIRING = [
   {
     file: "pharn-ship.md",
     role: "reads the exit code as a proceed/stop input",
-    re: new RegExp(`${CHECKER}\\s+\\S+\\s+memory-bank\\/lessons-learned\\.md`),
+    re: new RegExp(`${CHECKER}\\s+\\S+\\s+pharn\\/memory-bank\\/lessons-learned\\.md`),
   },
   {
     file: "pharn-dev-ship.md",
@@ -671,12 +671,12 @@ for (const site of PLAN_LESSONS_WIRING) {
   });
 
   // The CROSS-SURFACE guard, and it is the load-bearing half: a dev command must NOT invoke the checker
-  // against the user's `memory-bank/`, and a product command must NOT reach into this repo's
+  // against the user's `pharn/memory-bank/`, and a product command must NOT reach into this repo's
   // `.dev/memory-bank/`. Asserting only presence would let a pasted line check the wrong canon silently.
   test(`✧ ${site.file} points the checker at ITS OWN canon — the other surface's path does not appear on the invocation`, () => {
     const isDev = site.file.startsWith("pharn-dev-");
     const wrong = isDev
-      ? new RegExp(`${CHECKER}\\s+\\S+\\s+memory-bank\\/lessons-learned\\.md`)
+      ? new RegExp(`${CHECKER}\\s+\\S+\\s+pharn\\/memory-bank\\/lessons-learned\\.md`)
       : new RegExp(`${CHECKER}\\s+\\S+\\s+\\.dev\\/memory-bank\\/lessons-learned\\.md`);
     assert.doesNotMatch(
       commandBody(site.file),
@@ -739,7 +739,7 @@ const LESSON_EXTRACT_WIRING = [
     // the actual hand-off deleted: it would certify by not looking precisely enough, the same defect
     // as the first `writes:` guard below. Anchoring on `**invoke \`…\`` means only Step 2b's actual
     // instruction satisfies it. Dev surface, so the DEV promote command — a product
-    // `/pharn-memory-promote` here would point a dev run at the user's `memory-bank/`, the
+    // `/pharn-memory-promote` here would point a dev run at the user's `pharn/memory-bank/`, the
     // cross-surface error PLAN_LESSONS_WIRING guards on its own axis.
     re: /\*\*invoke\s+`\/pharn-dev-memory-promote`/,
   },
@@ -965,8 +965,8 @@ const PROMOTE_GATE_PARITY = [
   {
     obligation: "canon-hash-pin", // 2.2.4a
     role: "pins the canon content-hash at discovery, for the Step-6 TOCTOU compare",
-    dev: /\.pharn\/pharn-dev-memory-promote\/canon-content-hash\.txt/,
-    prod: /\.pharn\/pharn-memory-promote\/canon-content-hash\.txt/,
+    dev: /pharn\/\.run\/pharn-dev-memory-promote\/canon-content-hash\.txt/,
+    prod: /pharn\/\.run\/pharn-memory-promote\/canon-content-hash\.txt/,
   },
   {
     obligation: "canon-hash-reverify", // 2.2.4b
@@ -1257,7 +1257,7 @@ test("✧ RULE B: a command declaring >=2 placeholder `writes:` paths names EACH
   //
   // The >=2 filter is L8's own domain ("a command that emits >=2 artifacts under placeholder paths"),
   // NOT an exemption invented to dodge a failure. It is load-bearing: /pharn-memory-promote and
-  // /pharn-dev-memory-promote each declare ONE placeholder entry (`memory-bank/<canon-file>`) and pass
+  // /pharn-dev-memory-promote each declare ONE placeholder entry (`pharn/memory-bank/<canon-file>`) and pass
   // `--target <canon-file>` — a bare operator placeholder the human substitutes at run time, which the
   // setter's placeholder regex then resolves. Both are CORRECT; an unfiltered Rule B would RED them,
   // reintroducing the exact L3 defect this file's Rule A control case guards against.
@@ -1589,7 +1589,7 @@ test("✧ the reachability rule DISCRIMINATES — it fails on the real pre-fix s
 // THE DEFECT (adversarial review: `capability-writes-never-bound-to-guard`, HIGH). ARCHITECTURE §3.1
 // annotates `writes:` as "ENFORCED by the pre-write hook", and finding-shape.md claimed the guard "pins
 // the path" once a Capability names findings.json. Both are false. enforce-writes-scope.cjs reads ONE
-// input — .pharn/writes-scope.json — which set-writes-scope.cjs writes from `--from-frontmatter <file>`,
+// input — pharn/.run/writes-scope.json — which set-writes-scope.cjs writes from `--from-frontmatter <file>`,
 // and EVERY call site in the corpus names a COMMAND file. Not one names a Capability. So a Capability's
 // `writes:` is parsed by nothing.
 //
@@ -1739,7 +1739,7 @@ test("✧ the dev-canon rule DISCRIMINATES — it fires on the real pre-fix cita
 // materialized arrays, not one member. L36: presence is not closure, so every back-ticked `blocked:` and
 // `not committed:` spelling in the file must be a member — a variant fails, not only an absence. L38 is
 // the reason for the ordering pin: the commit must re-derive the plan's scope with `--from-plan` before it
-// stages, because by then `.pharn/writes-scope.json` holds the record's scope, not the plan's — the defect
+// stages, because by then `pharn/.run/writes-scope.json` holds the record's scope, not the plan's — the defect
 // the loop-autonomous grill caught at blocking severity. Its review then found two more defects of the
 // same kind, both pinned below: the branch-delete line read `$b`, a variable set in an EARLIER fenced block —
 // each block runs as its own shell, so it was empty — and the staging lines let git glob a listed
@@ -2485,7 +2485,7 @@ test("✧ QUICK MODE: pharn-grill.md pins its --spec-kind line and the skip lite
 const SHIP_GRILL_ROUTE = "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-grill --name '<name>'";
 const GRILL_STOP_LINES = [
   "node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md",
-  "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md",
+  "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memory-bank/lessons-learned.md",
 ];
 
 /** Reasons pharn-ship.md's grill stop lines are not each pinned ONCE, before the full grill route line. [] when clean. */
@@ -2765,7 +2765,7 @@ test("★ QUICK MODE (GATE-2 F3): a stray planted before the anchor passes recon
     git("init", "-q");
     git("config", "user.email", "t@example.invalid");
     git("config", "user.name", "t");
-    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
     mkdirSync(join(dir, ".claude", "hooks"), { recursive: true });
     for (const h of ["protect-trusted-paths.cjs", "enforce-writes-scope.cjs", "set-writes-scope.cjs"]) {
       writeFileSync(join(dir, ".claude", "hooks", h), readFileSync(join(REPO_ROOT, ".claude", "hooks", h)));
@@ -2778,8 +2778,8 @@ test("★ QUICK MODE (GATE-2 F3): a stray planted before the anchor passes recon
     // /pharn-test-stage time: a Bash write OUTSIDE the plan's scope, before the build's anchor.
     writeFileSync(join(dir, "src", "stray.js"), "written before the anchor\n");
     // /pharn-build Step 0: the scope the plan declares, then the anchor.
-    mkdirSync(join(dir, ".pharn"), { recursive: true });
-    writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope: ["src/a.js"], set_by: "PLAN.md" }) + "\n");
+    mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "writes-scope.json"), JSON.stringify({ scope: ["src/a.js"], set_by: "PLAN.md" }) + "\n");
     const anchor = spawnSync(process.execPath, [join(FLOOR, "reconcile-baseline.mjs"), "--anchor", "--base", dir, "--by", "test"], {
       encoding: "utf8",
     });
@@ -3208,7 +3208,7 @@ test("★ LOOP QUICK: the committed scope line STOPs on a changed file outside t
     git("init", "-q");
     git("config", "user.email", "t@example.invalid");
     git("config", "user.name", "t");
-    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
     mkdirSync(join(dir, "src"), { recursive: true });
     mkdirSync(join(dir, "pharn", "features", "demo"), { recursive: true });
     writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
@@ -3266,7 +3266,7 @@ test("★ LOOP QUICK: the committed scope line STOPs on a changed file outside t
 // line to. Their wiring is `STAGE_SCRIPT_WIRING`, below.
 const GATE_RUN_WIRING = [
   // 6.18.0: /pharn-test's red run. Its pinned lines are also EXECUTED by pharn/floor/check-red-run.test.mjs (L45).
-  { file: "pharn-test.md", stage: "ac-test", out: ".pharn/pharn-test/gates" },
+  { file: "pharn-test.md", stage: "ac-test", out: "pharn/.run/pharn-test/gates" },
 ];
 
 test("✧ L34 — the gate-run wiring set is NON-EMPTY (every rule below would otherwise be vacuous)", () => {
@@ -3296,8 +3296,8 @@ test("✧ the `=$?` rule DISCRIMINATES — it fires on the REAL pre-fix text", (
   const preFix = [
     "npm test > /dev/null 2>&1; t=$?",
     "npm run lint > /dev/null 2>&1; l=$?",
-    "node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > .pharn/pharn-verify/reconcile.json 2>&1; rc=$?",
-    "node pharn/floor/check-build-complete.mjs pharn/features/<name>/PLAN.md . > .pharn/pharn-verify/completeness.json 2>/dev/null ; c=$?",
+    "node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > pharn/.run/pharn-verify/reconcile.json 2>&1; rc=$?",
+    "node pharn/floor/check-build-complete.mjs pharn/features/<name>/PLAN.md . > pharn/.run/pharn-verify/completeness.json 2>/dev/null ; c=$?",
     "  node pharn/floor/check-structural.mjs <capDir>/evals/expected/<name>.json <capDir>/findings.json . ; s=$?",
   ];
   assert.equal(preFix.length, 5, "the pre-fix corpus must cover every capture the increment removed");
@@ -3389,10 +3389,10 @@ const STAGE_SCRIPT_WIRING = [
     file: "pharn-regress.md",
     stage: "regress",
     script: "stage-regress.mjs",
-    target: ".pharn/pharn-regress/stage.json",
+    target: "pharn/.run/pharn-regress/stage.json",
     noDirect: ["run-gates", "check-regress", "check-plan-spec-agree"],
     denied: ["pharn/features/demo/REGRESSION.md", "src/x.js"],
-    allowed: [".pharn/pharn-regress/other.json"],
+    allowed: ["pharn/.run/pharn-regress/other.json"],
     control: ["pharn/features/demo/REGRESSION.md"],
     mappingAnchor: "`/pharn-regress`'s stage-exit mapping",
   },
@@ -3400,10 +3400,10 @@ const STAGE_SCRIPT_WIRING = [
     file: "pharn-verify.md",
     stage: "verify",
     script: "stage-verify.mjs",
-    target: ".pharn/pharn-verify/stage.json",
+    target: "pharn/.run/pharn-verify/stage.json",
     noDirect: ["run-gates", "check-verify", "check-plan-spec-agree", "check-build-complete", "count-verifiers", "check-structural"],
     denied: ["pharn/features/demo/VERIFY.md", "pharn/features/demo/verify-report.json", "src/x.js"],
-    allowed: [".pharn/pharn-verify/x.json"],
+    allowed: ["pharn/.run/pharn-verify/x.json"],
     control: ["pharn/features/demo/VERIFY.md", "pharn/features/demo/verify-report.json"],
     mappingAnchor: "`/pharn-verify`'s stage-exit mapping",
   },
@@ -3468,11 +3468,11 @@ test("✧ STAGE_SCRIPT_WIRING — the A1 scope, EXECUTED: each command's pinned 
       assert.equal(set.status, 0, `${file}: the pinned setter line failed: ${set.stdout}${set.stderr}`);
 
       for (const p of denied) assert.equal(deny(cwd, p), 2, `${file}: the scope must deny ${p} while the script runs`);
-      for (const p of allowed) assert.equal(deny(cwd, p), 0, `${file}: .pharn/** must stay writable (${p})`);
+      for (const p of allowed) assert.equal(deny(cwd, p), 0, `${file}: pharn/.run/** must stay writable (${p})`);
 
       // Control: the SAME probe with NO scope file must NOT deny the stage's artifacts — proving the deny above
       // comes from the SET scope, not from the fail-closed default (which permits pharn/features/**).
-      rmSync(join(cwd, ".pharn", "writes-scope.json"), { force: true });
+      rmSync(join(cwd, "pharn", ".run", "writes-scope.json"), { force: true });
       for (const p of control) assert.equal(deny(cwd, p), 0, `${file}: with NO scope file, the default must NOT deny ${p}`);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
@@ -3774,7 +3774,7 @@ test("✧ DIRECT_STAGE_WIRING — each rule fails on its mutant (L60)", () => {
 // The thin callers and the orchestrators' direct call are a copy-pair of one invocation; #314 pinned rule 7 on the
 // orchestrators only, and the thin callers kept "the Bash tool itself timed out — run the resume line once", which,
 // since the tool MOVES a timed-out call to the background rather than killing it, starts a second stage script on the
-// same `.pharn/pharn-<stage>/` record. Each thin caller (iterated over STAGE_SCRIPT_WIRING, never named here) must
+// same `pharn/.run/pharn-<stage>/` record. Each thin caller (iterated over STAGE_SCRIPT_WIRING, never named here) must
 // carry the STILL-RUNNING bullet with its never-resume-meanwhile sentence, and must not match TIMEOUT_RESUME.
 // HONEST SCOPE (P0): presence over committed prose. TIMEOUT_RESUME is ONE spelling — a reworded resume-on-timeout
 // clause passes it (GRILL P0 finding); and nothing here proves a run waited for a backgrounded call.
@@ -3821,7 +3821,12 @@ test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real scrip
       if (!t.startsWith("node pharn/floor/stage-direct.mjs")) continue;
       const dir = mkdtempSync(join(tmpdir(), "hyg-direct-"));
       try {
-        symlinkSync(join(REPO_ROOT, "pharn"), join(dir, "pharn"));
+        // 7.0.0: the state root is pharn/.run, and a symlinked pharn is refused (it would carry scratch into the repo),
+        // so pharn/ is a real directory here whose shipped members are linked one by one.
+        mkdirSync(join(dir, "pharn"));
+        for (const e of readdirSync(join(REPO_ROOT, "pharn"))) {
+          if (![".run", ".backup", "features", "memory-bank"].includes(e)) symlinkSync(join(REPO_ROOT, "pharn", e), join(dir, "pharn", e));
+        }
         mkdirSync(join(dir, ".claude"));
         symlinkSync(join(REPO_ROOT, ".claude", "hooks"), join(dir, ".claude", "hooks"));
         symlinkSync(join(REPO_ROOT, ".claude", "commands"), join(dir, ".claude", "commands"));
@@ -3832,7 +3837,7 @@ test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real scrip
         const r = spawnSync("sh", ["-c", line], { cwd: dir, env, encoding: "utf8" });
         assert.equal(r.status, 2, `${w.file}: ${t}\n${r.stdout}${r.stderr}`);
         assert.match(r.stdout, /"schema": "pharn-stage-exit\/1"/, "the script's own object, passed through");
-        const markers = readFileSync(join(dir, ".pharn", "cost", "demo", "markers.jsonl"), "utf8")
+        const markers = readFileSync(join(dir, "pharn", ".run", "cost", "demo", "markers.jsonl"), "utf8")
           .trim()
           .split("\n")
           .map((l) => JSON.parse(l));
@@ -3847,7 +3852,7 @@ test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real scrip
             [markers[0].stage, markers[0].iteration],
             [t.match(/--stage (\S+)/)[1], Number(line.match(/--iteration (\d+)/)[1])]
           );
-        assert.equal(existsSync(join(dir, ".pharn", "writes-scope.json")), false, "the scope is released");
+        assert.equal(existsSync(join(dir, "pharn", ".run", "writes-scope.json")), false, "the scope is released");
         ran++;
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -4051,7 +4056,7 @@ test("★ EXECUTED — every `--from-frontmatter … --target …` line in the c
     const text = withoutGrant(readFileSync(join(COMMANDS_DIR, file), "utf8")); // a grant's `*` is not a line to run
     // `<canon-file>` (the two memory-promote commands) is a member of that command's own `writes:` prefix; the
     // lessons file is the concrete member both promote to.
-    const canon = file === "pharn-dev-memory-promote.md" ? ".dev/memory-bank/lessons-learned.md" : "memory-bank/lessons-learned.md";
+    const canon = file === "pharn-dev-memory-promote.md" ? ".dev/memory-bank/lessons-learned.md" : "pharn/memory-bank/lessons-learned.md";
     for (const m of text.matchAll(LINE_RE)) {
       const target = m[2]
         .replace(/<name>/g, "demo")
@@ -4069,7 +4074,7 @@ test("★ EXECUTED — every `--from-frontmatter … --target …` line in the c
         encoding: "utf8",
       });
       assert.equal(r.status, 0, `${s.file}: \`--from-frontmatter ${s.cmd} --target ${s.target}\` failed: ${r.stdout}${r.stderr}`);
-      const scope = JSON.parse(readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8")).scope;
+      const scope = JSON.parse(readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
       assert.deepEqual(scope, [s.target], `${s.file}: the setter scoped ${JSON.stringify(scope)}, not the target`);
     }
   } finally {
@@ -4545,7 +4550,7 @@ for (const cmd of STAGE_AGENT_WIRING) {
       "the inline return line, once, in this section"
     );
     assert.match(s, /control\s+flow\s+never\s+uses\s+the\s+agent's\s+prose\s+is\s+\*\*ADVISORY\*\*/);
-    assert.match(s, /`THREAT-MODEL\.md §5`'s\s+free-text\s+residual/);
+    assert.match(s, /`pharn\/THREAT-MODEL\.md §5`'s\s+free-text\s+residual/);
     if (cmd.command === "pharn-ship") {
       assert.match(s, /with\s+SendMessage — load its schema first if the harness lists it as a deferred tool/);
       assert.match(s, /If SendMessage is absent\s+altogether, re-run the stage's start line \(it writes no second stage-start/);
@@ -4673,12 +4678,12 @@ test("★ STAGE_AGENT_WIRING (7) — both guards judge a stage agent's write exa
   try {
     // The scratch cwd is an UNSIGNALLED tree with no scope: `pharn/floor/**` is outside its fail-closed default,
     // `pharn/features/**` inside it. The trusted doc is named by its ABSOLUTE path in this repo, because
-    // protect-trusted-paths.cjs guards the tree its own file lives in (a bare `LIMITS.md` would name the
+    // protect-trusted-paths.cjs guards the tree its own file lives in (a bare `pharn/LIMITS.md` would name the
     // scratch dir's own, unprotected file).
     const cases = [
       ["pharn/floor/x.mjs", { "enforce-writes-scope.cjs": 2, "protect-trusted-paths.cjs": 0 }],
       ["pharn/features/x/y.md", { "enforce-writes-scope.cjs": 0, "protect-trusted-paths.cjs": 0 }],
-      [join(REPO_ROOT, "LIMITS.md"), { "enforce-writes-scope.cjs": 2, "protect-trusted-paths.cjs": 2 }],
+      [join(REPO_ROOT, "pharn/LIMITS.md"), { "enforce-writes-scope.cjs": 2, "protect-trusted-paths.cjs": 2 }],
     ];
     for (const [file_path, want] of cases) {
       for (const hook of Object.keys(want)) {
@@ -4951,7 +4956,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-dev-grill.md": 25600, // 22,836 B
   "pharn-dev-memory-promote.md": 50688, // 45,963 B
   "pharn-dev-plan.md": 20480, // 18,512 B
-  "pharn-dev-regress.md": 22528, // 20,234 B
+  "pharn-dev-regress.md": 25088, // 22,563 B (7.0.0: the pharn/.run/ paths lengthened it by 35 B)
   "pharn-dev-review.md": 10240, // 8,931 B
   "pharn-dev-ship.md": 47104, // 42,526 B
   "pharn-dev-verify.md": 27648, // 24,713 B
@@ -5241,7 +5246,7 @@ const FEATURE_NAME_LINE = "node pharn/floor/feature-name.mjs";
 const ASK_SENTENCE =
   "A `<name>` this command did not receive as its argument is asked for: stop and ask the human — never take one from a directory listing or a file's content.";
 const RESOLVE_SENTENCE =
-  "A `<name>` this command did not receive as its argument is resolved only through `pharn/floor/feature-name.mjs`: write the slug alone to `.pharn/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when it is the slug you wrote — a refusal or any other value → ask the human; never type one from a directory listing or a file's content.";
+  "A `<name>` this command did not receive as its argument is resolved only through `pharn/floor/feature-name.mjs`: write the slug alone to `pharn/.run/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when it is the slug you wrote — a refusal or any other value → ask the human; never type one from a directory listing or a file's content.";
 
 /** Where each product command's `<name>` comes from. The CLASS is reviewed judgment; the pins below hold each class's text. */
 const NAME_ORIGINS = Object.freeze({
@@ -5479,8 +5484,8 @@ function gitFixture({ reflog = true } = {}) {
   const stageFailed = () => {
     writeFileSync(join(dir, "a"), "changed by the run\n");
     git("add", "a");
-    mkdirSync(join(dir, ".pharn", "pharn-loop", "demo"), { recursive: true });
-    writeFileSync(join(dir, ".pharn", "pharn-loop", "demo", "stage.list"), "a\0");
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", "demo", "stage.list"), "a\0");
   };
   return { dir, git, base, head, hasBranch, sh, stageFailed, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
@@ -5547,12 +5552,12 @@ test("★ SHELL-SINK 8 CONTROLS — each 6.28.2 line runs its payload (else the 
 // pinned AC test (.dev/measurements/loop-wall-clock-2026-10-05.md). The brief's rule 4 carries the routed-agent copy
 // (stage-agent-core.test.mjs pins it); a person or an inline orchestrator runs the COMMAND and never sees the brief,
 // so each command that writes the user's files says it in its own Step 3. PRESENCE only, inside that step: it never
-// proves the rule is obeyed (no shell command is parsed — LIMITS.md §6). Self-contained so a stacking merge appends.
+// proves the rule is obeyed (no shell command is parsed — pharn/LIMITS.md §6). Self-contained so a stacking merge appends.
 const WRITE_TOOL_RULE_SITES = Object.freeze({
   "pharn-build.md": [
     "Author files in the project with the write tools",
     "never through Bash",
-    "Keep scratch under `.pharn/`",
+    "Keep scratch under `pharn/.run/`",
     "named one by one — never a directory, a glob or a `git status` list",
   ],
   "pharn-test.md": ["with the Write or Edit tool, never through Bash", "never route\n  one through Bash"],
@@ -5941,7 +5946,7 @@ test("✧ loop-no-prompts: the grant rule DISCRIMINATES — uncovered lines and 
     loopGrantOffenders(grants, [...at("node pharn/floor/a.mjs --x   # note"), ...at("git status --short || echo none")]),
     []
   );
-  assert.ok(loopGrantOffenders(grants, at("node pharn/floor/a.mjs && rm -rf .pharn")).some((o) => o.includes("rm -rf")));
+  assert.ok(loopGrantOffenders(grants, at("node pharn/floor/a.mjs && rm -rf pharn/.run")).some((o) => o.includes("rm -rf")));
   assert.ok(
     loopGrantOffenders(grants, at("node pharn/floorx/a.mjs")).some((o) => o.includes("floorx")),
     "a near-miss path fails"
@@ -5960,13 +5965,13 @@ test("✧ loop-scope-hardening: the live grant pre-approves NO line outside the 
   for (const line of [
     "node pharn/floor/new-script.mjs", // a floor file a model-written plan scoped
     "node pharn/floor/x.mjs --feature a", // the same, with arguments shaped like a pinned line's
-    "node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-memory-promote.md --target memory-bank/lessons-learned.md",
+    "node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-memory-promote.md --target pharn/memory-bank/lessons-learned.md",
     "node .claude/hooks/set-writes-scope.cjs --allow-pharn-surface --from-plan pharn/features/x/PLAN.md",
     "node .claude/hooks/set-writes-scope.cjs --allow-exec-config --from-plan pharn/features/x/PLAN.md", // hook-hardening-batch
     "node .claude/hooks/enforce-writes-scope.cjs",
     "node pharn/floor/reconcile-baseline.mjs --anchor",
     "echo x > pharn/floor/check-loop.mjs",
-    "cat .pharn/x > pharn/floor/check-loop.mjs",
+    "cat pharn/.run/x > pharn/floor/check-loop.mjs",
     "git rev-parse HEAD > pharn/floor/check-loop.mjs",
   ]) {
     assert.equal(covered(line), false, `pre-approved but not pinned: ${line}`);

@@ -14,7 +14,7 @@
 // present tense, floor primitives that do not exist as running checks: a `pre-egress` hook (no
 // .claude/hooks/*egress* file), the fix #5 archetype-maps agreement (validate.mjs CHECK 7 is
 // CONDITIONAL and no manifest exists, so it has never fired), and `/pharn-estimate` (no such command).
-// THREAT-MODEL.md even carried `_Closed._` on fix #5. That is the P0 disease — "written in the contract"
+// pharn/THREAT-MODEL.md even carried `_Closed._` on fix #5. That is the P0 disease — "written in the contract"
 // mistaken for "therefore guaranteed" — reproduced inside the documents that DEFINE it, and NOTHING
 // DETECTED IT: the three trusted docs are in .prettierignore AND excluded by name in
 // .markdownlint-cli2.jsonc, and no floor checker reads their prose. The `trusted-doc-accuracy` (F7)

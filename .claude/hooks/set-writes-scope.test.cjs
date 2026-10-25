@@ -10,7 +10,7 @@
 // fixture — mirrors enforce-writes-scope.test.cjs's real-review.md regression test). It also backfills
 // dedicated set-writes-scope.cjs coverage (previously exercised only via enforce-writes-scope.test.cjs).
 // Run as a subprocess so the setter keeps its dependency-free, top-level-exec contract; cwd = a fresh
-// temp dir so the real repo .pharn/ is never touched.
+// temp dir so the real repo pharn/.run/ is never touched.
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -39,7 +39,7 @@ test("artifact-split lock: /pharn-dev-plan resolves a .dev/features/<name> --tar
   const cwd = tmp();
   const r = setter(cwd, "--from-frontmatter", PLAN_CMD, "--target", ".dev/features/sample/PLAN.md");
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, [".dev/features/sample/PLAN.md"]);
 });
 
@@ -49,7 +49,7 @@ test("artifact-split lock: a ROOT pharn/features/<name> --target is REJECTED (ph
   // pharn-dev-plan's `writes:` placeholder is `.dev/features/<name>/PLAN.md`; a root `pharn/features/…` target
   // matches no entry, so the setter emits no concrete scope, exits non-zero, and writes nothing (fail-closed).
   assert.equal(r.status, 1);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 // --- fail-closed: --from-plan on a PLAN with no parseable `## Files` (the /pharn-build crux) ---
@@ -68,7 +68,7 @@ test("--from-plan on a PLAN with no `## Files` heading (a free-text `## Steps / 
   );
   const r = setter(cwd, "--from-plan", plan);
   assert.equal(r.status, 1);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 // --- closing-the-loop: --from-plan SUCCEEDS on a PLAN in /pharn-plan's NEW emitted shape ---
@@ -118,7 +118,7 @@ test("--from-plan on a /pharn-plan-shaped PLAN (## Files with back-tick paths) e
   );
   const r = setter(cwd, "--from-plan", plan);
   assert.equal(r.status, 0); // SUCCESS — the inverse of the fail-closed cases above
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   // scope is EXACTLY the ## Files back-tick paths, in order …
   assert.deepEqual(rec.scope, ["src/widget.ts", "src/widget.test.ts"]);
   // … and excludes the `### Explicitly not touched` path (the #15 hardening, here for a product plan) …
@@ -156,7 +156,7 @@ test("--from-plan: a blockquote note with an exclusion cue ABOVE the paths does 
   );
   const r = setter(cwd, "--from-plan", plan);
   assert.equal(r.status, 0); // the blockquote no longer fails it closed
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["src/widget.ts"]); // the path AFTER the blockquote is collected …
   assert.equal(rec.scope.includes("src/legacy.ts"), false); // … and the `### Explicitly not touched` path stays excluded
 });
@@ -169,7 +169,7 @@ test("--from-plan: a NON-blockquote head-less exclusion intro (`Files NOT writte
   fs.writeFileSync(plan, ["## Files", "", "Files NOT written:", "", "- `src/legacy.ts` — excluded", ""].join("\n"));
   const r = setter(cwd, "--from-plan", plan);
   assert.equal(r.status, 1);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 // --- producer-faithfulness: the REAL product /pharn-plan template fails closed (locks the placeholder
@@ -183,7 +183,7 @@ test("--from-plan over the real pharn-plan.md template exits 1 (its `## Files` `
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", PLAN_PRODUCT_CMD);
   assert.equal(r.status, 1);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 // --- F3: the setter REFUSES to authorize the write-guards' own control surface (fail-closed) ---
@@ -214,7 +214,7 @@ for (const ctl of CONTROL_SURFACE) {
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /refusing to scope the write-guards' own control surface/);
     assert.match(r.stderr, new RegExp(ctl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+    assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
   });
 }
 
@@ -229,7 +229,7 @@ for (const ctl of CONTROL_SURFACE) {
       const r = setter(cwd, "--from-plan", planWith(cwd, variant, "src/legit.ts"));
       assert.notEqual(r.status, 0, r.stdout);
       assert.match(r.stderr, /refusing to scope the write-guards' own control surface/);
-      assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+      assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
     });
   }
 }
@@ -238,7 +238,7 @@ test("the case fold refuses only the control surface: ordinary mixed-case paths 
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", planWith(cwd, ".claude/commands/Pharn-Thing.md", "src/Legit.TS", "docs/café.md"));
   assert.equal(r.status, 0, r.stderr);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, [".claude/commands/Pharn-Thing.md", "src/Legit.TS", "docs/café.md"]);
 });
 
@@ -247,7 +247,7 @@ test("--allow-claude-dir opts back in: the same PLAN succeeds and the entry surv
   // 6.61.0: the operator flag goes BEFORE the mode (OPERATOR FLAGS in the setter's header); after it, it is refused.
   const r = setter(cwd, "--allow-claude-dir", "--from-plan", planWith(cwd, ".claude/settings.json", "src/legit.ts"));
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, [".claude/settings.json", "src/legit.ts"]);
 });
 
@@ -255,7 +255,7 @@ test("--allow-claude-dir is its own arg-loop branch: placed FIRST it does not ea
   const cwd = tmp();
   const r = setter(cwd, "--allow-claude-dir", "--from-plan", planWith(cwd, ".claude/settings.json"));
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, [".claude/settings.json"]);
 });
 
@@ -266,7 +266,7 @@ test("--from-frontmatter with a control path in `writes:` is REFUSED without the
   const r = setter(cwd, "--from-frontmatter", cap);
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /refusing to scope the write-guards' own control surface/);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 // The membership test normalizes the entry (lexically) so a trivial re-spelling cannot walk past it.
@@ -277,7 +277,7 @@ for (const spelling of ["./.claude/settings.json", ".claude/hooks/../hooks/set-w
     const cwd = tmp();
     const r = setter(cwd, "--from-plan", planWith(cwd, spelling));
     assert.notEqual(r.status, 0);
-    assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+    assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
   });
 }
 
@@ -288,7 +288,7 @@ test("a PLAN naming .claude/commands/* and .claude/hooks/*.test.cjs is UNAFFECTE
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", planWith(cwd, ".claude/commands/pharn-plan.md", ".claude/hooks/set-writes-scope.test.cjs"));
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, [".claude/commands/pharn-plan.md", ".claude/hooks/set-writes-scope.test.cjs"]);
 });
 
@@ -298,7 +298,7 @@ test("a PLAN with no control path emits the identical scope as before the refusa
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", planWith(cwd, "src/widget.ts", "src/widget.test.ts"));
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["src/widget.ts", "src/widget.test.ts"]);
 });
 
@@ -332,7 +332,7 @@ test("F15 fix: a route-group directory `app/(marketing)` survives `clean()` inta
   const cap = capWith(cwd, "writes:", '  - "app/(marketing)"');
   const r = setter(cwd, "--from-frontmatter", cap);
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["app/(marketing)"]);
 });
 
@@ -341,7 +341,7 @@ test("F15 fix: a NESTED route-group path `app/(a)/(b)` survives `clean()` intact
   const cap = capWith(cwd, "writes:", '  - "app/(a)/(b)"');
   const r = setter(cwd, "--from-frontmatter", cap);
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["app/(a)/(b)"]);
 });
 
@@ -350,7 +350,7 @@ test("F15 regression guard: the documented SPACE-separated annotation (e.g. ` (g
   const cap = capWith(cwd, "writes:", '  - "src/widget.ts (gated)"');
   const r = setter(cwd, "--from-frontmatter", cap);
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["src/widget.ts"]);
 });
 
@@ -359,7 +359,7 @@ test("F15 regression guard: a route-group FILE (`app/(marketing)/page.tsx`) was 
   const cap = capWith(cwd, "writes:", '  - "app/(marketing)/page.tsx"');
   const r = setter(cwd, "--from-frontmatter", cap);
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["app/(marketing)/page.tsx"]);
 });
 
@@ -389,7 +389,7 @@ test("--from-frontmatter resolves a GLOB `writes:` entry against --target", () =
     "pharn/features/x/REVIEW.md"
   );
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["pharn/features/x/REVIEW.md"]);
 });
 
@@ -397,14 +397,14 @@ test("--from-frontmatter: a GLOB that does not match --target yields no scope (f
   const cwd = tmp();
   const r = setter(cwd, "--from-frontmatter", capWith(cwd, 'writes: ["pharn/features/*/REVIEW.md"]'), "--target", "docs/other.md");
   assert.notEqual(r.status, 0);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 test("--from-frontmatter reads the BLOCK-list `writes:` form", () => {
   const cwd = tmp();
   const r = setter(cwd, "--from-frontmatter", capWith(cwd, "writes:", '  - "src/a.ts"', "  - src/b.ts"));
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["src/a.ts", "src/b.ts"]);
 });
 
@@ -412,7 +412,7 @@ test("--from-frontmatter reads an UNQUOTED inline-array `writes:` form", () => {
   const cwd = tmp();
   const r = setter(cwd, "--from-frontmatter", capWith(cwd, "writes: [src/a.ts, src/b.ts]"));
   assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, ".pharn", "writes-scope.json"), "utf8"));
+  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
   assert.deepEqual(rec.scope, ["src/a.ts", "src/b.ts"]);
 });
 
@@ -421,7 +421,7 @@ test("a BLOCK-list `writes:` naming a control file is refused too (the refusal i
   const r = setter(cwd, "--from-frontmatter", capWith(cwd, "writes:", '  - ".claude/settings.json"'));
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /refusing to scope the write-guards' own control surface/);
-  assert.equal(fs.existsSync(join(cwd, ".pharn", "writes-scope.json")), false);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
 test("--target that escapes the repo root is rejected", () => {
@@ -522,14 +522,14 @@ test("✧ the control surface names exactly the wiring files plus the four hook 
 // --clear — the writes-scope LIFECYCLE (feature `writes-scope-lifecycle`).
 //
 // A SET scope REPLACES enforce-writes-scope.cjs's fail-closed DEFAULT_SAFE_SET, so a command that
-// finished and left `.pharn/writes-scope.json` behind is STRICTER than no scope at all: paths the
+// finished and left `pharn/.run/writes-scope.json` behind is STRICTER than no scope at all: paths the
 // default PERMITS start being denied in later sessions. `--clear` deletes the file, returning control
 // to that default. These tests pin the flag's behavior AND the enforce-side consequence, because the
 // flag's whole purpose lives in the other hook's fallback, not in its own exit code.
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 const ENFORCE = join(__dirname, "enforce-writes-scope.cjs");
-const SCOPE_REL = join(".pharn", "writes-scope.json");
+const SCOPE_REL = join("pharn", ".run", "writes-scope.json");
 
 function enforce(cwd, filePath) {
   return spawnSync(process.execPath, [ENFORCE], {
@@ -540,7 +540,7 @@ function enforce(cwd, filePath) {
 }
 
 function seedScope(cwd, record) {
-  fs.mkdirSync(join(cwd, ".pharn"), { recursive: true });
+  fs.mkdirSync(join(cwd, "pharn", ".run"), { recursive: true });
   fs.writeFileSync(join(cwd, SCOPE_REL), JSON.stringify(record, null, 2) + "\n");
 }
 
@@ -616,7 +616,7 @@ test("--clear REFUSES to combine with --from-plan / --from-frontmatter / --targe
 
 test("--clear never writes a `{scope: []}` marker — an empty array is TRUTHY and would deny everything", () => {
   // The trap this flag had to avoid: enforce computes allow = [...ALWAYS, ...(scope || SAFE_SET)], so a
-  // present-but-empty scope[] yields ONLY `.pharn/**` — stricter than the stale scope --clear removes.
+  // present-but-empty scope[] yields ONLY `pharn/.run/**` — stricter than the stale scope --clear removes.
   const cwd = tmp();
   seedScope(cwd, { scope: [] });
   assert.equal(enforce(cwd, ".dev/features/other/PLAN.md").status, 2, "empty-array scope denies the safe-set");
@@ -627,14 +627,15 @@ test("--clear never writes a `{scope: []}` marker — an empty array is TRUTHY a
 
 test("--clear surfaces a non-ENOENT unlink failure as an error, never as a silent success", () => {
   // The catch treats ENOENT as the idempotent no-op and everything else as a real failure. Exercised
-  // by making `.pharn` a FILE, so unlinking `.pharn/writes-scope.json` fails with ENOTDIR rather than
+  // by making `pharn/.run` a FILE, so unlinking `pharn/.run/writes-scope.json` fails with ENOTDIR rather than
   // ENOENT. Without this, the branch's message and exit code were unverified — an error path that has
   // never run is an assumption, not a behavior.
   const cwd = tmp();
-  fs.writeFileSync(join(cwd, ".pharn"), "not a directory\n");
+  fs.mkdirSync(join(cwd, "pharn"), { recursive: true });
+  fs.writeFileSync(join(cwd, "pharn", ".run"), "not a directory\n");
   const r = setter(cwd, "--clear");
   assert.notEqual(r.status, 0, "a non-ENOENT failure must not report success");
-  assert.match(r.stderr, /could not clear \.pharn\/writes-scope\.json/);
+  assert.match(r.stderr, /could not clear pharn\/\.run\/writes-scope\.json/);
   assert.doesNotMatch(r.stdout, /writes-scope cleared/, "it must not claim to have cleared anything");
 });
 
@@ -647,7 +648,7 @@ test("--clear surfaces a non-ENOENT unlink failure as an error, never as a silen
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 const scopeOf = (cwd) => {
-  const f = join(cwd, ".pharn", "writes-scope.json");
+  const f = join(cwd, "pharn", ".run", "writes-scope.json");
   return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")).scope : null;
 };
 
@@ -791,7 +792,7 @@ function promoteTree() {
   return cwd;
 }
 function openLoopMarker(cwd, name = "feat", ageMs = 0) {
-  const dir = join(cwd, ".pharn", "pharn-loop", name);
+  const dir = join(cwd, "pharn", ".run", "pharn-loop", name);
   fs.mkdirSync(dir, { recursive: true });
   const f = join(dir, "active.json");
   fs.writeFileSync(f, "{}\n");
@@ -800,7 +801,7 @@ function openLoopMarker(cwd, name = "feat", ageMs = 0) {
     fs.utimesSync(f, t, t);
   }
 }
-const promote = (cwd, file = ".claude/commands/pharn-memory-promote.md", target = "memory-bank/lessons-learned.md") =>
+const promote = (cwd, file = ".claude/commands/pharn-memory-promote.md", target = "pharn/memory-bank/lessons-learned.md") =>
   setter(cwd, "--from-frontmatter", file, "--target", target);
 
 test("promotion origin with a FRESH /pharn-loop marker is REFUSED; the message names the marker and its close command", () => {
@@ -809,7 +810,7 @@ test("promotion origin with a FRESH /pharn-loop marker is REFUSED; the message n
   const r = promote(cwd);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /refusing a memory-bank promotion scope while a \/pharn-loop run is open/);
-  assert.match(r.stderr, /\.pharn\/pharn-loop\/feat\/active\.json/);
+  assert.match(r.stderr, /pharn\/\.run\/pharn-loop\/feat\/active\.json/);
   assert.match(r.stderr, /node \.claude\/hooks\/require-loop-record\.cjs --close feat/);
   assert.equal(scopeOf(cwd), null);
 });
@@ -817,20 +818,20 @@ test("promotion origin with a FRESH /pharn-loop marker is REFUSED; the message n
 test("promotion origin: no marker, or one older than 24 h, is NOT a run — the promotion scope is set (controls)", () => {
   const none = promoteTree();
   assert.equal(promote(none).status, 0);
-  assert.deepEqual(scopeOf(none), ["memory-bank/lessons-learned.md"]);
+  assert.deepEqual(scopeOf(none), ["pharn/memory-bank/lessons-learned.md"]);
   const stale = promoteTree();
   openLoopMarker(stale, "old", 26 * 3600 * 1000);
   const r = promote(stale);
   assert.equal(r.status, 0, r.stderr);
 });
 
-test("promotion origin: a FILE planted where .pharn/pharn-loop belongs keeps the refusal standing (cannot rule a run out)", () => {
+test("promotion origin: a FILE planted where pharn/.run/pharn-loop belongs keeps the refusal standing (cannot rule a run out)", () => {
   const cwd = promoteTree();
-  fs.mkdirSync(join(cwd, ".pharn"), { recursive: true });
-  fs.writeFileSync(join(cwd, ".pharn", "pharn-loop"), "x");
+  fs.mkdirSync(join(cwd, "pharn", ".run"), { recursive: true });
+  fs.writeFileSync(join(cwd, "pharn", ".run", "pharn-loop"), "x");
   const r = promote(cwd);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /\.pharn\/pharn-loop — not a readable run-state entry/);
+  assert.match(r.stderr, /pharn\/\.run\/pharn-loop — not a readable run-state entry/);
 });
 
 test("promotion origin: a non-slug marker directory is never rendered by name", () => {
@@ -850,7 +851,7 @@ test("promotion origin: BOTH promote commands, and a re-spelled one, are refused
   ]) {
     const cwd = promoteTree();
     openLoopMarker(cwd);
-    const target = file.includes("dev") ? ".dev/memory-bank/lessons-learned.md" : "memory-bank/lessons-learned.md";
+    const target = file.includes("dev") ? ".dev/memory-bank/lessons-learned.md" : "pharn/memory-bank/lessons-learned.md";
     const r = promote(cwd, file, target);
     assert.equal(r.status, 1, `${file}: ${r.stdout}`);
     assert.match(r.stderr, /while a \/pharn-loop run is open/);
@@ -871,20 +872,20 @@ test("★ SEC-3 composition: a refused promotion leaves no record, so the canon 
   const sb = promoteTree();
   fs.mkdirSync(join(sb, ".claude", "hooks"), { recursive: true });
   fs.symlinkSync(PROTECT_HOOK, join(sb, ".claude", "hooks", "protect-trusted-paths.cjs"));
-  fs.mkdirSync(join(sb, "memory-bank"), { recursive: true });
-  fs.writeFileSync(join(sb, "memory-bank", "lessons-learned.md"), "# canon\n");
+  fs.mkdirSync(join(sb, "pharn", "memory-bank"), { recursive: true });
+  fs.writeFileSync(join(sb, "pharn", "memory-bank", "lessons-learned.md"), "# canon\n");
   const write = () =>
     spawnSync(process.execPath, [join(sb, ".claude", "hooks", "protect-trusted-paths.cjs")], {
       cwd: sb,
       encoding: "utf8",
-      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "memory-bank/lessons-learned.md" } }),
+      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "pharn/memory-bank/lessons-learned.md" } }),
     });
   openLoopMarker(sb);
   assert.equal(promote(sb).status, 1, "the setter refuses during the loop");
   const denied = write();
   assert.equal(denied.status, 2, "no promote-origin record exists, so canon stays denied");
   assert.match(denied.stderr, /memory-bank CANON/);
-  fs.rmSync(join(sb, ".pharn", "pharn-loop"), { recursive: true, force: true });
+  fs.rmSync(join(sb, "pharn", ".run", "pharn-loop"), { recursive: true, force: true });
   assert.equal(promote(sb).status, 0, "control: with no loop open the promotion scope is set");
   assert.equal(write().status, 0, "control: and the canon Write it authorizes passes the hook");
 });
@@ -1302,4 +1303,45 @@ test("the dev checkout, an unsignalled tree and --from-frontmatter are UNCHANGED
   fs.writeFileSync(cap, ["---", 'writes: [".github/workflows/ci.yml"]', "---", ""].join("\n"));
   const r = setterIn(t, ["--from-frontmatter", cap]);
   assert.equal(r.status, 0, r.stderr);
+});
+
+// ============================== 7.0.0 — the scope file moved to pharn/.run/ (pharn-footprint-move) ==============
+// The CONTROL_SURFACE ↔ DEFAULT_PROTECTED parity pin covers only the `.claude/`-prefixed members, so it cannot see a
+// scope-file path the setter and the enforcer disagree on. These two tests can: one behavioural (the enforcer honours
+// what the setter wrote, and --clear removes exactly that file), one a ✧ pin over the three copies of the path (L31).
+test("★ 7.0.0 the setter writes exactly the file the enforcer reads — set, honoured, cleared", () => {
+  const cwd = seedDevRepo(tmp());
+  assert.equal(enforce(cwd, "src/legit.ts").status, 2, "control: no scope, so the dev default-safe-set denies src/");
+  const r = setter(cwd, "--from-plan", planWith(cwd, "src/legit.ts"));
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), "the record is at pharn/.run/");
+  assert.ok(!fs.existsSync(join(cwd, ".pharn")), "nothing is written at the OLD root"); // migration
+  assert.equal(enforce(cwd, "src/legit.ts").status, 0, "the enforcer reads the record the setter wrote");
+  assert.equal(enforce(cwd, "src/other.ts").status, 2, "and only that scope");
+  assert.equal(setter(cwd, "--clear").status, 0);
+  assert.ok(!fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")));
+  assert.equal(enforce(cwd, "src/legit.ts").status, 2, "after --clear the default applies again");
+});
+
+test("✧ 7.0.0 PIN: the scope-file path is the same in the setter, the enforcer and the protect list (L31)", () => {
+  const read = (f) => fs.readFileSync(join(__dirname, f), "utf8");
+  assert.match(read("enforce-writes-scope.cjs"), /^const SCOPE_FILE = "pharn\/\.run\/writes-scope\.json";$/m);
+  assert.match(read("protect-trusted-paths.cjs"), /^ {2}"pharn\/\.run\/writes-scope\.json",$/m);
+  const setterSrc = read("set-writes-scope.cjs");
+  assert.match(setterSrc, /path\.resolve\(process\.cwd\(\), "pharn", "\.run", "writes-scope\.json"\)/, "--clear");
+  assert.match(setterSrc, /path\.resolve\(process\.cwd\(\), "pharn", "\.run"\);\n.*\n.*"writes-scope\.json"/, "the write");
+});
+
+test("★ 7.0.0 promotion origin: a symlink at EITHER segment of the scratch root keeps the refusal standing", () => {
+  for (const seg of ["pharn", "pharn/.run"]) {
+    const cwd = promoteTree();
+    const elsewhere = fs.mkdtempSync(join(os.tmpdir(), "pharn-sws-out-"));
+    fs.mkdirSync(join(elsewhere, ".run", "pharn-loop"), { recursive: true });
+    if (seg === "pharn/.run") fs.mkdirSync(join(cwd, "pharn"), { recursive: true });
+    fs.symlinkSync(seg === "pharn" ? elsewhere : join(elsewhere, ".run"), join(cwd, ...seg.split("/")));
+    const r = promote(cwd);
+    assert.equal(r.status, 1, `${seg}: ${r.stderr}`);
+    assert.match(r.stderr, new RegExp(`${seg.replace(/[./]/g, "\\$&")} \\(a symbolic link\\)`));
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+  }
 });

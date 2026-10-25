@@ -92,7 +92,7 @@ function mutantSandbox(files, anchor, replacement) {
   return dir;
 }
 
-const TRUSTED = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "THREAT-MODEL.md", "LIMITS.md", ".github/CODEOWNERS"];
+const TRUSTED = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "pharn/THREAT-MODEL.md", "pharn/LIMITS.md", ".github/CODEOWNERS"];
 
 test("blocks writes to a trusted spec doc", () => {
   const r = run({ tool_name: "Write", tool_input: { file_path: "pharn/CONSTITUTION.md" } });
@@ -225,26 +225,27 @@ test("✧ guards its own root when PHARN is installed at a SUBPATH of a larger p
   fs.copyFileSync(HOOK, join(inner, ".claude", "hooks", "protect-trusted-paths.cjs"));
   fs.mkdirSync(join(inner, "pharn"), { recursive: true });
   fs.writeFileSync(join(inner, "pharn", "CONSTITUTION.md"), "trusted\n");
-  fs.writeFileSync(join(outer, "LIMITS.md"), "the USER's own file\n");
+  fs.mkdirSync(join(outer, "pharn"), { recursive: true });
+  fs.writeFileSync(join(outer, "pharn/LIMITS.md"), "the USER's own file\n");
   const hook = join(inner, ".claude", "hooks", "protect-trusted-paths.cjs");
   const at = (file_path, cwd) =>
     spawnSync(process.execPath, [hook], { input: JSON.stringify({ tool_name: "Write", tool_input: { file_path } }), encoding: "utf8", cwd })
       .status;
   // cwd is the OUTER project, as it would be for an agent working on the user's repo.
   assert.equal(at(join(inner, "pharn", "CONSTITUTION.md"), outer), 2, "PHARN's own doc must stay guarded");
-  assert.equal(at(join(outer, "LIMITS.md"), outer), 0, "the USER's own root LIMITS.md must NOT be guarded");
+  assert.equal(at(join(outer, "pharn/LIMITS.md"), outer), 0, "the USER's own root pharn/LIMITS.md must NOT be guarded");
 });
 
 test("✧ blocks an ABSOLUTE path whose ROOT prefix is spelled in a different case", () => {
   // path.relative() compares case-SENSITIVELY, so a differently-cased root relativizes to a `../` escape
   // while naming the very same file on a case-insensitive volume. Folding the prefix is what closes it.
-  const sb = sandbox(["pharn/CONSTITUTION.md", "THREAT-MODEL.md"]);
+  const sb = sandbox(["pharn/CONSTITUTION.md", "pharn/THREAT-MODEL.md"]);
   const i = [...sb].findIndex((c) => /[a-z]/i.test(c));
   assert.ok(i !== -1, "sandbox path must contain a letter to flip");
   const c = sb[i];
   const varied = sb.slice(0, i) + (c === c.toLowerCase() ? c.toUpperCase() : c.toLowerCase()) + sb.slice(i + 1);
   assert.notEqual(varied, sb);
-  for (const f of ["pharn/CONSTITUTION.md", "THREAT-MODEL.md"]) {
+  for (const f of ["pharn/CONSTITUTION.md", "pharn/THREAT-MODEL.md"]) {
     assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: join(varied, f) } }).status, 2, f);
   }
 });
@@ -291,7 +292,7 @@ test("6.49.3: NotebookEdit — a notebook_path to a trusted doc is DENIED; one t
 
 test("6.49.3: MultiEdit — a top-level file_path to a trusted doc is DENIED (edits[] carry no path); an ordinary one is ALLOWED", () => {
   const edits = [{ old_string: "a", new_string: "b" }];
-  assert.equal(run({ tool_name: "MultiEdit", tool_input: { file_path: "LIMITS.md", edits } }).status, 2);
+  assert.equal(run({ tool_name: "MultiEdit", tool_input: { file_path: "pharn/LIMITS.md", edits } }).status, 2);
   assert.equal(run({ tool_name: "MultiEdit", tool_input: { file_path: "src/ok.js", edits } }).status, 0);
 });
 
@@ -299,7 +300,7 @@ test("6.49.3: MultiEdit — edits[] that all reach ordinary paths are ALLOWED (t
   const r = run({ tool_name: "MultiEdit", tool_input: { edits: [{ file_path: "src/ok.js" }, { file_path: "src/also.js" }] } });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(
-    run({ tool_name: "MultiEdit", tool_input: { edits: [{ file_path: "src/ok.js" }, { file_path: "THREAT-MODEL.md" }] } }).status,
+    run({ tool_name: "MultiEdit", tool_input: { edits: [{ file_path: "src/ok.js" }, { file_path: "pharn/THREAT-MODEL.md" }] } }).status,
     2
   );
 });
@@ -334,6 +335,11 @@ test("allows writes to .claude/commands/* (not part of the guarded control surfa
 
 for (const p of [
   "app/user-docs/ARCHITECTURE.md",
+  "LIMITS.md", // migration: the old root paths below are a user's own files since 7.0.0
+  "THREAT-MODEL.md", // migration
+  "memory-bank/lessons-learned.md", // migration
+  "pharn.spec-template.md", // migration
+  ".pharn/writes-scope.json", // migration
   "some/dir/CONSTITUTION.md",
   "docs/THREAT-MODEL.md",
   "docs/ARCHITECTURE.md",
@@ -353,8 +359,15 @@ for (const p of [
   "pharn/constitution.md",
   "pharn/Architecture.MD",
   "pharn/ARCHITECTURE.MD",
-  "threat-model.md",
-  "Limits.MD",
+  "pharn/threat-model.md",
+  "pharn/Limits.MD",
+  "PHARN/LIMITS.md",
+  "PHARN/.RUN/WRITES-SCOPE.JSON",
+  "pharn/Memory-Bank/lessons-learned.md",
+  "pharn/Spec-Template.md",
+  "pharn/LIMITS.md.",
+  "pharn/LIMITS.md ",
+  "pharn/.run/writes-scope.json.",
   ".github/codeowners",
   ".CLAUDE/settings.json",
 ]) {
@@ -367,7 +380,7 @@ for (const p of [
 
 // FULL case folding, not simple case mapping: `ſ` (U+017F) lowercases to ITSELF, yet the filesystem
 // opens the real file through that spelling. Verified by reading the file, not by consulting a table.
-for (const p of ["pharn/CONſTITUTION.md", "LIMITſ.md", "pharn/ARCHITECTURE.md".replace("S", "ſ")]) {
+for (const p of ["pharn/CONſTITUTION.md", "pharn/LIMITſ.md", "pharn/ARCHITECTURE.md".replace("S", "ſ")]) {
   test(`blocks a full-case-fold variant that a bare toLowerCase() would miss: ${p}`, () => {
     assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 2);
   });
@@ -388,7 +401,14 @@ test("allows a CODEOWNERS at a location GitHub does not honor", () => {
 // --- F4 (d): lexical re-spellings must not walk past the exact test; outside the guarded root is never
 // protected. ---
 
-for (const p of ["./pharn/ARCHITECTURE.md", "pharn/../pharn/ARCHITECTURE.md", "pharn/features/../../LIMITS.md"]) {
+for (const p of [
+  "./pharn/ARCHITECTURE.md",
+  "pharn/../pharn/ARCHITECTURE.md",
+  "pharn/features/../LIMITS.md",
+  "pharn/.run/../LIMITS.md",
+  "pharn/.run/../../pharn/THREAT-MODEL.md",
+  "pharn/.run/../memory-bank/lessons-learned.md",
+]) {
   test(`blocks a lexical re-spelling of a protected path: ${p}`, () => {
     assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 2);
   });
@@ -658,8 +678,8 @@ test("✧ .claude/settings.local.json is guarded — it configures the very hook
 // --- CONTROL SURFACE: the writes-scope guard's INPUT, not only its code ---
 //
 // WHY THESE EXIST. enforce-writes-scope.cjs guards its own input with ONE byte-exact compare
-// (rel === SCOPE_FILE) while its ALWAYS glob leaves the rest of .pharn/ writable. On a case-insensitive
-// volume .pharn/WRITES-SCOPE.JSON is the SAME FILE, so that compare missed it and the Write tool could
+// (rel === SCOPE_FILE) while its ALWAYS glob leaves the rest of pharn/.run/ writable. On a case-insensitive
+// volume pharn/.run/WRITES-SCOPE.JSON is the SAME FILE, so that compare missed it and the Write tool could
 // rewrite the active scope, then write anywhere fix #2 does not backstop. Reproduced live before the
 // fix: enforce → 0 on the upper-case spelling, 2 on the lower-case one.
 //
@@ -671,33 +691,38 @@ test("✧ .claude/settings.local.json is guarded — it configures the very hook
 // before being trusted.
 
 test("✧ the writes-scope guard's own input is protected at its declared spelling", () => {
-  assert.equal(run({ tool_name: "Write", tool_input: { file_path: ".pharn/writes-scope.json" } }).status, 2);
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: "pharn/.run/writes-scope.json" } }).status, 2);
 });
 
 test("✧ REGRESSION: a case-variant of the scope file is denied (same inode on a case-insensitive volume)", () => {
-  for (const p of [".pharn/WRITES-SCOPE.JSON", ".pharn/Writes-Scope.Json", ".pharn/writes-scope.JSON"]) {
+  for (const p of ["pharn/.run/WRITES-SCOPE.JSON", "pharn/.run/Writes-Scope.Json", "pharn/.run/writes-scope.JSON"]) {
     assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 2, `${p} must be denied`);
   }
 });
 
-test("✧ protecting the scope file does NOT over-block the rest of .pharn/", () => {
-  // .pharn/ is disposable runtime scratch that stages legitimately write, and it also holds the
+test("✧ protecting the scope file does NOT over-block the rest of pharn/.run/", () => {
+  // pharn/.run/ is disposable runtime scratch that stages legitimately write, and it also holds the
   // load-bearing product lessons-index cache. Over-blocking here would break the pipeline, so the
-  // entry is one path and not a ".pharn/**" glob.
-  for (const p of [".pharn/foo.json", ".pharn/lessons-index.md", ".pharn/writes-scope.json.bak", "src/.pharn/writes-scope.json"]) {
+  // entry is one path and not a "pharn/.run/**" glob.
+  for (const p of [
+    "pharn/.run/foo.json",
+    "pharn/.run/lessons-index.md",
+    "pharn/.run/writes-scope.json.bak",
+    "src/.pharn/writes-scope.json",
+  ]) {
     assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 0, `${p} must be ALLOWED`);
   }
 });
 
 test("✧ a dangling symlink cannot be used to CREATE the scope file under another name", () => {
   const sb = sandbox();
-  fs.mkdirSync(join(sb, ".pharn"), { recursive: true });
-  fs.symlinkSync("writes-scope.json", join(sb, ".pharn", "alias.json")); // target absent = dangling
-  assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: ".pharn/alias.json" } }).status, 2);
+  fs.mkdirSync(join(sb, "pharn", ".run"), { recursive: true });
+  fs.symlinkSync("writes-scope.json", join(sb, "pharn", ".run", "alias.json")); // target absent = dangling
+  assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: "pharn/.run/alias.json" } }).status, 2);
 });
 
 // ✧ Derived cross-copy pin, the check-provenance / CONTROL_SURFACE precedent (see the ✧ agreement guard
-// in set-writes-scope.test.cjs). The literal ".pharn/writes-scope.json" now lives in TWO hooks: as
+// in set-writes-scope.test.cjs). The literal "pharn/.run/writes-scope.json" now lives in TWO hooks: as
 // SCOPE_FILE in enforce-writes-scope.cjs and as a DEFAULT_PROTECTED entry here. Two copies drift; this
 // converts "drifts silently" into "drifts loudly". It CANNOT be folded into the existing agreement test,
 // which deliberately compares only the `.claude/`-prefixed entries.
@@ -717,7 +742,7 @@ test("✧ the two guards name the SAME scope file: enforce-writes-scope SCOPE_FI
 
 // --- WINDOWS TRAILING DOT/SPACE: the OS drops them, so they name the real file there ---
 
-for (const p of ["LIMITS.md.", "LIMITS.md ", "pharn/CONSTITUTION.md.", "pharn/CONSTITUTION.md  "]) {
+for (const p of ["pharn/LIMITS.md.", "pharn/LIMITS.md ", "pharn/CONSTITUTION.md.", "pharn/CONSTITUTION.md  "]) {
   test(`✧ blocks a trailing dot/space spelling of a trusted path: ${JSON.stringify(p)}`, () => {
     assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 2);
   });
@@ -878,7 +903,12 @@ test("✧ a worktree of the SAME repository is guarded: its trusted doc, control
   const main = gitSandbox(["pharn/CONSTITUTION.md"]);
   const wt = join(main, "wt");
   git(main, "worktree", "add", "-q", wt, "-b", "guarded-w");
-  for (const f of ["pharn/CONSTITUTION.md", ".claude/settings.json", ".pharn/writes-scope.json", "memory-bank/lessons-learned.md"]) {
+  for (const f of [
+    "pharn/CONSTITUTION.md",
+    ".claude/settings.json",
+    "pharn/.run/writes-scope.json",
+    "pharn/memory-bank/lessons-learned.md",
+  ]) {
     assert.equal(runAt(main, wt, join(wt, f), null).status, 2, `${f} inside the worktree must be denied`);
   }
 });
@@ -892,39 +922,40 @@ test("✧ a DIFFERENT repository is NOT guarded — the subpath posture, with th
   fs.copyFileSync(HOOK, join(inner, ".claude", "hooks", "protect-trusted-paths.cjs"));
   fs.mkdirSync(join(inner, "pharn"), { recursive: true });
   fs.writeFileSync(join(inner, "pharn", "CONSTITUTION.md"), "trusted\n");
-  fs.writeFileSync(join(outer, "LIMITS.md"), "the USER's own file\n");
+  fs.mkdirSync(join(outer, "pharn"), { recursive: true });
+  fs.writeFileSync(join(outer, "pharn/LIMITS.md"), "the USER's own file\n");
   assert.equal(runAt(inner, outer, join(inner, "pharn", "CONSTITUTION.md"), null).status, 2, "PHARN's own doc must stay guarded");
   assert.equal(
-    runAt(inner, outer, join(outer, "LIMITS.md"), null).status,
+    runAt(inner, outer, join(outer, "pharn/LIMITS.md"), null).status,
     0,
-    "the outer repository's own root LIMITS.md must NOT be guarded"
+    "the outer repository's own root pharn/LIMITS.md must NOT be guarded"
   );
 });
 
 test("✧ no over-block from a subdirectory: a user's docs/THREAT-MODEL.md stays writable", () => {
   const sb = gitSandbox(["pharn/CONSTITUTION.md", "docs/keep.md"]);
-  assert.equal(runAt(sb, join(sb, "docs"), join(sb, "docs", "THREAT-MODEL.md"), null).status, 0);
-  assert.equal(runAt(sb, join(sb, "docs"), join(sb, "THREAT-MODEL.md"), null).status, 2, "the root one is guarded as always");
+  assert.equal(runAt(sb, join(sb, "docs"), join(sb, "docs", "pharn/THREAT-MODEL.md"), null).status, 0);
+  assert.equal(runAt(sb, join(sb, "docs"), join(sb, "pharn/THREAT-MODEL.md"), null).status, 2, "the root one is guarded as always");
 });
 
 test("✧ a CLAUDE_PROJECT_DIR stop that holds no .git entry adds nothing", () => {
   const sb = sandbox([]);
   const sub = join(sb, "packages", "ui");
   fs.mkdirSync(sub, { recursive: true });
-  assert.equal(runAt(sb, sub, join(sub, "LIMITS.md"), sub).status, 0, "the stop is not a git tree, so it is not a guarded root");
-  assert.equal(runAt(sb, sub, join(sb, "LIMITS.md"), sub).status, 2, "the hook's own root is guarded as always");
+  assert.equal(runAt(sb, sub, join(sub, "pharn/LIMITS.md"), sub).status, 0, "the stop is not a git tree, so it is not a guarded root");
+  assert.equal(runAt(sb, sub, join(sb, "pharn/LIMITS.md"), sub).status, 2, "the hook's own root is guarded as always");
 });
 
 test("✧ an UNRESOLVABLE .git file in the cwd tree IS added — over-block is the safe direction", () => {
   const main = gitSandbox([]);
   const bad = tmp();
   fs.writeFileSync(join(bad, ".git"), "not a gitdir line\n");
-  assert.equal(runAt(main, bad, join(bad, "LIMITS.md"), null).status, 2);
+  assert.equal(runAt(main, bad, join(bad, "pharn/LIMITS.md"), null).status, 2);
 });
 
 // --- GIT METADATA: a `.git` path segment under a guarded root is denied, whatever the scope says. The
 // entries decide which tree each guard judges, and .git/hooks + .git/config run code on the next git
-// command. A Bash write still reaches them (LIMITS.md §6) — this closes the TOOL surface only. ---
+// command. A Bash write still reaches them (pharn/LIMITS.md §6) — this closes the TOOL surface only. ---
 
 for (const p of [".git/config", ".git/hooks/pre-commit", ".GIT/config", ".claude/worktrees/w/.git", "src/.git", "vendor/dep/.git/config"]) {
   test(`✧ blocks a tool write to git metadata: ${p}`, () => {
@@ -945,27 +976,27 @@ test("✧ the canon escape is BOUND to the root the target sits under", () => {
   const wt = join(main, "wt");
   git(main, "worktree", "add", "-q", wt, "-b", "canon-w");
   const promote = JSON.stringify({
-    scope: ["memory-bank/lessons-learned.md"],
+    scope: ["pharn/memory-bank/lessons-learned.md"],
     set_by: ".claude/commands/pharn-memory-promote.md",
     set_at: "t",
   });
-  fs.mkdirSync(join(main, ".pharn"), { recursive: true });
-  fs.writeFileSync(join(main, ".pharn", "writes-scope.json"), promote);
+  fs.mkdirSync(join(main, "pharn", ".run"), { recursive: true });
+  fs.writeFileSync(join(main, "pharn", ".run", "writes-scope.json"), promote);
   // cwd inside the worktree: it is a guarded root too, and it carries NO record of its own.
   assert.equal(
-    runAt(main, wt, join(wt, "memory-bank", "lessons-learned.md"), null).status,
+    runAt(main, wt, join(wt, "pharn", "memory-bank", "lessons-learned.md"), null).status,
     2,
     "a promote record in one tree must not authorize the same relative canon path in another"
   );
   assert.equal(
-    runAt(main, wt, join(main, "memory-bank", "lessons-learned.md"), null).status,
+    runAt(main, wt, join(main, "pharn", "memory-bank", "lessons-learned.md"), null).status,
     0,
     "it still authorizes its OWN tree's canon"
   );
   // The mirror image, so the rule is not satisfied by "the worktree is never authorized".
-  fs.mkdirSync(join(wt, ".pharn"), { recursive: true });
-  fs.writeFileSync(join(wt, ".pharn", "writes-scope.json"), promote);
-  assert.equal(runAt(main, wt, join(wt, "memory-bank", "lessons-learned.md"), null).status, 0);
+  fs.mkdirSync(join(wt, "pharn", ".run"), { recursive: true });
+  fs.writeFileSync(join(wt, "pharn", ".run", "writes-scope.json"), promote);
+  assert.equal(runAt(main, wt, join(wt, "pharn", "memory-bank", "lessons-learned.md"), null).status, 0);
 });
 
 test("✧ MUTANT: dropping the trailing dot/space strip lets the Windows spelling through", () => {
@@ -990,8 +1021,8 @@ const ONLY_POSIX = { skip: require("node:path").sep !== "/" && "a backslash is a
 const PROMOTE_ORIGIN = ".claude/commands/pharn-memory-promote.md";
 
 function setScopeRecord(dir, scope, setBy) {
-  fs.mkdirSync(join(dir, ".pharn"), { recursive: true });
-  fs.writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope, set_by: setBy, set_at: "t" }));
+  fs.mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+  fs.writeFileSync(join(dir, "pharn", ".run", "writes-scope.json"), JSON.stringify({ scope, set_by: setBy, set_at: "t" }));
 }
 
 function writeIn(dir, file_path) {
@@ -999,10 +1030,14 @@ function writeIn(dir, file_path) {
 }
 
 test("★ M4: a symlink named `s\\x` → `.` no longer carries a write to a trusted doc past this hook", ONLY_POSIX, () => {
-  const sb = sandbox(["LIMITS.md", "pharn/CONSTITUTION.md"]);
+  const sb = sandbox(["pharn/LIMITS.md", "pharn/CONSTITUTION.md"]);
   fs.symlinkSync(".", join(sb, "s\\x"));
-  assert.equal(fs.statSync(join(sb, "s\\x", "LIMITS.md")).ino, fs.statSync(join(sb, "LIMITS.md")).ino, "premise: the same file");
-  for (const p of [join(sb, "s\\x", "LIMITS.md"), "s\\x/pharn/CONSTITUTION.md"]) {
+  assert.equal(
+    fs.statSync(join(sb, "s\\x", "pharn/LIMITS.md")).ino,
+    fs.statSync(join(sb, "pharn/LIMITS.md")).ino,
+    "premise: the same file"
+  );
+  for (const p of [join(sb, "s\\x", "pharn/LIMITS.md"), "s\\x/pharn/CONSTITUTION.md"]) {
     const r = writeIn(sb, p);
     assert.equal(r.status, 2, `denied: ${p}`);
     assert.match(r.stderr, /is \(or resolves to\) a trusted file/);
@@ -1014,20 +1049,20 @@ test(
   "★ M4: the same link cannot carry a canon write under a PLAN-origin scope — the `## Files` → canon vector (L7, L20)",
   ONLY_POSIX,
   () => {
-    const sb = sandbox(["memory-bank/lessons-learned.md"]);
+    const sb = sandbox(["pharn/memory-bank/lessons-learned.md"]);
     fs.symlinkSync(".", join(sb, "s\\x"));
-    setScopeRecord(sb, ["memory-bank/lessons-learned.md"], ".dev/features/evil/PLAN.md");
-    const r = writeIn(sb, "s\\x/memory-bank/lessons-learned.md");
+    setScopeRecord(sb, ["pharn/memory-bank/lessons-learned.md"], ".dev/features/evil/PLAN.md");
+    const r = writeIn(sb, "s\\x/pharn/memory-bank/lessons-learned.md");
     assert.equal(r.status, 2);
     assert.match(r.stderr, /memory-bank CANON/);
   }
 );
 
 test("★ M4: under a PROMOTE-origin scope that link reaches exactly the authorized file — judged there, so allowed", ONLY_POSIX, () => {
-  const sb = sandbox(["memory-bank/lessons-learned.md"]);
+  const sb = sandbox(["pharn/memory-bank/lessons-learned.md"]);
   fs.symlinkSync(".", join(sb, "s\\x"));
-  setScopeRecord(sb, ["memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
-  assert.equal(writeIn(sb, "s\\x/memory-bank/lessons-learned.md").status, 0);
+  setScopeRecord(sb, ["pharn/memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
+  assert.equal(writeIn(sb, "s\\x/pharn/memory-bank/lessons-learned.md").status, 0);
 });
 
 test("★ M4: a DANGLING link whose TEXT holds a backslash is followed the way the kernel follows it", ONLY_POSIX, () => {
@@ -1050,19 +1085,19 @@ test("★ M4: git metadata through a backslash-named link — found only by the 
 });
 
 test("★ M4: the canon escape never authorizes a target whose name holds a backslash", ONLY_POSIX, () => {
-  const sb = sandbox(["memory-bank/lessons-learned.md"]);
-  setScopeRecord(sb, ["memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
-  assert.equal(writeIn(sb, "memory-bank/lessons-learned.md").status, 0, "control: the authorized file itself");
-  const r = writeIn(sb, "memory-bank/x\\..\\lessons-learned.md");
+  const sb = sandbox(["pharn/memory-bank/lessons-learned.md"]);
+  setScopeRecord(sb, ["pharn/memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
+  assert.equal(writeIn(sb, "pharn/memory-bank/lessons-learned.md").status, 0, "control: the authorized file itself");
+  const r = writeIn(sb, "pharn/memory-bank/x\\..\\lessons-learned.md");
   assert.equal(r.status, 2, "a NEW file beside canon, whose folded key names the authorized one");
   assert.match(r.stderr, /memory-bank CANON/);
 });
 
 test("★ M4: a link inside canon to a DIFFERENT canon file is judged at its target, not by its authorized name", () => {
-  const sb = sandbox(["memory-bank/pattern-library.md"]);
-  fs.symlinkSync("pattern-library.md", join(sb, "memory-bank", "lessons-learned.md"));
-  setScopeRecord(sb, ["memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
-  const r = writeIn(sb, "memory-bank/lessons-learned.md");
+  const sb = sandbox(["pharn/memory-bank/pattern-library.md"]);
+  fs.symlinkSync("pattern-library.md", join(sb, "pharn", "memory-bank", "lessons-learned.md"));
+  setScopeRecord(sb, ["pharn/memory-bank/lessons-learned.md"], PROMOTE_ORIGIN);
+  const r = writeIn(sb, "pharn/memory-bank/lessons-learned.md");
   assert.equal(r.status, 2, "the write lands in pattern-library.md, which the scope does not authorize");
   assert.match(r.stderr, /memory-bank CANON/);
 });
@@ -1080,12 +1115,12 @@ test(
 );
 
 test("✧ MUTANT: switching the second pass off re-opens the backslash-named link — the pass is what closes it (L4)", ONLY_POSIX, () => {
-  const sb = mutantSandbox(["LIMITS.md"], PASS2_ANCHOR, PASS2_OFF); // strict: fails if the second pass is renamed
+  const sb = mutantSandbox(["pharn/LIMITS.md"], PASS2_ANCHOR, PASS2_OFF); // strict: fails if the second pass is renamed
   fs.symlinkSync(".", join(sb, "s\\x"));
-  assert.equal(writeIn(sb, "s\\x/LIMITS.md").status, 0, "without the second pass the link carries the write — the review's bypass");
-  const good = sandbox(["LIMITS.md"]);
+  assert.equal(writeIn(sb, "s\\x/pharn/LIMITS.md").status, 0, "without the second pass the link carries the write — the review's bypass");
+  const good = sandbox(["pharn/LIMITS.md"]);
   fs.symlinkSync(".", join(good, "s\\x"));
-  assert.equal(writeIn(good, "s\\x/LIMITS.md").status, 2);
+  assert.equal(writeIn(good, "s\\x/pharn/LIMITS.md").status, 2);
 });
 
 test("★ L7: null JSON payload denies (exit 2), never fail-open", () => {
@@ -1101,7 +1136,7 @@ test("★ L7: null JSON payload denies (exit 2), never fail-open", () => {
 // linear. The verdict is not the point here (such a path exceeds PATH_MAX, so no write can land); a guard that HANGS
 // stalls the agent as surely as one that allows. The bound is generous for a slow CI runner; patched, it takes < 0.5 s.
 test("✧ a 100k-segment payload path is judged in linear time, with the same verdict as its short spelling", () => {
-  const file_path = "src/" + "../src/".repeat(100000) + "LIMITS.md";
+  const file_path = "src/" + "../src/".repeat(100000) + "pharn/LIMITS.md";
   const t = Date.now();
   const r = spawnSync(process.execPath, [HOOK], {
     input: JSON.stringify({ tool_name: "Write", tool_input: { file_path } }),
@@ -1159,14 +1194,14 @@ test("TST-11 control (L60): the same throw placed BEFORE the handler's registrat
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // SEC-11 (audit 2026-10-12, LOW): a payload path holding a NUL byte. No file has such a name — Node's `fs` refuses
-// one — so both passes used to judge a name that is no file a write can reach: `LIMITS.md\u0000x` matched no
+// one — so both passes used to judge a name that is no file a write can reach: `pharn/LIMITS.md\u0000x` matched no
 // trusted path and exited 0. The patch (.dev/features/audit-low-human-patch/HUMAN-PATCH.md) denies any such path
 // through the malformed-input deny, before either pass. The deny cases are EXPECTED TO FAIL until the maintainer
 // runs that patch's apply.py, and to PASS after; the controls pass on both sides.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const NUL_PATHS = [
-  "LIMITS.md\u0000x",
+  "pharn/LIMITS.md\u0000x",
   "pharn/CONSTITUTION.md\u0000/../x",
   ".claude/hooks/protect-trusted-paths.cjs\u0000",
   ".github/CODEOWNERS\u0000.bak",
@@ -1183,14 +1218,14 @@ function assertNulDeny(r, label) {
 
 test("SEC-11: a NUL byte in a Write file_path is DENIED fail-closed, whatever the path names (relative and absolute)", () => {
   for (const p of NUL_PATHS) assertNulDeny(run({ tool_name: "Write", tool_input: { file_path: p } }), JSON.stringify(p));
-  const abs = join(process.cwd(), "LIMITS.md") + "\u0000x";
+  const abs = join(process.cwd(), "pharn/LIMITS.md") + "\u0000x";
   assertNulDeny(run({ tool_name: "Write", tool_input: { file_path: abs } }), "absolute");
 });
 
 test("SEC-11: every path field the hook reads denies on a NUL — path, notebook_path, a MultiEdit edits[] entry, no tool name", () => {
-  assertNulDeny(run({ tool_name: "Edit", tool_input: { path: "LIMITS.md\u0000x" } }), "Edit path");
-  assertNulDeny(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: "THREAT-MODEL.md\u0000" } }), "notebook_path");
-  const edits = [{ file_path: "LIMITS.md\u0000x", old_string: "a", new_string: "b" }];
+  assertNulDeny(run({ tool_name: "Edit", tool_input: { path: "pharn/LIMITS.md\u0000x" } }), "Edit path");
+  assertNulDeny(run({ tool_name: "NotebookEdit", tool_input: { notebook_path: "pharn/THREAT-MODEL.md\u0000" } }), "notebook_path");
+  const edits = [{ file_path: "pharn/LIMITS.md\u0000x", old_string: "a", new_string: "b" }];
   assertNulDeny(run({ tool_name: "MultiEdit", tool_input: { file_path: "src/ok.md", edits } }), "MultiEdit edits[]");
   assertNulDeny(run({ tool_input: { file_path: "pharn/ARCHITECTURE.md\u0000" } }), "no tool_name");
 });
@@ -1202,6 +1237,41 @@ test("SEC-11: in a sandbox whose trusted docs exist, a NUL-suffixed spelling of 
 
 test("SEC-11 controls: the same paths without a NUL keep their verdicts, and a non-write tool carrying a NUL is ignored", () => {
   assert.equal(run({ tool_name: "Write", tool_input: { file_path: "src/a.md" } }).status, 0, "an ordinary path is allowed");
-  assert.equal(run({ tool_name: "Write", tool_input: { file_path: "LIMITS.md" } }).status, 2, "the trusted doc is denied");
-  assert.equal(run({ tool_name: "Read", tool_input: { file_path: "LIMITS.md\u0000x" } }).status, 0, "not a write: not judged");
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: "pharn/LIMITS.md" } }).status, 2, "the trusted doc is denied");
+  assert.equal(run({ tool_name: "Read", tool_input: { file_path: "pharn/LIMITS.md\u0000x" } }).status, 0, "not a write: not judged");
+});
+
+// ============================== 7.0.0 — the protected paths moved under pharn/ (pharn-footprint-move) ===========
+// The four moved members (two trusted docs, the scope file, the SPEC template) and the canon subtree, reached through
+// a symlinked ALIAS of pharn/ — segment-wise resolution must judge the target, exactly as for the two docs that were
+// always there (L73: an identity check, not a spelling check). One table, iterated (L29).
+const MOVED_7 = [
+  "pharn/THREAT-MODEL.md",
+  "pharn/LIMITS.md",
+  "pharn/.run/writes-scope.json",
+  "pharn/spec-template.md",
+  "pharn/memory-bank/lessons-learned.md",
+  "pharn/memory-bank/pattern-library.md",
+];
+
+test("★ 7.0.0 every moved protected path is denied through a symlinked alias of pharn/", () => {
+  const sb = sandbox(MOVED_7);
+  fs.symlinkSync("pharn", join(sb, "alias"));
+  for (const p of MOVED_7) {
+    const viaAlias = "alias/" + p.slice("pharn/".length);
+    assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: p } }).status, 2, p);
+    assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: viaAlias } }).status, 2, viaAlias);
+  }
+  // control: an ordinary file behind the same alias is not protected
+  assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: "alias/features/demo/SPEC.md" } }).status, 0);
+});
+
+test("★ 7.0.0 the OLD root paths are a user's own files in a sandbox too — present or absent, never denied", () => {
+  // migration: the pre-7.0.0 root paths
+  const OLD = ["THREAT-MODEL.md", "LIMITS.md", "memory-bank/lessons-learned.md", "pharn.spec-template.md", ".pharn/writes-scope.json"]; // migration
+  for (const present of [false, true]) {
+    const sb = sandbox(present ? OLD : []);
+    for (const p of OLD)
+      assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: p } }).status, 0, `${p} (present: ${present})`);
+  }
 });

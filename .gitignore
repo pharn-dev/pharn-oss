@@ -2,6 +2,11 @@ node_modules/
 .claude/settings.local.json
 .pharn/*
 !.pharn/ci.yml
+# 7.0.0: runtime scratch, pharn-cli's backups and its lock file live under pharn/ now. `.pharn/` stays ignored
+# for its `ci.yml` exception (pharn-ci still reads `.pharn/ci.yml`) and for scratch left by a pre-7.0.0 checkout.
+pharn/.run/
+pharn/.backup/
+pharn/.lock*
 runs/
 .env
 .DS_Store

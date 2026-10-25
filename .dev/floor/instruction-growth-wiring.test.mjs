@@ -21,7 +21,7 @@
 //   - that CI ran the step on a given PR (an admin merge skips required checks; a direct push to main is not a PR);
 //   - the `git fetch` line: it needs GitHub's merge ref, so it is pinned as text and never run here;
 //   - the verdict's reach: `--growth` is a floor verdict over instruction-files-core.mjs's MODEL of the loader, with that
-//     header's known-so-far under-count routes (LIMITS.md §3e, L67), and a per-PR budget never bounds growth spread over
+//     header's known-so-far under-count routes (pharn/LIMITS.md §3e, L67), and a per-PR budget never bounds growth spread over
 //     many PRs.
 
 import { test } from "node:test";

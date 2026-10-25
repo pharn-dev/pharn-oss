@@ -43,7 +43,7 @@ function fixture({
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rlr-")));
   fs.mkdirSync(path.join(root, ".git"));
   if (marker) {
-    const dir = path.join(root, ".pharn", "pharn-loop", name);
+    const dir = path.join(root, "pharn", ".run", "pharn-loop", name);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "active.json"),
@@ -58,7 +58,7 @@ const payload = (over = {}) =>
   JSON.stringify({ session_id: SID, cwd: "/x", permission_mode: "default", hook_event_name: "Stop", stop_hook_active: false, ...over });
 const run = (root, over = {}, opts = {}) => stopGuard(payload(over), { now: NOW, root, env: {}, ...opts });
 const isBlock = (out) => out !== "" && JSON.parse(out).decision === "block";
-const counterFile = (root, name = NAME) => path.join(root, ".pharn", "pharn-loop", name, "stop-blocks.json");
+const counterFile = (root, name = NAME) => path.join(root, "pharn", ".run", "pharn-loop", name, "stop-blocks.json");
 
 function withFixture(opts, fn) {
   const root = fixture(opts);
@@ -132,7 +132,7 @@ for (const [why, fx, over] of INERT) {
 
 test("INERT — a /pharn-ship run in progress (open COST markers with run-start, no active.json) — the regression that killed the markers design", () => {
   withFixture({ marker: false }, (root) => {
-    const cost = path.join(root, ".pharn", "cost", NAME);
+    const cost = path.join(root, "pharn", ".run", "cost", NAME);
     fs.mkdirSync(cost, { recursive: true });
     fs.writeFileSync(
       path.join(cost, "markers.jsonl"),
@@ -169,7 +169,7 @@ test("BUDGET: K blocks per (session, run) in TOTAL, then the stop is allowed wit
     assert.equal(counts[SID], 3, "the counter survives across calls");
     // A different session starts fresh, on its own marker.
     fs.writeFileSync(
-      path.join(root, ".pharn/pharn-loop/demo/active.json"),
+      path.join(root, "pharn/.run/pharn-loop/demo/active.json"),
       JSON.stringify({ schema: SCHEMA, name: NAME, session_id: OTHER, started_at: new Date(NOW).toISOString(), cap: 3 })
     );
     assert.match(JSON.parse(run(root, { session_id: OTHER })).reason, /Refusal 1 of 3/);
@@ -200,12 +200,12 @@ const FAIL_OPEN = [
   ["malformed stdin", (root) => stopGuard("{ not json", { now: NOW, root, env: {} })],
   ["a non-object payload", (root) => stopGuard("42", { now: NOW, root, env: {} })],
   ["a payload with no session_id", (root) => run(root, { session_id: undefined })],
-  ["a corrupt marker", (root) => (fs.writeFileSync(path.join(root, ".pharn/pharn-loop/demo/active.json"), "{ torn"), run(root))],
+  ["a corrupt marker", (root) => (fs.writeFileSync(path.join(root, "pharn/.run/pharn-loop/demo/active.json"), "{ torn"), run(root))],
   [
     "a marker of another schema",
     (root) => (
       fs.writeFileSync(
-        path.join(root, ".pharn/pharn-loop/demo/active.json"),
+        path.join(root, "pharn/.run/pharn-loop/demo/active.json"),
         JSON.stringify({ schema: "x/1", name: NAME, session_id: SID, started_at: new Date(NOW).toISOString() })
       ),
       run(root)
@@ -215,7 +215,7 @@ const FAIL_OPEN = [
     "a marker whose name disagrees with its directory",
     (root) => (
       fs.writeFileSync(
-        path.join(root, ".pharn/pharn-loop/demo/active.json"),
+        path.join(root, "pharn/.run/pharn-loop/demo/active.json"),
         JSON.stringify({ schema: SCHEMA, name: "other", session_id: SID, started_at: new Date(NOW).toISOString() })
       ),
       run(root)
@@ -225,24 +225,24 @@ const FAIL_OPEN = [
     "an unparseable started_at",
     (root) => (
       fs.writeFileSync(
-        path.join(root, ".pharn/pharn-loop/demo/active.json"),
+        path.join(root, "pharn/.run/pharn-loop/demo/active.json"),
         JSON.stringify({ schema: SCHEMA, name: NAME, session_id: SID, started_at: "yesterday-ish" })
       ),
       run(root)
     ),
   ],
-  ["a missing state directory", (root) => (fs.rmSync(path.join(root, ".pharn"), { recursive: true, force: true }), run(root))],
+  ["a missing state directory", (root) => (fs.rmSync(path.join(root, "pharn", ".run"), { recursive: true, force: true }), run(root))],
   ["a corrupt counter", (root) => (fs.writeFileSync(counterFile(root), "{ torn"), run(root))],
   ["a counter that is a directory", (root) => (fs.mkdirSync(counterFile(root)), run(root))],
   [
     "an unwritable counter directory",
     (root) => {
       if (process.getuid && process.getuid() === 0) return ""; // root ignores the mode bits
-      fs.chmodSync(path.join(root, ".pharn/pharn-loop/demo"), 0o555);
+      fs.chmodSync(path.join(root, "pharn/.run/pharn-loop/demo"), 0o555);
       try {
         return run(root);
       } finally {
-        fs.chmodSync(path.join(root, ".pharn/pharn-loop/demo"), 0o755);
+        fs.chmodSync(path.join(root, "pharn/.run/pharn-loop/demo"), 0o755);
       }
     },
   ],
@@ -250,7 +250,7 @@ const FAIL_OPEN = [
     "an unreadable marker",
     (root) => {
       if (process.getuid && process.getuid() === 0) return "";
-      const m = path.join(root, ".pharn/pharn-loop/demo/active.json");
+      const m = path.join(root, "pharn/.run/pharn-loop/demo/active.json");
       fs.chmodSync(m, 0o000);
       try {
         return run(root);
@@ -283,13 +283,13 @@ test("CONTAINMENT: a state entry that is a SYMLINK out of the state root is igno
       path.join(elsewhere, "active.json"),
       JSON.stringify({ schema: SCHEMA, name: NAME, session_id: SID, started_at: new Date(NOW).toISOString() })
     );
-    fs.mkdirSync(path.join(root, ".pharn", "pharn-loop"), { recursive: true });
-    fs.symlinkSync(elsewhere, path.join(root, ".pharn", "pharn-loop", NAME));
+    fs.mkdirSync(path.join(root, "pharn", ".run", "pharn-loop"), { recursive: true });
+    fs.symlinkSync(elsewhere, path.join(root, "pharn", ".run", "pharn-loop", NAME));
     assert.equal(run(root), "", "a symlinked run directory must not be followed");
     fs.rmSync(elsewhere, { recursive: true, force: true });
   });
   withFixture({}, (root) => {
-    const real = path.join(root, ".pharn/pharn-loop/demo/active.json");
+    const real = path.join(root, "pharn/.run/pharn-loop/demo/active.json");
     const text = fs.readFileSync(real);
     fs.unlinkSync(real);
     const target = path.join(root, "elsewhere.json");
@@ -307,7 +307,11 @@ test("isPlainSegment refuses every non-segment (a containment property, not a sl
 });
 
 test("the Stop mode WRITES NOTHING under the state root except its counter (GRILL finding 3)", () => {
-  const list = (root) => fs.readdirSync(path.join(root, ".pharn"), { recursive: true }).map(String).sort();
+  const list = (root) =>
+    fs
+      .readdirSync(path.join(root, "pharn", ".run"), { recursive: true })
+      .map(String)
+      .sort();
   for (const fx of [{}, { session: OTHER }, { featureDir: false }, { record: "x" }]) {
     withFixture(fx, (root) => {
       const before = list(root);
@@ -331,14 +335,14 @@ const quiet = { write() {} };
 test("--open writes the schema with the env session id; --close removes it; a non-plain name is refused", () => {
   withFixture({ marker: false }, (root) => {
     assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr: quiet }), 0);
-    const m = JSON.parse(fs.readFileSync(path.join(root, ".pharn/pharn-loop/demo/active.json"), "utf8"));
+    const m = JSON.parse(fs.readFileSync(path.join(root, "pharn/.run/pharn-loop/demo/active.json"), "utf8"));
     assert.deepEqual(Object.keys(m).sort(), ["cap", "name", "schema", "session_id", "started_at"]);
     assert.equal(m.schema, SCHEMA);
     assert.equal(m.session_id, SID);
     assert.equal(m.cap, 3);
     assert.ok(isBlock(stopGuard(payload(), { root, env: {} })), "the marker --open writes is one the guard honours");
     assert.equal(markerMode(["--close", NAME], { root, stderr: quiet }), 0);
-    assert.ok(!fs.existsSync(path.join(root, ".pharn/pharn-loop/demo/active.json")));
+    assert.ok(!fs.existsSync(path.join(root, "pharn/.run/pharn-loop/demo/active.json")));
     assert.equal(stopGuard(payload(), { root, env: {} }), "", "after --close the guard is inert");
     assert.equal(markerMode(["--close", NAME], { root, stderr: quiet }), 0, "--close is idempotent");
     for (const bad of [
@@ -352,7 +356,7 @@ test("--open writes the schema with the env session id; --close removes it; a no
     }
     // No session id in the env → a null session, which matches no Stop payload: INERT, never blocking.
     assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 0);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".pharn/pharn-loop/demo/active.json"), "utf8")).session_id, null);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(root, "pharn/.run/pharn-loop/demo/active.json"), "utf8")).session_id, null);
     assert.equal(stopGuard(payload(), { root, env: {} }), "");
   });
 });
@@ -360,8 +364,8 @@ test("--open writes the schema with the env session id; --close removes it; a no
 test("--open refuses to write through a symlinked state directory", () => {
   withFixture({ marker: false }, (root) => {
     const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "rlr-out-"));
-    fs.mkdirSync(path.join(root, ".pharn"), { recursive: true });
-    fs.symlinkSync(elsewhere, path.join(root, ".pharn", "pharn-loop"));
+    fs.mkdirSync(path.join(root, "pharn", ".run"), { recursive: true });
+    fs.symlinkSync(elsewhere, path.join(root, "pharn", ".run", "pharn-loop"));
     assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr: quiet }), 2);
     assert.deepEqual(fs.readdirSync(elsewhere), [], "nothing was written through the link");
     fs.rmSync(elsewhere, { recursive: true, force: true });
@@ -454,4 +458,41 @@ test("★ WIRING — /pharn-loop's pinned --open line guards the run, and its pi
     assert.equal(sh(close).status, 0, "the pinned --close line failed");
     assert.equal(cli(root, payload()).stdout, "", "a closed run is inert");
   });
+});
+
+// ============================== 7.0.0 — the loop state moved to pharn/.run/pharn-loop/ (pharn-footprint-move) ====
+// A missed site here would make the Stop guard silently inert, so: the guard blocks on a marker at the NEW path, a
+// marker left only at the OLD path does not count (the migration note says to finish or abandon runs first), and
+// --open refuses a symlink at EITHER segment of the scratch root.
+test("★ 7.0.0 the guard blocks on a marker at pharn/.run/pharn-loop/ and ignores one left at the old .pharn/ (migration)", () => {
+  withFixture({}, (root) => {
+    assert.ok(isBlock(run(root)), "the new path is honoured");
+  });
+  withFixture({ marker: false }, (root) => {
+    const old = path.join(root, ".pharn", "pharn-loop", NAME); // migration: the pre-7.0.0 path
+    fs.mkdirSync(old, { recursive: true });
+    fs.writeFileSync(
+      path.join(old, "active.json"),
+      JSON.stringify({ schema: SCHEMA, name: NAME, session_id: SID, started_at: new Date(NOW - 60000).toISOString(), cap: 3 })
+    );
+    assert.equal(run(root), "", "a marker at the old root is never read");
+  });
+});
+
+test("★ 7.0.0 --open refuses a symlink at EITHER segment of the scratch root, and writes nothing through it", () => {
+  for (const at of [["pharn"], ["pharn", ".run"]]) {
+    withFixture({ marker: false, featureDir: false }, (root) => {
+      const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "rlr-out-"));
+      fs.mkdirSync(path.join(elsewhere, ".run"), { recursive: true });
+      if (at.length === 2) fs.mkdirSync(path.join(root, "pharn"), { recursive: true });
+      fs.symlinkSync(at.length === 1 ? elsewhere : path.join(elsewhere, ".run"), path.join(root, ...at));
+      assert.equal(
+        markerMode(["--open", NAME, "--cap", "3"], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr: quiet }),
+        2,
+        at.join("/")
+      );
+      assert.deepEqual(fs.readdirSync(path.join(elsewhere, ".run")), [], `${at.join("/")}: nothing written through the link`);
+      fs.rmSync(elsewhere, { recursive: true, force: true });
+    });
+  }
 });

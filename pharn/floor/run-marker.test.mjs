@@ -61,8 +61,8 @@ test("✧ RUN_MARKER_COMMANDS is exactly {pharn-review, pharn-ship} — pharn-lo
   assert.deepEqual([...RUN_MARKER_COMMANDS].sort(), ["pharn-review", "pharn-ship"]);
 });
 
-test("✧ markerPath() is <root>/.pharn/<command>/<name>/active.json", () => {
-  assert.equal(markerPath("/r", "pharn-ship", "demo"), join("/r", ".pharn", "pharn-ship", "demo", "active.json"));
+test("✧ markerPath() is <root>/pharn/.run/<command>/<name>/active.json", () => {
+  assert.equal(markerPath("/r", "pharn-ship", "demo"), join("/r", "pharn", ".run", "pharn-ship", "demo", "active.json"));
 });
 
 // ------------------------------------------------------------------------------------------- openRun / closeRun (JS API)
@@ -111,7 +111,7 @@ test("★ REFUSAL: pharn-loop is not a member — that marker has its own owner"
   const r = openRun({ root: dir, command: "pharn-loop", name: "demo" });
   assert.equal(r.ok, false);
   assert.match(r.reason, /own marker owner/);
-  assert.equal(existsSync(join(dir, ".pharn", "pharn-loop")), false, "nothing was written");
+  assert.equal(existsSync(join(dir, "pharn", ".run", "pharn-loop")), false, "nothing was written");
 });
 
 test("★ REFUSAL: an unknown command is rejected and nothing is written", () => {
@@ -133,30 +133,38 @@ test("★ REFUSAL: a bad name (uppercase, empty, leading hyphen, too long, path 
   assert.equal(ok.ok, true);
 });
 
-test("★ REFUSAL: a symlink on ANY path component (.pharn, the command dir, the name dir, the marker file itself)", () => {
-  // .pharn itself is a symlink
-  const dir1 = tmp();
+test("★ REFUSAL: a symlink on ANY path component (pharn/.run, the command dir, the name dir, the marker file itself)", () => {
+  // pharn itself is a symlink (7.0.0: the scratch root sits under pharn/, so both segments are walked)
   const realDir = tmp();
-  symlinkSync(realDir, join(dir1, ".pharn"));
+  const dir0 = tmp();
+  symlinkSync(realDir, join(dir0, "pharn"));
+  assert.equal(openRun({ root: dir0, command: "pharn-ship", name: "demo" }).ok, false);
+  assert.equal(closeRun({ root: dir0, command: "pharn-ship", name: "demo" }).ok, false, "close refuses the same alias");
+
+  // pharn/.run itself is a symlink
+  const dir1 = tmp();
+  mkdirSync(join(dir1, "pharn"), { recursive: true });
+  mkdirSync(join(dir1, "pharn"), { recursive: true });
+  symlinkSync(realDir, join(dir1, "pharn", ".run"));
   assert.equal(openRun({ root: dir1, command: "pharn-ship", name: "demo" }).ok, false);
 
   // the command directory is a symlink
   const dir2 = tmp();
-  mkdirSync(join(dir2, ".pharn"), { recursive: true });
-  symlinkSync(realDir, join(dir2, ".pharn", "pharn-ship"));
+  mkdirSync(join(dir2, "pharn", ".run"), { recursive: true });
+  symlinkSync(realDir, join(dir2, "pharn", ".run", "pharn-ship"));
   assert.equal(openRun({ root: dir2, command: "pharn-ship", name: "demo" }).ok, false);
 
   // the name directory is a symlink
   const dir3 = tmp();
-  mkdirSync(join(dir3, ".pharn", "pharn-ship"), { recursive: true });
-  symlinkSync(realDir, join(dir3, ".pharn", "pharn-ship", "demo"));
+  mkdirSync(join(dir3, "pharn", ".run", "pharn-ship"), { recursive: true });
+  symlinkSync(realDir, join(dir3, "pharn", ".run", "pharn-ship", "demo"));
   assert.equal(openRun({ root: dir3, command: "pharn-ship", name: "demo" }).ok, false);
 
   // the marker FILE itself is a symlink (pre-existing, from an earlier open elsewhere)
   const dir4 = tmp();
-  mkdirSync(join(dir4, ".pharn", "pharn-ship", "demo"), { recursive: true });
+  mkdirSync(join(dir4, "pharn", ".run", "pharn-ship", "demo"), { recursive: true });
   writeFileSync(join(realDir, "elsewhere.json"), "{}");
-  symlinkSync(join(realDir, "elsewhere.json"), join(dir4, ".pharn", "pharn-ship", "demo", "active.json"));
+  symlinkSync(join(realDir, "elsewhere.json"), join(dir4, "pharn", ".run", "pharn-ship", "demo", "active.json"));
   assert.equal(openRun({ root: dir4, command: "pharn-ship", name: "demo" }).ok, false);
   assert.equal(closeRun({ root: dir4, command: "pharn-ship", name: "demo" }).ok, false, "close refuses the same alias");
 });
@@ -182,7 +190,7 @@ test("★ CLI --open / --close round-trip, exercised as a real subprocess (the s
 test("★ the CLI's default root is the invoking cwd — exercised by a real spawn, not assumed (L41)", () => {
   const dir = tmp();
   cli(dir, "--open", "pharn-ship", "cwd-probe");
-  assert.ok(existsSync(join(dir, ".pharn", "pharn-ship", "cwd-probe", "active.json")), "the marker landed under the SPAWN's cwd");
+  assert.ok(existsSync(join(dir, "pharn", ".run", "pharn-ship", "cwd-probe", "active.json")), "the marker landed under the SPAWN's cwd");
 });
 
 test("★ CLI REFUSAL: pharn-loop exits 2 and writes nothing", () => {
@@ -190,7 +198,7 @@ test("★ CLI REFUSAL: pharn-loop exits 2 and writes nothing", () => {
   const r = cli(dir, "--open", "pharn-loop", "demo");
   assert.equal(r.status, 2);
   assert.match(r.stderr, /own marker owner/);
-  assert.equal(existsSync(join(dir, ".pharn", "pharn-loop")), false);
+  assert.equal(existsSync(join(dir, "pharn", ".run", "pharn-loop")), false);
 });
 
 test("★ CLI REFUSAL: a malformed invocation (missing name, extra argv, unknown mode) exits 2", () => {
@@ -214,7 +222,7 @@ test("★ NON-VACUITY (L34): opening EACH command's marker flips the install no-
   }
 });
 
-test("★ the require-loop-record.cjs marker under .pharn/pharn-loop/ ALSO flips the write guard — no third writer needed", () => {
+test("★ the require-loop-record.cjs marker under pharn/.run/pharn-loop/ ALSO flips the write guard — no third writer needed", () => {
   const dir = seedInstalled(tmp());
   assert.equal(hookAllows(dir, "src/x.js"), true, "premise");
   const open = spawnSync(process.execPath, [LOOP_HOOK, "--open", "probe", "--cap", "3"], { cwd: dir, encoding: "utf8" });
@@ -227,8 +235,8 @@ test("★ the require-loop-record.cjs marker under .pharn/pharn-loop/ ALSO flips
 
 test("★ a marker under an UNKNOWN state directory is ignored (negative control — the state-dir set is closed)", () => {
   const dir = seedInstalled(tmp());
-  mkdirSync(join(dir, ".pharn", "pharn-foo", "demo"), { recursive: true });
-  writeFileSync(join(dir, ".pharn", "pharn-foo", "demo", "active.json"), JSON.stringify({ schema: "x" }) + "\n");
+  mkdirSync(join(dir, "pharn", ".run", "pharn-foo", "demo"), { recursive: true });
+  writeFileSync(join(dir, "pharn", ".run", "pharn-foo", "demo", "active.json"), JSON.stringify({ schema: "x" }) + "\n");
   assert.equal(hookAllows(dir, "src/x.js"), true, "an unrecognized state directory must not hold the guard fail-closed");
 });
 
@@ -252,7 +260,7 @@ function pinnedLine(file, re) {
 // The pinned lines are relative to a REPO checkout ("node pharn/floor/run-marker.mjs …", "node
 // .claude/hooks/require-loop-record.cjs …"), because that is where a real command runs them from. These
 // tests execute them with `cwd` set to a THROWAWAY sandbox (so the marker lands there, not in this repo's
-// own `.pharn/`), so the relative script path is rewritten to this repo's absolute one first — the
+// own `pharn/.run/`), so the relative script path is rewritten to this repo's absolute one first — the
 // SUBSTITUTED PATH is infrastructure for running the test in isolation; the argv the line passes after the
 // script name (--open/--close, the command, the quoted name) is executed completely unedited. The absolute
 // path travels in the child's ENVIRONMENT and the line names it as a quoted "$VAR", so no path is ever
@@ -399,10 +407,10 @@ test("✧ WIRING: pharn-loop.md's existing --open/--close lines still work uncha
   mkdirSync(join(dir, "pharn", "features", "demo-run"), { recursive: true });
   const o = runShellLine(dir, openLine);
   assert.equal(o.status, 0, o.stderr);
-  assert.ok(existsSync(join(dir, ".pharn", "pharn-loop", "demo-run", "active.json")));
+  assert.ok(existsSync(join(dir, "pharn", ".run", "pharn-loop", "demo-run", "active.json")));
   const c = runShellLine(dir, closeLine);
   assert.equal(c.status, 0, c.stderr);
-  assert.equal(existsSync(join(dir, ".pharn", "pharn-loop", "demo-run", "active.json")), false);
+  assert.equal(existsSync(join(dir, "pharn", ".run", "pharn-loop", "demo-run", "active.json")), false);
 });
 
 // ------------------------------------------------------------------------------------------- age / staleness (via the real hook, since run-marker.mjs never reads age itself)
@@ -428,12 +436,12 @@ test("★ a marker aged 23h still counts (inside the ceiling)", () => {
 // ------------------------------------------------------------------------------------------- ★ S1 (GATE-2 review): a planted file is a refusal, never a crash
 
 // Every place a FILE can stand where the writer needs a directory. The Write tool can create each of these
-// in an installed project (.pharn/** is always writable), which is what made them reachable.
+// in an installed project (pharn/.run/** is always writable), which is what made them reachable.
 const PLANTS = [
-  { at: [".pharn"], command: "pharn-review", label: ".pharn itself" },
-  { at: [".pharn", "pharn-review"], command: "pharn-review", label: ".pharn/pharn-review" },
-  { at: [".pharn", "pharn-ship"], command: "pharn-ship", label: ".pharn/pharn-ship" },
-  { at: [".pharn", "pharn-review", "feat"], command: "pharn-review", label: ".pharn/pharn-review/feat" },
+  { at: ["pharn", ".run"], command: "pharn-review", label: "pharn/.run itself" },
+  { at: ["pharn", ".run", "pharn-review"], command: "pharn-review", label: "pharn/.run/pharn-review" },
+  { at: ["pharn", ".run", "pharn-ship"], command: "pharn-ship", label: "pharn/.run/pharn-ship" },
+  { at: ["pharn", ".run", "pharn-review", "feat"], command: "pharn-review", label: "pharn/.run/pharn-review/feat" },
 ];
 
 function plant(dir, at) {
@@ -450,7 +458,7 @@ test("★ S1: openRun() RETURNS a refusal for every planted file — it never th
       r = openRun({ root: dir, command, name: "feat" });
     }, label);
     assert.equal(r.ok, false, label);
-    assert.match(r.reason, /^cannot write \.pharn\/pharn-(review|ship)\/feat\/active\.json \([A-Z0-9_]+\)/, label);
+    assert.match(r.reason, /^cannot write pharn\/\.run\/pharn-(review|ship)\/feat\/active\.json \([A-Z0-9_]+\)/, label);
   }
 });
 
@@ -467,7 +475,7 @@ test("★ S1: the CLI exits 2 — never 1, never a stack trace — for every pla
 
 test("★ S1: --close under a planted file is a refusal (exit 2), not a crash", () => {
   const dir = tmp();
-  plant(dir, [".pharn", "pharn-review"]);
+  plant(dir, ["pharn", ".run", "pharn-review"]);
   const r = cli(dir, "--close", "pharn-review", "feat");
   assert.equal(r.status, 2, r.stderr);
   assert.match(r.stderr, /^run-marker: cannot remove /);
@@ -475,7 +483,7 @@ test("★ S1: --close under a planted file is a refusal (exit 2), not a crash", 
 
 test("★ S1: the planted file that makes --open refuse ALSO makes the guard read the tree as run-open (install, no scope)", () => {
   const dir = seedInstalled(tmp());
-  plant(dir, [".pharn", "pharn-review"]);
+  plant(dir, ["pharn", ".run", "pharn-review"]);
   assert.equal(cli(dir, "--open", "pharn-review", "feat").status, 2);
   assert.equal(hookAllows(dir, "src/x.js"), false, "a file where the state directory belongs is a scan error, i.e. fail-closed");
 });
@@ -494,10 +502,10 @@ for (const { file, command, next } of [
   },
   { file: "pharn-review.md", command: "pharn-review", next: "## Step 3 —" },
 ]) {
-  test(`✧ WIRING: ${file}'s pinned OPEN line, executed against a FILE planted at .pharn/${command}, exits non-zero`, () => {
+  test(`✧ WIRING: ${file}'s pinned OPEN line, executed against a FILE planted at pharn/.run/${command}, exits non-zero`, () => {
     const line = pinnedLine(file, new RegExp(`node pharn/floor/run-marker\\.mjs --open ${command} '<name>'`)).replace("<name>", "demo-run");
     const dir = tmp();
-    plant(dir, [".pharn", command]);
+    plant(dir, ["pharn", ".run", command]);
     const r = runShellLine(dir, line);
     assert.notEqual(r.status, 0, `the line the STOP branch reads must fail here: ${r.stdout}${r.stderr}`);
     assert.equal(r.status, 2);
@@ -516,14 +524,18 @@ for (const { file, command, next } of [
 // ------------------------------------------------------------------------------------------- ✧ WIRING: /pharn-loop's run-state lines STOP on a planted file — EXECUTED (re-review R2)
 
 // The loop's marker writer is require-loop-record.cjs, a human-only hook left unchanged: a FILE planted at
-// .pharn/pharn-loop/<name> makes it exit 1 with a stack trace. So the command STOPs (S9) on ANY non-zero exit
+// pharn/.run/pharn-loop/<name> makes it exit 1 with a stack trace. So the command STOPs (S9) on ANY non-zero exit
 // of its Step 1a snapshot line and of its --open line. Both lines are EXECUTED here, whole, in a git sandbox —
 // a control run with nothing planted must succeed, so a failure below is the plant's — against a FILE at each
 // of the three places the Write tool can put one. Neither proves a run obeyed the branch (P0).
 const LOOP_SNAPSHOT_RE =
-  /mkdir -p \.pharn\/pharn-loop\/<name> && git status --porcelain -uall > \.pharn\/pharn-loop\/<name>\/pre-run-status\.txt/;
+  /mkdir -p pharn\/\.run\/pharn-loop\/<name> && git status --porcelain -uall > pharn\/\.run\/pharn-loop\/<name>\/pre-run-status\.txt/;
 const LOOP_OPEN_RE = /node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M>/;
-const LOOP_PLANTS = [[".pharn"], [".pharn", "pharn-loop"], [".pharn", "pharn-loop", "demo-run"]];
+const LOOP_PLANTS = [
+  ["pharn", ".run"],
+  ["pharn", ".run", "pharn-loop"],
+  ["pharn", ".run", "pharn-loop", "demo-run"],
+];
 
 function gitSandbox() {
   const dir = tmp();
@@ -575,7 +587,7 @@ test("✧ WIRING (R2): pharn-loop.md STOPs as S9 after EACH of the two lines, be
 
 test("✧ pinnedLine() executes the WHOLE line — an appended `|| true` would be caught (mutation control)", () => {
   const dir = tmp();
-  plant(dir, [".pharn", "pharn-review"]);
+  plant(dir, ["pharn", ".run", "pharn-review"]);
   const line = pinnedLine("pharn-review.md", /node pharn\/floor\/run-marker\.mjs --open pharn-review '<name>'/).replace(
     "<name>",
     "demo-run"

@@ -21,7 +21,7 @@
 // would re-ship L17, so the baseline is a CONTENT-HASH MAP taken at a known instant.
 //
 // THE SCOPE IS SNAPSHOTTED INTO THE RECORD, deliberately. By the time a reconciliation runs at /verify,
-// `.pharn/writes-scope.json` holds VERIFY's scope, not the build's — the single mutable record every
+// `pharn/.run/writes-scope.json` holds VERIFY's scope, not the build's — the single mutable record every
 // stage's Step 0 overwrites (lessons-learned L38). check-regress.mjs documents the same trap from the
 // other side. So the scope that was live when the epoch opened is copied into the baseline, and the
 // checker matches candidates against THAT, never against whatever happens to be on disk later.
@@ -35,11 +35,11 @@
 //
 // HONEST SCOPE (P0). The reconciled set is exactly `tracked ∪ untracked-not-ignored`. A git-ignored path
 // is INVISIBLE here by construction — that is a design choice, not an oversight, and it is what makes
-// `.pharn/` scratch, `runs/**` and `node_modules/` cost nothing. Anchoring proves NOTHING about the
+// `pharn/.run/` scratch, `runs/**` and `node_modules/` cost nothing. Anchoring proves NOTHING about the
 // bytes it records: it states what was there, never that it was correct or that a human approved it.
 //
 // --ANCHOR REFUSES WITH NO USABLE SCOPE (D6, 6.24.0). `snapshotScope()` returning `null` — absent or an
-// unusable `.pharn/writes-scope.json` — now means `--anchor` writes NOTHING and exits 2, rather than
+// unusable `pharn/.run/writes-scope.json` — now means `--anchor` writes NOTHING and exits 2, rather than
 // opening an epoch whose `scope_snapshot` a later reconcile cannot use to authorize anything. An explicit
 // `{"scope": []}` IS a scope (an authorization to write nothing) and anchors normally. Both shipped
 // callers (`/pharn-build`, `/pharn-dev-build`) already run their own Step-0 setter immediately before this
@@ -73,8 +73,8 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 
 export const RECORD_VERSION = 1;
-export const RECORD_PATH = ".pharn/reconcile/baseline.json";
-export const SCOPE_PATH = ".pharn/writes-scope.json";
+export const RECORD_PATH = "pharn/.run/reconcile/baseline.json";
+export const SCOPE_PATH = "pharn/.run/writes-scope.json";
 
 function die(reason, code = 2) {
   console.error(`reconcile-baseline: ${reason}`);
@@ -428,7 +428,7 @@ function main(argv) {
   // still anchored successfully with `scope_snapshot: null`, and the checker's no-scope delegation
   // silently absorbed the gap. `{"scope": []}` IS a scope (an explicit "write nothing") and anchors.
   if (built.record.scope_snapshot === null) {
-    die("no usable writes-scope at .pharn/writes-scope.json — run the stage's scope-setter first");
+    die("no usable writes-scope at pharn/.run/writes-scope.json — run the stage's scope-setter first");
   }
   const abs = resolve(root, RECORD_PATH);
   try {

@@ -5,17 +5,17 @@
 // INSTALLED project (`pharn.config.json` carries a non-empty `skillsVersion`): with no scope set and no
 // PHARN run open, it denies PHARN's own installed surface and its own scope file and allows the rest of
 // the project, plus — outside the project — only a few named places (the hook's own header states the
-// whole rule, and LIMITS.md §7 its bounds). That relaxation must not stand open while a command is actually
+// whole rule, and pharn/LIMITS.md §7 its bounds). That relaxation must not stand open while a command is actually
 // working with no declared scope of its own (`/pharn-ship` between its own scoped writes, `/pharn-review`,
 // which sets no scope at all — see its command file). This is the writer of the marker the guard reads to
 // tell "a run is working" from "nothing is happening" in that install posture.
 //
 // It writes and removes EXACTLY ONE schema, `pharn-run-active/1`, at
-// `<root>/.pharn/<command>/<name>/active.json`, for `<command>` in the CLOSED set `RUN_MARKER_COMMANDS`
+// `<root>/pharn/.run/<command>/<name>/active.json`, for `<command>` in the CLOSED set `RUN_MARKER_COMMANDS`
 // below. It deliberately REFUSES `pharn-loop`: that marker (`pharn-loop-active/1`, under
-// `.pharn/pharn-loop/<name>/active.json`) already has its owner, `require-loop-record.cjs` — the Stop
+// `pharn/.run/pharn-loop/<name>/active.json`) already has its owner, `require-loop-record.cjs` — the Stop
 // guard for unattended runs — and giving it a second writer would put one schema behind two owners
-// (PHARN's own build-loop lesson L35). The write guard reads `.pharn/pharn-loop/**` the same way
+// (PHARN's own build-loop lesson L35). The write guard reads `pharn/.run/pharn-loop/**` the same way
 // it reads this module's own two directories (presence + age only — see below), so the loop's existing
 // marker ALSO holds the write guard's fail-closed default in an install, for free, with no third writer.
 //
@@ -37,7 +37,7 @@
 //
 // SYMLINK REFUSAL, one path-component lstat each — the SAME rule `require-loop-record.cjs`'s
 // `markerMode()` already enforces for its own marker (not re-derived, ported): refuse the write when
-// `.pharn`, `.pharn/<command>`, `.pharn/<command>/<name>`, or the marker file itself is ITSELF a symlink,
+// `pharn/.run`, `pharn/.run/<command>`, `pharn/.run/<command>/<name>`, or the marker file itself is ITSELF a symlink,
 // so a crafted alias cannot redirect the write outside the state root or age a marker it does not own.
 //
 // `<name>` is the slug grammar the deny message's RUN block also uses to decide whether a suggested close
@@ -65,7 +65,7 @@
 // Exit 0 ok (nothing printed to stdout beyond a one-line confirmation) · 2 refusal, no marker written.
 //
 // EVERY FAILURE IS EXIT 2, NEVER A CRASH (GATE-2 review, S1). A FILE planted where a directory belongs
-// (`.pharn`, `.pharn/<command>`, `.pharn/<command>/<name>` — the Write tool can plant one, since `.pharn/**`
+// (`pharn/.run`, `pharn/.run/<command>`, `pharn/.run/<command>/<name>` — the Write tool can plant one, since `pharn/.run/**`
 // is always writable) made `mkdirSync` throw, and the CLI exited 1 with a raw stack trace while this header
 // promised "0 ok · 2 refusal". openRun()/closeRun() now return every filesystem error as
 // `{ ok: false, reason }`, naming the operation, the marker's relative path and the error CODE only (never
@@ -128,13 +128,13 @@ function lstatOrNull(p) {
   }
 }
 
-/** The marker path this writer/reader agree on: <root>/.pharn/<command>/<name>/active.json. */
+/** The marker path this writer/reader agree on: <root>/pharn/.run/<command>/<name>/active.json. */
 export function markerPath(root, command, name) {
-  return join(root, ".pharn", command, name, MARKER);
+  return join(root, "pharn", ".run", command, name, MARKER);
 }
 
 function markerDir(root, command, name) {
-  return join(root, ".pharn", command, name);
+  return join(root, "pharn", ".run", command, name);
 }
 
 // Refuse when ANY path component up to and including the marker file is ITSELF a symlink — the
@@ -142,7 +142,7 @@ function markerDir(root, command, name) {
 // never a single resolved realpath, so an alias anywhere in the chain is caught, not only at the leaf).
 function symlinkOnPath(root, command, name) {
   const dir = markerDir(root, command, name);
-  const candidates = [join(root, ".pharn"), join(root, ".pharn", command), dir, join(dir, MARKER)];
+  const candidates = [join(root, "pharn"), join(root, "pharn", ".run"), join(root, "pharn", ".run", command), dir, join(dir, MARKER)];
   for (const p of candidates) {
     const st = lstatOrNull(p);
     if (st && st.isSymbolicLink()) return true;
@@ -209,7 +209,7 @@ export function closeRun({ root, command, name } = {}) {
 // closed enum, the name matched FEATURE_SLUG_RE) plus the error CODE — a short token — never the raw message.
 function fsReason(what, command, name, e) {
   const code = e && typeof e.code === "string" && /^[A-Z0-9_]{1,40}$/.test(e.code) ? e.code : "error";
-  return `${what} .pharn/${command}/${name}/${MARKER} (${code}) — check what is on that path under .pharn/ (a file where a directory belongs, or a permission) and fix it by hand; no marker was written or removed`;
+  return `${what} pharn/.run/${command}/${name}/${MARKER} (${code}) — check what is on that path under pharn/.run/ (a file where a directory belongs, or a permission) and fix it by hand; no marker was written or removed`;
 }
 
 function main(argv) {

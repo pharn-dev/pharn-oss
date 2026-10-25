@@ -45,7 +45,7 @@
 //   • FORGERY. **This certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated
 //     stamp passes, and a test builds one to prove it rather than leaving the bound as prose**
 //     (lessons-learned L43; the phrasing is check-cost-ledger.mjs's, cited not restated — P4). The stamp
-//     and its logs live in the writable tree, which `Bash` reaches unhooked: the LIMITS.md §6 class.
+//     and its logs live in the writable tree, which `Bash` reaches unhooked: the pharn/LIMITS.md §6 class.
 //
 // BUILD-COMPLETENESS IS NOT A GATE, and the separation is load-bearing (GRILL R1). The runner captures
 // check-build-complete.mjs's exit so it is not model-typed, and records it under `aux.completeness` — a
@@ -767,7 +767,7 @@ export const MAX_BUILD_TARGETS = 4096;
 /** Why these are not usable `build` arguments, or null. No `--extra` and no `--skip-style` (a human's `--gates` is
  *  accepted, as at verify — review R1); `targets` is null (full) or a NON-EMPTY array (L34 — an empty list handed to
  *  a runner means "the whole suite", L16) of distinct clean tokens, none led by `-` (a runner would read it as a flag)
- *  and none glob-shaped. The PATH rule proper (normalized, repo-relative, outside `.pharn/`) is ac-tests-core.mjs
+ *  and none glob-shaped. The PATH rule proper (normalized, repo-relative, outside `pharn/.run/`) is ac-tests-core.mjs
  *  `badPath`, which run-gates.mjs applies when it reads `--targets` — this module imports nothing. TOTAL (L62): names
  *  a position, never a value. */
 function buildArgsError({ extras, skipStyle, targets }) {

@@ -35,7 +35,7 @@ function makeRepo() {
   git("init", "-q");
   git("config", "user.email", "t@example.invalid");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), "ignored/\n.pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "ignored/\npharn/.run/\n");
   writeFileSync(join(dir, "tracked.md"), "a\n");
   mkdirSync(join(dir, "ignored"), { recursive: true });
   writeFileSync(join(dir, "ignored/secret.txt"), "invisible\n");
@@ -57,7 +57,7 @@ process.on("exit", () => {
 // D6 (6.24.0): --anchor now REFUSES with no usable scope to snapshot, so every happy-path anchor fixture
 // below must set one first — exactly what both shipped callers (/pharn-build, /pharn-dev-build) already do.
 function seedScope(dir, scope) {
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope, set_by: "pharn/features/x/PLAN.md", set_at: "T" }));
 }
 
@@ -73,7 +73,7 @@ test("★ the reconciled set is tracked ∪ untracked-not-ignored — git-ignore
 
 test("★ the scope is SNAPSHOTTED into the record, not left to be read live (L38)", () => {
   const dir = makeRepo();
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["a.md", "b.md"], set_by: "pharn/features/x/PLAN.md", set_at: "T" }));
   const built = buildRecord(dir, "test");
   assert.ok(built.ok);
@@ -105,7 +105,7 @@ test("★ 6.52.0: the anchor records anchored_head = the commit HEAD names — a
 test("an absent or unusable scope file snapshots as null — never as an empty allow-list", () => {
   const dir = makeRepo();
   assert.equal(snapshotScope(dir), null, "absent => null");
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(join(dir, SCOPE_PATH), "{ not json");
   assert.equal(snapshotScope(dir), null, "unparseable => null");
   writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ set_by: "x" }));
@@ -459,7 +459,7 @@ test("`anchored_by` is argv — a LABEL, never an authorization (stated in the c
 // D6 (6.24.0) — --anchor REFUSES to open an epoch with no usable scope to snapshot.
 
 test("★ D6: --anchor with NO scope file exits 2, names the remedy, and writes nothing", () => {
-  const dir = makeRepo(); // no .pharn/writes-scope.json at all
+  const dir = makeRepo(); // no pharn/.run/writes-scope.json at all
   const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
   assert.equal(r.status, 2, r.stdout);
   assert.match(r.stderr, /no usable writes-scope/);
@@ -469,7 +469,7 @@ test("★ D6: --anchor with NO scope file exits 2, names the remedy, and writes 
 
 test("★ D6: --anchor with a MALFORMED scope record exits 2 and writes nothing", () => {
   const dir = makeRepo();
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(join(dir, SCOPE_PATH), "{ not json");
   const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
   assert.equal(r.status, 2, r.stdout);
@@ -502,11 +502,15 @@ test("--show refuses when nothing has been anchored", () => {
   assert.match(r.stderr, /run --anchor first/);
 });
 
-test("✧ the record path is under .pharn/, which is gitignored by default — the baseline is never committed", () => {
-  assert.ok(RECORD_PATH.startsWith(".pharn/"), "the baseline must be disposable runtime state");
+test("✧ the record path is under pharn/.run/, which is gitignored by default — the baseline is never committed", () => {
+  assert.ok(RECORD_PATH.startsWith("pharn/.run/"), "the baseline must be disposable runtime state");
   const gi = readFileSync(resolve(HERE, "..", "..", ".gitignore"), "utf8");
-  assert.match(gi, /^\.pharn\/\*$/m, "this repo must still gitignore .pharn/ contents by default for that to hold");
-  assert.doesNotMatch(gi, /^!\.pharn\/reconcile\b/m, "the reconcile baseline directory must never be carved out of the default ignore");
+  assert.match(gi, /^pharn\/\.run\/\*?$/m, "this repo must still gitignore pharn/.run/ contents by default for that to hold");
+  assert.doesNotMatch(
+    gi,
+    /^!pharn\/\.run\/reconcile\b/m,
+    "the reconcile baseline directory must never be carved out of the default ignore"
+  );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -516,7 +520,7 @@ test("✧ the record path is under .pharn/, which is gitignored by default — t
 // BUILD stage's scope).
 
 function anchored(dir, scope) {
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   if (scope) writeFileSync(join(dir, SCOPE_PATH), JSON.stringify(scope));
   execFileSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test"], { stdio: "pipe" });
   return () => JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));

@@ -169,11 +169,11 @@ test("★ WIRING — pharn-dev-regress.md pins the reporter capture line and the
   assert.ok(capture.length >= 1, "the pinned capture line is present");
   for (const l of capture.filter((x) => !/^\s*-/.test(x) && !x.includes("`"))) {
     assert.match(l, /--test-reporter=<working tree>\/\.dev\/floor\/node-test-results-reporter\.mjs /, l);
-    assert.match(l, /--test-reporter-destination=<working tree>\/\.pharn\/pharn-dev-regress\/<side>-tests\.json/, l);
+    assert.match(l, /--test-reporter-destination=<working tree>\/pharn\/\.run\/pharn-dev-regress\/<side>-tests\.json/, l);
   }
   assert.match(
     text,
-    /--per-test tests --base-tests \.pharn\/pharn-dev-regress\/base-tests\.json --head-tests \.pharn\/pharn-dev-regress\/head-tests\.json/
+    /--per-test tests --base-tests pharn\/\.run\/pharn-dev-regress\/base-tests\.json --head-tests pharn\/\.run\/pharn-dev-regress\/head-tests\.json/
   );
   assert.ok(text.includes("node-test-results-reporter.mjs"), "the command names the reporter");
 });

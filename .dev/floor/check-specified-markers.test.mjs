@@ -456,7 +456,7 @@ function realFixture(id, opts = {}) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-real-markers-"));
 
   // Accumulate per FILE, not per site, then write once. Several sites of one entry share a doc
-  // (three of seam-record's four are THREAT-MODEL.md), so a write-per-site loop re-reads the pristine
+  // (three of seam-record's four are pharn/THREAT-MODEL.md), so a write-per-site loop re-reads the pristine
   // file and silently overwrites the mutation — leaving only the LAST site of each file actually
   // testable. That bug shipped in this helper's first draft and every direction-2 case except the
   // per-file last one went green against an unmutated doc: L36 one more time, a rule passing for the

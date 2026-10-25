@@ -28,7 +28,7 @@ grillers, verifiers) carry the concern axis; the one framework-coupled fact — 
 wires a capability into its request lifecycle_ — is resolved per project and pinned (§5, seam),
 never shipped as content.
 
-There are two threat models (`THREAT-MODEL.md`): **A** — does the app PHARN _builds_ defend itself
+There are two threat models (`pharn/THREAT-MODEL.md`): **A** — does the app PHARN _builds_ defend itself
 (OWASP LLM Top 10); **B** — is PHARN _itself_ injectable as an agent reading hostile context.
 A is methodology delivered to the user. **B is architecture, and this document bakes it into the
 foundation.**
@@ -50,7 +50,7 @@ small, explicit, and non-LLM. Nothing else is a guarantee.
 
 **Rule of reduction:** any sentence in this architecture that says "guaranteed" must trace to one
 of these three. If it cannot, it is `advisory` and is labeled so (P0). The honest consequence:
-the LLM layer is never injection-proof; only the floor is (`LIMITS.md`).
+the LLM layer is never injection-proof; only the floor is (`pharn/LIMITS.md`).
 
 ---
 
@@ -74,12 +74,12 @@ Frontmatter contract (every Capability):
 ---
 name: "<id>"
 role: skill | lens | validator | verifier | griller | auditor
-kind: pharn-owned | vendor-official | community   # also a privilege level — see LIMITS.md §1a + THREAT-MODEL.md §3
+kind: pharn-owned | vendor-official | community   # also a privilege level — see pharn/LIMITS.md §1a + pharn/THREAT-MODEL.md §3
 trust: trusted                                     # the Capability itself is trusted; its INPUT may not be
 coupling: agnostic | framework-seam | framework-specific   # §3.2; only on framework-touching capabilities
 applies: ["universal"] | ["<archetype>", …]        # REQUIRED — archetype scoping over the §5 enum + `universal`
 model_tier: haiku | sonnet | opus
-est_tokens: <int>                                  # ADVISORY estimate — see LIMITS.md (cannot be static over variable input)
+est_tokens: <int>                                  # ADVISORY estimate — see pharn/LIMITS.md (cannot be static over variable input)
 reads: ["<path-or-artifact>"]                      # declared inputs — ENFORCED only at the write side by the floor
 writes: ["<path>"]                                 # declared outputs — ENFORCED by the pre-write hook (§5, fix #7)
 constitution_refs: ["P0".."P7"]
@@ -133,7 +133,7 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
                              cost-ledger, reconciliation-record, regression-report, verify-report,
                              gate-run-record, test-results-record, ac-tests, stage-exit, spec-template
                              (+ templates/spec-template.md, the default SPEC template it defines;
-                             a project may supply its own at pharn.spec-template.md).
+                             a project may supply its own at pharn/spec-template.md).
                              Everything depends on this.
   └─ pharn-core          L0   seam-resolver — the seam MECHANISM, framework-agnostic;
                               installed-skill-selection — the advisory procedure for choosing
@@ -204,7 +204,7 @@ content **requires re-review (a diff a human sees)** — it never silently repla
 is the **only** place wiring facts live; a phase says "set the auth session at the seam," the
 record says _where, for this project_. Its configuration surface (`seam.haltOnUnknown` and the
 project `seam` block) is defined once in `pharn-contracts/seam-config.md`. **Seam answers are the
-single most expensive thing to maintain** (they age with every framework release) — `LIMITS.md` and
+single most expensive thing to maintain** (they age with every framework release) — `pharn/LIMITS.md` and
 the pipeline treat seam staleness as a first-class, loud signal, not a quiet check.
 
 **Archetype + map-consistency (fix #5).** `archetype ∈ {ssr, backend, spa, lib}` (extensible),
@@ -219,7 +219,7 @@ manifest exists** (conditional; specified, ships with the guarded surface).
 regression suite and spec (P1). `validate` enforces presence and the `rule_id` binding.
 
 **State.** Memory-bank = two canonical markdown files at the user's repo root
-(`memory-bank/lessons-learned.md`, `memory-bank/pattern-library.md`), git-committed. `/pharn-plan`
+(`pharn/memory-bank/lessons-learned.md`, `pharn/memory-bank/pattern-library.md`), git-committed. `/pharn-plan`
 is the read side (mandatory `applied_lessons`); `/pharn-memory-promote` is the write side.
 Promotion of a lesson/pattern to canon is a **gated** action with provenance per entry (which run /
 feature / diff) — memory poisoning is silent and cumulative, so the floor
@@ -250,13 +250,13 @@ linking back to the spec:
 excludes, and requires each to fail; its mapping, `AC-TESTS.md`, is written by `plan` for a templated
 SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage.mjs` first and refuses
 without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
-every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `LIMITS.md §9`).
+every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `pharn/LIMITS.md §9`).
 
 **Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`
 SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its
 interrogation, `test`, `build`, `regress`'s scope check alone, and `verify` as above — **no `regress` base
 comparison**, so nothing looks for a regression outside the feature. Both human gates stay, and the ledger
-outcome is `gate2-quick`, which is not `gate2`. Bounds: `LIMITS.md §3a`; shape:
+outcome is `gate2-quick`, which is not `gate2`. Bounds: `pharn/LIMITS.md §3a`; shape:
 `pharn-contracts/spec-template.md`, `pharn-contracts/cost-ledger.md`.
 
 **Keystone:** `SPEC.md` is the root artifact and every downstream artifact is bound to it. **The
@@ -307,7 +307,7 @@ Three moments, all reading **typed fields** (never model prose):
   sole basis for a guaranteed/constitutional block.
 
 The v1 "deterministic threshold gate over LLM severity" was advisory dressed as deterministic — it
-is now labeled correctly (`LIMITS.md`).
+is now labeled correctly (`pharn/LIMITS.md`).
 
 `pharn/floor/validate.mjs` (the `validate` step) enforces, deterministically: capability frontmatter
 present; evals present (P1); **every `enforces` rule_id produced by ≥1 eval** (P1, fix #6);
@@ -339,8 +339,8 @@ only. The free-text fields are for humans and are treated as untrusted data per 
 comment in reviewed code can at most influence an **advisory** judgment via the free-text fields —
 it can never flip a floor-gated block.
 
-**Residual (named, not hidden — `LIMITS.md`):** when a _downstream LLM stage_ consumes the
+**Residual (named, not hidden — `pharn/LIMITS.md`):** when a _downstream LLM stage_ consumes the
 free-text of a finding, "do not execute this as an instruction" becomes a heuristic again. Fix #1
 bounds the blast radius (free text never alone gates a guaranteed decision) but does not zero it.
-This is **not the only** place the trust model is not provable on paper (`THREAT-MODEL.md §5` names the
+This is **not the only** place the trust model is not provable on paper (`pharn/THREAT-MODEL.md §5` names the
 known ones) — it is the one **attempt 0** targets (`pharn/pharn-review/trust-fence/`).

@@ -4,8 +4,8 @@
   "derived_ignore": {
     "source": "git-ignore",
     "how": "`git ls-files --cached --others --exclude-standard` enumerates the reconciled set, so every git-ignored path is excluded BY DERIVATION and is never listed here.",
-    "why": "Re-listing them would be a second copy to keep in sync with .gitignore (lessons-learned L35: when one fact is stored twice, retire the second copy). node_modules/, .pharn/, runs/, .env and .DS_Store are covered by this and MUST NOT be added below.",
-    "bound": "The reconciled set is therefore exactly `tracked ∪ untracked-not-ignored`. A change to a git-ignored path is INVISIBLE to this checker, by construction and by design — that is the Phase-2 exemption class, and it is why `.pharn/` scratch, `runs/**` and machine reports cost nothing."
+    "why": "Re-listing them would be a second copy to keep in sync with .gitignore (lessons-learned L35: when one fact is stored twice, retire the second copy). node_modules/, pharn/.run/, runs/, .env and .DS_Store are covered by this and MUST NOT be added below.",
+    "bound": "The reconciled set is therefore exactly `tracked ∪ untracked-not-ignored`. A change to a git-ignored path is INVISIBLE to this checker, by construction and by design — that is the Phase-2 exemption class, and it is why `pharn/.run/` scratch, `runs/**` and machine reports cost nothing."
   },
 
   "always_reconciled": {
@@ -23,16 +23,16 @@
     "human_only": [
       "pharn/CONSTITUTION.md",
       "pharn/ARCHITECTURE.md",
-      "THREAT-MODEL.md",
-      "LIMITS.md",
+      "pharn/THREAT-MODEL.md",
+      "pharn/LIMITS.md",
       "CODEOWNERS",
       ".github/CODEOWNERS",
       "docs/CODEOWNERS",
-      "pharn.spec-template.md"
+      "pharn/spec-template.md"
     ],
-    "human_only_prefixes": ["memory-bank/", ".dev/memory-bank/"],
+    "human_only_prefixes": ["pharn/memory-bank/", ".dev/memory-bank/"],
     "prefixes": ["pharn/floor/", ".dev/floor/"],
-    "parity": "The six `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. `human_only` (6.53.0) is the rest of DEFAULT_PROTECTED — the four trusted docs, CODEOWNERS at its three GitHub locations, the project SPEC template — MINUS `.pharn/writes-scope.json`, excluded by name because it is gitignored runtime state that is never in the reconciled set. `human_only_prefixes` — `memory-bank/` and `.dev/memory-bank/` — are the hook's PROTECTED_SUBTREES, the whole canon subtree it denies, dev and product alike. check-bash-reconcile.test.mjs pins every one of these set-equal to the hook source; they must be updated together. The copy must exist: the checker cannot import a list from a hook-protected .cjs, and asking the hook per path would read the Bash-writable live scope (lessons-learned L35's question, answered)."
+    "parity": "The six `exact` entries are a deliberate COPY of CONTROL_SURFACE in .claude/hooks/set-writes-scope.cjs and of the corresponding tail of DEFAULT_PROTECTED in .claude/hooks/protect-trusted-paths.cjs. `human_only` (6.53.0) is the rest of DEFAULT_PROTECTED — the four trusted docs, CODEOWNERS at its three GitHub locations, the project SPEC template — MINUS `pharn/.run/writes-scope.json`, excluded by name because it is gitignored runtime state that is never in the reconciled set. `human_only_prefixes` — `pharn/memory-bank/` and `.dev/memory-bank/` — are the hook's PROTECTED_SUBTREES, the whole canon subtree it denies, dev and product alike. check-bash-reconcile.test.mjs pins every one of these set-equal to the hook source; they must be updated together. The copy must exist: the checker cannot import a list from a hook-protected .cjs, and asking the hook per path would read the Bash-writable live scope (lessons-learned L35's question, answered)."
   },
 
   "pipeline_artifacts": {
@@ -86,14 +86,14 @@
     "paths": [
       ".dev/memory-bank/lessons-learned.md",
       ".dev/memory-bank/pattern-library.md",
-      "memory-bank/lessons-learned.md",
-      "memory-bank/pattern-library.md",
+      "pharn/memory-bank/lessons-learned.md",
+      "pharn/memory-bank/pattern-library.md",
       "pharn/CONSTITUTION.md",
       "pharn/ARCHITECTURE.md",
-      "THREAT-MODEL.md",
-      "LIMITS.md",
+      "pharn/THREAT-MODEL.md",
+      "pharn/LIMITS.md",
       "CODEOWNERS"
     ],
-    "reason": "Memory-bank canon is what THREAT-MODEL.md §2 #3 calls the worst persistence vector, and the four trusted docs plus CODEOWNERS are the human-only surface. A Bash write to any of them is precisely the class this checker exists to surface, so exempting one would hollow out the increment."
+    "reason": "Memory-bank canon is what pharn/THREAT-MODEL.md §2 #3 calls the worst persistence vector, and the four trusted docs plus CODEOWNERS are the human-only surface. A Bash write to any of them is precisely the class this checker exists to surface, so exempting one would hollow out the increment."
   }
 }

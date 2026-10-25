@@ -35,7 +35,7 @@ const RELATIVE = GUARDS.map((g) => `node .claude/hooks/${g}`);
 // One payload per guard that the guard denies WHATEVER writes-scope is live, so a scope another stage set
 // concurrently cannot move the verdict: a trusted doc for fix #2, a path outside every tree for fix #7.
 const PAYLOAD = {
-  "protect-trusted-paths.cjs": { tool_name: "Edit", tool_input: { file_path: join(REPO, "LIMITS.md") } },
+  "protect-trusted-paths.cjs": { tool_name: "Edit", tool_input: { file_path: join(REPO, "pharn/LIMITS.md") } },
   "enforce-writes-scope.cjs": { tool_name: "Write", tool_input: { file_path: join(os.tmpdir(), "pharn-wiring-probe.md") } },
 };
 
@@ -71,7 +71,7 @@ test("✧ the Write|Edit|MultiEdit|NotebookEdit matcher wires EXACTLY the two an
 // the wiring above untouched — so the matcher test stays green while nothing runs (audit SEC-7, 6.64.3). The two
 // project files are checked: settings.json (committed) and settings.local.json (gitignored, checked when present).
 // The key is refused whatever its value: `false` today is one edit from `true`, and no shipped file needs it.
-// BOUND (P0): a user-level ~/.claude/settings.json is outside the repo and outside this test (LIMITS.md §6).
+// BOUND (P0): a user-level ~/.claude/settings.json is outside the repo and outside this test (pharn/LIMITS.md §6).
 const PROJECT_SETTINGS = [join(".claude", "settings.json"), join(".claude", "settings.local.json")];
 function assertHooksNotDisabled(settings, rel) {
   assert.ok(settings !== null && typeof settings === "object" && !Array.isArray(settings), `${rel} is not a JSON object`);
@@ -186,9 +186,9 @@ function stopFixture() {
   fs.mkdirSync(join(root, ".git"));
   fs.mkdirSync(join(root, ".claude", "hooks"), { recursive: true });
   fs.copyFileSync(join(REPO, ".claude", "hooks", "require-loop-record.cjs"), join(root, ".claude", "hooks", "require-loop-record.cjs"));
-  fs.mkdirSync(join(root, ".pharn", "pharn-loop", "demo"), { recursive: true });
+  fs.mkdirSync(join(root, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
   fs.writeFileSync(
-    join(root, ".pharn", "pharn-loop", "demo", "active.json"),
+    join(root, "pharn", ".run", "pharn-loop", "demo", "active.json"),
     JSON.stringify({
       schema: "pharn-loop-active/1",
       name: "demo",

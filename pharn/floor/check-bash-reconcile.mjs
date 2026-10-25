@@ -19,7 +19,7 @@
 //
 //   NOT "Bash writes are prevented." Detection is strictly weaker than prevention. The only true
 //   prevention is OS-level sandboxing of the Bash process, which PHARN does not implement and cannot —
-//   it is harness-layer, environment-dependent, not expressible in markdown methodology (LIMITS.md §6).
+//   it is harness-layer, environment-dependent, not expressible in markdown methodology (pharn/LIMITS.md §6).
 //   NOT "all Bash writes are detected" — only those to DENIED paths, inside the reconciled set, between
 //   two anchors, in one worktree. Every one of those four bounds is stated below.
 //   NOT "a clean verdict means no escape occurred" — it means none was detected.
@@ -74,7 +74,7 @@
 //
 // ================================== THE BOUNDS, STATED, NOT HIDDEN ==================================
 //  1. THE RECONCILED SET is `tracked ∪ untracked-not-ignored`. A git-ignored path is INVISIBLE — by
-//     design (it is what makes `.pharn/` scratch, `runs/**` and `node_modules/` free) and by consequence
+//     design (it is what makes `pharn/.run/` scratch, `runs/**` and `node_modules/` free) and by consequence
 //     (a Bash write there is never reported). See pharn/floor/reconcile-ignore.json. A symlink is reconciled as
 //     the LINK (its text, since 6.20.8), never as its target: a write through it lands on the target's own
 //     path, and a target outside the set (outside the repo, or ignored) is not seen through the link. A DELETION is
@@ -83,9 +83,9 @@
 //     reports it ignored (`git check-ignore`) — this bound again — and a candidate otherwise.
 //  2. THE WINDOW is anchor -> reconcile (build -> verify). A write before the anchor is baked into the
 //     baseline and is invisible; a later anchor RESETS, which is why anchoring is at build ONLY.
-//  3. ONE WORKTREE. Two agent sessions sharing a tree share `.pharn/`, so a second session's writes can
+//  3. ONE WORKTREE. Two agent sessions sharing a tree share `pharn/.run/`, so a second session's writes can
 //     surface as this one's escape. That is lessons-learned L38 exactly; this checker inherits the
-//     hazard and cannot fix it. Named as a bound in LIMITS.md; the structural remedy is L38's own.
+//     hazard and cannot fix it. Named as a bound in pharn/LIMITS.md; the structural remedy is L38's own.
 //  4. NO ATTRIBUTION. It answers "this path changed and the guards would have denied it", never "who".
 //  5. DELETING OR FORGING THIS CHECKER'S STATE is possible through the very channel it monitors — but it
 //     is LOUD, not silent. Two independent reasons: with `--require-baseline` (what /verify passes) an
@@ -99,10 +99,10 @@
 //     BUT THE CLAIM MUST BE NARROWED FURTHER, AND THIS IS THE MOST IMPORTANT SENTENCE IN THIS HEADER:
 //     that argument holds ONLY for the always-reconciled control surface — since 6.53.0 the guard files and
 //     pharn/floor/ + .dev/floor/, PLUS the human-only surface (the four trusted docs, CODEOWNERS at its three
-//     locations, pharn.spec-template.md) and the memory-bank canon subtrees, an added untracked file included.
-//     Before 6.53.0 a forged baseline entry cleared a Bash edit of LIMITS.md (audit 2026-10-07). For an ORDINARY
+//     locations, pharn/spec-template.md) and the memory-bank canon subtrees, an added untracked file included.
+//     Before 6.53.0 a forged baseline entry cleared a Bash edit of pharn/LIMITS.md (audit 2026-10-07). For an ORDINARY
 //     path the
-//     baseline IS the reference, the baseline lives under `.pharn/` — which Bash reaches — and nothing
+//     baseline IS the reference, the baseline lives under `pharn/.run/` — which Bash reaches — and nothing
 //     authenticates it. So a writer who edits a denied file AND rewrites that file's baseline entry to
 //     the new hash gets a SILENT `CLEAN`: no escape, no warning, no INCONCLUSIVE. Therefore:
 //       • WHAT THIS DETECTS: a Bash write by a NON-ADVERSARIAL writer — a stage's own tooling, a
@@ -112,7 +112,7 @@
 //         only the control surface holds, because only it is anchored in committed git objects.
 //     "Cannot be disabled quietly" is therefore STRUCK for ordinary paths and TRUE only for the control
 //     surface. Closing it needs authenticated state outside the worktree — the same harness-layer
-//     category as the OS sandbox in LIMITS.md §6, and just as absent. Raised in review; the accepted
+//     category as the OS sandbox in pharn/LIMITS.md §6, and just as absent. Raised in review; the accepted
 //     remedy offered there was "narrow the documented guarantee", and this is that narrowing.
 //  6. A COMMITTED change moves HEAD too, so the control-surface fallback cannot see it. The backstop
 //     there is Code-Owner review, which is where CODEOWNERS already sits. (The baseline comparison DOES see a
@@ -316,7 +316,7 @@ function askHook(hookAbs, rel, cwd) {
 //
 // The only hook passed here is protect-trusted-paths.cjs. It resolves its guarded roots from its own module
 // path — plus, since hook-cwd-anchoring, the git work tree containing cwd when that tree shares a hook
-// root's common directory — and reads `.pharn/writes-scope.json` from the root a canon target sits under,
+// root's common directory — and reads `pharn/.run/writes-scope.json` from the root a canon target sits under,
 // never from cwd as such. The sandbox is a non-git temp dir, so no tree is added there and the sandbox IS
 // that root. So reproducing a past scope means giving the hook a root where that
 // scope is the live one: copy the hook in, materialize the scope, and run it there with cwd set to the
@@ -338,8 +338,8 @@ function askHookUnderScope(hookAbs, rel, root, scopeRecord) {
       const hookDir = join(dir, ".claude", "hooks");
       mkdirSync(hookDir, { recursive: true });
       copyFileSync(hookAbs, join(hookDir, basename(hookAbs)));
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
-      writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify(scopeRecord) + "\n");
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+      writeFileSync(join(dir, "pharn", ".run", "writes-scope.json"), JSON.stringify(scopeRecord) + "\n");
     } catch {
       dir = null; // unusable sandbox => no clearance, which fails CLOSED (the denial stands)
     }
@@ -679,7 +679,7 @@ function main(argv) {
   if (!en.ok) emit({ verdict: "INCONCLUSIVE", reason: en.reason }, 2);
 
   // --- the control surface, reconciled ALWAYS and against COMMITTED BLOB IDS ------------------------
-  // Not "always when there is no baseline" — ALWAYS. The baseline lives under `.pharn/`, which Bash
+  // Not "always when there is no baseline" — ALWAYS. The baseline lives under `pharn/.run/`, which Bash
   // reaches, so a caller that can edit a guard can also rewrite that guard's baseline entry to the new
   // hash; the path then matches its baseline and never becomes a candidate. Comparing the control
   // surface to `HEAD` instead anchors it in something the monitored channel cannot rewrite in place.
@@ -687,7 +687,7 @@ function main(argv) {
   // implemented, and it was caught in review rather than by a test.
   //
   // ADDED FILES TOO (6.53.0). `git diff HEAD` lists tracked paths only, so a control path ABSENT at HEAD — no
-  // pharn.spec-template.md yet, a new pharn/floor/x.mjs — could be created through Bash, have its baseline entry
+  // pharn/spec-template.md yet, a new pharn/floor/x.mjs — could be created through Bash, have its baseline entry
   // forged, and read CLEAN (or NO_BASELINE with no baseline at all). The untracked-not-ignored control paths are
   // therefore added from git's own `--others --exclude-standard` listing, filtered to the control surface ONLY, so
   // an untracked file anywhere else is still judged by the baseline alone, exactly as before. BOUND: a git-ignored

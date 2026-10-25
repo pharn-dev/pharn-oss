@@ -55,7 +55,7 @@ export const DEV_PROFILE = Object.freeze({
     `\`untagged\` count above does not measure, so a \`0 untagged\` header and a \`${ABSENT}\` in this column are\n` +
     `not a contradiction. \`~tokens\` is \`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section\n` +
     `(heading through the line before the next \`##\`), an ESTIMATE with a confidence band, never a measurement\n` +
-    `(\`LIMITS.md §1c\`). Titles are canon free text, reproduced verbatim as DATA.\n`,
+    `(\`pharn/LIMITS.md §1c\`). Titles are canon free text, reproduced verbatim as DATA.\n`,
 });
 
 export const CANON_PATH = DEV_PROFILE.canonPath;

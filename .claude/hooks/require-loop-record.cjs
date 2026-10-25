@@ -19,8 +19,8 @@
 //   • It cannot judge a record. Blocking on record quality would contradict the loop's own rules: a second
 //     check-loop-record.mjs repair would pass the ≤1 bound, and check-loop-decision.mjs says "do not retry it".
 //   • It cannot tell a real record from a fabricated one. `touch LOOP.md` satisfies it; the record's quality
-//     is gated at /pharn-loop Step 6b and at the 6c commit gate, not here (LIMITS.md §6, §1d).
-//   • It only runs when Claude Code starts it (LIMITS.md §7). A hook that cannot start is a non-blocking
+//     is gated at /pharn-loop Step 6b and at the 6c commit gate, not here (pharn/LIMITS.md §6, §1d).
+//   • It only runs when Claude Code starts it (pharn/LIMITS.md §7). A hook that cannot start is a non-blocking
 //     notice — the hook-cwd-anchoring incident class, which hook-wiring.test.cjs exists to pin.
 //   • It reaches existing installs only by hand: `pharn update` never edits settings.json, and pharn-cli
 //     writes that file only when absent, while it does copy the .cjs hooks.
@@ -28,7 +28,7 @@
 // ======================================== WHEN IT BLOCKS ========================================
 //
 // BLOCK iff all of these hold for some run `<name>`:
-//   • `<root>/.pharn/pharn-loop/<name>/active.json` is a regular file (lstat — never through a symlink) with
+//   • `<root>/pharn/.run/pharn-loop/<name>/active.json` is a regular file (lstat — never through a symlink) with
 //     schema `pharn-loop-active/1`, a `name` equal to its directory, and a `session_id` EQUAL to the Stop
 //     payload's `session_id`;
 //   • its `started_at` is within the AGE CEILING (24 h) of now;
@@ -65,7 +65,7 @@
 //
 // ====================================== EXITS FOR A PERSON ======================================
 // Delete the marker (`node .claude/hooks/require-loop-record.cjs --close <name>`), interrupt the turn, or
-// unwire the hook. A MODEL can reach the first and the third through Bash too — the LIMITS.md §6 residual,
+// unwire the hook. A MODEL can reach the first and the third through Bash too — the pharn/LIMITS.md §6 residual,
 // stated, not hidden.
 //
 // ====================================== THE MARKER — ONE OWNER (L35) ======================================
@@ -82,7 +82,7 @@
 // re-enters Claude's context as an instruction, so it is one line from a closed set whose only variable is a
 // JSON-quoted relative path built from a validated readdir entry.
 //
-// COST: on the inert path, one readdir of `.pharn/pharn-loop/` (usually absent) — measured in VERIFY.md.
+// COST: on the inert path, one readdir of `pharn/.run/pharn-loop/` (usually absent) — measured in VERIFY.md.
 // No child process on any path. No network.
 //
 // NOT PROTECTED by protect-trusted-paths.cjs (adding it would edit a hook-protected file): a Write-tool edit
@@ -95,7 +95,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const SCHEMA = "pharn-loop-active/1";
-const STATE_SUBDIR = path.join(".pharn", "pharn-loop");
+const STATE_SUBDIR = path.join("pharn", ".run", "pharn-loop");
 const MARKER = "active.json";
 const COUNTER = "stop-blocks.json";
 const FEATURE_BASE = path.join("pharn", "features");
@@ -283,7 +283,7 @@ function markerMode(argv, { root = rootDir(), env = process.env, stderr = proces
   }
   const dir = path.join(stateDir, name);
   const file = path.join(dir, MARKER);
-  for (const p of [path.join(root, ".pharn"), stateDir, dir, file]) {
+  for (const p of [path.join(root, "pharn"), path.join(root, "pharn", ".run"), stateDir, dir, file]) {
     const st = lstatOrNull(p);
     if (st && st.isSymbolicLink()) {
       stderr.write("require-loop-record: refusing a marker path through a symlink\n");

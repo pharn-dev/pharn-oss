@@ -230,7 +230,7 @@ test("✧ CI actually INVOKES the drift check, and its step is not disabled by a
 
   // HONEST RESIDUAL (P0), stated so this guard is not oversold: what remains uncheckable from inside the
   // repo is that GitHub EXECUTED the job, that the workflow is enabled, and that branch protection
-  // requires this check. Those are harness-layer facts — the same boundary LIMITS.md §1d draws for an
+  // requires this check. Those are harness-layer facts — the same boundary pharn/LIMITS.md §1d draws for an
   // out-of-band approval signal. "The wiring is pinned" NEVER means "CI is guaranteed to run it".
 });
 
@@ -299,15 +299,15 @@ test("✧ the wrapper closure DISCRIMINATES — a re-grown grammar constant, par
 test("✧ the two profiles DIFFER where they must, and hold their surface's values", () => {
   // A future "let's unify these" edit that pointed the product default at `.dev/memory-bank/` or `docs/` would
   // re-introduce the two rejections the product profile encodes — writing into the gated-canon zone, and claiming
-  // a directory that belongs to the user. And a dev profile pointed at `.pharn/` would make `docs:check` compare a
+  // a directory that belongs to the user. And a dev profile pointed at `pharn/.run/` would make `docs:check` compare a
   // gitignored cache.
   assert.equal(DEV_PROFILE.canonPath, ".dev/memory-bank/lessons-learned.md");
   assert.equal(DEV_PROFILE.outPath, "docs/lessons-index.md");
   assert.equal(DEV_PROFILE.gen, ".dev/floor/gen-lessons-index.mjs");
   assert.equal(DEV_PROFILE.regen, "npm run docs:generate");
   assert.equal(DEV_PROFILE.storageNote, "", "the committed dev index carries no cache paragraph");
-  assert.equal(PRODUCT_PROFILE.canonPath, "memory-bank/lessons-learned.md");
-  assert.equal(PRODUCT_PROFILE.outPath, ".pharn/lessons-index.md");
+  assert.equal(PRODUCT_PROFILE.canonPath, "pharn/memory-bank/lessons-learned.md");
+  assert.equal(PRODUCT_PROFILE.outPath, "pharn/.run/lessons-index.md");
   // L2 — a doc may cite only a LIVE op: the product hint is a bare `node` invocation.
   assert.equal(PRODUCT_PROFILE.regen, "node pharn/floor/gen-lessons-index.mjs .");
   for (const k of ["canonPath", "outPath", "gen", "regen", "columnsNote"]) {
@@ -328,7 +328,7 @@ test("✧ CTX-8 dogfood: the PRODUCT checker runs on THIS repo's canon with --ca
   const cli = fileURLToPath(new URL("../../pharn/floor/check-lessons-index.mjs", import.meta.url));
   const withFlag = spawnSync(process.execPath, [cli, "--canon-root", ".dev/memory-bank", repo, "--verdict"], { encoding: "utf8" });
   assert.ok(["COLD", "GREEN", "STALE"].includes(withFlag.stdout.trim()), `got ${JSON.stringify(withFlag.stdout)}`);
-  // NON-VACUITY: without the flag the same call still reads memory-bank/ (absent here) — the default did not move.
+  // NON-VACUITY: without the flag the same call still reads pharn/memory-bank/ (absent here) — the default did not move.
   const without = spawnSync(process.execPath, [cli, repo, "--verdict"], { encoding: "utf8" });
   assert.equal(without.stdout, "NO_CANON\n");
 });

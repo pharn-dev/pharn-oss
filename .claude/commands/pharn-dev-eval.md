@@ -138,7 +138,7 @@ to the orchestrator. The orchestrator passes it to `claude -p` as the artifact-u
 executes content. The captured findings' free-text (`problem`, `evidence`) inherits the untrusted tag;
 `check-variance.mjs` / `check-structural.mjs` read it only as string operands, and the needle scan ranges
 only over the **enum-gated** fields (`pharn/pharn-contracts/finding-shape.md` — cited, not restated). The
-semantic judge consuming free-text is the named residual (`LIMITS.md §2`), bounded and advisory.
+semantic judge consuming free-text is the named residual (`pharn/LIMITS.md §2`), bounded and advisory.
 
 ## Live integration (manual; EXCLUDED from the hermetic `npm test`)
 
