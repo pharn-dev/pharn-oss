@@ -23,6 +23,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.75.0] - 2026-10-25
+
+### Changed
+
+- **A delivery run's entry check no longer calls a gate red when the runner killed it at its timeout or could not start
+  it: such a gate is `unmeasured`, and `/pharn-loop` stops on it as S14b `blocked: gates-unmeasured-at-entry` instead of
+  S14 `blocked: gates-red-at-entry`.**
+  - Why: two measured `/pharn-loop` runs on 6.73.2 in a user project both stopped S14 because the entry `test` gate was
+    killed at 540 s (exit 143, `timed_out: true`), while the same suite passed in the evidence-only `base:test` slot.
+    Nothing had been measured red. Verify (since 6.59.0) and regress already treat such a gate as not measured. One
+    reader still does not: `/pharn-build`'s own gate (`build-gate-core.mjs` `decide`) reads the exit alone, so a killed
+    gate is red there and a gate that traps the group signal and exits 0 is green (follow-up `build-gate-unmeasured`).
+  - What changed: `pharn/floor/entry-gates-core.mjs` `entryVerdict` reads "not measured" from `gate-run-core.mjs`
+    `unmeasuredRuns`, the same function verify uses. A gate it lists (killed at `--timeout-ms`, or exit 126/127) goes
+    into a new `unmeasured: [{id, cause}]` list in `entry-gates.mjs --wait`'s document, never into `red`, a style gate
+    included. The `base:test` slot is never listed. The status is `red` if any attributable gate is red, else the new
+    `unmeasured` (exit `6`) if any gate was not measured, else `green`. Every `--wait` document now carries the
+    `unmeasured` key, `[]` when there is nothing to list, and a `green` or `unmeasured` document that contradicts its
+    list is refused as malformed.
+  - `/pharn-loop` maps exit `6` to the new S14b. Its next steps name each unmeasured gate and its cause, and the remedies:
+    make the gate faster or fix what stops it starting, list it in `gates.exclude`, or re-run with `--allow-red-entry`,
+    which now goes on past an unmeasured gate as well as a red one. On exit `4` the run also copies any unmeasured
+    entries. `/pharn-ship` asks the same Stop/Continue question on exit `6` as on exit `4`, showing the unmeasured
+    entries. The entry check still offers its run to `/pharn-regress` as base evidence on an unmeasured verdict, as it
+    did when that verdict read red; a timed-out `base:test` slot is still refused as reusable evidence.
+  - What it does not change: the 540 s per-gate timeout. Build, regress and verify run each gate inside one Bash call, so
+    raising only the entry timeout would move the stop to verify. A project whose suite needs longer than 540 s still
+    stops at entry, now as S14b, until those stages can run a gate past one Bash call (follow-up
+    `gates-beyond-one-bash-call`). "Unmeasured" says the runner's clock ran out or the gate could not start; it does not
+    say whether the gate would pass.
+
 ## [6.74.0] - 2026-10-25
 
 ### Added
@@ -64,32 +95,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   because in the interactive CLI the stage agent still went to the background on 6.73.2. The apparatus helper
   `.dev/features/build-writes-through-tools/measure.mjs` gains a branch for ledgers with the 6.48.0 `entry` key,
   which reports the entry-gate wait; older ledgers read as before. Apparatus and README only; nothing shipped changes.
-
-### Changed
-
-- **A delivery run's entry check no longer calls a gate red when the runner killed it at its timeout or could not start
-  it: such a gate is `unmeasured`, and `/pharn-loop` stops on it as S14b `blocked: gates-unmeasured-at-entry` instead of
-  S14 `blocked: gates-red-at-entry`.**
-  - Why: two measured `/pharn-loop` runs on 6.73.2 in a user project both stopped S14 because the entry `test` gate was
-    killed at 540 s (exit 143, `timed_out: true`), while the same suite passed in the evidence-only `base:test` slot.
-    Nothing had been measured red. Verify (since 6.59.0) and regress already treat such a gate as not measured; the entry
-    check was the last place that did not.
-  - What changed: `pharn/floor/entry-gates-core.mjs` `entryVerdict` reads "not measured" from `gate-run-core.mjs`
-    `unmeasuredRuns`, the same function verify uses. A gate it lists (killed at `--timeout-ms`, or exit 126/127) goes
-    into a new `unmeasured: [{id, cause}]` list in `entry-gates.mjs --wait`'s document, never into `red`, a style gate
-    included. The `base:test` slot is never listed. The status is `red` if any attributable gate is red, else the new
-    `unmeasured` (exit `6`) if any gate was not measured, else `green`. Every `--wait` document now carries the
-    `unmeasured` key, `[]` when there is nothing to list.
-  - `/pharn-loop` maps exit `6` to the new S14b. Its next steps name each unmeasured gate and its cause, and the remedies:
-    make the gate faster or fix what stops it starting, list it in `gates.exclude`, or re-run with `--allow-red-entry`,
-    which now goes on past an unmeasured gate as well as a red one. On exit `4` the run also copies any unmeasured
-    entries. `/pharn-ship` asks the same Stop/Continue question on exit `6` as on exit `4`, showing the unmeasured
-    entries.
-  - What it does not change: the 540 s per-gate timeout. Build, regress and verify run each gate inside one Bash call, so
-    raising only the entry timeout would move the stop to verify. A project whose suite needs longer than 540 s still
-    stops at entry, now as S14b, until those stages can run a gate past one Bash call (follow-up
-    `gates-beyond-one-bash-call`). "Unmeasured" says the runner's clock ran out or the gate could not start; it does not
-    say whether the gate would pass.
 
 ## [6.73.2] - 2026-10-25
 

@@ -634,7 +634,7 @@ test("no slot — a test path badPath refuses, or a leftover regress BASE checko
   }
 });
 
-test("the offer is published only after a validated green or red --wait: a red entry offers; no open run offers nothing and says nothing", () => {
+test("the offer is published only after a validated green, red or unmeasured --wait: a red entry offers; no open run offers nothing and says nothing", () => {
   const fx = fixture({ scripts: { build: "node count.mjs build && exit 2" } });
   try {
     const e = enter(fx);

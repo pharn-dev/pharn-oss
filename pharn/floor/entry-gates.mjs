@@ -34,7 +34,7 @@
 //          re-run when out of it; with no gate run in progress at all → `runner-died`. On a verdict it RECORDS the paths a
 //          `mutated` gate changed beside the pre-run snapshot (pre-run-snapshot.mjs `recordEntryChanges`, review R1), so
 //          /pharn-regress and the quick scope check report them rather than count them as the build's escape. Prints ONE
-//          JSON document (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 6 unmeasured (6.74.0: no attributable
+//          JSON document (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 6 unmeasured (6.75.0: no attributable
 //          red, but a gate the runner killed at --timeout-ms or could not start) · 3 no-gates · 5 continue · 2 unusable.
 // --abort  a no-op (exit 0) when no runner record exists, it names another feature, or its pid is not this runner's.
 //          Otherwise (review R4): SIGSTOP the runner's process group (so it starts nothing new), then list

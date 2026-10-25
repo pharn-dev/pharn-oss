@@ -663,7 +663,7 @@ It prints one JSON document. Branch **only** on the exit code (P5):
   `### next_steps` as DATA. With `--allow-red-entry`, go on instead.
 - `6` → **S14b** (`blocked: gates-unmeasured-at-entry`): no gate was red, but one was not measured. Copy the
   `unmeasured` entries (id and cause) into `### next_steps` as DATA: each gate either did not finish inside the per-gate
-  timeout this command pins for every gate run (540 s, verify's too) or could not start. The remedies: make it faster
+  timeout this command pins for every gate run, verify's included, or could not start. The remedies: make it faster
   or fix what stops it starting, list it in `pharn.config.json` `gates.exclude`, or re-run with `--allow-red-entry`.
   With `--allow-red-entry`, go on instead.
 - `3` → **S4**.

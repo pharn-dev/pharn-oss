@@ -20,3 +20,21 @@ whole-repo `format:check`, `lint:md`, `lint` and `docs:check` are clean; the six
 
 Deviation: `SKILLS_VERSION` was written with a Bash `printf` (a declared path, so the guards would have allowed it and
 reconcile does not flag it), not with the Write tool.
+
+## GATE 2 fix iteration (2026-10-25)
+
+Before Step 0 the branch fast-forwarded to the review commit (`817b7380`) and merged `origin/main` twice: `56e3989c`
+(#392; the `CHANGELOG.md` conflict resolved by moving #392's `[Unreleased]` entry into the then-`[6.74.0]` section) and
+`30968218` (#393, which shipped 6.74.0 and had already folded #392's entry into its own section; auto-merged). The plan
+was amended (four more paths, the GATE 2 section, the `build-gate-unmeasured` follow-up), the scope re-set from it (23
+paths) and the baseline re-anchored after the setter. Spec hash: MATCH.
+
+Renumbered to 6.75.0 by diff (`SKILLS_VERSION` through the Write tool this time, the badge, the CHANGELOG section,
+`entry-gates-core.mjs`, `entry-gates.mjs`, `entry-gates.test.mjs`, the hygiene comment, the guide); main's released
+`[6.74.0]` and `command-hygiene.test.mjs`'s own 6.74.0 comments are untouched. Review findings 1–8 fixed as the plan's
+GATE 2 section lists: the CHANGELOG Why bullet now names `/pharn-build`'s gate as the open case; "green, red or
+unmeasured" in the base-evidence comments and test name; `unmeasuredRuns`' header names `entryVerdict`;
+`documentDefect` refuses a green document with unmeasured entries (one new defect case, which fails against the
+pre-fix rule); the base:test test asserts `unmeasured: []`; the README, ship Continue option and loop S14b prose
+wordings. Step 2b formatted 22 of 23 scoped paths (SHIP.md does not exist yet). The six touched suites pass 477/477;
+`validate.mjs .` → GREEN (37 capabilities).

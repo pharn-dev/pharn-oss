@@ -121,7 +121,7 @@ function parseJson(bytes) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  THE OFFER — what `entry-gates.mjs --wait` publishes once a completed entry run validated (green or red).
+ *  THE OFFER — what `entry-gates.mjs --wait` publishes once a completed entry run validated (green, red or unmeasured).
  *  ---------------------------------------------------------------------------------------------- */
 /** The offer record. `run` is `deliveryRunIdentity`'s `{command, markerSha256}`; `featureDir` the result's per-gate
  *  `[{id, before, after}]`. */

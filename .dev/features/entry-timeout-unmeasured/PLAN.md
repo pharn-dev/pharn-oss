@@ -10,7 +10,7 @@
   (`.claude/commands/pharn-loop.md`, `pharn-ship-stages.md`); apparatus (hygiene test, floor guide); repo-meta (README
   prose and badge, CHANGELOG, SKILLS_VERSION)
 - constitution_refs: [P0, P3, P4, P5, P6, P7]
-- version: SKILLS_VERSION 6.73.2 → 6.74.0 (minor: a new `--wait` status, exit code, document key and stop row, which is
+- version: SKILLS_VERSION 6.74.0 → 6.75.0, renumbered at GATE 2 after #393 shipped 6.74.0 (minor: a new `--wait` status, exit code, document key and stop row, which is
   new behavior. 6.59.0, the same split for verify and regress, was a minor bump too)
 
 ## The failure (P7, observed 2026-10-25)
@@ -128,6 +128,31 @@ gates-unmeasured-at-entry`. `--allow-red-entry` covers both. The badge moves to 
   timeout moves the stop to verify.
 - **Renaming `--allow-red-entry`** to say it also covers an unmeasured gate. Not observed as a problem, so not done
   (P7).
+- **`build-gate-unmeasured`** (named at review, finding 1). `/pharn-build`'s own gate (`build-gate-core.mjs` `decide`)
+  still reads the exit alone: a gate the runner killed is red there, and one that traps the group signal and exits 0
+  is green. It is the one gate reader left that does not use `unmeasuredRuns`.
+- **The entry check runs the full suite twice on a clean tree** (`test` and the `base:test` slot; the pharn-starter
+  record's §5). Not changed here.
+
+## GATE 2 fix iteration (review findings 1–8, human-approved 2026-10-25)
+
+The human chose "Fix all 8, then PR (Recommended)" at GATE 2, by chat answer on 2026-10-25. Before re-anchoring, the
+branch merged `origin/main` twice: `56e3989c` (#392) and `30968218` (#393, which shipped as **6.74.0** and folded #392's
+`[Unreleased]` entry into its own section). So this increment is renumbered **6.75.0**. Every `6.74.0` string the
+branch's diff added to a shipped or apparatus file moves to `6.75.0`, and main's released `[6.74.0]` section stays
+byte-for-byte. The earlier stage records (GRILL, BUILD, REGRESSION, VERIFY, REVIEW) keep their numbers as written.
+
+1. `CHANGELOG.md`: the entry moves into a new `## [6.75.0]` section above main's `[6.74.0]`. Its Why bullet stops
+   claiming the entry check was the last place, and names `/pharn-build`'s gate as the open case
+   (`build-gate-unmeasured`).
+2. `entry-base-evidence.mjs` (:13, :85), `entry-base-evidence-core.mjs` (:124) and the test name at
+   `entry-base-evidence.test.mjs` (:637): "green or red" becomes "green, red or unmeasured". Comments only.
+3. `gate-run-core.mjs` `unmeasuredRuns`' header names `entry-gates-core.mjs` `entryVerdict` as a second reader.
+4. `documentDefect` also rejects a `green` document with `unmeasured` entries; one defect case is added to the test.
+5. The 6.49.0 base:test test asserts `v.unmeasured` is `[]` directly.
+6. README: "since that gate was not measured".
+7. `pharn-ship-stages.md` Continue option: "accepts a red or unmeasured verify at GATE 2".
+8. `pharn-loop.md` S14b prose drops the 540 s literal.
 
 ## Applied lessons
 
@@ -204,9 +229,13 @@ store and no wait mechanism. The runner, the result binding and `--wait`'s read 
 - `.dev/floor/command-hygiene.test.mjs` — `STUCK_POINTS` S14b, count 17; byte ceilings only if outgrown (not
   expected) — apparatus
 - `.dev/guides/floor-gates.md` — `entry-gates.mjs` section: S14b, exit 6 — apparatus
-- `SKILLS_VERSION` — 6.74.0
-- `CHANGELOG.md` — the 6.74.0 section (moves any `[Unreleased]` entry present at build time)
-- `README.md` — the `/pharn-loop` paragraph clause, the version badge 6.74.0 (`check:badge`)
+- `pharn/floor/entry-base-evidence.mjs` — GATE 2 finding 2: "green, red or unmeasured" comments — product floor
+- `pharn/floor/entry-base-evidence-core.mjs` — GATE 2 finding 2: the same comment — product floor
+- `pharn/floor/entry-base-evidence.test.mjs` — GATE 2 finding 2: the test name — test
+- `pharn/floor/gate-run-core.mjs` — GATE 2 finding 3: `unmeasuredRuns`' header names `entryVerdict` — product floor
+- `SKILLS_VERSION` — 6.75.0 (renumbered at GATE 2; was 6.74.0)
+- `CHANGELOG.md` — the 6.75.0 section
+- `README.md` — the `/pharn-loop` paragraph clause, the version badge 6.75.0 (`check:badge`)
 - `.dev/features/entry-timeout-unmeasured/PLAN.md`
 - `.dev/features/entry-timeout-unmeasured/GRILL.md`
 - `.dev/features/entry-timeout-unmeasured/BUILD.md`

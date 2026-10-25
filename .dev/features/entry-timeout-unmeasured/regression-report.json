@@ -1,19 +1,22 @@
 {
-  "base": "60d713a9ec05249264f7e314996746a45b9b5a81",
+  "base": "a9e437ba44efa37857c8a3b02a508106eedf272c",
   "inside": [
     ".claude/commands/pharn-loop.md",
     ".claude/commands/pharn-ship-stages.md",
+    ".dev/features/entry-timeout-unmeasured/BUILD.md",
     ".dev/features/entry-timeout-unmeasured/PLAN.md",
     ".dev/floor/command-hygiene.test.mjs",
     ".dev/guides/floor-gates.md",
     "CHANGELOG.md",
     "README.md",
     "SKILLS_VERSION",
+    "pharn/floor/entry-base-evidence-core.mjs",
+    "pharn/floor/entry-base-evidence.mjs",
+    "pharn/floor/entry-base-evidence.test.mjs",
     "pharn/floor/entry-gates-core.mjs",
     "pharn/floor/entry-gates.mjs",
     "pharn/floor/entry-gates.test.mjs",
-    ".dev/features/entry-timeout-unmeasured/BUILD.md",
-    ".dev/features/entry-timeout-unmeasured/GRILL.md"
+    "pharn/floor/gate-run-core.mjs"
   ],
   "outside_gates": {
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
@@ -35,13 +38,13 @@
   "per_test": {
     "gate": "tests",
     "base": {
-      "passed": 5608,
+      "passed": 5606,
       "failed": 0,
       "skipped": 4,
       "suite_errors": 0
     },
     "head": {
-      "passed": 5611,
+      "passed": 5609,
       "failed": 0,
       "skipped": 1,
       "suite_errors": 0

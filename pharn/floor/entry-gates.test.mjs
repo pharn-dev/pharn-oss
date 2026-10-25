@@ -93,7 +93,7 @@ test("entryVerdict: a red STYLE gate counts only when the feature directory held
   }
 });
 
-// ── 6.74.0 (entry-timeout-unmeasured): a gate the runner did not measure is UNMEASURED, never red ───────────────────
+// ── 6.75.0 (entry-timeout-unmeasured): a gate the runner did not measure is UNMEASURED, never red ───────────────────
 test("entryVerdict: a timed-out gate is unmeasured, not red, whatever exit the kill left; `mutated` and `excluded` are reported, never decided on", () => {
   for (const exit of [143, 124, 1, 0]) {
     const stamp = {
@@ -218,6 +218,7 @@ test("documentDefect: `unmeasured` is closed for every status, and an unmeasured
   for (const [why, bad] of [
     ["an unmeasured status with no unmeasured gate", { ...good, unmeasured: [] }],
     ["an unmeasured status with a red", { ...good, red: ["build"] }],
+    ["a green status with an unmeasured gate", { ...good, status: "green" }],
     ["an unknown cause", { ...good, unmeasured: [{ id: "test", cause: "slow" }] }],
     ["a missing id", { ...good, unmeasured: [{ cause: "timed-out" }] }],
     ["an empty id", { ...good, unmeasured: [{ id: "", cause: "timed-out" }] }],
@@ -569,7 +570,7 @@ test("CLI (review R6): --start refuses `runner-unverifiable`, wiping nothing, wh
   }
 });
 
-test("CLI: a timed-out gate is UNMEASURED — exit 6, not red (6.74.0; it was exit 4 before)", () => {
+test("CLI: a timed-out gate is UNMEASURED — exit 6, not red (6.75.0; it was exit 4 before)", () => {
   const dir = sandbox({ gates: { test: { sleepMs: 20000 } } });
   try {
     assert.equal(start(dir, "800").status, 0);
@@ -829,7 +830,7 @@ const WIRING = [
     rows: [
       /`3` → \*\*S4\*\*/,
       /`4` → \*\*S14\*\* \(`blocked: gates-red-at-entry`\)/,
-      // 6.74.0: the exit number is built from EXIT, so the prose cannot drift from the code (L36).
+      // 6.75.0: the exit number is built from EXIT, so the prose cannot drift from the code (L36).
       new RegExp(`\`${EXIT.unmeasured}\` → \\*\\*S14b\\*\\* \\(\`blocked: gates-unmeasured-at-entry\`\\)`),
       /`unmeasured` entries/,
       /`--allow-red-entry`/,
@@ -848,7 +849,7 @@ const WIRING = [
       /\*\*Stop\*\*/,
       /\*\*Continue\*\*/,
       /Never continue without the answer/,
-      // 6.74.0: the unmeasured exit is presented and asked, like exit 4 (the number built from EXIT, L36).
+      // 6.75.0: the unmeasured exit is presented and asked, like exit 4 (the number built from EXIT, L36).
       new RegExp(`\`${EXIT.unmeasured}\` \\(no gate red`),
       /`unmeasured` entries/,
     ],
@@ -904,7 +905,7 @@ for (const w of WIRING) {
 test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part of both entry grammars", () => {
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   assert.match(loop, /^\| S14\s+\|/m);
-  assert.match(loop, /^\| S14b\s+\| Step 4's entry read exits `6`/m, "6.74.0: the unmeasured stop row, on exit 6");
+  assert.match(loop, /^\| S14b\s+\| Step 4's entry read exits `6`/m, "6.75.0: the unmeasured stop row, on exit 6");
   assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--max-iter N] <increment description>`"));
   assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--max-iter N] <increment description>`"));
 });
@@ -1181,6 +1182,7 @@ test("entryVerdict: a red or timed-out base:test slot is listed but never counte
     assert.equal(v.status, "green");
     assert.deepEqual(v.red, []);
     assert.deepEqual(v.unattributed, []);
+    assert.deepEqual(v.unmeasured, [], "6.75.0: the slot is never listed unmeasured either");
     assert.deepEqual(
       v.gates.map((g) => g.id),
       [ENTRY_BASE_TEST_ID, "test"]
