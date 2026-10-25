@@ -25,6 +25,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [6.73.2] - 2026-10-25
 
+### Added
+
+- 2026-10-25: **A preparation record for a second `/pharn-loop` cost measurement in pharn-starter,
+  `.dev/measurements/loop-6.72-prep.md`; the measurement itself is blocked.** It finds the 2026-10-05 run's base
+  commit, installs 6.73.1 (the CLI cannot pin 6.72.0) into a worktree there, and runs the readiness checks. `build` is
+  red there from unset production environment variables, and 6.73.1's loop would stop at entry on it. A second
+  attempt at pharn-starter HEAD (PHARN 6.72.0) finds `test` and `format:check` red. After pharn-starter#257 fixed
+  both, and with a feature named, the protocol went GO. Then two attempts at run 1, in a desktop-app session and in
+  the terminal CLI, both stopped at the spec stage on the named residual `stage-agent-background`: Claude Code
+  2.1.308/2.1.309 backgrounded the stage agent, because the call passed `run_in_background` as the string `"false"`.
+  So the protocol is blocked until PHARN fixes that. Apparatus only; nothing shipped changes.
+
 ### Fixed
 
 - **`/pharn-loop` no longer dead-ends when Claude Code launches its stage agents in the background (residual
@@ -32,8 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (Claude Code 2.1.308) and one in the terminal CLI (2.1.309), each stopped at the spec stage with
   `blocked: stage-refused` (S9). In both, the orchestrator sent `run_in_background` as the string `"false"`, Claude
   Code launched the agent in the background, and the loop's own rule then stopped the run. A probe on 2.1.309 that sent
-  the JSON boolean ran in the foreground (recorded by the measuring session; not re-run here). The desktop app's Agent tool, as its sessions read it, has no
-  `run_in_background` parameter at all.
+  the JSON boolean ran in the foreground (recorded by the measuring session; not re-run here). The desktop app's Agent
+  tool, as its sessions read it, has no `run_in_background` parameter at all.
   - `/pharn-loop` and `/pharn-ship` now say that `run_in_background` is the JSON boolean `false`, never the string.
   - `stage-agent.mjs start` takes a new bare flag, `--no-foreground-agent`. On a routed stage it records the new route
     token `inline:no-foreground-agent` and exits `3` without reading the config, so the stage runs inline. Its remedy
