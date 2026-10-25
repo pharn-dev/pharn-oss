@@ -109,17 +109,17 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # re-run is not covered by init's wipe) and records runs[].results_sha256 — sha256 of a REGULAR file, else
 # null — read through O_NOFOLLOW|O_NONBLOCK + fstat in chunks, so a symlink/FIFO/device is never followed or
 # blocked on. The field is OPTIONAL: SCHEMA is unchanged and a pre-6.15 stamp still validates; a malformed
-# value is stamp-malformed. `testRecord({stamp, outDir, gateId, root})` in pharn/floor/test-results-core.mjs
+# value is stamp-malformed. `testRecord({stamp, outDir, gateId, root})` in pharn/floor/per-test-results-core.mjs
 # (NO CLI, no defaults — L41) derives {id, file, title, status ∈ passed|failed|skipped} from that file, opted
 # in by pharn.config.json `testResults: {"test" | "test:e2e" | "e2e": "jest-json" | "pharn-json" | "playwright-json" |
 # "vitest-json"}` (jest-json and pharn-json since 6.22.0: Jest's built-in `--json` report, checked on Jest 29.7.0 and
 # 30.5.2, and PHARN's own neutral schema `pharn-test-results/1`, closed in both directions, for any other runner; JUnit
-# and CTRF were measured and not chosen, in test-results-formats.mjs's header; a Jest report still PARSES under
+# and CTRF were measured and not chosen, in per-test-results-formats.mjs's header; a Jest report still PARSES under
 # vitest-json, which skips Jest's retry/failing markers — follow-up vitest-json-refuses-jest-shape) (the e2e
 # gates, E2E_SET, since 6.16.0: discovered from a test:e2e/e2e script, run after build at /pharn-verify — resolveSet
 # drops them from a DISCOVERED regress source (an explicit --gates string is not filtered), so an e2e-only manifest
 # is empty-source-set there); the adapters live in
-# test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
+# per-test-results-formats.mjs (a reporter's format is its own axis, P3). Closed reasons (RECORD_REASONS), fail-closed
 # PER RECORD for its integrity (a refusal voids it); since 6.31.0 PER TEST for its anomalies (ANOMALY_REASONS): one
 # flaky test or expected failure the report MARKS (Playwright flaky/test.fail(), Jest's invocations > 1 and Jest 30's
 # failing: true) is an `unknown-status` entry in the record's `anomalies[]`, and every id two tests share is ONE
@@ -180,7 +180,7 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # so /pharn-regress and every product report are unchanged. /pharn-dev-regress passes them for its outside `tests` gate:
 # Step 2 runs `node --test` through .dev/floor/node-test-results-reporter.mjs on each side (an ABSOLUTE path into the
 # working tree — the base checkout has no reporter of its own), Step 3 adds the three flags. The files are
-# pharn-test-results/1 documents, read by test-results-core.mjs's readResultsFile + parseResults + buildRecord (one
+# pharn-test-results/1 documents, read by per-test-results-core.mjs's readResultsFile + parseResults + buildRecord (one
 # grammar). For that gate, red on BOTH sides is a REGRESSION when a test failed at head whose base status is not
 # `failed` (passed / skipped / absent), or head has more suite errors; otherwise `pre_existing`. Every other row is
 # unchanged; the report adds `per_test` (regression-report.md). Fail-closed, exit 2: usage-error,

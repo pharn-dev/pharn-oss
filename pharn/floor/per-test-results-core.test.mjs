@@ -1,5 +1,5 @@
-// pharn/floor/test-results-core.test.mjs — the per-test record's suite, over BOTH modules
-// (test-results-core.mjs and test-results-formats.mjs).
+// pharn/floor/per-test-results-core.test.mjs — the per-test record's suite, over BOTH modules
+// (per-test-results-core.mjs and per-test-results-formats.mjs).
 //
 // The format fixtures are CAPTURED from the real reporters (vitest 5.0.1, @playwright/test 1.63.0, Jest 30.5.2 and
 // 29.7.0), with only their absolute paths rewritten to the placeholder root `/work/proj` (and the capture's own
@@ -36,7 +36,7 @@ import {
   loadResultsConfig,
   readResultsConfig,
   testRecord,
-} from "./test-results-core.mjs";
+} from "./per-test-results-core.mjs";
 import {
   ENTRY_ANOMALIES,
   FORMAT_REFUSALS,
@@ -49,7 +49,7 @@ import {
   isCleanResultsPath,
   parseResults,
   relativeFile,
-} from "./test-results-formats.mjs";
+} from "./per-test-results-formats.mjs";
 import { SHOWN_CHARS, shown } from "./quote-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -227,13 +227,13 @@ test("6.31.0 ANOMALY_REASONS: the per-test codes — sorted, ⊂ RECORD_REASONS,
     "a code is a refusal of the document OR an anomaly of one test, never both"
   );
   // A consumer reads an anomaly's code as a RECORD reason (unmeasured), so it must stay a member of that set.
-  const src = readFileSync(join(HERE, "test-results-core.mjs"), "utf8");
+  const src = readFileSync(join(HERE, "per-test-results-core.mjs"), "utf8");
   assert.match(src, /throw new Error\(`internal: '\$\{a\.reason_code\}' is not a member of ANOMALY_REASONS`\)/);
 });
 
 test("✧ L36 CLOSURE — every reason literal the two modules emit is a RECORD_REASONS member", () => {
   const found = new Set();
-  for (const rel of ["test-results-core.mjs", "test-results-formats.mjs"]) {
+  for (const rel of ["per-test-results-core.mjs", "per-test-results-formats.mjs"]) {
     const src = readFileSync(join(HERE, rel), "utf8");
     for (const m of src.matchAll(/(?:\brefuse\(\s*|reason_code:\s*)"([a-z][a-z0-9-]*)"/g)) found.add(m[1]);
   }
@@ -1256,7 +1256,7 @@ test("L41 — testRecord takes NO defaults: each missing argument is a TypeError
 
 // ── 6.39.0 (build-gate-bounded): parsed entries carry the reporter's failure messages; NO record does ──────────
 
-import { gateResults, testIdOf } from "./test-results-core.mjs";
+import { gateResults, testIdOf } from "./per-test-results-core.mjs";
 
 test("messages — each format's failure messages ride on the parsed entry, on the REAL captured reports (L55); pharn-json has none", () => {
   for (const [fmt, name] of [

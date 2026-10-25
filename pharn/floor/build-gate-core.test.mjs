@@ -19,7 +19,7 @@ import {
   tail,
   targetFiles,
 } from "./build-gate-core.mjs";
-import { parseResults } from "./test-results-formats.mjs";
+import { parseResults } from "./per-test-results-formats.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FIX = (n) => JSON.parse(readFileSync(join(HERE, "test-fixtures", "test-results", `${n}.json`), "utf8"));

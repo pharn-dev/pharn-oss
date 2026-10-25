@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EXCLUDE_KEY, GATES_KEY, GATES_KEYS, loadGateExclusion, readGateExclusion } from "./gate-exclusion-core.mjs";
 import { ALLOWLIST, EXCLUSION_DECLARED_IN, exclusionError } from "./gate-run-core.mjs";
-import { CONFIG_FILE } from "./test-results-core.mjs";
+import { CONFIG_FILE } from "./per-test-results-core.mjs";
 
 const doc = (gates) => JSON.stringify({ testResults: { test: "vitest-json" }, gates });
 

@@ -27,7 +27,7 @@
 //      under the run's seq — observed wall time, never the gate's own. On CONTINUE the gates already finished are
 //      listed with their exits (review R6), so a red one is visible before the rest run.
 //   6. SUMMARY from the finalized stamp (validateStamp, expecting stage `build` and this feature): per gate, and for
-//      a red gate the failing tests (test-results-core.mjs `gateResults` + `buildRecord`, one parse) or a log tail.
+//      a red gate the failing tests (per-test-results-core.mjs `gateResults` + `buildRecord`, one parse) or a log tail.
 //
 // EXIT (build-gate-core EXIT): 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE (run the same line again) · 2 UNUSABLE.
 // Anything else — node's own 1 included — is a crash and never a verdict.
@@ -60,7 +60,7 @@ import {
 } from "./stage-runtime.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { declaredWrites } from "./scope-inputs.mjs";
-import { RESULTS_GATES, buildRecord, gateResults, testIdOf } from "./test-results-core.mjs";
+import { RESULTS_GATES, buildRecord, gateResults, testIdOf } from "./per-test-results-core.mjs";
 import { FEATURE_BASE } from "./check-test-stage.mjs";
 import { EXIT, MODES, STAGE, buildGatePaths, decide, finishedLines, logPaths, renderSummary, targetFiles } from "./build-gate-core.mjs";
 

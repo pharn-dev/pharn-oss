@@ -1,0 +1,85 @@
+{
+  "base": "bc63759f",
+  "inside": [
+    ".dev/features/floor-test-glob-names/BUILD.md",
+    ".dev/features/floor-test-glob-names/GRILL.md",
+    ".dev/features/floor-test-glob-names/HUMAN-PATCH.md",
+    ".dev/features/floor-test-glob-names/PLAN.md",
+    ".dev/floor/node-test-results-reporter.test.mjs",
+    ".dev/guides/floor-ac-tests.md",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/ac-gate-core.mjs",
+    "pharn/floor/ac-gate-core.test.mjs",
+    "pharn/floor/ac-test-infra-core.mjs",
+    "pharn/floor/ac-test-infra-core.test.mjs",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/build-gate-core.test.mjs",
+    "pharn/floor/build-gate.mjs",
+    "pharn/floor/check-ac-tests.mjs",
+    "pharn/floor/check-loop-fresh.mjs",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-red-run.test.mjs",
+    "pharn/floor/check-regress.mjs",
+    "pharn/floor/check-test-stage.test.mjs",
+    "pharn/floor/cost-hostile-input.test.mjs",
+    "pharn/floor/default-test-glob.test.mjs",
+    "pharn/floor/gate-exclusion-core.mjs",
+    "pharn/floor/gate-exclusion-core.test.mjs",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/loop-fresh-core.mjs",
+    "pharn/floor/per-test-results-core.mjs",
+    "pharn/floor/per-test-results-core.test.mjs",
+    "pharn/floor/per-test-results-formats.mjs",
+    "pharn/floor/quote-core.mjs",
+    "pharn/floor/red-run-core.mjs",
+    "pharn/floor/regress-install-config-core.mjs",
+    "pharn/floor/regress-install-config-core.test.mjs",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/floor/test-infra-core.mjs",
+    "pharn/floor/test-infra-core.test.mjs",
+    "pharn/floor/test-results-core.mjs",
+    "pharn/floor/test-results-core.test.mjs",
+    "pharn/floor/test-results-formats.mjs",
+    "pharn/pharn-contracts/ac-tests.md",
+    "pharn/pharn-contracts/test-results-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5462,
+      "failed": 0,
+      "skipped": 6,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5467,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

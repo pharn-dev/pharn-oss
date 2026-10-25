@@ -8,7 +8,7 @@
 // member out, and the only alternative — an explicit `--gates` list — makes /pharn-verify's AC gate read
 // `test-infra-changed` by design. Two of three real /pharn-loop runs stopped on exactly that.
 //
-// THE DECLARATION, in the project root's `pharn.config.json` (test-results-core.mjs CONFIG_FILE, imported):
+// THE DECLARATION, in the project root's `pharn.config.json` (per-test-results-core.mjs CONFIG_FILE, imported):
 //
 //   { "gates": { "exclude": ["e2e"] } }
 //
@@ -23,7 +23,7 @@
 //
 // WHERE IT IS READ: by run-gates.mjs `init` from the directory of its `--discover` manifest (every pinned caller passes
 // `--discover package.json` from the project root), and from the project root by the red run's preflight and stamp
-// binding (red-run-core.mjs) and by the test-infrastructure pin (test-infra-core.mjs), which PINS the declared list so
+// binding (red-run-core.mjs) and by the test-infrastructure pin (ac-test-infra-core.mjs), which PINS the declared list so
 // a later change reads `test-infra-changed` at /pharn-verify (pharn-contracts/ac-tests.md).
 //
 // WHAT IT DOES NOT DO (P0): it does not make excluding a gate safe — an excluded gate does not run, and its absence is
@@ -39,7 +39,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ALLOWLIST, exclusionError } from "./gate-run-core.mjs";
-import { CONFIG_FILE } from "./test-results-core.mjs";
+import { CONFIG_FILE } from "./per-test-results-core.mjs";
 import { shown } from "./quote-core.mjs";
 
 /** The top-level key of the declaration, and its closed key set. */

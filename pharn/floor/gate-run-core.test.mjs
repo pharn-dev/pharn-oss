@@ -611,7 +611,7 @@ test("resultsFileName is the ONE copy of the results-file naming rule (L35), and
   assert.equal(resultsFileName(0, "test"), "0-test.test-results.json");
   assert.equal(resultsFileName(3, "format:check"), "3-format_check.test-results.json", "sanitized exactly like the logs");
   assert.notEqual(resultsFileName(0, "test"), "results.json", "never the name that reads as a second store of the gate map");
-  for (const rel of ["pharn/floor/run-gates.mjs", "pharn/floor/test-results-core.mjs"]) {
+  for (const rel of ["pharn/floor/run-gates.mjs", "pharn/floor/per-test-results-core.mjs"]) {
     const src = read(rel);
     assert.ok(!src.includes(".test-results.json"), `${rel} re-spells the results file name instead of importing resultsFileName`);
     assert.ok(src.includes("resultsFileName"), `${rel} does not use resultsFileName`);

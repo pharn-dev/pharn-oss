@@ -96,7 +96,7 @@
 // failed, so a gate red at base hid every NEW failure at head behind `pre_existing`: a load-red base masked 11 real head
 // failures in one recorded /pharn-dev-regress run (.dev/features/frontmatter-parser-parity/REGRESSION.md). With
 // `--per-test <gate> --base-tests <b> --head-tests <h>` the two files are `pharn-test-results/1` documents
-// (test-results-record.md's `pharn-json`), read and checked by test-results-core.mjs's own `readResultsFile` +
+// (test-results-record.md's `pharn-json`), read and checked by per-test-results-core.mjs's own `readResultsFile` +
 // `parseResults` + `buildRecord` — one grammar (L35), with the gate's exit from each map as that record's exit. For
 // that gate only, base != 0 && head != 0 becomes a REGRESSION when some test FAILED at head whose base status is not
 // `failed` (passed, skipped, or absent from the base record), or head reports more suite errors than base; otherwise it
@@ -122,8 +122,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { isConcrete } from "./plan-files-core.mjs";
-import { buildRecord, readResultsFile } from "./test-results-core.mjs";
-import { parseResults } from "./test-results-formats.mjs";
+import { buildRecord, readResultsFile } from "./per-test-results-core.mjs";
+import { parseResults } from "./per-test-results-formats.mjs";
 
 // --- The ESCAPE-EXEMPT sets (the floor check for lessons-learned L17). -----------------------------
 // `scope` computes `escaped` over `git diff <base>`, which answers "what CHANGED since base" — but it is
@@ -590,7 +590,7 @@ function readSideStamp(path, side, label) {
 // --- THE PER-TEST COMPARISON (6.72.0) — see the header, THE OPT-IN PER-TEST COMPARISON. ---------------------------
 const PER_TEST_FLAGS = ["--per-test", "--base-tests", "--head-tests"];
 
-/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: test-results-core.mjs's own
+/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: per-test-results-core.mjs's own
  *  read + parse + build over a `pharn-test-results/1` document, then the two refusals only a COMPARISON needs (an
  *  ambiguous test, and a red the record does not account for — L34). `{ok, record}` or `{ok: false, reason_code,
  *  reason}`. No child process; the file is read under the builder's byte cap, never followed or evaluated. */

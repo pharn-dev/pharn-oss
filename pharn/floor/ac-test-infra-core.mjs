@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// pharn/floor/test-infra-core.mjs — the TEST-INFRASTRUCTURE PIN: the parts of a project, other than the AC tests
+// pharn/floor/ac-test-infra-core.mjs — the TEST-INFRASTRUCTURE PIN: the parts of a project, other than the AC tests
 // themselves, that decide how those tests run and what they report. `/pharn-test`'s `ac-tests-lock.mjs --write` records
 // it in the lock's `test_infra` section (schema `ac-tests-lock/6` since 6.68.0; `/5`, `/4` and `/3` are still read); `--check` and
 // `/pharn-verify`'s AC gate (ac-gate-core.mjs) recompute it from the live tree and compare. Contract:
 // pharn/pharn-contracts/ac-tests.md, "The test-infrastructure pin".
+// Named test-infra-core.mjs before 7.0.1: Node's default test patterns match `test-*.mjs`, so a bare `node --test` in an
+// installed project ran it as one of the project's own tests (default-test-glob.test.mjs fails if a shipped name matches).
 //
 // WHY (the queue's item 06, P7): the AC gate trusts a test's `passed` only because the test was pinned and shown red
 // before the build. The lock pins the test FILES; without this pin a build could change what runs them — the `test`
@@ -22,7 +24,7 @@
 //                 (gate-run-core.mjs discoverGates, an own-property test): { id, script, pre, post, results } —
 //                 `script` is the script's VALUE; `pre` / `post` are the `pre<id>` / `post<id>` values npm runs around
 //                 it implicitly (null when absent — grill G4); `results` is the `testResults` format
-//                 test-results-core.mjs reads for that id, or its refusal code (`not-configured` | `config-invalid`).
+//                 per-test-results-core.mjs reads for that id, or its refusal code (`not-configured` | `config-invalid`).
 //                 Not the whole package.json: dependencies legitimately change in a build.
 //   chained       (/4) every script a pinned value CHAINS to, transitively: { id, script, pre, post }, sorted by id,
 //                 level gate ids not repeated (THE TOKEN PASS, below)
@@ -150,8 +152,8 @@ import { LEVELS, scopedPath } from "./ac-tests-core.mjs";
 import { ALLOWLIST, LEVEL_GATES, discoverGates, exclusionError } from "./gate-run-core.mjs";
 import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 import { foldName } from "./spec-template-core.mjs";
-import { CONFIG_FILE, formatFor, loadResultsConfig } from "./test-results-core.mjs";
-import { RESULTS_FORMATS } from "./test-results-formats.mjs";
+import { CONFIG_FILE, formatFor, loadResultsConfig } from "./per-test-results-core.mjs";
+import { RESULTS_FORMATS } from "./per-test-results-formats.mjs";
 import { shown } from "./quote-core.mjs";
 
 /** The closed set of root RUNNER config names the pin covers, in FOLDED (lowercase) form — test it only through

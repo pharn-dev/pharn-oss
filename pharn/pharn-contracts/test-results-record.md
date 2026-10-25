@@ -2,7 +2,7 @@
 name: test-results-record
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the per-test record: how a project opts in, where its test run writes a machine-readable results file, how pharn/floor/test-results-core.mjs derives {test-id → passed | failed | skipped} from it, and the closed reasons it refuses with. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4)."
+purpose: "Single source of truth for the per-test record: how a project opts in, where its test run writes a machine-readable results file, how pharn/floor/per-test-results-core.mjs derives {test-id → passed | failed | skipped} from it, and the closed reasons it refuses with. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4)."
 ---
 
 # Contract — test-results-record
@@ -103,7 +103,7 @@ Both behaviours are runner code pinned by tests, not a floor primitive.
 
 ## The record
 
-`testRecord({ stamp, outDir, gateId, root })` in `test-results-core.mjs`. All four inputs are required;
+`testRecord({ stamp, outDir, gateId, root })` in `per-test-results-core.mjs`. All four inputs are required;
 `root` is the directory the gate ran in, because a finalized stamp does not record it, and it is where
 `pharn.config.json` is read. The result is either a record:
 

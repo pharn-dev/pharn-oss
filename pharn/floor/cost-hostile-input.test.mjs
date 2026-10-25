@@ -1139,7 +1139,7 @@ test("18 ★ named departures: a record naming ANOTHER valid agent, a meta that 
 
 test("✧ ONE ADDRESS (L35): each moved name is exported from its new home only, never re-exported from the old one", async () => {
   const ledgerModule = await import("./render-cost-ledger.mjs");
-  const formats = await import("./test-results-formats.mjs");
+  const formats = await import("./per-test-results-formats.mjs");
   const core = await import("./cost-value-core.mjs");
   const quote = await import("./quote-core.mjs");
   for (const name of ["ABS_PATH_RE", "IDENTITY_MAX", "isIdentityToken", "isTokenCount"]) {
@@ -1148,6 +1148,6 @@ test("✧ ONE ADDRESS (L35): each moved name is exported from its new home only,
   }
   for (const name of ["shown", "SHOWN_CHARS"]) {
     assert.ok(Object.hasOwn(quote, name), `quote-core exports ${name}`);
-    assert.ok(!Object.hasOwn(formats, name), `test-results-formats does not export ${name}`);
+    assert.ok(!Object.hasOwn(formats, name), `per-test-results-formats does not export ${name}`);
   }
 });

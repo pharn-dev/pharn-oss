@@ -11,7 +11,7 @@
 // never types the evidence).
 //
 // P3: it changes when "red for the right reason" changes. The mapping grammar is ac-tests-core.mjs's, the per-test
-// record test-results-core.mjs's, the level→gate table gate-run-core.mjs's; this file imports all three and restates
+// record per-test-results-core.mjs's, the level→gate table gate-run-core.mjs's; this file imports all three and restates
 // none.
 //
 // THE VERDICT, per AC (row `AC-<n> | <level> | <file>`), over the per-test record of EVERY gate its level maps to:
@@ -47,7 +47,7 @@ import { readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { acRowsOf } from "./ac-tests-core.mjs";
 import { LEVEL_GATES, acFilesFor, discoverGates, levelExcludedGates, resolveSet, validateStamp } from "./gate-run-core.mjs";
-import { RECORD_REASONS, formatFor, loadResultsConfig, testRecord } from "./test-results-core.mjs";
+import { RECORD_REASONS, formatFor, loadResultsConfig, testRecord } from "./per-test-results-core.mjs";
 import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 
@@ -208,14 +208,14 @@ export function bindStamp({ stamp, rows, feature, root }) {
 
 /**
  * THE MATCH RULE, one copy (L35): the red run's verdict and /pharn-verify's AC gate (ac-gate-core.mjs) both call it.
- * Over the per-test records of `gateIds` (`recordOf(gateId)` → a test-results-core.mjs testRecord), an entry belongs to
+ * Over the per-test records of `gateIds` (`recordOf(gateId)` → a per-test-results-core.mjs testRecord), an entry belongs to
  * AC `id` when its `file` EQUALS one of `files` — exactly, no case-folding — and its LEAF title starts `<id>:`. Never a
  * suite-wide title match: other features' AC tests share the suite and reuse the ids. EVERY observation is kept — one
  * per (gate, test) — never one status per test id: two e2e gates can report the same id, and keying by id let the later
  * gate's `failed` overwrite the earlier one's `passed` (REVIEW finding 1). The first refused record stops the walk and
  * is returned by name.
  *
- * A PER-TEST ANOMALY (6.31.0, test-results-core.mjs ANOMALY_REASONS) refuses the AC only when its `file` EQUALS one of
+ * A PER-TEST ANOMALY (6.31.0, per-test-results-core.mjs ANOMALY_REASONS) refuses the AC only when its `file` EQUALS one of
  * `files` — the same exact comparison the match uses — because a test there whose status cannot be read (a shared id,
  * a flaky run the report marks, an expected failure) could be this AC's test: fail-closed where the verdict reads.
  * Anywhere else it is not this AC's business and is skipped here; unmappedAnomalies() reports it. Before 6.31.0 one

@@ -6,8 +6,8 @@
 // WHY (the queue's item 06 — the requirement the queue exists for, P7): before this, verify's verdict came from
 // whole-gate exit codes, and nothing there knew an AC existed. A suite could pass with an AC's test deleted, skipped or
 // never collected. P3: this file changes when "what counts as a delivered AC" changes; the mapping grammar
-// (ac-tests-core.mjs), the per-test record (test-results-core.mjs), the match rule (red-run-core.mjs observeAc), the
-// lock's checks (ac-tests-lock.mjs) and the pin (test-infra-core.mjs) are imported, never restated (L35).
+// (ac-tests-core.mjs), the per-test record (per-test-results-core.mjs), the match rule (red-run-core.mjs observeAc), the
+// lock's checks (ac-tests-lock.mjs) and the pin (ac-test-infra-core.mjs) are imported, never restated (L35).
 //
 // AN AC IS DELIVERED = a locked, once-red test titled `AC-<n>:`, in a file mapped to AC-n, passed on the head run.
 // PHARN does not judge whether that test fully captures the AC's intent (P0). The SPEC is the source of the ACs: an AC
@@ -48,11 +48,11 @@
 // config and pharn.config.json are agent-editable, which the lock and the pin NARROW and never close; AGREEMENT, never
 // provenance (L43) — a self-consistent fabricated lock + stamp + results set over the live tree passes; code the
 // build writes runs INSIDE the test process and can switch off the assertion library or the reporter there, which
-// no pin reaches (test-infra-core.mjs's header states it, 6.31.0); a flaky test or expected failure the report MARKS,
+// no pin reaches (ac-test-infra-core.mjs's header states it, 6.31.0); a flaky test or expected failure the report MARKS,
 // or a duplicate id, in a file an AC maps makes that AC unmeasured, and one in any other file is only reported
 // (6.31.0 — before, one anywhere refused the whole record) — an unmarked one (vitest `test.fails` or pass on retry,
 // Jest 29's `test.failing`) reads as its raw status (test-results-record.md); the pin's own gaps are
-// test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
+// ac-test-infra-core.mjs's header. The gate does NOT re-check that the SPEC is
 // still Approved — it reads the SPEC's pin, never its `state`. Since 6.20.5 a test-first SPEC whose pin cannot be
 // read (no `spec_id` or `spec_content_hash` line, an empty one, a value that is not 64 hex — a Draft usually has one
 // of these) is `ac-tests-modified`, an EVIDENCE reason: verify FAIL and /pharn-loop S13; before, the comparison was
@@ -84,7 +84,7 @@ import {
 import { LEVEL_GATES } from "./gate-run-core.mjs";
 import { observeAc, unmappedAnomalies } from "./red-run-core.mjs";
 import { specVerdict } from "./spec-template-core.mjs";
-import { RECORD_REASONS, testRecord } from "./test-results-core.mjs";
+import { RECORD_REASONS, testRecord } from "./per-test-results-core.mjs";
 
 /** The build has not delivered the AC yet — a retry can fix it. */
 export const DELIVERY_REASONS = Object.freeze(["ac-not-passed", "ac-skipped", "ac-untested"]);

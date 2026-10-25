@@ -9,7 +9,7 @@
 // passes neither --install nor --no-install, so a library that commits no lockfile, or a project with two lockfile
 // families, could never finish a full /pharn-loop.
 //
-// THE DECLARATION, in the project root's `pharn.config.json` (test-results-core.mjs CONFIG_FILE, imported):
+// THE DECLARATION, in the project root's `pharn.config.json` (per-test-results-core.mjs CONFIG_FILE, imported):
 //
 //   { "regress": { "install": "none" | "head-node-modules" | "npm" | "pnpm" | "yarn" | "bun" } }
 //
@@ -43,7 +43,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DECLARED_INSTALL_VALUES } from "./stage-regress-core.mjs";
-import { CONFIG_FILE } from "./test-results-core.mjs";
+import { CONFIG_FILE } from "./per-test-results-core.mjs";
 import { shown } from "./quote-core.mjs";
 
 /** The top-level key of the declaration, and its closed key set. */

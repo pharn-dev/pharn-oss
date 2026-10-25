@@ -1,4 +1,4 @@
-// pharn/floor/test-infra-core.test.mjs — the test-infrastructure pin's suite. Each kind of change is one mutation of a
+// pharn/floor/ac-test-infra-core.test.mjs — the test-infrastructure pin's suite. Each kind of change is one mutation of a
 // pinned world that the diff names, and only that one (L52); the shape is closed at every level (L36); a symlinked config
 // or script-named file is refused, never hashed through (L59). 6.31.0: every member of the token pass's closed sets is
 // reached, each rule clause with a control (L60), and the bounds the header states are PROBED, so a later widening of
@@ -44,7 +44,7 @@ import {
   pinShapeError,
   sha256RegularFile,
   testInfraReds,
-} from "./test-infra-core.mjs";
+} from "./ac-test-infra-core.mjs";
 import { ALLOWLIST, discoverGates } from "./gate-run-core.mjs";
 
 const SCRIPT_SECRET = "vitest run --secret-7f3a";
@@ -656,7 +656,7 @@ test("6.31.0 STATED BOUNDS, probed — each is outside the pin today, so widenin
     });
   }
   // and the header states each one, in the one copy of the list
-  const header = readFileSync(join(HERE, "test-infra-core.mjs"), "utf8").split("\nimport ")[0];
+  const header = readFileSync(join(HERE, "ac-test-infra-core.mjs"), "utf8").split("\nimport ")[0];
   for (const needle of [
     "THE IN-PROCESS BOUND",
     "assert.equal = () => {}",
@@ -810,18 +810,18 @@ test("✧ L36 CLOSURE — every non-test floor module tests the config-name rege
   for (const f of modules) {
     const src = readFileSync(join(HERE, f), "utf8");
     for (const m of src.matchAll(/CONFIG_NAME_RE\.test\(/g)) hits.push(`${f}@${m.index}`);
-    if (f !== "test-infra-core.mjs" && /\/\^\(\?:vitest\\\.config/.test(src)) hits.push(`${f}: a second copy of the regex`);
+    if (f !== "ac-test-infra-core.mjs" && /\/\^\(\?:vitest\\\.config/.test(src)) hits.push(`${f}: a second copy of the regex`);
     // 6.31.0: the package-manager config names live in ONE constant, too
     if (/["']\.npmrc["']|["']\.yarnrc(?:\.yml)?["']/.test(src)) pmHits.push(f);
   }
   assert.equal(hits.length, 1, JSON.stringify(hits));
-  assert.match(hits[0], /^test-infra-core\.mjs@/);
-  assert.deepEqual(pmHits, ["test-infra-core.mjs"]);
-  const core = readFileSync(join(HERE, "test-infra-core.mjs"), "utf8");
+  assert.match(hits[0], /^ac-test-infra-core\.mjs@/);
+  assert.deepEqual(pmHits, ["ac-test-infra-core.mjs"]);
+  const core = readFileSync(join(HERE, "ac-test-infra-core.mjs"), "utf8");
   assert.match(core, /return typeof name === "string" && CONFIG_NAME_RE\.test\(foldName\(name\)\);/, "the one use folds first");
   assert.match(
     readFileSync(join(HERE, "check-ac-tests.mjs"), "utf8"),
-    /import \{ isPackageManagerConfigName, scriptNamedFiles, testInfraPathKind \} from "\.\/test-infra-core\.mjs";/
+    /import \{ isPackageManagerConfigName, scriptNamedFiles, testInfraPathKind \} from "\.\/ac-test-infra-core\.mjs";/
   );
 });
 
@@ -1253,7 +1253,7 @@ test("6.68.0 STATED BOUND, probed: an other gate's NAMED FILES and its own confi
       assert.equal(pinShapeError(pin, { version: 6 }), null);
     }
   );
-  const header = readFileSync(join(HERE, "test-infra-core.mjs"), "utf8").split("\nimport ")[0];
+  const header = readFileSync(join(HERE, "ac-test-infra-core.mjs"), "utf8").split("\nimport ")[0];
   for (const needle of ["DETECTION, NEVER PREVENTION", "what an OTHER gate's command READS", "or ADDS one (a first `typecheck`)"])
     assert.ok(header.includes(needle), `the header states: ${needle}`);
 });

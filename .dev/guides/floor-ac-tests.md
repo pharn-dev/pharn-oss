@@ -20,9 +20,9 @@ come from the single code block this text was moved from, so the entry they name
 # REDs on a closed kind set (missing/duplicate/unknown AC, level-mismatch, unlisted/unmapped file, in-plan-files — the
 # build's scope would cover it —, claimed-elsewhere, bad-path, no-files, malformed-line, pin via the SHELLED
 # check-plan-spec-agree.mjs, since 6.18.0 spec-kind, since 6.21.0 test-infra-in-plan — a ROOT runner config the lock's
-# test-infra pin covers named in PLAN.md `## Files`, matched through test-infra-core.mjs's own isRunnerConfigName, and
+# test-infra pin covers named in PLAN.md `## Files`, matched through ac-test-infra-core.mjs's own isRunnerConfigName, and
 # since 6.31.0 also a root package-manager config (.npmrc/.yarnrc/.yarnrc.yml) or a file a level gate's script NAMES
-# (test-infra-core scriptNamedFiles over the tree — the review's H2 wB: a PLAN-scoped build wrote the pharn-json
+# (ac-test-infra-core scriptNamedFiles over the tree — the review's H2 wB: a PLAN-scoped build wrote the pharn-json
 # reporter) —, and since 6.31.0 ac-artifact-in-plan — THIS feature's AC-TESTS.md or AC-TESTS.lock.json in PLAN.md (the
 # review's H2: a build scoped to the lock re-pinned its own change with every check green; LOCK_NAME is a literal,
 # parity-tested against ac-tests-lock.mjs, never imported); package.json / pharn.config.json there print an ADVISORY
@@ -130,7 +130,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # the explicit source and /pharn-verify's reference section says not to pass --gates for such a feature. Both ids are
 # RESERVED_IDS and never enter `gates`. Legacy SPEC → NOT-APPLICABLE, stated (with AC evidence beside it → ac-tests-modified); spec_kind:
 # test-infra → BOOTSTRAP, weaker, labelled. THE TEST-INFRA PIN (lock schema ac-tests-lock/6 since 6.68.0, /5 since 6.36.0, /4 since 6.31.0,
-# test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
+# ac-test-infra-core.mjs, written by --write BEFORE the red run): the level gates' package.json script VALUES + pre/post
 # scripts + testResults formats, root vitest/vite/playwright/jest config files in a CLOSED name set (matched FOLDED since
 # 6.21.0 — on APFS a `Vitest.config.mjs` is the runner's config), and since 6.31.0 (the review's H2 + the GATE-1
 # amendment) every script a pinned value CHAINS to (transitively, own-property only, REFUSED past MAX_CHAIN_HOPS = 8),
@@ -138,7 +138,7 @@ node pharn/floor/check-test-stage.mjs <name> [--base <features-dir>] [--require-
 # JSON digest, null when absent) and the root .npmrc/.yarnrc/.yarnrc.yml (hash only) — all through ONE closed literal
 # token pass (scriptTokens/scriptPathCandidates/chainedIds; never a shell parse; outputs after `>`, -o or an
 # --out… flag skipped); the gate also requires each level gate to have run as the pinned `npm run <id>`. NOT caught,
-# stated ONCE in test-infra-core.mjs's header (restated in the contract), FIRST the in-process bound: code the build
+# stated ONCE in ac-test-infra-core.mjs's header (restated in the contract), FIRST the in-process bound: code the build
 # writes runs INSIDE the test process and can switch off the assertions or the reporter there (`assert.equal = () =>
 # {}` → verify PASS, measured) — so a green pin NEVER means the build could not forge the AC gate; then imports of a
 # pinned file, env-driven config and user/global npmrc, other package.json keys (mocha, ava, dependencies), chains the

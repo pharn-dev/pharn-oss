@@ -80,7 +80,7 @@
 // through a descriptor opened O_NOFOLLOW|O_NONBLOCK and fstat-checked on that same descriptor, in fixed-size
 // chunks: a symlink, FIFO or device is never followed or blocked on, there is no check-then-use window, and a
 // large file costs no more memory than one chunk. The file is project-written and UNTRUSTED; the runner only
-// hashes it. What it MEANS is test-results-core.mjs's business (pharn-contracts/test-results-record.md).
+// hashes it. What it MEANS is per-test-results-core.mjs's business (pharn-contracts/test-results-record.md).
 //
 // ================================ REUSED EXECUTIONS (6.34.0) ================================
 // `init --stage verify --reuse-stamp <regress-head stamp> --reuse-sha256 <hex>` OFFERS a finalized /pharn-regress HEAD

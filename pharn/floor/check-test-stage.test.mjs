@@ -574,7 +574,7 @@ function inject(file, anchor, replacement) {
   writeFileSync(file, src.replace(anchor, replacement));
 }
 // The lock cases break a module ONLY the lock child loads (red-run-core.mjs): since 6.21.0 check-ac-tests.mjs imports
-// test-infra-core.mjs too, so breaking that one crashes the mapping child's `--spec` call first — the fourth case,
+// ac-test-infra-core.mjs too, so breaking that one crashes the mapping child's `--spec` call first — the fourth case,
 // whose first line names that call instead (still UNUSABLE, exit 2, never a RED). An optional fourth element is the
 // expected first line when it is not the crashed-child line.
 const CRASHES = [
@@ -595,9 +595,9 @@ const CRASHES = [
       ),
   ],
   [
-    "a dependency BOTH children load throws at load (test-infra-core.mjs, shared since 6.21.0)",
+    "a dependency BOTH children load throws at load (ac-test-infra-core.mjs, shared since 6.21.0)",
     "check-ac-tests.mjs",
-    (f) => appendFileSync(join(f, "test-infra-core.mjs"), "\nthrow new Error('simulated module-load failure');\n"),
+    (f) => appendFileSync(join(f, "ac-test-infra-core.mjs"), "\nthrow new Error('simulated module-load failure');\n"),
     /^UNUSABLE — check-ac-tests\.mjs --spec exited 1/,
   ],
 ];

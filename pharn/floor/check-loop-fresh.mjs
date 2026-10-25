@@ -5,7 +5,8 @@
 //
 // WHY A SEPARATE ENTRY (6.21.1 — the follow-up 6.20.6 named `loop-fresh-load-crash`): node exits 1 when a module
 // cannot load or a throw goes uncaught, and 1 is this checker's RERUN. While the checker imported its siblings
-// statically, a module that failed to load (a partial update, a test-infra-core.mjs that throws) ended the process
+// statically, a module that failed to load (a partial update, a test-infra-core.mjs that throws; ac-test-infra-core.mjs since 7.0.1)
+// ended the process
 // with exit 1 and an EMPTY stdout, so /pharn-loop's exit-1 branch had no `stage_to_rerun` to read. An uncaught throw
 // while checking did the same: a `pharn/.run` that is a regular file makes the budget ledger's mkdir throw
 // (.dev/features/crash-routing/PLAN.md records both, reproduced). This file has NO static import, so nothing can fail
