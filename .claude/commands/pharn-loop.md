@@ -476,9 +476,14 @@ two lines did), and you run them in this order:
    reading of your tools, failing in the safe direction. A second line `marker: not written` changes only the
    summary's route line.
 
+   With an Agent tool whose parameters list no `run_in_background`, append `--no-foreground-agent` to the start line:
+   it records `inline:no-foreground-agent` and exits `3` — ADVISORY, your own reading of the tool's schema. Such a
+   tool, as read in Claude Code's desktop app, runs every agent in the background, which item 3 cannot wait for.
+
 2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
-   after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false`, and **no `isolation`** —
-   the stages write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's
+   after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false` (the JSON boolean `false`,
+   never the string `"false"`), and **no `isolation`** — the stages write into this one tree, one after another,
+   never a worktree each. Its `prompt` is the stage's
    pinned one-line brief prompt, `<name>` (and `<N>`) substituted; the stage agent runs that line first and
    receives its rules from code. Only `/pharn-spec`'s prompt carries anything more: the increment description,
    below that line, in a fence longer than any backtick run inside it, labelled DATA (ADVISORY, like every

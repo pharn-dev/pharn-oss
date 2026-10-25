@@ -182,6 +182,13 @@ test("INLINE_REMEDIES names a remedy for EVERY inline reason, and for nothing el
   for (const [r, text] of Object.entries(INLINE_REMEDIES)) assert.ok(typeof text === "string" && text.length > 10, `${r} has a remedy`);
 });
 
+test("no-foreground-agent's remedy is reachable from THAT reason — never no-agent-tool's (L27, 6.73.2)", () => {
+  // The Agent tool IS present in this case, so "allow the Agent tool" could not help; the remedy names the parameter.
+  assert.match(INLINE_REMEDIES["no-foreground-agent"], /run_in_background/);
+  assert.doesNotMatch(INLINE_REMEDIES["no-foreground-agent"], /allow the Agent tool/);
+  assert.doesNotMatch(INLINE_REMEDIES["no-agent-tool"], /run_in_background/);
+});
+
 // ── decideRoute — the truth table ─────────────────────────────────────────────────────────────────────
 
 const resolved = (model, effort = "high") => ({ status: 0, stdout: `${JSON.stringify({ model, effort })}\n` });

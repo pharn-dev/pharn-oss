@@ -30,6 +30,7 @@ import {
   READ_DEFECTS,
   RESULT_MAX_BYTES,
   NO_AGENT_TOOL,
+  NO_FOREGROUND_AGENT,
   MARKER_KEPT,
   MARKER_DEFERRED,
 } from "./stage-agent.mjs";
@@ -752,6 +753,67 @@ test(`start ${NO_AGENT_TOOL} — an agent cell is inline:no-agent-tool WITHOUT c
   }
 });
 
+test(`start ${NO_FOREGROUND_AGENT} (6.73.2) — an agent cell is inline:no-foreground-agent WITHOUT consulting the config, with ITS remedy`, () => {
+  const dir = scratch();
+  try {
+    // No config: without the flag this is no-config, so the token proves the probe was skipped.
+    const plain = run(dir, ["route", ...startArgs("pharn-loop", "pharn-spec").slice(1)]);
+    assert.equal(plain.stdout, "inline:no-config\n", "control: without the flag the config decides");
+    const r = run(dir, startArgs("pharn-loop", "pharn-spec", [NO_FOREGROUND_AGENT]));
+    assert.equal(r.status, 3, r.stderr);
+    assert.equal(lines(r.stdout)[0], "inline:no-foreground-agent");
+    assert.equal(markersIn(dir)[0].route, "inline:no-foreground-agent");
+    assert.match(r.stderr, /runs inline \(no-foreground-agent\) — .*run_in_background/, "its own remedy (L27)");
+    assert.doesNotMatch(r.stderr, /allow the Agent tool/, "never no-agent-tool's remedy");
+    // Anywhere in argv it is the bare flag, mid-line included.
+    const mid = run(dir, [
+      "start",
+      "--command",
+      "pharn-loop",
+      "--stage",
+      "pharn-build",
+      "--name",
+      "demo",
+      NO_FOREGROUND_AGENT,
+      "--iteration",
+      "1",
+    ]);
+    assert.equal(mid.status, 3, mid.stderr);
+    assert.equal(lines(mid.stdout)[0], "inline:no-foreground-agent");
+    const quick = run(dir, [
+      "start",
+      "--command",
+      "pharn-loop",
+      "--stage",
+      "pharn-plan",
+      "--name",
+      "demo",
+      NO_FOREGROUND_AGENT,
+      "--mode",
+      "quick",
+    ]);
+    assert.equal(quick.status, 3, quick.stderr);
+    assert.equal(lines(quick.stdout)[0], "inline:no-foreground-agent");
+    // A policy-inline cell keeps its own reason.
+    const q = run(dir, startArgs("pharn-loop", "pharn-grill", [NO_FOREGROUND_AGENT]));
+    assert.equal(q.status, 3, q.stderr);
+    assert.equal(lines(q.stdout)[0], "inline:floor-only");
+    // Both flags: no Agent tool at all is the stronger reading.
+    const both = run(dir, startArgs("pharn-loop", "pharn-plan", [NO_FOREGROUND_AGENT, NO_AGENT_TOOL]));
+    assert.equal(both.status, 3, both.stderr);
+    assert.equal(lines(both.stdout)[0], "inline:no-agent-tool");
+    const written = markersIn(dir).length;
+    // At most once; never a value.
+    const twice = run(dir, startArgs("pharn-loop", "pharn-plan", [NO_FOREGROUND_AGENT, NO_FOREGROUND_AGENT]));
+    assert.deepEqual([twice.status, twice.stdout], [2, ""]);
+    const asValue = run(dir, ["start", "--command", "pharn-loop", "--stage", "pharn-plan", "--name", NO_FOREGROUND_AGENT]);
+    assert.deepEqual([asValue.status, asValue.stdout], [2, ""]);
+    assert.equal(markersIn(dir).length, written, "a refused start writes no marker");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("start — the OPEN-STAGE rule: a second start for the same stage and iteration keeps its marker; anything else writes one", () => {
   const dir = scratch();
   try {
@@ -917,6 +979,7 @@ test("never a crash — odd argv exits 2 (never 1, node's crash code), for every
       ["start"],
       ["start", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--status", "done"],
       ["start", "--no-agent-tool", "--no-agent-tool"],
+      ["start", "--no-foreground-agent", "--no-foreground-agent"],
       ["finish", "--command", "pharn-ship", "--stage", "pharn-plan", "--name", "demo", "--mode", "quick"],
       ["finish", "--command", "pharn-ship", "--stage", "pharn-build", "--name", "demo"],
     ];

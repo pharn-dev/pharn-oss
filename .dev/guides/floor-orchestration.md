@@ -478,9 +478,12 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # keeps ship's question relay from tripping ship-outcome-core (b). `finish` = `read` + the orchestrator marker, deferred
 # after a `question`. Each prints its closed line, then the marker line (or `marker: not written` — a marker never fails
 # a run). C1's own pre-registered bar (orchestrator-role requests >= 20%) was met in 1 of 3 real runs; adopted at the
-# user's request and to take the route token out of shell lines. Exit: start = route's 0/3 (2 refused, nothing written);
+# user's request and to take the route token out of shell lines. `--no-foreground-agent` (6.73.2, stage-agent-background-fix)
+# records inline:no-foreground-agent the same way: an Agent tool with no run_in_background parameter launches every agent
+# in the background, which /pharn-loop cannot wait for (ADVISORY: the model's reading of the tool's schema; residual
+# stage-agent-background in stage-agent-core.mjs). Exit: start = route's 0/3 (2 refused, nothing written);
 # finish = read's 0/2/3/4. An inline-run stage closes with `mark-phase.mjs --kind orchestrator` (the inline return line).
-node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
+node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool] [--no-foreground-agent]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 ```
 

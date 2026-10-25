@@ -4502,6 +4502,9 @@ for (const cmd of STAGE_AGENT_WIRING) {
     const s = saSection(cmd);
     assert.match(s, /`subagent_type: "general-purpose"`/);
     assert.match(s, /`run_in_background: false`/);
+    // 6.73.2 (stage-agent-background-fix): the parameter's JSON type is named — a STRING "false" was launched in the
+    // background in both harnesses (stage-agent-core.mjs, residual stage-agent-background).
+    assert.match(s, /`run_in_background: false` \(the JSON boolean\s+`false`,\s+never the string `"false"`\)/);
     assert.match(s, /\*\*no\s+`isolation`\*\*/);
     assert.match(s, cmd.waitRule, "the wait-before-finish rule");
     assert.match(s, /\*\*The finish line — only after an Agent call has returned the agent's COMPLETED result\.\*\*/);
@@ -4513,6 +4516,14 @@ for (const cmd of STAGE_AGENT_WIRING) {
     // no-agent-tool flag, and the inline return line pinned in this section (the start line's exit-3 branch runs it).
     assert.match(s, /^## Running a stage \(6\.27\.0\) — a routed stage runs as a stage agent, requested on its configured model$/m);
     assert.match(s, /append\s+`--no-agent-tool`\s+to\s+the\s+start\s+line:\s+it\s+records\s+`inline:no-agent-tool`\s+and\s+exits\s+`3`/);
+    // 6.73.2: only the loop takes --no-foreground-agent (it cannot wait for a background agent; ship waits). The grant
+    // test below pins that a start line carrying it stays inside the loop's allowed-tools.
+    if (cmd.command === "pharn-loop")
+      assert.match(
+        s,
+        /append\s+`--no-foreground-agent`\s+to\s+the\s+start\s+line:\s+it\s+records\s+`inline:no-foreground-agent`\s+and\s+exits\s+`3`/
+      );
+    else assert.doesNotMatch(s, /--no-foreground-agent/, "ship waits for a background agent, so it is given no such flag");
     assert.equal(
       fencedLines(s).filter((l) => l.text.trim() === "node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator").length,
       1,
@@ -5764,6 +5775,27 @@ const loopRunLines = () =>
 
 /** The exact grant set the pinned lines derive (see grantFor). */
 const derivedLoopGrants = (lines) => [...new Set(lines.flatMap((l) => subcommands(l.text).map(grantFor)))].sort();
+
+test("✧ loop-no-prompts (6.73.2): a start line carrying either bare flag, or both, stays inside a grant", () => {
+  // stage-agent-background-fix: the loop appends --no-foreground-agent (or --no-agent-tool) to a pinned start line. Every
+  // start grant ends its name position in `*`, which bashGrantRe reads as any text, spaces included, so the flags are
+  // covered wherever they sit (REVIEW A1 — the plan's "right after --name" placement was never load-bearing). This guard
+  // fails only if a start grant stops covering the rest of its line, e.g. an exact grant with no trailing `*`.
+  const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
+  const res = grants.filter((g) => g.startsWith("Bash(")).map(bashGrantRe);
+  const starts = loopRunLines().filter((l) => l.text.startsWith("node pharn/floor/stage-agent.mjs start "));
+  // Six pinned today: spec, plan, test and build in the full column, spec and build in the quick part.
+  assert.ok(starts.length >= 6, `non-vacuous: the loop pins its start lines (found ${starts.length})`);
+  const offenders = [];
+  for (const l of starts) {
+    const line = l.text.replace(/'<name>'/g, "'demo-feature'").replace(/<N>/g, "1");
+    for (const tail of [" --no-foreground-agent", " --no-agent-tool", " --no-agent-tool --no-foreground-agent"])
+      if (!res.some((re) => re.test(line + tail))) offenders.push(`${l.file}:${l.line}: ${line + tail}`);
+  }
+  assert.deepEqual(offenders, []);
+  // Non-vacuity of the regex itself: a line no grant names is refused.
+  assert.ok(!res.some((re) => re.test("node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan --name 'x'")));
+});
 
 test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line of its run, and no grant is unused", () => {
   const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));

@@ -14,7 +14,8 @@
 //   node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 //                                          --status <done|refused|question> [--row <S4..S10>] [--gate <pass|fail>]
 //   node pharn/floor/stage-agent.mjs read   --command <c> --name '<name>' --stage <stage> [--iteration <N>]
-//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool]          (6.43.0 — see START / FINISH)
+//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool] [--no-foreground-agent]
+//                                                                                    (6.43.0 — see START / FINISH)
 //   node pharn/floor/stage-agent.mjs finish <read's flags>                            (6.43.0)
 // `--iteration` is required exactly for an iterated stage (build, regress, verify). `--mode` is spelled only
 // for a column the command's policy holds besides `full` (today: `quick`, for both commands — /pharn-loop's
@@ -44,7 +45,10 @@
 //     `mark-phase.mjs`'s `tryMarkPhase` (the one printed encoding, so the line binds the run as the CLI's does), and
 //     prints the token, then the marker line. Three decisions the model used to make around the old lines are code:
 //     `--no-agent-tool` on an `agent` cell is `inline:no-agent-tool` with no config consulted (the model's reading of
-//     its own tool list stays ADVISORY, as before); a `route` refusal other than a skipped stage, or a leftover result
+//     its own tool list stays ADVISORY, as before), and so is `--no-foreground-agent` (6.73.2): an Agent tool that
+//     offers no `run_in_background` parameter, which launches every agent in the background (`stage-agent-core.mjs`,
+//     residual `stage-agent-background`) — `inline:no-foreground-agent`, again the model's ADVISORY reading, with
+//     `--no-agent-tool` winning when both are given; a `route` refusal other than a skipped stage, or a leftover result
 //     it cannot clear, is `inline:route-unavailable` (exit 3) with the reason on stderr; and a stage that is still
 //     OPEN — the run's latest marker is this stage's own stage-start, same stage and iteration — gets no second one
 //     (`MARKER_KEPT`), which is what lets /pharn-ship's question relay re-route a fresh agent without a second
@@ -191,7 +195,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(HERE, "check-model-config.mjs");
 
 /** Each subcommand's closed flag set (every one takes a value). `start` takes `route`'s, plus the bare
- *  `NO_AGENT_TOOL`, which `main` removes before parsing; `finish` takes `read`'s. */
+ *  `NO_AGENT_TOOL` and `NO_FOREGROUND_AGENT`, which `main` removes before parsing; `finish` takes `read`'s. */
 const FLAGS = Object.freeze({
   route: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode", "--config"]),
   brief: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode"]),
@@ -203,6 +207,10 @@ const FLAGS = Object.freeze({
 
 /** `start`'s one bare flag: the orchestrator has no Agent tool, not even a deferred one (its own, ADVISORY, reading). */
 export const NO_AGENT_TOOL = "--no-agent-tool";
+
+/** `start`'s second bare flag (6.73.2): the Agent tool offers no `run_in_background` parameter, so it would launch
+ *  the stage agent in the background (its own, ADVISORY, reading of the tool's schema). */
+export const NO_FOREGROUND_AGENT = "--no-foreground-agent";
 
 /** `start`'s second line when the stage is still open (the run's latest marker is its own stage-start). */
 export const MARKER_KEPT = "marker: kept (stage already open)";
@@ -533,11 +541,12 @@ export function route(opts, root = process.cwd()) {
 
 /** The route `start` records: `route`'s decision, with the three decisions the header names made in code. Returns
  *  `{token, exit, reason?, why?}` or `{refuse}` (a skipped stage only). Never throws. */
-export function decideStart(opts, root = process.cwd(), noAgentTool = false) {
+export function decideStart(opts, root = process.cwd(), noAgentTool = false, noForegroundAgent = false) {
   const cell = policyCell(opts.command, opts.mode, opts.stage);
   if (cell === SKIPPED || cell === null)
     return { refuse: `${opts.stage} does not run in ${opts.command}'s ${opts.mode} mode, so it has no route` };
   if (noAgentTool && cell === AGENT) return { token: inlineToken("no-agent-tool"), exit: 3, reason: "no-agent-tool" };
+  if (noForegroundAgent && cell === AGENT) return { token: inlineToken("no-foreground-agent"), exit: 3, reason: "no-foreground-agent" };
   const unavailable = (why) => ({ token: inlineToken("route-unavailable"), exit: 3, reason: "route-unavailable", why });
   let d;
   try {
@@ -560,8 +569,11 @@ function stageIsOpen(opts, base) {
 }
 
 /** `start`: route, then the stage-start marker. Returns `{exit, out: [lines], err: [lines]}`. */
-export function startStage(opts, { root = process.cwd(), noAgentTool = false, sessionId = null, base = join(root, DEFAULT_BASE) } = {}) {
-  const d = decideStart(opts, root, noAgentTool);
+export function startStage(
+  opts,
+  { root = process.cwd(), noAgentTool = false, noForegroundAgent = false, sessionId = null, base = join(root, DEFAULT_BASE) } = {}
+) {
+  const d = decideStart(opts, root, noAgentTool, noForegroundAgent);
   if (d.refuse) return { exit: 2, out: [], err: [d.refuse] };
   const err = [];
   if (d.exit !== 0) err.push(`${opts.stage} runs inline (${d.reason}) — ${INLINE_REMEDIES[d.reason]}${d.why ? `; ${d.why}` : ""}`);
@@ -613,16 +625,20 @@ function main(argv) {
     return 2;
   }
   let rest = argv.slice(1);
-  let noAgentTool = false;
+  const bare = { [NO_AGENT_TOOL]: false, [NO_FOREGROUND_AGENT]: false };
   if (sub === "start") {
-    const n = rest.filter((a) => a === NO_AGENT_TOOL).length;
-    if (n > 1) {
-      err(`${NO_AGENT_TOOL} was given more than once`);
-      return 2;
+    for (const flag of Object.keys(bare)) {
+      const n = rest.filter((a) => a === flag).length;
+      if (n > 1) {
+        err(`${flag} was given more than once`);
+        return 2;
+      }
+      bare[flag] = n === 1;
+      rest = rest.filter((a) => a !== flag);
     }
-    noAgentTool = n === 1;
-    rest = rest.filter((a) => a !== NO_AGENT_TOOL);
   }
+  const noAgentTool = bare[NO_AGENT_TOOL];
+  const noForegroundAgent = bare[NO_FOREGROUND_AGENT];
   const parsed = parseArgs(sub, rest);
   if (!parsed.ok) {
     if (sub === "read" || sub === "finish") out(unusableVerdict("usage").line);
@@ -634,7 +650,7 @@ function main(argv) {
 
   if (sub === "start" || sub === "finish") {
     const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? null;
-    const r = sub === "start" ? startStage(o, { root, noAgentTool, sessionId }) : finishStage(o, { root, sessionId });
+    const r = sub === "start" ? startStage(o, { root, noAgentTool, noForegroundAgent, sessionId }) : finishStage(o, { root, sessionId });
     for (const line of r.out) out(line);
     for (const line of r.err) err(line);
     return r.exit;
