@@ -32,7 +32,7 @@
 //       within 24h either direction, OR the scan cannot tell) → the pre-6.24.0 fail-closed default
 //       (`pharn/features/**` + `pharn/.run/**`);
 //     - no run open → PERMISSIVE. Inside the project it denies PHARN's own installed surface — `pharn/**`
-//       except `pharn/features/**`, `.claude/**` and `pharn.config.json` (case-folded, see `toKey()` /
+//       except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and `pharn.config.json` (case-folded, see `toKey()` /
 //       `isReserved()`) — plus `pharn/.run/writes-scope.json` itself and any path containing a backslash on a
 //       system whose separator is `/` (see BACKSLASHES, below), and allows every other in-project path.
 //       Outside the project it allows a path ONLY in three places — this project's own auto-memory folder,
@@ -141,8 +141,9 @@
 // starts hooks elsewhere and this file judges wherever it was started; the out-of-project places are read
 // from the hook's environment (`CLAUDE_CONFIG_DIR`, `HOME`, `TMPDIR` through `os.tmpdir()`) and from the
 // payload's session fields, so an environment that points one of them at a broad directory widens it; and a
-// HARD link is not resolved by either resolution, so the permissive posture judges it by its own name
-// (creating one needs Bash).
+// HARD link is not resolved by either resolution, so every posture judges it by its own name — under the
+// always-writable `pharn/.run/**` too, so a hard link there to a file only this guard covers is writable (protect
+// still catches its own files by inode; creating any hard link needs Bash).
 //
 // RUN MARKERS ARE READ, NEVER PARSED (6.24.0). `scanRuns()` tests PRESENCE (`lstat`, never followed — a
 // torn file, a directory, or a dangling link at that path still counts, fail-closed) and AGE (mtime within
@@ -480,10 +481,10 @@ const SCOPE_FILE = "pharn/.run/writes-scope.json";
 // directory or a dangling link cannot be read anyway. A plain object is carried as `record` even when its
 // `scope` is not an array, so the dev/unsignalled message keeps the origin line and the stale-scope
 // bullet the pre-6.24.0 message showed for that exact shape (GATE-2 review, minor 1).
-function dotPharnStateBad() {
+function dotPharnStateBad(root = ROOT) {
   // Both segments (7.0.0): the scratch root is `pharn/.run`, and an lstat of that path alone follows a symlink
   // at `pharn` without seeing it. A link at either segment is malformed; ENOENT at either is absence.
-  for (const dot of [path.join(ROOT, "pharn"), path.join(ROOT, "pharn", ".run")]) {
+  for (const dot of [path.join(root, "pharn"), path.join(root, "pharn", ".run")]) {
     try {
       const st = fs.lstatSync(dot);
       if (st.isSymbolicLink()) return true;
@@ -540,18 +541,9 @@ const RUN_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 function scanRuns(root) {
   const runs = [];
   const scanErrorDirs = [];
-  // Both segments of the scratch root (7.0.0), as dotPharnStateBad(): a link at `pharn` or at `pharn/.run`.
-  for (const seg of [path.join(root, "pharn"), path.join(root, "pharn", ".run")]) {
-    try {
-      const dot = fs.lstatSync(seg);
-      if (dot.isSymbolicLink()) {
-        return { runs: [], scanErrorDirs: RUN_STATE.map((s) => s.dir) };
-      }
-    } catch (err) {
-      if (!err || err.code !== "ENOENT") return { runs: [], scanErrorDirs: RUN_STATE.map((s) => s.dir) };
-      break; // absent: nothing below it can hold a run
-    }
-  }
+  // Both segments of the scratch root (7.0.0): the same test as the scope-file check, re-run here because the scan
+  // reads later (defense in depth — that check normally refuses the same link first).
+  if (dotPharnStateBad(root)) return { runs: [], scanErrorDirs: RUN_STATE.map((s) => s.dir) };
   for (const { dir } of RUN_STATE) {
     const stateDir = path.join(root, "pharn", ".run", dir);
     let st;
@@ -1084,7 +1076,7 @@ function denyMessage(blockedPath, scope, record, branch = "in-repo", ctx = {}) {
       "PHARN floor — write blocked (writes-scope guard, fix #7)\n" +
       `  Blocked path : ${shownPath}\n` +
       "  Active scope : (none set — installed project, no PHARN run open)\n" +
-      "WHY: with no scope set and no PHARN run open, an installed project's default denies PHARN's own installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json` (matched case-folded) — plus its own input `pharn/.run/writes-scope.json`. Your ordinary project source is NOT what this default denies.\n" +
+      "WHY: with no scope set and no PHARN run open, an installed project's default denies PHARN's own installed surface — `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and `pharn.config.json` (matched case-folded) — plus its own input `pharn/.run/writes-scope.json`. Your ordinary project source is NOT what this default denies.\n" +
       "FIX (pick one):\n" +
       "  • Declare this exact path in a Capability/command's `writes:` and re-run the scope-setter — a SET scope is authoritative in every posture and unlocks exactly the paths it names.\n" +
       "  • If this file genuinely needs a real edit: `pharn update` re-copies PHARN's shipped files from the source repository, or a human edits it directly outside the agent.\n" +

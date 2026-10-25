@@ -56,7 +56,7 @@
 // AFTER the ones above and each writing nothing:
 //   • PHARN'S OWN INSTALLED SURFACE, from a plan. In an INSTALLED project (`pharn.config.json` at cwd is a regular
 //     file whose JSON carries a non-empty string `skillsVersion` — enforce-writes-scope.cjs's posture signal) a
-//     `--from-plan` scope may not name `pharn/**` except `pharn/features/**`, `.claude/**` or `pharn.config.json`:
+//     `--from-plan` scope may not name `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` or `pharn.config.json`:
 //     the set enforce-writes-scope.cjs already reserves outside a run, matched by byte-equal copies of its
 //     `toKey()` / `isReserved()`. Those are PHARN's floor, guards, commands and config — what judges a run and
 //     instructs its later stages — and before this a model-written PLAN could scope a floor script that a
@@ -782,12 +782,14 @@ function main() {
   // Refuse PHARN's own installed surface from a plan, in an installed project (see the header). Layered after the
   // control-surface refusal; the dev checkout and an unsignalled tree never reach the membership test.
   if (mode === "--from-plan" && !allowPharnSurface && isPharnInstalledProject()) {
-    const offenders = scope.filter(isReserved);
+    // Judged as written AND with `..` collapsed: the two raw-prefix exemptions (`pharn/features/`, `pharn/.run/`)
+    // must not be a way past this refusal (`pharn/.run/../floor/x.mjs`). Only ever adds refusals.
+    const offenders = scope.filter((p) => isReserved(p) || isReserved(path.posix.normalize(String(p).replace(/\\/g, "/"))));
     if (offenders.length) {
       fail(
         `refusing to scope PHARN's own installed files from a plan: ${offenders.join(", ")}\n` +
           `  Declared in : ${file}\n` +
-          `  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); pharn/** (except pharn/features/**), .claude/** and pharn.config.json are PHARN's floor, guards, commands and config, which judge a run and instruct its later stages, and a plan is untrusted input (CONSTITUTION P2).\n` +
+          `  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); pharn/** (except pharn/features/** and pharn/.run/**), .claude/** and pharn.config.json are PHARN's floor, guards, commands and config, which judge a run and instruct its later stages, and a plan is untrusted input (CONSTITUTION P2).\n` +
           `  If you genuinely mean to change one of them (your own .claude/ commands or skills included): edit it yourself, outside the agent, or re-run this setter yourself with --allow-pharn-surface placed BEFORE --from-plan (an operator flag; no plan can set it). To update PHARN itself, use \`pharn update\`.\n` +
           `  Nothing was written; pharn/.run/writes-scope.json is unchanged.`
       );

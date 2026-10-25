@@ -99,7 +99,7 @@
 //
 // PROTECTED_SUBTREES is the ONE deliberate exception to exact matching, and it is NOT a return to the
 // removed branches. A canon directory cannot be spelled as an exact path, so it is matched as a ROOTED
-// PREFIX — `<guarded root>/memory-bank/…` — which is still trust-by-LOCATION. The removed fragment
+// PREFIX — `<guarded root>/pharn/memory-bank/…` — which is still trust-by-LOCATION. The removed fragment
 // branch denied a user's docs/ARCHITECTURE.md ANYWHERE in the tree because it matched a path SEGMENT
 // wherever it appeared; this matches only what actually sits under a guarded root's canon directory, so
 // a nested vendor copy at src/vendor/memory-bank/x.md is untouched. The honest over-block that remains

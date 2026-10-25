@@ -72,6 +72,27 @@ the copy byte for byte. These findings changed the work. None changes the intent
    lessons index changes because its generator's header cites `LIMITS.md §1c`, so it is regenerated, never edited. It
    drops eight declared files that turned out unchanged, and it adds the build scripts under `build/`.
 
+## Revision 4 (the review fix round)
+
+`REVIEW.md` found 0 blocking and 7 important / 7 minor advisory issues. The maintainer chose to fix them ("continue"
+at the post-review stop). The fix round is its own epoch: commit `f14f5837` records the build and its stage
+records as found, a second human patch lands next (pre-anchor, L68), and `/pharn-dev-build` then re-anchors and writes
+the agent-side fixes. Every changed path is already in `## Files`, so the new epoch needs no widening.
+
+- **Dated records keep the path they were true of** (the root cause of most findings). LIMITS §1d and §7 probe rows,
+  the reconciliation-record audit records, a check-bash-reconcile comment and the `legacyBase` migration constant
+  name their pre-7.0.0 paths again, each with a migration label.
+- **The reserved surface** names the `pharn/.run/` exemption wherever it is described, including the guard's
+  user-facing deny message.
+- **The setter judges a plan entry with `..` collapsed too**, closing `pharn/.run/../` (and the older
+  `pharn/features/../`) as a way past its installed-surface refusal, with a test.
+- **Coverage:** `scanRuns()` reuses `dotPharnStateBad()` (same behaviour, no unreachable duplicate), and an unused
+  fixture helper in `command-hygiene.test.mjs` is removed.
+- **Stale layout and contract sentences**, the versioning guide and the CHANGELOG [7.0.0] claims are corrected as
+  REVIEW.md lists.
+- **Human patch 2** (`apply.py` + `HUMAN-PATCH-2.md`): 14 edits to `enforce-writes-scope.cjs`,
+  `set-writes-scope.cjs`, `protect-trusted-paths.cjs` and `pharn/LIMITS.md`.
+
 ## Correcting the record (the prompt was verified against `56e3989`; this plan against live `7e71753c`)
 
 - **The base moved.** The prompt names SKILLS_VERSION 6.73.2. Live `main` is 6.75.0 at `7e71753c` (#393–#396). This

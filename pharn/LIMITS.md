@@ -297,9 +297,12 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
 
 | payload                                                       | hook                        | verdict                   |
 | ------------------------------------------------------------- | --------------------------- | ------------------------- |
-| `{"tool_name":"Bash",…{"command":"printf x >> pharn/LIMITS.md"}}`   | `protect-trusted-paths.cjs` | **exit 0** — not denied   |
+| `{"tool_name":"Bash",…{"command":"printf x >> LIMITS.md"}}` (pre-7.0.0 root path; migration) | `protect-trusted-paths.cjs` | **exit 0** — not denied   |
 | `{"tool_name":"Bash",…{"command":"printf x >> README.md"}}`   | `enforce-writes-scope.cjs`  | **exit 0** — not denied   |
-| `{"tool_name":"Edit","tool_input":{"file_path":"pharn/LIMITS.md"}}` | `protect-trusted-paths.cjs` | exit 2 — denied (control) |
+| `{"tool_name":"Edit","tool_input":{"file_path":"LIMITS.md"}}` (pre-7.0.0 root path; migration) | `protect-trusted-paths.cjs` | exit 2 — denied (control) |
+
+(Both probe tables in this file were measured when the doc sat at the root as `LIMITS.md`; migration: it is
+`pharn/LIMITS.md` since 7.0.0, and the verdicts carry over to that path.)
 
 - **Struck claim:** "the trusted docs are write-protected", "`writes:` is enforced", or "canon cannot be
   written", stated without a tool-surface qualifier. Each is true of `Write`/`Edit`/`MultiEdit`/
@@ -424,8 +427,8 @@ read off the wiring:
 
 | hook command run from               | payload          | exit                                             |
 | ----------------------------------- | ---------------- | ------------------------------------------------ |
-| `pharn/pharn-core`, relative wiring | `Edit pharn/LIMITS.md` | **1** — `Cannot find module`; the write proceeds |
-| repo root, relative wiring          | `Edit pharn/LIMITS.md` | 2 — denied                                       |
+| `pharn/pharn-core`, relative wiring | `Edit LIMITS.md` (pre-7.0.0 root path; migration) | **1** — `Cannot find module`; the write proceeds |
+| repo root, relative wiring          | `Edit LIMITS.md` (pre-7.0.0 root path; migration) | 2 — denied                                       |
 
 6.1.0 anchors both commands on `${CLAUDE_PROJECT_DIR}`. The bounds that remain:
 
@@ -456,8 +459,8 @@ read off the wiring:
   friction, not a hole.
 - **In an installed project, `enforce-writes-scope.cjs` is fail-closed only while PHARN is working
   (6.24.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it denies
-  PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`,
-  matched case-folded, with the `pharn/features/` exception matched as written, so a case or trailing-dot
+  PHARN's installed surface — `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and
+  `pharn.config.json`, matched case-folded, with the `pharn/features/` and `pharn/.run/` exceptions matched as written, so a case or trailing-dot
   variant of it is denied — plus its own input `pharn/.run/writes-scope.json` and, on a system whose separator
   is `/`, any path containing a backslash: there a backslash is part of a file name, while the guards' path
   folding reads it as a separator. It allows every other path inside the project, including the files
