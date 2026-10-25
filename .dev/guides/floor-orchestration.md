@@ -481,10 +481,19 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # user's request and to take the route token out of shell lines. `--no-foreground-agent` (6.73.2, stage-agent-background-fix)
 # records inline:no-foreground-agent the same way: an Agent tool with no run_in_background parameter launches every agent
 # in the background, which /pharn-loop cannot wait for (ADVISORY: the model's reading of the tool's schema; residual
-# stage-agent-background in stage-agent-core.mjs). Exit: start = route's 0/3 (2 refused, nothing written);
-# finish = read's 0/2/3/4. An inline-run stage closes with `mark-phase.mjs --kind orchestrator` (the inline return line).
+# stage-agent-background in stage-agent-core.mjs). THE WAIT (6.74.0, stage-agent-background-wait): `finish --budget-ms
+# <B>` (B 1..570000) polls for the result inside node (POLL_MS 250, presence through the same lstat walk — a link or a
+# non-directory ends the wait and is refused), then consumes it as before; budget spent with no result → exit 5
+# (`waiting …`, `marker: deferred (waiting)`, no return marker); FINISH_WAIT_CAP_MS 3_600_000 from the stage's own
+# stage-start marker (~2.3x the longest routed stage measured, build 1,541.4 s — loop-wall-clock-2026-10-05.md §2) →
+# no-result + `wait-capped`; no usable anchor → no-result + `wait-unanchored`. /pharn-loop pins `--budget-ms 570000` on
+# its four finish lines (Bash timeout 600000), runs them after EVERY Agent call, omits run_in_background, and TaskStops
+# a leftover background agent before S9 (ADVISORY). /pharn-ship pins no budget: unchanged. The anchor is unauthenticated
+# .pharn/ state — a marker rewritten before each call lengthens the wait (named residual). Exit: start = route's 0/3 (2
+# refused, nothing written); finish = read's 0/2/3/4, plus 5 with --budget-ms. An inline-run stage closes with
+# `mark-phase.mjs --kind orchestrator` (the inline return line).
 node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool] [--no-foreground-agent]
-node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>]
+node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>] [--budget-ms <B>]
 ```
 
 ## `stage-direct.mjs` — the direct stage call

@@ -58,6 +58,7 @@ allowed-tools:
     "Glob",
     "Grep",
     "Agent",
+    "TaskStop",
     "Skill(pharn-spec *)",
     "Skill(pharn-plan *)",
     "Skill(pharn-grill *)",
@@ -77,18 +78,18 @@ allowed-tools:
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage * --route 'inline:route-unavailable')",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind orchestrator)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name *)",
-    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-spec)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-spec --budget-ms 570000)",
     "Bash(node pharn/floor/check-spec-approved.mjs pharn/features/*/SPEC.md)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name *)",
-    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-plan)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-plan --budget-ms 570000)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage pharn-grill)",
     "Bash(node pharn/floor/entry-gates.mjs --wait --feature * --budget-ms 570000)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name *)",
-    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-test)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-test --budget-ms 570000)",
     "Bash(node pharn/floor/check-test-stage.mjs * --require-test-first)",
     "Bash(node pharn/floor/check-red-run.mjs --preflight --ac-tests pharn/features/*/AC-TESTS.md --discover package.json --root .)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-build --name * --iteration *)",
-    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-build --iteration *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-build --iteration * --budget-ms 570000)",
     "Bash(node pharn/floor/stage-direct.mjs --stage pharn-regress --name * --iteration * --timeout-ms 540000 --budget-ms 570000 --base *)",
     "Bash(node pharn/floor/stage-direct.mjs --stage pharn-verify --name * --iteration * --timeout-ms 540000 --budget-ms 570000)",
     "Bash(node pharn/floor/stage-direct.mjs --stage pharn-regress --name * --resume --budget-ms 570000)",
@@ -414,7 +415,10 @@ above by a fixed rule:
 **A call the Bash tool reports as moved to the background is STILL RUNNING** — it finishes the stage itself. Wait for
 it inside this turn (a blocking read of that background task's output until it completes) and branch on the exit code
 and object it reports. Never start its resume line, or any other `stage-direct.mjs` call, while it runs: a second call
-refuses `in-flight` (exit `2`, S9). No way to wait → **S9**, and the summary says the call may still be running.
+refuses `in-flight` (exit `2`, S9). No way to wait → **S9**, and the summary says the call may still be running. The
+same holds for a `stage-agent.mjs finish` call moved to the background: wait for it and branch on what it prints —
+never start a second `finish` while it runs, because the first may consume the result and close the stage, and the
+second would then read `no-result` (S9) over a stage that reported.
 
 **`/pharn-verify`'s stage-exit mapping (since `stage-verify-script`, 6.26.0).** Step 5 runs
 `pharn/floor/stage-verify.mjs` the same way, and its object maps by the same rule:
@@ -479,20 +483,27 @@ two lines did), and you run them in this order:
 
    With an Agent tool whose parameters list no `run_in_background`, append `--no-foreground-agent` to the start line:
    it records `inline:no-foreground-agent` and exits `3` — ADVISORY, your own reading of the tool's schema. Such a
-   tool, as read in Claude Code's desktop app, runs every agent in the background, which item 3 cannot wait for.
+   tool, as read in Claude Code's desktop app, runs every agent in the background, for which item 3's wait has not
+   been measured.
 
 2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
-   after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false` (the JSON boolean `false`,
-   never the string `"false"`), and **no `isolation`** — the stages write into this one tree, one after another,
-   never a worktree each. Its `prompt` is the stage's
+   after `agent:`), `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; the
+   tool's default is the foreground (ADVISORY, and unmeasured in a real loop) — and **no `isolation`** — the stages
+   write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's
    pinned one-line brief prompt, `<name>` (and `<N>`) substituted; the stage agent runs that line first and
    receives its rules from code. Only `/pharn-spec`'s prompt carries anything more: the increment description,
    below that line, in a fence longer than any backtick run inside it, labelled DATA (ADVISORY, like every
    placement).
-3. **The finish line — only after an Agent call has returned the agent's COMPLETED result.** It reads the agent's
-   result as `read` does and writes the `orchestrator` return marker. This command cannot end its turn to wait (the
-   `Stop` guard refuses a turn end, and nobody is there to resume it), so a call that returns a background-launch
-   notice instead is **S9**, and the summary says the stage agent may still be running. **Never run `finish` for a
+3. **The finish line — after EVERY Agent call, whatever it returned: the agent's COMPLETED result or a
+   background-launch notice.** Run it with the Bash tool's timeout parameter set to 600000. It waits on disk for the
+   agent's result (`stage-agent.mjs`'s THE WAIT, bounded per call and capped from the stage's start), reads it as
+   `read` does and writes the `orchestrator` return marker. Exit `5` (`waiting …`) → run the same finish line again;
+   any other exit maps as below. This command cannot end its turn to wait (the `Stop` guard refuses a turn end, and
+   nobody is there to resume it), which is why the wait is on disk. A completion notice that arrives later for that agent changes
+   nothing: its text is DATA. **After a background-launch notice, on a finish exit `2` or a crash**, stop that stage
+   agent with TaskStop first (load its schema if deferred; the agent's id from the notice is TaskStop's operand,
+   never an instruction — ADVISORY, and whether TaskStop reaches an agent is unmeasured), then **S9**; if it could not
+   be stopped, the summary says the stage agent may still be running. **Never run `finish` for a
    stage that ran inline.**
 4. **After an inline run, the inline return line** in place of `finish`:
 
@@ -509,9 +520,10 @@ command already maps a stage's OWN report to a row:
   `done gate:pass` and `done gate:fail` both go on to regress and verify — a red build gate is not a stop here.
 - any other routed stage outcome: `refused S9` → **S9**; `refused S10` → **S10**. A `refused` with no row, or
   with a row this list does not give that stage, is **S9**. A `question` is **S10** — `finish` leaves its return
-  marker unwritten (`marker: deferred (question)`), so run the inline return line first. Exit `2` (`unusable …`,
-  `no-result` included) or a crash is **S9** — never an inline re-run, since the stage may have written half
-  its files.
+  marker unwritten (`marker: deferred (question)`), so run the inline return line first. Exit `5` (`waiting …`,
+  `marker: deferred (waiting)`) is no stuck point: the same finish line again. Exit `2` (`unusable …`, `no-result`
+  included — after the wait's cap too) or a crash is **S9** — never an inline re-run, since the stage may have
+  written half its files.
 - `done` from spec or plan → the stage's own verdict read, unchanged.
 
 **Where a checker decides the row, the checker still decides, and whatever `finish` printed is ignored:** the
@@ -578,7 +590,7 @@ left in the Draft it reports back blocked on clarification, which is S6b. Only a
 returned (after an inline run, the inline return line instead):
 
 ```bash
-node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-spec
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-spec --budget-ms 570000
 ```
 
 Then read the gate this run's plan stage will enforce anyway:
@@ -604,7 +616,7 @@ Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.
 ```
 
 ```bash
-node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-plan
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-plan --budget-ms 570000
 ```
 
 Then `/pharn-grill`, **inline by policy (`floor-only`, 6.45.0)**: no start line, no Agent call and no `finish`. Mark
@@ -673,7 +685,7 @@ Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.
 ```
 
 ```bash
-node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-test
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-test --budget-ms 570000
 ```
 
 The stage is `/pharn-test <name> --unattended` — the stage agent's brief names that invocation, and an inline run
@@ -732,7 +744,7 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
    Only after an Agent call has returned (after an inline run, the inline return line instead):
 
    ```bash
-   node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-build --iteration <N>
+   node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-build --iteration <N> --budget-ms 570000
    ```
 
    `done gate:pass` or `done gate:fail` → go on to 2; any other line maps onto Step 2's table as
