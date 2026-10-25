@@ -53,6 +53,11 @@ deferred:
 
 ## Not done here (named)
 
+- `CLAUDE.md` keeps two `LIMITS.md §7` cites (the backslash-symlink bound and the hook-wiring measurement) under
+  the doc's old name. CI's instruction-growth check caps what one PR may add to `CLAUDE.md` at 2,048 bytes, and
+  this PR adds 1,968 with those two lines left unchanged. They name the doc, not a link. Update them in a follow-up
+  PR.
+
 - `/pharn-loop` acceptance run on a scratch project installed with pharn-cli 0.14.x (`pharn init --ref <this branch>`).
   It needs the branch pushed, which is the maintainer's call.
 - Cross-repo follow-ups, listed in CHANGELOG [7.0.0]: `pharn-dev/skills` commands.md, `pharn-dev/pharn-ci` probing
