@@ -53,7 +53,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   (`pharn.config.json` carries a non-empty `skillsVersion`), that same narrow default now applies **only
   while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open** — a marker file under
   `pharn/.run/<command>/<name>/active.json`, fresh within 24 h. **Outside an open run, the guard instead denies
-  PHARN's own installed surface** — `pharn/**` except `pharn/features/**`, `.claude/**` and
+  PHARN's own installed surface** — `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and
   `pharn.config.json`, matched case-folded — plus its own input `pharn/.run/writes-scope.json`, and allows
   every other path inside the project, **including your ordinary source** (`src/app.ts`, `package.json`,
   `README.md`). That includes files Claude Code loads at session start — the project's `CLAUDE.md`,

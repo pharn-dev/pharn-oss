@@ -1345,3 +1345,26 @@ test("★ 7.0.0 promotion origin: a symlink at EITHER segment of the scratch roo
     fs.rmSync(elsewhere, { recursive: true, force: true });
   }
 });
+
+// 7.0.0 review (fix round): the installed-surface refusal judges each plan entry as written AND with `..` collapsed,
+// so neither raw-prefix exemption (`pharn/features/`, `pharn/.run/`) is a way past it.
+test("★ 7.0.0 an installed project's plan may not reach PHARN's own files through `pharn/.run/../` or `pharn/features/../`", () => {
+  for (const entry of [
+    "pharn/.run/../floor/check.mjs",
+    "pharn/features/../floor/check.mjs",
+    "pharn/.run/../memory-bank/lessons-learned.md",
+  ]) {
+    const cwd = tmp();
+    seedInstalled(cwd);
+    const r = setter(cwd, "--from-plan", planWith(cwd, entry));
+    assert.equal(r.status, 1, `${entry}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, /refusing to scope PHARN's own installed files from a plan/);
+    assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "nothing written");
+  }
+  // controls: the two exemptions themselves are still scopable
+  for (const entry of ["pharn/.run/notes.json", "pharn/features/demo/SPEC.md"]) {
+    const cwd = tmp();
+    seedInstalled(cwd);
+    assert.equal(setter(cwd, "--from-plan", planWith(cwd, entry)).status, 0, entry);
+  }
+});

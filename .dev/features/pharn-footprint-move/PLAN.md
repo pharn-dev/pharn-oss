@@ -357,6 +357,8 @@ Section A: Phase A, pre-anchor (the agent's part; the 10 hook-protected files ar
 - `pharn/floor/run-marker.test.mjs` — path rewrite, plus the hand fix where the table names it
 - `.dev/features/pharn-footprint-move/apply.py` — the pinned human patch for the 10 hook-protected files and the two renames
 - `.dev/features/pharn-footprint-move/HUMAN-PATCH.md` — the readable twin of apply.py
+- `.dev/features/pharn-footprint-move/HUMAN-PATCH-2.md` — the readable twin of apply.py run 2 (fix round); committed in `2ae9f024`, declared after
+  that commit
 - `.dev/features/pharn-footprint-move/rewrite-hits.tsv` — one row per rewrite hit (L75)
 - `.dev/features/pharn-footprint-move/write-log.tsv` — every hook-checked helper write and its verdict
 - `.dev/floor/node-test-results-reporter.test.mjs` — path rewrite, plus the hand fix where the table names it

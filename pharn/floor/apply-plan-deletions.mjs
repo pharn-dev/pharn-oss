@@ -33,7 +33,7 @@
 //
 // THE ON-DISK SPELLING IS JUDGED TOO (6.56.0 review, blocking finding). `bad-path` and `control-path` run over the
 // declared spelling AND, once the leaf is a regular file, over `realpathSync.native`'s spelling of it: a case-insensitive
-// volume equates spellings no lexical fold reproduces — on APFS `LIMITſ.md` (U+017F) IS `pharn/LIMITS.md`, and the
+// volume equates spellings no lexical fold reproduces — on APFS `pharn/LIMITſ.md` (U+017F) IS `pharn/LIMITS.md`, and the
 // spelling-only test deleted it. BOUND: the identity is read on the volume as it stands when this runs; a platform whose
 // realpath does not return the stored spelling falls back to the declared-spelling test and the dev/ino comparison.
 // BOUND, check-then-act (TOCTOU): every path is validated first and unlinked after, and `unlinkSync` re-resolves the
@@ -95,7 +95,7 @@ class Refusal {
 }
 
 /** The always-reconciled set, compared exactly and case-folded (the guards case-fold; a case-insensitive volume would
- *  otherwise let `limits.md` name `pharn/LIMITS.md`). */
+ *  otherwise let `pharn/limits.md` name `pharn/LIMITS.md`). */
 function controlMatcher(data) {
   const lower = (xs) => xs.map((x) => x.toLowerCase());
   const folded = {
@@ -148,7 +148,7 @@ export function planDeletions(planText, root, data) {
   const isControl = controlMatcher(data);
   // The refusal rules over ONE spelling of a path. Run over the declared spelling first and, once the leaf is known to be
   // a regular file, over its ON-DISK spelling too (below) — a case-insensitive volume equates spellings no lexical fold
-  // reproduces (U+017F `ſ` names `s` on APFS), so a spelling test alone let `LIMITſ.md` delete pharn/LIMITS.md (6.56.0 review).
+  // reproduces (U+017F `ſ` names `s` on APFS), so a spelling test alone let `pharn/LIMITſ.md` delete pharn/LIMITS.md (the 6.56.0 review's case, at today's path).
   const spellingRefusal = (p, shown) => {
     const why = badPath(p);
     if (why) return new Refusal("bad-path", shown, `the path is ${why}`);

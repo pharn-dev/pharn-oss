@@ -34,3 +34,13 @@ plan scope (316 paths, equal to the 316 `## Files` bullets, L71) and then anchor
   `rebuild.sh` documents the order. `handfix-9d` (the one-line ALGO pin above) is described here rather than added
   as a file, because adding a path after the anchor would widen the plan (`plan-widened-after-anchor`).
 - The L57/L61 probe added no ignore entry (PLAN revision 3 item 6).
+
+## Fix round (PLAN.md revision 4)
+
+- Human patch 2 (`apply.py` run 2, 14 edits to three hooks and `pharn/LIMITS.md`) landed and was committed in
+  `2ae9f024`, before this round's anchor. All four files are byte-identical to the tested scratch copy.
+- Step 0 re-anchored the epoch (3,240 paths, scope 329; the setter needed `--allow-claude-dir` because Section C names
+  the hooks, which protect-trusted-paths still denies to every write tool). Step 1: the spec hash is unchanged.
+- Step 2 wrote the 19 agent-side fixes, byte-identical to the copy. Their test suites ran there first: 1,755 tests,
+  one expected failure, which the round also fixes by exempting and pinning the migration path.
+- Steps 2b/3: `format:check`, `lint` and `lint:md` exit 0; `FLOOR: GREEN — 37 capabilities checked`.

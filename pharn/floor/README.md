@@ -145,7 +145,7 @@ payload identifies that scratchpad, the out-of-root denial gains one bullet nami
 fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
 run is open** (a marker under `pharn/.run/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
 or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies PHARN's own installed
-surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`, matched case-folded
+surface — `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and `pharn.config.json`, matched case-folded
 — plus `pharn/.run/writes-scope.json` and any path containing a backslash, and allows every other path inside
 the project, including your ordinary source. Outside the project it then allows only this project's
 auto-memory folder (`<claude-config-dir>/projects/<key>/memory/**`, for the key of the folder holding the
@@ -177,7 +177,7 @@ symmetric) — the guard never parses a marker's contents.
 The **setter** (`set-writes-scope.cjs`) is separate from both hooks: it refuses to _authorize_ those
 same control-surface paths at scope-set time — exits non-zero and writes nothing if the parsed scope names
 one, unless the operator passes `--allow-claude-dir`. Since 6.61.0 it also refuses, in an installed project, a
-`--from-plan` scope naming PHARN's own surface (`pharn/**` except `pharn/features/**`, `.claude/**`,
+`--from-plan` scope naming PHARN's own surface (`pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**`,
 `pharn.config.json`) unless the operator passes `--allow-pharn-surface`, and a scope whose origin is a
 memory-promote command while a `/pharn-loop` run marker is open; it honors either opt-in only before the mode, and
 its `## Files` reader skips fenced code, refusing a list that reads differently depending on how a fence nests in a

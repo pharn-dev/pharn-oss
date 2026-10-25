@@ -45,9 +45,9 @@ docs) from **the apparatus used to build it** (under `.dev/`):
 - **Product surface (`pharn/` + root docs):** the capability tree under `pharn/` — `pharn/pharn-contracts/`
   (schemas; the layer-tree root), `pharn/pharn-core/` (e.g. `seam-resolver/`), `pharn/pharn-pipeline/grillers/`
   (grillers), `pharn/pharn-review/` (code-review lenses) — **plus the product floor** `pharn/floor/` (the
-  deterministic checkers + their tests that the `/pharn-*` product commands run on a user's code). Two of the
-  four trusted docs live here too (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`); the other two
-  (`pharn/THREAT-MODEL.md`, `pharn/LIMITS.md`), `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`,
+  deterministic checkers + their tests that the `/pharn-*` product commands run on a user's code). All four
+  trusted docs live here too (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`, and since 7.0.0
+  `pharn/THREAT-MODEL.md` and `pharn/LIMITS.md`); `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`,
   `SKILLS_VERSION` and `MIN_CLI` sit at the root; the **product-pipeline** artifacts (`SPEC.md`, …) live under
   `pharn/features/`, which is where they MOVED in 5.0.0 — a root `features/` collided with a project's own
   (Cucumber's default glob; feature-sliced architectures). This is what a user clones.

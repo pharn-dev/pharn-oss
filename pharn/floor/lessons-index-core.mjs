@@ -403,17 +403,17 @@ export function buildIndex(targetDir, profile = PRODUCT_PROFILE) {
   }
   const content = renderIndex(entries, profile);
 
-  // Neither `pharn/.run/` (the product outPath) nor `docs/` (the dev one) is in pharn/floor/validate.mjs's
-  // EXCLUDE_SEGMENTS (which holds only .claude/commands, .dev, pharn/floor, node_modules and .git), so the
-  // generated file lands on the validate-SCANNED surface (lessons-learned.md L10) — being gitignored does not
-  // exempt a file from validate's walk.
+  // `docs/` (the dev outPath) is not in pharn/floor/validate.mjs's EXCLUDE_SEGMENTS, so that generated file lands on
+  // the validate-SCANNED surface (lessons-learned.md L10) — being gitignored does not exempt a file from validate's
+  // walk. The product outPath `pharn/.run/` IS excluded since 7.0.0; the refusal is kept for both profiles, which
+  // is stricter than the product one needs (fail-closed).
   // validate CHECK 5 fires on any file containing BOTH `rule_id:` and `problem:` and lacking the
   // enum-gated/free-text split documentation — so a pair of canon titles could otherwise RED a user's
   // floor for a reason unrelated to their code. Refuse rather than emit it (fail-closed, P5).
   if (/rule_id:/.test(content) && /problem:/.test(content)) {
     throw new Error(
       `lessons-index: the rendered index contains both \`rule_id:\` and \`problem:\` (from canon free text) — ` +
-        `refusing to emit it, because ${profile.outPath} sits on validate.mjs's scanned surface and would trip CHECK 5`
+        `refusing to emit it, because an index on validate.mjs's scanned surface (docs/ is; pharn/.run/ is not) would trip CHECK 5`
     );
   }
   return { status: STATUS_OK, entries, content };

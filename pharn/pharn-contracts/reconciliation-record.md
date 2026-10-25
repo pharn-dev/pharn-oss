@@ -36,7 +36,8 @@ mistake, which is the entire population of the `L19`/`L20` failures it was built
 control against an attacker**. Only the always-reconciled control surface resists that actor, because
 only it is anchored in committed git objects rather than in the baseline. Since 6.53.0 that surface is the guard
 files and the floors **plus the human-only surface and memory-bank canon** (§4a). Before 6.53.0, a forged baseline
-entry cleared a Bash edit of `pharn/LIMITS.md`.
+entry cleared a Bash edit of
+`LIMITS.md` (migration: now `pharn/LIMITS.md`).
 
 **Struck (P0), each for a stated reason:**
 
@@ -392,7 +393,8 @@ it.
 
 ## 4a. The human-only surface is always reconciled (6.53.0)
 
-**Why (P7, measured — audit 2026-10-07).** In the audit's fixture, a Bash edit of `pharn/LIMITS.md` followed by a
+**Why (P7, measured — audit 2026-10-07).** In the audit's fixture, a Bash edit of
+`LIMITS.md` (migration: now `pharn/LIMITS.md`) followed by a
 rewrite of its baseline entry read `CLEAN`. The four trusted docs were not always-reconciled, so the forgeable
 baseline was their only reference. A second hole sat in the HEAD comparison itself: `git diff HEAD` never lists an
 **untracked** file, so a control path absent at HEAD could be created through Bash and hidden the same way. With no

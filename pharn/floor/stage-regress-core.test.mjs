@@ -41,9 +41,12 @@ test("★ LOAD GRAPH — stage-regress-core.mjs imports exactly gate-run-core.mj
 // ── REGRESS_PATHS / PHASES ───────────────────────────────────────────────────────────────────────────
 test("REGRESS_PATHS: every entry sits under the state root, and loop-fresh-core.mjs's DEFAULT_STAMPS derive from it", () => {
   for (const [k, v] of Object.entries(REGRESS_PATHS)) {
-    if (k === "root") continue;
+    if (k === "root" || k === "legacyBase") continue;
     assert.ok(v.startsWith(REGRESS_PATHS.root + "/"), `${k} (${v}) must sit under ${REGRESS_PATHS.root}`);
   }
+  // 7.0.0: the pre-6.50 nested base is a MIGRATION path — it keeps the old state root it was created under, so the
+  // leftover cleanup and entry's base-slot guard still find a real upgrade leftover there.
+  assert.equal(REGRESS_PATHS.legacyBase, ".pharn/pharn-regress/base"); // the migration path
   assert.equal(REGRESS_PATHS.head, "pharn/.run/pharn-regress/head");
   assert.equal(REGRESS_PATHS.baseGates, "pharn/.run/pharn-regress/base-gates");
   assert.equal(REGRESS_PATHS.stageJson, "pharn/.run/pharn-regress/stage.json");

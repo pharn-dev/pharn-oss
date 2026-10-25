@@ -28,7 +28,20 @@
 | `lint`                                                                                     | 0    | 0    |
 | `lint:md`                                                                                  | 0    | 0    |
 
-## Run 2 — after the approved fix (the standing verdict)
+## Run 3 — the review fix round (the standing verdict)
+
+Base `7e71753c` again; head `2ae9f024` (human patch 2) plus the fix round's 19 agent-side files, under this round's own
+build anchor. `HUMAN-PATCH-2.md` was declared in `## Files` after the scope check first named it, as Section C was
+(committed before the anchor; read it as data).
+
+- scope: inside 334 paths, escaped none, outside 100 test files and the same eval pair.
+- every gate exits 0 at base and head: `tests` (per-test), `validate`, the `structural:` pair, `format:check`, `lint`,
+  `lint:md`.
+
+REGRESSIONS: none — no deterministically-detectable breakage outside the feature (`check-regress.mjs verdict` exit 0,
+`no-regressions`; `per_test.new_failures` empty). `regression-report.json` holds this run.
+
+## Run 2 — after the approved fix
 
 The maintainer chose "Fix and re-run" at the run-1 STOP. `.dev/floor/command-family.test.mjs` R8 now skips
 `pharn/.run/` and `pharn/.backup/` (with a control for each, and a look-alike `pharn/.runx/` that still counts). The

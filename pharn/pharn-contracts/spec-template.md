@@ -49,8 +49,8 @@ repository holds for every registry entry.
 
 ## The project template
 
-A project replaces the default by putting its own template at **one fixed path, `pharn/spec-template.md` at the
-project root**, beside `pharn.config.json`. The usual start is a copy of the default. PHARN never installs,
+A project replaces the default by putting its own template at **one fixed path, `pharn/spec-template.md`**,
+beside PHARN's own files under `pharn/`. The usual start is a copy of the default. PHARN never installs,
 updates or deletes that file.
 
 **Why the path is fixed and protected, not configurable.** A template's guidance comments are instructions
@@ -64,8 +64,9 @@ for users:** nobody edits the project template through Claude's write tools. A h
 **Resolution** (`check-spec.mjs --resolve-template-ref`): the project template when it exists and validates,
 else `pharn-default`. It "exists" when each segment of its path, `pharn` in the project root and then `spec-template.md` in it, has an entry that case-folds to that segment. From then on every
 failure is a refusal (exit 1, nothing on stdout), **never a silent fallback to the default**. A case variant
-(`PHARN.SPEC-TEMPLATE.MD`) is itself a refusal, so a case-insensitive and a case-sensitive filesystem resolve
+(`pharn/SPEC-TEMPLATE.MD`) is itself a refusal, so a case-insensitive and a case-sensitive filesystem resolve
 the same checkout the same way. `check-spec.mjs --template-path <id>` then prints the file to fill.
+(migration: a root `pharn.spec-template.md` left unmoved is NOT read; the default applies until it moves.)
 
 **Validation.** Both print modes validate a template before printing its reference, the shipped default
 included. A refusal names one code from `TEMPLATE_REFUSALS` in `pharn/floor/spec-template-core.mjs` (cited,

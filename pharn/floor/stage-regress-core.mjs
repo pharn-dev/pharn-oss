@@ -91,7 +91,7 @@ export const REGRESS_PATHS = Object.freeze({
   // LEGACY (regress-base-integrity): the BASE worktree's location until 6.49.x, nested in the project. It is never created
   // now (base-worktree.mjs puts the checkout in the temp root); it is CLEARED at every fresh start as an upgrade
   // leftover, and entry-gates.mjs still refuses its base slot while one stands there.
-  legacyBase: "pharn/.run/pharn-regress/base",
+  legacyBase: ".pharn/pharn-regress/base", // migration: the pre-7.0.0, pre-6.50 nested base; never created now
   scopeJson: "pharn/.run/pharn-regress/scope.json",
   stageJson: "pharn/.run/pharn-regress/stage.json",
   // 6.40.0 — the HEAD install check's result (install-drift.mjs), written at head-init and re-read at render, so a

@@ -3,7 +3,7 @@
 // the BASE worktree changes, never when a regress rule does. No CLI; stage-regress.mjs is its only caller.
 //
 // ===================================== THE RECORDED FAILURE (P7) =====================================
-// Until 6.49.x the BASE worktree was `pharn/.run/pharn-regress/base`, NESTED inside the project. Node's module resolution
+// Until 6.49.x the BASE worktree was `.pharn/pharn-regress/base` (the pre-7.0.0 path; migration note), NESTED inside the project. Node's module resolution
 // walks every ancestor's `node_modules`, and npm's run-script prepends every ancestor's `node_modules/.bin` to PATH, so
 // a base gate reached the HEAD tree's dependencies whenever the base did not shadow them — reproduced (audit fixture f6):
 // with `--no-install`, the base `test` imported `<project>/node_modules/mydep` and the base `typecheck` ran

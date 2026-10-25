@@ -37,24 +37,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
        baseline left under `.pharn/` is never read again, so an interrupted loop's Stop guard is off.
     2. Run `pharn update` with `@pharn-dev/pharn` 0.14.0 or later. It moves `memory-bank/` and the SPEC template, and
        removes the root copies of the two docs that you never edited. If it reports a move it could not make, make
-       that move by hand: until then the root `memory-bank/` is not write-protected.
+       that move by hand: until then PHARN does not read the unmoved path (the default SPEC template applies, and the
+       root `memory-bank/` is no longer canon), and the guard no longer denies writes to it.
     3. Add `pharn/.run/`, `pharn/.backup/` and `pharn/.lock*` to `.gitignore`. This is required: reconcile exempts
-       scratch only through git-ignore, so without it every `/pharn-verify` reports `pharn/.run/**`.
-    4. Delete the old `.pharn/`, except `.pharn/ci.yml`.
+       scratch only through git-ignore, so without it the files a run writes under `pharn/.run/` read as escapes and every
+       `/pharn-verify` FAILs.
+    4. Delete the old `.pharn/`, except `.pharn/ci.yml`. A leftover `.pharn/` that is not git-ignored now counts as
+       changed paths and a dirty tree: it is no longer the excluded state root.
   - There is no automatic way back to 6.x. A downgrade means moving the four paths back by hand.
-  - The write guards follow the move. `protect-trusted-paths.cjs` protects the four moved paths and the
-    `pharn/memory-bank/` canon, with the same case-fold, trailing dot/space and symlink handling. It no longer
-    protects the old root names, which are a user's own files again. `enforce-writes-scope.cjs`'s always-writable
+  - The write guards follow the move. `protect-trusted-paths.cjs` denies Write/Edit/MultiEdit/NotebookEdit writes to the four
+    moved paths and the `pharn/memory-bank/` canon (a Bash write reaches them, as before), with the same case-fold, trailing dot/space and symlink handling. It no longer
+    denies the old root names, which are a user's own files again. `enforce-writes-scope.cjs`'s always-writable
     root is `pharn/.run/**`. In an installed project outside a run it is exempt from the reserved `pharn/**` surface,
     exactly as `pharn/features/**` is, and matched as written. A symlink at `pharn` or at `pharn/.run` is refused
-    wherever a symlink at `.pharn` was. Non-canon files under `pharn/memory-bank/` are reserved outside a run, a
-    change in the deny direction. The `/pharn-loop` Stop guard reads `pharn/.run/pharn-loop/`.
+    wherever a symlink at `.pharn` was. The `/pharn-loop` Stop guard reads `pharn/.run/pharn-loop/`.
   - Every floor walk that starts at the state root now also refuses a symlink at `pharn` above it (`build-gate`,
     `run-gates`, `run-marker`, `stage-agent`, `stage-direct`). The five capability walkers (`validate`, the
     catalog, `count-grillers`, `count-lenses`, `count-verifiers`) skip `pharn/.run/`, and also `pharn/.backup/`,
     where pharn-cli 0.14 keeps full capability copies.
-  - `worktree-fingerprint`'s ALGO moves from `/2` to `/3`, because the state root it excludes moved. A gate stamp
-    recorded before the update reads as a moved tree once, so that stage re-runs (the fail-closed direction).
+  - `worktree-fingerprint`'s ALGO moves from `/2` to `/3`, because the state root it excludes moved. A stamp
+    recorded before the update lives under `.pharn/`, which is never read again, so that stage simply re-runs; a `/2`
+    stamp copied into `pharn/.run/` by hand would read as a moved tree. Either way it re-runs (fail-closed).
+  - A symlinked `pharn/` (a vendored or shared install) is now refused as a link above the scratch root: in an
+    installed project the write guard then denies every write, and the runners refuse their state root. Use a real
+    directory.
+  - `set-writes-scope.cjs` also judges each `--from-plan` entry with `..` collapsed, so an installed project's plan
+    cannot reach PHARN's own files through `pharn/.run/../` (or the older `pharn/features/../`).
+  - Two merged entries further down link `./LIMITS.md` and `./THREAT-MODEL.md`. Those links no longer resolve, and
+    merged entries are frozen: the docs are at `pharn/LIMITS.md` and `pharn/THREAT-MODEL.md`.
   - Not moved: `.pharn/ci.yml`, because pharn-ci still reads it there.
   - Follow-ups in other repositories, not done here:
     - `pharn-dev/skills`: `plugins/pharn/skills/pharn-cli/references/commands.md` still documents `.pharn.lock`,

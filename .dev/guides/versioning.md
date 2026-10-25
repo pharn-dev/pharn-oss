@@ -14,10 +14,10 @@ evidence it does not exist. It fetches this repository, records the exact instal
 user's `pharn.config.json`, and its `pharn status` / `pharn update` compare that install against this
 file. **Bounded, and stated:** the versioning UNIT is the product surface, which is not the same set as
 "files an install contains" — the installer copies only the capabilities selected for the project, never
-the whole `pharn/` capability tree. **All four trusted docs DO land**, and all four bump. Since
-`@pharn-dev/pharn` 0.4.0 (pharn-cli `7c54820`) the installer copies `pharn/THREAT-MODEL.md` and `pharn/LIMITS.md` at
-the root beside the two under `pharn/`, and `MIN_CLI` (0.5.0) makes every CLI that honors it refuse
-anything older. The gate cannot reach a pre-0.4.0 CLI, because `minCliGate` itself first shipped in
+the whole `pharn/` capability tree. **All four trusted docs DO land**, and all four bump. From
+`@pharn-dev/pharn` 0.4.0 (pharn-cli `7c54820`) until 7.0.0 the installer copied `THREAT-MODEL.md` and `LIMITS.md` at
+the root beside the two under `pharn/`. Since 7.0.0 all four sit under `pharn/` (pharn-cli 0.14.0 moves an existing
+install's), and `MIN_CLI` (0.14.0) makes every CLI that honors it refuse anything older. The gate cannot reach a pre-0.4.0 CLI, because `minCliGate` itself first shipped in
 0.4.0. Such a CLI omits the two root docs, and it is already broken on this tree by the 5.0.0
 relocation.
 
@@ -31,7 +31,8 @@ tree** — a relocation of an installed path, a frontmatter/contract change that
 installs — never merely because `SKILLS_VERSION` moved; most releases leave it untouched. It went in at
 `0.5.0` with the 5.0.0 `features/` → `pharn/features/` relocation, because a pre-0.5.0 CLI looks for the
 boundary contract at the old root, finds nothing, and — both of its readers being existence-guarded —
-installs it **silently, with no error and no warning**. It did **not** move for 6.27.0's stage-model routing,
+installs it **silently, with no error and no warning**. It moved to `0.14.0` with the 7.0.0 relocation
+(`pharn-footprint-move`) for the same reason: an older CLI looks for the two docs and the canon at the old paths. It did **not** move for 6.27.0's stage-model routing,
 although `models.stages` became a run-time input then: a pre-0.7.0 CLI writes a block (`opus-4-8`/`sonnet-5`,
 a top-level `default`) that `check-model-config.mjs` REDs, so every routed stage of such an install runs inline
 as `inline:config-red` — loudly, with `pharn update` from a CLI ≥ 0.7.0 (which migrates the block) named as the

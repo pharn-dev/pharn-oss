@@ -5480,14 +5480,7 @@ function gitFixture({ reflog = true } = {}) {
   const head = () => git("symbolic-ref", "--short", "-q", "HEAD").stdout.trim() || `detached@${git("rev-parse", "HEAD").stdout.trim()}`;
   const hasBranch = (b) => git("show-ref", "--verify", "--quiet", `refs/heads/${b}`).status === 0;
   const sh = (cmd) => spawnSync("sh", ["-c", cmd], { cwd: dir, encoding: "utf8" });
-  /** What a failed Step 6c leaves before Step 6d: a staged change and its NUL-separated stage list. */
-  const stageFailed = () => {
-    writeFileSync(join(dir, "a"), "changed by the run\n");
-    git("add", "a");
-    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
-    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", "demo", "stage.list"), "a\0");
-  };
-  return { dir, git, base, head, hasBranch, sh, stageFailed, done: () => rmSync(dir, { recursive: true, force: true }) };
+  return { dir, git, base, head, hasBranch, sh, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 const HOSTILE_BRANCH = "fix';touch${IFS}PWNED_BRANCH;'x";

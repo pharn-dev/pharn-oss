@@ -35,7 +35,7 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
   **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) keeps that SAME
   fail-closed default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is
   open** (see the run-marker bullet below); **outside an open run it instead denies PHARN's own installed
-  surface** — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json` (matched
+  surface** — `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and `pharn.config.json` (matched
   case-folded; the `pharn/features/` exception is matched as WRITTEN, so a case or trailing-dot variant of it
   is denied — GATE-2 review, B2) — plus `pharn/.run/writes-scope.json` itself and, on a `/` system, any path
   containing a backslash (there a backslash is part of a file NAME, while the reserved-path fold reads it as
@@ -152,7 +152,7 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
     and set that project's scope there. Unchanged in every posture — the permissive default never admits a
     path inside another tree either;
   - **reserved** (NEW, 6.24.0) — an installed project, no scope, no run open, and the path is PHARN's own
-    installed surface (`pharn/**` except `pharn/features/**`, `.claude/**`, `pharn.config.json`): declare it
+    installed surface (`pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**`, `pharn.config.json`): declare it
     in `writes:`, use `pharn update`, or a human edits it directly outside the agent — never Bash, and
     never a stale-scope/stale-run bullet (there is neither). Its **backslash** variant (same posture, a path
     containing `\` on a `/` system) says why the guard refuses to guess and offers only "spell it with `/`"
@@ -178,7 +178,7 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
 - **Three more refusals and a flag order (6.61.0, loop-scope-hardening — review SEC-1, SEC-3, ENF-1).** Each
   writes nothing and exits 1:
   - **PHARN's own installed surface, from a plan.** In an installed project (`pharn.config.json` at the setter's
-    cwd carries a non-empty `skillsVersion`), a `--from-plan` scope naming `pharn/**` except `pharn/features/**`,
+    cwd carries a non-empty `skillsVersion`), a `--from-plan` scope naming `pharn/**` except `pharn/features/**` and `pharn/.run/**`,
     `.claude/**` or `pharn.config.json` is refused — the set `enforce-writes-scope.cjs` reserves outside a run,
     matched by byte-equal copies of its `toKey()` / `isReserved()` (✧-pinned). `--allow-pharn-surface` opts back in
     (independent of `--allow-claude-dir`; a guard file needs that one too). The trigger: `/pharn-loop`'s 6.58.0

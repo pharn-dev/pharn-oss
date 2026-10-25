@@ -146,3 +146,33 @@ measurement or a past state ("measured", "probed", "before 6.x", a legacy consta
 plus a migration note. This run's rewrite treated all such lines as current text and produced four separate false
 records. Provenance: this REVIEW.md, the findings at `pharn/LIMITS.md:427-428`,
 `reconciliation-record.md:39` and `stage-regress-core.mjs:94`.
+
+## Fix round — disposition of every finding (PLAN.md revision 4)
+
+The fix round ran as its own epoch: human patch 2 (`2ae9f024`), a fresh build anchor, 19 agent-side files, regress
+(no regressions), verify (PASS, reconcile CLEAN). Each finding above, in order:
+
+| finding                                                                    | disposition                                                                                                  |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| LIMITS §7 probe rows rewritten                                             | fixed (patch 2): the rows name `LIMITS.md` again, with a migration label and a note under both tables        |
+| dated audit records rewritten                                              | fixed: reconciliation-record.md :39/:395, the check-bash-reconcile comment, LIMITS §1d rows (patch 2)        |
+| `legacyBase` rewritten to a never-created path                             | fixed: `.pharn/pharn-regress/base` again (a labelled migration path), pinned by stage-regress-core.test      |
+| setter `..` way past the installed-surface refusal                         | fixed (patch 2): entries judged as written and with `..` collapsed; a new setter test covers both prefixes   |
+| reserved surface omits `pharn/.run/`                                       | fixed: enforce header and deny message, setter comment and refusal (patch 2); LIMITS (patch 2); the 4 others |
+| SPEC-template contract location and case-variant example                   | fixed, plus a migration line: an unmoved root template is not read                                           |
+| CLAUDE.md / README layout sentences                                        | fixed                                                                                                        |
+| CHANGELOG [7.0.0] overclaims (a–f)                                         | fixed: Write-tool bound, no-op claim dropped, steps 2–4 state the real cost, ALGO cause, symlinked `pharn/`  |
+| leftover `.pharn/` now counts as changed paths                             | stated in CHANGELOG step 4 (fail-closed; no code change)                                                     |
+| versioning guide history and MIN_CLI                                       | fixed (0.14.0 recorded)                                                                                      |
+| comment drift (lessons-index-core, base-worktree, run-gates, apply-plan-…) | fixed                                                                                                        |
+| protect canon comment                                                      | fixed (patch 2)                                                                                              |
+| merged CHANGELOG links no longer resolve                                   | stated in the [7.0.0] entry (merged entries are frozen)                                                      |
+| carried-over bounds (hard link, FIFO, setter cwd, non-walking writers)     | hard-link bound reworded (patch 2); the other three are pre-existing, unchanged, and named here              |
+| CONSTITUTION mixes doc- and repo-relative names                            | not changed: meaning is unchanged, and a trusted-doc edit for style alone is churn                           |
+
+Coverage findings of the first run, fixed in the same round: `scanRuns()` reuses `dotPharnStateBad()` (the
+unreachable duplicate branch is gone, behaviour unchanged), and an unused fixture helper in `command-hygiene.test.mjs`
+is removed.
+
+Updated verdict: GREEN floor; the important findings are all fixed; two minors are left as stated (CONSTITUTION style,
+three carried-over bounds).

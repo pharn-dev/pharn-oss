@@ -374,7 +374,7 @@ The architecture is specified in four documents:
 
 These trusted docs are protected from edits through Claude Code's Write/Edit/MultiEdit/NotebookEdit tool
 surface. Bash writes are outside that protection (see [Current limitations](./docs/limitations.md#current-limitations)). All
-four are copied into an install: the first two under `pharn/`, the other two at the project root.
+four are copied into an install, under `pharn/` (before 7.0.0 the last two sat at the project root).
 
 ---
 

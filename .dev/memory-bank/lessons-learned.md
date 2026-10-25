@@ -2424,3 +2424,18 @@ type: process · concepts: [dev-product-boundary, dependency-direction, redundan
 - commit: `54171c3d774038e6c9386d44e478d575df347311`
 - source: .dev/features/lessons-canon-root/REVIEW.md § Proposed lesson candidate + .dev/features/lessons-canon-root/SHIP.md lesson: deferred
 - promoted: 2026-10-20 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L78 — A mechanical path rewrite needs a dated-record exclusion class, not only a file list — a line that records a past measurement or state keeps the path it was true of
+
+type: process · concepts: [relocation, sweep-scope, dated-record, migration, false-record]
+
+**Lesson.** A relocation sweep that rewrites every root-anchored mention of a moved path treats every line as present-tense text. Some lines are records of the past: a probe table that says which payload a hook denied, an audit fixture ("a Bash edit of LIMITS.md read CLEAN"), a legacy constant naming where an old version left a leftover, a "before 6.x" comment. Rewriting their path makes each one false while it still looks well formed — the probe table reports a verdict its input could not have produced, and the legacy constant names a path no version created, so the cleanup that keys on it goes dead. In pharn-footprint-move the file-level exclusions (`.dev/features/**`, merged CHANGELOG entries, dated measurement files) held, and the rewrite still produced four false records inside otherwise-current files; three independent reviewers found them, not the suite. The remedy is a class in the rewrite rule set, decided per LINE: a line that records a measurement, a probe, a dated state or a legacy path keeps the path it was true of and gains a migration label on the same line (so a line-based acceptance grep can exempt it), instead of being rewritten to the new path.
+
+**Why it matters.** A false record looks exactly like a correct one: a well-formed table row, a constant that parses, a comment that reads fine. Nothing in the suite checks a record for truth, so the defect passes every gate. Records are also what later readers cite as evidence (one of these sat in a trusted doc), so the falsehood propagates. The cost of the remedy is one judgment per hit, which the per-hit record [[L75]] already asks for.
+
+**Provenance.**
+
+- feature: `pharn-footprint-move`
+- commit: `2ae9f0241a089578a62835c4449c537e6f09a47e`
+- source: .dev/features/pharn-footprint-move/REVIEW.md § Proposed lesson candidate + § Advisory findings (LIMITS §7, reconciliation-record.md:39, stage-regress-core.mjs:94)
+- promoted: 2026-10-25 via gated `/pharn-dev-memory-promote` (human-approved).

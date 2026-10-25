@@ -31,7 +31,7 @@
 // resolve `--out` and `--spec-from` against `--cwd`, while `run --next` — which takes no `--cwd` — resolved
 // `--out` against the invoking directory. The two subcommands therefore disagreed about where the record
 // lived whenever `--cwd` was not `.`, and the one caller that passes it (`stage-regress.mjs`'s base side,
-// `--cwd pharn/.run/pharn-regress/base`) failed at `init` with `spec-mismatch`, reading the head record
+// `--cwd .pharn/pharn-regress/base`, the pre-7.0.0 path — migration note) failed at `init` with `spec-mismatch`, reading the head record
 // from INSIDE the base worktree. Every test ran with the default `--cwd .`, so nothing saw it (L41).
 //
 // The corollary: `init` and every `run --next` for one `<out>` must be issued from the SAME directory.

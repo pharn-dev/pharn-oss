@@ -3,7 +3,28 @@
 Run in the footprint-move worktree at `54fe8f3a` plus the uncommitted Phase B build, with the build's reconciliation
 epoch open (anchored at `/pharn-dev-build` Step 0).
 
-## Floor gates (exit codes)
+## Fix round (the standing verdict)
+
+Run at `2ae9f024` (human patch 2) plus the fix round's 19 agent-side files, under the fix round's own build anchor.
+
+| gate                                                                                       | exit |
+| ------------------------------------------------------------------------------------------ | ---- |
+| `test` (`npm test`: 6,016 tests, 6,015 pass, 0 fail, 1 skipped)                            | 0    |
+| `validate`                                                                                 | 0    |
+| `lint`                                                                                     | 0    |
+| `format:check`                                                                             | 0    |
+| `lint:md`                                                                                  | 0    |
+| `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    |
+| `reconcile` (`CLEAN`: 19 paths reconciled, no escape)                                      | 0    |
+
+VERIFIED: floor gates PASS (`check-verify.mjs` exit 0). `verify-report.json` holds this run. The acceptance grep still
+finds 0 lines over `.claude/` + `pharn/`. No verifiers registered: floor gates only.
+
+Verified = the named gates passed; this is NOT a guarantee of correctness beyond what those gates check.
+
+## First run (kept as the record)
+
+### Floor gates (exit codes)
 
 | gate                                                                                       | exit |
 | ------------------------------------------------------------------------------------------ | ---- |
@@ -15,7 +36,7 @@ epoch open (anchored at `/pharn-dev-build` Step 0).
 | `structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` | 0    |
 | `reconcile` (`check-bash-reconcile.mjs --base . --require-baseline`)                       | 1    |
 
-## Verdict (`check-verify.mjs`, exit 1)
+### Verdict (`check-verify.mjs`, exit 1)
 
 VERIFY FAILS: gate(s) `reconcile` red — stage FAILS.
 

@@ -100,7 +100,7 @@
 //     that argument holds ONLY for the always-reconciled control surface — since 6.53.0 the guard files and
 //     pharn/floor/ + .dev/floor/, PLUS the human-only surface (the four trusted docs, CODEOWNERS at its three
 //     locations, pharn/spec-template.md) and the memory-bank canon subtrees, an added untracked file included.
-//     Before 6.53.0 a forged baseline entry cleared a Bash edit of pharn/LIMITS.md (audit 2026-10-07). For an ORDINARY
+//     Before 6.53.0 a forged baseline entry cleared a Bash edit of LIMITS.md (audit 2026-10-07; migration: now pharn/LIMITS.md). For an ORDINARY
 //     path the
 //     baseline IS the reference, the baseline lives under `pharn/.run/` — which Bash reaches — and nothing
 //     authenticates it. So a writer who edits a denied file AND rewrites that file's baseline entry to
