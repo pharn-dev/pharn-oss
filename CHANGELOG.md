@@ -23,7 +23,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.74.0] - 2026-10-25
+
 ### Added
+
+- **`stage-agent.mjs finish --budget-ms <B>` waits on disk for a stage agent the harness launched in the background,
+  and `/pharn-loop` runs it after every Agent call (residual `stage-agent-background`, observed again
+  2026-10-25).** On 6.73.2, an interactive `claude --permission-mode auto` session (Claude Code 2.1.310) running
+  `/pharn-loop` sent `run_in_background` as the string `"false"` while its Agent tool listed the parameter. So
+  6.73.2's `--no-foreground-agent` did not apply, the spec agent was launched in the background, and the loop stopped
+  S9. The agent ran on after the stop. Both 6.72.0 attempts failed the same way.
+  - `finish` with `--budget-ms` (1 to 570 000) polls for the result inside node. Each poll uses the per-component
+    `lstat` walk; a link or a non-directory ends the wait at once and is refused as `read` refuses it. When the result
+    is there, `finish` consumes it exactly as before. When the call's budget runs out first, it exits the new `5`
+    (`waiting — no result yet; run this finish line again`, then `marker: deferred (waiting)`) and writes no return
+    marker. The wait is capped at 3 600 000 ms from this stage's own stage-start marker, about 2.3 times the longest
+    routed stage measured (build, 1,541.4 s). At the cap, or with no usable anchor, the result is `unusable no-result`,
+    with the new stderr codes `wait-capped` or `wait-unanchored`. Without `--budget-ms`, `finish` is unchanged.
+  - `/pharn-loop` pins `--budget-ms 570000` on its four finish lines and grants, and runs them with the Bash tool's
+    timeout set to 600000. Its Agent call now leaves `run_in_background` out entirely. After a background launch that
+    ends in exit `2` or a crash, it stops that agent with TaskStop (newly granted) before S9. `--no-foreground-agent`
+    is kept as it was.
+  - `/pharn-ship` is unchanged: its finish lines carry no budget, and it still waits for the completion notice.
+  - `pharn/pharn-contracts/cost-ledger.md` says that a waited background stage agent is billed to its stage, and an
+    agent left running past the cap is not.
+  - What this does NOT guarantee: that the orchestrator leaves the parameter out, runs `finish` after every Agent
+    call, re-runs it on `5` and passes the timeout (advisory). That the tool's default is the foreground, and that
+    TaskStop reaches an agent, are unmeasured. A stage agent that never reports now costs a wait up to the cap, a
+    foreground one included. The anchor is unauthenticated `.pharn/` state: a marker rewritten before each call can
+    lengthen the wait without bound. No real interactive `/pharn-loop` run on 6.74.0 is part of this change; the
+    follow-up `loop-background-wait-measure` is that run.
 
 - 2026-10-25: **A measurement of two `/pharn-loop` runs on 6.73.2 in pharn-starter,
   `.dev/measurements/loop-wall-clock-2026-10-25.md`, and three README sentences on when to use the full loop or

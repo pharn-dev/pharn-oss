@@ -113,10 +113,27 @@
 // registry-held text per (stage, reason_code), and its `done` requires the verdict/report/render fields a
 // stage SCRIPT produces. An agent's question is free text from the stage it ran, relayed as quoted DATA.
 //
+// ==================== THE WAIT — `finish --budget-ms` (6.74.0, stage-agent-background-wait) ====================
+// With `--budget-ms <B>`, `finish` waits for the result before consuming it, so a stage agent the harness launched
+// in the background (residual `stage-agent-background`) is waited out on disk instead of stopping the run. The CLI
+// polls PRESENCE only — the containment walk's lstat kinds — and `waitDecision` (below, pure) decides each round
+// from four numbers: this stage's own stage-start marker time (the ANCHOR), now, the call's start, and the budget.
+//   unanchored  the run's latest marker is not this stage's own stage-start, or its `ts` does not parse, or lies in
+//               the future — no wait: today's `no-result`, stderr `wait-unanchored`;
+//   capped      `now - anchor >= capMs` — one last presence check, then `no-result`, stderr `wait-capped`;
+//   waiting     the call's budget is spent — exit `WAIT_EXIT` (5, `stage-exit.md`'s `continue` number: re-run the
+//               line), line 1 `WAITING_LINE`, no return marker (the stage is still open, so the anchor holds);
+//   poll        sleep, look again.
+// A present result (or anything at the result path that is not absent, or a refused state directory) stops the
+// wait at once and is consumed exactly as `read` consumes it. Without `--budget-ms`, `finish` is `read` + the
+// marker, unchanged — /pharn-ship pins no budget. The bounds and their measured sources are `stage-agent.mjs`'s
+// WAIT section.
+//
 // ================================ FLOOR / ADVISORY (P0) ================================
 // FLOOR (primitive #3): the route decision given the config — closed tables, the checker's own exit codes
 //   and JSON (`decideRoute`, tested); the brief's TEXT (rendered from closed tables, tested); the result's
-//   SHAPE (closed both ways, exit codes by membership); every token grammar-checked (`route-token-core.mjs`).
+//   SHAPE (closed both ways, exit codes by membership); every token grammar-checked (`route-token-core.mjs`);
+//   the wait's decision (`waitDecision`, tested) — over a marker that is unauthenticated `.pharn/` state.
 // ADVISORY: that the orchestrator runs the route line, pastes the pinned prompt and passes the alias; that
 //   the agent runs `brief` and obeys it; that a result's CONTENT is true (`done` is the agent's claim —
 //   ship's routed build proceeds on `done gate:pass`, re-confirmed by /pharn-verify's floor `.verdict`).
@@ -138,9 +155,29 @@
 //                             `--no-foreground-agent` to `start` when its Agent tool lists no such parameter —
 //                             each ADVISORY (what the model sends; its reading of the tool's schema), never
 //                             measured in a real loop by that increment. /pharn-ship gets no flag: it waits for
-//                             a background agent's completion notice. A background launch that still happens
-//                             is S9 in /pharn-loop and can leave the agent writing after the run's marker
-//                             closes (read then says no-result); nothing stops that agent.
+//                             a background agent's completion notice.
+//                             OBSERVED AGAIN 2026-10-25 (PHARN 6.73.2; Claude Code 2.1.310 interactive CLI): the
+//                             Agent call carried the STRING "false" while the tool listed the parameter, so the
+//                             flag did not apply; the spec agent was launched in the background, the loop stopped
+//                             S9, and the agent ran on after the stop (~97k tokens; the measuring session's
+//                             record, outside this repo).
+//                             6.74.0 (stage-agent-background-wait): /pharn-loop's Agent call names no
+//                             `run_in_background` at all (ADVISORY: what the model sends; that the tool's default
+//                             is the foreground is unmeasured in a real loop), and its four finish lines carry
+//                             `--budget-ms`, run after EVERY Agent call, so a background launch is waited out on
+//                             disk (THE WAIT, above). FLOOR: the presence test, the exit codes, the cap measured
+//                             from the stage-start marker. ADVISORY: that the orchestrator runs `finish` after
+//                             every Agent call, re-runs it on 5, passes the Bash timeout, and stops a leftover
+//                             agent with TaskStop. Still open, and named: an agent that never reports costs a wait
+//                             up to the cap (a FOREGROUND one included — the trade of waiting unconditionally);
+//                             at the cap the agent may still be running and writing (TaskStop is advisory and its
+//                             reach over an agent id unmeasured); the wait reads on the result's presence, not on
+//                             the writer's exit (L66 — bound to this agent only by `start`'s removal of a leftover
+//                             and `validateResult`'s binding); and the anchor is unauthenticated `.pharn/` state
+//                             (`mark-phase.mjs`, TRUST BOUND): an absent, unparseable, earlier or future `ts` only
+//                             shortens the wait, but a marker rewritten to a fresh `ts` before each call
+//                             lengthens it without bound — accounting against tooling, not a control against a
+//                             Bash writer (LIMITS.md §6).
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
@@ -681,6 +718,31 @@ export function readVerdict(result) {
 export function unusableVerdict(reason) {
   const r = UNUSABLE_REASONS.includes(reason) ? reason : "malformed";
   return { line: r === "no-result" ? `unusable no-result — ${NO_RESULT_TEXT}` : `unusable ${r}`, exit: READ_EXIT.unusable };
+}
+
+/** `finish`'s exit when its budget ran out with no result yet (6.74.0): `stage-exit.md`'s `continue` number, whose
+ *  meaning — run the line again — it keeps. Not in READ_EXIT, which maps a RESULT's status. */
+export const WAIT_EXIT = 5;
+
+/** `finish`'s closed first line for `WAIT_EXIT`. Fixed text: it carries nothing from the result or the marker. */
+export const WAITING_LINE = "waiting — no result yet; run this finish line again";
+
+/** The four outcomes of one wait round (THE WAIT, in the header). */
+export const WAIT_DECISIONS = Object.freeze(["poll", "waiting", "capped", "unanchored"]);
+
+/**
+ * One round of `finish --budget-ms`'s wait, decided from numbers only (THE WAIT, in the header). `anchorMs` is this
+ * stage's own stage-start time, or null when there is none; every other value is a finite millisecond count.
+ * Returns `{decision, sleepMs}` — `sleepMs` > 0 only for `poll`, and never past the cap. The cap is checked before the
+ * budget, so a stage past its cap is `capped` whatever the call's budget says. Never throws.
+ */
+export function waitDecision({ anchorMs, nowMs, callStartMs, budgetMs, capMs, pollMs }) {
+  const finite = (n) => typeof n === "number" && Number.isFinite(n);
+  if (!finite(anchorMs) || !finite(nowMs) || anchorMs > nowMs) return { decision: "unanchored", sleepMs: 0 };
+  const capLeft = anchorMs + capMs - nowMs;
+  if (!(capLeft > 0)) return { decision: "capped", sleepMs: 0 };
+  if (nowMs - callStartMs + pollMs > budgetMs) return { decision: "waiting", sleepMs: 0 };
+  return { decision: "poll", sleepMs: Math.max(1, Math.min(pollMs, capLeft)) };
 }
 
 /** The result object `report` writes, built from values the CLI already validated. */
