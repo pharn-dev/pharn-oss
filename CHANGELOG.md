@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [6.75.0] - 2026-10-25
 
+### Added
+
+- 2026-10-25: **The GATE 2 record for #393 (6.74.0, `stage-agent-background-wait`), in
+  `.dev/features/stage-agent-background-wait/SHIP.md`.** The human accepted the PR as is and merged it. The record
+  names three follow-ups, none built: `loop-background-wait-measure` (re-run the interactive `/pharn-loop` attempt on
+  6.74.0), `taskstop-grant-scope` (the loop's `TaskStop` grant is unscoped) and `anchor-clock-skew` (a stage-start
+  time later than the clock reads unanchored, so a background-launched stage gets no wait and stops S9). Apparatus
+  only; nothing shipped changes.
+
 ### Changed
 
 - **A delivery run's entry check no longer calls a gate red when the runner killed it at its timeout or could not start
