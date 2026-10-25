@@ -61,6 +61,9 @@
 //                                                 run check-model-config.mjs resolve <stage> by hand
 //   no-agent-tool     the orchestrating model (ADVISORY): no Agent tool, not even a deferred one — since 6.43.0
 //                     passed to `start` as `--no-agent-tool`      allow the Agent tool
+//   no-foreground-agent the orchestrating model (ADVISORY): an Agent tool that offers no `run_in_background`
+//                     parameter — since 6.73.2 passed to `start` as `--no-foreground-agent` (residual
+//                     `stage-agent-background`)  run /pharn-loop where the Agent tool takes `run_in_background`
 //   route-unavailable `start`: a `route` refusal or a leftover result it cannot clear, its reason after the
 //                     remedy (before 6.43.0, the orchestrating model when `route` exited outside 0/3)
 //                                                 run the route line by hand
@@ -125,8 +128,19 @@
 //
 // ================================ RESIDUALS (named, not built) ================================
 //   stage-agent-hang        — a hung foreground stage agent hangs the run; only a person's interrupt recovers it.
-//   stage-agent-background  — a harness that backgrounds the agent despite `run_in_background: false` can
-//                             leave it writing after the run's marker closes (read then says no-result).
+//   stage-agent-background  — OBSERVED 2026-10-25 (PHARN 6.72.0; Claude Code 2.1.308 desktop app, 2.1.309 CLI):
+//                             both orchestrators sent `run_in_background` as the STRING "false" and the agent
+//                             was launched in the background, so /pharn-loop stopped S9 at its first routed
+//                             stage; a 2.1.309 probe sending the JSON boolean ran in the foreground (the measuring
+//                             session's record, outside this repo); and the
+//                             desktop app's Agent tool, as its sessions read it, takes no such parameter.
+//                             6.73.2: both commands name the JSON boolean, and /pharn-loop passes
+//                             `--no-foreground-agent` to `start` when its Agent tool lists no such parameter —
+//                             each ADVISORY (what the model sends; its reading of the tool's schema), never
+//                             measured in a real loop by that increment. /pharn-ship gets no flag: it waits for
+//                             a background agent's completion notice. A background launch that still happens
+//                             is S9 in /pharn-loop and can leave the agent writing after the run's marker
+//                             closes (read then says no-result); nothing stops that agent.
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
@@ -277,6 +291,8 @@ export const INLINE_REMEDIES = Object.freeze({
   "model-id": "give this stage an alias (sonnet, opus, haiku or fable) in models.stages; a full model id is never mapped to an alias",
   "resolve-failed": "run `node pharn/floor/check-model-config.mjs resolve <stage key>` by hand and read what it prints",
   "no-agent-tool": "allow the Agent tool in this session",
+  "no-foreground-agent":
+    "run the command in a Claude Code session whose Agent tool takes `run_in_background` (Claude Code 2.1.309's terminal CLI did); as this session read its Agent tool, it takes no such parameter",
   "route-unavailable": "run the route line by hand and read its refusal",
 });
 

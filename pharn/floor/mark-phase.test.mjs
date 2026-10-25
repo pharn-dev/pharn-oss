@@ -391,7 +391,7 @@ test("--pending-start refuses --mode, exactly as it refuses --name/--kind/--stag
 test("--route is written on a stage-start: every route token is accepted, recorded on disk and printed", () => {
   const base = mkdtempSync(join(tmpdir(), "mark-phase-route-"));
   const tokens = [...AGENT_MODELS.map((m) => `agent:${m}`), ...INLINE_REASONS.map((r) => `inline:${r}`)];
-  assert.equal(tokens.length, 14, "L34: the whole grammar, not one member (L29)");
+  assert.equal(tokens.length, 15, "L34: the whole grammar, not one member (L29)");
   for (const t of tokens) {
     const out = execFileSync(
       "node",

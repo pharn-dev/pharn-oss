@@ -23,6 +23,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [6.73.2] - 2026-10-25
+
+### Fixed
+
+- **`/pharn-loop` no longer dead-ends when Claude Code launches its stage agents in the background (residual
+  `stage-agent-background`, observed 2026-10-25).** Two `/pharn-loop` runs on 6.72.0, one in the desktop app
+  (Claude Code 2.1.308) and one in the terminal CLI (2.1.309), each stopped at the spec stage with
+  `blocked: stage-refused` (S9). In both, the orchestrator sent `run_in_background` as the string `"false"`, Claude
+  Code launched the agent in the background, and the loop's own rule then stopped the run. A probe on 2.1.309 that sent
+  the JSON boolean ran in the foreground (recorded by the measuring session; not re-run here). The desktop app's Agent tool, as its sessions read it, has no
+  `run_in_background` parameter at all.
+  - `/pharn-loop` and `/pharn-ship` now say that `run_in_background` is the JSON boolean `false`, never the string.
+  - `stage-agent.mjs start` takes a new bare flag, `--no-foreground-agent`. On a routed stage it records the new route
+    token `inline:no-foreground-agent` and exits `3` without reading the config, so the stage runs inline. Its remedy
+    names the parameter. When both flags are given, `--no-agent-tool` wins.
+  - `/pharn-loop` appends that flag when its Agent tool lists no `run_in_background`. Its existing `allowed-tools`
+    start-line grants already cover the flag; a hygiene test pins that they keep doing so.
+    `/pharn-ship` gets no flag, because it already waits for a background agent's completion notice.
+  - What this does NOT guarantee: what the model sends to the Agent tool, and whether it reads the tool's schema
+    correctly, are model compliance (advisory). No real `/pharn-loop` run on 6.73.2 is part of this change. In the
+    desktop app the loop's routed stages now run inline on the orchestrator's model rather than on their configured
+    models. A background launch that still happens remains S9 in `/pharn-loop`, and nothing stops that agent.
+
 ## [6.73.1] - 2026-10-25
 
 ### Fixed

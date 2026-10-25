@@ -50,7 +50,8 @@ do what two lines did), and you run them in this order:
    A second line `marker: not written` changes only `SHIP.md`'s route line.
 
 2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the
-   part after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false`, and **no
+   part after `agent:`), `description: "pharn stage <stage>"`, `run_in_background: false` (the JSON boolean
+   `false`, never the string `"false"`), and **no
    `isolation`** — the stages write into this one tree, one after another, never a worktree each. Its
    `prompt` is the stage's pinned one-line brief prompt, `<name>` substituted, and nothing else: the stage
    agent runs that line first and receives its rules from code (`brief`), never from your transcription.
