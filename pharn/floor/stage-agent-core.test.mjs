@@ -54,6 +54,10 @@ import {
   buildResult,
   fixListApplies,
   fixListFields,
+  WAIT_EXIT,
+  WAITING_LINE,
+  WAIT_DECISIONS,
+  waitDecision,
 } from "./stage-agent-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -674,4 +678,53 @@ test("LOOP_ROWS is a subset of pharn-loop.md Step 2's stuck-point ids (S9 and S1
   assert.ok(LOOP_ROWS.includes("S9") && LOOP_ROWS.includes("S10"), "the two fallback rows");
   assert.ok(LOOP_ROWS.includes("S6c"), "a quick spec agent's misfit (6.28.0)");
   for (const r of ["S11", "S12", "S13"]) assert.ok(!LOOP_ROWS.includes(r), `${r} is decided by a checker, never reported by an agent`);
+});
+
+// ── THE WAIT (6.74.0, stage-agent-background-wait) ─────────────────────────────────────────────────────
+
+test("✧ PARITY: WAIT_EXIT is stage-exit's `continue` (re-run the line), never 1, and outside READ_EXIT", () => {
+  assert.equal(WAIT_EXIT, EXIT_CODE.continue);
+  assert.ok(!Object.values(READ_EXIT).includes(WAIT_EXIT), "a result status never maps to the wait's exit");
+  assert.notEqual(WAIT_EXIT, 1);
+  assert.match(WAITING_LINE, /^waiting — .*run this finish line again$/);
+});
+
+test("waitDecision — every outcome, decided from numbers only; the cap is checked before the budget", () => {
+  const base = { nowMs: 10_000_000, callStartMs: 10_000_000, budgetMs: 570_000, capMs: 3_600_000, pollMs: 250 };
+  const at = (o) => waitDecision({ ...base, ...o });
+  // unanchored: no anchor, a non-number, a future anchor.
+  for (const anchorMs of [null, undefined, NaN, Infinity, "10000000", base.nowMs + 1])
+    assert.deepEqual(at({ anchorMs }), { decision: "unanchored", sleepMs: 0 }, `anchor ${String(anchorMs)}`);
+  // capped: exactly at the cap, and past it — whatever the budget says.
+  assert.equal(at({ anchorMs: base.nowMs - base.capMs }).decision, "capped", "exactly the cap");
+  assert.equal(at({ anchorMs: base.nowMs - base.capMs - 1, budgetMs: 1 }).decision, "capped", "the cap wins over the budget");
+  // waiting: the budget's last poll would overrun.
+  const spent = { anchorMs: base.nowMs - 1000, callStartMs: base.nowMs - (base.budgetMs - base.pollMs) - 1 };
+  assert.equal(at(spent).decision, "waiting");
+  // poll: just inside the budget, and an anchor at exactly now.
+  const inside = at({ anchorMs: base.nowMs - 1000, callStartMs: base.nowMs - (base.budgetMs - base.pollMs) });
+  assert.deepEqual(inside, { decision: "poll", sleepMs: 250 });
+  assert.equal(at({ anchorMs: base.nowMs }).decision, "poll", "an anchor at now is not the future");
+  for (const d of [at({ anchorMs: null }), inside, at(spent)]) assert.ok(WAIT_DECISIONS.includes(d.decision));
+});
+
+test("waitDecision — a poll never sleeps past the cap (a budget longer than the cap's remainder ends AT the cap)", () => {
+  const capMs = 3_600_000;
+  const nowMs = 50_000_000;
+  const d = waitDecision({ anchorMs: nowMs - capMs + 40, nowMs, callStartMs: nowMs, budgetMs: 570_000, capMs, pollMs: 250 });
+  assert.deepEqual(d, { decision: "poll", sleepMs: 40 }, "40 ms of cap left: the sleep is 40, not the 250 poll");
+  // Iterate the rounds to the end: the call stops at the cap, never at its own longer budget.
+  let now = nowMs - 600;
+  const anchor = nowMs - capMs;
+  let rounds = 0;
+  for (;;) {
+    const r = waitDecision({ anchorMs: anchor, nowMs: now, callStartMs: nowMs - 600, budgetMs: 570_000, capMs, pollMs: 250 });
+    if (r.decision !== "poll") {
+      assert.equal(r.decision, "capped");
+      assert.ok(now - anchor <= capMs + 1, "no round ran past the cap");
+      break;
+    }
+    now += r.sleepMs;
+    assert.ok(++rounds < 10, "terminates");
+  }
 });

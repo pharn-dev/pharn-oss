@@ -4253,7 +4253,9 @@ const STAGE_AGENT_WIRING = [
     // (its brief's rule 7 reads verify-report.json alone). Its grill --mode line went with the full one (6.45.0).
     modeLines: { quick: ["pharn-spec", "pharn-build"] },
     section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
-    waitRule: /a call that\s+returns a background-launch\s+notice instead is \*\*S9\*\*/,
+    // 6.74.0 (stage-agent-background-wait): a background-launch notice is no longer S9 by itself — finish waits on disk.
+    waitRule:
+      /\*\*The finish line — after EVERY Agent call, whatever it returned: the agent's COMPLETED result or a\s+background-launch notice\.\*\*/,
   },
 ];
 
@@ -4501,13 +4503,25 @@ for (const cmd of STAGE_AGENT_WIRING) {
   test(`✧ STAGE_AGENT_WIRING (5) — ${cmd.file}: ## Running a stage names the Agent call's parameters and the read rules`, () => {
     const s = saSection(cmd);
     assert.match(s, /`subagent_type: "general-purpose"`/);
-    assert.match(s, /`run_in_background: false`/);
-    // 6.73.2 (stage-agent-background-fix): the parameter's JSON type is named — a STRING "false" was launched in the
-    // background in both harnesses (stage-agent-core.mjs, residual stage-agent-background).
-    assert.match(s, /`run_in_background: false` \(the JSON boolean\s+`false`,\s+never the string `"false"`\)/);
+    if (cmd.command === "pharn-ship") {
+      // 6.73.2 (stage-agent-background-fix): the parameter's JSON type is named — a STRING "false" was launched in the
+      // background in both harnesses (stage-agent-core.mjs, residual stage-agent-background). Ship keeps it.
+      assert.match(s, /`run_in_background: false`/);
+      assert.match(s, /`run_in_background: false` \(the JSON boolean\s+`false`,\s+never the string `"false"`\)/);
+      assert.match(s, /\*\*The finish line — only after an Agent call has returned the agent's COMPLETED result\.\*\*/);
+    } else {
+      // 6.74.0 (stage-agent-background-wait): the loop's Agent call names NO value for the parameter — it is left out,
+      // so there is no type to get wrong — and `finish` runs after every Agent call, under the 600000 tool timeout.
+      assert.match(s, /\*\*no `run_in_background`\*\* — leave the parameter out/);
+      assert.doesNotMatch(s, /run_in_background`?\s*:/, "no `run_in_background: <value>` anywhere in the section");
+      assert.doesNotMatch(s, /"false"/, "no string false");
+      assert.match(s, /Run it with the Bash tool's timeout parameter set to 600000/);
+      assert.match(s, /Exit `5` \(`waiting …`\) → run the same finish line again/);
+      assert.match(s, /Exit `5` \(`waiting …`,\s+`marker: deferred \(waiting\)`\) is no stuck point: the same finish line again/);
+      assert.match(s, /stop that stage\s+agent with TaskStop first/);
+    }
     assert.match(s, /\*\*no\s+`isolation`\*\*/);
     assert.match(s, cmd.waitRule, "the wait-before-finish rule");
-    assert.match(s, /\*\*The finish line — only after an Agent call has returned the agent's COMPLETED result\.\*\*/);
     assert.match(s, /\*\*Never run `finish` for a\s+stage that ran inline\.\*\*/);
     assert.match(s, /\*\*The model is routed; effort is not\*\*/);
     assert.match(s, /pharn\/floor\/stage-agent-core\.mjs`'s header/, "the protocol is cited, not restated (P4)");
@@ -5700,7 +5714,9 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
 // declares its own `allowed-tools` (measured: .dev/features/loop-grant-seam-skill/PROBE.md).
 const LOOP_RUN_FILES = ["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md", "pharn-grill.md"];
 const LOOP_INLINE_STAGE_FILES = ["pharn-spec.md", "pharn-plan.md", "pharn-test.md", "pharn-build.md"];
-const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent"];
+// 6.74.0 (stage-agent-background-wait): TaskStop, to stop a stage agent left running in the background after its
+// finish line could not use a result (`## Running a stage` item 3 — ADVISORY, a reviewed widening).
+const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent", "TaskStop"];
 
 /** The commands a loop run invokes in its own turn (L29 — one enumeration, derived, never hand-listed): every stage
  *  the routing table can send INLINE on a start exit 3 (`INVOCATIONS["pharn-loop"]`, both modes), plus every command
@@ -5795,6 +5811,30 @@ test("✧ loop-no-prompts (6.73.2): a start line carrying either bare flag, or b
   assert.deepEqual(offenders, []);
   // Non-vacuity of the regex itself: a line no grant names is refused.
   assert.ok(!res.some((re) => re.test("node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan --name 'x'")));
+});
+
+test("✧ finish --budget-ms CLOSURE (6.74.0, L36/L27): every loop-family finish line carries exactly `--budget-ms 570000`, no ship-family one carries a budget", () => {
+  const finishLines = (files) =>
+    files.flatMap((file) =>
+      shellLines(readFileSync(join(COMMANDS_DIR, file), "utf8"))
+        .filter((l) => l.kind === "fence" && l.text.startsWith("node pharn/floor/stage-agent.mjs finish "))
+        .map((l) => ({ file, ...l }))
+    );
+  const loop = finishLines(["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md"]);
+  assert.ok(loop.length >= 4, `non-vacuous: the loop pins its finish lines (found ${loop.length})`);
+  const loopOff = loop.filter((l) => !/ --budget-ms 570000$/.test(l.text) || (l.text.match(/--budget-ms/g) ?? []).length !== 1);
+  assert.deepEqual(
+    loopOff.map((l) => `${l.file}:${l.line}`),
+    []
+  );
+  const shipFiles = readdirSync(COMMANDS_DIR).filter((f) => /^pharn-ship(?:-[a-z]+)?\.md$/.test(f));
+  const ship = finishLines(shipFiles);
+  assert.ok(ship.length >= 4, `non-vacuous: ship pins its finish lines (found ${ship.length})`);
+  assert.deepEqual(
+    ship.filter((l) => /--budget-ms/.test(l.text)).map((l) => `${l.file}:${l.line}`),
+    [],
+    "ship waits for a completion notice, so its finish never waits on disk"
+  );
 });
 
 test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line of its run, and no grant is unused", () => {

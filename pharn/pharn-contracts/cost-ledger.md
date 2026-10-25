@@ -528,7 +528,9 @@ follows the stage's final read, both command rules (since 6.43.0 `stage-agent.mj
 that marker in one call, and leaves it unwritten after a `question`, whose round trip stays inside the stage). The same
 bucket holds the orchestrator's own requests inside the bracket, `sidechain: false`: the one that issues the Agent
 call and the one that issues `finish` (whose first line precedes the marker it writes), plus a relayed question's
-requests.
+requests. Since 6.74.0 `/pharn-loop`'s `finish` waits on disk for an agent launched in the background, and writes no
+marker while it waits (exit `5`), so such an agent's rows still fall inside its stage's bracket, with every `finish`
+request of the wait. An agent still running when the wait reaches its cap bills its later rows outside it.
 
 **The floor-only stages' bracket (6.43.0).** `/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as
 one `stage-direct.mjs` call each, which writes the stage-start marker right before the stage script runs and the

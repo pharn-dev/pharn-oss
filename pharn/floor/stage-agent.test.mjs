@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -33,6 +33,10 @@ import {
   NO_FOREGROUND_AGENT,
   MARKER_KEPT,
   MARKER_DEFERRED,
+  MARKER_WAITING,
+  FINISH_BUDGET_MAX_MS,
+  FINISH_WAIT_CAP_MS,
+  POLL_MS,
 } from "./stage-agent.mjs";
 import { MARKER_NOT_WRITTEN, markerLine } from "./mark-phase.mjs";
 import { AGENT_MODELS } from "./route-token-core.mjs";
@@ -44,6 +48,8 @@ import {
   RESULT_FILE,
   RESULT_KEYS,
   NO_RESULT_TEXT,
+  WAIT_EXIT,
+  WAITING_LINE,
   renderBrief,
   buildResult,
 } from "./stage-agent-core.mjs";
@@ -951,6 +957,231 @@ test("finish — read's verdict and exit, then the return marker; a QUESTION def
     } finally {
       rmSync(d2, { recursive: true, force: true });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── finish --budget-ms: THE WAIT (6.74.0, stage-agent-background-wait) ────────────────────────────────
+// Every case that must NOT wait runs `finish` with the full 570 000 ms budget under a 30 s spawn timeout, so a wait
+// that should not happen kills the child and fails on `status` (null) — a membership test, never a stopwatch (L24).
+
+const NO_WAIT_TIMEOUT_MS = 30_000;
+function runBounded(cwd, args, timeout = NO_WAIT_TIMEOUT_MS) {
+  const r = spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", timeout, killSignal: "SIGKILL" });
+  return { status: r.status, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+}
+/** Write this run's markers file by hand: each entry `{kind, stage, iteration, ts}`. */
+function writeMarkers(dir, entries) {
+  mkdirSync(join(dir, ".pharn", "cost", "demo"), { recursive: true });
+  const text = entries.map((m, i) => JSON.stringify({ seq: i + 1, iteration: null, session_id: null, ...m })).join("\n");
+  writeFileSync(markersFile(dir), `${text}\n`);
+}
+const openStage = (stage = "pharn-plan", iteration = null, ts = new Date().toISOString()) => ({
+  kind: "stage-start",
+  stage,
+  iteration,
+  ts,
+});
+const loopFinish = (stage, budget, iteration) => [...finishArgs("pharn-loop", stage, iteration), "--budget-ms", String(budget)];
+const loopReport = (dir, stage, extra) => run(dir, ["report", "--command", "pharn-loop", "--name", "demo", "--stage", stage, ...extra]);
+
+test("finish --budget-ms — the bounds are the measured ones, and one call stays under the Bash tool's 600 000 ms", () => {
+  assert.equal(FINISH_BUDGET_MAX_MS, 570_000, "the stage-direct.mjs / entry-gates.mjs --wait budget");
+  assert.ok(FINISH_BUDGET_MAX_MS + 30_000 <= 600_000, "30 s left under the Bash tool's maximum");
+  assert.equal(FINISH_WAIT_CAP_MS, 3_600_000);
+  assert.ok(FINISH_WAIT_CAP_MS >= 2 * 1_541_400, "over twice the longest routed stage measured (build, 1,541.4 s)");
+  assert.equal(POLL_MS, 250, "the entry-gates.mjs --wait interval");
+});
+
+test("finish --budget-ms — a present result is consumed AT ONCE, exactly as without the flag (done, gate, refused)", () => {
+  const dir = scratch();
+  try {
+    const cases = [
+      ["pharn-plan", null, ["--status", "done"], "done", 0],
+      ["pharn-build", "1", ["--iteration", "1", "--status", "done", "--gate", "pass"], "done gate:pass", 0],
+      ["pharn-plan", null, ["--status", "refused", "--row", "S9"], "refused S9", 3],
+    ];
+    for (const [stage, iteration, rep, line1, exit] of cases) {
+      writeMarkers(dir, [openStage(stage, iteration === null ? null : Number(iteration))]);
+      assert.equal(loopReport(dir, stage, rep).status, 0);
+      const r = runBounded(dir, loopFinish(stage, FINISH_BUDGET_MAX_MS, iteration));
+      assert.equal(r.status, exit, `${line1}: ${r.stderr}`);
+      const [first, second] = lines(r.stdout);
+      assert.equal(first, line1);
+      assert.equal(second, markerLine(markersIn(dir).at(-1)), "the return marker, as without the flag");
+      assert.equal(markersIn(dir).at(-1).kind, "orchestrator");
+      assert.equal(r.stderr, "");
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish --budget-ms — no result yet: exit 5 with WAITING_LINE and NO return marker; the next call after report consumes it", () => {
+  const dir = scratch();
+  try {
+    writeMarkers(dir, [openStage()]);
+    const r = runBounded(dir, loopFinish("pharn-plan", 300));
+    assert.equal(r.status, WAIT_EXIT, r.stderr);
+    assert.deepEqual(lines(r.stdout), [WAITING_LINE, MARKER_WAITING]);
+    assert.equal(r.stderr, "");
+    assert.equal(markersIn(dir).length, 1, "the stage stays open: no return marker");
+    // Again with the state directory present but no result file (report creates the components; route never does).
+    mkdirSync(join(dir, ".pharn", "pharn-loop", "demo"), { recursive: true });
+    assert.equal(runBounded(dir, loopFinish("pharn-plan", 300)).status, WAIT_EXIT, "an empty state dir is still 'not yet'");
+    assert.equal(loopReport(dir, "pharn-plan", ["--status", "done"]).status, 0);
+    const next = runBounded(dir, loopFinish("pharn-plan", 300));
+    assert.equal(next.status, 0, next.stderr);
+    assert.equal(lines(next.stdout)[0], "done");
+    assert.equal(markersIn(dir).at(-1).kind, "orchestrator");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish --budget-ms — a result reported WHILE the call waits is consumed by that same call", async () => {
+  const dir = scratch();
+  try {
+    writeMarkers(dir, [openStage()]);
+    // A long budget and a short delay: the assertion is the exit and the line, never how long it took (GRILL, P1).
+    const child = spawn(process.execPath, [CLI, ...loopFinish("pharn-plan", 20_000)], { cwd: dir });
+    let stdout = "";
+    child.stdout.on("data", (b) => (stdout += b));
+    const done = new Promise((res) => child.on("close", (code) => res(code)));
+    await new Promise((res) => setTimeout(res, 300));
+    assert.equal(loopReport(dir, "pharn-plan", ["--status", "done"]).status, 0);
+    const code = await done;
+    assert.equal(code, 0, stdout);
+    assert.equal(lines(stdout)[0], "done");
+    assert.ok(!existsSync(join(dir, ".pharn", "pharn-loop", "demo", RESULT_FILE)), "consumed");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish --budget-ms — past the cap: unusable no-result at once, stderr exactly `wait-capped`, the return marker written", () => {
+  const dir = scratch();
+  try {
+    const old = new Date(Date.now() - FINISH_WAIT_CAP_MS - 60_000).toISOString();
+    writeMarkers(dir, [openStage("pharn-plan", null, old)]);
+    const r = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
+    assert.equal(r.status, 2, r.stderr);
+    assert.equal(lines(r.stdout)[0], `unusable no-result — ${NO_RESULT_TEXT}`);
+    assert.equal(r.stderr, "stage-agent: read: wait-capped\n");
+    assert.equal(markersIn(dir).at(-1).kind, "orchestrator", "the stage is over");
+    // The cap never hides a result that IS there.
+    writeMarkers(dir, [openStage("pharn-plan", null, old)]);
+    assert.equal(loopReport(dir, "pharn-plan", ["--status", "done"]).status, 0);
+    const late = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
+    assert.deepEqual([late.status, lines(late.stdout)[0], late.stderr], [0, "done", ""]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish --budget-ms — no anchor: no wait, stderr `wait-unanchored` (never `wait-capped`, L27)", () => {
+  const future = new Date(Date.now() + 3_600_000).toISOString();
+  const cases = [
+    ["no markers file", null],
+    ["the latest marker is another stage's", [openStage("pharn-spec")]],
+    ["the stage already returned", [openStage(), { kind: "orchestrator", stage: null, ts: new Date().toISOString() }]],
+    ["an iteration mismatch", [openStage("pharn-build", 2)], "pharn-build", "1"],
+    ["a future ts", [openStage("pharn-plan", null, future)]],
+    ["an unparseable ts", [openStage("pharn-plan", null, "yesterday")]],
+  ];
+  for (const [label, markers, stage = "pharn-plan", iteration] of cases) {
+    const dir = scratch();
+    try {
+      if (markers) writeMarkers(dir, markers);
+      const r = runBounded(dir, loopFinish(stage, FINISH_BUDGET_MAX_MS, iteration));
+      assert.equal(r.status, 2, `${label}: ${r.stderr}`);
+      assert.equal(lines(r.stdout)[0], `unusable no-result — ${NO_RESULT_TEXT}`, label);
+      assert.equal(r.stderr, "stage-agent: read: wait-unanchored\n", label);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("finish --budget-ms — containment (L54/L59): a linked or dangling component, or a linked result, ends the wait at once and is refused", () => {
+  const components = [".pharn/pharn-loop", ".pharn/pharn-loop/demo"];
+  for (const comp of components) {
+    for (const kind of ["link-to-dir", "dangling"]) {
+      const dir = scratch();
+      try {
+        writeMarkers(dir, [openStage()]);
+        mkdirSync(join(dir, "elsewhere"));
+        mkdirSync(dirname(join(dir, comp)), { recursive: true });
+        symlinkSync(kind === "dangling" ? join(dir, "missing") : join(dir, "elsewhere"), join(dir, comp));
+        const r = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
+        assert.equal(r.status, 2, `${comp} ${kind}: ${r.stderr}`);
+        assert.equal(lines(r.stdout)[0], "unusable unreadable", `${comp} ${kind}`);
+        assert.equal(r.stderr, "stage-agent: read: state-dir-refused\n", `${comp} ${kind}`);
+        assert.deepEqual(readdirSync(join(dir, "elsewhere")), [], "nothing written through the link");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  }
+  // `.pharn` itself, dangling: no anchor can be read either, yet the refused component is still judged first.
+  {
+    const dir = scratch();
+    try {
+      symlinkSync(join(dir, "missing"), join(dir, ".pharn"));
+      const r = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
+      assert.deepEqual([r.status, lines(r.stdout)[0]], [2, "unusable unreadable"]);
+      assert.match(r.stderr, /^stage-agent: read: state-dir-refused\n/, "the refusal, not a wait code");
+      assert.equal(lines(r.stdout)[1], MARKER_NOT_WRITTEN, "the marker cannot be written through a dangling .pharn");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  for (const kind of ["link-to-file", "link-to-dir", "dangling"]) {
+    const dir = scratch();
+    try {
+      writeMarkers(dir, [openStage()]);
+      const sd = join(dir, ".pharn", "pharn-loop", "demo");
+      mkdirSync(sd, { recursive: true });
+      const target = join(dir, "target");
+      if (kind === "link-to-file") writeFileSync(target, "{}\n");
+      if (kind === "link-to-dir") mkdirSync(target);
+      symlinkSync(target, join(sd, RESULT_FILE));
+      const r = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
+      assert.equal(r.status, 2, `${kind}: ${r.stderr}`);
+      assert.equal(lines(r.stdout)[0], "unusable unreadable", kind);
+      assert.equal(r.stderr, "stage-agent: read: not-a-regular-file\n", kind);
+      if (kind === "link-to-file") assert.equal(readFileSync(target, "utf8"), "{}\n", "the target is untouched");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("finish --budget-ms — a bad budget is `unusable usage`, exit 2, and nothing is written; `read` takes no budget", () => {
+  const dir = scratch();
+  try {
+    const base = finishArgs("pharn-loop", "pharn-plan");
+    for (const tail of [["0"], ["-1"], [String(FINISH_BUDGET_MAX_MS + 1)], ["1e3"], ["01"], ["1\t"], ["300", "--budget-ms", "300"], []]) {
+      const r = runBounded(dir, [...base, "--budget-ms", ...tail]);
+      assert.deepEqual([r.status, r.stdout], [2, "unusable usage\n"], `${JSON.stringify(tail)}: ${r.stderr}`);
+    }
+    const read = runBounded(dir, ["read", "--command", "pharn-loop", "--name", "demo", "--stage", "pharn-plan", "--budget-ms", "300"]);
+    assert.deepEqual([read.status, read.stdout], [2, "unusable usage\n"]);
+    assert.deepEqual(readdirSync(dir), [], "nothing written");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("L41 — finish WITHOUT --budget-ms never waits: an absent result is today's no-result, with today's defect code", () => {
+  const dir = scratch();
+  try {
+    writeMarkers(dir, [openStage()]);
+    const r = runBounded(dir, finishArgs("pharn-loop", "pharn-plan"));
+    assert.equal(r.status, 2, r.stderr);
+    assert.equal(lines(r.stdout)[0], `unusable no-result — ${NO_RESULT_TEXT}`);
+    assert.equal(r.stderr, "stage-agent: read: no-state-dir\n", "no wait code without the flag");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
