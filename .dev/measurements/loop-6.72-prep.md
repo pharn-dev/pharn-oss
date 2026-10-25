@@ -343,8 +343,50 @@ Preconditions re-checked at `9c6343b7` after it was written [S·m]:
 
 Installed PHARN: 6.72.0.
 
-**Verdict: GO.** `~/Projects/pharn-measure/RUN-PROTOCOL.md` says so on its status line. The two runs are the
-human's to start.
+**Verdict at that point: GO.** The human then asked the model to start run 1.
+
+### Run 1, two attempts: both void, and the protocol is BLOCKED again
+
+Both attempts stopped at the spec stage, `blocked: stage-refused` (S9), before any feature directory existed [R·m,
+from each session's transcript]:
+
+| attempt  | how it was started                                                                            | Claude Code | start (Z) | stage agent launched             |
+| -------- | --------------------------------------------------------------------------------------------- | ----------- | --------- | -------------------------------- |
+| app      | a desktop-app session the model started in the worktree, auto mode                            | 2.1.308     | 01:11:39  | 01:12:30, "Async agent launched" |
+| terminal | `claude --permission-mode auto "/pharn-loop $(cat …/intent.md)"` in the user's Terminal panel | 2.1.309     | 01:15:13  | 01:16:00, "Async agent launched" |
+
+**The cause** [S·m]:
+
+- In both transcripts the orchestrator's Agent call carried `"run_in_background": "false"`, a **string**, though
+  6.72.0's `/pharn-loop` line 480 says `run_in_background: false`.
+- A headless probe on 2.1.309 (`claude -p`, sonnet) asked for the JSON boolean `false`. The call carried the boolean,
+  and the agent returned in the foreground.
+- The desktop app's Agent tool, as this session sees it, has no `run_in_background` parameter at all.
+- This is the residual 6.72.0 names `stage-agent-background` (`pharn/floor/stage-agent-core.mjs`, RESIDUALS). It is the
+  first observed occurrence, so it now has the real failure P7 asks for.
+- The 2026-10-05 run (Claude Code 2.1.286) got foreground agents. What changed between the two Claude Code versions is
+  not established here.
+
+**What the attempts left**:
+
+- The app attempt's model stopped its own spec agent.
+- In the terminal attempt, the spec agent was still running after the loop stopped (about 108k output tokens over
+  1.5 min). The model closed the tab, which ended it.
+- Neither attempt wrote to `pharn/features/` or committed anything.
+- Each attempt's `.pharn/` state, git-dir record, transcript and a note are in `~/Projects/pharn-measure/run1-void/`
+  (app) and `run1-void-cli/` (terminal).
+- The worktree is reset to `9c6343b7`: clean, no records.
+
+The app attempt also showed two delivery differences:
+
+- the prompt arrived inside a "Background … Task:" wrapper;
+- `@/content/legal` reached the session as `＠/content/legal`, with a full-width `＠`.
+
+The terminal form has neither.
+
+**Verdict: BLOCKED.** Under these Claude Code versions, every `/pharn-loop` with a routed stage stops at its first
+routed stage. A measurement needs a PHARN version that fixes `stage-agent-background`, installed in the worktree and
+committed on a measure branch. That run then measures that version, not 6.72.0.
 
 ## Bounds of this record
 
