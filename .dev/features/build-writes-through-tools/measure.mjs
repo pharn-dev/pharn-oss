@@ -35,6 +35,14 @@
 //   project      the project's CLAUDE.md and `.claude/rules/*.md` sizes NOW, their frontmatter keys, and whether each
 //                PostToolUse `npm run <x>` hook names an existing script.
 //   others       each `--other` run: its ledger window, stages, LOOP.md frontmatter, and whether its transcript exists.
+//   entry        (ledgers since 6.48.0 only — added 2026-10-25 for `.dev/measurements/loop-wall-clock-2026-10-25.md`)
+//                the ledger's `entry` record, copied per invocation (lifetime, segments, waits, the waits' union and
+//                the segments' overlap with marked stages), plus the orchestrator's `entry-gates.mjs` Bash calls
+//                and `buckets.entry_wait_s`: the time those `--wait` calls took. That time sits in the gaps between
+//                markers, so the older buckets file it under `orchestrator_between_s`; `entry_wait_s` is a SUBSET of
+//                that bucket, never added to it. A ledger without the `entry` key (6.35.0–6.47.x, or pre-6.35.0)
+//                reads `"absent (no entry key: ledger predates 6.48.0)"`, and every other section is computed
+//                exactly as before.
 //
 // TRUST (P2): transcripts and ledgers are another project's untrusted DATA. This helper prints counts, timestamps,
 // durations, sizes, tool names, paths and short command prefixes; nothing it reads reaches a decision.
@@ -540,6 +548,37 @@ function projectOf(starter) {
   return out;
 }
 
+/** The 6.48.0+ `entry` record (cost-ledger contract, "Entry gate observations"); absent on older ledgers. */
+function entryOf(j) {
+  if (!Object.hasOwn(j, "entry")) return "absent (no entry key: ledger predates 6.48.0)";
+  const e = j.entry;
+  if (!e || e.status !== "derived") return { status: e ? e.status : null, reason: e ? e.reason : null, invocations: [] };
+  return {
+    status: e.status,
+    method: e.method,
+    events: Array.isArray(j.entry_events) ? j.entry_events.length : null,
+    unbound_events: e.unbound_events,
+    conflicting_events: e.conflicting_events,
+    invocations: e.invocations.map((v) => ({
+      start: v.start,
+      lifetime: v.lifetime,
+      segments: v.segments.map((s) => ({
+        kind: s.kind,
+        begin_ts: s.begin_ts,
+        end_ts: s.end_ts,
+        elapsed_ms: s.elapsed_ms,
+        end: s.end,
+        gates: s.gates,
+      })),
+      waits: v.waits.map((w) => ({ ts: w.ts, end_ts: w.end_ts, elapsed_ms: w.elapsed_ms, status: w.status })),
+      aborts: v.aborts.length,
+      segments_union_ms: v.segments_union_ms,
+      waits_union_ms: v.waits_union_ms,
+      segments_overlap_marked_stages_ms: v.segments_overlap_marked_stages_ms,
+    })),
+  };
+}
+
 function main() {
   const a = args(process.argv.slice(2));
   const L = ledger(a.starter, a.feature);
@@ -628,7 +667,22 @@ function main() {
       else b.inline_other_stages_s += d - wait;
     }
     out.buckets = { window_s: round(win), ...Object.fromEntries(Object.entries(b).map(([k, v]) => [k, round(v)])) };
+    // 6.48.0+ ledgers only (the `entry` key): the orchestrator's entry-gates.mjs calls, and their --wait time as a
+    // subset of orchestrator_between_s. Older ledgers keep exactly the buckets above.
+    if (Object.hasOwn(j, "entry")) {
+      out.entry_scripts = main.uses
+        .filter(
+          (u) => u.name === "Bash" && /\bnode pharn\/floor\/entry-gates\.mjs --(start|wait|abort)\b/.test(String(u.input.command || ""))
+        )
+        .map((u) => ({
+          ts: u.ts,
+          seconds: u.resultTs ? round(sec(u.ts, u.resultTs)) : null,
+          call: String(u.input.command).match(/entry-gates\.mjs --(start|wait|abort)/)[1],
+        }));
+      out.buckets.entry_wait_s = round(out.entry_scripts.filter((s) => s.call === "wait").reduce((s, x) => s + (x.seconds || 0), 0));
+    }
   } else out.human_waits = out.scripts = out.buckets = "absent";
+  out.entry = entryOf(j);
   out.long_bash = {};
   out.writes = {};
   out.hooks = {};

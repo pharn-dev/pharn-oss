@@ -1,0 +1,45 @@
+{
+  "base": "471a54bb6fb24280cc0bffc6664d33d8b7d1c828",
+  "inside": [
+    ".dev/features/build-writes-through-tools/measure.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    ".dev/features/loop-cost-6-73-2/GRILL.md",
+    ".dev/features/loop-cost-6-73-2/PLAN.md",
+    ".dev/measurements/loop-wall-clock-2026-10-25.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5952,
+      "failed": 0,
+      "skipped": 6,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5957,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

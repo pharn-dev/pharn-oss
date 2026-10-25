@@ -159,6 +159,13 @@ For a small, well-scoped change, both commands take `--quick` (`/pharn-ship --qu
 `/pharn-loop --quick`, 6.28.0): a shorter spine that checks less. [Quick mode](./docs/pipeline.md#quick-mode) says
 what it skips and what still stops it.
 
+Use the full `/pharn-loop` for a feature that spans several files, has acceptance tests, or is likely to need more
+than one iteration, and `--quick` for everything else. Two measured full-loop runs of one small feature in a user
+project on 6.73.2 both stopped at the entry check, when that project's test suite ran past the 540 s gate timeout,
+after about 19 minutes and 5.5–5.9 million processed context tokens each (input, cache-write and cache-read tokens,
+plus about 31 thousand output tokens), with only the spec and plan done. The cost of a complete loop is not yet
+measured ([the measurement](./.dev/measurements/loop-wall-clock-2026-10-25.md)).
+
 Every stage is also available as its own command; see [Commands](#commands).
 
 Already installed? `npx @pharn-dev/pharn status` reports your installed skills version and drift.
