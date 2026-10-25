@@ -58,8 +58,10 @@ deferred:
   this PR adds 1,968 with those two lines left unchanged. They name the doc, not a link. Update them in a follow-up
   PR.
 
-- `/pharn-loop` acceptance run on a scratch project installed with pharn-cli 0.14.x (`pharn init --ref <this branch>`).
-  It needs the branch pushed, which is the maintainer's call.
+- `/pharn-loop` acceptance run on a scratch project installed with pharn-cli 0.14.x: AFTER this PR merges (maintainer's
+  choice). Falsified assumption (the original prompt and PLAN "Phase C"): `pharn init --ref <branch>` does not exist.
+  pharn-cli 0.14.1 accepts only `--ref main` or `--ref latest` (`REF_CHOICES`) and reads no source override, so an
+  install from this branch is impossible before it is on `main`.
 - Cross-repo follow-ups, listed in CHANGELOG [7.0.0]: `pharn-dev/skills` commands.md, `pharn-dev/pharn-ci` probing
   `pharn/ci.yml`, `pharn-dev/phargus` via `pharn update`.
 - A merge conflict waits with `loop-isolation-stop` (6.76.0, in progress in another session). It edits the
