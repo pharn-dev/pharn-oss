@@ -24,7 +24,21 @@ anchor `ts` later than the clock reads `unanchored` (no wait, S9), and the `Task
 
 ## GATE 2
 
-Handed to the orchestrating session for the merge / fix / abandon decision. The PR is opened, never merged, by this
-run.
+Handed to the orchestrating session for the merge / fix / abandon decision. The PR (#393) is opened, never merged, by
+this run.
+
+**Decision (the human, relayed by the orchestrating session, 2026-10-25), verbatim:** "GATE 2: accept PR #393 as is;
+keep the TaskStop grant and clock-skew points as named follow-ups. I'll merge when CI is green." So: accepted as is,
+and the human merges.
+
+Named follow-ups (not built):
+
+- `loop-background-wait-measure` — re-run the interactive `claude --permission-mode auto` `/pharn-loop` attempt on
+  6.74.0: does the Agent call omit the parameter and run in the foreground, and when it does not, does `finish` wait
+  the agent out (and does TaskStop reach it)?
+- `taskstop-grant-scope` — the `TaskStop` grant in `/pharn-loop`'s `allowed-tools` is unscoped: it pre-approves
+  stopping any background task of the session, with an operand read from the Agent tool's free text.
+- `anchor-clock-skew` — a stage-start marker `ts` later than the clock at `finish` time reads `unanchored`, so a
+  background-launched stage gets no wait and stops S9; the `stage-agent-background` residual does not name it.
 
 Lesson: none proposed (the setter's dropped glob bullets are L71, already canon).
