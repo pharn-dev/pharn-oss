@@ -32,7 +32,7 @@ import {
   RUNNER_SCHEMA,
   RESULT_SCHEMA,
 } from "./entry-gates-core.mjs";
-import { STYLE_SET } from "./gate-run-core.mjs";
+import { STYLE_SET, unmeasuredRuns } from "./gate-run-core.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -93,15 +93,141 @@ test("entryVerdict: a red STYLE gate counts only when the feature directory held
   }
 });
 
-test("entryVerdict: a timeout is red; `mutated` and `excluded` are reported, never decided on", () => {
+// ── 6.74.0 (entry-timeout-unmeasured): a gate the runner did not measure is UNMEASURED, never red ───────────────────
+test("entryVerdict: a timed-out gate is unmeasured, not red, whatever exit the kill left; `mutated` and `excluded` are reported, never decided on", () => {
+  for (const exit of [143, 124, 1, 0]) {
+    const stamp = {
+      runs: [run("test", exit, { timed_out: true }), run("build", 0, { mutated: true })],
+      excluded: { declared_in: "pharn.config.json#gates.exclude", ids: ["e2e"] },
+    };
+    const v = entryVerdict({ stamp, featureDir: [], d0: DIGEST_ABSENT });
+    assert.equal(v.status, "unmeasured", `exit ${exit}`);
+    assert.deepEqual(v.red, [], `exit ${exit}`);
+    assert.deepEqual(v.unattributed, []);
+    assert.deepEqual(v.unmeasured, [{ id: "test", cause: "timed-out" }], `exit ${exit}`);
+    assert.deepEqual(v.mutated, ["build"]);
+    assert.deepEqual(v.excluded, ["e2e"]);
+  }
+});
+
+test("entryVerdict: exit 126 / 127 is `not-started` (unmeasured); every other non-zero exit without a timeout stays a measured red (control)", () => {
+  for (const exit of [126, 127]) {
+    const v = entryVerdict({ stamp: { runs: [run("test", exit)] }, featureDir: [], d0: DIGEST_ABSENT });
+    assert.equal(v.status, "unmeasured", `exit ${exit}`);
+    assert.deepEqual(v.unmeasured, [{ id: "test", cause: "not-started" }], `exit ${exit}`);
+    assert.deepEqual(v.red, [], `exit ${exit}`);
+  }
+  for (const exit of [1, 2, 125, 128, 137, 143]) {
+    const v = entryVerdict({ stamp: { runs: [run("test", exit)] }, featureDir: [], d0: DIGEST_ABSENT });
+    assert.equal(v.status, "red", `exit ${exit}`);
+    assert.deepEqual(v.red, ["test"], `exit ${exit}`);
+    assert.deepEqual(v.unmeasured, [], `exit ${exit}`);
+  }
+});
+
+test("entryVerdict: an unmeasured STYLE gate is unmeasured whatever the feature directory did — never red or unattributed", () => {
+  for (const id of STYLE_SET) {
+    for (const extra of [{ timed_out: true }, {}]) {
+      const exit = extra.timed_out ? 143 : 127;
+      const cause = extra.timed_out ? "timed-out" : "not-started";
+      for (const [before, after] of [
+        [DIGEST_ABSENT, DIGEST_ABSENT],
+        [DIGEST_ABSENT, SHA],
+        [DIGEST_UNHASHABLE, DIGEST_UNHASHABLE],
+      ]) {
+        const v = entryVerdict({ stamp: { runs: [run(id, exit, extra)] }, featureDir: [{ id, before, after }], d0: DIGEST_ABSENT });
+        assert.deepEqual(v.unmeasured, [{ id, cause }], `${id} ${cause} ${before}→${after}`);
+        assert.deepEqual(v.red, []);
+        assert.deepEqual(v.unattributed, []);
+        assert.equal(v.status, "unmeasured");
+      }
+    }
+  }
+});
+
+test("entryVerdict: RED FIRST — a measured red beside an unmeasured gate is status red, and both lists are filled", () => {
+  const stamp = { runs: [run("lint", 0), run("build", 2), run("test", 143, { timed_out: true }), run("typecheck", 127)] };
+  const v = entryVerdict({ stamp, featureDir: [], d0: DIGEST_ABSENT });
+  assert.equal(v.status, "red");
+  assert.deepEqual(v.red, ["build"]);
+  assert.deepEqual(v.unmeasured, [
+    { id: "test", cause: "timed-out" },
+    { id: "typecheck", cause: "not-started" },
+  ]);
+  const doc = entryDocument({ status: v.status, feature: FEATURE, verdict: v, changesRecord: "none" });
+  assert.equal(documentDefect(doc), null, "a red document may carry unmeasured entries");
+  assert.equal(EXIT[doc.status], 4);
+});
+
+test("L35 — `unmeasured` is gate-run-core.mjs unmeasuredRuns minus base:test (one owner), and the core spells no second copy", () => {
   const stamp = {
-    runs: [run("test", 0, { timed_out: true }), run("build", 0, { mutated: true })],
-    excluded: { declared_in: "pharn.config.json#gates.exclude", ids: ["e2e"] },
+    runs: [
+      run(ENTRY_BASE_TEST_ID, 143, { timed_out: true }), // imported below (6.49.0 section); imports are hoisted
+      run("lint", 127),
+      run("test", 0, { timed_out: true }),
+      run("build", 1),
+      run("typecheck", 126),
+    ],
   };
   const v = entryVerdict({ stamp, featureDir: [], d0: DIGEST_ABSENT });
-  assert.deepEqual(v.red, ["test"]);
-  assert.deepEqual(v.mutated, ["build"]);
-  assert.deepEqual(v.excluded, ["e2e"]);
+  assert.deepEqual(
+    v.unmeasured,
+    unmeasuredRuns(stamp).filter((u) => u.id !== ENTRY_BASE_TEST_ID)
+  );
+  assert.equal(v.unmeasured.length, 3, "control: the stamp really holds three unmeasured gates besides the slot");
+  const src = readFileSync(join(HERE, "entry-gates-core.mjs"), "utf8");
+  assert.ok(src.includes("unmeasuredRuns(stamp)"), "the core calls the one owner");
+  assert.doesNotMatch(src, /timed_out\s*===\s*true/, "no second copy of the timed-out predicate");
+  assert.doesNotMatch(src, /\b12[67]\b/, "no second copy of the not-started exits");
+});
+
+test("EXIT.unmeasured is 6 — the number the commands branch on", () => {
+  assert.equal(EXIT.unmeasured, 6);
+  assert.ok(STATUSES.includes("unmeasured"));
+});
+
+test("documentDefect: `unmeasured` is closed for every status, and an unmeasured status must name a gate and no red", () => {
+  for (const status of STATUSES) {
+    const verdictStatus = ["green", "red", "unmeasured"].includes(status);
+    const verdict =
+      status === "unmeasured"
+        ? entryVerdict({ stamp: { runs: [run("test", 0, { timed_out: true })] }, featureDir: [], d0: DIGEST_ABSENT })
+        : status === "red"
+          ? entryVerdict({ stamp: { runs: [run("test", 1)] }, featureDir: [], d0: DIGEST_ABSENT })
+          : status === "green"
+            ? entryVerdict({ stamp: { runs: [run("test", 0)] }, featureDir: [], d0: DIGEST_ABSENT })
+            : null;
+    const doc = entryDocument({
+      status,
+      feature: FEATURE,
+      verdict,
+      changesRecord: verdictStatus ? "none" : null,
+      reasonCode: status === "unusable" ? "crashed" : null,
+    });
+    assert.ok(Object.hasOwn(doc, "unmeasured"), `${status}: the key is present`);
+    assert.equal(documentDefect(doc), null, `${status}: well-formed`);
+    if (!verdictStatus) assert.deepEqual(doc.unmeasured, [], `${status}: [] off a verdict`);
+  }
+  const good = entryDocument({
+    status: "unmeasured",
+    feature: FEATURE,
+    verdict: entryVerdict({ stamp: { runs: [run("test", 0, { timed_out: true })] }, featureDir: [], d0: DIGEST_ABSENT }),
+    changesRecord: "none",
+  });
+  assert.equal(documentDefect(good), null, "control");
+  for (const [why, bad] of [
+    ["an unmeasured status with no unmeasured gate", { ...good, unmeasured: [] }],
+    ["an unmeasured status with a red", { ...good, red: ["build"] }],
+    ["an unknown cause", { ...good, unmeasured: [{ id: "test", cause: "slow" }] }],
+    ["a missing id", { ...good, unmeasured: [{ cause: "timed-out" }] }],
+    ["an empty id", { ...good, unmeasured: [{ id: "", cause: "timed-out" }] }],
+    ["an extra key", { ...good, unmeasured: [{ id: "test", cause: "timed-out", exit: 143 }] }],
+    ["not an array", { ...good, unmeasured: "test" }],
+    ["no changes record", { ...good, changes_record: null }],
+    ["a missing key", Object.fromEntries(Object.entries(good).filter(([k]) => k !== "unmeasured"))],
+  ]) {
+    assert.notEqual(documentDefect(bad), null, why);
+  }
 });
 
 test("EXIT covers every status, distinct, and never 1 (a crash is never a verdict)", () => {
@@ -443,13 +569,15 @@ test("CLI (review R6): --start refuses `runner-unverifiable`, wiping nothing, wh
   }
 });
 
-test("CLI: a timed-out gate is red", () => {
+test("CLI: a timed-out gate is UNMEASURED — exit 6, not red (6.74.0; it was exit 4 before)", () => {
   const dir = sandbox({ gates: { test: { sleepMs: 20000 } } });
   try {
     assert.equal(start(dir, "800").status, 0);
     const { status, doc } = wait(dir);
-    assert.equal(status, 4);
-    assert.deepEqual(doc.red, ["test"]);
+    assert.equal(status, 6, JSON.stringify(doc));
+    assert.equal(doc.status, "unmeasured");
+    assert.deepEqual(doc.red, []);
+    assert.deepEqual(doc.unmeasured, [{ id: "test", cause: "timed-out" }]);
     assert.equal(doc.gates[0].timed_out, true);
   } finally {
     cleanup(dir);
@@ -700,7 +828,10 @@ const WIRING = [
     abortIn: "\n## At the stop — ",
     rows: [
       /`3` → \*\*S4\*\*/,
-      /\*\*S14\*\* \(`blocked: gates-red-at-entry`\)/,
+      /`4` → \*\*S14\*\* \(`blocked: gates-red-at-entry`\)/,
+      // 6.74.0: the exit number is built from EXIT, so the prose cannot drift from the code (L36).
+      new RegExp(`\`${EXIT.unmeasured}\` → \\*\\*S14b\\*\\* \\(\`blocked: gates-unmeasured-at-entry\`\\)`),
+      /`unmeasured` entries/,
       /`--allow-red-entry`/,
       /`2` or anything else → go on/,
       /`changed_paths`/,
@@ -713,7 +844,14 @@ const WIRING = [
     waitAfter: "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md",
     waitBefore: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-test --name '<name>'",
     abortIn: "\n## Closing the run — ",
-    rows: [/\*\*Stop\*\*/, /\*\*Continue\*\*/, /Never continue without the answer/],
+    rows: [
+      /\*\*Stop\*\*/,
+      /\*\*Continue\*\*/,
+      /Never continue without the answer/,
+      // 6.74.0: the unmeasured exit is presented and asked, like exit 4 (the number built from EXIT, L36).
+      new RegExp(`\`${EXIT.unmeasured}\` \\(no gate red`),
+      /`unmeasured` entries/,
+    ],
   },
 ];
 
@@ -763,9 +901,10 @@ for (const w of WIRING) {
   });
 }
 
-test("★ WIRING: /pharn-loop's S14 row exists and the opt-in is part of both entry grammars", () => {
+test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part of both entry grammars", () => {
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
-  assert.match(loop, /^\| S14 \|/m);
+  assert.match(loop, /^\| S14\s+\|/m);
+  assert.match(loop, /^\| S14b\s+\| Step 4's entry read exits `6`/m, "6.74.0: the unmeasured stop row, on exit 6");
   assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--max-iter N] <increment description>`"));
   assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--max-iter N] <increment description>`"));
 });

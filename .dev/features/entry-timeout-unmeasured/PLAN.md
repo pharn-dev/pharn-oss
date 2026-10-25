@@ -75,7 +75,7 @@ reader left that counts a timeout as red.
    would send `/pharn-loop` into a rebuild aimed at a hang. At entry both statuses stop the run (or both go on under
    `--allow-red-entry`), so nothing rebuilds. The measured red is the certain claim (verify cannot pass that gate unless
    the run fixes it), and the unmeasured one is the uncertain claim. The document lists both, so a red-first stop still
-   names the unmeasured gates (the loop copies both into `### next_steps`). **Open for GATE 1.**
+   names the unmeasured gates (the loop copies both into `### next_steps`). **Approved at GATE 1.**
 3. **Status, exit, document.** `STATUSES` gains `unmeasured`, and `EXIT.unmeasured = 6` (0, 2, 3, 4 and 5 are taken; 1
    is never used). `DOC_KEYS` gains `unmeasured` (after `unattributed`). `entryDocument` writes `verdict.unmeasured` or
    `[]`, so every status's document carries the key. `documentDefect`:
@@ -93,8 +93,8 @@ reader left that counts a timeout as red.
    `entry-base-evidence-core.mjs:181`.
 5. **`/pharn-loop` (`pharn-loop.md`).**
    - **Step 1:** `--allow-red-entry` goes on past a red **or unmeasured** gate instead of stopping at S14 or S14b.
-     Recommended: reuse the one flag rather than add a second one (P7: one opt-in, same meaning: "run anyway").
-     **Open for GATE 1.**
+     Reuse the one flag rather than add a second one (P7: one opt-in, same meaning: "run anyway").
+     **Approved at GATE 1.**
    - **Step 2:** "S4–S14b **stop** it". A new row:
      `| S14b | Step 4's entry read exits`6`: no gate was red, but a gate was not measured on the tree the run started
 from (killed at the per-gate timeout, or could not start), and`--allow-red-entry`was not given | stop`blocked:
@@ -292,13 +292,14 @@ true}` gives status `unmeasured`, `unmeasured: [{id: "test", cause: "timed-out"}
 No new input. Gate ids come from a validated stamp's allowlist, and `cause` is a closed token. The document gains no
 free text. The loop copies `unmeasured` entries into `### next_steps` as DATA, as it already does for `red` ids.
 
-## Open questions (HALT)
+## Decisions (resolved at GATE 1)
 
-- **Precedence.** Red first (recommended, Design 2), or unmeasured first to match verify?
-- **`--allow-red-entry` scope.** Should it also go on past an unmeasured gate (recommended, Design 5), or should an
-  unmeasured stop have no opt-out flag in this increment?
-- **Stop id.** `S14b` / `blocked: gates-unmeasured-at-entry` (recommended), or a new `S15`?
-- **Bump size.** Minor 6.74.0 (recommended; 6.59.0 precedent), or patch 6.73.3 as a correction?
-- **PR #392 ordering.** If `docs/loop-cost-2026-10-25` merges first, its `[Unreleased]` CHANGELOG entry moves into
-  6.74.0 at build time, and its README edits are merged in. Its record's "`gates-red-at-entry` (S14)" stays a true
-  historic label.
+Human-approved at GATE 1 on 2026-10-25, by chat answer ("Approve as planned (Recommended)" in the question form). Every
+question this plan had open was settled on its recommendation:
+
+- **Precedence.** Red first (Design 2).
+- **`--allow-red-entry` scope.** It also goes on past an unmeasured gate (Design 5).
+- **Stop id.** `S14b` / `blocked: gates-unmeasured-at-entry`.
+- **Bump size.** Minor, 6.74.0.
+- **PR #392 ordering.** If `docs/loop-cost-2026-10-25` has merged by build time, its `[Unreleased]` CHANGELOG entry
+  moves into 6.74.0 and its README edits are merged in; otherwise it is left alone.
