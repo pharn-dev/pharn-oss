@@ -23,6 +23,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-25: **A preparation record for a second `/pharn-loop` cost measurement in pharn-starter,
+  `.dev/measurements/loop-6.72-prep.md`; the measurement itself is blocked.** It finds the 2026-10-05 run's base
+  commit, installs 6.73.1 (the CLI cannot pin 6.72.0) into a worktree there, and runs the readiness checks. `build` is
+  red there from unset production environment variables, and 6.73.1's loop would stop at entry on it. A second
+  attempt at pharn-starter HEAD (PHARN 6.72.0) finds `test` and `format:check` red. After pharn-starter#257 fixed
+  both, and with a feature named, the protocol went GO. Then two attempts at run 1, in a desktop-app session and in
+  the terminal CLI, both stopped at the spec stage on the named residual `stage-agent-background`: Claude Code
+  2.1.308/2.1.309 backgrounded the stage agent, because the call passed `run_in_background` as the string `"false"`.
+  So the protocol is blocked until PHARN fixes that. Apparatus only; nothing shipped changes.
+
 ## [6.73.1] - 2026-10-25
 
 ### Fixed
