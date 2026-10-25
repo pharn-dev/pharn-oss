@@ -21,7 +21,7 @@
 //     the INVOKING directory, and the checkout must NOT already be on pharn-loop/<name> or pharn-loop/<name>-<n> — a
 //     second run after a commit (or after a crash that left the branch) would commit again (independent review R2,
 //     reproduced). Any refusal → exit 2, nothing run. Never re-run the closeout after a crash or after exit 0/3/4.
-//     From the branch step on, the step about to run is written to .pharn/pharn-loop/<name>/closeout-phase
+//     From the branch step on, the step about to run is written to pharn/.run/pharn-loop/<name>/closeout-phase
 //     (`branch`, `add`, `commit`, `undo`, `committed`, then `finished`), so a crash can be classified (review R1). The closeout runs from the project root, as every
 //     pinned line did: floor children resolve from this file's directory, the two hooks and every path operand from
 //     the invoking directory.
@@ -52,7 +52,7 @@
 //     order. ONE stated difference (L54): absence is an lstat ENOENT, never existsSync, so a dangling symlink at a
 //     listed path is skipped instead of being staged as a deletion, and a dangling-link lock refuses. Any refusal →
 //     `stage failed`; empty → `nothing staged`; both exit 4. Written NUL-separated to
-//     .pharn/pharn-loop/<name>/stage.list after a containmentWalk (lstat, no symlink component).
+//     pharn/.run/pharn-loop/<name>/stage.list after a containmentWalk (lstat, no symlink component).
 // 12. The first of pharn-loop/<name>, pharn-loop/<name>-2, … that `git show-ref --verify --quiet` reports absent,
 //     then `git switch -c`; non-zero → `branch failed`, exit 4.
 // 13. GIT_LITERAL_PATHSPECS=1 git add -A / git commit, both --pathspec-from-file=<list> --pathspec-file-nul; the
@@ -63,7 +63,7 @@
 //     Hooks run (never --no-verify; nothing is pushed or merged). A failed add → `stage failed`, a failed commit → `commit failed`, each followed by the undo the close
 //     part prescribed — reset of the list, `git checkout - --`, `git branch -d <branch>` — exit 4. Success → the SHA
 //     from `git rev-parse HEAD`, `committed <branch>`, exit 0.
-// 14. The freshness ledger (.pharn/pharn-loop/<name>/freshness.jsonl, read only as an lstat regular file), or
+// 14. The freshness ledger (pharn/.run/pharn-loop/<name>/freshness.jsonl, read only as an lstat regular file), or
 //     `no re-runs`.
 // 15. Exit 0 or 3 only (no model write follows): set-writes-scope.cjs --clear, then require-loop-record.cjs --close
 //     <name> — the Final step's order; `released` says whether both exited 0.
@@ -181,8 +181,8 @@ const featureDir = (f) => `pharn/features/${f}`;
 const recordPath = (f) => `pharn/features/${f}/LOOP.md`;
 const specPath = (f) => `pharn/features/${f}/SPEC.md`;
 const lockPath = (f) => `pharn/features/${f}/AC-TESTS.lock.json`;
-export const stageListPath = (f) => `.pharn/pharn-loop/${f}/stage.list`;
-export const phasePath = (f) => `.pharn/pharn-loop/${f}/closeout-phase`;
+export const stageListPath = (f) => `pharn/.run/pharn-loop/${f}/stage.list`;
+export const phasePath = (f) => `pharn/.run/pharn-loop/${f}/closeout-phase`;
 
 /** The closed set of phases written to `phasePath` (review R1). */
 export const PHASES = Object.freeze(["branch", "add", "commit", "undo", "committed", "finished"]);
@@ -201,13 +201,13 @@ function writePhase(feature, phase, log) {
   const walk = containmentWalk(root, join(root, rel));
   try {
     if (!walk.ok) throw new Error(walk.reason);
-    mkdirSync(join(root, ".pharn", "pharn-loop", feature), { recursive: true });
+    mkdirSync(join(root, "pharn", ".run", "pharn-loop", feature), { recursive: true });
     writeFileSync(rel, `${phase}\n`);
   } catch (e) {
     log(`── closeout-phase not written (${phase}): ${e && typeof e.message === "string" ? e.message : "write failed"}\n`);
   }
 }
-const freshnessPath = (f) => `.pharn/pharn-loop/${f}/freshness.jsonl`;
+const freshnessPath = (f) => `pharn/.run/pharn-loop/${f}/freshness.jsonl`;
 
 /** The commit-gate freshness argv — exported so check-loop-fresh.test.mjs EXECUTES exactly what this script passes. */
 export function commitGateArgs(feature, base) {
@@ -420,9 +420,9 @@ export function buildStageList(feature, { git = gitRun } = {}) {
   const trackedAtHead = (p) => git(["cat-file", "-e", `HEAD:${p}`], { literal: true }).status === 0;
   let rec;
   try {
-    rec = JSON.parse(readFileSync(".pharn/writes-scope.json", "utf8"));
+    rec = JSON.parse(readFileSync("pharn/.run/writes-scope.json", "utf8"));
   } catch {
-    return { code: 1, paths: [], detail: ".pharn/writes-scope.json is unreadable or not JSON" };
+    return { code: 1, paths: [], detail: "pharn/.run/writes-scope.json is unreadable or not JSON" };
   }
   if (rec === null || typeof rec !== "object" || Array.isArray(rec))
     return { code: 1, paths: [], detail: "the scope record is not an object" };
@@ -467,7 +467,7 @@ function writeStageList(feature, paths) {
   const walk = containmentWalk(root, join(root, rel));
   if (!walk.ok) return walk.reason;
   try {
-    mkdirSync(join(root, ".pharn", "pharn-loop", feature), { recursive: true });
+    mkdirSync(join(root, "pharn", ".run", "pharn-loop", feature), { recursive: true });
     writeFileSync(rel, paths.map((p) => `${p}\0`).join(""));
     return null;
   } catch (e) {

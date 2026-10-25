@@ -1,4 +1,5 @@
-
+/* eslint-disable -- BUILD RECORD: the script that produced pharn-footprint-move, replayed against a scratch copy (see
+   PLAN.md "Revision 3"); it is never run in this tree, and the new-tests/ files are fragments appended to the hook suites. */
 // ============================== 7.0.0 — the loop state moved to pharn/.run/pharn-loop/ (pharn-footprint-move) ====
 // A missed site here would make the Stop guard silently inert, so: the guard blocks on a marker at the NEW path, a
 // marker left only at the OLD path does not count (the migration note says to finish or abandon runs first), and
@@ -25,7 +26,11 @@ test("★ 7.0.0 --open refuses a symlink at EITHER segment of the scratch root, 
       fs.mkdirSync(path.join(elsewhere, ".run"), { recursive: true });
       if (at.length === 2) fs.mkdirSync(path.join(root, "pharn"), { recursive: true });
       fs.symlinkSync(at.length === 1 ? elsewhere : path.join(elsewhere, ".run"), path.join(root, ...at));
-      assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr: quiet }), 2, at.join("/"));
+      assert.equal(
+        markerMode(["--open", NAME, "--cap", "3"], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr: quiet }),
+        2,
+        at.join("/")
+      );
       assert.deepEqual(fs.readdirSync(path.join(elsewhere, ".run")), [], `${at.join("/")}: nothing written through the link`);
       fs.rmSync(elsewhere, { recursive: true, force: true });
     });

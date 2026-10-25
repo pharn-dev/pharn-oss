@@ -53,11 +53,11 @@ requires must be present, and no key outside that status's set may appear.
     `feature: null`, or `path-containment` itself), nothing has been removed or written.
   - **A `usage-error` from the rest of argv** (`--timeout-ms`, `--budget-ms`, a mutually exclusive pair, …)
     fires AFTER this feature's stale prior report was removed but BEFORE the scratch clear. So an earlier
-    run's `.pharn/pharn-regress/` scratch survives it: its progress record and its base worktree. An
+    run's `pharn/.run/pharn-regress/` scratch survives it: its progress record and its base worktree. An
     out-of-flow `--resume` would then revive that earlier run from its own record (measured). The thin
     command runs `--resume` only after a `continue` exit, so that revival is reachable only outside the
     documented flow.
-  - **Every later stop** (`no-feature` onward) has removed the stale report AND cleared `.pharn/pharn-regress/`
+  - **Every later stop** (`no-feature` onward) has removed the stale report AND cleared `pharn/.run/pharn-regress/`
     (GRILL G14: one run per worktree at a time, so another run's in-progress record goes with it) — all but a
     retained `base-gates/` directory, which a later decision reuses or discards (6.33.0, BASE-evidence reuse:
     `pharn/pharn-contracts/regression-report.md`, "The additive `base_evidence` block"). From
@@ -77,7 +77,7 @@ requires must be present, and no key outside that status's set may appear.
   - **Before the slug parses, or at `path-containment` itself**, nothing has been removed: an earlier
     `verify-report.json`, `VERIFY.md` and progress record survive together.
   - **Any later `unusable`** (a `usage-error` from the rest of argv included) has removed THIS feature's earlier
-    report and render AND cleared `.pharn/pharn-verify/`, its progress record first. From the runner's `init` on,
+    report and render AND cleared `pharn/.run/pharn-verify/`, its progress record first. From the runner's `init` on,
     this run's `gates/` may exist, and from "drain" on this run's own progress record.
   - **A `--resume`'s own stop** removes nothing, but may follow gates it ran, whose logs stay.
   - **A removal that fails** for any reason other than absence is a crash (exit 1, no document), never a `2` — so
@@ -323,7 +323,7 @@ thing that prevents it, and that text is advisory.
   transient copy for a one-line relay. The `report` **file** is the only verdict source a machine consumer
   may read.
 
-## Residual (named, not hidden — `LIMITS.md §2`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`)
 
 This contract governs the **shape** of a stage's exit, never whether the stage's underlying computation is
 correct. A stage script that fabricates a self-consistent `done` object with a wrong `verdict` value still

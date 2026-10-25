@@ -1,4 +1,5 @@
-
+/* eslint-disable -- BUILD RECORD: the script that produced pharn-footprint-move, replayed against a scratch copy (see
+   PLAN.md "Revision 3"); it is never run in this tree, and the new-tests/ files are fragments appended to the hook suites. */
 // ============================== 7.0.0 — the scratch root moved under pharn/ (pharn-footprint-move) ==============
 // The old ALWAYS glob (`.pharn/**`) sat OUTSIDE pharn/; the new one (`pharn/.run/**`) sits INSIDE it, beside the
 // trusted docs, canon and the floor. This is the regression the move could cause, so it is one table iterated over

@@ -1,4 +1,5 @@
-
+/* eslint-disable -- BUILD RECORD: the script that produced pharn-footprint-move, replayed against a scratch copy (see
+   PLAN.md "Revision 3"); it is never run in this tree, and the new-tests/ files are fragments appended to the hook suites. */
 // ============================== 7.0.0 — the protected paths moved under pharn/ (pharn-footprint-move) ===========
 // The four moved members (two trusted docs, the scope file, the SPEC template) and the canon subtree, reached through
 // a symlinked ALIAS of pharn/ — segment-wise resolution must judge the target, exactly as for the two docs that were
@@ -28,6 +29,7 @@ test("★ 7.0.0 the OLD root paths are a user's own files in a sandbox too — p
   const OLD = ["THREAT-MODEL.md", "LIMITS.md", "memory-bank/lessons-learned.md", "pharn.spec-template.md", ".pharn/writes-scope.json"];
   for (const present of [false, true]) {
     const sb = sandbox(present ? OLD : []);
-    for (const p of OLD) assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: p } }).status, 0, `${p} (present: ${present})`);
+    for (const p of OLD)
+      assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: p } }).status, 0, `${p} (present: ${present})`);
   }
 });

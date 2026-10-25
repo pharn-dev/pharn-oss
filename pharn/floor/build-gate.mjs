@@ -11,7 +11,7 @@
 //      REQUIRED (no default — L41), `--budget-ms` optional (absent = unbudgeted, for a code caller). `--gates` is a
 //      HUMAN's spec (review R1), exactly as `/pharn-verify` takes one: the invoker appends it verbatim, it reaches the
 //      runner as ONE argv string (no shell parses it here), and the project's gate exclusion never filters it.
-//   2. containment: every path under `.pharn/pharn-build/<name>/` is walked with containmentWalk first (lstat; a
+//   2. containment: every path under `pharn/.run/pharn-build/<name>/` is walked with containmentWalk first (lstat; a
 //      symlink or a dangling link at any component refuses — L54).
 //   3. CONTINUE OR START (L44, L66). The same line both starts and continues a run, so nothing rides between Bash
 //      calls. It continues only an UNFINALIZED `<out>/state.json` of this feature and stage, made from the same
@@ -32,7 +32,7 @@
 // EXIT (build-gate-core EXIT): 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE (run the same line again) · 2 UNUSABLE.
 // Anything else — node's own 1 included — is a crash and never a verdict.
 //
-// WRITES: only under `.pharn/pharn-build/<name>/` (targets.json, <mode>.times.json) and, through the runner, its
+// WRITES: only under `pharn/.run/pharn-build/<name>/` (targets.json, <mode>.times.json) and, through the runner, its
 // `<out>`. A Bash-reached write, outside the PreToolUse guards (L19); the state root is git-ignored.
 //
 // TRUST (P2): the PLAN's and AC-TESTS' `## Files` paths are untrusted: they reach the runner only through
@@ -66,7 +66,7 @@ import { EXIT, MODES, STAGE, buildGatePaths, decide, finishedLines, logPaths, re
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_GATES = join(HERE, "run-gates.mjs");
-const STATE_ROOT = ".pharn";
+const STATE_ROOT = "pharn/.run";
 const KNOWN = new Set(["--feature", "--mode", "--timeout-ms", "--budget-ms", "--gates"]);
 const LOG_READ_CAP = 4 * 1024 * 1024; // a log is read for its TAIL; past this, only the last bytes are read
 const ASK_GATES =
@@ -244,6 +244,10 @@ function run(argv) {
   const paths = buildGatePaths(feature);
   const out = paths.out(mode);
   const rootAbs = resolve(STATE_ROOT);
+  // 7.0.0: the walks below start AT the state root, whose own lstat follows a link at `pharn` above it. Walk the
+  // two segments from the project root first, so a link at `pharn` or `pharn/.run` is refused too.
+  const top = containmentWalk(resolve("."), rootAbs);
+  if (!top.ok) unusable(`path-containment: ${STATE_ROOT} ${top.reason}`);
   for (const p of [paths.root, out, paths.targets, paths.times(mode)]) {
     const c = containmentWalk(rootAbs, resolve(p));
     if (!c.ok) unusable(`path-containment: ${p} ${c.reason}`);

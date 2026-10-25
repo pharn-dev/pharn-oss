@@ -63,7 +63,7 @@ const sha256 = (b) => createHash("sha256").update(b).digest("hex");
  *  to produce the report — the same "checker's own output, never hand-typed" discipline the rest of this
  *  suite already follows for the regress side. Mirrors check-loop-fresh.test.mjs's own `writeStamp`. */
 function writeVerifyStampAndReport(dir, { head, digest }) {
-  const outDir = join(dir, ".pharn", "pharn-verify", "gates");
+  const outDir = join(dir, "pharn", ".run", "pharn-verify", "gates");
   mkdirSync(outDir, { recursive: true });
   const seq = 0;
   const id = "reconcile";
@@ -103,7 +103,7 @@ function writeVerifyStampAndReport(dir, { head, digest }) {
     ],
     aux: { completeness: 0 }, // check-build-complete.mjs's own exit code: 0 = complete
   };
-  const stampPath = join(dir, ".pharn", "pharn-verify", "gates", "stamp.json");
+  const stampPath = join(dir, "pharn", ".run", "pharn-verify", "gates", "stamp.json");
   writeFileSync(stampPath, JSON.stringify(stamp, null, 2));
   const r = spawnSync(process.execPath, [CHECK_VERIFY, "--stamp", stampPath, "--feature", FEATURE, "--ac-gate"], {
     cwd: dir,
@@ -141,7 +141,7 @@ function repo({ scripts = { test: "node --test" }, gitignorePharn = true, withTe
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fx", version: "1.0.0", scripts }, null, 2) + "\n");
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\n");
@@ -293,7 +293,7 @@ test("done/regressions: a change to a DECLARED file that breaks an UNDECLARED ou
     git("init", "-q", ".");
     git("config", "user.email", "t@t");
     git("config", "user.name", "t");
-    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fx", scripts: { test: "node --test" } }, null, 2) + "\n");
     mkdirSync(join(dir, "src"), { recursive: true });
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\n");
@@ -467,7 +467,7 @@ test("refused/scope-escaped (GRILL G3): a rename of an undeclared file onto a de
     git("init", "-q", ".");
     git("config", "user.email", "t@t");
     git("config", "user.name", "t");
-    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fx", scripts: { test: "node --test" } }, null, 2) + "\n");
     mkdirSync(join(dir, "src"), { recursive: true });
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\n");
@@ -909,11 +909,12 @@ test("unusable/no-feature: no such feature directory", () => {
 });
 
 // ── CONTAINMENT (L54) ──────────────────────────────────────────────────────────────────────────────
-test("unusable/path-containment: a SYMLINK at .pharn is refused, and a DANGLING one is refused the same way", () => {
+test("unusable/path-containment: a SYMLINK at pharn/.run is refused, and a DANGLING one is refused the same way", () => {
   const { dir, base } = repo();
   try {
     const outsideTarget = mkdtempSync(join(tmpdir(), "sr-outside-"));
-    symlinkSync(outsideTarget, join(dir, ".pharn"));
+    mkdirSync(join(dir, "pharn"), { recursive: true });
+    symlinkSync(outsideTarget, join(dir, "pharn", ".run"));
     const r = cli(dir, freshArgs(base));
     assert.equal(r.code, 2);
     assert.equal(r.json.reason_code, "path-containment");
@@ -972,8 +973,8 @@ test("--resume: a feature directory swapped for a SYMLINK between invocations is
   }
 });
 
-// ── GRILL G2 — the stage's own scratch is never an escape, even when .pharn/ is NOT git-ignored ────
-test("GRILL G2: a fixture that does NOT git-ignore .pharn/ never reports its own scratch as an escape", () => {
+// ── GRILL G2 — the stage's own scratch is never an escape, even when pharn/.run/ is NOT git-ignored ────
+test("GRILL G2: a fixture that does NOT git-ignore pharn/.run/ never reports its own scratch as an escape", () => {
   const { dir, base } = repo({ gitignorePharn: false });
   try {
     writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x){return x;}\n");
@@ -981,7 +982,7 @@ test("GRILL G2: a fixture that does NOT git-ignore .pharn/ never reports its own
     assert.equal(r.code, 0, r.raw);
     const scope = JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8"));
     assert.ok(
-      scope.inside.every((p) => !p.startsWith(".pharn/")),
+      scope.inside.every((p) => !p.startsWith("pharn/.run/")),
       "the stage's own scratch must never appear in `inside`"
     );
   } finally {
@@ -1355,7 +1356,7 @@ test("★ WIRING — pharn-regress.md's pinned fresh line, executed verbatim, re
     git("init", "-q", ".");
     git("config", "user.email", "t@t");
     git("config", "user.name", "t");
-    writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
     writeFileSync(
       join(dir, "package.json"),
       JSON.stringify({ name: "fx", version: "1.0.0", scripts: { test: "node --test" } }, null, 2) + "\n"
@@ -1714,7 +1715,7 @@ function openRun(dir, command = "pharn-loop", feature = FEATURE) {
   const argv = command === "pharn-loop" ? [LOOP_RECORD, "--open", feature, "--cap", "3"] : [RUN_MARKER, "--open", command, feature];
   const r = spawnSync(process.execPath, argv, { cwd: dir, encoding: "utf8", env: CLEAN_ENV });
   assert.equal(r.status, 0, `the ${command} marker writer refused: ${r.stdout}${r.stderr}`);
-  return join(dir, ".pharn", command, feature, "active.json");
+  return join(dir, "pharn", ".run", command, feature, "active.json");
 }
 
 function recordFile(dir) {
@@ -2107,7 +2108,7 @@ const E2E_MISSES = [
     why: "the run marker is older than 24 h",
     between: (fx) => {
       const t = (Date.now() - 25 * 60 * 60 * 1000) / 1000;
-      utimesSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"), t, t);
+      utimesSync(join(fx.dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"), t, t);
     },
   },
   { miss: "no-record", why: "the record was removed", between: (fx) => rmSync(recordFile(fx.dir)) },
@@ -2286,7 +2287,10 @@ test("a forged stage.json HIT at verdict over a forged stamp is never honored �
           miss: null,
           requirementSha256: first.be.requirement_sha256,
           stampSha256: sha256(forgedText),
-          run: { command: "pharn-loop", markerSha256: sha256(readFileSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"))) },
+          run: {
+            command: "pharn-loop",
+            markerSha256: sha256(readFileSync(join(fx.dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"))),
+          },
         },
         installOverride: true,
         entryReuse: null, // a retained HIT never asks the entry rule (progress /3, 6.49.0)
@@ -2341,7 +2345,7 @@ test("crash — a kill during drain-base of a MISS run, then a fresh run: no rec
   }
 });
 
-// ── ★ HOOK — the record is out of the WRITE TOOLS' reach; `.pharn/` is not (the reason the record is not there) ──
+// ── ★ HOOK — the record is out of the WRITE TOOLS' reach; `pharn/.run/` is not (the reason the record is not there) ──
 const PROTECT = join(HERE, "..", "..", ".claude", "hooks", "protect-trusted-paths.cjs");
 const ENFORCE = join(HERE, "..", "..", ".claude", "hooks", "enforce-writes-scope.cjs");
 
@@ -2364,7 +2368,7 @@ function hookExit(hook, projectDir, filePath) {
   return r.status;
 }
 
-test("★ HOOK — both real write guards deny the record path, in a main checkout and in a linked worktree; `.pharn/` evidence is writable", () => {
+test("★ HOOK — both real write guards deny the record path, in a main checkout and in a linked worktree; `pharn/.run/` evidence is writable", () => {
   const fx = reuseRepo();
   const wt = `${fx.dir}-wt`;
   try {
@@ -2376,7 +2380,7 @@ test("★ HOOK — both real write guards deny the record path, in a main checko
     assert.equal(hookExit(ENFORCE, fx.dir, mainRecord), 2, "enforce-writes-scope's default denies it too");
     const evidence = join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json");
     assert.equal(hookExit(PROTECT, fx.dir, evidence), 0);
-    assert.equal(hookExit(ENFORCE, fx.dir, evidence), 0, "`.pharn/**` is always writable — why the record is not there");
+    assert.equal(hookExit(ENFORCE, fx.dir, evidence), 0, "`pharn/.run/**` is always writable — why the record is not there");
 
     // A linked worktree: its own git dir lives in the main checkout's `.git/worktrees/<name>/`, another git tree.
     execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: fx.dir });
@@ -2805,7 +2809,7 @@ const npmRecord = (version) =>
 /** A repo whose COMMITTED lockfile names dep@2.0.0 (with `flags`); `installed` plants npm's record at that version, or
  *  no node_modules (null). */
 function installRepo(installed, flags = {}) {
-  const fx = repo({ committed: { ".gitignore": ".pharn/\nnode_modules/\n", "package-lock.json": npmLock("2.0.0", flags) } });
+  const fx = repo({ committed: { ".gitignore": "pharn/.run/\nnode_modules/\n", "package-lock.json": npmLock("2.0.0", flags) } });
   if (installed !== null) {
     mkdirSync(join(fx.dir, "node_modules"), { recursive: true });
     writeFileSync(join(fx.dir, "node_modules", ".package-lock.json"), npmRecord(installed));
@@ -3035,7 +3039,7 @@ test("★ P2-D (f6) — the base worktree sits OUTSIDE the project: base gates n
     "test('dep', async () => { console.log('CWD ' + process.cwd()); const m = await import('mydep'); console.log('RESOLVED ' + m.where); assert.ok(m.where); });\n";
   const { dir, base } = repo({
     scripts: { test: "node --test", typecheck: "mytool" },
-    committed: { "src/other.test.js": where, ".gitignore": ".pharn/\nnode_modules/\n" },
+    committed: { "src/other.test.js": where, ".gitignore": "pharn/.run/\nnode_modules/\n" },
   });
   try {
     mkdirSync(join(dir, "node_modules", "mydep"), { recursive: true });
@@ -3154,7 +3158,7 @@ const declaredArgs = (base, extra = []) => ["--feature", FEATURE, "--timeout-ms"
 function library(install, committedExtra = {}) {
   const committed = {
     "package.json": LIBRARY_PKG,
-    ".gitignore": ".pharn/\nnode_modules\n", // no trailing slash: a node_modules SYMLINK is ignored too
+    ".gitignore": "pharn/.run/\nnode_modules\n", // no trailing slash: a node_modules SYMLINK is ignored too
     "src/other.test.js": DEP_TEST,
     ...(install === null ? {} : { "pharn.config.json": declaration(install) }),
     ...committedExtra,
@@ -3246,7 +3250,7 @@ test("head-node-modules refuses install-config-invalid when the project's node_m
     [
       "the base commit tracks node_modules",
       () => {},
-      { ".gitignore": ".pharn/\n", "node_modules/mydep/package.json": MYDEP_PKG, "node_modules/mydep/index.js": MYDEP_INDEX },
+      { ".gitignore": "pharn/.run/\n", "node_modules/mydep/package.json": MYDEP_PKG, "node_modules/mydep/index.js": MYDEP_INDEX },
       /already has a node_modules entry/,
     ],
   ];

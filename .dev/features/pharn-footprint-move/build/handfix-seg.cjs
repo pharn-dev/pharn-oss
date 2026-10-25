@@ -163,7 +163,9 @@ ed("pharn/floor/build-gate.mjs", [
 
 // ── constants and comparisons ───────────────────────────────────────────────────────────────────────────
 for (const f of ["pharn/floor/stage-regress.mjs", "pharn/floor/stage-verify.mjs"])
-  ed(f, [[`const STATE_ROOT = ".pharn";`, `const STATE_ROOT = "pharn/.run"; // walked from the project root, so both segments are lstat'ed`]]);
+  ed(f, [
+    [`const STATE_ROOT = ".pharn";`, `const STATE_ROOT = "pharn/.run"; // walked from the project root, so both segments are lstat'ed`],
+  ]);
 ed("pharn/floor/seam-config-materialize.mjs", [[`const OUT_DIR = ".pharn";`, `const OUT_DIR = "pharn/.run";`]]);
 ed("pharn/floor/stage-agent.mjs", [
   [
@@ -180,8 +182,12 @@ function stateParts(command, name) {
   [`  const dir = join(root, rel[2]);`, `  const dir = join(root, rel[rel.length - 1]); // the run's own directory: the LAST component`],
   [`absent component, or -1 when all three exist as real directories`, `absent component, or -1 when every one exists as a real directory`],
 ]);
-ed("pharn/floor/stage-direct.mjs", [[`  for (const rel of [".pharn", LOCK_DIR]) {`, `  for (const rel of ["pharn", "pharn/.run", LOCK_DIR]) {`]]);
-ed("pharn/floor/ac-tests-core.mjs", [[`  if (p === ".pharn" || p.startsWith("pharn/.run/")) return`, `  if (p === "pharn/.run" || p.startsWith("pharn/.run/")) return`]]);
+ed("pharn/floor/stage-direct.mjs", [
+  [`  for (const rel of [".pharn", LOCK_DIR]) {`, `  for (const rel of ["pharn", "pharn/.run", LOCK_DIR]) {`],
+]);
+ed("pharn/floor/ac-tests-core.mjs", [
+  [`  if (p === ".pharn" || p.startsWith("pharn/.run/")) return`, `  if (p === "pharn/.run" || p.startsWith("pharn/.run/")) return`],
+]);
 ed("pharn/floor/apply-plan-deletions.mjs", [
   [
     `    if (lower === ".pharn" || lower.startsWith("pharn/.run/") || lower.startsWith("pharn/features/")) {`,

@@ -55,14 +55,14 @@ const markerDoc = (cap, extra = {}) => ({
 // Write a fixture project: pharn/features/demo/LOOP.md + optionally verify-report.json / regression-report.json
 // (a `null` report object means "do not write that file", to test a missing report). `spec` (6.28.0), when given, is
 // written as SPEC.md beside the record — the file the re-run's check-loop.mjs reads its mode from. `marker` (6.65.0):
-// "auto" writes .pharn/pharn-loop/demo/active.json carrying the record's own cap (a run that obeyed its cap); null
+// "auto" writes pharn/.run/pharn-loop/demo/active.json carrying the record's own cap (a run that obeyed its cap); null
 // writes none; an object is written as the marker's JSON, a string verbatim.
 function withFixture(fm, verifyObj, regressObj, fn, spec = null, marker = "auto") {
   const root = mkdtempSync(join(tmpdir(), "pharn-loop-decision-"));
   const dir = join(root, "pharn", "features", MARKER_NAME);
   mkdirSync(dir, { recursive: true });
   if (marker !== null) {
-    const mdir = join(root, ".pharn", "pharn-loop", MARKER_NAME);
+    const mdir = join(root, "pharn", ".run", "pharn-loop", MARKER_NAME);
     mkdirSync(mdir, { recursive: true });
     const doc = marker === "auto" ? markerDoc(/^\d+$/.test(fm.cap ?? "") ? Number(fm.cap) : 3) : marker;
     writeFileSync(join(mdir, "active.json"), typeof doc === "string" ? doc : `${JSON.stringify(doc)}\n`);
@@ -472,8 +472,8 @@ test("★ LOOP-2 / L54 — a symlink at the marker path is never followed: CAP_U
     (r) => {
       const real = join(r.root, "elsewhere.json");
       writeFileSync(real, JSON.stringify(markerDoc(3)));
-      mkdirSync(join(r.root, ".pharn", "pharn-loop", MARKER_NAME), { recursive: true });
-      const at = join(r.root, ".pharn", "pharn-loop", MARKER_NAME, "active.json");
+      mkdirSync(join(r.root, "pharn", ".run", "pharn-loop", MARKER_NAME), { recursive: true });
+      const at = join(r.root, "pharn", ".run", "pharn-loop", MARKER_NAME, "active.json");
       symlinkSync(real, at);
       // control: the link's target is a valid marker with the record's cap — only the link makes it RED
       assert.equal(JSON.parse(readFileSync(at, "utf8")).cap, 3);
@@ -507,8 +507,8 @@ test("★ LOOP-2 / CodeQL js/file-system-race — the marker is checked and read
       PASS,
       CLEAN,
       (r) => {
-        mkdirSync(join(r.root, ".pharn", "pharn-loop", MARKER_NAME), { recursive: true });
-        const at = join(r.root, ".pharn", "pharn-loop", MARKER_NAME, "active.json");
+        mkdirSync(join(r.root, "pharn", ".run", "pharn-loop", MARKER_NAME), { recursive: true });
+        const at = join(r.root, "pharn", ".run", "pharn-loop", MARKER_NAME, "active.json");
         make(at);
         if (!existsSync(at)) return; // mkfifo unavailable here: nothing to assert for this kind
         const out = spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8", timeout: 20000 });
@@ -590,7 +590,7 @@ test("✧ L35 — the restated marker schema equals require-loop-record.cjs's ex
           encoding: "utf8",
         });
         assert.equal(open.status, 0, open.stderr);
-        assert.ok(existsSync(join(r.root, ".pharn", "pharn-loop", MARKER_NAME, "active.json")));
+        assert.ok(existsSync(join(r.root, "pharn", ".run", "pharn-loop", MARKER_NAME, "active.json")));
         const out = spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" });
         assert.equal(out.status, verdict, out.stdout);
       },

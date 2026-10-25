@@ -141,7 +141,7 @@ function scenario({ config = { [CONFIG_KEY]: { test: "vitest-json" } }, bytes, r
   const root = mkdtempSync(join(tmpdir(), "trc-"));
   try {
     if (config !== null) writeFileSync(join(root, CONFIG_FILE), typeof config === "string" ? config : JSON.stringify(config));
-    const outDir = join(root, ".pharn", "gates");
+    const outDir = join(root, "pharn", ".run", "gates");
     mkdirSync(outDir, { recursive: true });
     const file = join(outDir, resultsFileName(0, "test"));
     if (bytes !== undefined) writeFileSync(file, bytes);
@@ -864,7 +864,7 @@ test("testRecord relativizes against the root's REALPATH too (macOS /var → /pr
   try {
     const real = realpathSync(root);
     writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ [CONFIG_KEY]: { test: "vitest-json" } }));
-    const outDir = join(root, ".pharn", "gates");
+    const outDir = join(root, "pharn", ".run", "gates");
     mkdirSync(outDir, { recursive: true });
     const bytes = JSON.stringify(vitestDoc([va("t", "passed")], "passed", join(real, "tests", "x.test.js")));
     writeFileSync(join(outDir, resultsFileName(0, "test")), bytes);
@@ -1304,7 +1304,7 @@ test("gateResults + buildRecord over ONE parse equals testRecord; testIdOf is th
   const root = mkdtempSync(join(tmpdir(), "trc-gr-"));
   try {
     writeFileSync(join(root, CONFIG_FILE), JSON.stringify({ [CONFIG_KEY]: { test: "vitest-json" } }));
-    const outDir = join(root, ".pharn", "gates");
+    const outDir = join(root, "pharn", ".run", "gates");
     mkdirSync(outDir, { recursive: true });
     const bytes = fixture("vitest-red").replaceAll("/work/proj", root);
     writeFileSync(join(outDir, resultsFileName(0, "test")), bytes);

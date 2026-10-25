@@ -5,7 +5,7 @@ purpose: "Eval fixture (SWALLOWED-EXCEPTION true-negative): CODE whose catch log
 
 # Eval case — proper-handling (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. This is a **true-negative**: the catch handles the error properly, so the scanner reports
 nothing.
 

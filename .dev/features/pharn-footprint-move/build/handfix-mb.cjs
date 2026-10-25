@@ -28,7 +28,10 @@ function joinMb(f) {
 }
 
 ed(".claude/hooks/protect-trusted-paths.cjs", [
-  [`const PROTECTED_SUBTREES = ["memory-bank", ".dev/memory-bank"];`, `const PROTECTED_SUBTREES = ["pharn/memory-bank", ".dev/memory-bank"];`],
+  [
+    `const PROTECTED_SUBTREES = ["memory-bank", ".dev/memory-bank"];`,
+    `const PROTECTED_SUBTREES = ["pharn/memory-bank", ".dev/memory-bank"];`,
+  ],
   [
     "// Canon subtrees as folded prefixes WITH the trailing slash, so `memory-banked/x.md` cannot match\n// `memory-bank`.",
     "// Canon subtrees as folded prefixes WITH the trailing slash, so `pharn/memory-banked/x.md` cannot match\n// `pharn/memory-bank`.",
@@ -54,11 +57,17 @@ ed("pharn/floor/canon-root.mjs", [
   [`export const DEFAULT_CANON_ROOT = "memory-bank";`, `export const DEFAULT_CANON_ROOT = "pharn/memory-bank";`],
 ]);
 ed("pharn/floor/canon-root.test.mjs", [
-  [`test("the default root is the user's memory-bank", () => {
-  assert.equal(DEFAULT_CANON_ROOT, "memory-bank");`, `test("the default root is the user's pharn/memory-bank (7.0.0)", () => {
-  assert.equal(DEFAULT_CANON_ROOT, "pharn/memory-bank");`],
+  [
+    `test("the default root is the user's memory-bank", () => {
+  assert.equal(DEFAULT_CANON_ROOT, "memory-bank");`,
+    `test("the default root is the user's pharn/memory-bank (7.0.0)", () => {
+  assert.equal(DEFAULT_CANON_ROOT, "pharn/memory-bank");`,
+  ],
   [`root: "memory-bank", rest: [".", "--verdict"]`, `root: "pharn/memory-bank", rest: [".", "--verdict"]`],
-  [`  ["memory-bank", "memory-bank"],\n`, `  ["memory-bank", "memory-bank"],\n  ["pharn/memory-bank", "pharn/memory-bank"],\n  ["./pharn/memory-bank/", "pharn/memory-bank"],\n`],
+  [
+    `  ["memory-bank", "memory-bank"],\n`,
+    `  ["memory-bank", "memory-bank"],\n  ["pharn/memory-bank", "pharn/memory-bank"],\n  ["./pharn/memory-bank/", "pharn/memory-bank"],\n`,
+  ],
 ]);
 ed("pharn/floor/check-provenance.mjs", [["default `memory-bank`", "default `pharn/memory-bank`", true]]);
 ed("pharn/floor/lessons-index-core.mjs", [["the user's `memory-bank`", "the user's `pharn/memory-bank`"]]);

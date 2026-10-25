@@ -15,7 +15,7 @@ user's `pharn.config.json`, and its `pharn status` / `pharn update` compare that
 file. **Bounded, and stated:** the versioning UNIT is the product surface, which is not the same set as
 "files an install contains" — the installer copies only the capabilities selected for the project, never
 the whole `pharn/` capability tree. **All four trusted docs DO land**, and all four bump. Since
-`@pharn-dev/pharn` 0.4.0 (pharn-cli `7c54820`) the installer copies `THREAT-MODEL.md` and `LIMITS.md` at
+`@pharn-dev/pharn` 0.4.0 (pharn-cli `7c54820`) the installer copies `pharn/THREAT-MODEL.md` and `pharn/LIMITS.md` at
 the root beside the two under `pharn/`, and `MIN_CLI` (0.5.0) makes every CLI that honors it refuse
 anything older. The gate cannot reach a pre-0.4.0 CLI, because `minCliGate` itself first shipped in
 0.4.0. Such a CLI omits the two root docs, and it is already broken on this tree by the 5.0.0

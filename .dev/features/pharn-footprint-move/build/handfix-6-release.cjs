@@ -113,7 +113,8 @@ const C = "CHANGELOG.md";
 let c = fs.readFileSync(C, "utf8");
 const startKey = "\n### Changed\n\n- 2026-10-25: **The pharn-ci gate moves to v0.2.0";
 const endKey = "\n## [6.75.0] - 2026-10-25\n";
-const i = c.indexOf(startKey), j = c.indexOf(endKey);
+const i = c.indexOf(startKey),
+  j = c.indexOf(endKey);
 if (i < 0 || j < 0 || j < i || c.split(startKey).length !== 2) throw new Error("CHANGELOG anchors");
 const moved = c.slice(i + "\n### Changed\n\n".length, j); // the [Unreleased] entry, byte for byte
 c = c.slice(0, i) + "\n## [7.0.0] - 2026-10-25\n\n### Changed\n\n" + ENTRY + "\n" + moved + c.slice(j);

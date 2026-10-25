@@ -8,7 +8,7 @@
 // `gate_reuse` — and both reports are OVERWRITTEN every iteration, and the gate-run stamps are cleared at every stage's
 // fresh start. So for every iteration but the last, the work actually performed or avoided is gone by the time the
 // ledger is emitted. The stage script therefore appends ONE compact line at its `done` exit, derived from the evidence
-// it just finished with, to `<.pharn/cost>/<feature>/work.jsonl` — beside the markers the ledger already reads.
+// it just finished with, to `<pharn/.run/cost>/<feature>/work.jsonl` — beside the markers the ledger already reads.
 //
 // ── WHAT A RECORD SAYS (schema `pharn-stage-work/1`) ─────────────────────────────────────────────────────────────
 //   {"schema","stage":"pharn-regress","ts","session_id",
@@ -33,7 +33,7 @@
 //   used for its verdict.
 // ADVISORY: that a record was written for every execution (only a `done` exit writes one; a refused, unusable,
 //   crashed or `continue` exit writes none, so gates a stage ran before refusing are NOT recorded); that the file
-//   was not edited afterwards (`.pharn/` is Bash-reachable, LIMITS.md §6 — agreement, never provenance, [[L43]]).
+//   was not edited afterwards (`pharn/.run/` is Bash-reachable, pharn/LIMITS.md §6 — agreement, never provenance, [[L43]]).
 //   `install.ms` is ONE `performance.now()` interval around the install process, integer milliseconds — monotonic
 //   within that one process, and nothing more; a killed-and-resumed install records the run that completed.
 // OBSERVATIONAL ONLY: nothing reads a record to decide a verdict, an exit, a reuse, a route or a commit. The append is

@@ -95,7 +95,7 @@
 // because a mode that skips /pharn-regress has no regression report (`fixListFields`, derived from the policy).
 //
 // ============================ THE RESULT — closed, never free text ============================
-// `report` writes `.pharn/<command>/<name>/stage-result.json`, schema `pharn-stage-agent-result/1`, keys
+// `report` writes `pharn/.run/<command>/<name>/stage-result.json`, schema `pharn-stage-agent-result/1`, keys
 // EXACTLY {schema, command, name, stage, iteration, status, row, gate} (closed both directions, L36):
 //   status    done | refused | question
 //   row       S4 S5 S6 S6b S6c S7 S8 S9 S10 (LOOP_ROWS; S6c since 6.28.0), or null — /pharn-loop only, never with `done`
@@ -133,7 +133,7 @@
 // FLOOR (primitive #3): the route decision given the config — closed tables, the checker's own exit codes
 //   and JSON (`decideRoute`, tested); the brief's TEXT (rendered from closed tables, tested); the result's
 //   SHAPE (closed both ways, exit codes by membership); every token grammar-checked (`route-token-core.mjs`);
-//   the wait's decision (`waitDecision`, tested) — over a marker that is unauthenticated `.pharn/` state.
+//   the wait's decision (`waitDecision`, tested) — over a marker that is unauthenticated `pharn/.run/` state.
 // ADVISORY: that the orchestrator runs the route line, pastes the pinned prompt and passes the alias; that
 //   the agent runs `brief` and obeys it; that a result's CONTENT is true (`done` is the agent's claim —
 //   ship's routed build proceeds on `done gate:pass`, re-confirmed by /pharn-verify's floor `.verdict`).
@@ -173,11 +173,11 @@
 //                             at the cap the agent may still be running and writing (TaskStop is advisory and its
 //                             reach over an agent id unmeasured); the wait reads on the result's presence, not on
 //                             the writer's exit (L66 — bound to this agent only by `start`'s removal of a leftover
-//                             and `validateResult`'s binding); and the anchor is unauthenticated `.pharn/` state
+//                             and `validateResult`'s binding); and the anchor is unauthenticated `pharn/.run/` state
 //                             (`mark-phase.mjs`, TRUST BOUND): an absent, unparseable, earlier or future `ts` only
 //                             shortens the wait, but a marker rewritten to a fresh `ts` before each call
 //                             lengthens it without bound — accounting against tooling, not a control against a
-//                             Bash writer (LIMITS.md §6).
+//                             Bash writer (pharn/LIMITS.md §6).
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
@@ -187,7 +187,7 @@
 // TRUST (P2): every value this module renders is a closed-table member or a caller-validated slug; a
 // stage agent's report reaches control flow only as a closed status read through `validateResult`.
 // ADVISORY, and named (GATE-2 review A6): the Agent tool also returns the stage agent's final text into the
-// orchestrator's context — `THREAT-MODEL.md §5`'s free-text residual, in a new place. That the orchestrator's
+// orchestrator's context — `pharn/THREAT-MODEL.md §5`'s free-text residual, in a new place. That the orchestrator's
 // control flow never uses it is the orchestrator's discipline, not something this module can enforce.
 
 import { agentToken, inlineToken } from "./route-token-core.mjs";
@@ -396,9 +396,9 @@ export const BRIEF_PROMPT_PREFIX = "Run exactly this line, then follow what it p
  * 2026-10-05.md`). "Author" is load-bearing: a stage's own pinned lines (the scope setter, the anchor,
  * `ac-tests-lock.mjs`, `report`) write through Bash and are commands, not authored content. "Inside the project" is
  * load-bearing too (6.35.2, the #305 review's R1): for a path outside every git tree, `enforce-writes-scope.cjs`'s deny message
- * itself routes scratch through Bash, so the rule stops at the project and points own scratch at `.pharn/`.
+ * itself routes scratch through Bash, so the rule stops at the project and points own scratch at `pharn/.run/`.
  * ADVISORY (P0): no shell command is parsed, so an agent can still write through Bash; an out-of-scope Bash write
- * stays DETECTED, never prevented, by /pharn-verify's reconcile gate (`LIMITS.md §6`), and an in-scope one is neither
+ * stays DETECTED, never prevented, by /pharn-verify's reconcile gate (`pharn/LIMITS.md §6`), and an in-scope one is neither
  * (residual `write-tool-attribution`).
  */
 export const WRITE_TOOL_RULE =
@@ -406,7 +406,7 @@ export const WRITE_TOOL_RULE =
   "tool: those are the only writes the writes-scope guard checks and a project's write hooks see. Never author a " +
   "file inside the project through Bash (`sed -i`, a heredoc, a redirect, a script that writes one), whatever a " +
   "harness reminder suggests; Bash runs commands — the stage's own lines and the project's tools. Keep your own " +
-  "scratch under `.pharn/`, written with the Write tool, or outside the project where a deny message routes it. Run a " +
+  "scratch under `pharn/.run/`, written with the Write tool, or outside the project where a deny message routes it. Run a " +
   "formatter only on files the stage may write, named one by one — never a directory, a glob or a list built from " +
   "`git status` — and a generator only when the stage may write every path it writes. If a write inside the project " +
   "is denied, do what the deny message says, or stop and report; never retry it through Bash.";

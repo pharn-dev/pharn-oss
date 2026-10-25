@@ -80,7 +80,7 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # path unblocked and (no PostToolUse being wired) unrecorded. L19 named that in 2026-08-05 with a
 # discipline-only remedy; L20 says the SECOND occurrence earns a floor check and it recurred at least
 # three times, so this is that check. `--anchor` runs at /pharn-*build Step 0 AFTER the scope-setter and
-# snapshots the live scope INTO the baseline (by verify time .pharn/writes-scope.json holds a LATER
+# snapshots the live scope INTO the baseline (by verify time pharn/.run/writes-scope.json holds a LATER
 # stage's scope — L38); the checker re-hashes at /pharn-*verify and asks the LIVE guards, by EXECUTING
 # them, whether each changed path would have been denied. Denied => `reconcile` gate fails => verify FAIL.
 # DELEGATED, not re-derived (L37): trusted-path/canon denial runs protect-trusted-paths.cjs; the
@@ -107,10 +107,10 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # failure keeps the escape. Precision, not strength: origin/HEAD is a Bash-movable alias; a stale fetch only
 # withholds the class; no origin/HEAD (git init + remote add) => inert, the warning names `git remote set-head`.
 # HUMAN-ONLY (6.53.0, contract §4a): always_reconciled gains `human_only` (the four trusted docs, CODEOWNERS x3,
-# pharn.spec-template.md) and `human_only_prefixes` (memory-bank/, .dev/memory-bank/), each pinned set-equal to
-# protect-trusted-paths.cjs (DEFAULT_PROTECTED - CONTROL_SURFACE - .pharn/writes-scope.json; PROTECTED_SUBTREES).
+# pharn/spec-template.md) and `human_only_prefixes` (pharn/memory-bank/, .dev/memory-bank/), each pinned set-equal to
+# protect-trusted-paths.cjs (DEFAULT_PROTECTED - CONTROL_SURFACE - pharn/.run/writes-scope.json; PROTECTED_SUBTREES).
 # The HEAD comparison also adds UNTRACKED control paths (ls-files --others, filtered to control paths), so a forged
-# baseline entry no longer hides a Bash edit of LIMITS.md or an added pharn.spec-template.md. Cost (L68): an
+# baseline entry no longer hides a Bash edit of pharn/LIMITS.md or an added pharn/spec-template.md. Cost (L68): an
 # UNCOMMITTED human edit there REDs even with no baseline; the finding names the remedy (commit first). Bound: a
 # git-ignored control path stays invisible.
 # PLAN-WIDENED (6.54.0, audit P2-I, contract §1): an amendment authorizes a NEW path only if its set_by is a stage
@@ -166,7 +166,7 @@ node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
 # actually working (6.24.0, D3) — see "Writes-scope" above for the posture it feeds. `<command>` is one of
 # the closed pair `{pharn-review, pharn-ship}`; `pharn-loop` is REFUSED (its marker has its own owner,
 # require-loop-record.cjs — one schema, one writer, L35). Writes/removes
-# `.pharn/<command>/<name>/active.json` = `{schema, command, name, session_id, started_at}`; the guard
+# `pharn/.run/<command>/<name>/active.json` = `{schema, command, name, session_id, started_at}`; the guard
 # reads only the marker's PRESENCE (lstat, never followed) and its mtime (24h ceiling, symmetric) —
 # NEVER its contents. `--open` overwrites (refreshes the age); `--close` is idempotent. `/pharn-ship` opens
 # right after its GATE-1 resume backstop and closes in Step 3a (every exit that ends the run);
@@ -174,7 +174,7 @@ node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
 # Step 7. Both lines are Bash calls outside the PreToolUse gate (L19) — ADVISORY: a run that skips `--open`
 # is simply unguarded between its own scoped steps, and one that skips `--close` leaves the fail-closed
 # default standing for at most 24h. Both commands STOP when `--open` exits non-zero (GATE-2 review, S1: a
-# FILE planted at `.pharn`, `.pharn/<command>` or `.pharn/<command>/<name>` used to crash the writer with
+# FILE planted at `pharn/.run`, `pharn/.run/<command>` or `pharn/.run/<command>/<name>` used to crash the writer with
 # exit 1 and a stack trace, and neither command stopped); run-marker.test.mjs EXECUTES each command's pinned
 # line — the WHOLE line, so a suffix like `|| true` is caught — against such a planted file. `/pharn-loop`,
 # which never calls this script, STOPs the same way (S9) when its own Step 1a snapshot line or its
@@ -193,8 +193,8 @@ node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 # reproduced): where a command derived the feature slug from the user's description (/pharn-spec Step 0, so /pharn-ship,
 # and /pharn-loop S1), the only check ran INSIDE a node process, after the shell had parsed the line carrying it — the
 # loop's own `node -e … '<slug>'` validator ran `x'$(touch PWNED)'` and exited 0, and /pharn-spec's unquoted setter ran
-# `;touch${IFS}PWNED;` before GATE 1. Now the model writes the slug alone to `.pharn/feature-name/candidate.txt` with the
-# WRITE tool (no shell parses it); this CLI refuses a symlinked or non-directory `.pharn` / `.pharn/feature-name`, reads
+# `;touch${IFS}PWNED;` before GATE 1. Now the model writes the slug alone to `pharn/.run/feature-name/candidate.txt` with the
+# WRITE tool (no shell parses it); this CLI refuses a symlinked or non-directory `pharn/.run` / `pharn/.run/feature-name`, reads
 # the file without following it, removes whatever stands at the path but a directory once those checks pass, and prints
 # the slug only as a FEATURE_SLUG_RE member (imported, L35). `--fresh` also picks the first `<slug>`, `<slug>-2`, … that
 # pharn/features/ lacks (the loop's old S2 shell loop) and refuses on any lstat error but ENOENT. The seven commands that
@@ -217,7 +217,7 @@ node pharn/floor/feature-name.mjs [--fresh]
 
 ```bash
 # PRODUCT check-provenance (the dev wrapper is below): validate a promotion candidate for a USER's memory-bank.
-# Same primitive #3 checks; TARGET_ENUM is `memory-bank/{lessons-learned,pattern-library}.md` (the two
+# Same primitive #3 checks; TARGET_ENUM is `pharn/memory-bank/{lessons-learned,pattern-library}.md` (the two
 # PRESCRIPTION files, deliberately NOT ARCHITECTURE §5's four state files), and COMMIT_RE additionally
 # admits the literal `unknown` — a user's project need not be a git repo, so an honest absence is a
 # member and a fabricated SHA is not. FLOOR, NARROWED and stated: "well-shaped provenance" therefore
@@ -232,9 +232,9 @@ node pharn/floor/feature-name.mjs [--fresh]
 # lands there — that is fix #7. Gated on the target-enum check passing, so a non-member target still
 # reports exactly one true reason.
 # ONE IMPLEMENTATION since 6.69.0 (audit ARCH-6): .dev/floor/check-provenance.mjs is a thin wrapper over
-# checkProvenance() here. `--canon-root <dir>` (default `memory-bank`; pharn/floor/canon-root.mjs owns the
+# checkProvenance() here. `--canon-root <dir>` (default `pharn/memory-bank`; pharn/floor/canon-root.mjs owns the
 # grammar) moves the two-file target enum under <dir>; `--strict-commit` refuses `unknown`. BOUND: the flag
-# relocates nothing else — the promote command's target stays memory-bank/. Exits 1 on any RED, 2 on an
+# relocates nothing else — the promote command's target stays pharn/memory-bank/. Exits 1 on any RED, 2 on an
 # invalid --canon-root.
 node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <candidate.json> <canon-file.md>
 ```
@@ -243,7 +243,7 @@ node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <ca
 
 ```bash
 # PRODUCT twin of the lessons index (dev pair below): generate / drift-check a one-line-per-lesson address
-# book over a USER's memory-bank/lessons-learned.md, rendered to the GITIGNORED CACHE .pharn/lessons-index.md.
+# book over a USER's pharn/memory-bank/lessons-learned.md, rendered to the GITIGNORED CACHE pharn/.run/lessons-index.md.
 # The checker prints one of five tokens — NO_CANON | COLD | GREEN | STALE | ENUM_ERROR — and `--verdict`
 # prints ONLY that token, so a caller branches on set MEMBERSHIP, never on prose and never on the exit code
 # alone (NO_CANON/COLD/GREEN all exit 0). FLOOR, NARROWED: a byte comparison over a DISPOSABLE CACHE — a
@@ -255,7 +255,7 @@ node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <ca
 # /pharn-memory-promote Step 6b (refresh, advisory, a Bash write outside fix #7 — L19); since 6.69.0
 # /pharn-plan also regenerates on COLD/STALE and re-checks. ONE IMPLEMENTATION since 6.69.0: the core takes a
 # profile, and the dev pair below is a thin wrapper passing the dev one. `--canon-root <dir>` reads
-# <dir>/lessons-learned.md instead (output stays .pharn/; the header names the root and a regenerate hint
+# <dir>/lessons-learned.md instead (output stays pharn/.run/; the header names the root and a regenerate hint
 # carrying the flag); invalid → exit 2, nothing on stdout. This repo dogfoods it with
 # `--canon-root .dev/memory-bank`. BOUND: the flag relocates nothing else in the product.
 node pharn/floor/gen-lessons-index.mjs [target-dir] [--canon-root <dir>]

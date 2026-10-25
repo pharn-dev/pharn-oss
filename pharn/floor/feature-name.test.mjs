@@ -7,7 +7,7 @@
 //   • ★ HOSTILE_CANDIDATES — every shape the CLI must refuse, written byte for byte: exit 2, stdout empty, the fixed
 //     refusal line, the candidate removed, no command run, and no byte of the candidate echoed (L62).
 //   • ★ PATH_KINDS (L59) — at the leaf (absent, regular, link to a file, link to a directory, dangling, looping,
-//     directory, FIFO) and at each parent (`.pharn`, `.pharn/feature-name`): a link is asked, never followed; what it
+//     directory, FIFO) and at each parent (`pharn/.run`, `pharn/.run/feature-name`): a link is asked, never followed; what it
 //     points at is never read or removed.
 //   • --fresh — absent, taken (a directory, a file, a dangling link), a run of taken suffixes, the 64-character limit,
 //     and an lstat error that must refuse at once rather than walk (grill G-D).
@@ -101,7 +101,7 @@ test("✧ ONE GRAMMAR (L35) — no copy of the slug pattern; the size bound is t
   assert.doesNotMatch(SOURCE, /\[a-z0-9\]\[a-z0-9-\]/, "the module must not declare its own slug pattern");
   assert.equal(MAX_CANDIDATE_BYTES, 64 + 1);
   assert.ok(FEATURE_SLUG_RE.test("a".repeat(64)) && !FEATURE_SLUG_RE.test("a".repeat(65)), "the grammar's maximum is 64");
-  assert.equal(CANDIDATE_REL, ".pharn/feature-name/candidate.txt");
+  assert.equal(CANDIDATE_REL, "pharn/.run/feature-name/candidate.txt");
   assert.match(SOURCE, /^if \(import\.meta\.main\) \{/m, "the entry guard is the house idiom");
 });
 
@@ -184,11 +184,11 @@ test("★ the refusal line never carries the candidate — a distinctive canary 
 
 // ── ★ PATH_KINDS — the leaf ───────────────────────────────────────────────────────────────────────────────────
 
-test("★ PATH_KINDS leaf — absent: no-candidate, and absent .pharn too", () => {
+test("★ PATH_KINDS leaf — absent: no-candidate, and absent pharn/.run too", () => {
   const s = scratch();
   try {
     refusedAs(s.run(), "no-candidate");
-    mkdirSync(join(s.dir, ".pharn", "feature-name"), { recursive: true });
+    mkdirSync(join(s.dir, "pharn", ".run", "feature-name"), { recursive: true });
     refusedAs(s.run(), "no-candidate");
   } finally {
     s.done();
@@ -264,16 +264,21 @@ test("★ PATH_KINDS leaf — a FIFO: refused not-a-file and removed, without bl
 
 // ── ★ PATH_KINDS — each parent ────────────────────────────────────────────────────────────────────────────────
 
-test("★ PATH_KINDS parents — a symlinked .pharn or .pharn/feature-name: unsafe-path, and the file behind it is never read or removed", () => {
-  for (const linkAt of [".pharn", ".pharn/feature-name"]) {
+test("★ PATH_KINDS parents — a symlinked pharn/.run or pharn/.run/feature-name: unsafe-path, and the file behind it is never read or removed", () => {
+  for (const linkAt of ["pharn", "pharn/.run", "pharn/.run/feature-name"]) {
     const s = scratch();
     try {
       // The real directory holds a VALID candidate; the link makes it reachable at the candidate path.
       const real = join(s.dir, "real");
-      const realCand = linkAt === ".pharn" ? join(real, "feature-name", "candidate.txt") : join(real, "candidate.txt");
+      const realCand =
+        linkAt === "pharn"
+          ? join(real, ".run", "feature-name", "candidate.txt")
+          : linkAt === "pharn/.run"
+            ? join(real, "feature-name", "candidate.txt")
+            : join(real, "candidate.txt");
       mkdirSync(dirname(realCand), { recursive: true });
       writeFileSync(realCand, "fix-login\n");
-      if (linkAt === ".pharn/feature-name") mkdirSync(join(s.dir, ".pharn"));
+      if (linkAt !== "pharn") mkdirSync(join(s.dir, ...linkAt.split("/").slice(0, -1)), { recursive: true });
       symlinkSync(real, join(s.dir, ...linkAt.split("/")));
       refusedAs(s.run(), "unsafe-path");
       assert.equal(readFileSync(realCand, "utf8"), "fix-login\n", `${linkAt}: the file behind the link is intact`);
@@ -285,9 +290,10 @@ test("★ PATH_KINDS parents — a symlinked .pharn or .pharn/feature-name: unsa
 
 test("★ PATH_KINDS parents — a regular file, or a dangling link, standing where a directory belongs: unsafe-path", () => {
   for (const [at, make] of [
-    [".pharn", (p) => writeFileSync(p, "x")],
-    [".pharn/feature-name", (p) => writeFileSync(p, "x")],
-    [".pharn/feature-name", (p) => symlinkSync(join(dirname(p), "nowhere"), p)],
+    ["pharn", (p) => writeFileSync(p, "x")],
+    ["pharn/.run", (p) => writeFileSync(p, "x")],
+    ["pharn/.run/feature-name", (p) => writeFileSync(p, "x")],
+    ["pharn/.run/feature-name", (p) => symlinkSync(join(dirname(p), "nowhere"), p)],
   ]) {
     const s = scratch();
     try {

@@ -1,5 +1,5 @@
 ---
-description: "Promote one lesson or pattern into memory-bank/ when the user asks to keep it, with checked provenance; nothing is written until the user accepts the rendered entry."
+description: "Promote one lesson or pattern into pharn/memory-bank/ when the user asks to keep it, with checked provenance; nothing is written until the user accepts the rendered entry."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -9,14 +9,14 @@ reads:
   [
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
-    "THREAT-MODEL.md",
-    "memory-bank/lessons-learned.md",
-    "memory-bank/pattern-library.md",
+    "pharn/THREAT-MODEL.md",
+    "pharn/memory-bank/lessons-learned.md",
+    "pharn/memory-bank/pattern-library.md",
     "pharn/features/<name>/REVIEW.md",
     "pharn/features/<name>/findings.json",
     "pharn/floor/check-provenance.mjs",
   ]
-writes: ["memory-bank/<canon-file>"]
+writes: ["pharn/memory-bank/<canon-file>"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
 version: "0.2.1"
 ---
@@ -77,7 +77,7 @@ Member meanings, so the choice is decidable rather than a vibe: `process` = pipe
 the nearest one.**
 
 **Pre-existing entries are not retrofitted.** `check-provenance.mjs` keys on `candidate.json` and **never
-scans canon**, so the two fields are required of **NEW** candidates only. A `memory-bank/lessons-learned.md`
+scans canon**, so the two fields are required of **NEW** candidates only. A `pharn/memory-bank/lessons-learned.md`
 you hand-wrote before installing this command stays exactly as it is, and any consumer reading the tag line
 must tolerate untagged entries.
 
@@ -85,8 +85,8 @@ must tolerate untagged entries.
 
 1. **Resolve the ONE target canon file by deterministic membership (P5)** from the invocation — never LLM
    classification:
-   - promoting a **lesson** → `memory-bank/lessons-learned.md`;
-   - promoting a **pattern** → `memory-bank/pattern-library.md`.
+   - promoting a **lesson** → `pharn/memory-bank/lessons-learned.md`;
+   - promoting a **pattern** → `pharn/memory-bank/pattern-library.md`.
    - If the invocation does not say which (ambiguous) → **HALT and ask** the human (the terminal fallback is
      a question, never a guess). `feature-catalog.md` / `architecture-context.md` are **out of scope** —
      refuse if asked to write either.
@@ -118,7 +118,7 @@ must tolerate untagged entries.
    the SHA-256 of the empty string:
 
    ```bash
-   node -e "const fs=require('fs'),c=require('crypto');const p='<canon-file>';const h=fs.existsSync(p)?c.createHash('sha256').update(fs.readFileSync(p)).digest('hex'):c.createHash('sha256').update('').digest('hex');fs.mkdirSync('.pharn/pharn-memory-promote',{recursive:true});fs.writeFileSync('.pharn/pharn-memory-promote/canon-content-hash.txt',h+'\n')"
+   node -e "const fs=require('fs'),c=require('crypto');const p='<canon-file>';const h=fs.existsSync(p)?c.createHash('sha256').update(fs.readFileSync(p)).digest('hex'):c.createHash('sha256').update('').digest('hex');fs.mkdirSync('pharn/.run/pharn-memory-promote',{recursive:true});fs.writeFileSync('pharn/.run/pharn-memory-promote/canon-content-hash.txt',h+'\n')"
    ```
 
 2. Read the **surfacing artifact live** this run — the path the invocation names or that you resolved
@@ -156,7 +156,7 @@ must tolerate untagged entries.
 
 ## Step 2 — Assemble the candidate (mechanics — provenance is deterministic, body is DATA)
 
-Write `.pharn/pharn-memory-promote/candidate.json` (`.pharn/**` is always-writable scratch — not hook-gated,
+Write `pharn/.run/pharn-memory-promote/candidate.json` (`pharn/.run/**` is always-writable scratch — not hook-gated,
 and gitignored):
 
 ```json
@@ -202,7 +202,7 @@ and gitignored):
 heading; validate it **before** `check-provenance.mjs` and **before** Step 5 renders anything:
 
 ```bash
-node -e "const fs=require('fs');const p='.pharn/pharn-memory-promote/candidate.json';let c;try{c=JSON.parse(fs.readFileSync(p,'utf8'))}catch(e){console.error('RED — candidate.json unreadable');process.exit(1)}const t=c.title;if(typeof t!=='string'||t.trim().length===0){console.error('RED — title must be a non-empty string');process.exit(1)}for(let i=0;i<t.length;i++){const code=t.charCodeAt(i);if(code<0x20||code===0x7f){console.error('RED — title must not contain control characters');process.exit(1)}}if(/[\r\n]/.test(t)){console.error('RED — title must be a single line (no newlines)');process.exit(1)}"
+node -e "const fs=require('fs');const p='pharn/.run/pharn-memory-promote/candidate.json';let c;try{c=JSON.parse(fs.readFileSync(p,'utf8'))}catch(e){console.error('RED — candidate.json unreadable');process.exit(1)}const t=c.title;if(typeof t!=='string'||t.trim().length===0){console.error('RED — title must be a non-empty string');process.exit(1)}for(let i=0;i<t.length;i++){const code=t.charCodeAt(i);if(code<0x20||code===0x7f){console.error('RED — title must not contain control characters');process.exit(1)}}if(/[\r\n]/.test(t)){console.error('RED — title must be a single line (no newlines)');process.exit(1)}"
 ```
 
 **Any RED → HALT.** Do not render for Step 5, do not write canon. Fix the candidate's `title` and re-run from
@@ -212,7 +212,7 @@ Then run the provenance floor check (the candidate's `commit` must still be the 
 `unknown`, never fabricated):
 
 ```bash
-node pharn/floor/check-provenance.mjs .pharn/pharn-memory-promote/candidate.json <canon-file>
+node pharn/floor/check-provenance.mjs pharn/.run/pharn-memory-promote/candidate.json <canon-file>
 ```
 
 `<canon-file>` **must be the candidate's own declared `target`** — the checker BINDS the two and REDs a
@@ -233,7 +233,7 @@ owns this verdict; you do not re-decide it — P0.)
   (same topic, opposite advice), **surface it for the human** in Step 5 — quote both entries. **Never
   auto-resolve, auto-merge, or silently supersede** (P5 terminal fallback = ask). This is a flag, not a
   block; the human decides.
-- **Validate-surface note → ADVISORY.** `memory-bank/` sits on `pharn/floor/validate.mjs`'s **scanned**
+- **Validate-surface note → ADVISORY.** `pharn/memory-bank/` sits on `pharn/floor/validate.mjs`'s **scanned**
   surface in a user's repo (unlike the apparatus's excluded `.dev/`). validate's fix #1 check RED-flags any
   file containing both `rule_id:` and `problem:` that does not document the enum-gated / free-text split.
   So if the candidate body **quotes a finding template**, either keep the words "enum-gated" and
@@ -264,7 +264,7 @@ On an explicit accept, **re-read `<canon-file>` immediately before writing** and
 since Step 1 (content-hash equality — primitive #2):
 
 ```bash
-node -e "const fs=require('fs'),c=require('crypto');const p='<canon-file>';const expected=fs.readFileSync('.pharn/pharn-memory-promote/canon-content-hash.txt','utf8').trim();const actual=fs.existsSync(p)?c.createHash('sha256').update(fs.readFileSync(p)).digest('hex'):c.createHash('sha256').update('').digest('hex');if(actual!==expected){console.error('RED — <canon-file> changed since Step 1 discovery');process.exit(1)}"
+node -e "const fs=require('fs'),c=require('crypto');const p='<canon-file>';const expected=fs.readFileSync('pharn/.run/pharn-memory-promote/canon-content-hash.txt','utf8').trim();const actual=fs.existsSync(p)?c.createHash('sha256').update(fs.readFileSync(p)).digest('hex'):c.createHash('sha256').update('').digest('hex');if(actual!==expected){console.error('RED — <canon-file> changed since Step 1 discovery');process.exit(1)}"
 ```
 
 **Any mismatch → HALT. Do not write.** Another process or session may have modified canon during the
@@ -273,7 +273,7 @@ Step-5 wait; re-run from Step 1.
 Then **re-run the floor gate** against the same candidate and the live canon file:
 
 ```bash
-node pharn/floor/check-provenance.mjs .pharn/pharn-memory-promote/candidate.json <canon-file>
+node pharn/floor/check-provenance.mjs pharn/.run/pharn-memory-promote/candidate.json <canon-file>
 ```
 
 **Any RED → HALT. Do not write.** A newly appeared duplicate id or other shape failure must not reach canon.
@@ -374,7 +374,7 @@ provenance-carrying entry. It does not chain to another stage.
 
 Everything this command does is advisory orchestration except what the Floor bullets below name, each of
 which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Nothing on the floor forces the command to run
-(`LIMITS.md §1d`), so each Floor bullet is unconditional only in its narrow form: _when `check-provenance.mjs`
+(`pharn/LIMITS.md §1d`), so each Floor bullet is unconditional only in its narrow form: _when `check-provenance.mjs`
 runs_, a malformed candidate cannot pass it; _when a canon byte goes through `Write|Edit|MultiEdit`_, fix #7
 confines it to the declared file.
 
@@ -387,7 +387,7 @@ confines it to the declared file.
 - **Floor:** the duplicate-id check ranges over the file the candidate DECLARED (the canon-arg binding). **NARROWED:**
   a relative argument must EQUAL the target; an absolute one need only END with it at a segment boundary. It does
   **not** prove the declaration named the RIGHT member, and it does **not** prove the WRITE lands there.
-- **Floor:** the write lands only in the declared canon file — the fix #7 hook (`memory-bank/**` is fail-closed until
+- **Floor:** the write lands only in the declared canon file — the fix #7 hook (`pharn/memory-bank/**` is fail-closed until
   declared in Step 0). **Bounded, and important:** fix #7 gates `Write|Edit|MultiEdit` only, and `/pharn-build`
   derives its scope from a PLAN's `## Files`, so a plan naming a canon path would grant an **ungated** canon write
   that never passes this gate (follow-up `canon-write-denylist`). Do not read this as "canon can only be written
@@ -406,7 +406,7 @@ confines it to the declared file.
 - **Untrusted input:** `check-provenance.mjs` ranges only over the enum-gated fields — never the body — so no
   guaranteed decision rests on a tainted field; the body lands in canon as DATA. A well-shaped but MISLEADING tag
   (`concepts: [safe, approved, verified]`) passes every check, and in canon the window is permanent
-  (`THREAT-MODEL.md §2 #3`). Shipping this write side makes an end user's memory-bank agent-reachable (P2).
+  (`pharn/THREAT-MODEL.md §2 #3`). Shipping this write side makes an end user's memory-bank agent-reachable (P2).
 - **Not a claim:** "memory-promote promoted it" means "the lesson is sound" or "the floor validated it"; "the entry
   is typed `floor`" means "the entry is about the floor".
 

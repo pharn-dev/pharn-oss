@@ -236,6 +236,35 @@ test("★ the accepted cost: a capability authored under .claude/ is NOT counted
   });
 });
 
+// 7.0.0 (pharn-footprint-move): the runtime scratch root moved under pharn/ (`pharn/.run/`), and pharn-cli 0.14
+// keeps its backups at `pharn/.backup/` — FULL capability copies. Every walker must skip both, or a backup would
+// double the rosters that dispatch /pharn-grill, /pharn-review and /pharn-verify. The negative control copies the
+// same tree to a sibling the exclusion must NOT reach (`pharn/.runx/`), so the test can see a miss.
+test("★ 7.0.0: every walker skips pharn/.run/ and pharn/.backup/ — and still counts a look-alike sibling", () => {
+  for (const w of WALKERS) {
+    withRepo((root) => {
+      const base = w.count(root);
+      for (const sub of ["pharn/.backup/20261025-000000", "pharn/.run/pharn-loop/x"]) {
+        for (const mod of ["pharn-review", "pharn-pipeline", "pharn-core"]) {
+          cpSync(join(root, "pharn", mod), join(root, sub, "pharn", mod), { recursive: true });
+        }
+      }
+      assert.equal(w.count(root), base, `${w.id}: a capability copy under pharn/.run or pharn/.backup was counted`);
+      for (const mod of ["pharn-review", "pharn-pipeline", "pharn-core"]) {
+        cpSync(join(root, "pharn", mod), join(root, "pharn", ".runx", "pharn", mod), { recursive: true });
+      }
+      // A walker that REFUSES the duplicate (the catalog throws on a repeated slug) has reached the copy too.
+      let seen;
+      try {
+        seen = w.count(root) > base;
+      } catch {
+        seen = true;
+      }
+      assert.ok(seen, `${w.id}: the control copy under pharn/.runx/ was not counted — the probe is blind`);
+    });
+  }
+});
+
 test("★ the enumeration is not silently empty", () => {
   // WALKERS is this file's whole deliverable (L29); an empty or truncated array would make every rule
   // above pass while checking nothing. Its members are named so a deletion is a diff a reviewer sees.

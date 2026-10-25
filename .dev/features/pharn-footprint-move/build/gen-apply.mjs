@@ -26,7 +26,8 @@ const count = (hay, needle) => hay.split(needle).length - 1;
 
 function hunks(before, after) {
   const dir = fs.mkdtempSync(path.join(OUT, ".gen-"));
-  const a = path.join(dir, "a"), b = path.join(dir, "b");
+  const a = path.join(dir, "a"),
+    b = path.join(dir, "b");
   fs.writeFileSync(a, before);
   fs.writeFileSync(b, after);
   let out = "";
@@ -44,7 +45,8 @@ function hunks(before, after) {
 }
 
 function edits(before, after) {
-  const bl = before.split("\n"), al = after.split("\n");
+  const bl = before.split("\n"),
+    al = after.split("\n");
   const hs = hunks(before, after);
   // Convert each hunk to a (old lines, new lines) pair with symmetric context, widened until unique in `before`.
   const raw = hs.map((h) => {
@@ -59,9 +61,11 @@ function edits(before, after) {
   for (const r of raw) {
     let ctx = 1;
     for (;;) {
-      const s = Math.max(prevEnd, r.o0 - ctx), e = Math.min(bl.length, r.o0 + r.oLen + ctx);
+      const s = Math.max(prevEnd, r.o0 - ctx),
+        e = Math.min(bl.length, r.o0 + r.oLen + ctx);
       const oldText = bl.slice(s, e).join("\n");
-      const pre = bl.slice(s, r.o0), post = bl.slice(r.o0 + r.oLen, e);
+      const pre = bl.slice(s, r.o0),
+        post = bl.slice(r.o0 + r.oLen, e);
       const newText = [...pre, ...al.slice(r.n0, r.n0 + r.nLen), ...post].join("\n");
       if (oldText.length > 0 && count(text, oldText) === 1) {
         out.push({ old: oldText, new: newText, line: r.o0 + 1 });
@@ -194,7 +198,8 @@ This file is for reading; the script's bytes are what count.
 | file | → | before | after | edits |
 | ---- | - | ------ | ----- | ----- |
 `;
-for (const f of data) md += `| \`${f.path}\` | ${f.new_path ? `\`${f.new_path}\`` : "—"} | \`${f.before_sha.slice(0, 12)}…\` | \`${f.after_sha.slice(0, 12)}…\` | ${f.edits.length} |\n`;
+for (const f of data)
+  md += `| \`${f.path}\` | ${f.new_path ? `\`${f.new_path}\`` : "—"} | \`${f.before_sha.slice(0, 12)}…\` | \`${f.after_sha.slice(0, 12)}…\` | ${f.edits.length} |\n`;
 md += "\nFull hashes (sha256):\n\n```text\n";
 for (const f of data) md += `${f.path}\n  before ${f.before_sha}\n  after  ${f.after_sha}\n`;
 md += "```\n";

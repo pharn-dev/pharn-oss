@@ -29,12 +29,12 @@ asked-for gate is the skipped one, and **L20**/**L46** make the recurrence the t
 
 ## The record
 
-Written to `<out>/stamp.json`. `<out>` must resolve **strictly inside** the state root `.pharn/` and may
+Written to `<out>/stamp.json`. `<out>` must resolve **strictly inside** the state root `pharn/.run/` and may
 not be the state root itself.
 
 **Which directory, exactly.** Every path operand (`--out`, `--spec-from`, `--discover`, `--scope-json`)
 resolves against the directory the runner is **invoked** from, and the state root is that directory's
-`.pharn/`. `--cwd` sets only where the gates execute and which tree is fingerprinted (and whose `HEAD` is
+`pharn/.run/`. `--cwd` sets only where the gates execute and which tree is fingerprinted (and whose `HEAD` is
 recorded), never where the record lives. So `init` and every `run --next` for one `<out>` are issued from
 the same directory. Before 6.9.3, `init` resolved `--out` and `--spec-from` against `--cwd` while
 `run --next` did not, and `/pharn-regress`'s base side, the one caller that passes `--cwd`, could not
@@ -144,7 +144,7 @@ test files not changed since the base, never this feature's own AC tests, so its
 whole-suite run and the execution identity misses it (6.72.2, audit LOOP-8, closed won't-fix). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
 without them validates as before, and a floor older than 6.34.0 reads a reused entry as `entry-not-run` (a LAPSE code,
 so a re-run — the fail-closed direction). The in-progress record's `reuse` binding (the offered path and digest) is
-dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `.pharn/` state
+dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `pharn/.run/` state
 the write tools reach, as the in-progress `runs` already are — the named residual `verify-paused-chain-integrity`.
 
 ### The closed reuse matrix, and the entry-derived BASE stamp (6.49.0)
@@ -352,7 +352,7 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 - **Who wrote an explicit `--gates` string.** Only `source` is recorded.
 - **Forgery.** This certifies **internal consistency, never provenance** — a self-consistent **fabricated**
   stamp passes, and a test builds one to prove it rather than leaving the bound as prose (**L43**). The
-  stamp and its logs live in the writable tree, which `Bash` reaches unhooked (`LIMITS.md §6`).
+  stamp and its logs live in the writable tree, which `Bash` reaches unhooked (`pharn/LIMITS.md §6`).
 - **That a gate is the right gate.** The allowlist ∩ manifest is a membership test; that the allowlist is
   the _correct_ set is judgment, unchanged from today.
 - **A reuse decision, after the fact** (6.34.0). The identity comparison and the eligibility rules ran as tested
@@ -379,7 +379,7 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
 - **Log growth** is bounded _within_ a stage by `init`'s recreate of `<out>`; across `/pharn-loop`
   iterations the logs accumulate under the git-ignored state root and nothing prunes them.
 - The fingerprint is **content-only** (a chmod-only change is invisible), does not descend a submodule
-  gitlink, and excludes `.pharn/` plus the active feature's post-build artifacts — a set of its **own**,
+  gitlink, and excludes `pharn/.run/` plus the active feature's post-build artifacts — a set of its **own**,
   deliberately not `reconcile-ignore.json`'s, because the two answer different questions (**L39**).
   Measured on this repository (re-measured 2026-09-25 for 6.20.8): 2230 paths, ~442 ms for the first
   in-process call and ~73–75 ms warm.
@@ -387,6 +387,9 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   reconciler's `hashFile`). Re-pointing a link moves the digest; a change to a link's target moves it only
   through the target's own entry, so a gate that reads **through** a link to a file outside the reconciled
   set (outside the repo, or git-ignored) is not re-run when that file changes.
+- **`fingerprint.algo` moved to `worktree-fingerprint/3+sha256` in 7.0.0**, because the excluded state root moved (the
+  migration) from `.pharn/` to `pharn/.run/`. A stamp recorded under `/2` reads as a moved tree: one re-run, the fail-closed
+  direction.
 - **`fingerprint.algo` moved to `worktree-fingerprint/2+sha256` in 6.20.8.** The algo is not part of the
   digest, so an unchanged tree can fingerprint equal under both: a stamp written before the upgrade is
   refused by every consumer's `algo` comparison (freshness F and G, the red-run binding), each naming both

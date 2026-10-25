@@ -71,6 +71,9 @@ const EXCLUDE_SEGMENTS = [
   `${sep}.claude${sep}`,
   `${sep}.dev${sep}`,
   `${sep}pharn${sep}floor${sep}`,
+  // 7.0.0: the runtime scratch root and the CLI's backup dir, which holds full capability copies (pharn-cli 0.14 BACKUP_DIR).
+  `${sep}pharn${sep}.run${sep}`,
+  `${sep}pharn${sep}.backup${sep}`,
   `${sep}node_modules${sep}`,
   `${sep}.git${sep}`,
   `${sep}docs${sep}`,

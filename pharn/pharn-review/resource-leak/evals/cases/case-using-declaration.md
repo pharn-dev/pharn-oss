@@ -5,7 +5,7 @@ purpose: "Eval fixture (RESOURCE-LEAK, true-negative): CODE that acquires a hand
 
 # Eval case — using-declaration (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner recognizes the `using` binding as auto-disposed and reports it
 CLEAN.
 

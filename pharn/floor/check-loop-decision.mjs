@@ -71,12 +71,12 @@
 // call and copies `cap` into the record, so re-deriving with the record's own `cap` only proves the record agrees with
 // itself: a run that kept iterating past the cap it was given, and recorded the cap it used, re-derived GREEN. The cap
 // the run opened with has a second home, written once at Step 1a: `require-loop-record.cjs --open <name> --cap <M>`
-// writes `.pharn/pharn-loop/<name>/active.json` (`pharn-loop-active/1`, that hook the one owner of the schema — L35 —
+// writes `pharn/.run/pharn-loop/<name>/active.json` (`pharn-loop-active/1`, that hook the one owner of the schema — L35 —
 // whose restated literal below a test pins equal to the hook's exported SCHEMA). After the live re-run, beside the
 // decision and mode comparisons (collected, never an early return, so every mismatch prints):
 //   • the marker is located from the record's own path, never an argument: the record must sit at
 //     `<root>/pharn/features/<name>/LOOP.md` (two literal parent segments), the marker at
-//     `<root>/.pharn/pharn-loop/<name>/active.json`. It is opened once with O_NOFOLLOW and checked and read
+//     `<root>/pharn/.run/pharn-loop/<name>/active.json`. It is opened once with O_NOFOLLOW and checked and read
 //     through that one descriptor — a regular file only, never through a symlink (L54), with no window between the
 //     type check and the read (CodeQL js/file-system-race) — then JSON.parsed; its `schema` must be `pharn-loop-active/1`, its `name` the record's `<name>`,
 //     and its `cap` a positive safe integer (own-property reads — L15). A record off that layout, or a marker that is
@@ -153,7 +153,7 @@ function markerCap(recordPath) {
   if (basename(featuresDir) !== "features" || basename(pharnDir) !== "pharn") {
     return { ok: false, why: "the record is not at pharn/features/<name>/LOOP.md, so its run marker cannot be located" };
   }
-  const marker = join(dirname(pharnDir), ".pharn", "pharn-loop", name, "active.json");
+  const marker = join(dirname(pharnDir), "pharn", ".run", "pharn-loop", name, "active.json");
   // ONE descriptor (the griller-extract.mjs 6.60.1 form, CodeQL js/file-system-race): the type check and the read see
   // the same file, so the path cannot be swapped between them. O_NOFOLLOW refuses a symlink at the final component
   // (ELOOP); O_NONBLOCK keeps a FIFO from blocking the open, and fstat then refuses it as not a regular file.
@@ -162,7 +162,7 @@ function markerCap(recordPath) {
     fd = openSync(marker, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (e) {
     if (e && e.code === "ELOOP") return { ok: false, why: "the run marker is not a regular file (a symlink is never followed)" };
-    if (e && e.code === "ENOENT") return { ok: false, why: `no run marker at .pharn/pharn-loop/${name}/active.json` };
+    if (e && e.code === "ENOENT") return { ok: false, why: `no run marker at pharn/.run/pharn-loop/${name}/active.json` };
     return { ok: false, why: "the run marker cannot be opened" };
   }
   let text;
@@ -359,7 +359,7 @@ function gate(recordPath) {
   } else if (witnessed.cap !== Number(cap)) {
     mismatches.push(
       `loop-record's \`cap\` is ${Number(cap)} (${recordPath}), but the run opened with --cap ${witnessed.cap} ` +
-        `(.pharn/pharn-loop/<name>/active.json) — CAP_MISMATCH. The record's stop was computed against a cap the run was ` +
+        `(pharn/.run/pharn-loop/<name>/active.json) — CAP_MISMATCH. The record's stop was computed against a cap the run was ` +
         `not given; do not commit it, and never repair this by editing \`cap\`.`
     );
   }

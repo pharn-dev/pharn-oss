@@ -147,7 +147,7 @@ function makeRepo({ sub = null, extra = null, kind = null } = {}) {
   git(root, "config", "user.name", "t");
   const proj = sub ? join(root, sub) : root;
   mkdirSync(proj, { recursive: true });
-  writeFileSync(join(proj, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(proj, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(proj, "a.txt"), "a\n");
   writeFront(proj, kind);
   if (extra) extra(proj);
@@ -375,7 +375,7 @@ test("L41 — the CLI with NONE of the stamp flags, no --repo and no --max-rerun
 test("the explicit stamp flags are honoured (a relocated stamp set is found, the default location ignored)", () => {
   withRepo((r) => {
     iterate(r);
-    const moved = { verify: ".pharn/x/v.json", regressHead: ".pharn/x/h.json", regressBase: ".pharn/x/b.json" };
+    const moved = { verify: "pharn/.run/x/v.json", regressHead: "pharn/.run/x/h.json", regressBase: "pharn/.run/x/b.json" };
     // A stamp's logs live in its own directory, so relocate each stamp WITH its logs.
     for (const [k, to] of Object.entries(moved)) {
       const fromDir = join(r.proj, dirname(DEFAULT_STAMPS[k]));
@@ -1561,7 +1561,7 @@ test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, e
     const control = spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8" });
     assert.equal(control.status, EXIT.RERUN, `control: the intact copy gives its ordinary verdict: ${control.stdout}`);
     assert.equal(JSON.parse(control.stdout).reason_code, "report-missing");
-    rmSync(join(copy, ".pharn"), { recursive: true, force: true });
+    rmSync(join(copy, "pharn", ".run"), { recursive: true, force: true });
     let cases = 0;
     for (const m of graph) {
       for (const [mode, breakIt] of LOAD_MODES) {
@@ -1575,7 +1575,7 @@ test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, e
             // gives its ordinary verdict. On the supported Node this test runs on, that verdict is the correct one.
             assert.equal(r.status, EXIT.RERUN, `${m} ${mode}: exit ${r.status}\n${r.stdout}${r.stderr}`);
             assert.equal(JSON.parse(r.stdout).reason_code, "report-missing", `${m} ${mode}`);
-            rmSync(join(copy, ".pharn"), { recursive: true, force: true });
+            rmSync(join(copy, "pharn", ".run"), { recursive: true, force: true });
           } else {
             expectCrashDoc(r, `${m} ${mode}`, copy);
           }
@@ -1586,7 +1586,7 @@ test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, e
       }
     }
     assert.equal(cases, graph.length * LOAD_MODES.length);
-    assert.equal(existsSync(join(copy, ".pharn")), false, "no crash wrote a budget-ledger row");
+    assert.equal(existsSync(join(copy, "pharn", ".run")), false, "no crash wrote a budget-ledger row");
   } finally {
     rmSync(copy, { recursive: true, force: true });
   }
@@ -1662,14 +1662,15 @@ test("6.21.1 — machine paths in a crash `reason`: the working directory reads 
   const copy = floorCopy();
   const spaced = mkdtempSync(join(tmpdir(), "clf dir with spaces "));
   try {
-    writeFileSync(join(spaced, ".pharn"), "not a directory\n");
+    mkdirSync(join(spaced, "pharn"), { recursive: true });
+    writeFileSync(join(spaced, "pharn", ".run"), "not a directory\n");
     const r = spawnSync(
       process.execPath,
       [join(copy, "pharn", "floor", "check-loop-fresh.mjs"), "--feature", FEATURE, "--base", "0".repeat(40), "--iter", "1", "--repo", "."],
       { cwd: spaced, encoding: "utf8" }
     );
     const doc = expectCrashDoc(r, "the ledger's mkdir throws under a spaced directory", spaced);
-    assert.match(doc.reason, /mkdir '\.\/\.pharn\/pharn-loop\/demo'/, doc.reason);
+    assert.match(doc.reason, /mkdir '\.\/pharn\/\.run\/pharn-loop\/demo'/, doc.reason);
   } finally {
     rmSync(copy, { recursive: true, force: true });
     rmSync(spaced, { recursive: true, force: true });
@@ -1702,7 +1703,7 @@ test("✧ L35 — the entry's restated facts agree with the core (exit codes, ve
     const stop = evaluate(["--feature", FEATURE, "--base", "0".repeat(40), "--commit-gate", "--repo", empty]);
     assert.equal(stop.code, EXIT.STOP, JSON.stringify(stop.doc));
     for (const r of [evaluate(["--bogus"]), stop]) assert.deepEqual(keys, Object.keys(r.doc));
-    assert.equal(existsSync(join(empty, ".pharn")), false);
+    assert.equal(existsSync(join(empty, "pharn", ".run")), false);
   } finally {
     rmSync(empty, { recursive: true, force: true });
   }
@@ -1740,10 +1741,11 @@ test("★ WIRING (6.21.1) — through both pinned /pharn-loop lines, a module th
       appendFileSync(infra, '\nthrow new Error("simulated module-load failure");\n');
       for (const line of [pin.decision, pin.commit]) expectCrashDoc(sh(line), `load failure at ${line}`, r.proj);
       writeFileSync(infra, keep);
-      // A throw while checking, from input alone: `.pharn` is a regular file, so the stamps read as missing (a RERUN) and
+      // A throw while checking, from input alone: `pharn/.run` is a regular file, so the stamps read as missing (a RERUN) and
       // the budget ledger's mkdir throws ENOTDIR. The commit gate never writes the ledger, so it cannot reach this throw.
-      rmSync(join(r.proj, ".pharn"), { recursive: true, force: true });
-      writeFileSync(join(r.proj, ".pharn"), "not a directory\n");
+      rmSync(join(r.proj, "pharn", ".run"), { recursive: true, force: true });
+      mkdirSync(join(r.proj, "pharn"), { recursive: true });
+      writeFileSync(join(r.proj, "pharn", ".run"), "not a directory\n");
       const doc = expectCrashDoc(sh(pin.decision), "the ledger's mkdir throws", r.proj);
       assert.match(doc.reason, /threw while checking: ENOTDIR/);
     },

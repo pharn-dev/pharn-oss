@@ -281,7 +281,9 @@ test("★ G10 — every outcome, built from the REPO-RELATIVE inputs stage-regre
       base: "a".repeat(40),
       report: baseReport(),
       scope: baseScope(),
-      progress: baseProgress({ cleanupResult: { ok: false, error: "EBUSY: resource busy or locked, rmdir '.pharn/pharn-regress/base'" } }),
+      progress: baseProgress({
+        cleanupResult: { ok: false, error: "EBUSY: resource busy or locked, rmdir 'pharn/.run/pharn-regress/base'" },
+      }),
     }),
     renderRefused({
       feature: "demo",

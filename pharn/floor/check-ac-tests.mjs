@@ -60,7 +60,7 @@
 //     (`/pharn-test`), advisory; the target column is checked for PRESENCE only;
 //   • that the build cannot write an AC test LATER: `in-plan-files` holds for the PLAN.md it read. An edit to
 //     PLAN.md after `/pharn-test` reopens it until something re-checks (the queue's item 05 makes `/pharn-build`
-//     refuse without a GREEN lock). A Bash write bypasses the write hooks entirely (LIMITS.md §6);
+//     refuse without a GREEN lock). A Bash write bypasses the write hooks entirely (pharn/LIMITS.md §6);
 //   • that `/pharn-test` read only SPEC, PLAN and AC-TESTS.md — `reads:` is not enforced (ARCHITECTURE §3.1);
 //   • that the files the level gates' scripts name are ALL of what those gates run — the token pass is a closed,
 //     literal rule, and what it does not read is listed once, in test-infra-core.mjs's header.

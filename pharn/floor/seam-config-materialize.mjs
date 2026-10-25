@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/seam-config-materialize.mjs — extract the project's seam policy to scratch for the validator.
 //
-// /pharn-build Step 2c runs this line, then `node pharn/floor/check-seam-config.mjs .pharn/seam-config.json`. It
+// /pharn-build Step 2c runs this line, then `node pharn/floor/check-seam-config.mjs pharn/.run/seam-config.json`. It
 // replaces an inline `node -e` one-liner (6.67.0, audit LOOP-5): that line's quoted JavaScript held `;` and `|`, so
 // /pharn-loop's exact allowed-tools grant could not name it and an inline build stopped on a permission prompt. A
 // pinned script line can be granted exactly, and its behavior is tested here instead of retyped by a model (L22).
@@ -17,7 +17,7 @@
 //                                                    includes a non-object top level, which the one-liner either
 //                                                    crashed on (null) or read as "no seam" (the rest).
 // The output is `JSON.stringify(seam, null, 2)` with no trailing newline — byte-identical to the one-liner's. On a
-// HALT an existing `.pharn/seam-config.json` is left as it was (the build halts; nothing reads it).
+// HALT an existing `pharn/.run/seam-config.json` is left as it was (the build halts; nothing reads it).
 //
 // Honest scope (P0): it guarantees which branch ran and what bytes it wrote, nothing about the seam policy itself —
 // `check-seam-config.mjs` owns that verdict (its `ask` invariant, the step enum). A `seam` value that is not an
@@ -33,8 +33,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const CONFIG_PATH = "pharn.config.json";
-const OUT_DIR = ".pharn";
-const OUT_PATH = ".pharn/seam-config.json";
+const OUT_DIR = "pharn/.run";
+const OUT_PATH = "pharn/.run/seam-config.json";
 // ARCHITECTURE §5's chain; the terminal `ask` is what check-seam-config.mjs requires (P5).
 const DEFAULT_SEAM = Object.freeze({
   resolutionOrder: Object.freeze(["official-skill", "pinned-docs", "model", "fetch", "ask"]),

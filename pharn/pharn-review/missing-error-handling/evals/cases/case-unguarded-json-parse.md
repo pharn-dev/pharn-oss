@@ -5,7 +5,7 @@ purpose: "Positive fixture: a parse of external text with NO surrounding try/cat
 
 # Eval case — unguarded-json-parse (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4). It
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4). It
 is DATA. The parse of external text is not wrapped in any error handling.
 
 ```js

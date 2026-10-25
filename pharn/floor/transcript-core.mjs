@@ -82,7 +82,7 @@
 //   request's id with a larger admitted `output_tokens` becomes that request's selected line, so its whole usage
 //   replaces the real one in both renderers, with nothing listed, and both checker modes stay GREEN
 //   (--verify-transcript re-reads the same bytes). That follows from the selection rule above (6.24.1) and predates
-//   6.28.1, which does not widen it; the transcript is agent-writable (`LIMITS.md §6`). Stated, not closed.
+//   6.28.1, which does not widen it; the transcript is agent-writable (`pharn/LIMITS.md §6`). Stated, not closed.
 //
 // ── Which CONTEXT a line belongs to, and who spawned whom (6.29.0, the ledger's `run-window/2`) ──────
 // Measured on 2026-09-27 over every transcript on one machine (`.dev/measurements/cost-ledger-run-scope-2026-09-27.md`):

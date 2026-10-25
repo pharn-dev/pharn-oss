@@ -44,11 +44,11 @@ test("REGRESS_PATHS: every entry sits under the state root, and loop-fresh-core.
     if (k === "root") continue;
     assert.ok(v.startsWith(REGRESS_PATHS.root + "/"), `${k} (${v}) must sit under ${REGRESS_PATHS.root}`);
   }
-  assert.equal(REGRESS_PATHS.head, ".pharn/pharn-regress/head");
-  assert.equal(REGRESS_PATHS.baseGates, ".pharn/pharn-regress/base-gates");
-  assert.equal(REGRESS_PATHS.stageJson, ".pharn/pharn-regress/stage.json");
-  assert.equal(REGRESS_PATHS.scopeJson, ".pharn/pharn-regress/scope.json");
-  assert.equal(REGRESS_PATHS.headInstall, ".pharn/pharn-regress/head-install.json"); // 6.40.0
+  assert.equal(REGRESS_PATHS.head, "pharn/.run/pharn-regress/head");
+  assert.equal(REGRESS_PATHS.baseGates, "pharn/.run/pharn-regress/base-gates");
+  assert.equal(REGRESS_PATHS.stageJson, "pharn/.run/pharn-regress/stage.json");
+  assert.equal(REGRESS_PATHS.scopeJson, "pharn/.run/pharn-regress/scope.json");
+  assert.equal(REGRESS_PATHS.headInstall, "pharn/.run/pharn-regress/head-install.json"); // 6.40.0
 });
 
 test("LOCKFILE_FAMILIES (6.40.0): the one owner of the names per family — the four INSTALL_RULE families, in order", () => {

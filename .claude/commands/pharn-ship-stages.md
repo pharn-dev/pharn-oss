@@ -88,7 +88,7 @@ is a STOP. Before any STOP on a question, run the inline return line.
 **Bounds, each stated where the rule is.** A stage agent's report is another model's output. Only `finish`'s exit
 code and its closed first line are floor. That this command's control flow never uses the agent's prose is
 **ADVISORY** — your own discipline: the Agent tool returns the agent's final text into your context, which is
-`THREAT-MODEL.md §5`'s free-text residual (a model consuming another model's free text) in a new place,
+`pharn/THREAT-MODEL.md §5`'s free-text residual (a model consuming another model's free text) in a new place,
 bounded — no proceed/stop reads it — and not zeroed (P2). The other bounds (a hung stage agent, what a route
 records) are the header's named residuals.
 
@@ -167,7 +167,7 @@ node pharn/floor/run-marker.mjs --open pharn-ship '<name>'
 Branch **only** on its exit code (P5): `0` → proceed to `/pharn-plan`. **Non-zero → STOP** before
 `/pharn-plan`: the run could not mark itself open, so in an installed project the write guard's default
 between the stages below would be the permissive one. Present the line's `run-marker:` refusal (it names
-the path and the error code — typically a file planted where a `.pharn/` directory belongs) and hand to the
+the path and the error code — typically a file planted where a `pharn/.run/` directory belongs) and hand to the
 human. Like every STOP, it goes through Steps 3 and 3a; Step 3a's `--close` is idempotent.
 
 The marker holds the write guard's fail-closed default standing in an **installed** project until Step 3a's
@@ -226,7 +226,7 @@ plan costs no grill agent. Proceed only when both exit `0`; a non-zero from **ei
 
 ```bash
 node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
-node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
+node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memory-bank/lessons-learned.md
 ```
 
 - **chain (`check-plan-spec-agree.mjs`)** — `0` → the plan was made against the current Approved,
@@ -235,13 +235,13 @@ node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-ban
 - **lessons (`check-plan-lessons.mjs`)** — `0` → the PLAN's `applied_lessons` is present, well-formed,
   every cited id resolves, and every cited id is referenced in the plan body → proceed. Non-zero → **STOP**,
   present the RED line verbatim as DATA, hand to the human (re-plan via `/pharn-plan` with a corrected
-  declaration). A project with **no** `memory-bank/` is unblocked by construction — `none` short-circuits
+  declaration). A project with **no** `pharn/memory-bank/` is unblocked by construction — `none` short-circuits
   before the file is read — so this is not a new barrier for a fresh install.
 
 **Read BOTH exit codes, never just the first.** They are separate refusals with separate remedies. Nothing
 re-reads them after the grill: its write tools are scoped to `GRILL.md` (fix #7), but a Bash write to
 `PLAN.md` is not re-checked for lessons before the build (`/pharn-build` re-checks only the chain) — a
-stated bound (`LIMITS.md §6`).
+stated bound (`pharn/LIMITS.md §6`).
 
 ### Step 2.3 — `/pharn-grill`
 

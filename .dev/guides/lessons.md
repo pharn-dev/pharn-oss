@@ -19,16 +19,16 @@ still holds the rules every session needs; this file adds detail and does not ov
 - **The field is no longer SELF-ATTESTED — a stage that did not author it now re-verifies it
   (`grill-lessons-reverify`, shipped 2.8.0).** Both grill stages run the SAME checker against their own
   canon (`/pharn-dev-grill` → `.dev/memory-bank/lessons-learned.md`, `/pharn-grill` →
-  `memory-bank/lessons-learned.md`) as a deterministic RED, and both ship orchestrators read that exit
+  `pharn/memory-bank/lessons-learned.md`) as a deterministic RED, and both ship orchestrators read that exit
   code as a proceed/stop input. **No new floor primitive** — `check-plan-lessons.mjs` is reused
   byte-for-byte; what changed is **who** checks, not **what** is checkable. All six call sites are
   enumerated in `PLAN_LESSONS_WIRING` (`.dev/floor/command-hygiene.test.mjs`), which pins that each
   command **invokes** the checker **against its own surface's canon** — a dev command pointed at the
-  user's `memory-bank/` is a RED, and vice versa. **The bound is unchanged and is the point:**
+  user's `pharn/memory-bank/` is a RED, and vice versa. **The bound is unchanged and is the point:**
   re-verification NARROWS self-attestation; it does **not** close the declaration-vs-application gap.
   A plan may cite `[L1]` having ignored L1 entirely and every stop stays GREEN. "The grill verified the
   lessons were applied" remains struck (P0). And "the wiring is pinned" never means "the check ran".
-- A project with **no** `memory-bank/` is unblocked by construction: `none` short-circuits before the
+- A project with **no** `pharn/memory-bank/` is unblocked by construction: `none` short-circuits before the
   lessons file is read, so a fresh install is GREEN without an exception being granted anywhere.
 
 ## The lessons index is an address book
@@ -46,17 +46,17 @@ still holds the rules every session needs; this file adds detail and does not ov
   are now unexpected: a `-` means no tag line, i.e. an entry that reached canon without the promote
   gate's `type`/`concepts`; a `?` means a tag line is present but **failed its gate**. Read that entry in
   canon and flag it either way. (The PRODUCT profile keeps the benign reading of `-` on purpose — a user's
-  `memory-bank/` may legitimately hold hand-written entries.) **Neither marker is a floor error:** a `-`
+  `pharn/memory-bank/` may legitimately hold hand-written entries.) **Neither marker is a floor error:** a `-`
   or `?` regenerates cleanly and `docs:check` stays exit 0, so this is a read-it-and-look signal, not a
   gate — the named `lesson-tagline-render-check` residual.
   - **The PRODUCT surface now has the same two-step sweep, with a deliberately WEAKER guarantee.**
-    `/pharn-plan` selects from `.pharn/lessons-index.md` and then reads the full entries from the user's
-    `memory-bank/lessons-learned.md`, branching on `pharn/floor/check-lessons-index.mjs --verdict`'s closed
+    `/pharn-plan` selects from `pharn/.run/lessons-index.md` and then reads the full entries from the user's
+    `pharn/memory-bank/lessons-learned.md`, branching on `pharn/floor/check-lessons-index.mjs --verdict`'s closed
     token set `{NO_CANON, COLD, GREEN, STALE, ENUM_ERROR}` — **membership, never prose, and never the exit
     code alone** (three tokens share exit 0 and each prescribes a different sweep). A stale or absent index is
     regenerated and re-checked (6.69.0, below); an index that still is not `GREEN`, or an invalid canon,
     **degrades to "read canon in full and say so"; it never blocks a plan.** The product
-    index is a **gitignored, disposable CACHE** under `.pharn/`, not a committed page, so its check is a
+    index is a **gitignored, disposable CACHE** under `pharn/.run/`, not a committed page, so its check is a
     **staleness** comparison whose coverage is machine-local — **not** the dev surface's
     "committed == recomputed" byte-equality. `NO_CANON` (no memory-bank yet) and `COLD` (no cache yet) are
     **GREEN by design**: both are the honest normal state of a fresh install, and REDding there would make
@@ -67,7 +67,7 @@ still holds the rules every session needs; this file adds detail and does not ov
     hand-kept SEPARATE COPIES (`pharn/floor/lessons-index-core.mjs` vs `.dev/floor/lessons-index-core.mjs`, and
     likewise `check-lessons-index`, `gen-lessons-index` and `check-provenance`), pinned to agree by ✧ text tests.
     The copies are retired (L35): the grammar, the renderer and the comparison live only under `pharn/floor/`,
-    which takes the canon root as a parameter (`--canon-root <dir>`, default `memory-bank`; plus
+    which takes the canon root as a parameter (`--canon-root <dir>`, default `pharn/memory-bank`; plus
     `--strict-commit` on check-provenance). The four `.dev/floor/` files are thin wrappers that pass the dev
     surface's PROFILE — `.dev/memory-bank/`, the committed `docs/lessons-index.md`, `npm run docs:generate`, a
     columns paragraph reading both absence markers as unexpected — and keep what is genuinely different there:
@@ -76,7 +76,7 @@ still holds the rules every session needs; this file adds detail and does not ov
     other top-level declaration in a wrapper, so the grammar cannot grow back. The dependency still points only
     `.dev/` → `pharn/` (an install ships `pharn/floor/` without `.dev/`). **The flag's bound:** it changes which
     file those four CLIs read; every other product canon path (`check-plan-lessons`'s argument, the promote
-    target, `/pharn-plan`'s "read canon" step) stays `memory-bank/`, so it is not a way to relocate a project's
+    target, `/pharn-plan`'s "read canon" step) stays `pharn/memory-bank/`, so it is not a way to relocate a project's
     memory-bank. Its consumer is this repo: `node pharn/floor/check-lessons-index.mjs --canon-root .dev/memory-bank
 . --verdict` runs the product sweep's checker on PHARN's own canon (a dev test pins that it is never
     `NO_CANON`).

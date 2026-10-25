@@ -5,7 +5,7 @@ purpose: "Eval fixture (DUPLICATED-LOGIC, clean/negative): CODE with wholly dist
 
 # Eval case — unique (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. There is no exact duplicated block; the scanner reports `found:false`.
 
 ```js

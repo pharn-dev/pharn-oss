@@ -13,7 +13,7 @@
 //
 // --start  supersedes an earlier runner of this tree (one per tree, L38: `--abort` first; review R6 — an earlier pid
 //          that is alive but cannot be verified, with no `ps`, refuses `runner-unverifiable` and wipes nothing), wipes
-//          `.pharn/pharn-entry/` (containment-walked; a symlink at any component refuses — L54) and an earlier run's
+//          `pharn/.run/pharn-entry/` (containment-walked; a symlink at any component refuses — L54) and an earlier run's
 //          entry-gate changes record, records `runner.json` with a fresh nonce BEFORE anything else (pid null), runs
 //          `run-gates.mjs init --stage entry` synchronously, then spawns the runner (`detached`, so `setsid`: it outlives
 //          the Bash call — measured — and has its own process group) and rewrites the record with its pid. Exit 0 started
@@ -60,7 +60,7 @@
 //     child-refused` with that `runner_reason`; landing DURING a gate it marks that gate `mutated`, which the document
 //     lists (run-gates records a gate's own tree change the same way). Writes inside the feature directory are
 //     neither: the entry fingerprint excludes it (worktree-fingerprint.mjs ENTRY_ALGO).
-//   • Everything under `.pharn/pharn-entry/` is ordinary `.pharn/` state a Bash writer reaches (L19, L43): agreement
+//   • Everything under `pharn/.run/pharn-entry/` is ordinary `pharn/.run/` state a Bash writer reaches (L19, L43): agreement
 //     between the stamp, its digest and the result is checked, never provenance. The runner's writes are `fs` writes
 //     outside fix #7, before the build's reconcile anchor.
 //   • The record readers (`readInProject`) are imported from regress-base-reuse.mjs (reused, not copied — L35), so a
@@ -70,12 +70,12 @@
 //     the set holds the evidence-only `base:test` slot (gate-run-core.mjs ENTRY_BASE_TEST_ID; never an S14 or S14b stop). Any
 //     problem with that list — a listing that fails, a path ac-tests-core.mjs `badPath` refuses, a shape resolveSet would
 //     refuse, more than BASE_TESTS_MAX_ARGV_BYTES of argv, a regress BASE checkout still standing at
-//     `.pharn/pharn-regress/base` (a runner's path filters could match its copies) — means NO slot, never a refusal. A
+//     `pharn/.run/pharn-regress/base` (a runner's path filters could match its copies) — means NO slot, never a refusal. A
 //     `--wait` that decided green, red or unmeasured, after every check above, then PUBLISHES the offer /pharn-regress reads
 //     (entry-base-evidence.mjs `publishEntryOffer`, in the git dir); `--start` discards an earlier one. Publication is
 //     best-effort: a failure is one `note —` line on stderr and changes no document, exit or record.
 //   • OBSERVATIONS (6.48.0, entry-gates-ledger-row): `--start`, the runner, a `--wait` call (and its takeover) and
-//     `--abort` each append one line per boundary they already have to `.pharn/cost/<name>/entry.jsonl` for the cost
+//     `--abort` each append one line per boundary they already have to `pharn/.run/cost/<name>/entry.jsonl` for the cost
 //     ledger — schema, binding and view in entry-observations.mjs's header. Each is written AFTER the control record it
 //     describes, best-effort (a failure is one `note —` line on stderr), and read by nothing here: no exit, document,
 //     verdict, takeover or abort depends on one.

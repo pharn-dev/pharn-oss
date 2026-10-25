@@ -14,7 +14,7 @@ still holds the rules every session needs; this file adds detail and does not ov
   verdict and stuck-point mappings, its prompts and human gates, its trusted-prefix instruction and its P2
   fences, plus ONE `## What you may claim` block — the command's floor/advisory split and its struck claims.
   Why a rule exists, version and review history, and a contract's or floor module's bounds are NOT restated
-  there: they live in that contract, that module's header, the `LIMITS.md` / `THREAT-MODEL.md` section, or
+  there: they live in that contract, that module's header, the `pharn/LIMITS.md` / `pharn/THREAT-MODEL.md` section, or
   the CHANGELOG version section, and the command cites the owner (P4 — a restated bound goes stale when its
   owner changes, L25). Its `description:` is one double-quoted line saying what the command does and when
   to use it, with no claim vocabulary. The COMMAND BUDGET section of `.dev/floor/command-hygiene.test.mjs`

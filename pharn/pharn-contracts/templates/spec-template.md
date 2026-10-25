@@ -6,7 +6,7 @@ spec_template: <the line check-spec.mjs --resolve-template-ref prints>
 ---
 
 <!-- pharn:guidance
-A PHARN SPEC template: the one PHARN ships, or a project's own copy of it at pharn.spec-template.md in the
+A PHARN SPEC template: the one PHARN ships, or a project's own copy of it at pharn/spec-template.md in the
 project root. Its shape is defined by pharn/pharn-contracts/spec-template.md, and pharn/floor/check-spec.mjs
 enforces it on any SPEC whose frontmatter carries `spec_template`.
 

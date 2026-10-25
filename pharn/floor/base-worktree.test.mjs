@@ -108,7 +108,7 @@ test("clearBaseWorktrees: removes this project's registered and stray checkouts 
     symlinkSync(victim, link, "dir");
     const foreign = join(root, `${namePrefix("/some/other/project")}For001`);
     mkdirSync(foreign);
-    const legacy = join(repo, ".pharn", "pharn-regress", "base");
+    const legacy = join(repo, "pharn", ".run", "pharn-regress", "base");
     mkdirSync(legacy, { recursive: true });
     writeFileSync(join(legacy, "old"), "x");
 
@@ -117,7 +117,7 @@ test("clearBaseWorktrees: removes this project's registered and stray checkouts 
       [
         "--input-type=module",
         "-e",
-        `import { clearBaseWorktrees } from ${JSON.stringify(MODULE)}; clearBaseWorktrees(process.argv[1], ".pharn/pharn-regress/base", process.argv[2]);`,
+        `import { clearBaseWorktrees } from ${JSON.stringify(MODULE)}; clearBaseWorktrees(process.argv[1], "pharn/.run/pharn-regress/base", process.argv[2]);`,
         repo,
         root,
       ],
@@ -144,7 +144,7 @@ test("clearBaseWorktrees never throws: no git repository, an absent root", () =>
       [
         "--input-type=module",
         "-e",
-        `import { clearBaseWorktrees } from ${JSON.stringify(MODULE)}; clearBaseWorktrees(process.argv[1], ".pharn/pharn-regress/base", process.argv[1] + "/absent");`,
+        `import { clearBaseWorktrees } from ${JSON.stringify(MODULE)}; clearBaseWorktrees(process.argv[1], "pharn/.run/pharn-regress/base", process.argv[1] + "/absent");`,
         notRepo,
       ],
       { cwd: notRepo, encoding: "utf8", env: CLEAN_ENV }

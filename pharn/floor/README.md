@@ -31,7 +31,7 @@ over `pharn/ARCHITECTURE.md` uses the same fold via `../../.dev/floor/hash-doc.m
 **The SPEC template is opt-in.** For a SPEC whose frontmatter declares `spec_template`, `check-spec.mjs` also
 enforces, through `spec-template-core.mjs`, the shape defined in `../pharn-contracts/spec-template.md` (sections, the acceptance-criteria
 grammar, clarification markers). `--resolve-template-ref` prints the value `/pharn-spec` writes into that
-key: the project's own `pharn.spec-template.md` when it exists and validates, else the shipped default. Once a
+key: the project's own `pharn/spec-template.md` when it exists and validates, else the shipped default. Once a
 project template exists, every failure is a refusal (exit 1), never a fallback. `--template-path <id>` prints
 the file to fill, and `--template-ref <id>` names one template directly. Every template is validated before its
 reference is printed. A SPEC without the key gets none of the template rules; the pin's layout rule (a body may
@@ -105,7 +105,7 @@ _current_ directory, so a relative `node .claude/hooks/…` stops starting after
 subdirectory: node exits 1, which Claude Code treats as a non-blocking error, and both guards go silently
 off (measured; the shipped form until `6.1.0`). Each guard then judges the **git working tree that contains
 Claude's current directory** — a subdirectory keeps the repo root, a session inside a worktree is judged as
-that worktree — and `LIMITS.md §7` states the bounds that remain. **`protect-trusted-paths.cjs` (fix #2)**
+that worktree — and `pharn/LIMITS.md §7` states the bounds that remain. **`protect-trusted-paths.cjs` (fix #2)**
 blocks any write to a protected path. Paths are matched **repo-relative and exact**, case-folded, against
 the guard's own location (plus the work tree Claude is in, when it belongs to the same repository) — never
 by bare basename, so a user's own `docs/ARCHITECTURE.md` stays writable. **Git metadata is denied too**: any
@@ -115,14 +115,14 @@ exactly as before, then at the file the write actually reaches — on macOS and 
 file name there — so a symlink named `s\x` pointing at the project root no longer carries a write to a
 protected file past the guard; every verdict that second check changes is a denial.
 The default set is the four trusted spec docs (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`,
-`THREAT-MODEL.md`, `LIMITS.md`), `CODEOWNERS` at each of the three locations GitHub honors (root,
+`pharn/THREAT-MODEL.md`, `pharn/LIMITS.md`), `CODEOWNERS` at each of the three locations GitHub honors (root,
 `.github/`, `docs/`) — the GitHub-layer write-guard itself — and **the two pre-write guards' own control
 surface**: both settings files that can wire the hooks (`.claude/settings.json` and
 `.claude/settings.local.json`) plus the four hook scripts
 (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`, `set-writes-scope.cjs`,
 `require-loop-record.cjs`). Each hook is re-read
 fresh on every tool call, so a write to one would disarm that guard on the very next write. It also names
-the project's own SPEC template, `pharn.spec-template.md`, denied whether or not the file exists: its
+the project's own SPEC template, `pharn/spec-template.md`, denied whether or not the file exists: its
 guidance comments are instructions `/pharn-spec` follows, so a human edits it directly. Extend the
 set further with the `PHARN_PROTECTED` env var (comma-separated; an entry containing `/` is an exact
 repo-relative path, a bare name still matches that basename at any depth). Confirm it works:
@@ -134,7 +134,7 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"docs/ARCHITECTURE.md"}}' |
 ```
 
 **`enforce-writes-scope.cjs` (fix #7)** is the runtime scope-enforcement hook: it denies any write
-outside the active scope in `.pharn/writes-scope.json`. With no scope set, the default depends on the
+outside the active scope in `pharn/.run/writes-scope.json`. With no scope set, the default depends on the
 tree (6.24.0): a dev checkout or an unsignalled tree stays fail-closed to the same default-safe-set as
 before, and every denial it made before carries the same message; the only verdict changes 6.24.0 made there
 are toward deny (a write through a symlink is also judged at the target the filesystem reaches, a path spelled
@@ -143,10 +143,10 @@ error denies). Since 6.73.1 one change goes the other way: there the Write tool 
 scratchpad, recognised by the rule below, under any scope, and nothing else outside the project; when the call's
 payload identifies that scratchpad, the out-of-root denial gains one bullet naming it. An **installed** project (`pharn.config.json` carries a non-empty `skillsVersion`) is
 fail-closed to the same default-safe-set **only while a `/pharn-ship`, `/pharn-loop` or `/pharn-review`
-run is open** (a marker under `.pharn/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
+run is open** (a marker under `pharn/.run/<command>/<name>/active.json`, written by `pharn/floor/run-marker.mjs`
 or, for the loop, `require-loop-record.cjs`); outside an open run it instead denies PHARN's own installed
 surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`, matched case-folded
-— plus `.pharn/writes-scope.json` and any path containing a backslash, and allows every other path inside
+— plus `pharn/.run/writes-scope.json` and any path containing a backslash, and allows every other path inside
 the project, including your ordinary source. Outside the project it then allows only this project's
 auto-memory folder (`<claude-config-dir>/projects/<key>/memory/**`, for the key of the folder holding the
 session's transcript and the key Claude Code derives from the repository's main checkout — a mirror of an
@@ -157,8 +157,8 @@ tree, and never another spelling of the project's own path (a different letter c
 the project's own files on a case-insensitive volume, so it is denied as the project's own); every other
 out-of-project path, another project's memory folder included, stays denied — where a project is its key, so
 two paths that differ only in characters outside `[A-Za-z0-9]` share one folder, as they do in Claude Code
-(`LIMITS.md §7`). A malformed
-`.pharn/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
+(`pharn/LIMITS.md §7`). A malformed
+`pharn/.run/writes-scope.json` denies EVERY write in an installed project rather than falling back to either
 default. Confirm it works:
 
 ```bash
@@ -192,7 +192,7 @@ only — Bash-tool writes bypass them entirely, for these paths exactly as for t
 **detected, not prevented**: `/pharn-build` anchors a content-hash baseline and `/pharn-verify` runs
 `check-bash-reconcile.mjs`, which fails verify when a changed path is one the live guards would have denied —
 for a non-adversarial writer only, since the baseline is unauthenticated state a Bash write can also reach
-(`../pharn-contracts/reconciliation-record.md`, `LIMITS.md §6`). Since 6.52.0 a denied path whose bytes are
+(`../pharn-contracts/reconciliation-record.md`, `pharn/LIMITS.md §6`). Since 6.52.0 a denied path whose bytes are
 exactly the upstream bytes HEAD merged in during the window is reported as `merged` and does not fail verify; a
 commit the build makes itself still does (contract §2a).
 

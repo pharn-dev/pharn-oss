@@ -70,7 +70,7 @@
 // Over the tokens of every pinned value — each level gate's script, pre and post, then each chained script's own:
 //   • a FILE the value names (scriptPathCandidates): each token, split on `=`, leading `./` stripped, that is a clean
 //     relative POSIX path — not led by `-` or `/`, no empty / `.` / `..` segment, no whitespace, quote, shell or glob
-//     character, first segment not `node_modules` (dependencies stay out) or `.pharn` (runtime scratch) — whose
+//     character, first segment not `node_modules` (dependencies stay out) or `pharn/.run` (runtime scratch) — whose
 //     extension is one a gate EXECUTES (EXECUTED_EXTENSIONS). Skipped: the token after an OUTPUT redirect (`>`, `>>`,
 //     `2>`, and `&>` / `>|` as the tokenizer leaves them) and after an output flag (`-o`, or any `--out…` flag, whose
 //     `=` value is skipped too) — a gate's own OUTPUT named literally would otherwise be pinned and then rewritten by the
@@ -319,7 +319,7 @@ function isCandidatePath(p) {
   if (PATH_BAD_CHAR_RE.test(p) || hasControl(p)) return false;
   const segs = p.split("/");
   if (segs.some((s) => s === "" || s === "." || s === "..")) return false;
-  if (segs[0] === "node_modules" || segs[0] === ".pharn") return false;
+  if (segs[0] === "node_modules" || (segs[0] === "pharn" && segs[1] === ".run")) return false;
   return EXECUTED_EXTENSIONS.includes(posix.extname(segs[segs.length - 1]).toLowerCase());
 }
 

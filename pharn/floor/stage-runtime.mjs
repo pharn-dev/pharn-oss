@@ -17,7 +17,7 @@
 //   wrappers and their registry-held reason codes (`stage-exit-core.mjs`). A helper here that emitted would put
 //   one stage's vocabulary into another's exit, so every helper returns `{ok, …}` or a `{kind}` instead.
 // • A stage's own containment LIST (which paths to walk) and its detail WORDING. `containmentWalk` is shared; the
-//   `containmentGuard` that names `.pharn/pharn-regress` or `.pharn/pharn-verify` stays in each script.
+//   `containmentGuard` that names `pharn/.run/pharn-regress` or `pharn/.run/pharn-verify` stays in each script.
 // • The composition of a rule the two stages apply differently, named rather than hidden: `stage-verify.mjs`'s
 //   `--resume` ALSO applies `parseBudgetMs` (so a value-less trailing `--budget-ms` is a `usage-error`), while
 //   `stage-regress.mjs`'s `--resume` applies `parseResumeArgv` alone, exactly as in 6.23.0 — GATE 1 kept regress's

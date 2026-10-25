@@ -206,7 +206,9 @@ test("--growth: a rule losing `paths:` or gaining a catch-all counts WHOLE; stay
 });
 
 test("--growth --base-rule: a dirty tree measures against HEAD; a clean tree against merge-base origin/main; neither → base-unresolved", () => {
-  withRepo({ "CLAUDE.md": "a\n" }, (fx) => {
+  // A tracked file under pharn/, as every install has (7.0.0: the state root lives there). Without one, git reports the
+  // untracked scratch as `?? pharn/` and the tree reads dirty — the bound stage-regress.mjs and instruction-files.mjs state.
+  withRepo({ "CLAUDE.md": "a\n", "pharn/keep.md": "k\n" }, (fx) => {
     const first = commit(fx);
     writeFileSync(join(fx.dir, "CLAUDE.md"), "a\nb\n");
     const second = commit(fx);
@@ -219,13 +221,13 @@ test("--growth --base-rule: a dirty tree measures against HEAD; a clean tree aga
     const mb = run(fx.dir, ["--growth", "--base-rule"]);
     assert.equal(mb.code, 0, mb.raw);
     assert.deepEqual([mb.doc.base, mb.doc.base_source, mb.doc.added_bytes], [first, "merge-base", 2]);
-    // Dirty (outside .pharn/) → HEAD.
+    // Dirty (outside pharn/.run/) → HEAD.
     writeFileSync(join(fx.dir, "CLAUDE.md"), "a\nb\nc\n");
     const dirty = run(fx.dir, ["--growth", "--base-rule"]);
     assert.deepEqual([dirty.doc.base, dirty.doc.base_source, dirty.doc.added_bytes], [second, "head", 2]);
-    // Control: a change under .pharn/ alone is not "dirty" (the state root, as BASE_RULE reads it).
+    // Control: a change under pharn/.run/ alone is not "dirty" (the state root, as BASE_RULE reads it).
     writeFileSync(join(fx.dir, "CLAUDE.md"), "a\nb\n");
-    write(fx.dir, { ".pharn/scratch.txt": "s" });
+    write(fx.dir, { "pharn/.run/scratch.txt": "s" });
     const st = run(fx.dir, ["--growth", "--base-rule"]);
     assert.equal(st.doc.base_source, "merge-base", st.raw);
   });
@@ -417,14 +419,14 @@ test("GATE 2 — a submodule holding the rules: --report notes it unread; a move
   }
 });
 
-test("GATE 2 — a staged rename INTO .pharn/ is a dirty tree for --base-rule (either path counts), as regress reads it", () => {
+test("GATE 2 — a staged rename INTO pharn/.run/ is a dirty tree for --base-rule (either path counts), as regress reads it", () => {
   withRepo({ "CLAUDE.md": "a\n", "src/x.js": "1\n" }, (fx) => {
     const head = commit(fx);
     fx.git("mv", "src/x.js", ".pharn-moved.js"); // control first: an ordinary rename is dirty
     assert.equal(run(fx.dir, ["--growth", "--base-rule"]).doc.base_source, "head");
     fx.git("mv", ".pharn-moved.js", "src/x.js");
-    mkdirSync(join(fx.dir, ".pharn"));
-    fx.git("mv", "src/x.js", ".pharn/x.js");
+    mkdirSync(join(fx.dir, "pharn", ".run"), { recursive: true });
+    fx.git("mv", "src/x.js", "pharn/.run/x.js");
     const r = run(fx.dir, ["--growth", "--base-rule"]);
     assert.equal(r.code, 0, r.raw);
     assert.deepEqual([r.doc.base, r.doc.base_source], [head, "head"]);

@@ -134,7 +134,7 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
     },
   ],
   "entry_events": [
-    // one line of .pharn/cost/<feature>/entry.jsonl per lifecycle boundary (see "Entry gate observations")
+    // one line of pharn/.run/cost/<feature>/entry.jsonl per lifecycle boundary (see "Entry gate observations")
     {
       "schema": "pharn-entry-observation/1",
       "event": "start",
@@ -785,7 +785,7 @@ checker computes either, so there is nothing to re-derive against.
   `gate2-quick` test is a membership fact; _which_ stage it stopped at rests on marker discipline.
 - **`stop:unknown` is the terminal fallback** — markers exist but none is a `stage-start`, or its stage
   token failed the grammar. The token is re-tested at READ time, not trusted from the writer: the
-  markers file is ordinary state under `.pharn/` that a Bash write reaches (`LIMITS.md §6`).
+  markers file is ordinary state under `pharn/.run/` that a Bash write reaches (`pharn/LIMITS.md §6`).
 
 - **`undetermined`** — markers exist, but the run's own boundary cannot be established from them: the
   run window is `unknown` (see "Run membership"), or — since 6.25.0 — the current run starts a stage other
@@ -983,7 +983,7 @@ stage. **Nothing decomposes it**: stage elapsed minus anything is not model time
 Whether a regress execution reused its BASE evidence and how many VERIFY results were reused is recorded in the two
 reports — which every iteration OVERWRITES — and the gate-run stamps are cleared at every fresh start. So
 `/pharn-regress` and `/pharn-verify` (`stage-regress.mjs`, `stage-verify.mjs`) each append ONE line at their `done`
-exit to `<.pharn/cost>/<feature>/work.jsonl`, beside `markers.jsonl`, counted by `pharn/floor/stage-work.mjs` (the
+exit to `<pharn/.run/cost>/<feature>/work.jsonl`, beside `markers.jsonl`, counted by `pharn/floor/stage-work.mjs` (the
 record's one owner, whose header is its spec) from the stamp the verdict just used:
 
 - `required` = the stamp's entries; `executed` = `ran: true` (a process ran); `reused` = `reason: "reused"` (a
@@ -1013,11 +1013,11 @@ two). A record attached to no execution is shown, never merged.
 
 **Bounds, each stated.** Only a `done` exit writes a record: gates a stage ran before refusing, crashing or being
 killed are NOT recorded (`work-on-non-done-exit`). The file is never pruned: one line per execution, standalone runs
-included, in disposable `.pharn/` scratch. The append is best-effort and OBSERVATIONAL — it refuses a symlinked or
+included, in disposable `pharn/.run/` scratch. The append is best-effort and OBSERVATIONAL — it refuses a symlinked or
 non-directory component, opens with `O_NOFOLLOW | O_NONBLOCK` (a planted FIFO is refused, never blocked on), never
 throws, and a failure is one stderr note;
-nothing reads a record to decide a verdict, an exit, a reuse, a route or a commit. `work.jsonl` is `.pharn/` state a
-Bash write reaches (LIMITS.md §6): the checker certifies agreement between the file's facts and its view, never that
+nothing reads a record to decide a verdict, an exit, a reuse, a route or a commit. `work.jsonl` is `pharn/.run/` state a
+Bash write reaches (pharn/LIMITS.md §6): the checker certifies agreement between the file's facts and its view, never that
 the records or markers are true (L43). `--verify-transcript` does not compare either key: neither is
 transcript-derived. No per-gate duration is measured (`gate-process-duration`).
 
@@ -1027,7 +1027,7 @@ The entry check (`pharn/floor/entry-gates.mjs`, 6.42.0) runs `/pharn-verify`'s g
 `/pharn-spec`, `/pharn-plan` and `/pharn-grill` work. It has deliberately **no stage marker**: a marker would put
 concurrent work into the sequential phase stream that attributes requests. So until 6.48.0 its execution appeared
 nowhere in this file. The foreground `--wait` call fell into the gap between two marked stages, and the entry scratch
-(`.pharn/pharn-entry/`, which holds no timestamp anyway) is wiped by the next `--start`. Two keys now carry it,
+(`pharn/.run/pharn-entry/`, which holds no timestamp anyway) is wiped by the next `--start`. Two keys now carry it,
 appended after `work` on every `/2` ledger the emitter writes. **No schema bump and no change to any existing key,
 marker, marker field or printed marker line**, so membership, attribution, totals and `executions` are exactly as
 before. For `/2` the checker admits EXACTLY three key sets: the current one, the 6.35.0–6.47.x one with neither entry
@@ -1038,7 +1038,7 @@ closed key set is not forward-compatible, by design. The record's one owner, who
 
 ### `entry_events[]` — FACTS written at the moment of each act (`pharn-entry-observation/1`)
 
-Each process appends one line per lifecycle boundary it already has to `<.pharn/cost>/<feature>/entry.jsonl`, beside
+Each process appends one line per lifecycle boundary it already has to `<pharn/.run/cost>/<feature>/entry.jsonl`, beside
 `markers.jsonl`. That file is never wiped by `--start`, so consecutive invocations keep their history:
 
 - `start`, once per `--start` that created an invocation. `run` is the current run-start `{seq, ts}` read from
@@ -1059,14 +1059,14 @@ output, argument, environment value, prompt or path is written. The emitter admi
 checker) requires EVERY timestamp the line carries to be a window member: `ts`, and `end_ts` for a start or a wait. It
 uses `isMember`, the test request rows and `work[]` pass. The emitter also drops exact duplicates. An invalid line joins
 `dropped[]` as `entry.jsonl[<n>]`. The read lstat-walks the directory chain (`readEntryEventsFor`), so a linked
-`.pharn/cost` or feature directory is never read through; it is listed in `dropped[]` as `entry.jsonl`.
+`pharn/.run/cost` or feature directory is never read through; it is listed in `dropped[]` as `entry.jsonl`.
 
 ### `entry` — a VIEW over `entry_events[]` (method `entry-observations/1`)
 
 - **Binding.** An invocation is in the view only when a `start` for its nonce recorded EXACTLY the ledger's current
   run-start `(seq, ts)` from `markers[]`. Every other event binds through its nonce. An event of any other nonce is
   counted in `unbound_events` and never attached. Nothing binds by feature name, pid, session or timestamp proximity,
-  so any disagreement (a reset `.pharn/cost`, a run-start the emitter normalizes away) reads unbound, never as another
+  so any disagreement (a reset `pharn/.run/cost`, a run-start the emitter normalizes away) reads unbound, never as another
   run's. A nonce whose start records conflict is bound to NO run, even when one of them names this run: a contested
   binding is left unattached and counted.
 - **The quantities, kept apart and never added.** `start.elapsed_ms` is the `--start` call (monotonic). The
@@ -1120,8 +1120,8 @@ succeeding. That is a comparison within 6.48.0. The pre-existing CLI tests are w
 behaviour. A process killed between its two boundaries leaves its
 segment `incomplete`. A `--start` that supersedes an earlier runner writes no event for that earlier nonce, so that
 invocation stays as it was recorded. An event whose session id matches no current-run marker of its session is not a
-window member and stays out (a resumed session with a new id is the case). The file is never pruned. `.pharn/` is
-Bash-reachable (LIMITS.md §6): the checker certifies agreement between the facts and the view, never that the events
+window member and stays out (a resumed session with a new id is the case). The file is never pruned. `pharn/.run/` is
+Bash-reachable (pharn/LIMITS.md §6): the checker certifies agreement between the facts and the view, never that the events
 describe what ran (L43); a self-consistent fabricated file passes. Per-gate durations are not measured.
 
 ## Size, disclosed rather than discovered
@@ -1198,7 +1198,7 @@ several stores of one fact AGREE, never that any of them is right (they can all 
 per [[L35]] it would itself become a third thing to keep in sync. What binds each to reality is the
 window it records, which each already states.
 
-## Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`)
 
 The transcript is **untrusted input**. `attribution_skill`, `model` and `agent_id` are copied from it into
 a committed artifact and are attacker-influencable in principle. So are `request_id`, `session_id` and each

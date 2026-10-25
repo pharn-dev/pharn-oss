@@ -1,7 +1,7 @@
 // pharn/floor/head-reuse-offer.test.mjs — the HEAD offer's storage (verify-head-gate-reuse, 6.34.0; grill B2).
 //
 // ★ HOOK runs BOTH real write guards on the offer's path — in a main checkout and in a linked worktree — and shows that
-// `.pharn/` (where the stamp itself lives) is writable: the reason the binding lives in the git dir (L65).
+// `pharn/.run/` (where the stamp itself lives) is writable: the reason the binding lives in the git dir (L65).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -39,7 +39,7 @@ function repo() {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(dir, "a.txt"), "a\n");
   git("add", "-A");
   git("commit", "-qm", "init");
@@ -47,8 +47,8 @@ function repo() {
 }
 
 function openRun(dir, command = "pharn-loop", body = '{"schema":"pharn-loop-active/1"}\n') {
-  mkdirSync(join(dir, ".pharn", command, FEATURE), { recursive: true });
-  writeFileSync(join(dir, ".pharn", command, FEATURE, "active.json"), body);
+  mkdirSync(join(dir, "pharn", ".run", command, FEATURE), { recursive: true });
+  writeFileSync(join(dir, "pharn", ".run", command, FEATURE, "active.json"), body);
 }
 
 function writeHeadStamp(dir, text = '{"stage":"regress"}\n') {
@@ -96,7 +96,7 @@ test("publishOffer: under one open run, the offer binds the stamp's exact bytes 
     assert.equal(o.feature, FEATURE);
     assert.deepEqual(o.run, {
       command: "pharn-loop",
-      marker_sha256: sha256(readFileSync(join(dir, ".pharn/pharn-loop", FEATURE, "active.json"))),
+      marker_sha256: sha256(readFileSync(join(dir, "pharn/.run/pharn-loop", FEATURE, "active.json"))),
     });
     assert.equal(o.stamp_sha256, sha256(Buffer.from('{"x":1}\n')));
     // The pure rule accepts it — and refuses the moment the stamp's bytes move (a write-tool edit after publication).
@@ -122,9 +122,9 @@ test("publishOffer: no head stamp, or a linked one, publishes nothing", () => {
   inRepo((dir) => {
     openRun(dir);
     assert.deepEqual(publishOffer(FEATURE), { published: false, why: "source-unusable" });
-    writeFileSync(join(dir, ".pharn/real.json"), "{}\n");
+    writeFileSync(join(dir, "pharn/.run/real.json"), "{}\n");
     mkdirSync(join(dir, dirname(HEAD_STAMP)), { recursive: true });
-    symlinkSync(join(dir, ".pharn/real.json"), join(dir, HEAD_STAMP));
+    symlinkSync(join(dir, "pharn/.run/real.json"), join(dir, HEAD_STAMP));
     assert.deepEqual(publishOffer(FEATURE), { published: false, why: "source-unusable" });
     assert.equal(existsSync(offerPath()), false);
   });
@@ -173,7 +173,7 @@ test("discardOffer NEVER throws — a removal the filesystem refuses is returned
   });
 });
 
-// ── ★ HOOK — the offer is out of the WRITE TOOLS' reach; `.pharn/` (the stamp) is not ─────────────────
+// ── ★ HOOK — the offer is out of the WRITE TOOLS' reach; `pharn/.run/` (the stamp) is not ─────────────────
 const PROTECT = join(HERE, "..", "..", ".claude", "hooks", "protect-trusted-paths.cjs");
 const ENFORCE = join(HERE, "..", "..", ".claude", "hooks", "enforce-writes-scope.cjs");
 
@@ -208,7 +208,7 @@ test("★ HOOK — both real write guards deny the offer path (main checkout, li
     assert.equal(hookExit(ENFORCE, dir, mainOffer), 2, "enforce-writes-scope's default denies it too");
     const stamp = join(dir, HEAD_STAMP);
     assert.equal(hookExit(PROTECT, dir, stamp), 0);
-    assert.equal(hookExit(ENFORCE, dir, stamp), 0, "`.pharn/**` is always writable — the reason the stamp alone is never offered");
+    assert.equal(hookExit(ENFORCE, dir, stamp), 0, "`pharn/.run/**` is always writable — the reason the stamp alone is never offered");
 
     execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: dir });
     installHooks(wt);

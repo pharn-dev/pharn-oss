@@ -14,18 +14,18 @@ import { EXIT } from "./build-gate-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "build-gate.mjs");
-const OUT_FULL = ".pharn/pharn-build/demo/full";
-const OUT_TARGETED = ".pharn/pharn-build/demo/targeted";
+const OUT_FULL = "pharn/.run/pharn-build/demo/full";
+const OUT_TARGETED = "pharn/.run/pharn-build/demo/targeted";
 
 /** The fixture's one runner: `node runner.cjs <gate-id> [files…]`. It records each call, sleeps, writes a vitest-shaped
- *  report for the `test` gate (one test per file it was handed, or one default test), and exits as `.pharn/mode.json`
- *  says. Everything it writes or reads sits under `.pharn/` (git-ignored, outside the tree fingerprint). */
+ *  report for the `test` gate (one test per file it was handed, or one default test), and exits as `pharn/.run/mode.json`
+ *  says. Everything it writes or reads sits under `pharn/.run/` (git-ignored, outside the tree fingerprint). */
 const RUNNER = [
   'const fs = require("fs");',
   "const [id, ...files] = process.argv.slice(2);",
-  'let mode = {}; try { mode = JSON.parse(fs.readFileSync(".pharn/mode.json", "utf8")); } catch {}',
-  'fs.mkdirSync(".pharn", { recursive: true });',
-  'fs.appendFileSync(".pharn/calls.jsonl", JSON.stringify({ id, files }) + "\\n");',
+  'let mode = {}; try { mode = JSON.parse(fs.readFileSync("pharn/.run/mode.json", "utf8")); } catch {}',
+  'fs.mkdirSync("pharn/.run", { recursive: true });',
+  'fs.appendFileSync("pharn/.run/calls.jsonl", JSON.stringify({ id, files }) + "\\n");',
   "const until = Date.now() + (mode.sleep || 0); while (Date.now() < until) {}",
   "const fail = new Set(mode.fail || []);",
   'const names = files.length ? files : ["tests/all.test.js"];',
@@ -77,7 +77,7 @@ function project({
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   for (const f of ["src/a.js", "tests/a.test.js", "tests/ac/u.test.js", "e2e/x.spec.js"]) {
     mkdirSync(join(dir, dirname(f)), { recursive: true });
     writeFileSync(join(dir, f), `// ${f}\n`);
@@ -93,12 +93,12 @@ function project({
   return dir;
 }
 const setMode = (dir, mode) => {
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
-  writeFileSync(join(dir, ".pharn", "mode.json"), JSON.stringify(mode));
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+  writeFileSync(join(dir, "pharn", ".run", "mode.json"), JSON.stringify(mode));
 };
 const calls = (dir) =>
-  existsSync(join(dir, ".pharn", "calls.jsonl"))
-    ? readFileSync(join(dir, ".pharn", "calls.jsonl"), "utf8")
+  existsSync(join(dir, "pharn", ".run", "calls.jsonl"))
+    ? readFileSync(join(dir, "pharn", ".run", "calls.jsonl"), "utf8")
         .trim()
         .split("\n")
         .filter(Boolean)
@@ -135,7 +135,7 @@ test("full GREEN — the discovered set minus the e2e gates, in ALLOWLIST order,
       ["test", "lint", "typecheck"]
     );
     assert.deepEqual(calls(dir)[0].files, [], "the full test gate runs the whole suite");
-    const times = JSON.parse(readFileSync(join(dir, ".pharn/pharn-build/demo/full.times.json"), "utf8"));
+    const times = JSON.parse(readFileSync(join(dir, "pharn/.run/pharn-build/demo/full.times.json"), "utf8"));
     assert.deepEqual(Object.keys(times).sort(), ["0", "1", "2"]);
     for (const v of Object.values(times)) assert.ok(Number.isInteger(v) && v >= 0);
   });
@@ -153,7 +153,7 @@ test("full RED — failing tests are named with a bounded, fenced excerpt; a red
     assert.ok(!r.stdout.includes(String.fromCharCode(27)), "colour codes are cut");
     assert.match(r.stdout, /## typecheck — exit 2/);
     assert.match(r.stdout, /stderr, last lines \(DATA[^\n]*\n\n```text\ntypecheck: error XYZ\n```/);
-    assert.match(r.stdout, /full logs: \.pharn\/pharn-build\/demo\/full\/2-typecheck\.out/);
+    assert.match(r.stdout, /full logs: pharn\/\.run\/pharn-build\/demo\/full\/2-typecheck\.out/);
     assert.doesNotMatch(r.stdout, /## lint/, "a green gate gets no section");
   });
 });
@@ -174,7 +174,7 @@ test("targeted — only the `test` gate, handed exactly the declared test files 
     const r = targeted(dir);
     assert.equal(r.status, EXIT.green, r.stdout + r.stderr);
     assert.deepEqual(calls(dir), [{ id: "test", files: ["tests/a.test.js", "tests/ac/u.test.js"] }]);
-    assert.deepEqual(JSON.parse(readFileSync(join(dir, ".pharn/pharn-build/demo/targets.json"), "utf8")), [
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, "pharn/.run/pharn-build/demo/targets.json"), "utf8")), [
       "tests/a.test.js",
       "tests/ac/u.test.js",
     ]);
@@ -233,7 +233,7 @@ test("review R1 — no package.json is NO-GATES (4), never UNUSABLE; a human's -
     );
     assert.equal(stampOf(dir, OUT_FULL).source, "explicit");
     // targeted over an explicit spec: its `test` id alone, handed the targets.
-    writeFileSync(join(dir, ".pharn", "calls.jsonl"), "");
+    writeFileSync(join(dir, "pharn", ".run", "calls.jsonl"), "");
     const t = targeted(dir, ["--gates", spec]);
     assert.equal(t.status, EXIT.green, t.stdout + t.stderr);
     assert.deepEqual(calls(dir), [{ id: "test", files: ["tests/a.test.js", "tests/ac/u.test.js"] }]);
@@ -313,10 +313,10 @@ test("L44/L66 — CONTINUE (exit 5) under the budget; the same line continues an
       ["test", "lint"],
       "continued: test was not run again"
     );
-    const times = JSON.parse(readFileSync(join(dir, ".pharn/pharn-build/demo/full.times.json"), "utf8"));
+    const times = JSON.parse(readFileSync(join(dir, "pharn/.run/pharn-build/demo/full.times.json"), "utf8"));
     assert.deepEqual(Object.keys(times).sort(), ["0", "1"], "both calls' times are kept");
     // A paused run whose tree then changes is started over, never read as this tree's.
-    writeFileSync(join(dir, ".pharn", "calls.jsonl"), "");
+    writeFileSync(join(dir, "pharn", ".run", "calls.jsonl"), "");
     assert.equal(gate(dir, ["--mode", "full", ...line]).status, EXIT.continue);
     writeFileSync(join(dir, "src", "a.js"), "// edited\n");
     assert.equal(gate(dir, ["--mode", "full", ...line]).status, EXIT.continue);
@@ -328,7 +328,7 @@ test("L44/L66 — CONTINUE (exit 5) under the budget; the same line continues an
   });
 });
 
-test("UNUSABLE (exit 2) — usage, and a symlinked or dangling .pharn/pharn-build (L54); never a crash code", () => {
+test("UNUSABLE (exit 2) — usage, and a symlinked or dangling pharn/.run/pharn-build (L54); never a crash code", () => {
   withProject({}, (dir) => {
     for (const args of [
       ["--mode", "full"], // no --timeout-ms (no default, L41)
@@ -345,15 +345,15 @@ test("UNUSABLE (exit 2) — usage, and a symlinked or dangling .pharn/pharn-buil
       encoding: "utf8",
     });
     assert.equal(bad.status, EXIT.unusable);
-    mkdirSync(join(dir, ".pharn"), { recursive: true });
+    mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
     const elsewhere = mkdtempSync(join(tmpdir(), "bg-else-"));
     try {
-      symlinkSync(elsewhere, join(dir, ".pharn", "pharn-build"));
+      symlinkSync(elsewhere, join(dir, "pharn", ".run", "pharn-build"));
       const r = full(dir);
       assert.equal(r.status, EXIT.unusable, r.stdout);
       assert.match(r.stdout, /path-containment: .*symlink/);
-      rmSync(join(dir, ".pharn", "pharn-build"));
-      symlinkSync(join(dir, "nowhere"), join(dir, ".pharn", "pharn-build"));
+      rmSync(join(dir, "pharn", ".run", "pharn-build"));
+      symlinkSync(join(dir, "nowhere"), join(dir, "pharn", ".run", "pharn-build"));
       const d = full(dir);
       assert.equal(d.status, EXIT.unusable, d.stdout);
       assert.deepEqual(calls(dir), [], "nothing ran");
@@ -380,7 +380,7 @@ function pinnedLine(re) {
 }
 const sh = (dir, line) => spawnSync("sh", ["-c", line.replaceAll("<name>", "demo")], { cwd: dir, encoding: "utf8" });
 
-test("★ WIRING — /pharn-build's pinned targeted and full lines run, GREEN and RED, recording under .pharn/pharn-build/<name>/", () => {
+test("★ WIRING — /pharn-build's pinned targeted and full lines run, GREEN and RED, recording under pharn/.run/pharn-build/<name>/", () => {
   const lines = {
     targeted: pinnedLine(/build-gate\.mjs --feature <name> --mode targeted /),
     full: pinnedLine(/build-gate\.mjs --feature <name> --mode full /),
@@ -404,5 +404,19 @@ test("★ WIRING — /pharn-build's pinned targeted and full lines run, GREEN an
     // CONTROL (L60): the line with a pinned flag removed is refused, so the pin is what the test exercises.
     const cut = lines.full.replace(/ --timeout-ms \d+/, "");
     assert.equal(sh(dir, cut).status, EXIT.unusable);
+  });
+});
+
+import { renameSync as renameBG7 } from "node:fs";
+
+test("UNUSABLE (7.0.0) — a symlink at `pharn`, above the state root, is refused as path-containment; nothing runs", () => {
+  withProject({}, (dir) => {
+    const real = join(dir, "pharn-real");
+    if (existsSync(join(dir, "pharn"))) renameBG7(join(dir, "pharn"), real);
+    else mkdirSync(real, { recursive: true });
+    symlinkSync(real, join(dir, "pharn"));
+    const r = full(dir);
+    assert.equal(r.status, EXIT.unusable, r.stdout);
+    assert.match(r.stdout, /path-containment: pharn\/\.run .*symlink/);
   });
 });

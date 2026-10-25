@@ -199,8 +199,8 @@ export const APPLICABILITY = Object.freeze({ CURRENT: "current", NOT_IN_RUN: "no
 export const OUTCOME_SOURCE = "verdicts+markers";
 
 /** A stage token: the same grammar `mark-phase.mjs` enforces at WRITE time, re-tested at READ time.
- *  Re-testing is deliberate and is not redundancy — the markers file is ordinary state under `.pharn/`
- *  that Bash reaches (`LIMITS.md §6`), so a reader that trusted the writer's validation would be
+ *  Re-testing is deliberate and is not redundancy — the markers file is ordinary state under `pharn/.run/`
+ *  that Bash reaches (`pharn/LIMITS.md §6`), so a reader that trusted the writer's validation would be
  *  trusting a file anyone can edit. Fail-closed: a token that does not match becomes `unknown`. */
 const STAGE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 

@@ -18,7 +18,7 @@ _(SKIPPED entirely in Quick mode — see `## Quick mode` item 10 above. `BRIEFIN
 is skipped with it.)_
 
 Reached only after a `PASS` verify (step 7). Before writing anything, scope this step's own artifact. **The
-setter resolves exactly one `--target` per call and OVERWRITES `.pharn/writes-scope.json`**, so each artifact is
+setter resolves exactly one `--target` per call and OVERWRITES `pharn/.run/writes-scope.json`**, so each artifact is
 scoped **to itself immediately before it is written**:
 
 ```bash
@@ -385,7 +385,7 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   your own discipline, and its heading model is not checked against a renderer.
 - **Untrusted input:** control flow reads only exit codes, `.verdict` enums and path lists — no proceed/stop decision
   rests on free text; `GRILL.md` / `REGRESSION.md` / `VERIFY.md` / `BUILD.md` free text is presented as quoted DATA.
-  A stage agent's final text returns into your context: `THREAT-MODEL.md §5`'s free-text residual in a new place,
+  A stage agent's final text returns into your context: `pharn/THREAT-MODEL.md §5`'s free-text residual in a new place,
   bounded (no proceed/stop reads it) and not zeroed. `BRIEFING.md`'s frontmatter is computed from JSON and
   frontmatter source fields only, never from PLAN.md's body (P2).
 - **Not a claim:** "`/pharn-ship` ensures a good feature" / "reaching the end means the feature is correct or wise" —

@@ -31,7 +31,7 @@ const REPO = join(HERE, "..", "..");
 const FEATURE = "demo";
 
 /** A throwaway git repo. `gitignorePharn` is a PARAMETER, not a constant, because the whole point of the
- *  `.pharn/` exclusion is the install that does NOT ignore it — a fixture that always ignored it would
+ *  `pharn/.run/` exclusion is the install that does NOT ignore it — a fixture that always ignored it would
  *  leave the exclusion unexercised, which is the L41 blind spot in its exact shape. */
 function repo({ gitignorePharn = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "wfp-"));
@@ -39,7 +39,7 @@ function repo({ gitignorePharn = true } = {}) {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   mkdirSync(join(dir, `pharn/features/${FEATURE}`), { recursive: true });
   writeFileSync(join(dir, "a.txt"), "a\n");
   writeFileSync(join(dir, `pharn/features/${FEATURE}/PLAN.md`), "# PLAN\n");
@@ -83,23 +83,23 @@ test("NON-VACUITY: the digest MOVES on an edit, an add, a delete, and an untrack
   }
 });
 
-test("L41 — `.pharn/` is excluded EVEN IN A FIXTURE THAT DOES NOT GIT-IGNORE IT, incl. a mark-phase append", () => {
-  // The exclusion is inert when git-ignore already hides `.pharn/`, which is the case in THIS repo. The
+test("L41 — `pharn/.run/` is excluded EVEN IN A FIXTURE THAT DOES NOT GIT-IGNORE IT, incl. a mark-phase append", () => {
+  // The exclusion is inert when git-ignore already hides `pharn/.run/`, which is the case in THIS repo. The
   // install that does not ignore it is the one the exclusion exists for, so that is the fixture here.
   const { dir, fp } = repo({ gitignorePharn: false });
   try {
-    // Control first: prove the enumeration really does see `.pharn/` in this fixture, or the assertion
+    // Control first: prove the enumeration really does see `pharn/.run/` in this fixture, or the assertion
     // below would pass because there was nothing to exclude.
-    mkdirSync(join(dir, ".pharn/cost", FEATURE), { recursive: true });
-    appendFileSync(join(dir, ".pharn/cost", FEATURE, "markers.jsonl"), JSON.stringify({ seq: 1, kind: "stage-start" }) + "\n");
+    mkdirSync(join(dir, "pharn/.run/cost", FEATURE), { recursive: true });
+    appendFileSync(join(dir, "pharn/.run/cost", FEATURE, "markers.jsonl"), JSON.stringify({ seq: 1, kind: "stage-start" }) + "\n");
     const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: dir, encoding: "utf8" });
-    assert.ok(untracked.includes(".pharn"), "fixture is wrong: git already hides .pharn/, so the exclusion is untested");
+    assert.ok(untracked.includes("pharn/.run"), "fixture is wrong: git already hides pharn/.run/, so the exclusion is untested");
 
     const a = fp();
-    appendFileSync(join(dir, ".pharn/cost", FEATURE, "markers.jsonl"), JSON.stringify({ seq: 2, kind: "stage-start" }) + "\n");
-    mkdirSync(join(dir, ".pharn/pharn-verify/gates"), { recursive: true });
-    writeFileSync(join(dir, ".pharn/pharn-verify/gates/0-test.out"), "x".repeat(4096));
-    assert.equal(fp(), a, "a .pharn/ write moved the digest — the runner's own logs would refuse every run");
+    appendFileSync(join(dir, "pharn/.run/cost", FEATURE, "markers.jsonl"), JSON.stringify({ seq: 2, kind: "stage-start" }) + "\n");
+    mkdirSync(join(dir, "pharn/.run/pharn-verify/gates"), { recursive: true });
+    writeFileSync(join(dir, "pharn/.run/pharn-verify/gates/0-test.out"), "x".repeat(4096));
+    assert.equal(fp(), a, "a pharn/.run/ write moved the digest — the runner's own logs would refuse every run");
 
     // The paired non-vacuity control: the SAME fixture still moves on an ordinary edit.
     appendFileSync(join(dir, "a.txt"), "z\n");
@@ -172,7 +172,7 @@ test("with NO feature named, nothing is excluded on the artifact axis (fail-clos
 });
 
 test("isExcluded: the state root, both feature roots, and the refusals", () => {
-  assert.ok(isExcluded(".pharn", FEATURE));
+  assert.ok(isExcluded("pharn/.run", FEATURE));
   assert.ok(isExcluded(`${STATE_ROOT_SEGMENT}anything/at/all`, FEATURE));
   for (const root of featureRoots(FEATURE)) {
     assert.ok(isExcluded(`${root}VERIFY.md`, FEATURE), `${root} was not honoured`);
@@ -408,13 +408,16 @@ test("links: a directory link and a dangling link are stable untouched and move 
 // `len \0 path \0 sha256 \0` triples; a link contributes sha256("symlink\0" + text)), not copied from the output.
 const GOLDEN = Object.freeze({
   "worktree-fingerprint/2+sha256": "95c9ef03cb8a321936a6cbd47b23acf8d83a73bad2decc1e416f0cc5ec2a6e22",
+  // 7.0.0 (pharn-footprint-move): recomputed by hand from the same composition; the recomputation reproduces the /2 value
+  // above from the old, pre-migration fixture (`.gitignore` = ".pharn/"), and gives this one for the fixture as it now stands.
+  "worktree-fingerprint/3+sha256": "2f45eea8fcac334ba0e43f049e36ac21057a493e5b2637470462219e3af3f687",
 });
 
 function goldenTree() {
   const dir = mkdtempSync(join(tmpdir(), "wfp-golden-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   git("init", "-q", ".");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(dir, "a.txt"), "a\n");
   mkdirSync(join(dir, "sub"));
   writeFileSync(join(dir, "sub/f.txt"), "f\n");

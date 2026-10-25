@@ -38,7 +38,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "run-gates.mjs");
-const OUT = ".pharn/gates";
+const OUT = "pharn/.run/gates";
 const FEATURE = "demo";
 
 /** Run the CLI and return {code, json}. stdout is always one JSON document, so a caller branches on the
@@ -60,7 +60,7 @@ function repo({ scripts = { test: 'node -e "process.exit(0)"' }, gitignorePharn 
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  if (gitignorePharn) writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   mkdirSync(join(dir, `pharn/features/${FEATURE}`), { recursive: true });
   writeFileSync(join(dir, `pharn/features/${FEATURE}/PLAN.md`), "# PLAN\n\n## Files\n\n- `a.txt` — a\n");
   writeFileSync(join(dir, "a.txt"), "a\n");
@@ -268,7 +268,10 @@ test("CONTAINMENT: --out outside, equal to, or symlinked through the state root 
           ["init", "--stage", "verify", "--feature", FEATURE, "--out", "elsewhere/gates", "--discover", "package.json"],
           "outside the state root",
         ],
-        [["init", "--stage", "verify", "--feature", FEATURE, "--out", ".pharn", "--discover", "package.json"], "equal to the state root"],
+        [
+          ["init", "--stage", "verify", "--feature", FEATURE, "--out", "pharn/.run", "--discover", "package.json"],
+          "equal to the state root",
+        ],
         [["init", "--stage", "verify", "--feature", FEATURE, "--out", "../escape", "--discover", "package.json"], "traversing out"],
       ];
       for (const [args, why] of cases) {
@@ -277,10 +280,20 @@ test("CONTAINMENT: --out outside, equal to, or symlinked through the state root 
         assert.equal(r.json.reason_code, "path-containment", `wrong reason_code for ${why}`);
       }
       // The symlink case: a component of the path is a link, which `lstat` sees and `stat` would follow.
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
       mkdirSync(join(dir, "outside-target"), { recursive: true });
-      symlinkSync(join(dir, "outside-target"), join(dir, ".pharn", "linked"));
-      const r = cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", ".pharn/linked/gates", "--discover", "package.json"]);
+      symlinkSync(join(dir, "outside-target"), join(dir, "pharn", ".run", "linked"));
+      const r = cli(dir, [
+        "init",
+        "--stage",
+        "verify",
+        "--feature",
+        FEATURE,
+        "--out",
+        "pharn/.run/linked/gates",
+        "--discover",
+        "package.json",
+      ]);
       assert.equal(r.code, 2, "accepted a --out traversing a symlink");
       assert.equal(r.json.reason_code, "path-containment");
       // Non-vacuity control: the ordinary path is accepted by the same fixture.
@@ -300,27 +313,27 @@ test("CONTAINMENT: a DANGLING link, a FILE component and a dangling STATE ROOT a
   const cases = [
     {
       why: "a dangling symlink component",
-      out: ".pharn/linked/gates",
+      out: "pharn/.run/linked/gates",
       target: "missing-target",
       setup: (dir) => {
-        mkdirSync(join(dir, ".pharn"), { recursive: true });
-        symlinkSync(join(dir, "missing-target"), join(dir, ".pharn", "linked"));
+        mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+        symlinkSync(join(dir, "missing-target"), join(dir, "pharn", ".run", "linked"));
       },
     },
     {
       why: "a regular FILE as a component",
-      out: ".pharn/afile/gates",
+      out: "pharn/.run/afile/gates",
       target: null,
       setup: (dir) => {
-        mkdirSync(join(dir, ".pharn"), { recursive: true });
-        writeFileSync(join(dir, ".pharn", "afile"), "not a directory");
+        mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+        writeFileSync(join(dir, "pharn", ".run", "afile"), "not a directory");
       },
     },
     {
       why: "a dangling symlink as the state root itself",
-      out: ".pharn/gates",
+      out: "pharn/.run/gates",
       target: "missing-root",
-      setup: (dir) => symlinkSync(join(dir, "missing-root"), join(dir, ".pharn")),
+      setup: (dir) => symlinkSync(join(dir, "missing-root"), join(dir, "pharn", ".run")),
     },
   ];
   for (const c of cases) {
@@ -412,7 +425,7 @@ test("regress --side base REQUIRES --spec-from, and copies the head spec VERBATI
         "--feature",
         FEATURE,
         "--out",
-        ".pharn/head",
+        "pharn/.run/head",
         "--discover",
         "package.json",
         "--scope-json",
@@ -428,9 +441,9 @@ test("regress --side base REQUIRES --spec-from, and copies the head spec VERBATI
         "--feature",
         FEATURE,
         "--out",
-        ".pharn/base",
+        "pharn/.run/base",
         "--spec-from",
-        ".pharn/head",
+        "pharn/.run/head",
       ]);
       assert.equal(base.code, 0);
       assert.deepEqual(base.json.ids, head.json.ids, "the base side did not copy the head spec verbatim");
@@ -921,14 +934,14 @@ const PATH_OPERANDS = [
     operand: "--scope-json",
     check(dir) {
       // scope.json exists ONLY in the invoking directory; resolved against --cwd it would be unreadable.
-      const r = cli(dir, regressHead(".pharn/head", ["--cwd", SUB]));
+      const r = cli(dir, regressHead("pharn/.run/head", ["--cwd", SUB]));
       assert.equal(r.code, 0, `--scope-json was not read from the invoking directory: ${r.raw}`);
     },
   },
   {
     operand: "--spec-from",
     check(dir) {
-      const head = cli(dir, regressHead(".pharn/head"));
+      const head = cli(dir, regressHead("pharn/.run/head"));
       assert.equal(head.code, 0, head.raw);
       const base = cli(dir, [
         "init",
@@ -939,9 +952,9 @@ const PATH_OPERANDS = [
         "--feature",
         FEATURE,
         "--out",
-        ".pharn/base",
+        "pharn/.run/base",
         "--spec-from",
-        ".pharn/head",
+        "pharn/.run/head",
         "--cwd",
         SUB,
       ]);
@@ -987,9 +1000,9 @@ function withBaseWorktree(fn) {
   return withRepo(
     (dir) => {
       const sha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir, encoding: "utf8" }).trim();
-      mkdirSync(join(dir, ".pharn/pharn-regress"), { recursive: true });
+      mkdirSync(join(dir, "pharn/.run/pharn-regress"), { recursive: true });
       writeFileSync(
-        join(dir, ".pharn/pharn-regress/scope.json"),
+        join(dir, "pharn/.run/pharn-regress/scope.json"),
         JSON.stringify({ escaped: [], outside_tests: [], outside_eval_pairs: [] })
       );
       return fn(dir, sha);
@@ -1000,8 +1013,8 @@ function withBaseWorktree(fn) {
 
 test("the regress PAIR end to end through a real git worktree: the base stamp lands in the invoking state root", () => {
   withBaseWorktree((dir, sha) => {
-    execFileSync("git", ["worktree", "add", "-q", "--detach", ".pharn/pharn-regress/base", sha], { cwd: dir });
-    assert.equal(cli(dir, regressHead(".pharn/pharn-regress/head", [], ".pharn/pharn-regress/scope.json")).code, 0);
+    execFileSync("git", ["worktree", "add", "-q", "--detach", "pharn/.run/pharn-regress/base", sha], { cwd: dir });
+    assert.equal(cli(dir, regressHead("pharn/.run/pharn-regress/head", [], "pharn/.run/pharn-regress/scope.json")).code, 0);
     const base = cli(dir, [
       "init",
       "--stage",
@@ -1011,24 +1024,24 @@ test("the regress PAIR end to end through a real git worktree: the base stamp la
       "--feature",
       FEATURE,
       "--out",
-      ".pharn/pharn-regress/base-gates",
+      "pharn/.run/pharn-regress/base-gates",
       "--spec-from",
-      ".pharn/pharn-regress/head",
+      "pharn/.run/pharn-regress/head",
       "--cwd",
-      ".pharn/pharn-regress/base",
+      "pharn/.run/pharn-regress/base",
     ]);
     assert.equal(base.code, 0, `the base init refused: ${base.raw}`);
-    for (const out of [".pharn/pharn-regress/head", ".pharn/pharn-regress/base-gates"]) {
+    for (const out of ["pharn/.run/pharn-regress/head", "pharn/.run/pharn-regress/base-gates"]) {
       for (let i = 0; i < 10; i++) {
         const r = cli(dir, ["run", "--next", "--out", out, "--timeout-ms", "30000"]);
         assert.notEqual(r.code, 2, `the ${out} drain hit a runner error: ${r.raw}`);
         if (r.code === 3) break;
       }
     }
-    const baseStamp = join(dir, ".pharn/pharn-regress/base-gates/stamp.json");
+    const baseStamp = join(dir, "pharn/.run/pharn-regress/base-gates/stamp.json");
     assert.ok(existsSync(baseStamp), "the base stamp is not in the invoking directory's state root");
     // Negative control: the pre-fix location, INSIDE the base worktree, stays empty.
-    assert.ok(!existsSync(join(dir, ".pharn/pharn-regress/base/.pharn")), "a record was written inside the base worktree");
+    assert.ok(!existsSync(join(dir, "pharn/.run/pharn-regress/base/pharn/.run")), "a record was written inside the base worktree");
     const s = JSON.parse(readFileSync(baseStamp, "utf8"));
     assert.equal(s.head, sha, "the base stamp must record the base worktree's HEAD");
     assert.equal(s.side, "base");
@@ -1327,7 +1340,7 @@ test("regress head REFUSES an outside_eval_pairs entry that is not {expected, ac
 test("regress base REFUSES a --spec-from record that carries no gate entries (spec-mismatch)", () => {
   withRepo(
     (dir) => {
-      const head = join(dir, ".pharn", "head");
+      const head = join(dir, "pharn", ".run", "head");
       mkdirSync(head, { recursive: true });
       writeFileSync(
         join(head, "state.json"),
@@ -1342,9 +1355,9 @@ test("regress base REFUSES a --spec-from record that carries no gate entries (sp
         "--feature",
         FEATURE,
         "--out",
-        ".pharn/base",
+        "pharn/.run/base",
         "--spec-from",
-        ".pharn/head",
+        "pharn/.run/head",
       ]);
       assert.equal(r.code, 2);
       assert.equal(r.json.reason_code, "spec-mismatch");
@@ -1451,7 +1464,7 @@ test("E2E AT REGRESS (runner level) — the head init drops an e2e script, print
         "--feature",
         FEATURE,
         "--out",
-        ".pharn/head",
+        "pharn/.run/head",
         "--discover",
         "package.json",
         "--scope-json",
@@ -1469,14 +1482,14 @@ test("E2E AT REGRESS (runner level) — the head init drops an e2e script, print
         "--feature",
         FEATURE,
         "--out",
-        ".pharn/base",
+        "pharn/.run/base",
         "--spec-from",
-        ".pharn/head",
+        "pharn/.run/head",
       ]);
       assert.equal(base.code, 0, base.raw);
       assert.deepEqual(base.json.ids, ["test"], "the base side must copy the head set, e2e excluded");
       // The stamp shape is untouched: the report lives in init's output only.
-      assert.ok(!Object.hasOwn(JSON.parse(readFileSync(join(dir, ".pharn/head/state.json"), "utf8")), "e2e_excluded"));
+      assert.ok(!Object.hasOwn(JSON.parse(readFileSync(join(dir, "pharn/.run/head/state.json"), "utf8")), "e2e_excluded"));
     },
     { scripts: { test: "true", "test:e2e": "true" } }
   );
@@ -1494,9 +1507,9 @@ const AC_ROWS_OK = [
   "- AC-2 | integration | `tests/ac/i.test.js` | t",
   "- AC-3 | e2e | `tests/e2e/x.spec.js` | t",
 ];
-/** Each gate records its argv under .pharn/ (outside the fingerprint) and exits 1 — the red run's normal shape. */
+/** Each gate records its argv under pharn/.run/ (outside the fingerprint) and exits 1 — the red run's normal shape. */
 const RECORDER = (id) =>
-  `node -e "require('fs').writeFileSync('.pharn/argv-${id}.json', JSON.stringify(process.argv.slice(1))); process.exit(1)"`;
+  `node -e "require('fs').writeFileSync('pharn/.run/argv-${id}.json', JSON.stringify(process.argv.slice(1))); process.exit(1)"`;
 const acInit = (extra = []) => [
   "init",
   "--stage",
@@ -1514,7 +1527,7 @@ const acInit = (extra = []) => [
 function withAcRepo(fn, { rows = AC_ROWS_OK, scripts } = {}) {
   return withRepo(
     (dir) => {
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
       writeFileSync(join(dir, AC_PATH), acMapping(rows));
       return fn(dir);
     },
@@ -1540,10 +1553,10 @@ test("ac-test: init selects exactly the levels' gates and each gate receives exa
     );
     assert.ok(!st.runs.some((r) => r.id === "reconcile"), "no reconcile at ac-test");
     assert.equal(st.aux.completeness, null, "no completeness capture at ac-test");
-    const argvOf = (id) => JSON.parse(readFileSync(join(dir, `.pharn/argv-${id}.json`), "utf8"));
+    const argvOf = (id) => JSON.parse(readFileSync(join(dir, `pharn/.run/argv-${id}.json`), "utf8"));
     assert.deepEqual(argvOf("test"), ["tests/ac/i.test.js", "tests/ac/u.test.js"]);
     assert.deepEqual(argvOf("e2e"), ["tests/e2e/x.spec.js"], "the e2e gate is file-restricted too (grill G6)");
-    assert.ok(!existsSync(join(dir, ".pharn/argv-lint.json")), "lint never ran");
+    assert.ok(!existsSync(join(dir, "pharn/.run/argv-lint.json")), "lint never ran");
   });
 });
 
@@ -1615,14 +1628,14 @@ test("ac-test: a record whose entry lost its files is refused at run, never run 
     const r = cli(dir, runArgs());
     assert.equal(r.code, 2, r.raw);
     assert.match(r.json.reason, /carries no mapped files/);
-    assert.ok(!existsSync(join(dir, ".pharn/argv-test.json")), "the gate never ran");
+    assert.ok(!existsSync(join(dir, "pharn/.run/argv-test.json")), "the gate never ran");
   });
 });
 
 // ── REUSED EXECUTIONS (6.34.0, verify-head-gate-reuse) — the runner's per-entry decision ────────────────────────────
 // Every gate script appends its id to a counter file OUTSIDE the repo, so "not spawned" is MEASURED, never read off a
 // `reused: true` flag (the plan's requirement 17). The source is a REAL regress/head stamp this runner wrote.
-const HEAD_OUT = ".pharn/pharn-regress/head";
+const HEAD_OUT = "pharn/.run/pharn-regress/head";
 const HEAD_STAMP_REL = `${HEAD_OUT}/stamp.json`;
 const COUNT = (gate, tail = "") => `node -e "require('fs').appendFileSync(process.env.RG_COUNTER, '${gate}\\n')${tail}"`;
 const REUSE_SCRIPTS = Object.freeze({
@@ -1638,9 +1651,9 @@ function reuseRepo(scripts = REUSE_SCRIPTS) {
   writeFileSync(counter, "");
   const env = { ...process.env, RG_COUNTER: counter };
   delete env.NODE_TEST_CONTEXT;
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(
-    join(dir, ".pharn/scope.json"),
+    join(dir, "pharn/.run/scope.json"),
     JSON.stringify({ inside: [], declared: [], escaped: [], outside_tests: [], outside_eval_pairs: [] })
   );
   return { dir, counter, env };
@@ -1670,7 +1683,7 @@ function runHead(fx, { ms = 30000, extra = [] } = {}) {
       "--discover",
       "package.json",
       "--scope-json",
-      ".pharn/scope.json",
+      "pharn/.run/scope.json",
       ...extra,
     ],
     { env: fx.env }
@@ -1793,7 +1806,7 @@ test("REUSE MISS (B) — same gate id, different command (an explicit --gates sh
     // Rebuild the head side with an explicit gate list: `typecheck` is the same ID with a different execution.
     rmSync(join(fx.dir, HEAD_OUT), { recursive: true, force: true });
     // A comma-free wrapper (the --gates grammar splits on commas); under the git-ignored state root, so the tree is unchanged.
-    writeFileSync(join(fx.dir, ".pharn/tc.cjs"), "require('fs').appendFileSync(process.env.RG_COUNTER, 'typecheck\\n');\n");
+    writeFileSync(join(fx.dir, "pharn/.run/tc.cjs"), "require('fs').appendFileSync(process.env.RG_COUNTER, 'typecheck\\n');\n");
     const init = cli(
       fx.dir,
       [
@@ -1807,9 +1820,9 @@ test("REUSE MISS (B) — same gate id, different command (an explicit --gates sh
         "--out",
         HEAD_OUT,
         "--gates",
-        "node .pharn/tc.cjs::typecheck",
+        "node pharn/.run/tc.cjs::typecheck",
         "--scope-json",
-        ".pharn/scope.json",
+        "pharn/.run/scope.json",
       ],
       { env: fx.env }
     );
@@ -1847,7 +1860,7 @@ test("REUSE MISS (D) — a gate the HEAD run skipped (--skip-style / absent) run
         "--discover",
         "package.json",
         "--scope-json",
-        ".pharn/scope.json",
+        "pharn/.run/scope.json",
       ],
       { env: fx.env }
     );
@@ -1931,7 +1944,7 @@ test("REUSE — an offer init cannot bind is simply no offer: a digest mismatch,
     assert.equal(wrong.code, 0, wrong.raw);
     assert.equal(wrong.json.reuse_offered, false);
     // A link at the stamp's name (L59) — never followed.
-    const real = join(fx.dir, ".pharn/elsewhere.json");
+    const real = join(fx.dir, "pharn/.run/elsewhere.json");
     writeFileSync(real, readFileSync(join(fx.dir, HEAD_STAMP_REL)));
     rmSync(join(fx.dir, HEAD_STAMP_REL));
     symlinkSync(real, join(fx.dir, HEAD_STAMP_REL));
@@ -1970,7 +1983,7 @@ test("REUSE usage — --reuse-stamp is verify-only, needs its digest, and must n
           "--discover",
           "package.json",
           "--scope-json",
-          ".pharn/scope.json",
+          "pharn/.run/scope.json",
           "--reuse-stamp",
           HEAD_STAMP_REL,
           "--reuse-sha256",
@@ -2096,14 +2109,14 @@ test("REUSE — a symlink at an INTERMEDIATE directory of the source path is nev
   const fx = reuseRepo();
   try {
     const head = runHead(fx);
-    execFileSync("mv", [join(fx.dir, ".pharn/pharn-regress"), join(fx.dir, ".pharn/real-regress")]);
-    symlinkSync(join(fx.dir, ".pharn/real-regress"), join(fx.dir, ".pharn/pharn-regress"));
+    execFileSync("mv", [join(fx.dir, "pharn/.run/pharn-regress"), join(fx.dir, "pharn/.run/real-regress")]);
+    symlinkSync(join(fx.dir, "pharn/.run/real-regress"), join(fx.dir, "pharn/.run/pharn-regress"));
     const init = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
     assert.equal(init.code, 0, init.raw);
     assert.equal(init.json.reuse_offered, false, "the stamp behind a linked directory is not read");
     // Control: the same bytes at the real path ARE offered, so the refusal above is the link rule's.
-    rmSync(join(fx.dir, ".pharn/pharn-regress"));
-    execFileSync("mv", [join(fx.dir, ".pharn/real-regress"), join(fx.dir, ".pharn/pharn-regress")]);
+    rmSync(join(fx.dir, "pharn/.run/pharn-regress"));
+    execFileSync("mv", [join(fx.dir, "pharn/.run/real-regress"), join(fx.dir, "pharn/.run/pharn-regress")]);
     const ok = cli(fx.dir, initArgs(["--reuse-stamp", HEAD_STAMP_REL, "--reuse-sha256", head.sha]), { env: fx.env });
     assert.equal(ok.json.reuse_offered, true);
   } finally {
@@ -2121,7 +2134,7 @@ const BUILD_SCRIPTS = { test: RECORDER("test"), lint: RECORDER("lint"), e2e: REC
 test("build: init runs the discovered set minus the e2e gates, no reconcile, no completeness; the stamp is stage build", () => {
   withRepo(
     (dir) => {
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
       const init = cli(dir, buildInit());
       assert.equal(init.code, 0, init.raw);
       assert.deepEqual(init.json.ids, ["test", "lint"]);
@@ -2138,7 +2151,7 @@ test("build: init runs the discovered set minus the e2e gates, no reconcile, no 
         ]
       );
       assert.equal(st.aux.completeness, null, "no completeness capture at build");
-      assert.equal(existsSync(join(dir, ".pharn/argv-e2e.json")), false, "e2e never ran");
+      assert.equal(existsSync(join(dir, "pharn/.run/argv-e2e.json")), false, "e2e never ran");
     },
     { scripts: BUILD_SCRIPTS }
   );
@@ -2147,17 +2160,17 @@ test("build: init runs the discovered set minus the e2e gates, no reconcile, no 
 test("build: --targets hands the `test` gate exactly the listed files after `--`, and only it runs", () => {
   withRepo(
     (dir) => {
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
-      writeFileSync(join(dir, ".pharn/targets.json"), JSON.stringify(["tests/b.test.js", "tests/a.test.js"]));
-      const init = cli(dir, buildInit(["--targets", ".pharn/targets.json"]));
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+      writeFileSync(join(dir, "pharn/.run/targets.json"), JSON.stringify(["tests/b.test.js", "tests/a.test.js"]));
+      const init = cli(dir, buildInit(["--targets", "pharn/.run/targets.json"]));
       assert.equal(init.code, 0, init.raw);
       assert.deepEqual(init.json.ids, ["test"]);
       drain(dir);
-      assert.deepEqual(JSON.parse(readFileSync(join(dir, ".pharn/argv-test.json"), "utf8")).slice(-2), [
+      assert.deepEqual(JSON.parse(readFileSync(join(dir, "pharn/.run/argv-test.json"), "utf8")).slice(-2), [
         "tests/b.test.js",
         "tests/a.test.js",
       ]);
-      assert.equal(existsSync(join(dir, ".pharn/argv-lint.json")), false);
+      assert.equal(existsSync(join(dir, "pharn/.run/argv-lint.json")), false);
     },
     { scripts: BUILD_SCRIPTS }
   );
@@ -2166,7 +2179,7 @@ test("build: --targets hands the `test` gate exactly the listed files after `--`
 test("build: refusals by presence, and every --targets entry through badPath (no flag, glob, absolute or state-root path)", () => {
   withRepo(
     (dir) => {
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
       for (const f of [
         ["--extra", "[]"],
         ["--skip-style"],
@@ -2186,16 +2199,16 @@ test("build: refusals by presence, and every --targets entry through badPath (no
       const explicit = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", "node -e 0::check"]);
       assert.equal(explicit.code, 0, explicit.raw);
       assert.deepEqual(explicit.json.ids, ["check"]);
-      for (const bad of [["-x.test.js"], ["/abs/a.test.js"], ["a/../b.test.js"], [".pharn/x.test.js"], ["t/*.test.js"], [3], {}]) {
-        writeFileSync(join(dir, ".pharn/targets.json"), JSON.stringify(bad));
-        const r = cli(dir, buildInit(["--targets", ".pharn/targets.json"]));
+      for (const bad of [["-x.test.js"], ["/abs/a.test.js"], ["a/../b.test.js"], ["pharn/.run/x.test.js"], ["t/*.test.js"], [3], {}]) {
+        writeFileSync(join(dir, "pharn/.run/targets.json"), JSON.stringify(bad));
+        const r = cli(dir, buildInit(["--targets", "pharn/.run/targets.json"]));
         assert.equal(r.code, 2, JSON.stringify(bad));
         assert.equal(r.json.reason_code, "usage-error", JSON.stringify(bad));
-        assert.doesNotMatch(r.json.reason, /abs|\.pharn\/x|\*/, "the reason names a position, never the value (L62)");
+        assert.doesNotMatch(r.json.reason, /abs|pharn\/\.run\/x|\*/, "the reason names a position, never the value (L62)");
       }
       const missing = cli(dir, buildInit(["--targets"]));
       assert.equal(missing.json.reason_code, "usage-error");
-      const off = cli(dir, initArgs(["--targets", ".pharn/targets.json"]));
+      const off = cli(dir, initArgs(["--targets", "pharn/.run/targets.json"]));
       assert.equal(off.json.reason_code, "usage-error");
       assert.match(off.json.reason, /--targets applies to --stage build only/);
     },
@@ -2211,7 +2224,7 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
   try {
     execFileSync("git", ["init", "-q", "."], { cwd: dir });
     writeBT(join(dir, "package.json"), JSON.stringify({ scripts: { test: "node --test", build: "true" } }));
-    writeBT(join(dir, ".gitignore"), ".pharn/\n");
+    writeBT(join(dir, ".gitignore"), "pharn/.run/\n");
     const cli = (...a) =>
       spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "run-gates.mjs"), ...a], { cwd: dir, encoding: "utf8" });
     writeBT(join(dir, "list.json"), JSON.stringify(["src/a.test.js", "src/b.test.js"]));
@@ -2222,7 +2235,7 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
       "--feature",
       "demo",
       "--out",
-      ".pharn/e",
+      "pharn/.run/e",
       "--discover",
       "package.json",
       "--base-tests",
@@ -2230,7 +2243,7 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
     );
     assert.equal(ok.status, 0, ok.stdout + ok.stderr);
     assert.deepEqual(JSON.parse(ok.stdout).ids, ["base:test", "test", "build"]);
-    const state = JSON.parse(readBT(join(dir, ".pharn", "e", "state.json"), "utf8"));
+    const state = JSON.parse(readBT(join(dir, "pharn", ".run", "e", "state.json"), "utf8"));
     assert.deepEqual(state.entries[0].files, ["src/a.test.js", "src/b.test.js"]);
     assert.deepEqual(state.entries[0].argv, ["npm", "run", "test"]);
     const verify = cli(
@@ -2240,7 +2253,7 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
       "--feature",
       "demo",
       "--out",
-      ".pharn/v",
+      "pharn/.run/v",
       "--discover",
       "package.json",
       "--base-tests",
@@ -2248,7 +2261,7 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
     );
     assert.equal(verify.status, 2);
     assert.equal(JSON.parse(verify.stdout).reason_code, "usage-error");
-    for (const bad of [["/abs.test.js"], [".pharn/x.test.js"], ["../up.test.js"], []]) {
+    for (const bad of [["/abs.test.js"], ["pharn/.run/x.test.js"], ["../up.test.js"], []]) {
       writeBT(join(dir, "bad.json"), JSON.stringify(bad));
       const r = cli(
         "init",
@@ -2257,7 +2270,7 @@ test("init --base-tests: entry only; the slot carries exactly the listed files; 
         "--feature",
         "demo",
         "--out",
-        ".pharn/e",
+        "pharn/.run/e",
         "--discover",
         "package.json",
         "--base-tests",
@@ -2332,10 +2345,10 @@ test("audit P3-J — finalize REFUSES `tree-changed-between-gates` when the firs
  *  after. It used to exit by itself after 30 s, which a loaded machine could reach before the test killed it
  *  (load-flake-regress); every test that starts it kills it, in its `finally` at the latest. */
 const SLOW_GATE = `const fs = require("fs");
-fs.mkdirSync(".pharn/m", { recursive: true });
-if (fs.existsSync(".pharn/m/once")) process.exit(0);
-fs.writeFileSync(".pharn/m/once", "");
-fs.writeFileSync(".pharn/m/pid", String(process.pid));
+fs.mkdirSync("pharn/.run/m", { recursive: true });
+if (fs.existsSync("pharn/.run/m/once")) process.exit(0);
+fs.writeFileSync("pharn/.run/m/once", "");
+fs.writeFileSync("pharn/.run/m/pid", String(process.pid));
 setTimeout(() => {}, 600000);
 `;
 
@@ -2364,7 +2377,7 @@ async function startSlowRun(dir) {
   assert.equal(init.code, 0, init.raw);
   const runner = spawn(process.execPath, [CLI, ...runArgs()], { cwd: dir, stdio: "ignore" });
   const exited = new Promise((r) => runner.once("exit", (code, signal) => r({ code, signal })));
-  const pidFile = join(dir, ".pharn/m/pid");
+  const pidFile = join(dir, "pharn/.run/m/pid");
   const up = await waitFor(() => existsSync(pidFile) && existsSync(join(dir, OUT, "lock.child")), 120000);
   assert.ok(up, "fixture: the slow gate never started");
   return { runner, exited, gate: Number(readFileSync(pidFile, "utf8")) };
@@ -2440,4 +2453,24 @@ test("audit P3-P — SIGTERM, SIGINT and SIGHUP are FORWARDED to the gate's grou
       rmSync(dir, { recursive: true, force: true });
     }
   }
+});
+
+import { existsSync as existsRG7, mkdirSync as mkdirRG7, renameSync as renameRG7, symlinkSync as symlinkRG7 } from "node:fs";
+
+// 7.0.0 (pharn-footprint-move): the state root is pharn/.run, so its PARENT can be a link. A walk that starts AT the
+// state root lstats the root itself, and that lstat follows a link at `pharn` unseen — stateRootLinkFree() closes it.
+test("CONTAINMENT (7.0.0): a symlink at `pharn`, the state root's parent, is refused as path-containment", () => {
+  withRepo(
+    (dir) => {
+      assert.equal(cli(dir, initArgs()).code, 0, "non-vacuity: the ordinary layout is accepted");
+      const real = join(dir, "pharn-real");
+      if (existsRG7(join(dir, "pharn"))) renameRG7(join(dir, "pharn"), real);
+      else mkdirRG7(real, { recursive: true });
+      symlinkRG7(real, join(dir, "pharn"));
+      const r = cli(dir, initArgs());
+      assert.equal(r.code, 2, "accepted a state root reached through a link at pharn");
+      assert.equal(r.json.reason_code, "path-containment");
+    },
+    { scripts: { test: "true" } }
+  );
 });

@@ -5,7 +5,7 @@
 //
 //   --report                         ADVISORY. The always-loaded instruction set of the project at the working
 //                                    directory: per-file bytes, the total, an estimated token count (bytes/4, an
-//                                    estimate — LIMITS.md §1c), every note, the path-scoped rules left out, and
+//                                    estimate — pharn/LIMITS.md §1c), every note, the path-scoped rules left out, and
 //                                    CLAUDE.local.md listed as personal (never counted by --growth). Exit 0, or 2 when
 //                                    the input is unusable.
 //   --growth --base <ref>            FLOOR. The bytes ADDED to that set since <ref> (removals never offset), against

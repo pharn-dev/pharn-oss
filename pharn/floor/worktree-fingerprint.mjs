@@ -19,9 +19,9 @@
 //
 // ===================================== THE TWO EXCLUSIONS =====================================
 //
-// (1) `.pharn/` — LOAD-BEARING IN THIS INCREMENT, not merely a convenience for the next one.
+// (1) `pharn/.run/` — LOAD-BEARING IN THIS INCREMENT, not merely a convenience for the next one.
 //     `enumerate()` derives its set from `git ls-files --cached --others --exclude-standard`, so a
-//     git-IGNORED path is already absent. In THIS repo `.pharn/` is ignored (.gitignore:3) and the
+//     git-IGNORED path is already absent. In THIS repo `pharn/.run/` is ignored (.gitignore:3) and the
 //     exclusion is inert. In an install that does NOT ignore it, the runner's own logs and state — which
 //     live under the state root — would land in the set, `fp_after(k)` would differ from `fp_before(k+1)`
 //     for EVERY gate, and every run would refuse `tree-changed-between-gates`. The exclusion is
@@ -63,7 +63,9 @@
 //     the target's own entry — so a gate that reads THROUGH a link to a file outside the reconciled set (outside
 //     the repo, or git-ignored) is not re-run when that file changes. Stated, not solved: such a file is outside
 //     the set exactly as any other path there is.
-//   • UPGRADES, and why ALGO moved to /2 in 6.20.8. 6.17.1 changed what is hashed WITHOUT bumping ALGO (recorded
+//   • UPGRADES. 7.0.0 moved ALGO to /3 (the migration): the excluded state root moved from `.pharn/` to `pharn/.run/`, which changes
+//     what is hashed on any tree holding either path untracked and not ignored. Same consumers, same cost as below.
+//   • Why ALGO moved to /2 in 6.20.8. 6.17.1 changed what is hashed WITHOUT bumping ALGO (recorded
 //     then as a decision): a stamp straddling it read as tree-moved on a tree holding such a link, and as fresh
 //     elsewhere. 6.20.8 changed it again, so this time ALGO bumped, and a golden digest in
 //     worktree-fingerprint.test.mjs now fails any change to what is hashed that does not bump it. ALGO is NOT part
@@ -103,7 +105,7 @@ import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
  *  algo differs from the live one), so an unversioned change would read as a tree mutation. Pinned: the
  *  golden digest in worktree-fingerprint.test.mjs is keyed by this value (/2 since 6.20.8 — every symlink
  *  hashed by its link text; see the header's UPGRADES bound). */
-export const ALGO = "worktree-fingerprint/2+sha256";
+export const ALGO = "worktree-fingerprint/3+sha256";
 
 /** The ENTRY stage's algo (6.42.0, loop-entry-preflight) — ALGO plus the one extra exclusion below. Its own token so
  *  an entry digest can never be compared equal to any other stage's: every consumer compares `algo` first, and
@@ -127,7 +129,7 @@ export function productFeatureDir(feature) {
 }
 
 /** The scratch namespace the runner itself writes. See exclusion (1) in the header. */
-export const STATE_ROOT_SEGMENT = ".pharn/";
+export const STATE_ROOT_SEGMENT = "pharn/.run/";
 
 /** POST-BUILD artifacts: written at or after regress, so a change cannot alter what a gate judged. */
 export const EXCLUDED_ARTIFACTS = Object.freeze([
@@ -172,7 +174,7 @@ export function featureRoots(feature) {
  */
 export function isExcluded(file, feature) {
   if (typeof file !== "string" || file.length === 0) return false;
-  if (file === ".pharn" || file.startsWith(STATE_ROOT_SEGMENT)) return true;
+  if (file === "pharn/.run" || file.startsWith(STATE_ROOT_SEGMENT)) return true;
   if (!feature || !FEATURE_SLUG_RE.test(feature)) return false;
   for (const root of featureRoots(feature)) {
     if (!file.startsWith(root)) continue;

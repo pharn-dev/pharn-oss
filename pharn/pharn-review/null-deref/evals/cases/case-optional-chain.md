@@ -5,7 +5,7 @@ purpose: "Eval fixture (NULL-DEREF, true-negative): CODE that binds a value from
 
 # Eval case — optional-chain (UNTRUSTED INPUT, true-negative)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner classifies this as CLEAN — the deref is null-safe optional
 chaining, not a raw deref.
 

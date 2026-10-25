@@ -139,12 +139,12 @@ function runCommitted(line, dir, base, opts = {}) {
   return { status: r.status, doc: parseDoc(r.stdout), stdout: r.stdout, stderr: r.stderr };
 }
 
-/** 6.25.0's instruction, followed literally: list without -z, drop `.pharn/`, paste both lists into OLD_LINE. */
+/** 6.25.0's instruction, followed literally: list without -z, drop `pharn/.run/`, paste both lists into OLD_LINE. */
 function runOldLine(dir, base, declared) {
   const listed = [
     ...spawnSync("git", ["diff", "--name-only", "--no-renames", base], { cwd: dir, encoding: "utf8" }).stdout.split("\n"),
     ...spawnSync("git", ["ls-files", "--others", "--exclude-standard"], { cwd: dir, encoding: "utf8" }).stdout.split("\n"),
-  ].filter((p) => p && !p.startsWith(".pharn/"));
+  ].filter((p) => p && !p.startsWith("pharn/.run/"));
   const cmd = OLD_LINE.replace("<inside, comma-separated>", listed.join(","))
     .replace("<PLAN.md ## Files paths, plus AC-TESTS.md ## Files paths when that file exists>", declared.join(","))
     .replace("<name>", "demo");
@@ -309,10 +309,10 @@ test("the closed exemptions: this feature's pipeline artifact and a trusted doc 
   const { dir, base } = makeRepo();
   try {
     writeFileSync(join(dir, "pharn", "features", "demo", "GRILL.md"), "x\n");
-    writeFileSync(join(dir, "LIMITS.md"), "x\n");
+    writeFileSync(join(dir, "pharn/LIMITS.md"), "x\n");
     let r = runCli(dir, ["--feature", "demo", "--base", base]);
     assert.equal(r.status, 0, r.stdout);
-    assert.deepEqual([...r.doc.escape_exempt].sort(), ["LIMITS.md", "pharn/features/demo/GRILL.md"]);
+    assert.deepEqual([...r.doc.escape_exempt].sort(), ["pharn/LIMITS.md", "pharn/features/demo/GRILL.md"]);
     mkdirSync(join(dir, "pharn", "features", "other"), { recursive: true });
     writeFileSync(join(dir, "pharn", "features", "other", "PLAN.md"), "x\n");
     r = runCli(dir, ["--feature", "demo", "--base", base]);
@@ -323,11 +323,11 @@ test("the closed exemptions: this feature's pipeline artifact and a trusted doc 
   }
 });
 
-test("a deleted undeclared file escapes; a path under .pharn/ is never counted, even with no .gitignore", () => {
+test("a deleted undeclared file escapes; a path under pharn/.run/ is never counted, even with no .gitignore", () => {
   const { dir, base } = makeRepo();
   try {
-    mkdirSync(join(dir, ".pharn", "pharn-loop", "demo"), { recursive: true });
-    writeFileSync(join(dir, ".pharn", "pharn-loop", "demo", "active.json"), "{}\n");
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", "demo", "active.json"), "{}\n");
     let r = runCli(dir, ["--feature", "demo", "--base", base]);
     assert.equal(r.status, 0, r.stdout);
     unlinkSync(join(dir, "src", "y.js"));

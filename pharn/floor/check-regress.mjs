@@ -57,7 +57,7 @@
 //
 //   THE BOUND (lessons-learned L43): a stamp certifies INTERNAL CONSISTENCY, never provenance. A
 //   self-consistent FABRICATED pair of stamps passes, and a test builds one to prove it. Stamps live in
-//   the writable tree, which `Bash` reaches unhooked (LIMITS.md §6). No child process is spawned — the
+//   the writable tree, which `Bash` reaches unhooked (pharn/LIMITS.md §6). No child process is spawned — the
 //   stamp grammar is imported from gate-run-core.mjs, so the "no child process" property above holds.
 //
 // Usage:
@@ -139,7 +139,7 @@ import { parseResults } from "./test-results-formats.mjs";
 // judgment), and neither is silent: every exempted path is reported in `escape_exempt`.
 //
 // NOT taken: L17's other suggested remedy — deriving "written by the build" from
-// `.pharn/writes-scope.json` — is UNIMPLEMENTABLE as stated, which is a discovery, not a preference.
+// `pharn/.run/writes-scope.json` — is UNIMPLEMENTABLE as stated, which is a discovery, not a preference.
 // That file is a single MUTABLE record every stage's Step 0 overwrites, so by the time /pharn-dev-regress
 // runs it holds the regress stage's own scope, not the build's (verified live). It would require a
 // durable per-build scope record, which does not exist.
@@ -201,7 +201,7 @@ const LENS_FINDINGS_RE = /^lenses\/[A-Za-z0-9._-]+\/findings\.json$/;
 // assumption. BOUNDED, and stated: the hook gates the Write-tool surface only, so a Bash-tool write
 // bypasses both it and this exemption (the L19 escape). The claim is "the build could not have written
 // this WITH THE WRITE TOOL", never "no process changed it".
-const TRUSTED_DOCS = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "THREAT-MODEL.md", "LIMITS.md"];
+const TRUSTED_DOCS = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "pharn/THREAT-MODEL.md", "pharn/LIMITS.md"];
 
 // THE NARROWING THIS EXEMPTION INTRODUCES — the honest cost, stated because it is not obvious (P0/P7).
 // A build that rewrites its OWN `pharn/features/<name>/PLAN.md` `## Files` to retroactively authorize a path it
@@ -251,7 +251,7 @@ function emit(obj, code) {
 // Split on COMMA or NEWLINE only, never on spaces. A space is a legal filename character and
 // `git diff --name-only` does NOT quote it, so a whitespace split turns ONE real path into TWO tokens.
 // That is not cosmetic: composed with the escape-exempt sets it LAUNDERS an escape — a single undeclared
-// file named `THREAT-MODEL.md LIMITS.md` split into two tokens that are each separately exempt, and
+// file named `pharn/THREAT-MODEL.md pharn/LIMITS.md` split into two tokens that are each separately exempt, and
 // `scope` exited 0 where it had exited 1 before the exemption existed. `normPath` already trims each
 // token, so surrounding spaces around a comma are still tolerated (`a.ts, b.ts`).
 function parseList(s) {

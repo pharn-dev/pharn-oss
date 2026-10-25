@@ -105,7 +105,7 @@
 // they print binds the run exactly as this CLI's does. It never throws: a marker that cannot be written prints the
 // fixed `MARKER_NOT_WRITTEN` line instead, because a marker is advisory and never fails a run. `latestMarker()`
 // reads the last marker of a run's file, for `start`'s open-stage rule. TRUST BOUND (stated, and tested):
-// `markers.jsonl` is unauthenticated `.pharn/` state a Bash write reaches (LIMITS.md §6), so a forged last line can
+// `markers.jsonl` is unauthenticated `pharn/.run/` state a Bash write reaches (pharn/LIMITS.md §6), so a forged last line can
 // make `start` KEEP an open stage's marker instead of writing one — it never changes a route, a token or an exit.
 //
 // Usage:
@@ -137,7 +137,7 @@ export const QUICK_MODE = "quick";
 /** The ONE definition of where markers live. Duplicating it at the CLI entry point is exactly the
  *  defect L41 records in `render-ship-briefing.mjs` — two copies of a default, one updated, the stale
  *  one on the production path and invisible to a suite whose every test passes the flag. */
-export const DEFAULT_BASE = ".pharn/cost";
+export const DEFAULT_BASE = "pharn/.run/cost";
 
 /** A feature slug: one path segment, no traversal, no separators. */
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -222,8 +222,8 @@ export function writePendingStart({ base = DEFAULT_BASE, sessionId = null, now }
 }
 
 /**
- * The pending start for `sessionId`, or `null`. Validated, never trusted: `.pharn/` is state a Bash write
- * reaches (LIMITS.md §6), so a torn, malformed, cross-session or FUTURE-dated file is ignored rather than
+ * The pending start for `sessionId`, or `null`. Validated, never trusted: `pharn/.run/` is state a Bash write
+ * reaches (pharn/LIMITS.md §6), so a torn, malformed, cross-session or FUTURE-dated file is ignored rather than
  * adopted — ignoring it degrades to today's behaviour (`ts` = now), the safe direction.
  */
 export function readPendingStart(base, sessionId, nowMs) {

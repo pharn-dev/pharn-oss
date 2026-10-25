@@ -7,13 +7,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseCanonRoot, takeCanonRoot, DEFAULT_CANON_ROOT, CANON_ROOT_FLAG } from "./canon-root.mjs";
 
-test("the default root is the user's memory-bank", () => {
-  assert.equal(DEFAULT_CANON_ROOT, "memory-bank");
+test("the default root is the user's pharn/memory-bank (7.0.0)", () => {
+  assert.equal(DEFAULT_CANON_ROOT, "pharn/memory-bank");
   assert.equal(CANON_ROOT_FLAG, "--canon-root");
 });
 
 const ACCEPTED = [
   ["memory-bank", "memory-bank"],
+  ["pharn/memory-bank", "pharn/memory-bank"],
+  ["./pharn/memory-bank/", "pharn/memory-bank"],
   [".dev/memory-bank", ".dev/memory-bank"],
   ["./.dev/memory-bank/", ".dev/memory-bank"],
   ["docs/lessons_v2", "docs/lessons_v2"],
@@ -59,7 +61,7 @@ test("a non-string root is refused without throwing", () => {
 });
 
 test("takeCanonRoot: absent flag -> the default root, argv untouched", () => {
-  assert.deepEqual(takeCanonRoot([".", "--verdict"]), { ok: true, root: "memory-bank", rest: [".", "--verdict"] });
+  assert.deepEqual(takeCanonRoot([".", "--verdict"]), { ok: true, root: "pharn/memory-bank", rest: [".", "--verdict"] });
 });
 
 test("takeCanonRoot: the flag and its value are removed from argv, wherever they sit", () => {

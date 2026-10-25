@@ -220,7 +220,7 @@ test("hostile lines are dropped by index, never crash, and never copy their valu
   }
 });
 
-test("appendWork: writes one line under <root>/<.pharn/cost>/<feature>/, beside the markers (the one DEFAULT_BASE)", () => {
+test("appendWork: writes one line under <root>/<pharn/.run/cost>/<feature>/, beside the markers (the one DEFAULT_BASE)", () => {
   const root = mkdtempSync(join(tmpdir(), "stage-work-"));
   try {
     const rec = verifyWork({ stamp: stamp([ran("a")]), ts: TS });
@@ -238,22 +238,23 @@ test("appendWork REFUSES — writes nothing, never throws — on a symlinked com
   const elsewhere = mkdtempSync(join(tmpdir(), "stage-work-target-"));
   try {
     const rec = verifyWork({ stamp: stamp([ran("a")]), ts: TS });
-    // 1. `.pharn` itself is a link.
-    symlinkSync(elsewhere, join(root, ".pharn"));
+    // 1. `pharn/.run` itself is a link.
+    mkdirSync(join(root, "pharn"), { recursive: true });
+    symlinkSync(elsewhere, join(root, "pharn", ".run"));
     const a = appendWork({ feature: "feat", record: rec, root });
     assert.equal(a.ok, false);
     assert.equal(existsSync(join(elsewhere, "cost")), false, "nothing was written through the link");
-    rmSync(join(root, ".pharn"));
+    rmSync(join(root, "pharn", ".run"));
     // 2. A DANGLING link at the file.
-    mkdirSync(join(root, ".pharn", "cost", "feat"), { recursive: true });
-    symlinkSync(join(elsewhere, "target.jsonl"), join(root, ".pharn", "cost", "feat", WORK_FILE));
+    mkdirSync(join(root, "pharn", ".run", "cost", "feat"), { recursive: true });
+    symlinkSync(join(elsewhere, "target.jsonl"), join(root, "pharn", ".run", "cost", "feat", WORK_FILE));
     const b = appendWork({ feature: "feat", record: rec, root });
     assert.equal(b.ok, false);
     assert.equal(existsSync(join(elsewhere, "target.jsonl")), false, "O_NOFOLLOW: the dangling link was not followed");
     // 3. A file where a directory must be.
-    rmSync(join(root, ".pharn"), { recursive: true });
-    mkdirSync(join(root, ".pharn"));
-    writeFileSync(join(root, ".pharn", "cost"), "x");
+    rmSync(join(root, "pharn", ".run"), { recursive: true });
+    mkdirSync(join(root, "pharn", ".run"), { recursive: true });
+    writeFileSync(join(root, "pharn", ".run", "cost"), "x");
     assert.equal(appendWork({ feature: "feat", record: rec, root }).ok, false);
     // 4. Bad slug / invalid record.
     assert.equal(appendWork({ feature: "../x", record: rec, root }).ok, false);
@@ -281,7 +282,12 @@ test("CONCURRENT FIRST APPENDS — a directory another appender makes between th
       },
     });
     assert.deepEqual(r, { ok: true }, JSON.stringify(r));
-    assert.deepEqual(raced, [join(root, ".pharn"), join(root, ".pharn", "cost"), join(root, ".pharn", "cost", "feat")]);
+    assert.deepEqual(raced, [
+      join(root, "pharn"), // 7.0.0: the state root's parent is a component of the chain too
+      join(root, "pharn", ".run"),
+      join(root, "pharn", ".run", "cost"),
+      join(root, "pharn", ".run", "cost", "feat"),
+    ]);
     assert.equal(readFileSync(join(root, DEFAULT_BASE, "feat", WORK_FILE), "utf8"), '{"n":1}\n');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -296,7 +302,7 @@ test("CONCURRENT FIRST APPENDS — a SYMLINK or a FILE planted in that window is
       ["symlink", (dir) => symlinkSync(elsewhere, dir)],
       ["file", (dir) => writeFileSync(dir, "x")],
     ]) {
-      rmSync(join(root, ".pharn"), { recursive: true, force: true });
+      rmSync(join(root, "pharn", ".run"), { recursive: true, force: true });
       const r = appendJsonLine({ feature: "feat", fileName: WORK_FILE, value: { n: 1 }, root, onMissing: plant });
       assert.equal(r.ok, false, `${what}: a component planted in the race window was accepted`);
       assert.match(r.why, /symlink or not a directory/, what);
@@ -319,7 +325,7 @@ test("the two stage labels are the orchestrators' own iterated stage labels (par
   for (const s of WORK_STAGES) assert.ok(ITERATED_STAGES.includes(s), s);
   assert.deepEqual([...WORK_STAGES], ["pharn-regress", "pharn-verify"]);
   assert.equal(
-    readFileSync(new URL("./stage-work.mjs", import.meta.url), "utf8").includes('".pharn/cost"'),
+    readFileSync(new URL("./stage-work.mjs", import.meta.url), "utf8").includes('"pharn/.run/cost"'),
     false,
     "L41: no second literal"
   );
@@ -328,7 +334,7 @@ test("the two stage labels are the orchestrators' own iterated stage labels (par
 test("GATE-2 — a FIFO planted at work.jsonl never blocks: the append refuses and the read lists it, both promptly", () => {
   const root = mkdtempSync(join(tmpdir(), "stage-work-fifo-"));
   try {
-    const dir = join(root, ".pharn", "cost", "feat");
+    const dir = join(root, "pharn", ".run", "cost", "feat");
     mkdirSync(dir, { recursive: true });
     execFileSync("mkfifo", [join(dir, WORK_FILE)]);
     const rec = verifyWork({ stamp: stamp([ran("a")]), ts: TS });

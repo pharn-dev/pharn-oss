@@ -1,3 +1,5 @@
+/* eslint-disable -- BUILD RECORD: the script that produced pharn-footprint-move, replayed against a scratch copy (see
+   PLAN.md "Revision 3"); it is never run in this tree, and the new-tests/ files are fragments appended to the hook suites. */
 // rewrite.mjs — the pharn-footprint-move path rewrite (PLAN.md "The rewrite", rules R1–R5).
 //
 //   node rewrite.mjs <root> <file-list> [--apply] [--tsv <out.tsv>]
@@ -143,7 +145,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === new URL(import.meta.url
   const apply = rest.includes("--apply");
   const tsvI = rest.indexOf("--tsv");
   const tsvOut = tsvI >= 0 ? rest[tsvI + 1] : null;
-  const files = fs.readFileSync(listFile, "utf8").split("\n").map((s) => s.trim()).filter(Boolean);
+  const files = fs
+    .readFileSync(listFile, "utf8")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
   const rows = ["file\tline\trule\told\tnew"];
   const counts = {};
   let changed = 0;

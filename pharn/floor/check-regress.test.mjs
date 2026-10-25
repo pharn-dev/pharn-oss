@@ -250,9 +250,9 @@ test("★ ENUMERATION (L23/L29): every machine-written JSON pipeline artifact is
 
 test("★ a space-containing path is ONE path, not two exempt tokens (escape laundering)", () => {
   // Before the fix this exited 0 with escape_exempt naming two trusted docs that were never touched.
-  const r = run(["scope", "--changed", "THREAT-MODEL.md LIMITS.md", "--declared", "src/a.ts"]);
+  const r = run(["scope", "--changed", "pharn/THREAT-MODEL.md pharn/LIMITS.md", "--declared", "src/a.ts"]);
   assert.equal(r.status, 1, r.stdout);
-  assert.deepEqual(json(r).escaped, ["THREAT-MODEL.md LIMITS.md"]);
+  assert.deepEqual(json(r).escaped, ["pharn/THREAT-MODEL.md pharn/LIMITS.md"]);
   assert.deepEqual(json(r).escape_exempt, []);
 });
 
@@ -269,9 +269,9 @@ test("comma lists still tolerate spaces AROUND the separator (normPath trims)", 
 });
 
 test("escape-exempt: a hook-protected trusted doc is exempt, and needs no --feature", () => {
-  const r = run(["scope", "--changed", "pharn/ARCHITECTURE.md, THREAT-MODEL.md", "--declared", "src/a.ts"]);
+  const r = run(["scope", "--changed", "pharn/ARCHITECTURE.md, pharn/THREAT-MODEL.md", "--declared", "src/a.ts"]);
   assert.equal(r.status, 0);
-  assert.deepEqual(json(r).escape_exempt.sort(), ["THREAT-MODEL.md", "pharn/ARCHITECTURE.md"]);
+  assert.deepEqual(json(r).escape_exempt.sort(), ["pharn/ARCHITECTURE.md", "pharn/THREAT-MODEL.md"]);
 });
 
 test("escape-exempt: a NON-protected doc at the root is still an escape (the enum is the four, exactly)", () => {
@@ -631,7 +631,7 @@ test("★ the stamp flags are MUTUALLY EXCLUSIVE with the positional maps, and m
 // ── 6.37.0: partitionScope's pre-run input (regress-pre-run-snapshot) ─────────────────────────────────────────────
 test("partitionScope — a pre-run path is subtracted AFTER the closed exemptions, only when undeclared, and REPORTED", async () => {
   const { partitionScope } = await import("./check-regress.mjs");
-  const inside = ["src/a.js", "src/user.js", "pharn/features/demo/GRILL.md", "LIMITS.md", "src/stray.js", "src/user.test.js"];
+  const inside = ["src/a.js", "src/user.js", "pharn/features/demo/GRILL.md", "pharn/LIMITS.md", "src/stray.js", "src/user.test.js"];
   const args = { inside, declared: ["src/a.js"], tests: ["src/user.test.js", "src/other.test.js"], evalPairs: [], feature: "demo" };
   const before = partitionScope(args);
   assert.deepEqual(before.escaped, ["src/user.js", "src/stray.js", "src/user.test.js"]);
@@ -832,7 +832,7 @@ test("✧ L31 PARITY — the isConcrete check-regress.mjs imports (plan-files-co
 
 test("P1-B — changedUnderTest: the changed set minus EXACTLY the closed exemptions; empty means nothing could be compared", async () => {
   const { changedUnderTest } = await import("./check-regress.mjs");
-  assert.deepEqual(changedUnderTest(["pharn/features/demo/PLAN.md", "pharn/features/demo/BUILD.md", "LIMITS.md"], "demo"), []);
+  assert.deepEqual(changedUnderTest(["pharn/features/demo/PLAN.md", "pharn/features/demo/BUILD.md", "pharn/LIMITS.md"], "demo"), []);
   assert.deepEqual(changedUnderTest([], "demo"), [], "the audit's f1b: nothing changed at all");
   assert.deepEqual(
     changedUnderTest(["pharn/features/demo/PLAN.md", "src/a.js"], "demo"),

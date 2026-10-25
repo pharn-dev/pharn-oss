@@ -458,8 +458,8 @@ test("readDirtySnapshot: absent file → an honest n/a note and a null set", () 
 test("readDirtySnapshot: an EMPTY snapshot says the tree was clean — not the same as absent", () => {
   const root = scratch();
   try {
-    mkdirSync(join(root, ".pharn", "pharn-loop", "feat"), { recursive: true });
-    writeFileSync(join(root, ".pharn", "pharn-loop", "feat", "pre-run-status.txt"), "");
+    mkdirSync(join(root, "pharn", ".run", "pharn-loop", "feat"), { recursive: true });
+    writeFileSync(join(root, "pharn", ".run", "pharn-loop", "feat", "pre-run-status.txt"), "");
     const { set, note } = readDirtySnapshot(root, "feat");
     assert.equal(set.size, 0);
     assert.match(note, /clean before the run/);
@@ -477,8 +477,8 @@ test("Files: changed + untracked paths are listed, dirty-before-run marked, PLAN
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(join(root, "src", "a.ts"), "x");
     writeFileSync(join(root, "src", "undeclared.ts"), "y");
-    mkdirSync(join(root, ".pharn", "pharn-loop", "feat"), { recursive: true });
-    writeFileSync(join(root, ".pharn", "pharn-loop", "feat", "pre-run-status.txt"), "?? src/a.ts\n");
+    mkdirSync(join(root, "pharn", ".run", "pharn-loop", "feat"), { recursive: true });
+    writeFileSync(join(root, "pharn", ".run", "pharn-loop", "feat", "pre-run-status.txt"), "?? src/a.ts\n");
     feature(root, "feat", {
       "cost.json": costJson({ base_sha: base }),
       "PLAN.md": "# PLAN\n\n## Files\n\n- `src/a.ts` — the thing this increment adds — layer app\n",
@@ -758,9 +758,9 @@ test("★ 6.65.0 CTX-14 — ## Tokens shows the Step-1a instruction-set estimate
     // absent → n/a naming who records it
     let md = renderRunReport("feat", { repo: root });
     assert.match(tokens(md), /Always-loaded instruction set — an ESTIMATE/);
-    assert.match(tokens(md), /n\/a — no `\.pharn\/pharn-loop\/feat\/instruction-files\.json` — `\/pharn-loop` records it at Step 1a/);
+    assert.match(tokens(md), /n\/a — no `pharn\/\.run\/pharn-loop\/feat\/instruction-files\.json` — `\/pharn-loop` records it at Step 1a/);
     // a real --report document, as the pinned Step-1a line writes it
-    const dir = join(root, ".pharn", "pharn-loop", "feat");
+    const dir = join(root, "pharn", ".run", "pharn-loop", "feat");
     mkdirSync(dir, { recursive: true });
     const real = spawnSync(process.execPath, [join(here, "check-instruction-files.mjs"), "--report"], { cwd: REPO, encoding: "utf8" });
     assert.equal(real.status, 0, real.stderr);
@@ -2341,7 +2341,7 @@ test("F1: a KNOWN window with an UNAVAILABLE transcript renders 'UNAVAILABLE —
   const root = scratch();
   try {
     mkdirSync(join(root, "projects"), { recursive: true }); // the transcript lookup MISSES
-    const mb = join(root, ".pharn", "cost");
+    const mb = join(root, "pharn", ".run", "cost");
     for (const [label, ms] of [
       [
         "bounded",
@@ -2395,7 +2395,7 @@ test("F2: a FAILED emission leaves the previous run's cost.json — the report r
         message: { model: "m", usage: { input_tokens: 3, output_tokens: 0 } },
       }) + "\n"
     );
-    const mb = join(root, ".pharn", "cost"); // the DEFAULT markers location under --repo (no flag below)
+    const mb = join(root, "pharn", ".run", "cost"); // the DEFAULT markers location under --repo (no flag below)
     // A compliant run 1 builds first (since 6.25.0 a verdict stage-start counts only after the same
     // iteration's latest pharn-build stage-start — ship-outcome-core, condition (a)).
     const run1 = [

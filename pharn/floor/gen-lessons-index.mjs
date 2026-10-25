@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/gen-lessons-index.mjs — the lessons-index GENERATOR, on the PRODUCT surface.
 //
-// Emits `.pharn/lessons-index.md` from the user's `memory-bank/lessons-learned.md`. Rendering is delegated
+// Emits `pharn/.run/lessons-index.md` from the user's `pharn/memory-bank/lessons-learned.md`. Rendering is delegated
 // ENTIRELY to lessons-index-core.mjs, the single source of truth shared with the drift checker, so the two
 // can never diverge (P3). Output is deterministic + idempotent: no timestamps, ordering by numeric id;
 // running twice yields byte-identical bytes, and the file is written ONLY on a real change so a second run
@@ -11,25 +11,25 @@
 // checker's comparison (`check-lessons-index.mjs`); this just produces the bytes it compares against — and
 // that comparison is itself NARROWED, because the output is a disposable cache (see the core's header).
 //
-// ════ WHY IT WRITES TO .pharn/ AND NOT INTO memory-bank/ ════
+// ════ WHY IT WRITES TO pharn/.run/ AND NOT INTO pharn/memory-bank/ ════
 // The write-guards (fix #2 + fix #7) gate the Write|Edit|MultiEdit TOOL surface only, so a Bash-run
-// generator writing into the fail-closed sensitive zone `memory-bank/**` would NORMALIZE a bypass of
+// generator writing into the fail-closed sensitive zone `pharn/memory-bank/**` would NORMALIZE a bypass of
 // fix #7 — teaching future increments that a generator may reach a zone the Write tool cannot, and that
 // zone is precisely the gated canon /pharn-memory-promote's check-provenance + human accept exist to
-// protect. `.pharn/` is always-writable runtime scratch, so no guard is bypassed to reach it.
+// protect. `pharn/.run/` is always-writable runtime scratch, so no guard is bypassed to reach it.
 // (`docs/` was the third candidate and was rejected on a different ground: in a user's repo `docs/` is
 // THE USER'S directory, and writing there is a scope claim on ground PHARN does not own.)
 //
 // ════ THIS WRITE ESCAPES THE fix #7 WRITES-SCOPE — DECLARED, NOT PRETENDED (lessons-learned.md L19) ════
 // A stage that invokes this generator through Bash writes OUTSIDE its `writes:` scope, because the hook
 // gates the Write tool and this runs as a subprocess. That is stated here rather than papered over. It is
-// benign for this specific target — `.pharn/**` is always-writable scratch, so nothing is granted that the
+// benign for this specific target — `pharn/.run/**` is always-writable scratch, so nothing is granted that the
 // scope withheld — but the MECHANISM is the one L19 documents, and a reader must not learn the wrong
 // lesson from it.
 //
 // Usage:  node pharn/floor/gen-lessons-index.mjs [targetDir] [--canon-root <dir>]     (default: cwd)
-//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `memory-bank/` (6.69.0; canon-root.mjs
-//                 owns the grammar and the bound). The output stays `.pharn/lessons-index.md`, and its header
+//   --canon-root  read canon from `<dir>/lessons-learned.md` instead of `pharn/memory-bank/` (6.69.0; canon-root.mjs
+//                 owns the grammar and the bound). The output stays `pharn/.run/lessons-index.md`, and its header
 //                 names the root and a regenerate command that carries the flag. Invalid → exit 2, nothing
 //                 written.
 // Non-LLM, stdlib-only.

@@ -59,7 +59,7 @@ const MATERIAL = Object.freeze([
   ["shell instead of argv", { shell: "npm run typecheck", argv: null }],
   ["files (one added)", { files: ["src/a.test.js"] }],
   ["files (a different file)", { files: ["src/b.test.js"] }],
-  ["cwd", { cwdAbs: "/work/project/.pharn/pharn-regress/base" }],
+  ["cwd", { cwdAbs: "/work/project/pharn/.run/pharn-regress/base" }],
   ["timeout", { timeoutMs: 30000 }],
   ["git HEAD", { head: "b".repeat(40) }],
   ["git HEAD absent", { head: null }],
@@ -83,7 +83,7 @@ test("identity: two different shell texts differ (the explicit --gates case)", (
 test("identity IRRELEVANT METADATA — the gate id, seq, stage, <out> and the PHARN_TEST_RESULTS value are not inputs", () => {
   // The function has no parameter for any of them, so passing one changes nothing: a stage label or position cannot
   // cause a false MISS. (The runner-level test proves the same with a real regress seq/out differing from verify's.)
-  const withNoise = executionIdentity({ ...BASE_ID, id: "other", seq: 7, stage: "regress", out: ".pharn/x", results: "/tmp/r.json" });
+  const withNoise = executionIdentity({ ...BASE_ID, id: "other", seq: 7, stage: "regress", out: "pharn/.run/x", results: "/tmp/r.json" });
   assert.equal(withNoise.value, id());
 });
 

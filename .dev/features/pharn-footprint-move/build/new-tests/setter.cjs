@@ -1,4 +1,5 @@
-
+/* eslint-disable -- BUILD RECORD: the script that produced pharn-footprint-move, replayed against a scratch copy (see
+   PLAN.md "Revision 3"); it is never run in this tree, and the new-tests/ files are fragments appended to the hook suites. */
 // ============================== 7.0.0 — the scope file moved to pharn/.run/ (pharn-footprint-move) ==============
 // The CONTROL_SURFACE ↔ DEFAULT_PROTECTED parity pin covers only the `.claude/`-prefixed members, so it cannot see a
 // scope-file path the setter and the enforcer disagree on. These two tests can: one behavioural (the enforcer honours

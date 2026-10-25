@@ -98,7 +98,7 @@ node pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'
    check is about to make it pass. **A decision↔mode RED is never repaired by editing `mode`** (6.28.0): it means
    the invocation and the SPEC's kind disagree, so the record keeps the invocation, the line is re-run with
    `--after-repair` and nothing else changed, and the decision check below REDs too, so nothing is committed. The ≤1
-   repair bound is advisory (`LIMITS.md §1d`) — command prose and an argument you pass, not a counter.
+   repair bound is advisory (`pharn/LIMITS.md §1d`) — command prose and an argument you pass, not a counter.
 2. **The decision re-derivation, on every NON-BLOCKED stop** — `check-loop-decision.mjs`. Its result is the
    document's `decision_check`, called `<decision-check>` below and in Step 7. It is **not retried**: a RED blocks
    the commit regardless of `decision`. A blocked stop skips it (`N/A`). Since 6.65.0 it also REDs a record whose
@@ -134,7 +134,7 @@ node pharn/floor/loop-closeout.mjs --feature '<name>' --base '<base sha>'
 
   ```bash
   git status --short --branch
-  cat .pharn/pharn-loop/<name>/closeout-phase 2>/dev/null || echo "no git step reached"
+  cat pharn/.run/pharn-loop/<name>/closeout-phase 2>/dev/null || echo "no git step reached"
   ```
 
   The phase file names the git step the closeout had reached (`branch`, `add`, `commit`, `undo`, `committed`,
@@ -166,7 +166,7 @@ step's own outcome:
    the scope file an earlier stage left (by now it holds this run's `LOOP.md` scope). A non-zero setter →
    `not committed: stage failed`.
 2. **The staging list** — regular files and tracked deletions only, git-ignored paths dropped, plus the feature's
-   artifacts by name and every test the AC lock pins, NUL-separated in `.pharn/pharn-loop/<name>/stage.list`. A scope
+   artifacts by name and every test the AC lock pins, NUL-separated in `pharn/.run/pharn-loop/<name>/stage.list`. A scope
    file not set from this plan, or a lock or pinned test that is not a regular, non-ignored file →
    `not committed: stage failed`; an empty list → `not committed: nothing staged`.
 3. **The branch** — the first absent of `pharn-loop/<name>`, `pharn-loop/<name>-2`, … → else
@@ -225,7 +225,7 @@ Report, plainly and without asking anything:
   excluded by `pharn.config.json` `gates.exclude` and **not run**, and say the stop covers only the gates that ran;
   `null` → no verdict report was read. A commit's message carries the same ids;
 - **every stage re-run**, by stage and iteration, read from the budget ledger the closeout printed
-  (`.pharn/pharn-loop/<name>/freshness.jsonl`, or `no re-runs`) rather than from memory, and the final freshness
+  (`pharn/.run/pharn-loop/<name>/freshness.jsonl`, or `no re-runs`) rather than from memory, and the final freshness
   verdict (`FRESH`, or the `reason_code` that blocked or stopped the commit);
 - **the `<decision-check>` result** for the final stop — GREEN, RED (quoting `check-loop-decision.mjs`'s message
   verbatim from the closeout's output), or N/A on a blocked stop;
@@ -236,7 +236,7 @@ Report, plainly and without asking anything:
 - where the checkout is (the document's `checkout`): on the new branch (naming `<original branch>` to return to), or
   unchanged — after a closeout crash, the `git status --short --branch` output and the sentence that a person must
   check the commit state;
-- any committed path that was already dirty in the pre-run snapshot (`.pharn/pharn-loop/<name>/pre-run-status.txt`);
+- any committed path that was already dirty in the pre-run snapshot (`pharn/.run/pharn-loop/<name>/pre-run-status.txt`);
 - every path `pre_run_snapshot.unchanged` lists (`regression-report.json`, or a quick run's scope-check output):
   changed before the run, present when the gates ran, and never in the commit;
 - the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, **revert failed**
@@ -280,7 +280,7 @@ last three feeds `check-loop.mjs`'s inputs.
   cannot be built, runs to `STOP_CAP`; an unsound fix cannot fake a green stop, because the verdicts are recomputed
   every iteration.
 - **Floor compare, ADVISORY bound:** "at most `M` iterations" — `check-loop.mjs` keeps no counter; it compares an
-  **agent-supplied `--iter`**, so the cap bounds the decision, not the agent (`LIMITS.md §1d`). Since 6.65.0 the
+  **agent-supplied `--iter`**, so the cap bounds the decision, not the agent (`pharn/LIMITS.md §1d`). Since 6.65.0 the
   commit also needs the record's `cap` to equal the one Step 1a's marker recorded and its `iterations` to stay within
   it (`check-loop-decision.mjs`) — agreement between two files Bash reaches, never provenance, and a typed iteration
   count that is too low still passes.
@@ -288,7 +288,7 @@ last three feeds `check-loop.mjs`'s inputs.
   `check-loop-fresh.mjs` (content-hash, enum membership and a live re-derivation), at the decision and again at the
   commit gate. **Bounded:** it is **tree identity, not recency**; it certifies **agreement, never provenance** — a
   self-consistent fabricated set of stamps, logs and reports over the live tree passes; it runs from the worktree and
-  so **cannot vouch for itself**; its re-run **budget** is unauthenticated state under `.pharn/`.
+  so **cannot vouch for itself**; its re-run **budget** is unauthenticated state under `pharn/.run/`.
 - **Floor:** the build does not run before the test stage completed, and the loop stops if that evidence stops
   holding — `check-test-stage.mjs --require-test-first`, read at Step 4 and by the freshness check after every build
   and at the commit gate. Obeying it is **ADVISORY**, which is why the freshness check re-reads it. **Bounded:** a
@@ -308,7 +308,7 @@ last three feeds `check-loop.mjs`'s inputs.
   a failed commit is right only while nothing checks out between its branch step and its undo (Step 6d).
 - **Floor: hook (fix #7):** a rebuild never writes outside the plan's `## Files` (`/pharn-build`'s own setter each
   iteration), and this command's own Write-tool writes land only in `SPEC.md` (the revert) and `LOOP.md` — the
-  Write/Edit/MultiEdit/NotebookEdit surface only. **Every git step, the scratch files under `.pharn/pharn-loop/`, and
+  Write/Edit/MultiEdit/NotebookEdit surface only. **Every git step, the scratch files under `pharn/.run/pharn-loop/`, and
   the stages' own writes are outside it**, and the commit runs after `/pharn-verify`'s reconcile gate, so neither
   guard nor reconciler covers it. A Bash write by a fix is detected — never prevented — by `check-bash-reconcile.mjs`
   (non-adversarial, `pharn/pharn-contracts/reconciliation-record.md`), and a retry cannot erase it.
@@ -336,7 +336,7 @@ last three feeds `check-loop.mjs`'s inputs.
   this file are vocabulary checks, which a novel spelling still passes); and the `Stop` guard (`require-loop-record.cjs`),
   deterministic infrastructure but not a floor primitive — it makes an early, record-less ending **visible and
   costly**, never impossible, **cannot judge a record or tell a real one from a fabricated one** (`touch LOOP.md`
-  satisfies it), runs only when Claude Code starts it (`LIMITS.md §7`), and fails **open**.
+  satisfies it), runs only when Claude Code starts it (`pharn/LIMITS.md §7`), and fails **open**.
 - **Advisory, the parts (6.32.0):** this command reads `pharn-loop-quick.md` only for a `--quick` run, before Step 1a,
   and this file once, at the run's first stop — each again after a compaction. That you read each there, in full, and
   follow it is your own discipline: nothing on the floor sees a Read. PHARN's own tests pin the TEXT — each part's file
@@ -351,7 +351,7 @@ last three feeds `check-loop.mjs`'s inputs.
   it after a compaction, and re-read the parts, is your own discipline, and its heading model is not checked against a
   renderer.
 - **Untrusted input:** control flow reads only deterministic-tool output — no stop, continue or stuck-point decision
-  rests on a free-text field. **This command ENLARGES the residual** (`LIMITS.md §2`, `THREAT-MODEL.md §5`), and says
+  rests on a free-text field. **This command ENLARGES the residual** (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`), and says
   so: untrusted prose reaches an Approved SPEC, a PLAN, a writes-scope and code with no person reading it; code built
   from it is EXECUTED — project gates, the suite, commit hooks — before any person sees it, bounded by nothing beyond
   fix #7's write scope (pre-egress is not built); a plan that lists a tracked file the user had edited commits that
@@ -360,9 +360,9 @@ last three feeds `check-loop.mjs`'s inputs.
   slug's check prints only a `FEATURE_SLUG_RE` member (`pharn/floor/feature-name.mjs`, floor), while writing the
   candidate with the Write tool and re-typing only the printed value into later lines are advisory; the Stop
   guard's marker and counter, the freshness ledger and every stamp, log and report live in the writable tree Bash
-  reaches (`LIMITS.md §6`); and `.pharn/writes-scope.json` can be overwritten by a second session, which the
+  reaches (`pharn/LIMITS.md §6`); and `pharn/.run/writes-scope.json` can be overwritten by a second session, which the
   closeout's scope re-derivation narrows to one step, not to zero (P2).
-- **Reported for a human, never agent-edited:** `LIMITS.md §1d`'s backstop list should name the Draft revert and the
+- **Reported for a human, never agent-edited:** `pharn/LIMITS.md §1d`'s backstop list should name the Draft revert and the
   merge review; and `/pharn-verify`'s premise of human-approved intent does not hold under this command (a follow-up).
 - **Not a claim:** "`/pharn-loop` finished" means **a stop was reached and recorded** — STRUCK: "the feature is good",
   "a human approved the intent", "the fix converged", "context was carried forward", "the change is small", "the plan
@@ -392,7 +392,7 @@ the release step.
 node .claude/hooks/require-loop-record.cjs --close '<name>'
 ```
 
-It removes `.pharn/pharn-loop/<name>/active.json`. **For the write guard only `--close` or the 24 h ceiling releases
+It removes `pharn/.run/pharn-loop/<name>/active.json`. **For the write guard only `--close` or the 24 h ceiling releases
 a leftover marker — a present `LOOP.md` does NOT.** So in an **installed** project a leftover loop marker keeps the
 WHOLE tree on the fail-closed default — your own source blocked too — for up to 24 h after a run that forgot to close
 it.

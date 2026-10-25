@@ -126,7 +126,7 @@ function fixture(opts = {}) {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   if (scripts !== null) writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fx", version: "1.0.0", scripts }, null, 2) + "\n");
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\n");
@@ -497,7 +497,7 @@ test("6.38.0 ACCEPTANCE ★ ANTI-GAMING — the 5 KB feature that also raises th
   });
 });
 
-test("6.35.0 OBSERVATIONAL — the work record is written at done; a planted `.pharn/cost` link refuses it and changes NOTHING else", () => {
+test("6.35.0 OBSERVATIONAL — the work record is written at done; a planted `pharn/.run/cost` link refuses it and changes NOTHING else", () => {
   let control;
   withFixture({}, ({ dir }) => {
     const r = runCli(dir, fresh());
@@ -511,7 +511,7 @@ test("6.35.0 OBSERVATIONAL — the work record is written at done; a planted `.p
   withFixture({}, ({ dir }) => {
     const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), "sv-elsewhere-")));
     try {
-      mkdirSync(join(dir, ".pharn"), { recursive: true });
+      mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
       symlinkSync(elsewhere, join(dir, COST_BASE));
       const r = runCli(dir, fresh());
       assert.equal(r.code, control.code, r.raw);
@@ -677,7 +677,7 @@ const npmPackages = (version) => ({
   "node_modules/dep": { version, resolved: `file:dep-${version}.tgz`, integrity: `sha512-${version}` },
 });
 const NPM_COMMITTED = {
-  ".gitignore": ".pharn/\nnode_modules/\n", // G5: an ignored node_modules, as in every real project
+  ".gitignore": "pharn/.run/\nnode_modules/\n", // G5: an ignored node_modules, as in every real project
   "package-lock.json": JSON.stringify({ name: "fx", lockfileVersion: 3, requires: true, packages: npmPackages("2.0.0") }),
 };
 function plantRecord(dir, version) {
@@ -884,27 +884,29 @@ test("question no-gates — exit 4, resume.argv is the invocation's argv, nothin
 });
 
 // ── CONTAINMENT AND RESUME ──────────────────────────────────────────────────────────────────────────
-test("path-containment — a symlinked .pharn, a dangling one, a symlinked .pharn/pharn-verify and a symlinked feature dir", () => {
+test("path-containment — a symlinked pharn/.run, a dangling one, a symlinked pharn/.run/pharn-verify and a symlinked feature dir", () => {
   const outsideOf = () => realpathSync(mkdtempSync(join(tmpdir(), "sv-link-")));
   const cases = [
     [
-      "a symlinked .pharn",
+      "a symlinked pharn/.run",
       (dir, out) => {
-        rmSync(join(dir, ".pharn"), { recursive: true, force: true });
-        symlinkSync(out, join(dir, ".pharn"));
+        rmSync(join(dir, "pharn", ".run"), { recursive: true, force: true });
+        mkdirSync(join(dir, "pharn"), { recursive: true });
+        symlinkSync(out, join(dir, "pharn", ".run"));
       },
     ],
     [
-      "a dangling .pharn",
+      "a dangling pharn/.run",
       (dir) => {
-        rmSync(join(dir, ".pharn"), { recursive: true, force: true });
-        symlinkSync(join(dir, "nowhere"), join(dir, ".pharn"));
+        rmSync(join(dir, "pharn", ".run"), { recursive: true, force: true });
+        mkdirSync(join(dir, "pharn"), { recursive: true });
+        symlinkSync(join(dir, "nowhere"), join(dir, "pharn", ".run"));
       },
     ],
     [
-      "a symlinked .pharn/pharn-verify",
+      "a symlinked pharn/.run/pharn-verify",
       (dir, out) => {
-        mkdirSync(join(dir, ".pharn"), { recursive: true });
+        mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
         symlinkSync(out, join(dir, VERIFY_PATHS.root));
       },
     ],
@@ -1145,7 +1147,9 @@ test("★ budget clock — the opening work counts: a slow first `git ls-files` 
 
 // ── ★ KILL MID-DRAIN ────────────────────────────────────────────────────────────────────────────────
 async function killMidDrain(cliSource) {
-  const committed = { "slow.sh": "#!/bin/sh\n: > .pharn/slow-started\nwhile [ ! -f .pharn/slow-release ]; do sleep 0.1; done\nexit 0\n" };
+  const committed = {
+    "slow.sh": "#!/bin/sh\n: > pharn/.run/slow-started\nwhile [ ! -f pharn/.run/slow-release ]; do sleep 0.1; done\nexit 0\n",
+  };
   const fx = fixture({ committed, cliSource });
   try {
     const child = spawn(process.execPath, ["pharn/floor/stage-verify.mjs", ...fresh(["--gates", "sh slow.sh::slow,true::b"])], {
@@ -1155,14 +1159,14 @@ async function killMidDrain(cliSource) {
       detached: true,
     });
     const t0 = Date.now();
-    while (!existsSync(join(fx.dir, ".pharn/slow-started")) && Date.now() - t0 < 60000) await new Promise((res) => setTimeout(res, 50));
-    assert.ok(existsSync(join(fx.dir, ".pharn/slow-started")), "the slow gate never started within 60 s");
+    while (!existsSync(join(fx.dir, "pharn/.run/slow-started")) && Date.now() - t0 < 60000) await new Promise((res) => setTimeout(res, 50));
+    assert.ok(existsSync(join(fx.dir, "pharn/.run/slow-started")), "the slow gate never started within 60 s");
     process.kill(-child.pid, "SIGKILL"); // the stage's whole process group, as a harness kill would
     await new Promise((res) => (child.exitCode !== null || child.signalCode !== null ? res() : child.once("exit", res)));
     const phase = existsSync(join(fx.dir, VERIFY_PATHS.stageJson))
       ? JSON.parse(readFileSync(join(fx.dir, VERIFY_PATHS.stageJson), "utf8")).phase
       : null;
-    writeFileSync(join(fx.dir, ".pharn/slow-release"), ""); // lets the orphaned gate (its own process group) exit
+    writeFileSync(join(fx.dir, "pharn/.run/slow-release"), ""); // lets the orphaned gate (its own process group) exit
     let r;
     for (let i = 0; i < 40; i++) {
       r = runCli(fx.dir, ["--resume", "--budget-ms", "600000"]);
@@ -1277,8 +1281,8 @@ function withReuseFixture(opts, fn) {
 
 /** /pharn-loop Step 1a's marker — the delivery run the reuse is bound to. */
 function openDeliveryRun(dir, body = '{"schema":"pharn-loop-active/1"}\n') {
-  mkdirSync(join(dir, ".pharn", "pharn-loop", FEATURE), { recursive: true });
-  writeFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"), body);
+  mkdirSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE), { recursive: true });
+  writeFileSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"), body);
 }
 
 function runRegress(fx, extra = []) {
@@ -1432,7 +1436,7 @@ test("REUSE F — the tree changed between regress and verify: nothing is reused
 
 test("REUSE H — no marker, a planted stamp (quick mode: no regress in the run), a rewritten stamp, a removed offer: all run, all done", () => {
   // (1) A regress run OUTSIDE any delivery run publishes no offer; a run opened afterwards (as `--quick` does, where no
-  //     regress runs at all) finds a stamp under .pharn/ that nothing offered — the grill's B2 plant. Nothing is reused.
+  //     regress runs at all) finds a stamp under pharn/.run/ that nothing offered — the grill's B2 plant. Nothing is reused.
   withReuseFixture({}, (fx) => {
     runRegress(fx);
     openDeliveryRun(fx.dir);
@@ -1442,11 +1446,11 @@ test("REUSE H — no marker, a planted stamp (quick mode: no regress in the run)
     assert.deepEqual(readReport(fx.dir).gate_reuse.reused, []);
     assert.deepEqual(spawned(fx, "verify", from).sort(), ["build", "lint", "test", "typecheck"]);
   });
-  // (2) The stamp rewritten after the offer bound it (a write-tool edit of `.pharn/`): source-unbound, nothing reused.
+  // (2) The stamp rewritten after the offer bound it (a write-tool edit of `pharn/.run/`): source-unbound, nothing reused.
   withReuseFixture({}, (fx) => {
     const d = deliver(fx, {
       editBetween: () => {
-        const p = join(fx.dir, ".pharn/pharn-regress/head/stamp.json");
+        const p = join(fx.dir, "pharn/.run/pharn-regress/head/stamp.json");
         const s = JSON.parse(readFileSync(p, "utf8"));
         writeFileSync(p, JSON.stringify(s)); // same content, other bytes
       },

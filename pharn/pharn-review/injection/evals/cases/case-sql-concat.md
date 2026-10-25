@@ -5,7 +5,7 @@ purpose: "Eval fixture (INJECTION): CODE that builds a SQL query by string-conca
 
 # Eval case — sql-concat (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects the concat-into-query shape from the text.
 
 ```js

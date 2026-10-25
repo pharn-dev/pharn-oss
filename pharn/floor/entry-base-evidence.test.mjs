@@ -72,14 +72,14 @@ const COUNT_JS =
   "import { appendFileSync } from 'node:fs';\n" +
   // regress-base-integrity: the BASE checkout is a temp-root directory named by base-worktree.mjs (never nested now).
   "const side = /[\\\\/]pharn-regress-base-[0-9a-f]{12}-[A-Za-z0-9]{6}([\\\\/]|$)/.test(process.cwd()) ? 'base'\n" +
-  "  : /[\\\\/]\\.pharn[\\\\/]pharn-entry[\\\\/]/.test(process.env.PHARN_TEST_RESULTS || '') ? 'entry' : 'head';\n" +
+  "  : /[\\\\/]pharn[\\\\/]\\.run[\\\\/]pharn-entry[\\\\/]/.test(process.env.PHARN_TEST_RESULTS || '') ? 'entry' : 'head';\n" +
   "if (process.env.EBE_COUNTER) appendFileSync(process.env.EBE_COUNTER, `${process.argv[2]} ${side}\\n`);\n";
 const TEST_OK = (name, expr) =>
   `import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { add } from './index.js';\ntest('${name}', () => { assert.ok(${expr}); });\n`;
 
 /** A git repo at its BASE commit: three counting gates, an npm lockfile with no dependencies (so the default inferred
  *  install is a real `npm ci` whose postinstall counts), source, an outside test, a post-checkout counter. */
-function fixture({ scripts = {}, files = {}, gitignore = ".pharn/\nnode_modules/\n" } = {}) {
+function fixture({ scripts = {}, files = {}, gitignore = "pharn/.run/\nnode_modules/\n" } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ebe-"));
   const counter = `${dir}.counter.log`;
   writeFileSync(counter, "");
@@ -337,7 +337,7 @@ test("★ equivalent environment — fresh BASE (no offer) and entry BASE classi
 test("environment divergence — an ignored local input the entry tree has and a nested worktree lacks: entry BASE records the real start (no equality asserted)", () => {
   const fx = fixture({
     scripts: { typecheck: "node count.mjs typecheck && node -e \"process.exit(require('fs').existsSync('.env.local') ? 0 : 1)\"" },
-    gitignore: ".pharn/\nnode_modules/\n.env.local\n",
+    gitignore: "pharn/.run/\nnode_modules/\n.env.local\n",
   });
   try {
     fx.w(".env.local", "SECRET=1\n"); // ignored, so the snapshot stays empty and git never copies it into a worktree
@@ -391,7 +391,7 @@ test("explicit --install / --no-install MISS install-override; a standalone regr
       assert.equal(r.be.source, "fresh");
       assert.ok(r.counts.base === 3 && r.counts.worktree === 1);
     }
-    rmSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"));
+    rmSync(join(fx.dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"));
     const r = regress(fx);
     assert.equal(r.be.entry.miss, "no-delivery-run");
     assert.equal(r.be.source, "fresh");
@@ -451,7 +451,7 @@ test("resume — a persisted entry HIT is re-decided: genuine → HIT; source ed
     build(fx);
     const first = regress(fx);
     assert.equal(first.be.source, "entry");
-    const marker = readFileSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json"));
+    const marker = readFileSync(join(fx.dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"));
     const record = (entryReuse) => ({
       schema: PROGRESS_SCHEMA,
       feature: FEATURE,
@@ -517,7 +517,7 @@ test("resume — a persisted entry HIT is re-decided: genuine → HIT; source ed
 
 // ── ★ freshness: the derived evidence satisfies check-loop-fresh unchanged ─────────────────────────────────────────
 function writeVerifyStampAndReport(dir, { head, digest }) {
-  const outDir = join(dir, ".pharn", "pharn-verify", "gates");
+  const outDir = join(dir, "pharn", ".run", "pharn-verify", "gates");
   mkdirSync(outDir, { recursive: true });
   const b = logBasename(0, "reconcile");
   writeFileSync(join(outDir, `${b}.out`), "ok\n");
@@ -773,7 +773,7 @@ test("path kinds — a link, a dangling link, a directory and a FIFO at the offe
   }
 });
 
-// ── ★ HOOK — the offer is out of the WRITE TOOLS' reach; `.pharn/` is not (why the offer is not there) — L65 ────────
+// ── ★ HOOK — the offer is out of the WRITE TOOLS' reach; `pharn/.run/` is not (why the offer is not there) — L65 ────────
 const PROTECT = join(ROOT, ".claude", "hooks", "protect-trusted-paths.cjs");
 const ENFORCE = join(ROOT, ".claude", "hooks", "enforce-writes-scope.cjs");
 
@@ -793,7 +793,7 @@ function hookExit(hook, projectDir, filePath) {
   return r.status;
 }
 
-test("★ HOOK — both real write guards deny the offer path in a main checkout and a linked worktree; the entry source under .pharn/ is writable", () => {
+test("★ HOOK — both real write guards deny the offer path in a main checkout and a linked worktree; the entry source under pharn/.run/ is writable", () => {
   const fx = fixture();
   const wt = `${fx.dir}-wt`;
   try {
@@ -804,7 +804,7 @@ test("★ HOOK — both real write guards deny the offer path in a main checkout
     assert.equal(hookExit(ENFORCE, fx.dir, mainOffer), 2);
     const source = join(fx.dir, ENTRY_PATHS.stamp);
     assert.equal(hookExit(PROTECT, fx.dir, source), 0);
-    assert.equal(hookExit(ENFORCE, fx.dir, source), 0, "`.pharn/**` is always writable — why the offer binds it by sha256");
+    assert.equal(hookExit(ENFORCE, fx.dir, source), 0, "`pharn/.run/**` is always writable — why the offer binds it by sha256");
     execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: fx.dir });
     installHooks(wt);
     const wtOffer = join(execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: wt, encoding: "utf8" }).trim(), OFFER_BASENAME);

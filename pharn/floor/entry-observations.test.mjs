@@ -318,7 +318,7 @@ test("CONSECUTIVE INVOCATIONS / MISSING RUN: only the start that recorded THIS r
   assert.equal(noRun.invocations.length, 0, "a start with no recorded run-start binds to no run");
   assert.equal(noRun.unbound_events, 2);
   const otherTs = view([ev.start({ run: { seq: 1, ts: T("09:00:00") } })]);
-  assert.equal(otherTs.invocations.length, 0, "a reset .pharn/cost (same seq, other ts) reads UNBOUND, never this run");
+  assert.equal(otherTs.invocations.length, 0, "a reset pharn/.run/cost (same seq, other ts) reads UNBOUND, never this run");
 });
 
 test("DUPLICATES and CONFLICTS: an exact duplicate never counts twice; one identity with two contents is unmeasured, counted, never picked", () => {
@@ -427,14 +427,14 @@ const tmp = () => mkdtempSync(join(tmpdir(), "entry-obs-"));
 test("recordEntryEvent → readEntryEvents: one line per event; an invalid event is refused; a torn final line is dropped, by index", () => {
   const root = tmp();
   const notes = [];
-  const opts = { root, base: ".pharn/cost", note: (m) => notes.push(m) };
+  const opts = { root, base: "pharn/.run/cost", note: (m) => notes.push(m) };
   assert.deepEqual(recordEntryEvent("feat", ev.start(), opts), { ok: true });
   assert.deepEqual(recordEntryEvent("feat", ev.begin(), opts), { ok: true });
   const refused = recordEntryEvent("feat", { ...ev.start(), outcome: "?" }, opts);
   assert.equal(refused.ok, false);
   assert.equal(notes.length, 1, "one note per failed write");
   assert.match(notes[0], /^note — an entry-gate observation for the cost ledger was not written/);
-  const file = join(root, ".pharn/cost/feat", ENTRY_FILE);
+  const file = join(root, "pharn/.run/cost/feat", ENTRY_FILE);
   appendFileSync(file, '{"schema":"pharn-entry-obs'); // a torn append
   const r = readEntryEvents(file);
   assert.equal(r.records.length, 2);
@@ -445,29 +445,29 @@ test("recordEntryEvent → readEntryEvents: one line per event; an invalid event
 test("UNSAFE PATHS (L54/L59): a symlinked state directory or a link/FIFO at entry.jsonl is refused, never followed, never blocks", () => {
   const root = tmp();
   mkdirSync(join(root, "elsewhere"));
-  mkdirSync(join(root, ".pharn"), { recursive: true });
-  symlinkSync(join(root, "elsewhere"), join(root, ".pharn/cost"));
+  mkdirSync(join(root, "pharn", ".run"), { recursive: true });
+  symlinkSync(join(root, "elsewhere"), join(root, "pharn/.run/cost"));
   const notes = [];
-  const r = recordEntryEvent("feat", ev.start(), { root, base: ".pharn/cost", note: (m) => notes.push(m) });
+  const r = recordEntryEvent("feat", ev.start(), { root, base: "pharn/.run/cost", note: (m) => notes.push(m) });
   assert.equal(r.ok, false);
   assert.match(r.why, /symlink or not a directory/);
   assert.equal(notes.length, 1);
 
   const root2 = tmp();
-  mkdirSync(join(root2, ".pharn/cost/feat"), { recursive: true });
+  mkdirSync(join(root2, "pharn/.run/cost/feat"), { recursive: true });
   writeFileSync(join(root2, "target"), "");
-  symlinkSync(join(root2, "target"), join(root2, ".pharn/cost/feat", ENTRY_FILE));
-  assert.equal(recordEntryEvent("feat", ev.start(), { root: root2, base: ".pharn/cost", note: () => {} }).ok, false);
+  symlinkSync(join(root2, "target"), join(root2, "pharn/.run/cost/feat", ENTRY_FILE));
+  assert.equal(recordEntryEvent("feat", ev.start(), { root: root2, base: "pharn/.run/cost", note: () => {} }).ok, false);
   assert.equal(readFileSync(join(root2, "target"), "utf8"), "", "nothing written through the link");
-  assert.deepEqual(readEntryEvents(join(root2, ".pharn/cost/feat", ENTRY_FILE)), { records: [], dropped: ["entry.jsonl"] });
+  assert.deepEqual(readEntryEvents(join(root2, "pharn/.run/cost/feat", ENTRY_FILE)), { records: [], dropped: ["entry.jsonl"] });
 
   const root3 = tmp();
-  mkdirSync(join(root3, ".pharn/cost/feat"), { recursive: true });
-  const fifo = join(root3, ".pharn/cost/feat", ENTRY_FILE);
+  mkdirSync(join(root3, "pharn/.run/cost/feat"), { recursive: true });
+  const fifo = join(root3, "pharn/.run/cost/feat", ENTRY_FILE);
   const mk = spawnSync("mkfifo", [fifo]);
   if (mk.status === 0) {
     const t0 = Date.now();
-    assert.equal(recordEntryEvent("feat", ev.start(), { root: root3, base: ".pharn/cost", note: () => {} }).ok, false);
+    assert.equal(recordEntryEvent("feat", ev.start(), { root: root3, base: "pharn/.run/cost", note: () => {} }).ok, false);
     assert.deepEqual(readEntryEvents(fifo), { records: [], dropped: ["entry.jsonl"] });
     assert.ok(Date.now() - t0 < 5000, "a planted FIFO never blocks the writer or the reader");
   }
@@ -493,7 +493,7 @@ test("CONCURRENT WRITERS: four processes appending at once leave only whole, val
       })
   );
   await Promise.all(runs);
-  const r = readEntryEvents(join(root, ".pharn/cost/feat", ENTRY_FILE));
+  const r = readEntryEvents(join(root, "pharn/.run/cost/feat", ENTRY_FILE));
   assert.deepEqual(r.dropped, [], "no torn or interleaved line");
   assert.equal(r.records.length, 200);
 });
@@ -504,14 +504,14 @@ test("currentRunStart: the LATEST run-start by seq (a torn last line ignored); n
   process.chdir(root);
   try {
     assert.equal(currentRunStart("feat"), null, "no markers file");
-    mkdirSync(".pharn/cost/feat", { recursive: true });
+    mkdirSync("pharn/.run/cost/feat", { recursive: true });
     const lines = [
       { seq: 1, kind: "run-start", stage: null, iteration: null, ts: T("09:00:00"), session_id: null },
       { seq: 2, kind: "run-stop", stage: null, iteration: null, ts: T("09:30:00"), session_id: null },
       { seq: 3, kind: "run-start", stage: null, iteration: null, ts: T("10:00:00"), session_id: null },
       { seq: 4, kind: "stage-start", stage: "pharn-spec", iteration: null, ts: T("10:00:01"), session_id: null },
     ];
-    writeFileSync(".pharn/cost/feat/markers.jsonl", lines.map((l) => JSON.stringify(l)).join("\n") + '\n{"seq":5,"kind":"run-st');
+    writeFileSync("pharn/.run/cost/feat/markers.jsonl", lines.map((l) => JSON.stringify(l)).join("\n") + '\n{"seq":5,"kind":"run-st');
     assert.deepEqual(currentRunStart("feat"), { seq: 3, ts: T("10:00:00") });
     assert.equal(currentRunStart("../feat"), null);
   } finally {
@@ -557,7 +557,7 @@ test("REVIEW F5 — a begin/end pair that disagrees on kind is a CONFLICT: count
   assert.deepEqual([x.lifetime.status, x.lifetime.reason], ["unmeasured", "conflicting-records"]);
 });
 
-test("REVIEW F6 — the READ side refuses a linked directory chain: a symlinked .pharn/cost or feature directory is never read through", () => {
+test("REVIEW F6 — the READ side refuses a linked directory chain: a symlinked pharn/.run/cost or feature directory is never read through", () => {
   const root = tmp();
   const prev = process.cwd();
   process.chdir(root);
@@ -565,12 +565,20 @@ test("REVIEW F6 — the READ side refuses a linked directory chain: a symlinked 
     mkdirSync("elsewhere/feat", { recursive: true });
     writeFileSync("elsewhere/feat/entry.jsonl", JSON.stringify(ev.start()) + "\n");
     writeFileSync("elsewhere/feat/markers.jsonl", JSON.stringify({ seq: 1, kind: "run-start", ts: T("10:00:00") }) + "\n");
-    mkdirSync(".pharn");
-    symlinkSync(join(root, "elsewhere"), ".pharn/cost");
-    assert.equal(stateDirState("feat", ".pharn/cost"), "unsafe");
-    assert.deepEqual(readEntryEventsFor("feat", ".pharn/cost"), { records: [], dropped: ["entry.jsonl"] }, "nothing read through the link");
+    mkdirSync("pharn/.run", { recursive: true });
+    symlinkSync(join(root, "elsewhere"), "pharn/.run/cost");
+    assert.equal(stateDirState("feat", "pharn/.run/cost"), "unsafe");
+    assert.deepEqual(
+      readEntryEventsFor("feat", "pharn/.run/cost"),
+      { records: [], dropped: ["entry.jsonl"] },
+      "nothing read through the link"
+    );
     assert.equal(currentRunStart("feat"), null, "the run-start is not read through a link either");
-    assert.equal(readEntryEvents(".pharn/cost/feat/entry.jsonl").records.length, 1, "control: the low-level reader alone WOULD follow it");
+    assert.equal(
+      readEntryEvents("pharn/.run/cost/feat/entry.jsonl").records.length,
+      1,
+      "control: the low-level reader alone WOULD follow it"
+    );
     assert.equal(stateDirState("other", "absent-base"), "absent");
     assert.deepEqual(readEntryEventsFor("other", "absent-base"), { records: [], dropped: [] });
     mkdirSync("real/feat", { recursive: true });

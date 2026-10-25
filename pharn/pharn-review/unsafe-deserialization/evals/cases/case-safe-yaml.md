@@ -5,7 +5,7 @@ purpose: "True-negative eval fixture: CODE deserializes untrusted input with SAF
 
 # Eval case — safe-yaml (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. It deserializes untrusted input using **safe** primitives, so the scanner reports nothing.
 
 ```python

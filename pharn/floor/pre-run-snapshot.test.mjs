@@ -271,7 +271,7 @@ function repo() {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "a.js"), "a\n");
   writeFileSync(join(dir, "src", "b.js"), "b\n");
@@ -407,7 +407,7 @@ test("capture under an open loop run records every changed path with its digest,
     assert.equal(validateSnapshot(rec).ok, true);
     assert.equal(rec.base, base);
     assert.equal(rec.run.command, "pharn-loop");
-    assert.equal(rec.run.marker_sha256, sha256(readFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"))));
+    assert.equal(rec.run.marker_sha256, sha256(readFileSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"))));
     assert.deepEqual(rec.paths, [
       ["pharn/features/abandoned/SPEC.md", sha256("old\n")],
       ["src/a.js", sha256("a, edited by the user\n")],
@@ -455,7 +455,7 @@ test("preRunUnchanged end to end: the unchanged pre-run path is named, an edited
       inDir(dir, () => preRunUnchanged({ feature: FEATURE, base: "b".repeat(40), inside: ["src/a.js"] })).status,
       "base-changed"
     );
-    rmSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"));
+    rmSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"));
     assert.equal(inDir(dir, () => preRunUnchanged({ feature: FEATURE, base, inside: ["src/a.js"] })).status, "no-delivery-run");
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -521,7 +521,7 @@ test("the record's basename is its own — not 6.33.0's base-reuse record nor 6.
   assert.notEqual(SNAPSHOT_BASENAME, OFFER_BASENAME);
 });
 
-// ── ★ HOOK — the record is out of the WRITE TOOLS' reach; `.pharn/` is not (the non-vacuity control) ─────────────
+// ── ★ HOOK — the record is out of the WRITE TOOLS' reach; `pharn/.run/` is not (the non-vacuity control) ─────────────
 const PROTECT = join(ROOT, ".claude", "hooks", "protect-trusted-paths.cjs");
 const ENFORCE = join(ROOT, ".claude", "hooks", "enforce-writes-scope.cjs");
 
@@ -558,18 +558,18 @@ function setPosture(dir, kind) {
 }
 
 function setRun(dir, open) {
-  rmSync(join(dir, ".pharn", "pharn-loop"), { recursive: true, force: true });
+  rmSync(join(dir, "pharn", ".run", "pharn-loop"), { recursive: true, force: true });
   if (open) {
-    mkdirSync(join(dir, ".pharn", "pharn-loop", FEATURE), { recursive: true });
-    writeFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"), "{}\n");
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"), "{}\n");
   }
 }
 
 function setScope(dir, scope) {
-  rmSync(join(dir, ".pharn", "writes-scope.json"), { force: true });
+  rmSync(join(dir, "pharn", ".run", "writes-scope.json"), { force: true });
   if (scope) {
-    mkdirSync(join(dir, ".pharn"), { recursive: true });
-    writeFileSync(join(dir, ".pharn", "writes-scope.json"), JSON.stringify({ scope, set_by: "test", set_at: "now" }) + "\n");
+    mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "writes-scope.json"), JSON.stringify({ scope, set_by: "test", set_at: "now" }) + "\n");
   }
 }
 
@@ -605,10 +605,10 @@ test("★ HOOK — the write tools never reach the record: protect-trusted-paths
     const main = hookMatrix(dir, recordFile(dir));
     assert.equal(main.length, 18, "L34: the cell set is counted, not merely iterated");
     for (const [label, p] of main) assert.equal(p, 2, `main checkout, ${label}: protect-trusted-paths denies the .git segment`);
-    // Control (non-vacuity): the guards do not deny everything — a .pharn/ path is writable, the reason the record is not kept there.
-    const marker = join(dir, ".pharn", "pharn-loop", FEATURE, "active.json");
+    // Control (non-vacuity): the guards do not deny everything — a pharn/.run/ path is writable, the reason the record is not kept there.
+    const marker = join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json");
     assert.equal(hookExit(PROTECT, dir, marker), 0);
-    assert.equal(hookExit(ENFORCE, dir, marker), 0, "`.pharn/**` is always writable");
+    assert.equal(hookExit(ENFORCE, dir, marker), 0, "`pharn/.run/**` is always writable");
 
     for (const [layout, wt] of [
       ["beside", beside],
@@ -642,7 +642,7 @@ test("★ HOOK, the stated bound PINNED — a SEPARATE git dir kept inside the p
   try {
     const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
     git("init", "-q", "--separate-git-dir", join(dir, "gitdata"), ".");
-    writeFileSync(join(dir, ".gitignore"), ".pharn/\n.claude/\ngitdata/\n");
+    writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n.claude/\ngitdata/\n");
     installHooks(dir);
     const target = recordFile(dir);
     assert.ok(target.startsWith(join(dir, "gitdata")), target);

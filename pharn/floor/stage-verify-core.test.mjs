@@ -75,16 +75,16 @@ test("G12 discriminates — a local declaration in a module's source is caught b
 // ── VERIFY_PATHS / PHASES ───────────────────────────────────────────────────────────────────────────
 test("VERIFY_PATHS: four entries under the stage root; loop-fresh-core.mjs's DEFAULT_STAMPS.verify derives from it", () => {
   assert.deepEqual(VERIFY_PATHS, {
-    root: ".pharn/pharn-verify",
-    gates: ".pharn/pharn-verify/gates",
-    stageJson: ".pharn/pharn-verify/stage.json",
-    headInstall: ".pharn/pharn-verify/head-install.json", // 6.40.0
+    root: "pharn/.run/pharn-verify",
+    gates: "pharn/.run/pharn-verify/gates",
+    stageJson: "pharn/.run/pharn-verify/stage.json",
+    headInstall: "pharn/.run/pharn-verify/head-install.json", // 6.40.0
   });
   assert.equal(DEFAULT_STAMPS.verify, `${VERIFY_PATHS.gates}/stamp.json`);
   const lf = readFileSync(join(HERE, "loop-fresh-core.mjs"), "utf8");
   assert.doesNotMatch(
     lf,
-    /verify:\s*"\.pharn\/pharn-verify\/gates\/stamp\.json"/,
+    /verify:\s*"pharn\/\.run\/pharn-verify\/gates\/stamp\.json"/,
     "DEFAULT_STAMPS.verify must be derived, not a second literal"
   );
 });

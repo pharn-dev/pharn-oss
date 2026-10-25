@@ -4,7 +4,7 @@
 // off disk and hands plain values in (P3 — this file changes when a RULE changes; that one when the storage does).
 //
 // ==================================== WHY (P7) ====================================
-// Every fresh `stage-regress.mjs` invocation cleared `.pharn/pharn-regress/`, then re-created the base worktree, re-ran
+// Every fresh `stage-regress.mjs` invocation cleared `pharn/.run/pharn-regress/`, then re-created the base worktree, re-ran
 // the base-commit install and re-ran every base gate — even when an earlier invocation of the same `/pharn-loop` (every
 // iteration, and every freshness re-run) or `/pharn-ship` (the Step 2b retry) had produced that exact evidence minutes
 // before. Built at the maintainer's direction, at the narrowest scope (`.dev/features/regress-base-reuse/`).
@@ -14,7 +14,7 @@
 // --side base`, which copies the HEAD record's spec VERBATIM (gate-run-core.mjs `baseSpecFrom`, the one owner) → one
 // `run --next` per entry under `--timeout-ms` → a stamp in the gate-run-record SCHEMA, fingerprinted with the
 // worktree-fingerprint ALGO. Its gates also read whatever lies OUTSIDE the base worktree: until 6.49.x the worktree was
-// nested at `.pharn/pharn-regress/base` inside the HEAD tree, so a tool that searches parent directories (node's module
+// nested at `pharn/.run/pharn-regress/base` inside the HEAD tree, so a tool that searches parent directories (node's module
 // resolution, npm's `.bin` PATH, tsc / prettier / eslint config lookup) reached the HEAD tree's root. Since
 // regress-base-integrity it sits in the temp root, outside the project (base-worktree.mjs), so that search no longer
 // reaches it; `head_root` below is KEPT anyway — binding more than is now reachable can only cause a miss, never a false
@@ -176,7 +176,7 @@ export function evidenceRequirement(stamp, record) {
 
 /**
  * The delivery run this invocation belongs to. `markers` maps each DELIVERY_COMMANDS member to what the execution half
- * found at `.pharn/<command>/<feature>/active.json`: `{state: "absent"}`, `{state: "unusable"}` (a link, a directory,
+ * found at `pharn/.run/<command>/<feature>/active.json`: `{state: "absent"}`, `{state: "unusable"}` (a link, a directory,
  * an oversize or unreadable file) or `{state: "ok", bytes, mtimeMs}`. Exactly ONE path may hold anything, and it must be
  * a regular file whose mtime is within the write guard's 24 h of `now`; else there is no identity. Fail-closed: a
  * second present entry, even an unreadable one (which the write guard counts as a run open), is ambiguity. The bytes

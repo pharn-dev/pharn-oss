@@ -5,7 +5,7 @@ purpose: "Eval fixture (RESOURCE-LEAK): CODE that opens a file handle with fs.op
 
 # Eval case — open-no-close (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects the unclosed-resource shape from the text.
 
 ```js

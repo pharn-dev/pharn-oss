@@ -111,7 +111,7 @@ for "therefore guaranteed":
 
 ## Trust class (P2)
 
-A seam config can originate in **untrusted** input (a forked/poisoned repo — `THREAT-MODEL.md §2`,
+A seam config can originate in **untrusted** input (a forked/poisoned repo — `pharn/THREAT-MODEL.md §2`,
 seam-resolver fetch fallback / seam-record poisoning). The validator's verdict ranges **only** over
 enum-gated / type-checked fields (`resolutionOrder` steps ∈ enum, `ask` presence, the threshold enum,
 the boolean type) — **never** over any free-text. A poisoned config can therefore only name an invalid

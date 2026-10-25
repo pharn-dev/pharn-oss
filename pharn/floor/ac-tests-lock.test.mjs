@@ -288,7 +288,7 @@ test("/1 locks are still read and checked GREEN, and never pass --require-red-ru
     const r = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /ac-tests-lock\/1, which has no red run/);
-    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a red run is recorded on a /4 lock only");
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/x"]).code, 2, "a red run is recorded on a /4 lock only");
     writeLockJson(root, { ...rest, schema: "ac-tests-lock/1", mode: "test-first" });
     assert.equal(cli(root, ["--check", NAME]).code, 2, "a /1 lock with /2's keys is not the /1 shape");
   } finally {
@@ -364,7 +364,7 @@ test("usage: --require-red-run only with --check; --record-red-run needs --out; 
     assert.equal(cli(root, ["--write", NAME, "--require-red-run"]).code, 2);
     assert.equal(cli(root, ["--record-red-run", NAME]).code, 2);
     assert.equal(cli(root, ["--check", "--require-red-run"]).code, 2);
-    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/none"]).code, 2, "no lock yet");
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/none"]).code, 2, "no lock yet");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -438,7 +438,7 @@ test("bootstrap: --write-bootstrap records mode bootstrap, no mapping, no files,
     assert.match(strict.out, /BOOTSTRAP lock: no red run exists/);
     assert.equal(cli(root, ["--check", NAME, "--require-red-run", "--allow-bootstrap"]).code, 0);
     assert.equal(cli(root, ["--check", NAME, "--allow-bootstrap"]).code, 2, "--allow-bootstrap only qualifies --require-red-run");
-    assert.equal(cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]).code, 2, "a bootstrap lock has no red run to record");
+    assert.equal(cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/x"]).code, 2, "a bootstrap lock has no red run to record");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -632,7 +632,7 @@ test("/2 is still read: GREEN with --require-red-run, saying it has no pin; a re
     assert.equal(r.code, 0, r.out);
     assert.match(r.out, /no test-infrastructure pin \(ac-tests-lock\/2\)/);
     writeLockJson(root, { ...lock, schema: "ac-tests-lock/2", test_infra: null });
-    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    const rec = cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/x"]);
     assert.equal(rec.code, 2, rec.out);
     assert.match(rec.out, /ac-tests-lock\/2 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock/);
     writeLockJson(root, { ...lock, test_infra: null });
@@ -767,7 +767,7 @@ test("6.31.0 MIGRATION — a /3 lock is still read: GREEN over a tree with nothi
     assert.equal(g.code, 0, g.out);
     assert.match(g.out, /the test-infrastructure pin holds/);
     // a red run is recorded on a current-schema lock only (re-running --write is cheap there)
-    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    const rec = cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/x"]);
     assert.equal(rec.code, 2, rec.out);
     assert.match(rec.out, /ac-tests-lock\/3 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock — re-run --write/);
     // closed per schema: a /4-shaped pin under /3, and a /3-shaped one under /4, are unusable, never a verdict
@@ -858,7 +858,7 @@ test("6.36.0 MIGRATION — a /4 lock is still read: GREEN with no declaration, R
         "RED — test infrastructure unpinned — pharn.config.json gates.exclude: e2e — the project excludes discovered gate(s), and a pin written before ac-tests-lock/5 does not cover the declaration",
       ]
     );
-    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    const rec = cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/x"]);
     assert.equal(rec.code, 2, rec.out);
     assert.match(rec.out, /ac-tests-lock\/4 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock — re-run --write/);
     // closed per schema: a /5-shaped pin under /4, and a /4-shaped one under /5, are unusable, never a verdict
@@ -927,7 +927,7 @@ test("6.68.0 MIGRATION — a /5 lock is still read: GREEN with no other gate, RE
     dropOtherGates(root);
     const g = cli(root, ["--check", NAME, "--require-red-run"]);
     assert.equal(g.code, 0, `no other gate: exactly as before — ${g.out}`);
-    const rec = cli(root, ["--record-red-run", NAME, "--out", ".pharn/x"]);
+    const rec = cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/x"]);
     assert.equal(rec.code, 2, rec.out);
     assert.match(rec.out, /ac-tests-lock\/5 test-first; a red run is recorded on an ac-tests-lock\/6 test-first lock — re-run --write/);
     // closed per schema: a /6-shaped pin under /5, and a /5-shaped one under /6, are unusable, never a verdict
@@ -1218,7 +1218,7 @@ test("6.21.1: --record-red-run over a lock that checks RED exits 1 and records n
   try {
     assert.equal(cli(root, ["--write", NAME]).code, 0);
     writeFileSync(join(root, FILES[0]), "edited after the lock\n");
-    const r = cli(root, ["--record-red-run", NAME, "--out", ".pharn/pharn-test/gates"]);
+    const r = cli(root, ["--record-red-run", NAME, "--out", "pharn/.run/pharn-test/gates"]);
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /^RED — tests\/ac\/one\.test\.js changed since the lock was written$/m);
     assert.equal(lockOf(root).red_run, null, "nothing recorded");

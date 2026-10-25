@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.75.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.0.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -197,8 +197,8 @@ normal install adds:
 - product commands in `.claude/commands/`,
 - hooks in `.claude/hooks/`: the two write guards, the scope setter they read, and a `Stop` guard for
   `/pharn-loop` (see below),
-- the four trusted docs — `pharn/CONSTITUTION.md` and `pharn/ARCHITECTURE.md`, plus `THREAT-MODEL.md` and
-  `LIMITS.md` at the root,
+- the four trusted docs — `pharn/CONSTITUTION.md` and `pharn/ARCHITECTURE.md`, plus `pharn/THREAT-MODEL.md` and
+  `pharn/LIMITS.md`,
 - the deterministic floor, contracts, grillers, and review lenses under `pharn/`,
 - `pharn.config.json`, pinning the skills version and exact installed commit, and carrying the
   `models.stages` block that sets each product command's model and effort — and, since 6.27.0, the model
@@ -212,20 +212,35 @@ your-repo/
 │   ├── hooks/*.cjs                # the write guards, their setter, the /pharn-loop Stop guard
 │   └── settings.json              # wires the hooks (see the caveat below)
 ├── pharn/
-│   ├── CONSTITUTION.md            # trusted docs (human-only)
+│   ├── CONSTITUTION.md            # the four trusted docs (human-only)
 │   ├── ARCHITECTURE.md
+│   ├── THREAT-MODEL.md
+│   ├── LIMITS.md
 │   ├── floor/*.mjs                # the deterministic checkers
 │   ├── pharn-contracts/           # artifact shapes
 │   ├── pharn-pipeline/grillers/   # plan interrogators
 │   ├── pharn-review/              # code lenses
-│   └── features/<name>/           # per increment, written as you run the pipeline — commit these:
-│                                  # SPEC PLAN GRILL AC-TESTS (+ .lock.json) BUILD REGRESSION VERIFY, then SHIP + BRIEFING
-│                                  # (/pharn-ship) or LOOP (/pharn-loop), and RUN-REPORT + cost.json
-├── THREAT-MODEL.md                # the other two trusted docs
-├── LIMITS.md
-├── pharn.config.json              # skills version + installed commit + models.stages
-└── .pharn/                        # runtime scratch — add to .gitignore
+│   ├── memory-bank/               # your promoted lessons and patterns (/pharn-memory-promote) — commit these
+│   ├── spec-template.md           # optional: your own SPEC template, edited by hand
+│   ├── features/<name>/           # per increment, written as you run the pipeline — commit these:
+│   │                              # SPEC PLAN GRILL AC-TESTS (+ .lock.json) BUILD REGRESSION VERIFY, then SHIP + BRIEFING
+│   │                              # (/pharn-ship) or LOOP (/pharn-loop), and RUN-REPORT + cost.json
+│   ├── .run/                      # runtime scratch — gitignore it
+│   └── .backup/                   # pharn-cli's backups from `pharn update` — gitignore it
+└── pharn.config.json              # skills version + installed commit + models.stages
 ```
+
+Add these three lines to your `.gitignore`. The middle one is pharn-cli's lock file:
+
+```gitignore
+pharn/.run/
+pharn/.lock*
+pharn/.backup/
+```
+
+Reconcile exempts runtime scratch only through git-ignore. Without the first line, every `/pharn-verify` reports
+`pharn/.run/**` as changed paths. Before 7.0.0 the scratch lived at `.pharn/`, and `memory-bank/`, the SPEC template
+and two of the trusted docs sat at the project root (migration: CHANGELOG [7.0.0]).
 
 The hooks enforce only after they are registered in Claude Code's settings — `.claude/settings.json`, or
 `.claude/settings.local.json`, which is loaded too and can wire or override the same hooks. If your
@@ -252,7 +267,7 @@ error, and **both guards are then silently off**. That was the shipped form unti
 measured, not theorised. Upgrading an older install is ordered: run `pharn update` first, then change
 these two commands — the anchored wiring over pre-`6.1.0` hooks regresses both guards, so roll back in the
 reverse order. Each guard judges the git working tree that contains Claude's current directory;
-[`LIMITS.md` §7](./LIMITS.md) states the bounds that remain.
+[`pharn/LIMITS.md` §7](./pharn/LIMITS.md) states the bounds that remain.
 
 ---
 
@@ -274,7 +289,7 @@ two are standalone: neither is a pipeline stage, and neither is invoked by `/pha
 | `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                                                                                                    |
 | `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                                                                                                 |
 | `/pharn-verify`         | Check build artifacts and completeness signals, including declared concrete paths that were never created, and that every acceptance criterion's locked, once-red test passed.                                                                             |
-| `/pharn-memory-promote` | Promote one lesson into `memory-bank/` through a gated provenance check.                                                                                                                                                                                   |
+| `/pharn-memory-promote` | Promote one lesson into `pharn/memory-bank/` through a gated provenance check.                                                                                                                                                                             |
 
 The command names are generated and drift-guarded in the [inventory below](#pharn-builds-pharn); the
 one-line descriptions in this table are hand-written and are not.
@@ -301,7 +316,7 @@ judgment is **advisory**.
   mean the code is correct.
 
 What PHARN does not do today is in [Current limitations](./docs/limitations.md#current-limitations); the full set of
-bounds is in [`LIMITS.md`](./LIMITS.md).
+bounds is in [`pharn/LIMITS.md`](./pharn/LIMITS.md).
 
 ---
 
@@ -354,8 +369,8 @@ The architecture is specified in four documents:
 1. [`pharn/CONSTITUTION.md`](./pharn/CONSTITUTION.md) — the principles that govern commands, rules,
    guarantees, and PHARN's own development process.
 2. [`pharn/ARCHITECTURE.md`](./pharn/ARCHITECTURE.md) — the floor, primitives, layer tree, and pipeline.
-3. [`THREAT-MODEL.md`](./THREAT-MODEL.md) — the security foundation and attack surface.
-4. [`LIMITS.md`](./LIMITS.md) — what PHARN does **not** guarantee.
+3. [`pharn/THREAT-MODEL.md`](./pharn/THREAT-MODEL.md) — the security foundation and attack surface.
+4. [`pharn/LIMITS.md`](./pharn/LIMITS.md) — what PHARN does **not** guarantee.
 
 These trusted docs are protected from edits through Claude Code's Write/Edit/MultiEdit/NotebookEdit tool
 surface. Bash writes are outside that protection (see [Current limitations](./docs/limitations.md#current-limitations)). All

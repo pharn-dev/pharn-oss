@@ -2,7 +2,7 @@
 
 What PHARN does not do today, and the bounds of what it does. This text moved here unchanged from the root
 [`README.md`](../README.md) in 6.65.3, apart from re-based links and the two phrases that pointed at the README's own
-layout; the full set of bounds is in [`LIMITS.md`](../LIMITS.md), and the guarantees these bounds qualify are in
+layout; the full set of bounds is in [`pharn/LIMITS.md`](../pharn/LIMITS.md), and the guarantees these bounds qualify are in
 [`guarantees.md`](guarantees.md).
 
 ## Current limitations
@@ -31,7 +31,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   escape — a formatter, a generator, a script, a mistake, which is the whole population of failures it
   was built for. **Deleting** its state is loud (a missing baseline is `INCONCLUSIVE` at verify) and the
   always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
-  `.dev/floor/*`, the four trusted docs, `CODEOWNERS`, `pharn.spec-template.md` and memory-bank canon,
+  `.dev/floor/*`, the four trusted docs, `CODEOWNERS`, `pharn/spec-template.md` and memory-bank canon,
   including a file added there) is anchored in committed blob ids rather than the baseline, so that half
   resists a determined writer — but **forging** an ordinary path's entry does not. The cost: an uncommitted
   human edit of a trusted doc reads as an escape too, so commit it before running the gates. Two further bounds, stated
@@ -52,18 +52,18 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `.dev/features/**` and `pharn/pharn-*/**`) — exactly as before. In an **installed** project
   (`pharn.config.json` carries a non-empty `skillsVersion`), that same narrow default now applies **only
   while a `/pharn-ship`, `/pharn-loop` or `/pharn-review` run is open** — a marker file under
-  `.pharn/<command>/<name>/active.json`, fresh within 24 h. **Outside an open run, the guard instead denies
+  `pharn/.run/<command>/<name>/active.json`, fresh within 24 h. **Outside an open run, the guard instead denies
   PHARN's own installed surface** — `pharn/**` except `pharn/features/**`, `.claude/**` and
-  `pharn.config.json`, matched case-folded — plus its own input `.pharn/writes-scope.json`, and allows
+  `pharn.config.json`, matched case-folded — plus its own input `pharn/.run/writes-scope.json`, and allows
   every other path inside the project, **including your ordinary source** (`src/app.ts`, `package.json`,
   `README.md`). That includes files Claude Code loads at session start — the project's `CLAUDE.md`,
   `AGENTS.md`, `.mcp.json` — so a write made outside a run can shape later runs. Outside a run a path
   containing a backslash is denied too, because on macOS and Linux a backslash is part of a file name and
-  the guards' path folding could otherwise judge a different file than the one written. `.pharn/**` stays
+  the guards' path folding could otherwise judge a different file than the one written. `pharn/.run/**` stays
   writable in every posture, as before — it is the gitignored
   runtime-state directory the guard bootstraps from, composed into the allow-list unconditionally, so it
   stays writable **even under a set scope**; one path inside it is still denied by name:
-  `.pharn/writes-scope.json`. **Outside the project** the permissive default allows only three places, each
+  `pharn/.run/writes-scope.json`. **Outside the project** the permissive default allows only three places, each
   narrowed to this project and this session in 6.31.1: **this project's auto-memory folder**
   (`<claude-config-dir>/projects/<key>/memory/**`, where the config dir is `$CLAUDE_CONFIG_DIR` or
   `~/.claude`, for the key of the folder that holds this session's transcript and the key Claude Code derives
@@ -85,31 +85,31 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   trusted docs, `CODEOWNERS`, the guards' own control surface, your SPEC template) in every posture,
   regardless of any scope — and since 6.31.1 it also judges the file a write actually reaches, so a symlink
   whose name holds a backslash no longer carries a write to one of them past it. A
-  **malformed** `.pharn/writes-scope.json` now denies **every** write in an installed project, rather than
+  **malformed** `pharn/.run/writes-scope.json` now denies **every** write in an installed project, rather than
   falling back to a default. The markers are written and removed through **Bash**: `/pharn-ship`,
   `/pharn-review` and `/pharn-loop` stop when opening theirs fails (the loop also when its pre-run snapshot
   does), but a run that skips the step leaves the install unguarded
-  between stages, anything other than a directory at a run-state path (`.pharn/pharn-review`, say) holds the
+  between stages, anything other than a directory at a run-state path (`pharn/.run/pharn-review`, say) holds the
   narrow default until someone removes it, and a crashed run's leftover marker holds the
   narrow default for up to 24 h unless it is closed or ages out. Clearing the scope
-  (`set-writes-scope.cjs --clear`, or deleting `.pharn/writes-scope.json`) returns to whichever default the
+  (`set-writes-scope.cjs --clear`, or deleting `pharn/.run/writes-scope.json`) returns to whichever default the
   tree and the open-run state compute; it does **not** by itself re-open your source in the dev/unsignalled
   postures, or during an open install run. To write elsewhere, either set a scope that names those paths
   (`set-writes-scope.cjs --from-plan <PLAN.md>`) — noting that a set scope **replaces** the default rather
   than adding to it — or leave `enforce-writes-scope.cjs` out of `.claude/settings.json`, at the cost of
   `writes:` enforcement.
 - **The memory-bank denylist covers the write-tool surface only — Bash still reaches canon.**
-  `THREAT-MODEL.md` treats memory-bank poisoning as the worst persistence vector. As of `3.1.1`
+  `pharn/THREAT-MODEL.md` treats memory-bank poisoning as the worst persistence vector. As of `3.1.1`
   `.claude/hooks/protect-trusted-paths.cjs` **does** deny `Write`/`Edit`/`MultiEdit`/`NotebookEdit` to
-  `memory-bank/**` and `.dev/memory-bank/**`, and the escape is the writes-scope record's **origin**
+  `pharn/memory-bank/**` and `.dev/memory-bank/**`, and the escape is the writes-scope record's **origin**
   (`set_by`), which `set-writes-scope.cjs` writes from its own **argv** — so **no `writes:` declaration
   and no `PLAN.md` `## Files` entry can grant itself a canon write.** That closes the reported vector: a
-  `## Files` entry naming `memory-bank/lessons-learned.md` is now denied rather than silently allowed.
+  `## Files` entry naming `pharn/memory-bank/lessons-learned.md` is now denied rather than silently allowed.
   **What it does NOT close:** `PreToolUse` hooks never see **Bash**, so an agent holding Bash can still
   append to canon, run the setter with promote-shaped argv, or forge the scope record. No mechanism
   without that hole was found and none is claimed. So "canon cannot be written" stays **struck** — what
   changed is that on the guarded tool surface a canon write now costs a separate, explicit
-  act that a build plan cannot cause. Keep reviewing `memory-bank/**` in diffs like any other file.
+  act that a build plan cannot cause. Keep reviewing `pharn/memory-bank/**` in diffs like any other file.
 - **Model judgment remains model judgment.** Architecture quality, review correctness, severity,
   completeness of intent, and semantic correctness are advisory unless a specific deterministic checker
   covers the claim.
@@ -122,7 +122,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   does not claim to eliminate prompt injection. That includes skills you install yourself: a
   `.claude/skills/<name>/SKILL.md` reaches product stages as untrusted context, and a hostile one can talk a
   lens out of reporting a real finding, which then never reaches you. That is only partly bounded;
-  `THREAT-MODEL.md` §2 (item 8) and §5 state it in full. Since 6.47.0 a stage reads a body-free catalogue of
+  `pharn/THREAT-MODEL.md` §2 (item 8) and §5 state it in full. Since 6.47.0 a stage reads a body-free catalogue of
   your skills and then only the bodies it judges relevant, plus every skill whose metadata it cannot read
   cleanly. That choice is advisory: a skill with a misleading description can be skipped. A skill reached through
   a `.claude` symlink that leaves the project is not read at all.
@@ -142,7 +142,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   model id) run on the session's model, the model of the session running the orchestrator, and the run says
   why. Effort is not routed. A green checker means two files agree, and a route records what was REQUESTED:
   `cost.json` shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
-  platform veto, and what deleting the block costs — are stated once, in [`LIMITS.md`](../LIMITS.md) § 8.
+  platform veto, and what deleting the block costs — are stated once, in [`pharn/LIMITS.md`](../pharn/LIMITS.md) § 8.
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans the applicable lenses out to parallel subagents, one per lens family; `/pharn-loop` repeats
   build → regress → verify up to the cap, unattended — each pass runs your suite at HEAD and the verify gates,
@@ -165,5 +165,5 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
   currently fetches the repository's `main` and records the exact installed commit.
 
-[`LIMITS.md`](../LIMITS.md) documents what PHARN does not guarantee.
-[`THREAT-MODEL.md`](../THREAT-MODEL.md) documents the attack surface and trust assumptions.
+[`pharn/LIMITS.md`](../pharn/LIMITS.md) documents what PHARN does not guarantee.
+[`pharn/THREAT-MODEL.md`](../pharn/THREAT-MODEL.md) documents the attack surface and trust assumptions.

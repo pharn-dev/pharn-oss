@@ -8,7 +8,7 @@
 // ================================ WHERE IT LIVES, AND WHO CAN WRITE IT ================================
 // `<git rev-parse --absolute-git-dir>/pharn-regress-head-offer.json` (OFFER_BASENAME), resolved through
 // regress-base-reuse.mjs `gitDirFile` — the BASE-reuse record's own resolver and reasoning (L65). The HEAD stamp itself
-// sits in `.pharn/pharn-regress/head/`, which the write tools can ALWAYS write, so a stamp alone — planted by a build
+// sits in `pharn/.run/pharn-regress/head/`, which the write tools can ALWAYS write, so a stamp alone — planted by a build
 // under `--quick`, where no regress runs — must never be offered. The git dir is out of the write tools' reach in the
 // layouts the ★ HOOK test probes: a main checkout (`protect-trusted-paths.cjs` denies a `.git` segment) and a linked
 // worktree (`enforce-writes-scope.cjs` denies a path inside another git tree, in every posture). NOT in every layout
@@ -23,8 +23,8 @@
 // finalized it PUBLISHES one for the run whose marker it sees — none without exactly one open /pharn-loop or /pharn-ship
 // marker. /pharn-verify only reads. A resumed regress re-publishes the same bytes (its drain is an idempotent repeat).
 //
-// WHAT REMAINS WRITABLE, stated (P0): a Bash writer reaches the git dir and `.pharn/` alike (L19) and can forge the offer
-// and the stamp together; nothing detects it. The markers are in `.pharn/`, so restoring an earlier run's marker bytes
+// WHAT REMAINS WRITABLE, stated (P0): a Bash writer reaches the git dir and `pharn/.run/` alike (L19) and can forge the offer
+// and the stamp together; nothing detects it. The markers are in `pharn/.run/`, so restoring an earlier run's marker bytes
 // re-binds that run's offer. A write-tool edit of the stamp or its logs after publication reads as a miss.
 //
 // NEVER A NEW FAILURE MODE: publishing and discarding RETURN a failure, never throw. A discard that could not remove a

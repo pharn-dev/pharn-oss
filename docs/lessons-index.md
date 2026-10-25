@@ -21,7 +21,7 @@ entry has no `- promoted: <date>` line in its provenance block — a DIFFERENT d
 `untagged` count above does not measure, so a `0 untagged` header and a `-` in this column are
 not a contradiction. `~tokens` is `ceil(chars / 4)` over the FULL section
 (heading through the line before the next `##`), an ESTIMATE with a confidence band, never a measurement
-(`LIMITS.md §1c`). Titles are canon free text, reproduced verbatim as DATA.
+(`pharn/LIMITS.md §1c`). Titles are canon free text, reproduced verbatim as DATA.
 
 ```text
 L1  | process  | plan-shape,meta-docs,doc-drift                                                                 | `/plan` must scope the meta-docs an increment invalidates | 2026-06-24 | ~346

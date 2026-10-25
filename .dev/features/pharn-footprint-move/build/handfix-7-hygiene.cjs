@@ -31,13 +31,21 @@ const perMember = (repo, dir) => (m, ind) =>
 // (a)
 edit(".dev/floor/command-hygiene.test.mjs", (s) => s.replace(LINK_RE("REPO_ROOT", "dir"), perMember("REPO_ROOT", "dir")));
 edit("pharn/floor/ship-outcome-core.test.mjs", (s) => {
-  s = once(s, `import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync } from "node:fs";`, `import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync, readdirSync } from "node:fs";`);
+  s = once(
+    s,
+    `import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync } from "node:fs";`,
+    `import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync, readdirSync } from "node:fs";`
+  );
   const t = s.replace(LINK_RE("REPO", "cwd"), perMember("REPO", "cwd"));
-  if (t.split("for (const e of readdirSync(join(REPO, \"pharn\")))").length !== 3) throw new Error("ship-outcome: expected 2 sites");
+  if (t.split('for (const e of readdirSync(join(REPO, "pharn")))').length !== 3) throw new Error("ship-outcome: expected 2 sites");
   return t;
 });
 edit("pharn/floor/stage-direct.test.mjs", (s) => {
-  s = once(s, `import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";`, `import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";`);
+  s = once(
+    s,
+    `import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";`,
+    `import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";`
+  );
   return s.replace(LINK_RE("REPO", "root"), perMember("REPO", "root"));
 });
 
@@ -46,12 +54,20 @@ edit(".dev/floor/command-hygiene.test.mjs", (s) => {
   const a = "\\\\s+memory-bank\\\\/lessons-learned\\\\.md";
   if (s.split(a).length - 1 !== 4) throw new Error(`hygiene: ${s.split(a).length - 1} double-escaped canon sites, want 4`);
   s = s.split(a).join("\\\\s+pharn\\\\/memory-bank\\\\/lessons-learned\\\\.md");
-  return once(s, `  "pharn-dev-regress.md": 22528, // 20,234 B`, `  "pharn-dev-regress.md": 25088, // 22,563 B (7.0.0: the pharn/.run/ paths lengthened it by 35 B)`);
+  return once(
+    s,
+    `  "pharn-dev-regress.md": 22528, // 20,234 B`,
+    `  "pharn-dev-regress.md": 25088, // 22,563 B (7.0.0: the pharn/.run/ paths lengthened it by 35 B)`
+  );
 });
 
 // (d)
 edit(".dev/floor/stage-load-budget.test.mjs", (s) => {
-  s = once(s, " * still matches. `pharn/features/` (the project's own artifacts) is skipped by readClosureOffenders.", " * still matches. The project's own files under `pharn/` (PROJECT_ARTIFACTS) are skipped by readClosureOffenders.");
+  s = once(
+    s,
+    " * still matches. `pharn/features/` (the project's own artifacts) is skipped by readClosureOffenders.",
+    " * still matches. The project's own files under `pharn/` (PROJECT_ARTIFACTS) are skipped by readClosureOffenders."
+  );
   s = once(
     s,
     `const PROJECT_ARTIFACTS = "pharn/features/";`,
@@ -59,5 +75,9 @@ edit(".dev/floor/stage-load-budget.test.mjs", (s) => {
 // (pharn-footprint-move: canon, runtime scratch and the project SPEC template moved under pharn/).
 const PROJECT_ARTIFACTS = Object.freeze(["pharn/features/", "pharn/memory-bank/", "pharn/.run/", "pharn/spec-template.md"]);`
   );
-  return once(s, `    if (path.startsWith(PROJECT_ARTIFACTS) || set.has(path)) continue;`, `    if (PROJECT_ARTIFACTS.some((p) => path.startsWith(p)) || set.has(path)) continue;`);
+  return once(
+    s,
+    `    if (path.startsWith(PROJECT_ARTIFACTS) || set.has(path)) continue;`,
+    `    if (PROJECT_ARTIFACTS.some((p) => path.startsWith(p)) || set.has(path)) continue;`
+  );
 });

@@ -5,7 +5,7 @@ purpose: "Eval fixture (DUPLICATED-LOGIC): CODE with two functions whose bodies 
 
 # Eval case — duplicated-function (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The two function bodies below are byte-identical; the scanner detects the block.
 
 ```js

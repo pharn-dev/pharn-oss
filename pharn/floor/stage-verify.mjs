@@ -23,7 +23,7 @@
 // fresh → chain → pairs → verifiers → init → drain → verdict → render (`stage-verify-core.mjs` PHASES, the one owner
 // of the order). Every refusal and the one question are raised before "drain", the first slow step.
 //   fresh    — the slug; the `lstat` containment walk; then THIS feature's earlier `verify-report.json` and
-//              `VERIFY.md` are removed and `.pharn/pharn-verify/` is cleared, the progress record first. ONLY
+//              `VERIFY.md` are removed and `pharn/.run/pharn-verify/` is cleared, the progress record first. ONLY
 //              `ENOENT` counts as absence (GRILL G2): any other removal error propagates — a crash, never a verdict
 //              — so no refusal and no `unusable` can follow a removal that failed. The rest of argv is validated
 //              AFTER the clear, so a `usage-error` there cannot leave an earlier run's progress record beside a
@@ -58,7 +58,7 @@
 // verdict call, the composition, the render and the writes). With no `--budget-ms` nothing is budgeted.
 //
 // ==================================== RESUME ====================================
-// `--resume` accepts only `--budget-ms` and reads everything else from `.pharn/pharn-verify/stage.json`
+// `--resume` accepts only `--budget-ms` and reads everything else from `pharn/.run/pharn-verify/stage.json`
 // (`pharn-stage-verify-progress/1`). It walks containment before anything is written. A resume re-derives the
 // verdict from the same durable stamp; over an UNCHANGED tree it reproduces the interrupted run's report, but the
 // verdict also reads live files the AC gate needs (the lock, the SPEC, the mapping), so after the tree moved it may
@@ -149,7 +149,7 @@ const RUN_GATES = join(HERE, "run-gates.mjs");
 const CHECK_VERIFY = join(HERE, "check-verify.mjs");
 
 const FEATURES_DIR = "pharn/features";
-const STATE_ROOT = ".pharn";
+const STATE_ROOT = "pharn/.run"; // walked from the project root, so both segments are lstat'ed
 const STAMP = `${VERIFY_PATHS.gates}/stamp.json`;
 const COMPLETENESS = `${VERIFY_PATHS.gates}/completeness.json`;
 
@@ -180,7 +180,7 @@ function featureDir(feature) {
 }
 
 /** ------------------------------------------------------------------------------------------------
- *  CONTAINMENT (L54) — the walk is `stage-runtime.mjs`'s; THIS stage's paths are `.pharn`, `.pharn/pharn-verify`
+ *  CONTAINMENT (L54) — the walk is `stage-runtime.mjs`'s; THIS stage's paths are `pharn/.run`, `pharn/.run/pharn-verify`
  *  and the feature directory. `feature` null walks the first two only (a `--resume` before its record is read).
  *  ---------------------------------------------------------------------------------------------- */
 function containmentGuard(feature) {
@@ -530,7 +530,7 @@ function runResume(args) {
   const budget = parseBudgetMs(args); // a trailing `--budget-ms` with no value is refused here (M7b)
   if (!budget.ok) emitUnusable(null, "usage-error", budget.detail);
 
-  containmentGuard(null); // `.pharn` and `.pharn/pharn-verify` before the record is read (A4)
+  containmentGuard(null); // `pharn/.run` and `pharn/.run/pharn-verify` before the record is read (A4)
   let raw;
   try {
     raw = readFileSync(VERIFY_PATHS.stageJson, "utf8");

@@ -14,7 +14,7 @@
 // THE BASE (GATE 1 decision D1). `--base <ref>` names it (a commit, resolved with `git rev-parse --verify`). The gate
 // passes `--base-rule` instead, which applies the non-interactive branches of /pharn-regress's BASE_RULE
 // (`stage-regress-core.mjs` `resolveBaseSource`, the one owner of the decision): a dirty working tree (any porcelain
-// path outside `.pharn/`) → HEAD; else `git merge-base HEAD origin/main`; else INCONCLUSIVE `base-unresolved`, because
+// path outside `pharn/.run/`) → HEAD; else `git merge-base HEAD origin/main`; else INCONCLUSIVE `base-unresolved`, because
 // a gate cannot ask. Inside /pharn-ship and /pharn-loop the build is uncommitted at verify, so the tree is dirty and the
 // base is the commit those runs started from. BOUND (`instruction-growth-base-binding`): with a dirty tree only the
 // UNCOMMITTED growth is measured, so growth committed before verify — by the build through Bash, by a person between
@@ -217,7 +217,9 @@ export function baseTree(root, sha, rootAbs, prefix = "") {
 /** ------------------------------------------------------------------------------------------------
  *  The base commit: `{sha, source}`.
  *  ---------------------------------------------------------------------------------------------- */
-/** Dirty = any porcelain path outside the project's `.pharn/` state root. Porcelain paths are repo-relative, so the
+/** BOUND (7.0.0): when `pharn/` holds no tracked file, git reports an untracked scratch root as `pharn/` itself, which
+ *  reads dirty — the safe direction (HEAD as the base). Every install tracks files under `pharn/`. */
+/** Dirty = any porcelain path outside the project's `pharn/.run/` state root. Porcelain paths are repo-relative, so the
  *  project prefix is stripped before the state-root test. A rename or copy is dirty when EITHER of its two paths is
  *  outside the state root — as stage-regress.mjs reads the whole `old -> new` line (GATE 2 review). */
 function porcelainDirty(root, prefix) {

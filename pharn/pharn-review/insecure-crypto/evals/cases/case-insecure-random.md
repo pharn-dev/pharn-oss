@@ -5,7 +5,7 @@ purpose: "Eval fixture (MIXED FILE): CODE calls the non-crypto RNG twice — onc
 
 # Eval case — insecure-random (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. It deliberately places both uses of the non-crypto RNG in one file, so the case exercises the
 `insecure-random` kind's **context scoping** rather than merely its presence.
 

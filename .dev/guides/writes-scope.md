@@ -4,27 +4,27 @@ Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.4
 for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
-**Read when:** before planning or editing a write guard, a hook's wiring, a writes-scope, the setter's `--allow-claude-dir` flag, or anything under `.pharn/`; and after any write is denied. The root `CLAUDE.md` section "Writes-scope (fix #7 — fail-closed)" and hard constraint 1 hold the rules; this file holds the postures, the deny bodies and the reasons.
+**Read when:** before planning or editing a write guard, a hook's wiring, a writes-scope, the setter's `--allow-claude-dir` flag, or anything under `pharn/.run/`; and after any write is denied. The root `CLAUDE.md` section "Writes-scope (fix #7 — fail-closed)" and hard constraint 1 hold the rules; this file holds the postures, the deny bodies and the reasons.
 
-## Why `.pharn/writes-scope.json` is guarded by protect-trusted-paths (hard constraint 1)
+## Why `pharn/.run/writes-scope.json` is guarded by protect-trusted-paths (hard constraint 1)
 
 Each hook is re-read fresh on every tool call, so a write to one would disarm that guard on the very
 next write; and the scope file is the list `enforce-writes-scope.cjs` reads to decide **every**
 write, so a Write-tool edit of it was a self-escalation — that hook guards it with one byte-exact
-compare while `ALWAYS` leaves the rest of `.pharn/` writable, so on a case-insensitive volume
-`.pharn/WRITES-SCOPE.JSON` named the same file and slipped past. It is covered **here** instead
+compare while `ALWAYS` leaves the rest of `pharn/.run/` writable, so on a case-insensitive volume
+`pharn/.run/WRITES-SCOPE.JSON` named the same file and slipped past. It is covered **here** instead
 because this hook already case-folds, strips Windows trailing dot/space, and resolves symlinks
 segment-wise, which closes the case-variant and dangling-alias vectors together;
 `enforce-writes-scope.cjs` keeps its own compare as defense in depth, and `set-writes-scope.cjs` is
 unaffected because it writes via `fs.writeFileSync`, which `PreToolUse` never sees. Deliberately the
-one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages legitimately write.
+one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch stages legitimately write.
 
 ## Fail-closed — every posture (dev, unsignalled, installed)
 
 - **Fail-closed — in a dev checkout or an unsignalled tree, always; in an installed project, only while
   PHARN is working (6.24.0).** With no scope file, a dev checkout (`.dev/floor/` present, no
   `skillsVersion`) or an unsignalled tree (neither signal) restricts writes to a default-safe-set — other
-  `.pharn/**` (not `writes-scope.json`, which is setter-only), `pharn/features/**`, `.dev/features/**`,
+  `pharn/.run/**` (not `writes-scope.json`, which is setter-only), `pharn/features/**`, `.dev/features/**`,
   `pharn/pharn-*/**` (the dev-repo extras — matches the relocated module dirs but **not** `pharn/floor/` or
   the `pharn/` trusted docs) — exactly as before; `.dev/memory-bank/**`, `.dev/floor/**`, `pharn/floor/**`,
   `.claude/**`, and root files stay **denied** until an explicit `writes:` declaration names them. Outside the
@@ -37,7 +37,7 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   open** (see the run-marker bullet below); **outside an open run it instead denies PHARN's own installed
   surface** — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json` (matched
   case-folded; the `pharn/features/` exception is matched as WRITTEN, so a case or trailing-dot variant of it
-  is denied — GATE-2 review, B2) — plus `.pharn/writes-scope.json` itself and, on a `/` system, any path
+  is denied — GATE-2 review, B2) — plus `pharn/.run/writes-scope.json` itself and, on a `/` system, any path
   containing a backslash (there a backslash is part of a file NAME, while the reserved-path fold reads it as
   a separator — a deny list must not guess), and allows every other in-project path, including your ordinary
   source and the files Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`).
@@ -59,10 +59,10 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   every other out-of-project path (another project's memory, dotfiles, `~/.ssh`, `~/.claude/settings*.json`,
   `~/.claude.json`, `~/.claude/hooks/`) stays denied, as every one was before 6.24.0 — "another project" meaning
   another KEY: two paths that differ only in characters outside `[A-Za-z0-9]` share one key and, in Claude Code
-  too, one memory folder (`LIMITS.md §7`). A **malformed** `.pharn/writes-scope.json` (present, or not confirmable as absent, but not a readable
+  too, one memory folder (`pharn/LIMITS.md §7`). A **malformed** `pharn/.run/writes-scope.json` (present, or not confirmable as absent, but not a readable
   regular file whose JSON is a plain object with an array `scope`) denies **every** write in an installed
-  project, `.pharn/**` included, rather than falling back to either default. A **set** scope is authoritative
-  in **every** posture — it replaces whichever default is live for non-`.pharn` zones — so
+  project, `pharn/.run/**` included, rather than falling back to either default. A **set** scope is authoritative
+  in **every** posture — it replaces whichever default is live for non-`pharn/.run` zones — so
   `writes: [".dev/memory-bank/lessons-learned.md"]` unlocks exactly that file.
 
 ## Every write is judged at every target it can reach
@@ -83,10 +83,10 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
 ## A PHARN run keeps the fail-closed default standing (installed projects)
 
 - **A PHARN run, in an installed project, is what keeps the fail-closed default standing (6.24.0).** A
-  run is open while `.pharn/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (`lstat`,
+  run is open while `pharn/.run/<pharn-loop|pharn-review|pharn-ship>/<name>/active.json` exists (`lstat`,
   never followed — a torn file, a directory or a dangling link still counts) with a modification time
   within 24 h of now in either direction, or while one of those three state directories is present but is
-  not a readable directory — a FILE planted there (the Write tool can plant one; `.pharn/**` is always
+  not a readable directory — a FILE planted there (the Write tool can plant one; `pharn/.run/**` is always
   writable) counts as a run open, fail-closed, until someone removes it (GATE-2 review, S1). A stray
   non-directory ENTRY inside a real state directory (a `.DS_Store`) is not a run. The guard never parses a
   marker — presence and age only. `/pharn-ship` and `/pharn-review` open and close theirs with
@@ -113,7 +113,7 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   repo's scope record, and a session inside a worktree is judged — and protected — as that worktree. The
   wiring in `.claude/settings.json` anchors both guards on `${CLAUDE_PROJECT_DIR}` for the same reason:
   with the old relative command they did not **start** at all from a subdirectory (exit 1, which Claude
-  Code treats as non-blocking — both guards silently off). `LIMITS.md §7` carries the bounds.
+  Code treats as non-blocking — both guards silently off). `pharn/LIMITS.md §7` carries the bounds.
 
 ## When a write is blocked — the five deny bodies
 
@@ -157,7 +157,7 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
     never a stale-scope/stale-run bullet (there is neither). Its **backslash** variant (same posture, a path
     containing `\` on a `/` system) says why the guard refuses to guess and offers only "spell it with `/`"
     or a human write;
-  - **malformed** (NEW, 6.24.0) — an installed project whose `.pharn/writes-scope.json` exists but is not a
+  - **malformed** (NEW, 6.24.0) — an installed project whose `pharn/.run/writes-scope.json` exists but is not a
     readable file with a plain-object, array-`scope` shape: release it (`--clear`) or let the running
     command's own first step replace it with a usable one — declaring the path in `writes:` alone does not
     help until the record itself is replaced.
@@ -186,7 +186,7 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
     `skillsVersion`) and an unsignalled tree are unchanged, so `/pharn-dev-build` scopes `pharn/floor/**` as before.
   - **A promotion-origin scope while a `/pharn-loop` run is open.** `protect-trusted-paths.cjs` unlocks a canon
     write for a record whose `set_by` folds to a promote command, and `set_by` is the setter's argv. While
-    `.pharn/pharn-loop/<name>/active.json` is present and under 24 h old (enforce's `scanRuns()` test, read-only;
+    `pharn/.run/pharn-loop/<name>/active.json` is present and under 24 h old (enforce's `scanRuns()` test, read-only;
     an unreadable state dir counts as open), that origin is refused in every mode — the message names each marker
     and its `require-loop-record.cjs --close <name>`.
   - **Fenced code in `## Files`.** Fenced lines are never the heading, an item, a heading break or a cue. The
@@ -213,27 +213,27 @@ one file, **not** `.pharn/**` — the rest is disposable runtime scratch stages 
   a write reaches when it is not in the scope. The dev checkout is unaffected (no `skillsVersion`), so dev plans
   still scope `.github/workflows/*.yml`.
 
-## What under `.pharn/` is load-bearing
+## What under `pharn/.run/` is load-bearing
 
-- **What under `.pharn/` is LOAD-BEARING, and what is disposable — because they sit side by side.**
+- **What under `pharn/.run/` is LOAD-BEARING, and what is disposable — because they sit side by side.**
   Exactly three kinds of entry matter, and none is obvious from the filename:
-  - **`.pharn/writes-scope.json`** — the fix #7 guard's INPUT. Its path is hard-referenced by both
-    hooks and the setter, so it **never moves**, and it is the one `.pharn/` path the write-guard
+  - **`pharn/.run/writes-scope.json`** — the fix #7 guard's INPUT. Its path is hard-referenced by both
+    hooks and the setter, so it **never moves**, and it is the one `pharn/.run/` path the write-guard
     protects by name. Deleting it is safe and means "fail-closed default" (dev/unsignalled, or an
     installed project with a run open) or "the permissive default" (an installed project outside an open
     run); editing it by hand is not.
-  - **`.pharn/pharn-loop/`, `.pharn/pharn-review/`, `.pharn/pharn-ship/`** (6.24.0) — the RUN MARKERS. **In
+  - **`pharn/.run/pharn-loop/`, `pharn/.run/pharn-review/`, `pharn/.run/pharn-ship/`** (6.24.0) — the RUN MARKERS. **In
     this dev repo the guard never reads them** (dev posture is unaffected by any run state), but in an
     **installed** project a fresh marker under one of these three is what holds the fail-closed default
     standing instead of the newer permissive one. Deleting one early releases that hold; deleting one that
     belongs to a run you are executing removes the guard that run depends on.
-  - **`.pharn/lessons-index.md`** — the PRODUCT lessons-index CACHE. Disposable by design (deleting it
+  - **`pharn/.run/lessons-index.md`** — the PRODUCT lessons-index CACHE. Disposable by design (deleting it
     yields `COLD`, which is GREEN), but deleting it to clear scratch costs a regeneration, which is why
-    "just delete `.pharn/`" is the wrong reflex.
-- **Everything else under `.pharn/` is per-command scratch, and belongs under `.pharn/<command>/`** —
-  the shape `/pharn-dev-regress` and `/pharn-dev-verify` already use (`.pharn/pharn-dev-regress/*.json`).
-  A stage writing ad-hoc files at the `.pharn/` ROOT is the thing to avoid: it puts throwaway logs and
+    "just delete `pharn/.run/`" is the wrong reflex.
+- **Everything else under `pharn/.run/` is per-command scratch, and belongs under `pharn/.run/<command>/`** —
+  the shape `/pharn-dev-regress` and `/pharn-dev-verify` already use (`pharn/.run/pharn-dev-regress/*.json`).
+  A stage writing ad-hoc files at the `pharn/.run/` ROOT is the thing to avoid: it puts throwaway logs and
   captures in the same flat namespace as the two load-bearing entries above, so a human clearing scratch
   cannot tell them apart. **ADVISORY (P0):** no checker enforces the namespace and none is added — this
   is a convention a human and a command author follow, not a floor guarantee. Clearing scratch means
-  removing `.pharn/<command>/` directories, never `rm -rf .pharn/`.
+  removing `pharn/.run/<command>/` directories, never `rm -rf pharn/.run/`.

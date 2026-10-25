@@ -1,3 +1,5 @@
+/* eslint-disable -- BUILD RECORD: the script that produced pharn-footprint-move, replayed against a scratch copy (see
+   PLAN.md "Revision 3"); it is never run in this tree, and the new-tests/ files are fragments appended to the hook suites. */
 // handfix-9: the full-suite fallout, second round.
 //  (A) GENERIC, floor test files only: the scratch root gained a parent, so a fixture that creates `pharn/.run`
 //      non-recursively, or plants a file/link AT `pharn/.run`, needs `pharn/` first.
@@ -20,7 +22,10 @@ function ed(f, pairs) {
 }
 
 // ── (A) ──
-const testFiles = [...fs.readdirSync("pharn/floor").map((f) => `pharn/floor/${f}`), ...fs.readdirSync(".dev/floor").map((f) => `.dev/floor/${f}`)].filter((f) => /\.test\.mjs$/.test(f));
+const testFiles = [
+  ...fs.readdirSync("pharn/floor").map((f) => `pharn/floor/${f}`),
+  ...fs.readdirSync(".dev/floor").map((f) => `.dev/floor/${f}`),
+].filter((f) => /\.test\.mjs$/.test(f));
 const V = "([\\w.]+)";
 const NONREC = new RegExp(`mkdirSync\\(join\\(${V}, "pharn", "\\.run"\\)\\)`, "g");
 const AT_WRITE = new RegExp(`^( *)(fs\\.)?writeFileSync\\(join\\(${V}, "pharn", "\\.run"\\), `, "gm");
@@ -46,16 +51,25 @@ if (changedA === 0) throw new Error("(A) changed nothing");
 // ── (B) ──
 ed("README.md", [["img.shields.io/badge/pharn-6.75.0-blue", "img.shields.io/badge/pharn-7.0.0-blue"]]);
 ed("pharn/floor/apply-plan-deletions.test.mjs", [
-  ['["control-path", "- `limits.md` (delete) — case-folded", "- `limits.txt` (delete) — ordinary"],', '["control-path", "- `pharn/limits.md` (delete) — case-folded", "- `pharn/limits.txt` (delete) — ordinary"],'],
+  [
+    '["control-path", "- `limits.md` (delete) — case-folded", "- `limits.txt` (delete) — ordinary"],',
+    '["control-path", "- `pharn/limits.md` (delete) — case-folded", "- `pharn/limits.txt` (delete) — ordinary"],',
+  ],
   ['["LIMITſ.md", "pharn/LIMITS.md", "control-path"],', '["pharn/LIMITſ.md", "pharn/LIMITS.md", "control-path"],'],
   ["spelling-only refusal let `LIMITſ.md` delete pharn/LIMITS.md.", "spelling-only refusal let `pharn/LIMITſ.md` delete pharn/LIMITS.md."],
   ["(there `LIMITſ.md` simply names another file)", "(there `pharn/LIMITſ.md` simply names another file)"],
 ]);
 ed("pharn/floor/check-bash-reconcile.test.mjs", [
-  ['assert.deepEqual([...r.json.merged].sort(), ["pharn/LIMITS.md", "dep.json", "pharn/floor/new.mjs"]);', 'assert.deepEqual([...r.json.merged].sort(), ["dep.json", "pharn/LIMITS.md", "pharn/floor/new.mjs"]);'],
+  [
+    'assert.deepEqual([...r.json.merged].sort(), ["pharn/LIMITS.md", "dep.json", "pharn/floor/new.mjs"]);',
+    'assert.deepEqual([...r.json.merged].sort(), ["dep.json", "pharn/LIMITS.md", "pharn/floor/new.mjs"]);',
+  ],
 ]);
 ed("pharn/floor/check-regress.test.mjs", [
-  ['assert.deepEqual(json(r).escape_exempt.sort(), ["pharn/THREAT-MODEL.md", "pharn/ARCHITECTURE.md"]);', 'assert.deepEqual(json(r).escape_exempt.sort(), ["pharn/ARCHITECTURE.md", "pharn/THREAT-MODEL.md"]);'],
+  [
+    'assert.deepEqual(json(r).escape_exempt.sort(), ["pharn/THREAT-MODEL.md", "pharn/ARCHITECTURE.md"]);',
+    'assert.deepEqual(json(r).escape_exempt.sort(), ["pharn/ARCHITECTURE.md", "pharn/THREAT-MODEL.md"]);',
+  ],
 ]);
 ed("pharn/floor/check-instruction-files.test.mjs", [
   [
@@ -79,7 +93,9 @@ for (const f of ["pharn/floor/instruction-files.mjs", "pharn/floor/stage-regress
   fs.writeFileSync(f, t);
   console.log("ok", f);
 }
-ed("pharn/floor/reconcile-baseline.test.mjs", [["assert.match(gi, /^pharn\\/\\.run\\/\\*$/m,", "assert.match(gi, /^pharn\\/\\.run\\/\\*?$/m,"]]);
+ed("pharn/floor/reconcile-baseline.test.mjs", [
+  ["assert.match(gi, /^pharn\\/\\.run\\/\\*$/m,", "assert.match(gi, /^pharn\\/\\.run\\/\\*?$/m,"],
+]);
 ed("pharn/floor/check-spec.test.mjs", [
   [
     `    name: "a case variant PHARN.SPEC-TEMPLATE.MD sits at the root (same verdict on every filesystem)",

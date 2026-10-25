@@ -617,6 +617,28 @@ Section B: Phase B, `/pharn-dev-build`.
 - `pharn/floor/check-loop-fresh.mjs` — path rewrite, plus the hand fix where the table names it
 - `pharn/floor/regress-base-reuse-core.test.mjs` — path rewrite, plus the hand fix where the table names it
 
+- `.dev/floor/command-family.test.mjs` — added 2026-10-25 AFTER the build anchor (regress run 1, maintainer-approved fix):
+  its R8 walk skips `pharn/.run/` and `pharn/.backup/`; verify reports it as `plan-widened-after-anchor`
+
+Section C: applied by the maintainer through `apply.py` and committed in `54fe8f3a`, BEFORE the build anchor. Listed
+2026-10-25, after the apply, so `/pharn-dev-regress`'s scope check (base `7e71753c`) can see them as declared — the
+`hook-hardening-batch` precedent. This widens `## Files` after the fact: read it as data. Every path below was
+committed before the anchor, and no write tool can reach any of them (the four hooks, both settings paths and
+`CODEOWNERS` are hook-protected; the two root docs are the rename sources).
+
+- `.claude/hooks/protect-trusted-paths.cjs` — the maintainer's patch (apply.py), or a rename source it removed
+- `.claude/hooks/enforce-writes-scope.cjs` — the maintainer's patch (apply.py), or a rename source it removed
+- `.claude/hooks/set-writes-scope.cjs` — the maintainer's patch (apply.py), or a rename source it removed
+- `.claude/hooks/require-loop-record.cjs` — the maintainer's patch (apply.py), or a rename source it removed
+- `.claude/settings.json` — the maintainer's patch (apply.py), or a rename source it removed
+- `.github/CODEOWNERS` — the maintainer's patch (apply.py), or a rename source it removed
+- `pharn/CONSTITUTION.md` — the maintainer's patch (apply.py), or a rename source it removed
+- `pharn/ARCHITECTURE.md` — the maintainer's patch (apply.py), or a rename source it removed
+- `pharn/THREAT-MODEL.md` — the maintainer's patch (apply.py), or a rename source it removed
+- `pharn/LIMITS.md` — the maintainer's patch (apply.py), or a rename source it removed
+- `THREAT-MODEL.md` — the maintainer's patch (apply.py), or a rename source it removed
+- `LIMITS.md` — the maintainer's patch (apply.py), or a rename source it removed
+
 ## Human patch (Phase A, applied by the maintainer through `apply.py`; never in the agent's scope)
 
 - `.claude/hooks/enforce-writes-scope.cjs`

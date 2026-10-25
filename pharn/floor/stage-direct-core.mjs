@@ -187,11 +187,11 @@ export const MARKER_DEFERRED_CONTINUE = "marker: deferred (continue)";
 
 // ── THE IN-FLIGHT LOCK (GATE-2 review R1) ─────────────────────────────────────────────────────────────
 // ONE lock for both stages, beside (never inside) their state roots: each stage script's fresh start removes its own
-// root (`.pharn/pharn-verify/` whole; regress clears `.pharn/pharn-regress/`), so a lock there would be deleted while
+// root (`pharn/.run/pharn-verify/` whole; regress clears `pharn/.run/pharn-regress/`), so a lock there would be deleted while
 // held — and the two stages share the one writes-scope file, which is what a second concurrent call would clobber.
 
 /** The lock's directory and file, relative to the project root. */
-export const LOCK_DIR = ".pharn/stage-direct";
+export const LOCK_DIR = "pharn/.run/stage-direct";
 export const LOCK_FILE = `${LOCK_DIR}/in-flight.json`;
 
 /** The lock record's schema token. */

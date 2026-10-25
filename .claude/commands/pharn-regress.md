@@ -14,7 +14,7 @@ reads:
     "pharn/pharn-contracts/stage-exit.md",
     "<the user's target repo>",
   ]
-writes: [".pharn/pharn-regress/stage.json"]
+writes: ["pharn/.run/pharn-regress/stage.json"]
 constitution_refs: ["P0", "P2", "P3", "P4", "P5", "P6", "P7"]
 version: "0.5.1"
 ---
@@ -40,7 +40,7 @@ re-run. See `pharn/pharn-contracts/stage-exit.md` for the full protocol this sec
   2. **The spec→plan hash chain** — `pharn/floor/check-plan-spec-agree.mjs` (content-hash equality + the
      `state == Approved` enum). You are the **fourth** downstream consumer that enforces `/pharn-spec`'s pin.
   3. **The writes-scope while the script runs** — `set-writes-scope.cjs` + `enforce-writes-scope.cjs` pin
-     the fix #7 scope to `.pharn/**` alone (see "Writes-scope", below). The script's own artifact writes
+     the fix #7 scope to `pharn/.run/**` alone (see "Writes-scope", below). The script's own artifact writes
      happen through `fs`, reached via Bash, outside fix #7 (L19) — declared here, not hidden.
 - **ADVISORY — never a guarantee.** Invoking the script, reading its exit code, and relaying a `question`
   to you are **orchestration**. Only the script's own emitted stage-exit object and the checkers it shells
@@ -77,7 +77,7 @@ Load the trusted prefix and obey it:
 1. **Resolve the feature `<name>`** — the kebab-case slug of the feature just built. Ambiguous → **ask the
    human** (P5 — the terminal fallback is a question, never a guess). A `<name>` this command did not receive as
    its argument is resolved only through `pharn/floor/feature-name.mjs`: write the slug alone to
-   `.pharn/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when
+   `pharn/.run/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when
    it is the slug you wrote — a refusal or any other value → ask the human; never type one from a directory listing
    or a file's content.
 
@@ -90,14 +90,14 @@ Load the trusted prefix and obey it:
    again. A directory at that path is never removed: stop and ask the human.
 
 2. **Set the scope to the strictest one the setter can express.** `writes: []` is refused by the setter
-   (it will not emit an empty scope), so the concrete entry above — `.pharn/pharn-regress/stage.json`, the
-   script's own scratch record — is the minimum: it lies inside the hook's always-writable `.pharn/**`, so
-   the effective allow-set is `.pharn/**` alone. **While the script runs, no Write-tool write may land
-   outside `.pharn/**`** — a real, probed guarantee (`--target` is inert for a concrete entry; it satisfies
+   (it will not emit an empty scope), so the concrete entry above — `pharn/.run/pharn-regress/stage.json`, the
+   script's own scratch record — is the minimum: it lies inside the hook's always-writable `pharn/.run/**`, so
+   the effective allow-set is `pharn/.run/**` alone. **While the script runs, no Write-tool write may land
+   outside `pharn/.run/**`** — a real, probed guarantee (`--target` is inert for a concrete entry; it satisfies
    the setter's requirement that `--from-frontmatter` always carry one):
 
    ```bash
-   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-regress.md --target .pharn/pharn-regress/stage.json
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-regress.md --target pharn/.run/pharn-regress/stage.json
    ```
 
 Deterministic floor step (P0/P5): the scope is parsed from `writes:`, never chosen by a model.
@@ -129,7 +129,7 @@ Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code 
   - a stop before `--feature` parses as a valid slug, or `path-containment` itself, removes and writes
     nothing;
   - a `usage-error` from any OTHER flag has removed this feature's stale prior report, but has NOT cleared
-    an earlier run's `.pharn/pharn-regress/` scratch. That run's progress record and base worktree survive,
+    an earlier run's `pharn/.run/pharn-regress/` scratch. That run's progress record and base worktree survive,
     and a `--resume` run now would revive that earlier run. Run `--resume` only after a `5`, or after a
     call that is gone (below);
   - every later `unusable` has removed the stale report and cleared that scratch (all but a retained
@@ -253,9 +253,9 @@ command"). A declaration that cannot answer the run is `unusable install-config-
   (`check-regress.mjs scope`), now built from inputs captured by **tested code**, never the model.
 - **"It builds its verdict only from a current Approved, un-drifted plan"** → **FLOOR**: content-hash +
   enum (`check-plan-spec-agree.mjs`) — the fourth enforcement of `/pharn-spec`'s pin.
-- **"While the script runs, no Write-tool write lands outside `.pharn/**`"** → **FLOOR: hook** (fix #7,
+- **"While the script runs, no Write-tool write lands outside `pharn/.run/**`"** → **FLOOR: hook** (fix #7,
   amendment A1) — **stronger** than before 6.23.0, when the scope permitted the two artifacts directly.
-- **"The script writes only its two artifacts and `.pharn/pharn-regress/**`"** → **weaker than the
+- **"The script writes only its two artifacts and `pharn/.run/pharn-regress/**`"** → **weaker than the
   Write-tool guarantee, stated.** The script's `fs` writes are Bash, outside the hook (L19); a write
   anywhere else is **detected, never prevented**, by `/pharn-verify`'s `reconcile` gate.
 - **"`REGRESSION.md` is rendered from the JSON"** → tested deterministic code
@@ -280,7 +280,7 @@ command"). A declaration that cannot answer the run is `unusable install-config-
 - **The question object.** It carries only fixed text and the user's own argv — no tainted field reaches a
   relayed question.
 - **Residual.** A human or model reading `REGRESSION.md`'s quoted text is the accepted, bounded residual
-  (`LIMITS.md §2`, `THREAT-MODEL.md §5`). Nothing gates on it.
+  (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`). Nothing gates on it.
 
 ## Determinism audit (P5)
 

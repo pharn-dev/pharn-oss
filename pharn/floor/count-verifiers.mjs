@@ -35,7 +35,15 @@ const TARGET = process.argv[2] || ".";
 // double this count. It reads 0 today, which is exactly why the widening matters here — a doubled 0 is
 // still 0, so this walker would have gone on reporting a correct-looking number while sharing the defect,
 // and only the enumeration test ranges over it. Closure, not a second member.
-const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
+// 7.0.0: `pharn/.run/` (runtime scratch) and `pharn/.backup/` (the CLI's backup, full capability copies) too.
+const EXCLUDE_SEGMENTS = [
+  `${sep}.claude${sep}`,
+  `${sep}.dev${sep}`,
+  `${sep}node_modules${sep}`,
+  `${sep}.git${sep}`,
+  `${sep}pharn${sep}.run${sep}`,
+  `${sep}pharn${sep}.backup${sep}`,
+];
 
 /** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {

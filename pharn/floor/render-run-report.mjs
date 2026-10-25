@@ -198,7 +198,7 @@ export function readTextOrNull(path) {
 
 /** The pre-run dirty snapshot as a path SET plus the sentence the report shows, or an honest absence. */
 export function readDirtySnapshot(repo, name) {
-  const text = readTextOrNull(join(repo, ".pharn", "pharn-loop", name, "pre-run-status.txt"));
+  const text = readTextOrNull(join(repo, "pharn", ".run", "pharn-loop", name, "pre-run-status.txt"));
   if (text === null) {
     return { set: null, note: na("no pre-run snapshot was found, so no path can be marked `dirty-before-run`") };
   }
@@ -586,14 +586,14 @@ function tokensSection(cost, absentReason = null) {
 }
 
 /** 6.65.0 (audit CTX-14) — the always-loaded instruction set's size, as `/pharn-loop` Step 1a recorded it with
- *  `check-instruction-files.mjs --report` into `.pharn/pharn-loop/<name>/instruction-files.json` (the
+ *  `check-instruction-files.mjs --report` into `pharn/.run/pharn-loop/<name>/instruction-files.json` (the
  *  pre-run-status.txt precedent). Rendered only from a `reported` document whose counts are non-negative safe
  *  integers — every number inline passed that test; nothing else of the document is shown. Anything else is one
  *  `n/a` line. An ESTIMATE of the checker's MODEL of the loader, never a measurement, and never added to the table. */
 export const INSTRUCTION_SET_FILE = "instruction-files.json";
 function instructionSetLines(repo, name) {
-  const rel = `.pharn/pharn-loop/${name}/${INSTRUCTION_SET_FILE}`;
-  const text = readTextOrNull(join(repo, ".pharn", "pharn-loop", name, INSTRUCTION_SET_FILE));
+  const rel = `pharn/.run/pharn-loop/${name}/${INSTRUCTION_SET_FILE}`;
+  const text = readTextOrNull(join(repo, "pharn", ".run", "pharn-loop", name, INSTRUCTION_SET_FILE));
   const head = "**Always-loaded instruction set — an ESTIMATE, not a measurement.**";
   if (text === null) {
     return [
@@ -617,8 +617,8 @@ function instructionSetLines(repo, name) {
     head,
     "",
     `~${doc.estimated_tokens} tokens (${doc.total_bytes} bytes over ${doc.files.length} file(s)), taken once at the run's start ` +
-      "by `pharn/floor/check-instruction-files.mjs --report`. The figure is bytes / 4 (`LIMITS.md §1c`) over that checker's",
-    "model of what Claude Code loads into every context (`LIMITS.md §3e`) — a model, not a measurement of the loader.",
+      "by `pharn/floor/check-instruction-files.mjs --report`. The figure is bytes / 4 (`pharn/LIMITS.md §1c`) over that checker's",
+    "model of what Claude Code loads into every context (`pharn/LIMITS.md §3e`) — a model, not a measurement of the loader.",
     "By that model those files ride in the prefix of the run's requests, so they would already sit inside the input",
     "and cache counts above — never add this figure to them.",
   ];
@@ -1131,7 +1131,7 @@ function latestRunStart(markers) {
  * A failed emission leaves the PREVIOUS run's `cost.json` on disk; `check-cost-ledger.mjs` is GREEN on it,
  * because internal consistency is all it certifies ([[L43]]), and this report used to render it as the
  * current run's. So the ledger is bound to its referent: the LIVE markers file's latest `run-start` must
- * be the SAME marker (`seq` AND `ts` — identity, not "greater", so a reset `.pharn/` that restarts `seq`
+ * be the SAME marker (`seq` AND `ts` — identity, not "greater", so a reset `pharn/.run/` that restarts `seq`
  * cannot make an old ledger read as current, GRILL finding 1) as the latest one the ledger recorded.
  *
  *  - `current`   — identical latest run-start.

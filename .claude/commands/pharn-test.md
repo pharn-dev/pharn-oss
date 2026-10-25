@@ -205,21 +205,21 @@ Run the AC tests, and only them, through the gate runner. It selects the gates *
 and hands each gate exactly its mapped files; you name nothing:
 
 ```bash
-node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out .pharn/pharn-test/gates --discover package.json --ac-tests pharn/features/<name>/AC-TESTS.md
+node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out pharn/.run/pharn-test/gates --discover package.json --ac-tests pharn/features/<name>/AC-TESTS.md
 ```
 
 Exit **0** → drain. Any other exit → **`red-run-unusable`**: quote the runner's `reason_code`, run the Final step,
 stop. Then repeat until it exits **3** (nothing left), with a Bash timeout **above** `--timeout-ms`:
 
 ```bash
-node pharn/floor/run-gates.mjs run --next --out .pharn/pharn-test/gates --timeout-ms 540000
+node pharn/floor/run-gates.mjs run --next --out pharn/.run/pharn-test/gates --timeout-ms 540000
 ```
 
 A gate exiting non-zero is **expected** here — the tests are meant to fail — and is data, not a runner error. Exit
 **2** is a runner error → **`red-run-unusable`**. Then:
 
 ```bash
-node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/<name>/AC-TESTS.md --out .pharn/pharn-test/gates --root .
+node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/<name>/AC-TESTS.md --out pharn/.run/pharn-test/gates --root .
 ```
 
 - exit **0** → every AC's test was collected and failed. Go to Step 6. A `NOTE —` line names a per-test anomaly in
@@ -235,7 +235,7 @@ node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/<name>/AC
 ## Step 6 — Record the evidence (FLOOR — re-derived by the script, never typed)
 
 ```bash
-node pharn/floor/ac-tests-lock.mjs --record-red-run <name> --out .pharn/pharn-test/gates
+node pharn/floor/ac-tests-lock.mjs --record-red-run <name> --out pharn/.run/pharn-test/gates
 ```
 
 ```bash
@@ -245,8 +245,8 @@ node pharn/floor/ac-tests-lock.mjs --check <name> --require-red-run
 `--record-red-run` re-derives the verdict itself, requires the lock to check GREEN and the run to be bound to the
 mapping and the LIVE tree (a test edited after the run is refused), and only then writes `red_run` into the lock:
 the matched test ids per AC, each results file's digest, and a digest binding it to the pinned files. `--check
---require-red-run` must print GREEN. The evidence lives in the committed lock, not in `.pharn/` — the next run
-wipes `.pharn/pharn-test/gates`.
+--require-red-run` must print GREEN. The evidence lives in the committed lock, not in `pharn/.run/` — the next run
+wipes `pharn/.run/pharn-test/gates`.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a
 **procedure** step, not reference material; it sits beneath the claims block for document layout only, and a
@@ -293,7 +293,7 @@ not (P0)" (`pharn/pharn-contracts/ac-tests.md`) owns the bounds cited here.
   (content-hash) and `check-ac-tests.mjs` (enum/regex/set membership).
 - **Floor:** this stage's Write-tool writes land only in the mapped test files — the fix #7 hook. The lock is
   written by `ac-tests-lock.mjs` through `fs` in a Bash-run script, outside the hook. Bounded: a Bash write bypasses
-  the hook (`LIMITS.md §6`).
+  the hook (`pharn/LIMITS.md §6`).
 - **Floor:** the build cannot write an AC test file — the hook, for the PLAN.md `check-ac-tests.mjs` read. An edit
   to PLAN.md after this stage reopens it until `/pharn-build` re-checks it first thing (`check-test-stage.mjs`); the
   comparison is folded, and a filesystem equivalence wider than that fold is not modelled (the contract's bound).

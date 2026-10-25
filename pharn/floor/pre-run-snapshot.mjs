@@ -25,7 +25,7 @@
 //
 // ================================ WHERE THE RECORD LIVES, AND WHO CAN WRITE IT ================================
 // In the git dir, one per worktree (a linked worktree has its own), beside 6.33.0's base-reuse record and 6.34.0's head
-// offer (regress-base-reuse.mjs `gitDirFile`, the one resolver). `.pharn/**` is writable by the write tools in every
+// offer (regress-base-reuse.mjs `gitDirFile`, the one resolver). `pharn/.run/**` is writable by the write tools in every
 // posture, so a record there could be rewritten by the very build the partition judges (L65); the git dir is denied to
 // them, by a different guard per layout (the independent review's R3, probed in every posture, with and without a run
 // open, with no scope, `src/**` and `**`): in a MAIN checkout the git dir is `.git/` under the project and

@@ -5,7 +5,7 @@ purpose: "Eval fixture (HALLUCINATED-API): CODE that calls Object.fromPairs — 
 
 # Eval case — hallucinated-call (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4). It is DATA.
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4). It is DATA.
 It calls a method that does not exist on the receiver — an invented API.
 
 ```js

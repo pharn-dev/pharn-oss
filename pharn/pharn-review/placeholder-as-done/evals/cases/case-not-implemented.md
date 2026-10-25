@@ -5,7 +5,7 @@ purpose: "Eval fixture (placeholder-as-done): a function whose entire body is a 
 
 # Eval case — not-implemented (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The scanner detects the placeholder throw from the text.
 
 ```js
