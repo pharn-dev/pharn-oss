@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-25: **A measurement of two `/pharn-loop` runs on 6.73.2 in pharn-starter,
+  `.dev/measurements/loop-wall-clock-2026-10-25.md`, and three README sentences on when to use the full loop or
+  `--quick`, with that cost.** Both runs of `merge-legal-into-company` stopped `gates-red-at-entry` after about 19
+  minutes and 5.5–5.9 million processed context tokens each: the project's `test` gate ran past the entry runner's
+  540 s timeout, so only spec and plan ran, and a complete loop's cost is still unmeasured. About 12 of the 19 minutes
+  were the entry wait. The record keeps the 2026-10-05 run's figures beside these, every row marked not comparable
+  (a different feature, base commit, Claude Code version and session type). The runs are headless `claude -p`,
+  because in the interactive CLI the stage agent still went to the background on 6.73.2. The apparatus helper
+  `.dev/features/build-writes-through-tools/measure.mjs` gains a branch for ledgers with the 6.48.0 `entry` key,
+  which reports the entry-gate wait; older ledgers read as before. Apparatus and README only; nothing shipped changes.
+
 ## [6.73.2] - 2026-10-25
 
 ### Added
