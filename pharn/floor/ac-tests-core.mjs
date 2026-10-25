@@ -73,7 +73,7 @@ export function badPath(p) {
   if (p.startsWith("-")) return "led by '-', which a test runner would read as a flag";
   if (p !== posix.normalize(p) || p.endsWith("/") || p.startsWith("./") || p.split("/").includes(".."))
     return "not a normalized repo-relative path";
-  if (p === ".pharn" || p.startsWith(".pharn/")) return "under .pharn/, which is always writable and git-ignored";
+  if (p === "pharn/.run" || p.startsWith("pharn/.run/")) return "under pharn/.run/, which is always writable and git-ignored";
   if (p.startsWith("pharn/features/")) return "under pharn/features/, the pipeline's own artifact tree";
   return null;
 }

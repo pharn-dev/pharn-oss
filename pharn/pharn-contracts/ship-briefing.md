@@ -104,7 +104,7 @@ as the equality check that produced it (see "The rule of the contract" below).
 - **State is ALWAYS shown.** A field that cannot be sourced renders `n/a`, never an omitted line — a
   silent gap would let "written" masquerade as "verified", the disease this repo exists to prevent (P0).
 
-## Residual (named, not hidden — `LIMITS.md §2`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`)
 
 The `grill_verdict` field quotes GRILL.md's own advisory prose; a downstream reader treating that quote as
 a guarantee is the same residual `finding-shape.md` already names for free-text findings — bounded (no

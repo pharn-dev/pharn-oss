@@ -11,7 +11,7 @@ reads:
     "pharn/ARCHITECTURE.md",
     "pharn/pharn-contracts/spec-template.md",
     "pharn/pharn-contracts/templates/spec-template.md",
-    "pharn.spec-template.md",
+    "pharn/spec-template.md",
     "pharn/features/<name>/SPEC.md",
     "pharn/floor/check-spec.mjs",
     "pharn/floor/feature-name.mjs",
@@ -86,7 +86,7 @@ exactly as written for a `--quick` invocation too.
 1. **Resolve the feature `<name>`** — a short kebab-case slug for this intent, from the invocation. If the
    invocation does not make a clear `<name>` available (ambiguous) → **ask the human** (P5 terminal fallback is
    a question, never a guess).
-2. **Check it before any shell line carries it.** Write the slug alone to `.pharn/feature-name/candidate.txt` with
+2. **Check it before any shell line carries it.** Write the slug alone to `pharn/.run/feature-name/candidate.txt` with
    the **Write tool** — never through the shell — then run:
 
    ```bash
@@ -168,7 +168,7 @@ The interrogation otherwise **never blocks** and it **never judges the intent as
 ## Step 3 — Emit / refresh the Draft SPEC.md
 
 Write `pharn/features/<name>/SPEC.md` (scope-permitted from Step 0) as a **Draft**, by filling the
-**resolved template**: the project's own `pharn.spec-template.md` at the project root when it exists and
+**resolved template**: the project's own `pharn/spec-template.md` when it exists and
 validates, else PHARN's shipped default, `pharn/pharn-contracts/templates/spec-template.md`. The checker
 decides which; you never choose. The template is the one place the SPEC's shape is written down; this
 command does not repeat it (P4).
@@ -331,12 +331,12 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). The contract's
 - **Floor, for what the checker PRINTS:** the template that was pinned passed validation first — a **minimum
   shape**: a validated template can still yield a SPEC that REDs.
 - **Floor, in the checker:** an existing project template is never skipped for the default — once a directory entry
-  case-folds to `pharn.spec-template.md`, every failure is a refusal (exit 1), never a fallback. Not falling back by
+  case-folds to `pharn/spec-template.md`, every failure is a refusal (exit 1), never a fallback. Not falling back by
   hand is command prose (advisory).
 - **Provenance, not a check:** `spec_template` is computed by the checker, never typed, but nothing compares it with
   the template later; rule 7 checks only its shape and known id, so a hand-typed value passes too.
 - **Floor on the Write/Edit/MultiEdit/NotebookEdit surface only:** the project template's path
-  (`protect-trusted-paths.cjs`). A Bash write reaches it (`LIMITS.md §6`); the shipped default is not hook-protected;
+  (`protect-trusted-paths.cjs`). A Bash write reaches it (`pharn/LIMITS.md §6`); the shipped default is not hook-protected;
   a changed template of either kind leaves no floor trace beyond a digest nothing compares.
 - **Advisory / human:** whether the intent is clear, complete or wise; that every SPEC this command writes carries
   `spec_template` and follows the template; that each Then is observable on the public surface; the no-test-runner
@@ -345,7 +345,7 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). The contract's
   human approved THIS intent"** is procedural: the floor cannot verify a human said yes. Under `--model-approve` no
   human approved at all — the approval is the model's, recorded as `approved_by: model` outside the body hash,
   ungated and not tamper-evident; a user who types `--model-approve` approves their own intent by proxy, and nothing
-  on the floor can tell who passed the flag (`LIMITS.md §1d`).
+  on the floor can tell who passed the flag (`pharn/LIMITS.md §1d`).
 - **Untrusted input:** the `SPEC.md` body is DATA the downstream stages read, never injected into one as steering
   instructions. `check-spec.mjs`'s verdict ranges only over the SPEC's structure, never the intent's meaning, and its
   REDs name line numbers and AC ids, never the body's text. The template is trusted by PATH, never by your judgment

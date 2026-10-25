@@ -2,7 +2,7 @@
 //
 // Two halves, named so neither stands in for the other (GRILL G4):
 //   (a) HERE, with an INJECTED stage script: every exit code (0/2/3/4/5, a crash, a signal) passes through; the scope
-//       file holds the thin caller's scope WHILE the script runs and the live guard denies a write outside `.pharn/**`
+//       file holds the thin caller's scope WHILE the script runs and the live guard denies a write outside `pharn/.run/**`
 //       then; markers per mode; each failure mode the header names.
 //   (b) `.dev/floor/command-hygiene.test.mjs` (DIRECT_STAGE_WIRING) runs each COMMITTED line with the REAL script in a
 //       scratch tree, where the script refuses: it proves that line's pass-through, markers and release — never the
@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -167,17 +167,17 @@ const FAKE = `
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 writeFileSync(".ran", "1");
-const scope = existsSync(".pharn/writes-scope.json") ? JSON.parse(readFileSync(".pharn/writes-scope.json", "utf8")).scope : null;
+const scope = existsSync("pharn/.run/writes-scope.json") ? JSON.parse(readFileSync("pharn/.run/writes-scope.json", "utf8")).scope : null;
 const guard = (p) => spawnSync(process.execPath, [process.env.FAKE_GUARD], {
   input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: p } }), encoding: "utf8" }).status;
-const seen = { argv: process.argv.slice(2), scope, inside: guard(".pharn/pharn-regress/other.json"),
+const seen = { argv: process.argv.slice(2), scope, inside: guard("pharn/.run/pharn-regress/other.json"),
   outside: guard("pharn/features/demo/REGRESSION.md") };
 if (process.env.FAKE_HOLD) {
   writeFileSync(".holding", "1");
   const sab = new Int32Array(new SharedArrayBuffer(4));
   while (!existsSync(".release")) Atomics.wait(sab, 0, 0, 20);
 }
-if (process.env.FAKE_SWAP_LOCK) writeFileSync(".pharn/stage-direct/in-flight.json", process.env.FAKE_SWAP_LOCK);
+if (process.env.FAKE_SWAP_LOCK) writeFileSync("pharn/.run/stage-direct/in-flight.json", process.env.FAKE_SWAP_LOCK);
 process.stdout.write(JSON.stringify(seen) + (process.env.FAKE_NO_NL ? "" : "\\n"));
 if (process.env.FAKE_EXIT === "SIGKILL") process.kill(process.pid, "SIGKILL");
 process.exitCode = Number(process.env.FAKE_EXIT ?? "0");
@@ -214,7 +214,7 @@ function direct(root, argv, env = {}, opts = {}) {
   }
 }
 const markersIn = (root) => {
-  const f = join(root, ".pharn", "cost", "demo", "markers.jsonl");
+  const f = join(root, "pharn", ".run", "cost", "demo", "markers.jsonl");
   return existsSync(f)
     ? readFileSync(f, "utf8")
         .split("\n")
@@ -224,7 +224,7 @@ const markersIn = (root) => {
 };
 const seenBy = (out) => JSON.parse(out.split("\n").find((l) => l.startsWith("{")));
 
-test("runDirect — the scope is the thin caller's WHILE the script runs (the live guard denies outside .pharn/**), and released after", () => {
+test("runDirect — the scope is the thin caller's WHILE the script runs (the live guard denies outside pharn/.run/**), and released after", () => {
   for (const stage of Object.keys(DIRECT_STAGES)) {
     const root = scratchRoot();
     try {
@@ -236,13 +236,13 @@ test("runDirect — the scope is the thin caller's WHILE the script runs (the li
       try {
         const s = spawnSync(process.execPath, [REAL_SETTER, ...setterArgv(stage)], { cwd: ref, encoding: "utf8" });
         assert.equal(s.status, 0, s.stderr);
-        assert.deepEqual(seen.scope, JSON.parse(readFileSync(join(ref, ".pharn", "writes-scope.json"), "utf8")).scope);
+        assert.deepEqual(seen.scope, JSON.parse(readFileSync(join(ref, "pharn", ".run", "writes-scope.json"), "utf8")).scope);
       } finally {
         rmSync(ref, { recursive: true, force: true });
       }
-      assert.equal(seen.outside, 2, `${stage}: a Write outside .pharn/** is DENIED while the script runs`);
-      assert.equal(seen.inside, 0, `${stage}: .pharn/** stays writable`);
-      assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false, `${stage}: released after`);
+      assert.equal(seen.outside, 2, `${stage}: a Write outside pharn/.run/** is DENIED while the script runs`);
+      assert.equal(seen.inside, 0, `${stage}: pharn/.run/** stays writable`);
+      assert.equal(existsSync(join(root, "pharn", ".run", "writes-scope.json")), false, `${stage}: released after`);
       // CONTROL: with the scope released, the same probe is allowed by the default — so the deny above was the scope's.
       const after = spawnSync(process.execPath, [GUARD], {
         cwd: root,
@@ -277,7 +277,7 @@ test("runDirect — EVERY exit code passes through; the start marker precedes th
         assert.equal(r.pieces.at(-1), `${markerLine(m[1])}\n`);
       }
       assert.equal(r.out, r.pieces.join(""), "out is exactly the emitted pieces");
-      assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false, "released on every exit");
+      assert.equal(existsSync(join(root, "pharn", ".run", "writes-scope.json")), false, "released on every exit");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -331,8 +331,8 @@ test("runDirect — a setter that fails (no thin-caller command file) refuses wi
 test("runDirect — an unwritable marker prints MARKER_NOT_WRITTEN and the stage still runs with its own exit; a refused argv runs nothing", () => {
   const root = scratchRoot();
   try {
-    mkdirSync(join(root, ".pharn"), { recursive: true });
-    writeFileSync(join(root, ".pharn", "cost"), "a file where the marker directory belongs\n");
+    mkdirSync(join(root, "pharn", ".run"), { recursive: true });
+    writeFileSync(join(root, "pharn", ".run", "cost"), "a file where the marker directory belongs\n");
     const r = direct(root, fresh("pharn-verify"), { FAKE_EXIT: "3" });
     assert.equal(r.exit, 3);
     assert.equal(r.pieces[0], `${MARKER_NOT_WRITTEN}\n`);
@@ -416,7 +416,7 @@ test("runDirect — a lock held by a LIVE pid refuses `in-flight` (exit 2): no s
       assert.deepEqual([r.exit, r.out], [2, ""]);
       assert.match(r.err.join("\n"), /^refused \(in-flight\) — another call \(pid \d+, pharn-regress for demo, /);
       assert.equal(existsSync(join(root, ".ran")), false, "the script never ran");
-      assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false, "no scope was set");
+      assert.equal(existsSync(join(root, "pharn", ".run", "writes-scope.json")), false, "no scope was set");
       assert.deepEqual(markersIn(root), [], "no marker");
       assert.equal(readFileSync(lockPath(root), "utf8"), held, "the holder's lock is left alone");
     }
@@ -442,7 +442,7 @@ test("runDirect — a DEAD holder's lock is stale: cleared, taken and released; 
     assert.equal(torn.exit, 2);
     assert.match(
       torn.err.join("\n"),
-      /^refused \(in-flight\) — \.pharn\/stage-direct\/in-flight\.json holds no readable lock record; if no stage-direct call is running in this tree, remove it/
+      /^refused \(in-flight\) — pharn\/\.run\/stage-direct\/in-flight\.json holds no readable lock record; if no stage-direct call is running in this tree, remove it/
     );
     assert.equal(readFileSync(lockPath(root), "utf8"), "", "a torn record is left for a person");
   } finally {
@@ -455,12 +455,12 @@ test("runDirect — a lock directory that is a link or a file refuses `lock-unus
     const root = scratchRoot();
     const elsewhere = mkdtempSync(join(tmpdir(), "stage-direct-elsewhere-"));
     try {
-      mkdirSync(join(root, ".pharn"), { recursive: true });
+      mkdirSync(join(root, "pharn", ".run"), { recursive: true });
       if (plant === "link") symlinkSync(elsewhere, join(root, LOCK_DIR));
       else writeFileSync(join(root, LOCK_DIR), "x");
       const r = direct(root, fresh("pharn-verify"));
       assert.deepEqual([r.exit, r.out], [2, ""], plant);
-      assert.match(r.err.join("\n"), /^refused \(lock-unusable\) — \.pharn\/stage-direct is not a directory/, plant);
+      assert.match(r.err.join("\n"), /^refused \(lock-unusable\) — pharn\/\.run\/stage-direct is not a directory/, plant);
       assert.equal(existsSync(join(elsewhere, "in-flight.json")), false, `${plant}: nothing through the link`);
       assert.equal(existsSync(join(root, ".ran")), false);
     } finally {
@@ -517,14 +517,18 @@ test("★ two PROCESSES — a call still running (as a call the Bash tool moved 
     ended = new Promise((res) => child.on("close", (code) => res(code)));
     for (let i = 0; i < 500 && !existsSync(join(root, ".holding")); i++) await sleep(20);
     assert.ok(existsSync(join(root, ".holding")), "the first call's script is running");
-    const scopeWhileHeld = readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8");
+    const scopeWhileHeld = readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8");
     rmSync(join(root, ".holding"));
     for (const argv of [resume("pharn-regress"), fresh("pharn-verify")]) {
       const r = direct(root, argv);
       assert.deepEqual([r.exit, r.out], [2, ""], JSON.stringify(argv));
       assert.match(r.err.join("\n"), new RegExp(`^refused \\(in-flight\\) — another call \\(pid ${child.pid}, pharn-regress for demo, `));
     }
-    assert.equal(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8"), scopeWhileHeld, "the first call's scope is untouched");
+    assert.equal(
+      readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8"),
+      scopeWhileHeld,
+      "the first call's scope is untouched"
+    );
     assert.deepEqual(
       markersIn(root).map((m) => m.kind),
       ["stage-start"],
@@ -539,7 +543,7 @@ test("★ two PROCESSES — a call still running (as a call the Bash tool moved 
       "the first call closes its own stage"
     );
     assert.equal(existsSync(lockPath(root)), false, "and releases the lock");
-    assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false, "and the scope");
+    assert.equal(existsSync(join(root, "pharn", ".run", "writes-scope.json")), false, "and the scope");
     // CONTROL: the call refused above now runs.
     rmSync(join(root, ".release"));
     assert.equal(direct(root, resume("pharn-regress")).exit, 0);
@@ -572,7 +576,7 @@ function regressRepo() {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(dir, "package.json"), `${JSON.stringify({ name: "fx", version: "1.0.0", scripts: { test: "node --test" } })}\n`);
   mkdirSync(join(dir, "src"));
   writeFileSync(join(dir, "src", "index.js"), "export const add = (a, b) => a + b;\n");
@@ -657,7 +661,12 @@ test("★ a question's answer line — the pinned line's own flags + resume.argv
 test("the CLI — the real stage-verify.mjs refuses in a scratch tree, and the call passes its object and code through", () => {
   const root = mkdtempSync(join(tmpdir(), "stage-direct-cli-"));
   try {
-    symlinkSync(join(REPO, "pharn"), join(root, "pharn"));
+    // 7.0.0: the state root is pharn/.run, and a symlinked pharn is refused (it would carry scratch into the repo),
+    // so pharn/ is a real directory here whose shipped members are linked one by one.
+    mkdirSync(join(root, "pharn"));
+    for (const e of readdirSync(join(REPO, "pharn"))) {
+      if (![".run", ".backup", "features", "memory-bank"].includes(e)) symlinkSync(join(REPO, "pharn", e), join(root, "pharn", e));
+    }
     mkdirSync(join(root, ".claude"));
     symlinkSync(join(REPO, ".claude", "hooks"), join(root, ".claude", "hooks"));
     symlinkSync(join(REPO, ".claude", "commands"), join(root, ".claude", "commands"));
@@ -671,13 +680,31 @@ test("the CLI — the real stage-verify.mjs refuses in a scratch tree, and the c
     assert.deepEqual([obj.schema, obj.status, obj.stage], ["pharn-stage-exit/1", "unusable", "verify"]);
     assert.match(lines[0], /^marker 1: stage-start pharn-verify iter=1 /);
     assert.match(lines.at(-1), /^marker 2: orchestrator /);
-    assert.equal(existsSync(join(root, ".pharn", "writes-scope.json")), false);
+    assert.equal(existsSync(join(root, "pharn", ".run", "writes-scope.json")), false);
     // Odd argv at the CLI: exit 2, nothing on stdout, no stack trace.
     for (const argv of [[], ["--stage"], ["--stage", "toString", "--name", "demo", "--budget-ms", "1"]]) {
       const o = spawnSync(process.execPath, [CLI, ...argv], { cwd: root, env, encoding: "utf8" });
       assert.deepEqual([o.status, o.stdout], [2, ""], `${JSON.stringify(argv)}: ${o.stderr}`);
       assert.doesNotMatch(o.stderr, /at .*\.mjs:\d+/);
     }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+import { renameSync as renameSD7 } from "node:fs";
+
+test("runDirect (7.0.0) — a link at `pharn`, above the lock's state root, refuses `lock-unusable`; nothing runs", () => {
+  const root = scratchRoot();
+  try {
+    const real = join(root, "pharn-real");
+    if (existsSync(join(root, "pharn"))) renameSD7(join(root, "pharn"), real);
+    else mkdirSync(real, { recursive: true });
+    symlinkSync(real, join(root, "pharn"));
+    const r = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(r.err.join("\n"), /^refused \(lock-unusable\) — pharn is not a directory/);
+    assert.equal(existsSync(join(root, ".ran")), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

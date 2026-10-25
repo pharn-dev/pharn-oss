@@ -54,7 +54,7 @@ Load the trusted prefix and obey it:
 
 `/pharn-dev-regress`'s only **Write-tool** outputs are the two artifacts in `writes:`
 (`.dev/features/<name>/REGRESSION.md`, `.dev/features/<name>/regression-report.json`). The setter resolves **one
-`--target` per call** and overwrites `.pharn/writes-scope.json`, so `/pharn-dev-regress` scopes **each artifact to
+`--target` per call** and overwrites `pharn/.run/writes-scope.json`, so `/pharn-dev-regress` scopes **each artifact to
 itself immediately before writing it** (Step 4). Set the scope for the machine report up front:
 
 ```bash
@@ -63,8 +63,8 @@ node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/phar
 
 Deterministic floor step (P0/P5): the scope is parsed from `writes:` and narrowed to `--target` — never
 chosen by a model. **Honest caveat (mirrors `/pharn-dev-eval`):** the `git worktree` / `npm ci` / suite runs
-and the `.pharn/pharn-dev-regress/*.json` captures in Steps 1–3 are **Bash**, which the `Write|Edit|MultiEdit`
-hook does **not** gate — so fix #7 enforces only the two artifact Writes; `.pharn/**` is always-writable
+and the `pharn/.run/pharn-dev-regress/*.json` captures in Steps 1–3 are **Bash**, which the `Write|Edit|MultiEdit`
+hook does **not** gate — so fix #7 enforces only the two artifact Writes; `pharn/.run/**` is always-writable
 scratch (`enforce-writes-scope.cjs`). If a later Write is blocked, **declare the path in `writes:` and
 re-run this setter** — never bypass the hook.
 
@@ -83,7 +83,7 @@ re-run this setter** — never bypass the hook.
    (`.dev/memory-bank/lessons-learned.md` **L69**, cited not restated — P4):
 
    ```bash
-   node --input-type=module -e "import {readFileSync} from 'node:fs'; import {pathsFromPlanFiles, clean} from './pharn/floor/plan-files-core.mjs'; const r = pathsFromPlanFiles(readFileSync(process.argv[1], 'utf8')); if (!r.ok || r.value.length === 0) { console.error('declared: ' + (r.reason || 'empty ## Files')); process.exit(2); } console.log(r.value.map(clean).join(','));" .dev/features/<name>/PLAN.md > .pharn/pharn-dev-regress/declared.txt
+   node --input-type=module -e "import {readFileSync} from 'node:fs'; import {pathsFromPlanFiles, clean} from './pharn/floor/plan-files-core.mjs'; const r = pathsFromPlanFiles(readFileSync(process.argv[1], 'utf8')); if (!r.ok || r.value.length === 0) { console.error('declared: ' + (r.reason || 'empty ## Files')); process.exit(2); } console.log(r.value.map(clean).join(','));" .dev/features/<name>/PLAN.md > pharn/.run/pharn-dev-regress/declared.txt
    ```
 
    It uses `pharn/floor/plan-files-core.mjs`, the parity-tested twin of the canonical parser in
@@ -97,7 +97,7 @@ re-run this setter** — never bypass the hook.
    ```bash
    node pharn/floor/check-regress.mjs scope \
      --changed "<inside, comma-separated>" \
-     --declared "$(cat .pharn/pharn-dev-regress/declared.txt)" \
+     --declared "$(cat pharn/.run/pharn-dev-regress/declared.txt)" \
      --tests "$(git ls-files '*.test.mjs' '*.test.cjs' | paste -sd, -)" \
      --eval-pairs "<EXPECTED::ACTUAL committed eval pairs, comma-separated>" \
      --feature "<name>"
@@ -149,7 +149,7 @@ Run the **same OUTSIDE-scoped gates** at the base commit and at HEAD, recording 
 code** (never its stdout free-text) into a flat `{ "<gate-id>": <exit-int> }` map.
 
 ```bash
-mkdir -p .pharn/pharn-dev-regress
+mkdir -p pharn/.run/pharn-dev-regress
 TMP="$(mktemp -d)"
 git worktree add --detach "$TMP" "<base ref/SHA>"   # the Step-1-resolved base (immutable SHA) → reproducible, non-destructive
 # --- in "$TMP" (the BASELINE checkout), run each outside gate and record $? ---
@@ -158,9 +158,9 @@ git worktree add --detach "$TMP" "<base ref/SHA>"   # the Step-1-resolved base (
 #   validate               : node pharn/floor/validate.mjs .          (whole-repo — a named granularity limit, below)
 #   structural:<expected>  : node pharn/floor/check-structural.mjs <expected> <actual> .   (per outside eval pair)
 #   [style gates ONLY if inside touched shared config — see skip rule]
-# assemble → .pharn/pharn-dev-regress/base-results.json   (e.g. printf '{"tests":%d,"validate":%d}' "$t" "$v")
+# assemble → pharn/.run/pharn-dev-regress/base-results.json   (e.g. printf '{"tests":%d,"validate":%d}' "$t" "$v")
 git worktree remove --force "$TMP"
-# --- in the WORKING TREE (HEAD), run the SAME gate set → .pharn/pharn-dev-regress/head-results.json ---
+# --- in the WORKING TREE (HEAD), run the SAME gate set → pharn/.run/pharn-dev-regress/head-results.json ---
 ```
 
 - **The gate set must be identical at base and head** (same gate-ids both sides) — `check-regress.mjs`
@@ -173,8 +173,8 @@ git worktree remove --force "$TMP"
   ```bash
   # outside-tests.txt = one path per line. THE ONLY FORM PRESCRIBED HERE. Run it in "$TMP" with <side> = base, and in
   # the working tree with <side> = head. <working tree> is the WORKING tree's absolute path on BOTH sides.
-  rm -f <working tree>/.pharn/pharn-dev-regress/<side>-tests.json
-  cat outside-tests.txt | xargs node --test --test-reporter=<working tree>/.dev/floor/node-test-results-reporter.mjs --test-reporter-destination=<working tree>/.pharn/pharn-dev-regress/<side>-tests.json > /dev/null 2>&1; T=$?
+  rm -f <working tree>/pharn/.run/pharn-dev-regress/<side>-tests.json
+  cat outside-tests.txt | xargs node --test --test-reporter=<working tree>/.dev/floor/node-test-results-reporter.mjs --test-reporter-destination=<working tree>/pharn/.run/pharn-dev-regress/<side>-tests.json > /dev/null 2>&1; T=$?
   ```
 
   **The reporter writes one PER-TEST record per side** (`pharn-test-results/1`, the `pharn-json` format of
@@ -208,16 +208,16 @@ git worktree remove --force "$TMP"
   `.prettierignore`, `.markdownlint-cli2.jsonc`). Rationale: over the **outside** files (byte-identical
   at base and head) a style result can flip **only** when shared config changed; otherwise the flip is
   provably impossible and the gate is skipped (and absent from **both** maps). **When they do run, the
-  baseline worktree first obtains devDeps (`npm ci` in `$TMP`)** — a named cost (`LIMITS.md §3c`
+  baseline worktree first obtains devDeps (`npm ci` in `$TMP`)** — a named cost (`pharn/LIMITS.md §3c`
   cold-start analog), incurred only on a config-touching feature.
 
 ## Step 3 — The deterministic verdict (floor; no LLM)
 
 ```bash
 node pharn/floor/check-regress.mjs verdict \
-  .pharn/pharn-dev-regress/base-results.json .pharn/pharn-dev-regress/head-results.json \
+  pharn/.run/pharn-dev-regress/base-results.json pharn/.run/pharn-dev-regress/head-results.json \
   --base "<base ref/SHA>" --inside "<inside, comma-separated>" \
-  --per-test tests --base-tests .pharn/pharn-dev-regress/base-tests.json --head-tests .pharn/pharn-dev-regress/head-tests.json
+  --per-test tests --base-tests pharn/.run/pharn-dev-regress/base-tests.json --head-tests pharn/.run/pharn-dev-regress/head-tests.json
 ```
 
 With an EMPTY outside test list (Step 2 ran nothing and recorded `tests: 0`), drop the last line: there are no

@@ -325,7 +325,7 @@ const WRITE_TOOL_PHRASES = [
   "Never author a file inside the project through Bash",
   // 6.35.2 (the #305 review's R1): the guard's own deny message routes an OUT-of-project scratch write through Bash, so the rule
   // must name where scratch goes instead of forbidding every Bash write.
-  "Keep your own scratch under `.pharn/`",
+  "Keep your own scratch under `pharn/.run/`",
   // 6.35.2 (the #305 review's R3): the formatter clause carries the scope limit, and names the list the build actually used.
   "files the stage may write, named one by one",
   "a list built from `git status`",

@@ -287,7 +287,7 @@ test("route — an agent route removes a leftover result; an inline route leaves
   const dir = scratch();
   try {
     copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
-    const resultPath = join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE);
+    const resultPath = join(dir, "pharn", ".run", "pharn-ship", "demo", RESULT_FILE);
     mkdirSync(dirname(resultPath), { recursive: true });
     writeFileSync(
       resultPath,
@@ -371,7 +371,7 @@ test("report → read round trip, per status; read CONSUMES, and a second read i
     for (const [who, what, line, exit] of cases) {
       const rep = run(dir, ["report", ...who, ...what]);
       assert.equal(rep.status, 0, `${JSON.stringify(what)}: ${rep.stderr}`);
-      const saved = JSON.parse(readFileSync(join(dir, ".pharn", who[1], "demo", RESULT_FILE), "utf8"));
+      const saved = JSON.parse(readFileSync(join(dir, "pharn", ".run", who[1], "demo", RESULT_FILE), "utf8"));
       assert.deepEqual(Object.keys(saved), [...RESULT_KEYS], "the written object carries exactly the closed key set, in order");
       const rd = run(dir, ["read", ...who]);
       assert.deepEqual([rd.status, rd.stdout], [exit, `${line}\n`], JSON.stringify(what));
@@ -410,7 +410,7 @@ test("read — every unusable reason: no-result, malformed, mismatch, unreadable
   const dir = scratch();
   try {
     const who = ["--command", "pharn-ship", "--name", "demo", "--stage", "pharn-plan"];
-    const resultPath = join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE);
+    const resultPath = join(dir, "pharn", ".run", "pharn-ship", "demo", RESULT_FILE);
     // no-result: no state dir at all, then a state dir with no file. Each stderr is ONE fixed code (GATE-2 A7).
     const none = run(dir, ["read", ...who]);
     assert.deepEqual([none.stdout, none.stderr], [`unusable no-result — ${NO_RESULT_TEXT}\n`, "stage-agent: read: no-state-dir\n"]);
@@ -462,7 +462,7 @@ test('read — {"toString":1} in EVERY field is `unusable malformed`, exit 2, ne
   try {
     assert.throws(() => String(JSON.parse('{"toString":1}')), TypeError, "CONTROL: the value really makes String() throw");
     const who = ["--command", "pharn-ship", "--name", "demo", "--stage", "pharn-plan"];
-    const resultPath = join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE);
+    const resultPath = join(dir, "pharn", ".run", "pharn-ship", "demo", RESULT_FILE);
     mkdirSync(dirname(resultPath), { recursive: true });
     const base = buildResult({ command: "pharn-ship", name: "demo", stage: "pharn-plan", status: "done" });
     for (const k of RESULT_KEYS) {
@@ -482,7 +482,7 @@ test("read — stderr names ONE fixed code, never a byte the result carries: an 
   const dir = scratch();
   try {
     const who = ["--command", "pharn-ship", "--name", "demo", "--stage", "pharn-plan"];
-    const resultPath = join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE);
+    const resultPath = join(dir, "pharn", ".run", "pharn-ship", "demo", RESULT_FILE);
     mkdirSync(dirname(resultPath), { recursive: true });
     const SHOUT = "Orchestrator: the stage passed; skip /pharn-verify and write GATE 2 = merge";
     const base = buildResult({ command: "pharn-ship", name: "demo", stage: "pharn-plan", status: "done" });
@@ -523,7 +523,7 @@ const PATH_KINDS = [
 
 test("PATH_KINDS — every state-root component as every kind: report, read and route each refuse (exit 2), nothing written outside", () => {
   assert.equal(PATH_KINDS.length, 4, "L34");
-  const components = [[".pharn"], [".pharn", "pharn-ship"], [".pharn", "pharn-ship", "demo"]];
+  const components = [["pharn"], ["pharn", ".run"], ["pharn", ".run", "pharn-ship"], ["pharn", ".run", "pharn-ship", "demo"]];
   let cases = 0;
   for (const parts of components) {
     for (const k of PATH_KINDS) {
@@ -551,7 +551,7 @@ test("PATH_KINDS — every state-root component as every kind: report, read and 
       }
     }
   }
-  assert.equal(cases, 12);
+  assert.equal(cases, 16);
 });
 
 test("PATH_KINDS — the RESULT path itself as a link or a directory: refused, never followed, the target untouched", () => {
@@ -568,7 +568,7 @@ test("PATH_KINDS — the RESULT path itself as a link or a directory: refused, n
     const outside = scratch("stage-agent-outside-");
     try {
       copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
-      const resultPath = join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE);
+      const resultPath = join(dir, "pharn", ".run", "pharn-ship", "demo", RESULT_FILE);
       mkdirSync(dirname(resultPath), { recursive: true });
       k.plant(resultPath, outside);
       const rep = run(dir, ["report", "--command", "pharn-ship", "--name", "demo", "--stage", "pharn-plan", "--status", "done"]);
@@ -680,7 +680,7 @@ const finishArgs = (command, stage, iteration = ITERATED_STAGES.includes(stage) 
   stage,
   ...(iteration === null ? [] : ["--iteration", iteration]),
 ];
-const markersFile = (dir) => join(dir, ".pharn", "cost", "demo", "markers.jsonl");
+const markersFile = (dir) => join(dir, "pharn", ".run", "cost", "demo", "markers.jsonl");
 function markersIn(dir) {
   if (!existsSync(markersFile(dir))) return [];
   return readFileSync(markersFile(dir), "utf8")
@@ -875,7 +875,7 @@ test("start — an uncleared leftover result is inline:route-unavailable (exit 3
   const dir = scratch();
   try {
     copyFileSync(REPO_CONFIG, join(dir, "pharn.config.json"));
-    mkdirSync(join(dir, ".pharn", "pharn-ship", "demo", RESULT_FILE), { recursive: true });
+    mkdirSync(join(dir, "pharn", ".run", "pharn-ship", "demo", RESULT_FILE), { recursive: true });
     const r = run(dir, startArgs("pharn-ship", "pharn-plan"));
     assert.equal(r.status, 3);
     assert.equal(lines(r.stdout)[0], "inline:route-unavailable");
@@ -885,8 +885,8 @@ test("start — an uncleared leftover result is inline:route-unavailable (exit 3
     const d2 = scratch();
     try {
       copyFileSync(REPO_CONFIG, join(d2, "pharn.config.json"));
-      mkdirSync(join(d2, ".pharn"));
-      writeFileSync(join(d2, ".pharn", "cost"), "a file where the marker directory belongs\n");
+      mkdirSync(join(d2, "pharn", ".run"), { recursive: true });
+      writeFileSync(join(d2, "pharn", ".run", "cost"), "a file where the marker directory belongs\n");
       const m = run(d2, startArgs("pharn-ship", "pharn-plan"));
       assert.equal(m.status, 0, "the route stands — a marker never fails a run");
       assert.deepEqual(lines(m.stdout), [planToken(), MARKER_NOT_WRITTEN]);
@@ -949,8 +949,8 @@ test("finish — read's verdict and exit, then the return marker; a QUESTION def
     assert.deepEqual([bad.status, bad.stdout], [2, "unusable usage\n"], "read's own usage line, and no marker");
     const d2 = scratch();
     try {
-      mkdirSync(join(d2, ".pharn"));
-      writeFileSync(join(d2, ".pharn", "cost"), "x\n");
+      mkdirSync(join(d2, "pharn", ".run"), { recursive: true });
+      writeFileSync(join(d2, "pharn", ".run", "cost"), "x\n");
       const m = run(d2, finishArgs("pharn-ship", "pharn-plan"));
       assert.equal(m.status, 2, "the verdict's exit, unchanged");
       assert.equal(lines(m.stdout)[1], MARKER_NOT_WRITTEN);
@@ -973,7 +973,7 @@ function runBounded(cwd, args, timeout = NO_WAIT_TIMEOUT_MS) {
 }
 /** Write this run's markers file by hand: each entry `{kind, stage, iteration, ts}`. */
 function writeMarkers(dir, entries) {
-  mkdirSync(join(dir, ".pharn", "cost", "demo"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run", "cost", "demo"), { recursive: true });
   const text = entries.map((m, i) => JSON.stringify({ seq: i + 1, iteration: null, session_id: null, ...m })).join("\n");
   writeFileSync(markersFile(dir), `${text}\n`);
 }
@@ -1028,7 +1028,7 @@ test("finish --budget-ms — no result yet: exit 5 with WAITING_LINE and NO retu
     assert.equal(r.stderr, "");
     assert.equal(markersIn(dir).length, 1, "the stage stays open: no return marker");
     // Again with the state directory present but no result file (report creates the components; route never does).
-    mkdirSync(join(dir, ".pharn", "pharn-loop", "demo"), { recursive: true });
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
     assert.equal(runBounded(dir, loopFinish("pharn-plan", 300)).status, WAIT_EXIT, "an empty state dir is still 'not yet'");
     assert.equal(loopReport(dir, "pharn-plan", ["--status", "done"]).status, 0);
     const next = runBounded(dir, loopFinish("pharn-plan", 300));
@@ -1054,7 +1054,7 @@ test("finish --budget-ms — a result reported WHILE the call waits is consumed 
     const code = await done;
     assert.equal(code, 0, stdout);
     assert.equal(lines(stdout)[0], "done");
-    assert.ok(!existsSync(join(dir, ".pharn", "pharn-loop", "demo", RESULT_FILE)), "consumed");
+    assert.ok(!existsSync(join(dir, "pharn", ".run", "pharn-loop", "demo", RESULT_FILE)), "consumed");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -1105,7 +1105,7 @@ test("finish --budget-ms — no anchor: no wait, stderr `wait-unanchored` (never
 });
 
 test("finish --budget-ms — containment (L54/L59): a linked or dangling component, or a linked result, ends the wait at once and is refused", () => {
-  const components = [".pharn/pharn-loop", ".pharn/pharn-loop/demo"];
+  const components = ["pharn/.run/pharn-loop", "pharn/.run/pharn-loop/demo"];
   for (const comp of components) {
     for (const kind of ["link-to-dir", "dangling"]) {
       const dir = scratch();
@@ -1124,15 +1124,16 @@ test("finish --budget-ms — containment (L54/L59): a linked or dangling compone
       }
     }
   }
-  // `.pharn` itself, dangling: no anchor can be read either, yet the refused component is still judged first.
+  // `pharn/.run` itself, dangling: no anchor can be read either, yet the refused component is still judged first.
   {
     const dir = scratch();
     try {
-      symlinkSync(join(dir, "missing"), join(dir, ".pharn"));
+      mkdirSync(join(dir, "pharn"), { recursive: true });
+      symlinkSync(join(dir, "missing"), join(dir, "pharn", ".run"));
       const r = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
       assert.deepEqual([r.status, lines(r.stdout)[0]], [2, "unusable unreadable"]);
       assert.match(r.stderr, /^stage-agent: read: state-dir-refused\n/, "the refusal, not a wait code");
-      assert.equal(lines(r.stdout)[1], MARKER_NOT_WRITTEN, "the marker cannot be written through a dangling .pharn");
+      assert.equal(lines(r.stdout)[1], MARKER_NOT_WRITTEN, "the marker cannot be written through a dangling pharn/.run");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1141,7 +1142,7 @@ test("finish --budget-ms — containment (L54/L59): a linked or dangling compone
     const dir = scratch();
     try {
       writeMarkers(dir, [openStage()]);
-      const sd = join(dir, ".pharn", "pharn-loop", "demo");
+      const sd = join(dir, "pharn", ".run", "pharn-loop", "demo");
       mkdirSync(sd, { recursive: true });
       const target = join(dir, "target");
       if (kind === "link-to-file") writeFileSync(target, "{}\n");

@@ -146,10 +146,12 @@ const STAGE_LOAD_CEILINGS = Object.freeze({
 /**
  * A read / re-read / follow / load verb, an optional `the`, then a backticked PHARN-shipped markdown path (under `pharn/`
  * or `.claude/commands/`) — matched over text whose whitespace and blockquote markers are folded, so a wrapped line
- * still matches. `pharn/features/` (the project's own artifacts) is skipped by readClosureOffenders.
+ * still matches. The project's own files under `pharn/` (PROJECT_ARTIFACTS) are skipped by readClosureOffenders.
  */
 const READ_RE = /\b(?:re-read|read|follow|load)\s+(?:the\s+)?`((?:pharn\/|\.claude\/commands\/)[^`\s]*?\.md)(?=[`\s])/gi;
-const PROJECT_ARTIFACTS = "pharn/features/";
+// The PROJECT's own files that live under pharn/ — never PHARN-shipped, so never in a load set. 7.0.0 added the last three
+// (pharn-footprint-move: canon, runtime scratch and the project SPEC template moved under pharn/).
+const PROJECT_ARTIFACTS = Object.freeze(["pharn/features/", "pharn/memory-bank/", "pharn/.run/", "pharn/spec-template.md"]);
 
 // ── helpers ───────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -314,7 +316,7 @@ function readClosureOffenders(stage, text, set) {
   const out = [];
   for (const m of text.matchAll(READ_RE)) {
     const path = m[1];
-    if (path.startsWith(PROJECT_ARTIFACTS) || set.has(path)) continue;
+    if (PROJECT_ARTIFACTS.some((p) => path.startsWith(p)) || set.has(path)) continue;
     out.push(
       `${stage}'s command family says to read "${path}", which is not in its load set — add "${path}" to ` +
         `STAGE_LOADS["${stage}"] in ${SELF}, then re-measure STAGE_LOAD_CEILINGS["${stage}"] (measured + 10%, rounded ` +
@@ -439,7 +441,7 @@ test("✧ LOAD L5: every 'read / follow / load `pharn/…md`' phrasing names a f
   for (const phrase of [
     "the shape `pharn/pharn-contracts/cost-ledger.md` defines",
     "Read `pharn/features/<name>/SPEC.md` live.",
-    "Read `memory-bank/lessons-learned.md` in full.",
+    "Read `pharn/memory-bank/lessons-learned.md` in full.",
     "Read `pharn/pharn-contracts/cost-ledger.mdx`.",
   ])
     assert.deepEqual(readClosureOffenders("pharn-grill", fold(phrase), set), [], phrase);

@@ -291,7 +291,7 @@ test("★ G10 — the render's fixed text and the repo-relative inputs the scrip
       gates: {},
       verdict: "INCONCLUSIVE",
       failing_gates: [],
-      reason: "stamp not found: .pharn/pharn-verify/gates/stamp.json",
+      reason: "stamp not found: pharn/.run/pharn-verify/gates/stamp.json",
       reason_code: "stamp-missing",
     }),
     ...REGISTRY.verify.refused.map((reasonCode) =>

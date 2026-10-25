@@ -23,7 +23,7 @@
 //
 // ===================================== PATH RESOLUTION =====================================
 // EVERY path operand — `--out`, `--spec-from`, `--discover`, `--scope-json`, `--ac-tests` — resolves against the
-// directory the runner is INVOKED from, and containment is checked against THAT directory's `.pharn/`.
+// directory the runner is INVOKED from, and containment is checked against THAT directory's `pharn/.run/`.
 // `--cwd` changes exactly two things: where the gates EXECUTE, and which tree is fingerprinted (and whose
 // HEAD is recorded). It never moves the runner's own records.
 //
@@ -31,7 +31,7 @@
 // resolve `--out` and `--spec-from` against `--cwd`, while `run --next` — which takes no `--cwd` — resolved
 // `--out` against the invoking directory. The two subcommands therefore disagreed about where the record
 // lived whenever `--cwd` was not `.`, and the one caller that passes it (`stage-regress.mjs`'s base side,
-// `--cwd .pharn/pharn-regress/base`) failed at `init` with `spec-mismatch`, reading the head record
+// `--cwd .pharn/pharn-regress/base`, the pre-7.0.0 path — migration note) failed at `init` with `spec-mismatch`, reading the head record
 // from INSIDE the base worktree. Every test ran with the default `--cwd .`, so nothing saw it (L41).
 //
 // The corollary: `init` and every `run --next` for one `<out>` must be issued from the SAME directory.
@@ -94,7 +94,7 @@
 // before. An offer that cannot be read is `reuse` absent — never a refusal: reuse is an optimisation, never a
 // requirement. The `reuse` field lives in the in-progress record only; a finalized stamp carries the provenance per run.
 // NAMED residual `verify-paused-chain-integrity`: while a budgeted verify chain is paused at `continue`, `state.json` —
-// its `reuse` binding included — is ordinary `.pharn/` state the write tools reach, exactly as its `runs` already are.
+// its `reuse` binding included — is ordinary `pharn/.run/` state the write tools reach, exactly as its `runs` already are.
 //
 // ================================ GATE EXCLUSION (6.36.0) ================================
 // `init --discover <m>` (no `--gates`) reads the project's `gates.exclude` from the `pharn.config.json` beside `<m>`
@@ -174,7 +174,25 @@ import { acRowsOf, badPath } from "./ac-tests-core.mjs";
 import { executionIdentity, findReusable, reusedRunRecord } from "./gate-reuse-core.mjs";
 import { loadGateExclusion } from "./gate-exclusion-core.mjs";
 
-const STATE_ROOT = ".pharn";
+const STATE_ROOT = "pharn/.run";
+
+/** 7.0.0: the state root sits under `pharn/`. A walk that STARTS at the state root lstats the root itself, and that
+ *  lstat follows a symlink at `pharn` without seeing it, so each such walk first refuses a link at either segment.
+ *  ENOENT ends the check (nothing below an absent segment can be a link); any other lstat error refuses. */
+function stateRootLinkFree(base) {
+  let cur = resolve(base);
+  for (const part of STATE_ROOT.split("/")) {
+    cur = join(cur, part);
+    let st;
+    try {
+      st = lstatSync(cur);
+    } catch (e) {
+      return Boolean(e && e.code === "ENOENT");
+    }
+    if (st.isSymbolicLink()) return false;
+  }
+  return true;
+}
 /** Grace between SIGTERM and SIGKILL, and the pid-reuse margin on a stale lock. */
 const KILL_GRACE_MS = 2000;
 const LOCK_GRACE_MS = 30000;
@@ -227,10 +245,11 @@ function has(args, name) {
  *  must not BE the state root, and may not traverse a symlink at any component. Checked once per
  *  invocation, before anything is created — a check performed after a write is not a containment check.
  *
- *  `base` is the directory `outDir` is resolved against and whose `.pharn/` is the state root. Both
+ *  `base` is the directory `outDir` is resolved against and whose `pharn/.run/` is the state root. Both
  *  subcommands pass the INVOKING directory, never `--cwd` (see PATH RESOLUTION in the header).
  *  ---------------------------------------------------------------------------------------------- */
 function assertContained(outDir, base) {
+  if (!stateRootLinkFree(base)) fail("path-containment", `refusing a state root that traverses a symlink at pharn or ${STATE_ROOT}`);
   const rootAbs = resolve(base, STATE_ROOT);
   const outAbs = resolve(base, outDir);
   if (outAbs === rootAbs) {
@@ -328,6 +347,7 @@ function sha256RegularFile(file) {
 const REUSE_MAX_BYTES = 64 * 1024 * 1024;
 
 function noLinkInside(base, relPath) {
+  if (!stateRootLinkFree(base)) return false;
   const rootAbs = resolve(base, STATE_ROOT);
   const abs = resolve(base, relPath);
   if (!(abs + sep).startsWith(rootAbs + sep) || abs === rootAbs) return false;
@@ -654,7 +674,7 @@ function readAcRows(file, feature) {
 
 /** `--targets` (6.39.0, build): a JSON array of repo-relative test files, read from a FILE (the `--scope-json` pattern —
  *  no list through argv splitting, L5), each one a path ac-tests-core.mjs `badPath` accepts — the path rule the red run
- *  already applies to the files it hands a runner (no glob, not absolute, no leading `-`, normalized, outside `.pharn/`
+ *  already applies to the files it hands a runner (no glob, not absolute, no leading `-`, normalized, outside `pharn/.run/`
  *  and `pharn/features/`). The array's shape (non-empty, unique, capped) is resolveSet's. Returns `{ok, targets}` or a
  *  reason naming a POSITION, never a value (L62). */
 function readTargets(file, name = "--targets") {

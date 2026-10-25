@@ -19,7 +19,7 @@
 // is deliberately NO claim that built code "matches" or "conforms to" a skill.
 //
 // TRUST (P2). A `.claude/skills/*/SKILL.md` is user-dropped markdown — `trust: untrusted`, NOT one of the four
-// write-protected trusted docs (LIMITS.md §1a "markdown is executable" applies). This helper reads ONLY
+// write-protected trusted docs (pharn/LIMITS.md §1a "markdown is executable" applies). This helper reads ONLY
 // directory/entry NAMES, never SKILL.md bodies. Enumeration hygiene (the core's header has the full rule):
 // exactly one level; symlinked skill dirs and symlinked SKILL.md files are skipped (lstat); JSON.stringify
 // escapes every name. BOUND: `.claude` itself is not lstat'ed, so a `.claude` link leaving the target is

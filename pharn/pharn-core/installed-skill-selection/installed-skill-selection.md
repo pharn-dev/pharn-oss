@@ -83,4 +83,4 @@ a decision input.
   never closed. The live evaluation of this procedure is recorded with its evals.
 - It does not certify that the work follows a skill, or that a skill is correct or safe.
 - It does not make a skipped skill harmless to review: a lens that skips a skill may miss a convention, and a
-  skill that is read may still argue a lens out of a real finding (`THREAT-MODEL.md §5`).
+  skill that is read may still argue a lens out of a real finding (`pharn/THREAT-MODEL.md §5`).

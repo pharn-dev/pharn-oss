@@ -235,7 +235,7 @@ error-handling / observability / privacy / performance grillers defer it). No ha
   ratified at the plan's GATE-1 approval (the observability-route choice) and reconciled with error-handling /
   observability at the grill halt. Named precisely to avoid over-claim: it is floor for **token presence**,
   used as **advisory evidence** — not a floor-gate.
-- **The ★ residual, named (`LIMITS.md §2`, `THREAT-MODEL.md §5`).** Because migrations findings are
+- **The ★ residual, named (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`).** Because migrations findings are
   **advisory**, "still surface the concern despite a fake/injected migration mention" (fixture
   `plan-fake-migration-injection`) is the **trust-fence heuristic**, not a floor guarantee — bounded (the
   finding gates nothing; the injected string is kept out of every enum-gated field by fix #1, floor-checked via

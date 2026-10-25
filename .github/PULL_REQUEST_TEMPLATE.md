@@ -18,7 +18,7 @@ Closes #<!-- issue number -->
 
 ## Checklist
 
-- [ ] I read the four trusted docs (`pharn/CONSTITUTION.md` → `pharn/ARCHITECTURE.md` → `THREAT-MODEL.md` → `LIMITS.md`) and did **not** edit them — they are human-only and hook-protected.
+- [ ] I read the four trusted docs (`pharn/CONSTITUTION.md` → `pharn/ARCHITECTURE.md` → `pharn/THREAT-MODEL.md` → `pharn/LIMITS.md`) and did **not** edit them — they are human-only and hook-protected.
 - [ ] No constitutional principle (P0–P7) is violated.
 - [ ] If this adds a Capability: it has a `role:` and ships evals (`evals/cases/` + `evals/expected/`), and every `enforces` rule_id is produced by ≥1 eval case (P1).
 - [ ] Findings cite a file-qualified `rule_id`; no guarantee is claimed without a floor reduction, otherwise it is labeled `advisory` (P0).

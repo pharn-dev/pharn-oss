@@ -11,15 +11,15 @@
 //   probes (a main checkout: protect-trusted-paths.cjs, a `.git` segment; a linked worktree: enforce-writes-scope.cjs, a
 //   path in another git tree), with 6.34.0's named separate-git-dir bound. It is published ONLY by `entry-gates.mjs
 //   --wait` after every one of its checks passed, for a green, red or unmeasured verdict, and discarded by every `--start` (L66:
-//   regress never reads whatever happens to remain in `.pharn/pharn-entry/` — only a source an offer binds by sha256).
-// • The SOURCE stays where the runner wrote it: `.pharn/pharn-entry/gates/` (the stamp and each gate's logs), which the
+//   regress never reads whatever happens to remain in `pharn/.run/pharn-entry/` — only a source an offer binds by sha256).
+// • The SOURCE stays where the runner wrote it: `pharn/.run/pharn-entry/gates/` (the stamp and each gate's logs), which the
 //   write tools reach. The offer binds the stamp's bytes and the stamp binds each log's, so an edit reads as a MISS.
-// • The DERIVED stamp is written into `.pharn/pharn-regress/base-gates/` — where check-loop-fresh.mjs and the verdict read
+// • The DERIVED stamp is written into `pharn/.run/pharn-regress/base-gates/` — where check-loop-fresh.mjs and the verdict read
 //   a BASE stamp — from scratch, after the verdict-time re-decision: each copied log is verified against the entry
 //   stamp's digest before it is written and re-hashed after (the run-gates.mjs `tryReuse` discipline), the stamp last.
 //
-// WHAT REMAINS WRITABLE, stated (P0): a Bash writer reaches the git dir and `.pharn/` alike (L19) and can forge the offer,
-// the snapshot, the marker and the evidence together; nothing detects it. The derived stamp itself is `.pharn/` state:
+// WHAT REMAINS WRITABLE, stated (P0): a Bash writer reaches the git dir and `pharn/.run/` alike (L19) and can forge the offer,
+// the snapshot, the marker and the evidence together; nothing detects it. The derived stamp itself is `pharn/.run/` state:
 // after the verdict, check-loop-fresh.mjs D/E/J re-bind it to the report and its logs, nothing more.
 //
 // ================================ READS — lstat-first, never followed (L54, L59) ================================
@@ -148,7 +148,7 @@ export function decideEntryFromDisk({ feature, base, timeoutMs, installOverride 
 }
 
 /**
- * Write the entry-derived BASE evidence for a HIT's `detail` into `.pharn/pharn-regress/base-gates/`, from scratch: each
+ * Write the entry-derived BASE evidence for a HIT's `detail` into `pharn/.run/pharn-regress/base-gates/`, from scratch: each
  * log verified against the entry stamp's digest before the write and re-hashed after it, a `no-files` slot's empty logs,
  * then the stamp (tmp + rename) LAST. Returns `{ok: true, stampSha256}` or `{ok: false, miss: "log-unverified"}`; on a
  * failure the partial directory is removed, so no derived stamp is ever left without its logs.

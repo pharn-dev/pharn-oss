@@ -20,7 +20,7 @@ durable).
 
 Both `PreToolUse` write guards match `Write|Edit|MultiEdit|NotebookEdit`. A write issued through
 **`Bash`** reaches every path in the repository, is not denied, and — with no `PostToolUse` hook wired —
-leaves no record. `LIMITS.md §6` states that bound; this contract is the shape of the mechanism that
+leaves no record. `pharn/LIMITS.md §6` states that bound; this contract is the shape of the mechanism that
 makes such a write **detectable after the fact**.
 
 ## The claim these artifacts support — and the seven it does not
@@ -36,13 +36,14 @@ mistake, which is the entire population of the `L19`/`L20` failures it was built
 control against an attacker**. Only the always-reconciled control surface resists that actor, because
 only it is anchored in committed git objects rather than in the baseline. Since 6.53.0 that surface is the guard
 files and the floors **plus the human-only surface and memory-bank canon** (§4a). Before 6.53.0, a forged baseline
-entry cleared a Bash edit of `LIMITS.md`.
+entry cleared a Bash edit of
+`LIMITS.md` (migration: now `pharn/LIMITS.md`).
 
 **Struck (P0), each for a stated reason:**
 
 | Struck claim                                  | Why                                                                                                                                                                                                                                                                   |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Bash writes are prevented"                   | Detection is strictly weaker than prevention. The only true prevention is OS-level sandboxing of the `Bash` process, which PHARN does not implement and cannot — harness-layer, environment-dependent, not expressible in markdown methodology (`LIMITS.md §6`)       |
+| "Bash writes are prevented"                   | Detection is strictly weaker than prevention. The only true prevention is OS-level sandboxing of the `Bash` process, which PHARN does not implement and cannot — harness-layer, environment-dependent, not expressible in markdown methodology (`pharn/LIMITS.md §6`) |
 | "all Bash writes are detected"                | Only those to **denied** paths, inside the reconciled set, between two anchors, in one worktree                                                                                                                                                                       |
 | "a `CLEAN` verdict means no escape occurred"  | It means none was **detected**                                                                                                                                                                                                                                        |
 | "the detector cannot be disabled"             | Its state is reachable by the channel it monitors. **Deleting** it is loud (`--require-baseline` ⇒ `INCONCLUSIVE`), and the control surface is anchored in committed blob ids — but **forging** an ordinary path's baseline entry is silent                           |
@@ -50,14 +51,14 @@ entry cleared a Bash edit of `LIMITS.md`.
 | "the checker vouches for its own integrity"   | It cannot. `/pharn-*verify` runs the **worktree** copy through Bash. `pharn/floor/` is always-reconciled, so a modified checker is caught **by itself** — circular, and not a guarantee                                                                               |
 | "skipping the anchor fails the run"           | Only in a tree that has **never** anchored. Otherwise `--require-baseline` is satisfied by whatever earlier epoch is on disk, and the reconciliation silently ranges over the wrong window. The anchor is a Bash call (`L19`), so nothing forces it                   |
 
-## 1. The baseline record — `.pharn/reconcile/baseline.json`
+## 1. The baseline record — `pharn/.run/reconcile/baseline.json`
 
-Written by `pharn/floor/reconcile-baseline.mjs --anchor`. Gitignored (it lives under `.pharn/`), and
+Written by `pharn/floor/reconcile-baseline.mjs --anchor`. Gitignored (it lives under `pharn/.run/`), and
 **disposable**: absent means "no epoch has been opened", which is the honest normal state of a fresh
 clone.
 
 **Since 6.24.0, `--anchor` REFUSES to open an epoch with no usable scope to snapshot (D6).** When
-`snapshotScope()` returns `null` — an absent or unusable `.pharn/writes-scope.json` — the command exits 2
+`snapshotScope()` returns `null` — an absent or unusable `pharn/.run/writes-scope.json` — the command exits 2
 and writes nothing, with a message naming the remedy (run the stage's own scope-setter first). An
 explicit `{"scope": []}` **is** a scope (an authorization to write nothing) and anchors normally. Both
 shipped callers (`/pharn-build`, `/pharn-dev-build`) already run their own Step-0 setter immediately
@@ -71,26 +72,26 @@ before this call, so the refusal reaches only a caller that anchors out of order
   "anchored_head": "052709d2c0ffee…",
   "scope_snapshot": { "scope": ["src/app.ts"], "set_by": "pharn/features/x/PLAN.md", "set_at": "…" },
   "scope_amendments": [
-    { "scope": ["memory-bank/lessons-learned.md"], "set_by": ".claude/commands/pharn-memory-promote.md", "set_at": "…" }
+    { "scope": ["pharn/memory-bank/lessons-learned.md"], "set_by": ".claude/commands/pharn-memory-promote.md", "set_at": "…" }
   ],
   "entry_count": 1759,
   "entries": { "<repo-relative path>": "<sha256 hex>" }
 }
 ```
 
-| Field              | Type             | Meaning                                                                                                                                                                                                   |
-| ------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                 |
-| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                    |
-| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                       |
-| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.52.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`   |
-| `scope_snapshot`   | object \| `null` | A verbatim copy of `.pharn/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.24.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above) |
-| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                              |
-| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                               |
-| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below)        |
+| Field              | Type             | Meaning                                                                                                                                                                                                       |
+| ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                     |
+| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                        |
+| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                           |
+| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.52.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`       |
+| `scope_snapshot`   | object \| `null` | A verbatim copy of `pharn/.run/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.24.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above) |
+| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                                  |
+| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                                   |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below)            |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
-`.pharn/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
+`pharn/.run/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
 worktree, that every stage's Step 0 overwrites (lessons-learned **L38**; `check-regress.mjs` documents
 the same trap from the other side). Reading it live would judge the build's writes against verify's
 scope.
@@ -375,7 +376,7 @@ quantified over a set, the enumeration is the deliverable). Five keys:
 
 | Key                  | What it holds                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `.pharn/`, `runs/` cost nothing                                                                                                                                                                                              |
+| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `pharn/.run/`, `runs/` cost nothing                                                                                                                                                                                          |
 | `always_reconciled`  | Never exemptible, and compared against HEAD's committed blobs on every run, with or without a baseline: tracked changes and **added untracked files** (6.53.0). `exact` + `prefixes` are the guards' control surface and the floors; `human_only` + `human_only_prefixes` are the human-only surface and canon (§4a). Each list is a **copy** of the hooks' own sets, pinned set-equal by test |
 | `pipeline_artifacts` | A stage's **own** output (`pharn/features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test                                                                                           |
 | `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                                                                                                                       |
@@ -392,11 +393,12 @@ it.
 
 ## 4a. The human-only surface is always reconciled (6.53.0)
 
-**Why (P7, measured — audit 2026-10-07).** In the audit's fixture, a Bash edit of `LIMITS.md` followed by a
+**Why (P7, measured — audit 2026-10-07).** In the audit's fixture, a Bash edit of
+`LIMITS.md` (migration: now `pharn/LIMITS.md`) followed by a
 rewrite of its baseline entry read `CLEAN`. The four trusted docs were not always-reconciled, so the forgeable
 baseline was their only reference. A second hole sat in the HEAD comparison itself: `git diff HEAD` never lists an
 **untracked** file, so a control path absent at HEAD could be created through Bash and hidden the same way. With no
-baseline at all it read `NO_BASELINE`. Examples are `pharn.spec-template.md`, which most repositories do not have,
+baseline at all it read `NO_BASELINE`. Examples are `pharn/spec-template.md`, which most repositories do not have,
 or a new `pharn/floor/x.mjs`.
 
 **What joined:**
@@ -404,11 +406,11 @@ or a new `pharn/floor/x.mjs`.
 - `human_only` — `protect-trusted-paths.cjs`'s `DEFAULT_PROTECTED` minus the guard control surface:
   - the four trusted docs;
   - `CODEOWNERS` at its three GitHub locations (root, `.github/`, `docs/`);
-  - `pharn.spec-template.md`.
+  - `pharn/spec-template.md`.
 
-  `.pharn/writes-scope.json` is excluded by name: it is gitignored runtime state, never in the reconciled set.
+  `pharn/.run/writes-scope.json` is excluded by name: it is gitignored runtime state, never in the reconciled set.
 
-- `human_only_prefixes` — the hook's `PROTECTED_SUBTREES`, `memory-bank/` and `.dev/memory-bank/`. That is the whole
+- `human_only_prefixes` — the hook's `PROTECTED_SUBTREES`, `pharn/memory-bank/` and `.dev/memory-bank/`. That is the whole
   canon subtree, dev and product alike, because the hook denies the whole subtree.
 - Every always-reconciled path's **added untracked-not-ignored** file is now a candidate too, from git's own
   `ls-files --others --exclude-standard`. The listing is filtered to control paths only, so an untracked file
@@ -429,7 +431,7 @@ or a new `pharn/floor/x.mjs`.
 
 - inside a build's anchor→verify window, as before;
 - **and now also with no baseline**, because the HEAD comparison sees it. So `npm run check` (`check:reconcile`) on
-  a checkout holding an uncommitted `LIMITS.md` edit is RED, exactly as an uncommitted guard edit already was.
+  a checkout holding an uncommitted `pharn/LIMITS.md` edit is RED, exactly as an uncommitted guard edit already was.
 - The same holds for an uncommitted canon write by `/pharn-*memory-promote` run outside any build epoch, until that
   write is committed.
 

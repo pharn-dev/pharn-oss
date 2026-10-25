@@ -61,7 +61,7 @@ test("IGNORE_DATA_PATH is the committed reconcile-ignore.json beside the core, a
   assert.ok(existsSync(core.IGNORE_DATA_PATH));
   const data = core.loadIgnoreData();
   assert.equal(data.ok, true, data.reason);
-  assert.ok(core.isAlwaysReconciled("LIMITS.md", data), "a human-only member");
+  assert.ok(core.isAlwaysReconciled("pharn/LIMITS.md", data), "a human-only member");
   assert.ok(core.isAlwaysReconciled("pharn/floor/x.mjs", data), "a prefix member");
   assert.ok(!core.isAlwaysReconciled("src/x.ts", data), "a non-member (control)");
 });

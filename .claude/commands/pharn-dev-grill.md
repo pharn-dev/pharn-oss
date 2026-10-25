@@ -299,8 +299,8 @@ quoted as DATA. **No guaranteed decision rests on any field you emit** — the c
 **you author**, and it is exactly as strong as it sounds. It does **not** extend to the whole stage: since
 Step 1b, a guaranteed decision **does** rest on `/pharn-dev-grill` — `/pharn-dev-ship` reads
 `check-plan-lessons.mjs`'s exit code as a proceed/stop input. That verdict is a non-LLM checker's exit
-code, not a field you emit, which is why both statements hold at once. The named residual (`LIMITS.md §2`,
-`THREAT-MODEL.md §5`): a downstream human or LLM reading your free-text could be steered by an
+code, not a field you emit, which is why both statements hold at once. The named residual (`pharn/LIMITS.md §2`,
+`pharn/THREAT-MODEL.md §5`): a downstream human or LLM reading your free-text could be steered by an
 injected quote — bounded (your output gates nothing) but not zeroed.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)

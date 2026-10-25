@@ -223,7 +223,7 @@ error-handling grillers defer it). No half-specified runner is built here.
   ratified at the plan's GATE-1 approval and reconciled with `error-handling` at the grill halt. Named
   precisely to avoid over-claim: it is floor for **token presence**, used as **advisory evidence** — not a
   floor-gate.
-- **The ★ residual, named (`LIMITS.md §2`, `THREAT-MODEL.md §5`).** Because observability findings are
+- **The ★ residual, named (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`).** Because observability findings are
   **advisory**, "still surface the concern despite a fake/injected observability mention" (fixture
   `plan-fake-observability-injection`) is the **trust-fence heuristic**, not a floor guarantee — bounded (the
   finding gates nothing; the injected string is kept out of every enum-gated field by fix #1, floor-checked via

@@ -73,7 +73,7 @@ function fixture({ record = loopRecord(), spec = "Draft", reflog = true } = {}) 
   if (!reflog) rmSync(join(dir, ".git", "logs"), { recursive: true, force: true });
   writeFileSync(join(dir, "README"), "seed\n");
   writeFileSync(join(dir, "-"), "committed\n");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   sh(dir, "add", "-A");
   assert.equal(sh(dir, "commit", "-q", "-m", "seed").status, 0, "fixture: the seed commit");
   const base = sh(dir, "rev-parse", "HEAD").stdout.trim();
@@ -82,7 +82,7 @@ function fixture({ record = loopRecord(), spec = "Draft", reflog = true } = {}) 
   writeFileSync(join(fd, "SPEC.md"), `---\nspec_id: demo\nstate: ${spec}\nspec_content_hash: ""\n---\n\n## Intent\n\nx\n`);
   writeFileSync(join(fd, "PLAN.md"), "# PLAN\n\n## Files\n\n- `src/a.js` — the change\n");
   if (record !== null) writeFileSync(join(fd, "LOOP.md"), record);
-  mkdirSync(join(dir, ".pharn", "pharn-loop", FEATURE), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE), { recursive: true });
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
   const head = () =>
@@ -117,7 +117,7 @@ function stub({ exits = {}, scope = ["src/a.js"], scopeRecord } = {}) {
     calls.push({ id: s.id, script: s.script, args: [...s.args] });
     if (s.id === "set-writes-scope.cjs --from-plan") {
       const rec = scopeRecord ?? { scope, set_by: `pharn/features/${FEATURE}/PLAN.md`, set_at: "x" };
-      writeFileSync(join(".pharn", "writes-scope.json"), typeof rec === "string" ? rec : JSON.stringify(rec));
+      writeFileSync(join("pharn", ".run", "writes-scope.json"), typeof rec === "string" ? rec : JSON.stringify(rec));
     }
     const status = Object.hasOwn(exits, s.id) ? exits[s.id] : 0;
     return { status, stdout: `${s.id} said hi\n`, stderr: "", error: null };
@@ -568,7 +568,7 @@ test("exit 4 — the lock or a test it pins not a regular file → stage failed 
 test("exit 4 — nothing to stage (every candidate absent or ignored) → nothing staged", () => {
   const fx = fixture();
   try {
-    writeFileSync(join(fx.dir, ".gitignore"), ".pharn/\npharn/features/\n");
+    writeFileSync(join(fx.dir, ".gitignore"), "pharn/.run/\npharn/features/\n");
     const { doc } = close(fx, { run: stub({ scope: [] }).run });
     assert.equal(doc.outcome, "not committed: nothing staged");
   } finally {
@@ -751,11 +751,11 @@ test("buildStageList — regular files and tracked deletions, minus ignored ones
   try {
     inDir(fx.dir, () => {
       writeFileSync("ignored.log", "x\n");
-      writeFileSync(".gitignore", ".pharn/\n*.log\n");
+      writeFileSync(".gitignore", "pharn/.run/\n*.log\n");
       rmSync("README"); // a tracked deletion
       symlinkSync("nowhere", "dangling");
       writeFileSync(
-        join(".pharn", "writes-scope.json"),
+        join("pharn", ".run", "writes-scope.json"),
         JSON.stringify({
           set_by: "pharn/features/demo/PLAN.md",
           scope: ["src/a.js", "README", "ignored.log", "dangling", "src", "src/a.js", "absent.js"],
@@ -783,7 +783,7 @@ test("buildStageList — the lock's pinned tests are staged", () => {
       mkdirSync("test", { recursive: true });
       writeFileSync(join("test", "ac.test.mjs"), "x\n");
       writeFileSync(join("pharn", "features", FEATURE, "AC-TESTS.lock.json"), JSON.stringify({ files: [{ path: "test/ac.test.mjs" }] }));
-      writeFileSync(join(".pharn", "writes-scope.json"), JSON.stringify({ set_by: "pharn/features/demo/PLAN.md", scope: [] }));
+      writeFileSync(join("pharn", ".run", "writes-scope.json"), JSON.stringify({ set_by: "pharn/features/demo/PLAN.md", scope: [] }));
       const r = buildStageList(FEATURE);
       assert.equal(r.code, 0);
       assert.ok(r.paths.includes("test/ac.test.mjs"));
@@ -819,14 +819,14 @@ test("STAGE_ARTIFACTS is the close part's former list, in its order", () => {
 
 test("the add, commit and undo argv equal the close part's former lines", () => {
   const list = stageListPath("<name>");
-  assert.equal(list, ".pharn/pharn-loop/<name>/stage.list");
-  assert.deepEqual(addArgs(list), ["add", "-A", "--pathspec-from-file=.pharn/pharn-loop/<name>/stage.list", "--pathspec-file-nul"]);
+  assert.equal(list, "pharn/.run/pharn-loop/<name>/stage.list");
+  assert.deepEqual(addArgs(list), ["add", "-A", "--pathspec-from-file=pharn/.run/pharn-loop/<name>/stage.list", "--pathspec-file-nul"]);
   // One stated difference from the former line: `-q` (independent review R8), so a commit's summary does not crowd the
   // closing JSON line out of the tool result; hook output is still echoed (capped).
   assert.deepEqual(commitArgs(list, "<name>", "<decision>", "<N>"), [
     "commit",
     "-q",
-    "--pathspec-from-file=.pharn/pharn-loop/<name>/stage.list",
+    "--pathspec-from-file=pharn/.run/pharn-loop/<name>/stage.list",
     "--pathspec-file-nul",
     "-m",
     "pharn-loop(<name>): <decision> after <N> iteration(s)",
@@ -836,7 +836,7 @@ test("the add, commit and undo argv equal the close part's former lines", () => 
   assert.deepEqual(
     undoArgs(list, "<branch>").map((u) => [u.literal, ...u.args]),
     [
-      [true, "reset", "-q", "--pathspec-from-file=.pharn/pharn-loop/<name>/stage.list", "--pathspec-file-nul"],
+      [true, "reset", "-q", "--pathspec-from-file=pharn/.run/pharn-loop/<name>/stage.list", "--pathspec-file-nul"],
       [false, "checkout", "-", "--"],
       [false, "branch", "-d", "<branch>"],
     ]
@@ -917,7 +917,7 @@ const HOSTILE_BRANCH = "fix';touch${IFS}PWNED_BRANCH;'x";
 function stageFailed(dir) {
   writeFileSync(join(dir, "README"), "changed by the run\n");
   sh(dir, "add", "README");
-  writeFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "stage.list"), "README\0");
+  writeFileSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "stage.list"), "README\0");
 }
 
 test("★ the branch then the undo return to a hostile original branch and run nothing from its name", () => {
@@ -1058,7 +1058,11 @@ test("★ END-TO-END — a blocked stop, real children: ledger and report writte
     );
     assert.ok(existsSync(join(fx.dir, "pharn", "features", FEATURE, "cost.json")));
     assert.ok(existsSync(join(fx.dir, "pharn", "features", FEATURE, "RUN-REPORT.md")));
-    assert.equal(existsSync(join(fx.dir, ".pharn", "pharn-loop", FEATURE, "active.json")), false, "the Stop guard's marker is closed");
+    assert.equal(
+      existsSync(join(fx.dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json")),
+      false,
+      "the Stop guard's marker is closed"
+    );
     assert.match(r.stdout, /no re-runs/);
   } finally {
     fx.done();

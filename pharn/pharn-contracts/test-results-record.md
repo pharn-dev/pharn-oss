@@ -86,13 +86,13 @@ change the format. Treat a change to this block like a change to the test script
 The runner (`run-gates.mjs`) spawns **every** gate with one extra environment variable:
 
 - **`PHARN_TEST_RESULTS`** — the absolute path `<out>/<seq>-<id>.test-results.json`, where `<out>` is the
-  stage's runner directory under `.pharn/` (for example `.pharn/pharn-verify/gates`). Same name for every
+  stage's runner directory under `pharn/.run/` (for example `pharn/.run/pharn-verify/gates`). Same name for every
   gate, a different value per gate, so a later gate cannot overwrite an earlier gate's file.
 
 The project's reporter config reads the variable. PHARN chooses the path; the project never names one. That
 keeps every write and delete inside the runner's own state root, lets `init`'s wipe of `<out>` clear every
 earlier run's file (runner behaviour pinned by tests, not a floor primitive), and keeps the file out of the
-worktree fingerprint (`.pharn/` is excluded), so writing it never marks a gate as having mutated the tree.
+worktree fingerprint (`pharn/.run/` is excluded), so writing it never marks a gate as having mutated the tree.
 
 Before a gate runs, the runner removes whatever is at that path (a file, a symlink without following it, or a
 directory); `init`'s wipe does not cover an entry re-run after a stale lock. A path it still cannot remove is a

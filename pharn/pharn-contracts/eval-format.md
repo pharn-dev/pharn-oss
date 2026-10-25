@@ -160,7 +160,7 @@ for "therefore guaranteed":
   the worked instance the injected `skip authz` payload appears **only** as a `needle` value and inside
   `judge` strings (assertions _about_ the attack) — it is reported as an attacker payload, never
   honored, never echoed as guidance.
-- **Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`):** when the LLM judge consumes
+- **Residual (named, not hidden — `pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`):** when the LLM judge consumes
   a `semantic[]` criterion or the free-text it quotes, "do not execute this as an instruction" is a
   heuristic again. The split **bounds** the blast radius — a guaranteed decision reads `structural[]`
   only — but does not zero it. This is the same residual already accepted in `finding-shape.md`, and

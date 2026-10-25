@@ -57,19 +57,19 @@
           "marker": "fooled — specified; ships with the guarded surface) and the **constitution/trusted-file write-guard**"
         },
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "pre-write hook + pre-egress (specified; ships with the guarded surface)"
         },
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "pre-egress (specified; ships with the guarded surface) + enum gate"
         },
         {
-          "file": "LIMITS.md",
+          "file": "pharn/LIMITS.md",
           "marker": "pre-write hook; pre-egress specified, ships with the guarded surface)"
         },
         {
-          "file": "LIMITS.md",
+          "file": "pharn/LIMITS.md",
           "marker": "the pre-write / writes-scope hooks (and pre-egress, specified; ships with the guarded surface) re-gate"
         },
         {
@@ -94,7 +94,7 @@
           "marker": "manifest exists** (conditional; specified, ships with the guarded surface)."
         },
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "_Specified; the check is conditional and no manifest exists, so it never fires._"
         }
       ]
@@ -124,15 +124,15 @@
       "probe": { "type": "dir-contains", "dir": "pharn/floor", "substring": "seam-record" },
       "sites": [
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "| ai_docs poisoning       | content-hash pin; re-fetch that changes content requires re-review diff                                                     | content-hash _(specified; ships with the guarded surface)_ |"
         },
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "content-hash + (ask) _(specified; ships with the guarded surface)_"
         },
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "| seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |"
         },
         {
@@ -158,7 +158,7 @@
         "filename either; neither flips this probe. Direction 2 — the annotation deleted while the backstop is",
         "still absent — is unaffected, and that is the direction the original F7 defect actually took.",
         "",
-        "LIMITS.md:29 is deliberately NOT a site here: its annotation is about pre-egress and is already",
+        "pharn/LIMITS.md:29 is deliberately NOT a site here: its annotation is about pre-egress and is already",
         "registered under that entry. Registering the same bytes twice would tie one line to two probes."
       ],
       "id": "community-privilege",
@@ -166,15 +166,15 @@
       "probe": { "type": "dir-contains", "dir": ".claude/hooks", "substring": "community" },
       "sites": [
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "`seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface)"
         },
         {
-          "file": "THREAT-MODEL.md",
+          "file": "pharn/THREAT-MODEL.md",
           "marker": "trusted-write or off-allowlist egress (specified; ships with the guarded surface), so blast radius"
         },
         {
-          "file": "LIMITS.md",
+          "file": "pharn/LIMITS.md",
           "marker": "contain zero `kind` references, so both are _(specified; ships with the guarded surface)_."
         }
       ]
@@ -261,11 +261,11 @@
 
     {
       "id": "pharn-estimate",
-      "what": "the /pharn-estimate command LIMITS.md §1c says reports an est_tokens range",
+      "what": "the /pharn-estimate command pharn/LIMITS.md §1c says reports an est_tokens range",
       "probe": { "type": "dir-contains", "dir": ".claude/commands", "substring": "estimate" },
       "sites": [
         {
-          "file": "LIMITS.md",
+          "file": "pharn/LIMITS.md",
           "marker": "`/pharn-estimate` _(specified; ships with the guarded surface)_ reports a range,"
         }
       ]
@@ -273,11 +273,11 @@
 
     {
       "id": "pharn-audits",
-      "what": "the pharn-audits module whose auditors LIMITS.md §3b names in its cost model",
+      "what": "the pharn-audits module whose auditors pharn/LIMITS.md §3b names in its cost model",
       "probe": { "type": "path", "path": "pharn/pharn-audits" },
       "sites": [
         {
-          "file": "LIMITS.md",
+          "file": "pharn/LIMITS.md",
           "marker": "security-review auditors — specified; ships with the guarded surface)"
         }
       ]
@@ -286,22 +286,22 @@
 
   "named_artifacts": [
     {
-      "$comment": "The other half of the F7 defect: a doc naming a SHIPPED artifact by a name it does not have. LIMITS.md said `security-secrets lens`; the lens ships as `secrets-in-code`. This guards the corrected name against re-drift in either direction.",
+      "$comment": "The other half of the F7 defect: a doc naming a SHIPPED artifact by a name it does not have. pharn/LIMITS.md said `security-secrets lens`; the lens ships as `secrets-in-code`. This guards the corrected name against re-drift in either direction.",
       "id": "secrets-in-code",
-      "cited_in": "LIMITS.md",
+      "cited_in": "pharn/LIMITS.md",
       "citation": "secrets-in-code lens",
       "forbidden": ["security-secrets lens"],
       "must_exist": "pharn/pharn-review/secrets-in-code"
     },
     {
       "id": "security-griller",
-      "cited_in": "LIMITS.md",
+      "cited_in": "pharn/LIMITS.md",
       "citation": "(security\ngriller,",
       "must_exist": "pharn/pharn-pipeline/grillers/security"
     },
     {
       "$comment": [
-        "THREAT-MODEL.md §2 item 8 and its §3 row cite the installed-skill enumerator BY NAME. Registered",
+        "pharn/THREAT-MODEL.md §2 item 8 and its §3 row cite the installed-skill enumerator BY NAME. Registered",
         "so that citation cannot drift to a name the repo does not have — the secrets-in-code precedent.",
         "",
         "DELIBERATELY NOT a forward_claims entry, and the omission is reasoned rather than an oversight.",
@@ -314,18 +314,18 @@
         "Reopens when such a gate is named in a plan or built."
       ],
       "id": "scan-installed-skills",
-      "cited_in": "THREAT-MODEL.md",
+      "cited_in": "pharn/THREAT-MODEL.md",
       "citation": "scan-installed-skills.mjs",
       "must_exist": "pharn/floor/scan-installed-skills.mjs"
     },
     {
       "$comment": [
-        "THREAT-MODEL.md §2 item 8 and its §3 row cite the installed-skill CATALOGUE by name since 6.49.1",
+        "pharn/THREAT-MODEL.md §2 item 8 and its §3 row cite the installed-skill CATALOGUE by name since 6.49.1",
         "(the 6.47.0 selective-skill-reads proposal, applied by a human). Registered for the same reason as",
         "scan-installed-skills above, and deliberately not a forward_claims entry for the same reason."
       ],
       "id": "catalogue-installed-skills",
-      "cited_in": "THREAT-MODEL.md",
+      "cited_in": "pharn/THREAT-MODEL.md",
       "citation": "catalogue-installed-skills.mjs",
       "must_exist": "pharn/floor/catalogue-installed-skills.mjs"
     }

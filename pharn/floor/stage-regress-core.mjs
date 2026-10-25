@@ -41,19 +41,19 @@
 // refused by the stage (`no-change-under-test`).
 //
 // ==================================== THE PROGRESS RECORD ====================================
-// `.pharn/pharn-regress/stage.json` (REGRESS_PATHS.stageJson) is the in-progress record `--resume` reads.
+// `pharn/.run/pharn-regress/stage.json` (REGRESS_PATHS.stageJson) is the in-progress record `--resume` reads.
 // It carries EXACTLY what a resumed invocation needs and nothing re-derivable more cheaply elsewhere:
 // the resolved `base` (a git rev-parse the CLI must not repeat, since the working tree/remote state that
 // produced it may have moved by the time `--resume` runs — re-deriving it could silently pick a DIFFERENT
 // commit), the resolved INSTALL decision (so a resumed run does not need to re-read the base commit's tree
 // a second time), and the NEXT phase to execute. Everything else a resumed run needs — the discovered gate
 // set, the test-file universe, the scope partition — is ALREADY durable on disk by the time a progress
-// record can exist (run-gates.mjs's own stamps, `.pharn/pharn-regress/scope.json`), so it is read from
+// record can exist (run-gates.mjs's own stamps, `pharn/.run/pharn-regress/scope.json`), so it is read from
 // there rather than duplicated here (one owner of each fact, L35).
 //
 // Since `/2` (6.33.0) it also carries `baseReuse`, the BASE-reuse decision made once the HEAD side is done, because a
 // resumed invocation must know whether to run the base phases at all and what to report. It is never TRUSTED as a
-// HIT: `stage-regress.mjs` re-decides a persisted HIT in full at the verdict (the record is ordinary `.pharn/` state
+// HIT: `stage-regress.mjs` re-decides a persisted HIT in full at the verdict (the record is ordinary `pharn/.run/` state
 // the write tools reach, `regress-base-reuse.mjs`, header). A persisted MISS keeps the delivery run it saw, which a
 // later publication must see again.
 //
@@ -85,18 +85,18 @@ function isCleanToken(v, max = 4096) {
  *  `DEFAULT_STAMPS.regressHead`/`regressBase` are DERIVED from it rather than a second literal (L35).
  *  ---------------------------------------------------------------------------------------------- */
 export const REGRESS_PATHS = Object.freeze({
-  root: ".pharn/pharn-regress",
-  head: ".pharn/pharn-regress/head",
-  baseGates: ".pharn/pharn-regress/base-gates",
+  root: "pharn/.run/pharn-regress",
+  head: "pharn/.run/pharn-regress/head",
+  baseGates: "pharn/.run/pharn-regress/base-gates",
   // LEGACY (regress-base-integrity): the BASE worktree's location until 6.49.x, nested in the project. It is never created
   // now (base-worktree.mjs puts the checkout in the temp root); it is CLEARED at every fresh start as an upgrade
   // leftover, and entry-gates.mjs still refuses its base slot while one stands there.
-  legacyBase: ".pharn/pharn-regress/base",
-  scopeJson: ".pharn/pharn-regress/scope.json",
-  stageJson: ".pharn/pharn-regress/stage.json",
+  legacyBase: ".pharn/pharn-regress/base", // migration: the pre-7.0.0, pre-6.50 nested base; never created now
+  scopeJson: "pharn/.run/pharn-regress/scope.json",
+  stageJson: "pharn/.run/pharn-regress/stage.json",
   // 6.40.0 — the HEAD install check's result (install-drift.mjs), written at head-init and re-read at render, so a
   // resumed chain reports it without a progress-record field (the scope.json precedent).
-  headInstall: ".pharn/pharn-regress/head-install.json",
+  headInstall: "pharn/.run/pharn-regress/head-install.json",
 });
 
 /** ------------------------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ export const RESUMABLE_PHASES = Object.freeze(
  *  this module's G8 pin keeps its imports at `gate-run-core.mjs`, so the rules that USE them live in
  *  `regress-base-reuse-core.mjs`, which imports these.
  *
- *  DELIVERY_COMMANDS — the delivery runs that invoke /pharn-regress, whose run markers (`.pharn/<command>/<feature>/
+ *  DELIVERY_COMMANDS — the delivery runs that invoke /pharn-regress, whose run markers (`pharn/.run/<command>/<feature>/
  *  active.json`, written by require-loop-record.cjs and run-marker.mjs) bound a reuse to ONE run.
  *  BASE_REUSE_MISSES — why a base run was NOT reused, in the predicate's evaluation order (first failure decides).
  *  The one owner of each member's meaning (the contract cites this list rather than restating it, P4):

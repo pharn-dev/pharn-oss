@@ -122,7 +122,7 @@ function world({ levels = ["unit", "unit"], mapped = null, kind = null } = {}) {
     acs: ids.map((id) => ({ id, tests: [tid(FILE(id.slice(3)), `${id}: t`)] })),
   };
   writeFileSync(lockPath, JSON.stringify(lock, null, 2));
-  const outDir = join(root, ".pharn", "pharn-verify", "gates");
+  const outDir = join(root, "pharn", ".run", "pharn-verify", "gates");
   mkdirSync(outDir, { recursive: true });
   const results = [
     ...ids.map((id) => ({ file: FILE(id.slice(3)), title: `${id}: t`, status: "passed" })),
@@ -685,7 +685,7 @@ function bootWorld(levels = ["unit", "integration"]) {
   const r = spawnSync(process.execPath, [LOCK_CLI, "--write-bootstrap", NAME], { cwd: root, encoding: "utf8" });
   assert.equal(r.status, 0, `fixture: --write-bootstrap: ${r.stdout}`);
   writeFileSync(join(root, "pharn.config.json"), JSON.stringify({ testResults: { test: "vitest-json" } }));
-  const outDir = join(root, ".pharn", "pharn-verify", "gates");
+  const outDir = join(root, "pharn", ".run", "pharn-verify", "gates");
   mkdirSync(outDir, { recursive: true });
   return { root, fd, outDir, lockPath: join(fd, "AC-TESTS.lock.json"), done: () => rmSync(root, { recursive: true, force: true }) };
 }

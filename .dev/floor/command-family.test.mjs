@@ -463,9 +463,12 @@ function walk(dir, rel = "") {
   return out;
 }
 const isTestFile = (f) => /\.test\.(mjs|cjs|js)$/.test(f);
+// 7.0.0: runtime scratch (`pharn/.run/`) and pharn-cli backups (`pharn/.backup/`) sit under pharn/ but never ship. A stage
+// writes file lists there that name this helper (regress run 1 of pharn-footprint-move found exactly that).
+const isScratch = (f) => /^pharn\/\.(run|backup)\//.test(f);
 function shippedHelperOffenders(entries) {
   return entries
-    .filter(([f, text]) => !isTestFile(f) && text.includes("command-family.mjs"))
+    .filter(([f, text]) => !isTestFile(f) && !isScratch(f) && text.includes("command-family.mjs"))
     .map(([f]) => `${f}: a shipped file names command-family.mjs`);
 }
 function shippedEntries() {
@@ -754,6 +757,12 @@ test("R8 — no shipped file (a non-test file under pharn/ or .claude/hooks/) na
     "pharn/floor/x.mjs: a shipped file names command-family.mjs",
   ]);
   assert.deepEqual(shippedHelperOffenders([["pharn/floor/x.test.mjs", 'import "../../.dev/floor/command-family.mjs";']]), []);
+  // 7.0.0: scratch and backups under pharn/ never ship; a look-alike sibling still does.
+  for (const f of ["pharn/.run/pharn-dev-regress/outside-tests.txt", "pharn/.backup/x/pharn/floor/y.mjs"])
+    assert.deepEqual(shippedHelperOffenders([[f, ".dev/floor/command-family.mjs"]]), [], f);
+  assert.deepEqual(shippedHelperOffenders([["pharn/.runx/y.mjs", "command-family.mjs"]]), [
+    "pharn/.runx/y.mjs: a shipped file names command-family.mjs",
+  ]);
 });
 
 // ── the helper itself ─────────────────────────────────────────────────────────────────────────────────────────────

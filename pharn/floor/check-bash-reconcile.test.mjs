@@ -55,7 +55,7 @@ const CHECK = join(HERE, "check-bash-reconcile.mjs");
 const IGNORE_JSON = join(HERE, "reconcile-ignore.json");
 
 const made = [];
-function makeRepo({ devRepo = true, gitignore = "node_modules/\n.pharn/\nrunned/\n" } = {}) {
+function makeRepo({ devRepo = true, gitignore = "node_modules/\npharn/.run/\nrunned/\n" } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-recon-test-"));
   made.push(dir);
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
@@ -89,15 +89,18 @@ process.on("exit", () => {
 });
 
 function setScope(dir, scope) {
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(
-    join(dir, ".pharn/writes-scope.json"),
+    join(dir, "pharn/.run/writes-scope.json"),
     JSON.stringify({ scope, set_by: "pharn/features/t/PLAN.md", set_at: new Date().toISOString() }, null, 2) + "\n"
   );
 }
 function setScopeBy(dir, scope, setBy) {
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
-  writeFileSync(join(dir, ".pharn/writes-scope.json"), JSON.stringify({ scope, set_by: setBy, set_at: new Date().toISOString() }) + "\n");
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+  writeFileSync(
+    join(dir, "pharn/.run/writes-scope.json"),
+    JSON.stringify({ scope, set_by: setBy, set_at: new Date().toISOString() }) + "\n"
+  );
 }
 const anchor = (dir, extra = []) =>
   spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test", ...extra], { encoding: "utf8" });
@@ -447,7 +450,7 @@ test("★ ignored-path exemption: a git-ignored write is invisible by derivation
   assert.equal(anchor(dir).status, 0);
   mkdirSync(join(dir, "node_modules"), { recursive: true });
   writeFileSync(join(dir, "node_modules/whatever.js"), "ignored\n");
-  writeFileSync(join(dir, ".pharn/scratch.json"), "{}\n");
+  writeFileSync(join(dir, "pharn/.run/scratch.json"), "{}\n");
   const r = check(dir);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.json.verdict, "CLEAN");
@@ -610,11 +613,11 @@ test("✧ never_exempt holds the canon + trusted-doc set, and run-time REFUSES a
   const data = loadIgnoreData(IGNORE_JSON);
   for (const p of [
     ".dev/memory-bank/lessons-learned.md",
-    "memory-bank/lessons-learned.md",
+    "pharn/memory-bank/lessons-learned.md",
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
-    "THREAT-MODEL.md",
-    "LIMITS.md",
+    "pharn/THREAT-MODEL.md",
+    "pharn/LIMITS.md",
     "CODEOWNERS",
   ]) {
     assert.ok(data.neverExempt.includes(p), `${p} must be never-exempt`);
@@ -623,7 +626,7 @@ test("✧ never_exempt holds the canon + trusted-doc set, and run-time REFUSES a
   const bad = mkdtempSync(join(tmpdir(), "pharn-recon-ign-"));
   made.push(bad);
   const raw = JSON.parse(readFileSync(IGNORE_JSON, "utf8"));
-  raw.exempt.paths.push({ path: "LIMITS.md", writer: "forged" });
+  raw.exempt.paths.push({ path: "pharn/LIMITS.md", writer: "forged" });
   writeFileSync(join(bad, "reconcile-ignore.json"), JSON.stringify(raw));
   const res = loadIgnoreData(join(bad, "reconcile-ignore.json"));
   assert.equal(res.ok, false);
@@ -656,7 +659,7 @@ test("★ PARITY: makeDefaultProbeSandbox()'s own run marker flips the REAL inst
   assert.equal(withMarkerResult.status, 2, "the probe's own marker must hold the strict default fail-closed");
 
   // Non-vacuity control (L34): the SAME sandbox construction with the marker directory removed answers 0.
-  rmSync(join(withMarker, ".pharn", "pharn-ship"), { recursive: true, force: true });
+  rmSync(join(withMarker, "pharn", ".run", "pharn-ship"), { recursive: true, force: true });
   const withoutMarkerResult = spawnSync(process.execPath, [hookAbs], {
     input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "src/x.js" } }),
     cwd: withMarker,
@@ -728,9 +731,9 @@ test("★ L17: a stage's OWN pipeline artifact is exempt — changed-since-ancho
   const dir = makeRepo();
   mkdirSync(join(dir, ".dev/features/x/lenses/security"), { recursive: true });
   // `set_by` names THIS feature's plan, so `x` is the active slug and its artifacts are the exempt ones.
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(
-    join(dir, ".pharn/writes-scope.json"),
+    join(dir, "pharn/.run/writes-scope.json"),
     JSON.stringify({ scope: ["pharn/features/keep.md"], set_by: ".dev/features/x/PLAN.md", set_at: "T" })
   );
   assert.equal(anchor(dir).status, 0);
@@ -853,9 +856,9 @@ test("★ REVIEW: the pipeline exemption is restricted to the ACTIVE feature slu
   const dir = makeRepo();
   mkdirSync(join(dir, ".dev/features/mine"), { recursive: true });
   mkdirSync(join(dir, ".dev/features/other"), { recursive: true });
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(
-    join(dir, ".pharn/writes-scope.json"),
+    join(dir, "pharn/.run/writes-scope.json"),
     JSON.stringify({ scope: ["pharn/features/keep.md"], set_by: ".dev/features/mine/PLAN.md", set_at: "T" })
   );
   assert.equal(anchor(dir).status, 0);
@@ -950,9 +953,9 @@ function seedCanon(dir) {
 }
 const amend = (dir) => spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
 function setPromoteScope(dir, target) {
-  mkdirSync(join(dir, ".pharn"), { recursive: true });
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
   writeFileSync(
-    join(dir, ".pharn/writes-scope.json"),
+    join(dir, "pharn/.run/writes-scope.json"),
     JSON.stringify({ scope: [target], set_by: PROMOTE, set_at: new Date().toISOString() }, null, 2) + "\n"
   );
 }
@@ -982,7 +985,7 @@ test("★ F3 REGRESSION: it stays CLEAN after the promote scope is RELEASED — 
   assert.equal(amend(dir).status, 0);
   writeFileSync(join(dir, CANON), "## L1 — seed\n\n## L2 — promoted\n");
   // Every command's LAST step clears the scope, which is exactly when the checker runs.
-  rmSync(join(dir, ".pharn/writes-scope.json"), { force: true });
+  rmSync(join(dir, "pharn/.run/writes-scope.json"), { force: true });
 
   const r = check(dir);
   assert.equal(r.json?.verdict, "CLEAN", `a released scope must not resurrect the escape: ${r.stdout}`);
@@ -1299,13 +1302,13 @@ function buildThenMerge(dir) {
 test("★ MERGED: paths an upstream merge changed after the anchor are classified merged, not escapes — every escape kind", () => {
   // On main before 6.52.0 this exact sequence was ESCAPE on all three paths (the audit's P3-L false RED).
   const fx = mergeFixture();
-  upstreamCommit(fx, { "dep.json": "v2\n", "LIMITS.md": "a trusted doc changed on main\n", "pharn/floor/new.mjs": "// floor\n" });
+  upstreamCommit(fx, { "dep.json": "v2\n", "pharn/LIMITS.md": "a trusted doc changed on main\n", "pharn/floor/new.mjs": "// floor\n" });
   buildThenMerge(fx.dir);
   const r = check(fx.dir, ["--require-baseline"]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(r.json.verdict, "CLEAN");
   assert.deepEqual(r.json.escapes, []);
-  assert.deepEqual([...r.json.merged].sort(), ["LIMITS.md", "dep.json", "pharn/floor/new.mjs"]);
+  assert.deepEqual([...r.json.merged].sort(), ["dep.json", "pharn/LIMITS.md", "pharn/floor/new.mjs"]);
   assert.ok(
     r.json.warnings.some((w) => /3 path\(s\) classified merged/.test(w)),
     "reported, never silent (L48): " + r.json.warnings.join(" | ")
@@ -1610,7 +1613,7 @@ test("✧ `merged` is always present in the verdict — an empty array when HEAD
 
 // ------------------------------------------------ the human-only surface joins the control surface (6.53.0)
 //
-// Audit 2026-10-07: a Bash edit of LIMITS.md plus a forged baseline entry read CLEAN, because the trusted docs were
+// Audit 2026-10-07: a Bash edit of pharn/LIMITS.md plus a forged baseline entry read CLEAN, because the trusted docs were
 // not always-reconciled. And `git diff HEAD` never lists an UNTRACKED file, so a control path absent at HEAD could be
 // added through Bash and hidden the same way. Each case below fails on the 6.52.0 checker.
 
@@ -1627,20 +1630,20 @@ function humanOnlyMembers() {
   return [...data.humanOnly, ...data.humanOnlyPrefixes.map((p) => `${p}lessons-learned.md`)];
 }
 
-test("★ FORGED BASELINE: a Bash edit of LIMITS.md with its baseline entry rewritten is still an ESCAPE — and names the remedy", () => {
+test("★ FORGED BASELINE: a Bash edit of pharn/LIMITS.md with its baseline entry rewritten is still an ESCAPE — and names the remedy", () => {
   const dir = makeRepo();
-  writeFileSync(join(dir, "LIMITS.md"), "the human-only text\n");
-  g(dir, "add", "LIMITS.md");
+  writeFileSync(join(dir, "pharn/LIMITS.md"), "the human-only text\n");
+  g(dir, "add", "pharn/LIMITS.md");
   g(dir, "commit", "-q", "-m", "limits");
   setScope(dir, ["pharn/features/keep.md"]);
   assert.equal(anchor(dir).status, 0);
-  writeFileSync(join(dir, "LIMITS.md"), "rewritten through Bash\n");
-  forge(dir, "LIMITS.md");
+  writeFileSync(join(dir, "pharn/LIMITS.md"), "rewritten through Bash\n");
+  forge(dir, "pharn/LIMITS.md");
   const r = check(dir, ["--require-baseline"]);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.deepEqual(
     r.json.escapes.map((e) => `${e.file}:${e.denied_by}`),
-    ["LIMITS.md:protect-trusted-paths.cjs"]
+    ["pharn/LIMITS.md:protect-trusted-paths.cjs"]
   );
   assert.ok(r.json.findings[0].problem.endsWith(HUMAN_ONLY_REMEDY), "GATE-1 addition: the one-line remedy is carried");
 });
@@ -1681,24 +1684,24 @@ test("★ ADDED FILE: an untracked new pharn/floor/ file with a forged entry is 
   assert.ok(!r.json.findings[0].problem.includes(HUMAN_ONLY_REMEDY), "the remedy is for the human-only surface only");
 });
 
-test("★ NO BASELINE: an untracked pharn.spec-template.md is an ESCAPE, not NO_BASELINE", () => {
+test("★ NO BASELINE: an untracked pharn/spec-template.md is an ESCAPE, not NO_BASELINE", () => {
   const dir = makeRepo();
-  writeFileSync(join(dir, "pharn.spec-template.md"), "<!-- an instruction channel -->\n");
+  writeFileSync(join(dir, "pharn/spec-template.md"), "<!-- an instruction channel -->\n");
   const r = check(dir);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.equal(r.json.verdict, "ESCAPE");
   assert.deepEqual(
     r.json.escapes.map((e) => e.file),
-    ["pharn.spec-template.md"]
+    ["pharn/spec-template.md"]
   );
 });
 
 test("★ L68 CONSEQUENCE, pinned: with no baseline, a human's UNCOMMITTED trusted-doc edit is an ESCAPE carrying the remedy", () => {
   const dir = makeRepo();
-  writeFileSync(join(dir, "LIMITS.md"), "v1\n");
-  g(dir, "add", "LIMITS.md");
+  writeFileSync(join(dir, "pharn/LIMITS.md"), "v1\n");
+  g(dir, "add", "pharn/LIMITS.md");
   g(dir, "commit", "-q", "-m", "limits");
-  writeFileSync(join(dir, "LIMITS.md"), "a maintainer's own edit, not yet committed\n");
+  writeFileSync(join(dir, "pharn/LIMITS.md"), "a maintainer's own edit, not yet committed\n");
   const r = check(dir);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.json.findings[0].problem, /commit it before running the gates/);
@@ -1719,13 +1722,13 @@ test("★ NON-VACUITY (GATE-1): with no baseline, an untracked file OUTSIDE the 
   assert.deepEqual(r.json.escapes, []);
 });
 
-test("★ MERGED still applies: LIMITS.md MODIFIED on upstream and merged in during the window is merged, not an escape", () => {
-  const fx = mergeFixture({ baseFiles: { "LIMITS.md": "v1\n" } });
-  upstreamCommit(fx, { "LIMITS.md": "v2, edited by a human on main\n" });
+test("★ MERGED still applies: pharn/LIMITS.md MODIFIED on upstream and merged in during the window is merged, not an escape", () => {
+  const fx = mergeFixture({ baseFiles: { "pharn/LIMITS.md": "v1\n" } });
+  upstreamCommit(fx, { "pharn/LIMITS.md": "v2, edited by a human on main\n" });
   buildThenMerge(fx.dir);
   const r = check(fx.dir, ["--require-baseline"]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.deepEqual(r.json.merged, ["LIMITS.md"]);
+  assert.deepEqual(r.json.merged, ["pharn/LIMITS.md"]);
 });
 
 test("★ GATE-2 R2: a TRACKED canon file with a NON-ASCII name, Bash-edited and baseline-forged, is an ESCAPE (no quotePath miss)", () => {
@@ -1750,14 +1753,14 @@ test("★ GATE-2 R2: a TRACKED canon file with a NON-ASCII name, Bash-edited and
 
 test("★ GATE-2 R2: a staged `git mv` of a trusted doc is seen under the doc's OWN path (no rename collapse)", () => {
   const dir = makeRepo();
-  writeFileSync(join(dir, "LIMITS.md"), "the human-only text, long enough to be detected as a rename\n".repeat(4));
-  g(dir, "add", "LIMITS.md");
+  writeFileSync(join(dir, "pharn/LIMITS.md"), "the human-only text, long enough to be detected as a rename\n".repeat(4));
+  g(dir, "add", "pharn/LIMITS.md");
   g(dir, "commit", "-q", "-m", "limits");
-  g(dir, "mv", "LIMITS.md", "ELSEWHERE.md");
+  g(dir, "mv", "pharn/LIMITS.md", "ELSEWHERE.md");
   const r = check(dir); // no baseline: the HEAD comparison is the only reference
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.ok(
-    r.json.escapes.some((e) => e.file === "LIMITS.md"),
+    r.json.escapes.some((e) => e.file === "pharn/LIMITS.md"),
     JSON.stringify(r.json.escapes)
   );
 });
@@ -1769,8 +1772,8 @@ test("✧ PARITY: human_only and its canon prefixes equal the hook's own sets; n
   const subtrees = eval(protect.match(/const PROTECTED_SUBTREES\s*=\s*(\[[^\]]*\])/)[1]);
   const setter = readFileSync(join(REPO, ".claude/hooks/set-writes-scope.cjs"), "utf8");
   const control = eval(setter.match(/const CONTROL_SURFACE\s*=\s*(\[[\s\S]*?\])/)[1]);
-  // `.pharn/writes-scope.json` is excluded BY NAME: gitignored runtime state, never in the reconciled set.
-  const expected = protected_.filter((p) => !control.includes(p) && p !== ".pharn/writes-scope.json");
+  // `pharn/.run/writes-scope.json` is excluded BY NAME: gitignored runtime state, never in the reconciled set.
+  const expected = protected_.filter((p) => !control.includes(p) && p !== "pharn/.run/writes-scope.json");
   assert.deepEqual([...data.humanOnly].sort(), [...expected].sort(), "reconcile-ignore.json human_only drifted from DEFAULT_PROTECTED");
   assert.deepEqual(
     [...data.humanOnlyPrefixes].sort(),

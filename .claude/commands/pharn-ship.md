@@ -17,7 +17,7 @@ reads:
     "pharn/features/<name>/VERIFY.md",
     "pharn/features/<name>/regression-report.json",
     "pharn/features/<name>/verify-report.json",
-    "memory-bank/lessons-learned.md",
+    "pharn/memory-bank/lessons-learned.md",
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-spec.mjs",
     "pharn/floor/check-plan-spec-agree.mjs",

@@ -69,7 +69,7 @@ jobs:
           node .dev/floor/check-surface-bump.mjs --base-ref HEAD^1
       # Pull requests only, on the same base as the step above (HEAD^1 of GitHub's test merge commit): the bytes this PR
       # adds to the always-loaded instruction set (CLAUDE.md here) against pharn.config.json's budget AT THE BASE (default
-      # 2048). A floor verdict over instruction-files-core.mjs's model of the loader, never the loader (LIMITS.md §3e).
+      # 2048). A floor verdict over instruction-files-core.mjs's model of the loader, never the loader (pharn/LIMITS.md §3e).
       - name: Instruction-growth check
         if: ${{ always() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}
         run: |

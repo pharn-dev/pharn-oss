@@ -3,7 +3,7 @@
 // the BASE worktree changes, never when a regress rule does. No CLI; stage-regress.mjs is its only caller.
 //
 // ===================================== THE RECORDED FAILURE (P7) =====================================
-// Until 6.49.x the BASE worktree was `.pharn/pharn-regress/base`, NESTED inside the project. Node's module resolution
+// Until 6.49.x the BASE worktree was `.pharn/pharn-regress/base` (the pre-7.0.0 path; migration note), NESTED inside the project. Node's module resolution
 // walks every ancestor's `node_modules`, and npm's run-script prepends every ancestor's `node_modules/.bin` to PATH, so
 // a base gate reached the HEAD tree's dependencies whenever the base did not shadow them — reproduced (audit fixture f6):
 // with `--no-install`, the base `test` imported `<project>/node_modules/mydep` and the base `typecheck` ran
@@ -24,7 +24,7 @@
 // entry in a shared /tmp) is left alone; (3) the LEGACY nested path is cleared the same way an upgrade leftover was
 // before; (4) `git worktree prune`. Every step is best-effort and never throws: an absent worktree is the normal case.
 //
-// RESUME (`isOurBaseDir`): the path is persisted in `.pharn/pharn-regress/stage.json`, which the write tools and Bash
+// RESUME (`isOurBaseDir`): the path is persisted in `pharn/.run/pharn-regress/stage.json`, which the write tools and Bash
 // reach. A recorded path is used only if it is exactly `<temp root>/<this project's prefix><6 chars>`; anything else is
 // `progress-malformed` to the caller, so a forged record cannot aim a removal at another directory.
 //

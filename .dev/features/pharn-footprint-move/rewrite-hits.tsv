@@ -1,0 +1,2072 @@
+file	line	rule	old	new
+.claude/commands/pharn-build.md	106	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-build.md	184	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-build.md	213	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-build.md	234	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-build.md	292	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-build.md	318	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-build.md	36	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-build.md	41	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-build.md	99	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-build.md	130	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-build.md	132	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-eval.md	141	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-grill.md	302	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-grill.md	303	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-memory-promote.md	10	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-memory-promote.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-memory-promote.md	58	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-memory-promote.md	172	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	172	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	223	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	223	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	269	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	284	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	329	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	341	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-memory-promote.md	554	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-memory-promote.md	581	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-plan.md	13	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-plan.md	14	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-plan.md	34	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-plan.md	35	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-regress.md	57	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	66	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	67	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	86	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	100	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	152	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	161	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	163	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	211	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-regress.md	218	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	218	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	220	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-regress.md	220	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-review.md	9	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-review.md	9	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-review.md	24	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-ship.md	258	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-ship.md	258	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-ship.md	299	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-ship.md	406	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-ship.md	407	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-ship.md	511	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-ship.md	511	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-dev-ship.md	526	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-verify.md	64	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	73	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	74	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	85	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	95	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	96	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	99	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	170	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	271	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	272	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-dev-verify.md	288	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-dev-verify.md	288	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-grill.md	15	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-grill.md	159	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-grill.md	171	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-grill.md	348	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-grill.md	361	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-grill.md	363	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-loop-close.md	101	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop-close.md	137	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	169	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	228	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	239	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	283	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop-close.md	291	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	311	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	339	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop-close.md	354	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-loop-close.md	354	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop-close.md	363	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop-close.md	363	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop-close.md	365	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop-close.md	395	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	71	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	72	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	76	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	112	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	120	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-loop.md	138	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	139	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	140	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	141	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	149	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	220	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-loop.md	260	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	291	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	291	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	295	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	296	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	296	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	296	R5b	.pharn	pharn/.run
+.claude/commands/pharn-loop.md	297	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	311	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	342	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-loop.md	537	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-memory-promote.md	2	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	12	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-memory-promote.md	13	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	14	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	19	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	80	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	88	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	89	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	121	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	121	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	159	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	159	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	205	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	215	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	236	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	267	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	276	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-memory-promote.md	377	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-memory-promote.md	390	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-memory-promote.md	409	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-plan.md	13	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-plan.md	14	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-plan.md	77	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-plan.md	87	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-plan.md	89	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-plan.md	97	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-plan.md	100	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-plan.md	234	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-plan.md	244	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-plan.md	294	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-plan.md	365	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-regress.md	17	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	43	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	80	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	93	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	94	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	95	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	96	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	100	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	132	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	256	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	258	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-regress.md	283	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-regress.md	283	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-review.md	32	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-review.md	63	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-review.md	126	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-review.md	194	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-review.md	350	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-review.md	388	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-review.md	389	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-review.md	390	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-ship-close.md	21	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-ship-close.md	388	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-ship-stages.md	91	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/commands/pharn-ship-stages.md	170	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-ship-stages.md	229	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-ship-stages.md	238	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-ship-stages.md	244	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-ship.md	20	R3	memory-bank/	pharn/memory-bank/
+.claude/commands/pharn-spec.md	14	R4	pharn.spec-template.md	pharn/spec-template.md
+.claude/commands/pharn-spec.md	89	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-spec.md	171	R4	pharn.spec-template.md	pharn/spec-template.md
+.claude/commands/pharn-spec.md	334	R4	pharn.spec-template.md	pharn/spec-template.md
+.claude/commands/pharn-spec.md	339	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-spec.md	348	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-test.md	208	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-test.md	215	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-test.md	222	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-test.md	238	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-test.md	248	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-test.md	249	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-test.md	296	R2	LIMITS.md	pharn/LIMITS.md
+.claude/commands/pharn-verify.md	17	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	79	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	92	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	93	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	94	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	97	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	241	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	242	R5	.pharn/	pharn/.run/
+.claude/commands/pharn-verify.md	257	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/enforce-writes-scope.cjs	6	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	26	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/enforce-writes-scope.cjs	31	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	33	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	36	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	43	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	44	R5b	.pharn	pharn/.run
+.claude/hooks/enforce-writes-scope.cjs	45	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	53	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	84	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/enforce-writes-scope.cjs	151	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	151	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	151	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	173	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	201	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	202	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	420	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	423	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	473	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	477	R5b	.pharn	pharn/.run
+.claude/hooks/enforce-writes-scope.cjs	484	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.cjs	541	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.cjs	549	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.cjs	597	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	600	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	620	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1067	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1077	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1082	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1092	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1092	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1094	R5b	.pharn	pharn/.run
+.claude/hooks/enforce-writes-scope.cjs	1125	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1152	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1160	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1180	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1200	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1208	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1209	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1218	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.cjs	1221	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	4	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	6	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	36	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	37	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	124	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	125	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	130	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	131	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	203	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	205	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	206	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	209	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	211	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	212	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	215	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	217	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	218	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	221	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	224	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	264	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	267	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	268	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	280	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	289	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	299	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	310	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	316	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	319	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	320	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	324	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	325	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	334	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	375	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	405	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	430	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	461	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	487	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	525	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	547	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	575	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	602	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	618	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	624	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	632	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	635	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	637	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/enforce-writes-scope.test.cjs	704	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	706	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	736	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	737	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	744	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	749	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	751	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	768	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	770	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	784	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	785	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	795	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	797	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	906	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	907	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	945	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	997	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	998	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1005	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1006	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1430	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/enforce-writes-scope.test.cjs	1454	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1477	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1481	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1515	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1516	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1532	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1533	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1545	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1552	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1554	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1555	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1556	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1563	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1565	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1569	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1571	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1572	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1576	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1580	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1588	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1589	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1598	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1599	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1647	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1671	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1707	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1710	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1718	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1729	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1730	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1733	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1754	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1829	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1830	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	1855	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1858	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1926	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	1933	E5	\.pharn\/	pharn\/\.run\/
+.claude/hooks/enforce-writes-scope.test.cjs	2325	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2326	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2327	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	2330	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2331	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2337	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2338	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2339	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2343	R5b	.pharn	pharn/.run
+.claude/hooks/enforce-writes-scope.test.cjs	2345	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2353	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2354	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2359	E5	\.pharn\/	pharn\/\.run\/
+.claude/hooks/enforce-writes-scope.test.cjs	2372	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2373	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2384	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	2385	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	2388	R5	.pharn/	pharn/.run/
+.claude/hooks/enforce-writes-scope.test.cjs	2404	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2925	R5b	.pharn	pharn/.run
+.claude/hooks/enforce-writes-scope.test.cjs	2927	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/enforce-writes-scope.test.cjs	2952	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/hook-wiring.test.cjs	38	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/hook-wiring.test.cjs	74	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/hook-wiring.test.cjs	189	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/hook-wiring.test.cjs	191	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.cjs	17	R4	pharn.spec-template.md	pharn/spec-template.md
+.claude/hooks/protect-trusted-paths.cjs	20	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	22	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	23	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	32	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	34	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.cjs	42	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	53	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	65	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	69	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	73	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	76	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	106	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	107	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.cjs	107	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	136	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	150	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	159	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.cjs	159	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	162	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	208	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	212	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	379	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.cjs	380	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	395	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	396	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	399	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	404	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	407	R4	pharn.spec-template.md	pharn/spec-template.md
+.claude/hooks/protect-trusted-paths.cjs	413	R3q	"memory-bank"	(hand fix)
+.claude/hooks/protect-trusted-paths.cjs	418	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	419	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.cjs	430	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.cjs	442	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	442	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.cjs	462	R3q	`memory-bank`	(hand fix)
+.claude/hooks/protect-trusted-paths.cjs	807	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.cjs	848	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	95	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	95	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	228	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	235	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	235	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	241	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	247	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	294	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	302	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	661	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	662	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	674	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	678	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	678	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	678	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	683	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	684	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	686	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	687	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	687	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	687	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	694	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	695	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	696	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	700	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	720	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	720	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	881	R5	.pharn/	pharn/.run/
+.claude/hooks/protect-trusted-paths.test.cjs	881	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	895	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	898	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	900	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	906	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	907	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	914	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	915	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	922	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	927	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	948	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	952	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	953	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	956	R3q	"memory-bank"	(hand fix)
+.claude/hooks/protect-trusted-paths.test.cjs	961	R3q	"memory-bank"	(hand fix)
+.claude/hooks/protect-trusted-paths.test.cjs	966	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	967	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	968	R3q	"memory-bank"	(hand fix)
+.claude/hooks/protect-trusted-paths.test.cjs	993	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	994	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/protect-trusted-paths.test.cjs	1002	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1004	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1004	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1005	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1017	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1019	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1027	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1029	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1053	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1054	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1055	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1056	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1062	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1063	R3q	"memory-bank"	(hand fix)
+.claude/hooks/protect-trusted-paths.test.cjs	1064	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1065	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/protect-trusted-paths.test.cjs	1083	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1086	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1104	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1162	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1169	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1186	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1191	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1192	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.claude/hooks/protect-trusted-paths.test.cjs	1193	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1205	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/protect-trusted-paths.test.cjs	1206	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/require-loop-record.cjs	22	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/require-loop-record.cjs	23	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/require-loop-record.cjs	31	R5p	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.cjs	68	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/require-loop-record.cjs	85	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.cjs	98	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.cjs	286	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	46	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	61	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	135	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	172	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	203	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	208	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	218	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	228	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	234	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	241	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	245	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	253	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	286	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	287	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	292	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	310	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	334	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	341	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	355	R5	.pharn/	pharn/.run/
+.claude/hooks/require-loop-record.test.cjs	363	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/require-loop-record.test.cjs	364	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.cjs	5	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	17	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	37	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	122	R2	LIMITS.md	pharn/LIMITS.md
+.claude/hooks/set-writes-scope.cjs	164	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	459	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.cjs	460	R5b	.pharn	pharn/.run
+.claude/hooks/set-writes-scope.cjs	464	SEG	".pharn"	(hand fix)
+.claude/hooks/set-writes-scope.cjs	467	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.cjs	472	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	480	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	485	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	486	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	701	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	720	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	723	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.cjs	731	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	735	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	774	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	789	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	806	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	817	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	831	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.cjs	837	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.cjs	840	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.test.cjs	13	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.test.cjs	42	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	52	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	71	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	121	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	159	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	172	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	186	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	217	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	232	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	241	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	250	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	258	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	269	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	280	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	291	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	301	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	335	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	344	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	353	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	362	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	392	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	400	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	407	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	415	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	424	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	525	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.test.cjs	532	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	543	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	619	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.test.cjs	630	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.test.cjs	630	R5b	.pharn	pharn/.run
+.claude/hooks/set-writes-scope.test.cjs	634	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	637	E5	\.pharn\/	pharn\/\.run\/
+.claude/hooks/set-writes-scope.test.cjs	650	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	794	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	803	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/set-writes-scope.test.cjs	812	E5	\.pharn\/	pharn\/\.run\/
+.claude/hooks/set-writes-scope.test.cjs	820	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/set-writes-scope.test.cjs	827	R5	.pharn/	pharn/.run/
+.claude/hooks/set-writes-scope.test.cjs	829	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	830	SEGj	".pharn"	"pharn", ".run"
+.claude/hooks/set-writes-scope.test.cjs	833	E5	\.pharn\/	pharn\/\.run\/
+.claude/hooks/set-writes-scope.test.cjs	853	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/set-writes-scope.test.cjs	874	R3q	"memory-bank"	(hand fix)
+.claude/hooks/set-writes-scope.test.cjs	875	R3q	"memory-bank"	(hand fix)
+.claude/hooks/set-writes-scope.test.cjs	880	R3	memory-bank/	pharn/memory-bank/
+.claude/hooks/set-writes-scope.test.cjs	887	SEGj	".pharn"	"pharn", ".run"
+.claude/settings.json	2	R5	.pharn/	pharn/.run/
+.claude/settings.json	2	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/check-provenance.test.mjs	44	R3q	"memory-bank"	(hand fix)
+.dev/floor/check-provenance.test.mjs	250	R3q	"memory-bank"	(hand fix)
+.dev/floor/check-provenance.test.mjs	329	R3q	"memory-bank"	(hand fix)
+.dev/floor/check-provenance.test.mjs	417	R3q	"memory-bank"	(hand fix)
+.dev/floor/check-provenance.test.mjs	417	R3q	"memory-bank"	(hand fix)
+.dev/floor/check-provenance.test.mjs	496	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/check-provenance.test.mjs	545	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/check-provenance.test.mjs	651	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/check-provenance.test.mjs	653	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/check-provenance.test.mjs	658	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/check-specified-markers.mjs	17	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/check-specified-markers.test.mjs	459	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/check-surface-bump.mjs	61	R4	pharn.spec-template.md	pharn/spec-template.md
+.dev/floor/check-surface-bump.mjs	126	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/check-surface-bump.mjs	127	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/check-surface-bump.test.mjs	142	R4	pharn.spec-template.md	pharn/spec-template.md
+.dev/floor/check-surface-bump.test.mjs	185	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/check-surface-bump.test.mjs	232	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/check-surface-bump.test.mjs	232	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/check-surface-bump.test.mjs	394	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/check-surface-bump.test.mjs	397	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/command-hygiene.test.mjs	176	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	185	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	462	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/command-hygiene.test.mjs	615	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	674	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	742	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	968	E5	\.pharn\/	pharn\/\.run\/
+.dev/floor/command-hygiene.test.mjs	969	E5	\.pharn\/	pharn\/\.run\/
+.dev/floor/command-hygiene.test.mjs	1260	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	1592	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	1742	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	2488	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	2768	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	2781	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	2782	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	3211	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3269	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3299	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3300	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3392	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3395	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3403	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3406	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3471	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3475	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	3777	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	3835	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	3850	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	4054	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	4072	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	4548	E1	THREAT-MODEL\.md	pharn\/THREAT-MODEL\.md
+.dev/floor/command-hygiene.test.mjs	4676	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/command-hygiene.test.mjs	4681	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/command-hygiene.test.mjs	5244	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	5482	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	5483	SEGj	".pharn"	"pharn", ".run"
+.dev/floor/command-hygiene.test.mjs	5550	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/command-hygiene.test.mjs	5555	R5	.pharn/	pharn/.run/
+.dev/floor/command-hygiene.test.mjs	5963	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/command-hygiene.test.mjs	5969	R5	.pharn/	pharn/.run/
+.dev/floor/instruction-growth-wiring.test.mjs	24	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/lessons-index-core.mjs	58	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/lessons-index-core.test.mjs	233	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/lessons-index-core.test.mjs	302	R5	.pharn/	pharn/.run/
+.dev/floor/lessons-index-core.test.mjs	309	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/lessons-index-core.test.mjs	310	R5	.pharn/	pharn/.run/
+.dev/floor/lessons-index-core.test.mjs	331	R3	memory-bank/	pharn/memory-bank/
+.dev/floor/node-test-results-reporter.mjs	28	R5	.pharn/	pharn/.run/
+.dev/floor/node-test-results-reporter.test.mjs	176	E5	\.pharn\/	pharn\/\.run\/
+.dev/floor/node-test-results-reporter.test.mjs	176	E5	\.pharn\/	pharn\/\.run\/
+.dev/floor/specified-primitives.json	60	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	64	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	68	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	72	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	97	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	127	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	131	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	135	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	161	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	169	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	173	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	177	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	264	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	268	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	276	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	280	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	289	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	291	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	298	R2	LIMITS.md	pharn/LIMITS.md
+.dev/floor/specified-primitives.json	304	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	317	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	323	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/specified-primitives.json	328	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/floor/stage-load-budget.test.mjs	442	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/deferred-decisions.md	27	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	83	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	110	R4	pharn.spec-template.md	pharn/spec-template.md
+.dev/guides/floor-checks.md	110	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/floor-checks.md	111	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	113	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-checks.md	113	R4	pharn.spec-template.md	pharn/spec-template.md
+.dev/guides/floor-checks.md	169	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	177	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	177	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	177	R5b	.pharn	pharn/.run
+.dev/guides/floor-checks.md	196	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	197	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	197	R5b	.pharn	pharn/.run
+.dev/guides/floor-checks.md	220	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/floor-checks.md	235	R3q	`memory-bank`	(hand fix)
+.dev/guides/floor-checks.md	237	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/floor-checks.md	246	R5	.pharn/	pharn/.run/
+.dev/guides/floor-checks.md	246	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/floor-checks.md	258	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	53	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	55	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	69	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	224	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	228	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	247	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	247	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	248	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	295	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	350	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	362	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-gates.md	382	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	400	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	400	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	438	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	462	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	489	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	494	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-gates.md	522	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	562	R5	.pharn/	pharn/.run/
+.dev/guides/floor-gates.md	591	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-gates.md	606	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	59	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	71	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	71	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-orchestration.md	89	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	103	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-orchestration.md	111	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-orchestration.md	147	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	263	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	272	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	322	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	322	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/floor-orchestration.md	401	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	454	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	492	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	511	R5	.pharn/	pharn/.run/
+.dev/guides/floor-orchestration.md	515	R5	.pharn/	pharn/.run/
+.dev/guides/lessons.md	22	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/lessons.md	27	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/lessons.md	31	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/lessons.md	49	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/lessons.md	53	R5	.pharn/	pharn/.run/
+.dev/guides/lessons.md	54	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/lessons.md	59	R5	.pharn/	pharn/.run/
+.dev/guides/lessons.md	70	R3q	`memory-bank`	(hand fix)
+.dev/guides/lessons.md	79	R3	memory-bank/	pharn/memory-bank/
+.dev/guides/product-commands.md	17	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/guides/product-commands.md	17	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/versioning.md	18	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.dev/guides/versioning.md	18	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/writes-scope.md	7	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	9	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	14	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	15	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	20	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	27	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	40	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	62	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	62	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/writes-scope.md	64	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	65	R5b	.pharn	pharn/.run
+.dev/guides/writes-scope.md	86	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	89	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	116	R2	LIMITS.md	pharn/LIMITS.md
+.dev/guides/writes-scope.md	160	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	189	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	216	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	218	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	220	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	221	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	225	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	225	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	225	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	230	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	232	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	233	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	233	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	234	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	235	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	239	R5	.pharn/	pharn/.run/
+.dev/guides/writes-scope.md	239	R5	.pharn/	pharn/.run/
+.github/CODEOWNERS	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.github/CODEOWNERS	9	R2	LIMITS.md	pharn/LIMITS.md
+.github/PULL_REQUEST_TEMPLATE.md	21	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.github/PULL_REQUEST_TEMPLATE.md	21	R2	LIMITS.md	pharn/LIMITS.md
+.github/workflows/ci.yml	72	R2	LIMITS.md	pharn/LIMITS.md
+.gitignore	3	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	7	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.markdownlint-cli2.jsonc	8	R2	LIMITS.md	pharn/LIMITS.md
+.markdownlint-cli2.jsonc	33	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.markdownlint-cli2.jsonc	34	R2	LIMITS.md	pharn/LIMITS.md
+.markdownlint-cli2.jsonc	46	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	47	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	50	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	52	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	69	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	70	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	72	R5	.pharn/	pharn/.run/
+.markdownlint-cli2.jsonc	76	R5	.pharn/	pharn/.run/
+.prettierignore	94	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.prettierignore	95	R2	LIMITS.md	pharn/LIMITS.md
+.prettierignore	98	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+.prettierignore	99	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	19	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CLAUDE.md	19	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	27	R5	.pharn/	pharn/.run/
+CLAUDE.md	50	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CLAUDE.md	50	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	63	R5	.pharn/	pharn/.run/
+CLAUDE.md	84	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CLAUDE.md	84	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	99	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CLAUDE.md	99	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	116	R5	.pharn/	pharn/.run/
+CLAUDE.md	122	R4	pharn.spec-template.md	pharn/spec-template.md
+CLAUDE.md	133	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	136	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	181	R2	LIMITS.md	pharn/LIMITS.md
+CLAUDE.md	184	R5	.pharn/	pharn/.run/
+CLAUDE.md	191	R5	.pharn/	pharn/.run/
+CLAUDE.md	196	R4	pharn.spec-template.md	pharn/spec-template.md
+CLAUDE.md	214	R5	.pharn/	pharn/.run/
+CLAUDE.md	220	R5	.pharn/	pharn/.run/
+CLAUDE.md	237	R5	.pharn/	pharn/.run/
+CLAUDE.md	242	R5	.pharn/	pharn/.run/
+CLAUDE.md	281	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CLAUDE.md	357	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CLAUDE.md	358	R2	LIMITS.md	pharn/LIMITS.md
+CONTRIBUTING.md	11	LINK	./THREAT-MODEL.md	./pharn/THREAT-MODEL.md
+CONTRIBUTING.md	11	LINK	./LIMITS.md	./pharn/LIMITS.md
+CONTRIBUTING.md	11	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CONTRIBUTING.md	11	R2	LIMITS.md	pharn/LIMITS.md
+CONTRIBUTING.md	17	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+CONTRIBUTING.md	17	R2	LIMITS.md	pharn/LIMITS.md
+CONTRIBUTING.md	76	LINK	./LIMITS.md	./pharn/LIMITS.md
+CONTRIBUTING.md	76	R2	LIMITS.md	pharn/LIMITS.md
+CONTRIBUTING.md	177	R5	.pharn/	pharn/.run/
+CONTRIBUTING.md	177	R5	.pharn/	pharn/.run/
+CONTRIBUTING.md	177	R5	.pharn/	pharn/.run/
+LIMITS.md	2	R2	LIMITS.md	pharn/LIMITS.md
+LIMITS.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	98	R4	pharn.spec-template.md	pharn/spec-template.md
+LIMITS.md	111	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	113	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	246	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	248	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	300	R2	LIMITS.md	pharn/LIMITS.md
+LIMITS.md	302	R2	LIMITS.md	pharn/LIMITS.md
+LIMITS.md	322	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	348	R5	.pharn/	pharn/.run/
+LIMITS.md	352	R5	.pharn/	pharn/.run/
+LIMITS.md	355	R4	pharn.spec-template.md	pharn/spec-template.md
+LIMITS.md	418	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+LIMITS.md	427	R2	LIMITS.md	pharn/LIMITS.md
+LIMITS.md	428	R2	LIMITS.md	pharn/LIMITS.md
+LIMITS.md	461	R5	.pharn/	pharn/.run/
+LIMITS.md	508	R5	.pharn/	pharn/.run/
+LIMITS.md	515	R5	.pharn/	pharn/.run/
+README.md	200	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+README.md	201	R2	LIMITS.md	pharn/LIMITS.md
+README.md	224	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+README.md	225	R2	LIMITS.md	pharn/LIMITS.md
+README.md	227	R5	.pharn/	pharn/.run/
+README.md	255	LINK	./LIMITS.md	./pharn/LIMITS.md
+README.md	255	R2	LIMITS.md	pharn/LIMITS.md
+README.md	277	R3	memory-bank/	pharn/memory-bank/
+README.md	304	LINK	./LIMITS.md	./pharn/LIMITS.md
+README.md	304	R2	LIMITS.md	pharn/LIMITS.md
+README.md	357	LINK	./THREAT-MODEL.md	./pharn/THREAT-MODEL.md
+README.md	357	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+README.md	358	LINK	./LIMITS.md	./pharn/LIMITS.md
+README.md	358	R2	LIMITS.md	pharn/LIMITS.md
+SECURITY.md	7	R5	.pharn/	pharn/.run/
+SECURITY.md	9	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+SECURITY.md	50	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+SECURITY.md	51	R5	.pharn/	pharn/.run/
+SECURITY.md	51	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+SECURITY.md	51	R2	LIMITS.md	pharn/LIMITS.md
+SECURITY.md	51	R4	pharn.spec-template.md	pharn/spec-template.md
+THREAT-MODEL.md	2	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+THREAT-MODEL.md	63	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	76	R4	pharn.spec-template.md	pharn/spec-template.md
+THREAT-MODEL.md	95	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	99	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	100	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	106	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	112	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	118	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	119	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	119	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	139	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	154	R2	LIMITS.md	pharn/LIMITS.md
+THREAT-MODEL.md	156	R2	LIMITS.md	pharn/LIMITS.md
+docs/guarantees.md	19	R4	pharn.spec-template.md	pharn/spec-template.md
+docs/guarantees.md	20	R3	memory-bank/	pharn/memory-bank/
+docs/guarantees.md	63	LINK	../LIMITS.md	../pharn/LIMITS.md
+docs/guarantees.md	63	R2	LIMITS.md	pharn/LIMITS.md
+docs/limitations.md	5	LINK	../LIMITS.md	../pharn/LIMITS.md
+docs/limitations.md	5	R2	LIMITS.md	pharn/LIMITS.md
+docs/limitations.md	34	R4	pharn.spec-template.md	pharn/spec-template.md
+docs/limitations.md	55	R5	.pharn/	pharn/.run/
+docs/limitations.md	57	R5	.pharn/	pharn/.run/
+docs/limitations.md	62	R5	.pharn/	pharn/.run/
+docs/limitations.md	66	R5	.pharn/	pharn/.run/
+docs/limitations.md	88	R5	.pharn/	pharn/.run/
+docs/limitations.md	92	R5	.pharn/	pharn/.run/
+docs/limitations.md	95	R5	.pharn/	pharn/.run/
+docs/limitations.md	102	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+docs/limitations.md	104	R3	memory-bank/	pharn/memory-bank/
+docs/limitations.md	107	R3	memory-bank/	pharn/memory-bank/
+docs/limitations.md	112	R3	memory-bank/	pharn/memory-bank/
+docs/limitations.md	125	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+docs/limitations.md	145	LINK	../LIMITS.md	../pharn/LIMITS.md
+docs/limitations.md	145	R2	LIMITS.md	pharn/LIMITS.md
+docs/limitations.md	168	LINK	../LIMITS.md	../pharn/LIMITS.md
+docs/limitations.md	168	R2	LIMITS.md	pharn/LIMITS.md
+docs/limitations.md	169	LINK	../THREAT-MODEL.md	../pharn/THREAT-MODEL.md
+docs/limitations.md	169	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+docs/pipeline.md	86	R4	pharn.spec-template.md	pharn/spec-template.md
+docs/pipeline.md	99	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn.config.json	2	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	31	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/ARCHITECTURE.md	53	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	77	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/ARCHITECTURE.md	77	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	82	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	136	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/ARCHITECTURE.md	207	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	222	R3	memory-bank/	pharn/memory-bank/
+pharn/ARCHITECTURE.md	222	R3	memory-bank/	pharn/memory-bank/
+pharn/ARCHITECTURE.md	253	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	259	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	310	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	342	R2	LIMITS.md	pharn/LIMITS.md
+pharn/ARCHITECTURE.md	345	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/CONSTITUTION.md	21	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/CONSTITUTION.md	21	R2	LIMITS.md	pharn/LIMITS.md
+pharn/CONSTITUTION.md	60	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/CONSTITUTION.md	104	R2	LIMITS.md	pharn/LIMITS.md
+pharn/CONSTITUTION.md	136	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/CONSTITUTION.md	137	R2	LIMITS.md	pharn/LIMITS.md
+pharn/CONSTITUTION.md	138	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/README.md	34	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/README.md	108	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/README.md	118	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/README.md	118	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/README.md	125	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/README.md	137	R5	.pharn/	pharn/.run/
+pharn/floor/README.md	146	R5	.pharn/	pharn/.run/
+pharn/floor/README.md	149	R5	.pharn/	pharn/.run/
+pharn/floor/README.md	160	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/README.md	161	R5	.pharn/	pharn/.run/
+pharn/floor/README.md	195	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/ac-gate-core.test.mjs	125	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/ac-gate-core.test.mjs	688	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/ac-tests-core.mjs	76	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-core.mjs	76	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-core.mjs	76	SEG	".pharn"	(hand fix)
+pharn/floor/ac-tests-lock.test.mjs	291	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	367	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	441	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	635	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	770	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	861	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	930	R5	.pharn/	pharn/.run/
+pharn/floor/ac-tests-lock.test.mjs	1221	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.mjs	36	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.mjs	98	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.mjs	151	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.mjs	158	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.mjs	158	SEG	".pharn"	(hand fix)
+pharn/floor/apply-plan-deletions.mjs	159	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.test.mjs	154	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.test.mjs	157	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	161	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/apply-plan-deletions.test.mjs	162	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/apply-plan-deletions.test.mjs	249	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	265	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	268	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.test.mjs	268	R5	.pharn/	pharn/.run/
+pharn/floor/apply-plan-deletions.test.mjs	295	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	295	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	296	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	304	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/apply-plan-deletions.test.mjs	306	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/base-worktree.mjs	6	R5	.pharn/	pharn/.run/
+pharn/floor/base-worktree.mjs	27	R5	.pharn/	pharn/.run/
+pharn/floor/base-worktree.test.mjs	111	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/base-worktree.test.mjs	120	R5	.pharn/	pharn/.run/
+pharn/floor/base-worktree.test.mjs	147	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.mjs	20	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.mjs	55	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	37	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	39	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	41	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	73	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	163	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	287	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate-core.test.mjs	317	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.mjs	14	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.mjs	35	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.mjs	69	SEG	".pharn"	(hand fix)
+pharn/floor/build-gate.test.mjs	17	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	18	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	21	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	22	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	27	SEG	".pharn"	(hand fix)
+pharn/floor/build-gate.test.mjs	28	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	80	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	96	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	97	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	100	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	101	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	138	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	156	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/build-gate.test.mjs	177	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	236	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	316	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	319	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	331	R5	.pharn/	pharn/.run/
+pharn/floor/build-gate.test.mjs	348	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	351	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	355	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	356	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/build-gate.test.mjs	383	R5	.pharn/	pharn/.run/
+pharn/floor/canon-root.mjs	9	R3q	`memory-bank`	(hand fix)
+pharn/floor/canon-root.mjs	16	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/canon-root.mjs	21	R3q	`memory-bank`	(hand fix)
+pharn/floor/canon-root.mjs	31	R3q	"memory-bank"	(hand fix)
+pharn/floor/canon-root.test.mjs	11	R3q	"memory-bank"	(hand fix)
+pharn/floor/canon-root.test.mjs	16	R3q	"memory-bank"	(hand fix)
+pharn/floor/canon-root.test.mjs	16	R3q	"memory-bank"	(hand fix)
+pharn/floor/canon-root.test.mjs	62	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-ac-tests.mjs	63	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-ac-tests.test.mjs	539	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.mjs	22	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.mjs	77	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.mjs	86	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.mjs	88	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.mjs	102	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-bash-reconcile.mjs	103	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.mjs	105	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.mjs	115	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.mjs	319	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.mjs	341	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.mjs	342	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.mjs	682	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.mjs	690	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-bash-reconcile.test.mjs	92	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.test.mjs	94	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	99	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.test.mjs	100	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	450	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	613	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-bash-reconcile.test.mjs	616	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-bash-reconcile.test.mjs	617	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	626	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	659	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.test.mjs	731	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.test.mjs	733	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	856	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.test.mjs	858	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	953	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-bash-reconcile.test.mjs	955	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	985	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	1302	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1308	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1613	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1630	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1632	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1633	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1637	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1638	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1643	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1684	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-bash-reconcile.test.mjs	1686	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-bash-reconcile.test.mjs	1692	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-bash-reconcile.test.mjs	1698	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1699	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1701	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1722	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1723	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1724	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1728	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1753	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1754	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1756	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1760	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-bash-reconcile.test.mjs	1772	R5	.pharn/	pharn/.run/
+pharn/floor/check-bash-reconcile.test.mjs	1773	R5	.pharn/	pharn/.run/
+pharn/floor/check-build-complete.test.mjs	200	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-build-complete.test.mjs	228	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-build-complete.test.mjs	247	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-build-complete.test.mjs	293	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-build-complete.test.mjs	424	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-build-complete.test.mjs	577	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-instruction-files.mjs	8	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-instruction-files.test.mjs	222	R5	.pharn/	pharn/.run/
+pharn/floor/check-instruction-files.test.mjs	226	R5	.pharn/	pharn/.run/
+pharn/floor/check-instruction-files.test.mjs	228	R5	.pharn/	pharn/.run/
+pharn/floor/check-instruction-files.test.mjs	420	R5	.pharn/	pharn/.run/
+pharn/floor/check-instruction-files.test.mjs	426	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-instruction-files.test.mjs	427	R5	.pharn/	pharn/.run/
+pharn/floor/check-lessons-index.mjs	8	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-lessons-index.mjs	45	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-lessons-index.test.mjs	189	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-lessons-index.test.mjs	191	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-lessons-index.test.mjs	207	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-lessons-index.test.mjs	217	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-loop-decision.mjs	74	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-decision.mjs	79	R5p	.pharn/	pharn/.run/
+pharn/floor/check-loop-decision.mjs	156	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-decision.mjs	165	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-decision.mjs	362	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-decision.test.mjs	58	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-decision.test.mjs	65	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-decision.test.mjs	475	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-decision.test.mjs	476	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-decision.test.mjs	510	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-decision.test.mjs	511	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-decision.test.mjs	593	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.mjs	10	R5b	.pharn	pharn/.run
+pharn/floor/check-loop-fresh.test.mjs	150	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-fresh.test.mjs	378	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-fresh.test.mjs	378	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-fresh.test.mjs	378	R5	.pharn/	pharn/.run/
+pharn/floor/check-loop-fresh.test.mjs	1564	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.test.mjs	1578	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.test.mjs	1589	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.test.mjs	1665	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.test.mjs	1705	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.test.mjs	1743	R5b	.pharn	pharn/.run
+pharn/floor/check-loop-fresh.test.mjs	1745	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-loop-fresh.test.mjs	1746	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-provenance.mjs	48	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.mjs	74	R3q	`memory-bank`	(hand fix)
+pharn/floor/check-provenance.mjs	138	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.mjs	275	R3q	`memory-bank`	(hand fix)
+pharn/floor/check-provenance.test.mjs	41	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	44	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	166	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	179	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	184	E3	memory-bank\/	pharn\/memory-bank\/
+pharn/floor/check-provenance.test.mjs	217	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	218	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	238	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	239	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	260	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	261	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	280	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	281	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	294	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	336	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	336	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	337	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	337	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	369	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	376	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	376	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	390	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	391	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	401	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/check-provenance.test.mjs	466	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	560	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	560	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	593	R3q	"memory-bank"	(hand fix)
+pharn/floor/check-provenance.test.mjs	653	E3	memory-bank\/	pharn\/memory-bank\/
+pharn/floor/check-quick-scope.test.mjs	142	R5	.pharn/	pharn/.run/
+pharn/floor/check-quick-scope.test.mjs	147	R5	.pharn/	pharn/.run/
+pharn/floor/check-quick-scope.test.mjs	312	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-quick-scope.test.mjs	315	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-quick-scope.test.mjs	326	R5	.pharn/	pharn/.run/
+pharn/floor/check-quick-scope.test.mjs	329	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-quick-scope.test.mjs	330	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-red-run.test.mjs	98	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-red-run.test.mjs	530	R5	.pharn/	pharn/.run/
+pharn/floor/check-red-run.test.mjs	540	R5	.pharn/	pharn/.run/
+pharn/floor/check-red-run.test.mjs	554	R5	.pharn/	pharn/.run/
+pharn/floor/check-red-run.test.mjs	590	R5	.pharn/	pharn/.run/
+pharn/floor/check-red-run.test.mjs	816	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/check-red-run.test.mjs	858	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/check-regress.mjs	60	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-regress.mjs	142	R5	.pharn/	pharn/.run/
+pharn/floor/check-regress.mjs	204	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-regress.mjs	204	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-regress.mjs	254	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-regress.mjs	254	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-regress.test.mjs	253	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-regress.test.mjs	253	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-regress.test.mjs	255	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-regress.test.mjs	255	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-regress.test.mjs	272	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-regress.test.mjs	274	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/check-regress.test.mjs	634	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-regress.test.mjs	835	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-spec.test.mjs	1496	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-spec.test.mjs	1511	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-spec.test.mjs	1528	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-spec.test.mjs	1546	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-spec.test.mjs	1690	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-spec.test.mjs	1690	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-spec.test.mjs	1735	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/check-test-stage.test.mjs	511	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-test-stage.test.mjs	515	R5	.pharn/	pharn/.run/
+pharn/floor/check-test-stage.test.mjs	523	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/check-test-stage.test.mjs	551	R5	.pharn/	pharn/.run/
+pharn/floor/check-verify.mjs	125	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/check-verify.test.mjs	553	R5	.pharn/	pharn/.run/
+pharn/floor/check-verify.test.mjs	570	R5	.pharn/	pharn/.run/
+pharn/floor/check-verify.test.mjs	575	R5	.pharn/	pharn/.run/
+pharn/floor/check-verify.test.mjs	579	R5	.pharn/	pharn/.run/
+pharn/floor/check-verify.test.mjs	587	R5	.pharn/	pharn/.run/
+pharn/floor/cli-stdout-flush.test.mjs	217	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence-core.mjs	47	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.mjs	14	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.mjs	15	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.mjs	17	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.mjs	21	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.mjs	22	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.mjs	151	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.test.mjs	82	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.test.mjs	340	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.test.mjs	394	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/entry-base-evidence.test.mjs	454	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/entry-base-evidence.test.mjs	520	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/entry-base-evidence.test.mjs	776	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.test.mjs	796	R5	.pharn/	pharn/.run/
+pharn/floor/entry-base-evidence.test.mjs	807	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates-core.mjs	61	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates-core.mjs	78	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.mjs	16	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.mjs	63	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.mjs	63	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.mjs	73	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.mjs	78	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.test.mjs	404	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.test.mjs	763	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.test.mjs	767	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/entry-gates.test.mjs	845	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/entry-gates.test.mjs	933	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.test.mjs	943	R5	.pharn/	pharn/.run/
+pharn/floor/entry-gates.test.mjs	960	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.mjs	11	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.mjs	13	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.mjs	50	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.mjs	63	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.mjs	63	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/entry-observations.mjs	268	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	321	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	430	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	437	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	448	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/entry-observations.test.mjs	449	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	451	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	457	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	459	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	460	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	462	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	465	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	466	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	470	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	496	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	507	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	514	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	560	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	568	SEG	".pharn"	(hand fix)
+pharn/floor/entry-observations.test.mjs	569	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	570	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	571	R5	.pharn/	pharn/.run/
+pharn/floor/entry-observations.test.mjs	573	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	20	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	34	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	34	R5b	.pharn	pharn/.run
+pharn/floor/feature-name.mjs	94	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	102	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	103	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	103	R5b	.pharn	pharn/.run
+pharn/floor/feature-name.mjs	106	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	108	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.mjs	174	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/feature-name.test.mjs	10	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.test.mjs	10	R5b	.pharn	pharn/.run
+pharn/floor/feature-name.test.mjs	104	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.test.mjs	187	R5b	.pharn	pharn/.run
+pharn/floor/feature-name.test.mjs	191	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/feature-name.test.mjs	267	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.test.mjs	267	R5b	.pharn	pharn/.run
+pharn/floor/feature-name.test.mjs	268	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.test.mjs	268	SEG	".pharn"	(hand fix)
+pharn/floor/feature-name.test.mjs	273	SEG	".pharn"	(hand fix)
+pharn/floor/feature-name.test.mjs	276	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.test.mjs	276	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/feature-name.test.mjs	288	SEG	".pharn"	(hand fix)
+pharn/floor/feature-name.test.mjs	289	R5	.pharn/	pharn/.run/
+pharn/floor/feature-name.test.mjs	290	R5	.pharn/	pharn/.run/
+pharn/floor/gate-reuse-core.test.mjs	86	R5	.pharn/	pharn/.run/
+pharn/floor/gate-run-core.mjs	48	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/gate-run-core.mjs	770	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.mjs	4	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.mjs	4	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/gen-lessons-index.mjs	14	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.mjs	14	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/gen-lessons-index.mjs	16	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/gen-lessons-index.mjs	19	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.mjs	31	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/gen-lessons-index.mjs	32	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.test.mjs	73	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.test.mjs	76	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.test.mjs	76	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/gen-lessons-index.test.mjs	78	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/gen-lessons-index.test.mjs	164	R5	.pharn/	pharn/.run/
+pharn/floor/gen-lessons-index.test.mjs	171	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/gen-lessons-index.test.mjs	180	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/gen-lessons-index.test.mjs	185	E3	memory-bank\/	pharn\/memory-bank\/
+pharn/floor/head-reuse-offer.mjs	11	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.mjs	27	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	4	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	42	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	50	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/head-reuse-offer.test.mjs	51	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/head-reuse-offer.test.mjs	99	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	125	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	127	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	176	R5	.pharn/	pharn/.run/
+pharn/floor/head-reuse-offer.test.mjs	211	R5	.pharn/	pharn/.run/
+pharn/floor/install-drift.mjs	13	R5	.pharn/	pharn/.run/
+pharn/floor/instruction-files-core.mjs	590	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/instruction-files.mjs	17	R5	.pharn/	pharn/.run/
+pharn/floor/instruction-files.mjs	220	R5	.pharn/	pharn/.run/
+pharn/floor/lens-groups.mjs	73	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/lessons-index-core.mjs	29	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.mjs	69	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/lessons-index-core.mjs	71	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.mjs	90	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/lessons-index-core.mjs	94	R3q	`memory-bank`	(hand fix)
+pharn/floor/lessons-index-core.mjs	105	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.mjs	109	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.mjs	111	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.mjs	123	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/lessons-index-core.mjs	229	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/lessons-index-core.mjs	406	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.test.mjs	176	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.test.mjs	176	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.test.mjs	240	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.test.mjs	255	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/lessons-index-core.test.mjs	256	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.test.mjs	263	R5	.pharn/	pharn/.run/
+pharn/floor/lessons-index-core.test.mjs	266	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	24	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	55	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	66	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	184	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	185	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	204	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.mjs	210	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	423	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	425	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.mjs	470	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.test.mjs	76	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	85	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.test.mjs	120	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.test.mjs	571	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	754	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	758	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.test.mjs	786	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.test.mjs	822	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	823	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	829	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	839	R5	.pharn/	pharn/.run/
+pharn/floor/loop-closeout.test.mjs	920	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-closeout.test.mjs	1061	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/loop-fresh-core.mjs	105	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/loop-fresh-core.mjs	128	R5	.pharn/	pharn/.run/
+pharn/floor/loop-fresh-core.mjs	194	R5	.pharn/	pharn/.run/
+pharn/floor/loop-fresh-core.mjs	195	R5	.pharn/	pharn/.run/
+pharn/floor/loop-fresh-core.mjs	198	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/loop-fresh-core.mjs	795	R5p	.pharn/	pharn/.run/
+pharn/floor/mark-phase.mjs	108	R5	.pharn/	pharn/.run/
+pharn/floor/mark-phase.mjs	108	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/mark-phase.mjs	140	R5	.pharn/	pharn/.run/
+pharn/floor/mark-phase.mjs	225	R5	.pharn/	pharn/.run/
+pharn/floor/mark-phase.mjs	226	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/pre-run-snapshot.mjs	28	R5	.pharn/	pharn/.run/
+pharn/floor/pre-run-snapshot.test.mjs	274	R5	.pharn/	pharn/.run/
+pharn/floor/pre-run-snapshot.test.mjs	410	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	458	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	524	R5	.pharn/	pharn/.run/
+pharn/floor/pre-run-snapshot.test.mjs	561	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	563	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	564	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	569	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	571	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	572	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	608	R5	.pharn/	pharn/.run/
+pharn/floor/pre-run-snapshot.test.mjs	609	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/pre-run-snapshot.test.mjs	611	R5	.pharn/	pharn/.run/
+pharn/floor/pre-run-snapshot.test.mjs	645	R5	.pharn/	pharn/.run/
+pharn/floor/quick-scope-core.mjs	21	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.mjs	24	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.mjs	38	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.mjs	42	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.mjs	76	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.mjs	77	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.mjs	431	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.test.mjs	60	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/reconcile-baseline.test.mjs	76	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/reconcile-baseline.test.mjs	108	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/reconcile-baseline.test.mjs	462	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.test.mjs	472	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/reconcile-baseline.test.mjs	505	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.test.mjs	506	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.test.mjs	508	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/reconcile-baseline.test.mjs	508	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-baseline.test.mjs	509	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/reconcile-baseline.test.mjs	519	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/reconcile-detail-core.mjs	32	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-detail-core.mjs	33	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/reconcile-ignore-core.test.mjs	64	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/reconcile-ignore.json	7	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-ignore.json	8	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-ignore.json	26	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/reconcile-ignore.json	27	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/reconcile-ignore.json	31	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/reconcile-ignore.json	33	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/reconcile-ignore.json	35	R5	.pharn/	pharn/.run/
+pharn/floor/reconcile-ignore.json	35	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/reconcile-ignore.json	89	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/reconcile-ignore.json	90	R3	memory-bank/	pharn/memory-bank/
+pharn/floor/reconcile-ignore.json	93	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/reconcile-ignore.json	94	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/reconcile-ignore.json	97	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/regress-base-reuse-core.mjs	7	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse-core.mjs	17	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse-core.mjs	179	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	8	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	10	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	13	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	20	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	23	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	24	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.mjs	110	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.test.mjs	90	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/regress-base-reuse.test.mjs	91	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/regress-base-reuse.test.mjs	93	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.test.mjs	105	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/regress-base-reuse.test.mjs	106	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/regress-base-reuse.test.mjs	181	R5	.pharn/	pharn/.run/
+pharn/floor/regress-base-reuse.test.mjs	213	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-cost-record.mjs	7	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/render-regression.test.mjs	284	R5	.pharn/	pharn/.run/
+pharn/floor/render-run-report.mjs	201	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.mjs	589	R5	.pharn/	pharn/.run/
+pharn/floor/render-run-report.mjs	595	R5	.pharn/	pharn/.run/
+pharn/floor/render-run-report.mjs	596	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.mjs	620	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/render-run-report.mjs	621	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/render-run-report.mjs	1134	R5	.pharn/	pharn/.run/
+pharn/floor/render-run-report.test.mjs	461	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.test.mjs	462	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.test.mjs	480	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.test.mjs	481	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.test.mjs	761	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/render-run-report.test.mjs	763	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.test.mjs	2344	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-run-report.test.mjs	2398	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/render-verify.test.mjs	294	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.mjs	34	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.mjs	97	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.mjs	177	SEG	".pharn"	(hand fix)
+pharn/floor/run-gates.mjs	230	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.mjs	657	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	41	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	63	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	271	SEG	".pharn"	(hand fix)
+pharn/floor/run-gates.test.mjs	280	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	282	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	283	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	303	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	306	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	307	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	312	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	315	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	316	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	321	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	323	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	415	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	431	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	433	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	924	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	931	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	942	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	944	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	990	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	992	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1003	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1004	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1004	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1014	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1016	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1018	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1021	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1021	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1028	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1031	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1330	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	1345	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1347	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1454	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1472	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1474	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1479	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1497	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1499	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1517	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	1543	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1546	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1618	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1625	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1641	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	1643	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1673	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1796	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1810	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1812	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1850	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1934	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	1973	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2099	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2099	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2100	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2100	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2105	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2106	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2106	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2124	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	2141	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2150	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	2151	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2152	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2156	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2160	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2169	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	2189	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2190	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2191	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2194	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/run-gates.test.mjs	2198	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2214	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2225	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2233	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-gates.test.mjs	2243	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2251	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2260	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2335	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2336	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2337	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2338	R5	.pharn/	pharn/.run/
+pharn/floor/run-gates.test.mjs	2367	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	8	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/run-marker.mjs	14	R5p	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	16	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	18	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	40	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	40	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	40	R5b	.pharn	pharn/.run
+pharn/floor/run-marker.mjs	68	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	68	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	68	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	68	R5b	.pharn	pharn/.run
+pharn/floor/run-marker.mjs	131	R5p	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	133	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.mjs	137	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.mjs	145	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.mjs	145	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.mjs	212	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.mjs	212	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	64	R5p	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	65	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	114	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	136	R5b	.pharn	pharn/.run
+pharn/floor/run-marker.test.mjs	137	R5b	.pharn	pharn/.run
+pharn/floor/run-marker.test.mjs	140	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	145	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	146	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	151	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	152	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	157	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	159	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	185	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	193	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	217	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	230	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	231	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	255	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	402	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	405	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/run-marker.test.mjs	431	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	433	R5b	.pharn	pharn/.run
+pharn/floor/run-marker.test.mjs	433	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	434	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	434	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	435	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	435	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	436	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	436	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	453	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/run-marker.test.mjs	470	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	478	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	497	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	500	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	519	R5	.pharn/	pharn/.run/
+pharn/floor/run-marker.test.mjs	524	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/run-marker.test.mjs	524	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/run-marker.test.mjs	526	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	526	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	526	SEG	".pharn"	(hand fix)
+pharn/floor/run-marker.test.mjs	578	SEG	".pharn"	(hand fix)
+pharn/floor/scan-installed-skills.mjs	22	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/seam-config-materialize.mjs	4	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.mjs	20	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.mjs	36	SEG	".pharn"	(hand fix)
+pharn/floor/seam-config-materialize.mjs	37	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.test.mjs	4	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.test.mjs	30	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.test.mjs	30	SEG	'.pharn'	(hand fix)
+pharn/floor/seam-config-materialize.test.mjs	35	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.test.mjs	44	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/seam-config-materialize.test.mjs	62	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/seam-config-materialize.test.mjs	63	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/seam-config-materialize.test.mjs	71	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.test.mjs	111	R5	.pharn/	pharn/.run/
+pharn/floor/seam-config-materialize.test.mjs	132	R5b	.pharn	pharn/.run
+pharn/floor/seam-config-materialize.test.mjs	133	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/seam-config-materialize.test.mjs	137	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/ship-closeout.test.mjs	115	R5	.pharn/	pharn/.run/
+pharn/floor/ship-closeout.test.mjs	133	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/ship-closeout.test.mjs	142	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/ship-closeout.test.mjs	161	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/ship-outcome-core.mjs	202	R5	.pharn/	pharn/.run/
+pharn/floor/ship-outcome-core.mjs	203	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/ship-outcome-core.test.mjs	138	R5	.pharn/	pharn/.run/
+pharn/floor/ship-outcome-core.test.mjs	138	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/ship-outcome-core.test.mjs	598	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/ship-outcome-core.test.mjs	640	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/spec-template-core.mjs	153	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/spec-template-core.mjs	177	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/floor/stage-agent-core.mjs	98	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent-core.mjs	136	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent-core.mjs	176	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent-core.mjs	180	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/stage-agent-core.mjs	190	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/floor/stage-agent-core.mjs	399	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent-core.mjs	401	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/stage-agent-core.mjs	409	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent-core.test.mjs	328	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	66	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	115	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	118	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	118	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	118	R5b	.pharn	pharn/.run
+pharn/floor/stage-agent.mjs	133	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	134	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/stage-agent.mjs	135	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	387	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	387	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	387	SEG	".pharn"	(hand fix)
+pharn/floor/stage-agent.mjs	423	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.mjs	431	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.mjs	492	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.mjs	663	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	290	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	374	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	413	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	465	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	485	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	526	SEG	".pharn"	(hand fix)
+pharn/floor/stage-agent.test.mjs	526	SEG	".pharn"	(hand fix)
+pharn/floor/stage-agent.test.mjs	526	SEG	".pharn"	(hand fix)
+pharn/floor/stage-agent.test.mjs	571	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	683	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	878	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	888	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	889	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	952	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	953	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	976	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	1031	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	1057	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	1108	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.test.mjs	1108	R5	.pharn/	pharn/.run/
+pharn/floor/stage-agent.test.mjs	1127	R5b	.pharn	pharn/.run
+pharn/floor/stage-agent.test.mjs	1131	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-agent.test.mjs	1144	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct-core.mjs	190	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct-core.mjs	190	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct-core.mjs	194	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	25	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	28	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	28	R5b	.pharn	pharn/.run
+pharn/floor/stage-direct.mjs	32	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	33	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	49	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	53	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	58	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	68	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	80	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.mjs	179	SEG	".pharn"	(hand fix)
+pharn/floor/stage-direct.test.mjs	5	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	170	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	170	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	173	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	180	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	217	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	227	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	239	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	243	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	244	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	245	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	280	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	334	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	335	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	419	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	445	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/stage-direct.test.mjs	458	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	463	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/stage-direct.test.mjs	520	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	527	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	542	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-direct.test.mjs	575	R5	.pharn/	pharn/.run/
+pharn/floor/stage-direct.test.mjs	674	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress-core.mjs	44	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	51	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	56	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	88	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	89	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	90	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	94	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	95	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	96	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	99	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.mjs	141	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.test.mjs	47	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.test.mjs	48	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.test.mjs	49	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.test.mjs	50	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress-core.test.mjs	51	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	185	SEG	".pharn"	(hand fix)
+pharn/floor/stage-regress.mjs	264	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	264	R5b	.pharn	pharn/.run
+pharn/floor/stage-regress.mjs	493	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	608	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	1073	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	1087	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	1386	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.mjs	1386	R5b	.pharn	pharn/.run
+pharn/floor/stage-regress.test.mjs	66	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress.test.mjs	106	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress.test.mjs	144	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	296	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	470	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	912	R5b	.pharn	pharn/.run
+pharn/floor/stage-regress.test.mjs	916	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress.test.mjs	975	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	976	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	984	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	1358	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	1717	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress.test.mjs	2110	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress.test.mjs	2289	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-regress.test.mjs	2344	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	2367	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	2379	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	2808	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	3038	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	3157	R5	.pharn/	pharn/.run/
+pharn/floor/stage-regress.test.mjs	3249	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.mjs	20	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.mjs	20	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	167	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	169	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	220	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	252	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	254	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	257	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	266	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	270	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	274	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	276	R5	.pharn/	pharn/.run/
+pharn/floor/stage-runtime.test.mjs	288	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.mjs	13	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.mjs	40	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.mjs	41	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.mjs	42	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.mjs	44	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.mjs	55	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.test.mjs	78	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.test.mjs	79	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.test.mjs	80	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.test.mjs	81	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify-core.test.mjs	87	E5	\.pharn\/	pharn\/\.run\/
+pharn/floor/stage-verify.mjs	26	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.mjs	61	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.mjs	152	SEG	".pharn"	(hand fix)
+pharn/floor/stage-verify.mjs	183	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.mjs	183	R5b	.pharn	pharn/.run
+pharn/floor/stage-verify.mjs	533	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.mjs	533	R5b	.pharn	pharn/.run
+pharn/floor/stage-verify.test.mjs	129	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	500	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	514	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	680	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	887	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	887	R5b	.pharn	pharn/.run
+pharn/floor/stage-verify.test.mjs	893	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	894	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	900	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	901	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	905	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	907	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	1148	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1148	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1158	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1159	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1165	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1280	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	1281	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-verify.test.mjs	1435	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1445	R5	.pharn/	pharn/.run/
+pharn/floor/stage-verify.test.mjs	1449	R5	.pharn/	pharn/.run/
+pharn/floor/stage-work.mjs	11	R5	.pharn/	pharn/.run/
+pharn/floor/stage-work.mjs	36	R5	.pharn/	pharn/.run/
+pharn/floor/stage-work.mjs	36	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/stage-work.test.mjs	223	R5	.pharn/	pharn/.run/
+pharn/floor/stage-work.test.mjs	241	R5b	.pharn	pharn/.run
+pharn/floor/stage-work.test.mjs	242	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	246	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	248	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	249	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	254	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	255	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	256	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	284	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	284	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	284	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	299	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/stage-work.test.mjs	322	R5	.pharn/	pharn/.run/
+pharn/floor/stage-work.test.mjs	331	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/test-infra-core.mjs	73	R5b	.pharn	pharn/.run
+pharn/floor/test-infra-core.mjs	322	SEG	".pharn"	(hand fix)
+pharn/floor/test-infra-core.test.mjs	424	R5	.pharn/	pharn/.run/
+pharn/floor/test-infra-core.test.mjs	424	R5b	.pharn	pharn/.run
+pharn/floor/test-results-core.test.mjs	144	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/test-results-core.test.mjs	867	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/test-results-core.test.mjs	1307	SEGj	".pharn"	"pharn", ".run"
+pharn/floor/transcript-core.mjs	85	R2	LIMITS.md	pharn/LIMITS.md
+pharn/floor/worktree-fingerprint.mjs	22	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.mjs	24	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.mjs	130	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.mjs	175	SEG	".pharn"	(hand fix)
+pharn/floor/worktree-fingerprint.test.mjs	34	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	42	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	86	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	87	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	91	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	93	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	94	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	96	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	96	SEG	".pharn"	(hand fix)
+pharn/floor/worktree-fingerprint.test.mjs	99	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	100	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	101	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	102	R5	.pharn/	pharn/.run/
+pharn/floor/worktree-fingerprint.test.mjs	175	SEG	".pharn"	(hand fix)
+pharn/floor/worktree-fingerprint.test.mjs	417	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/ac-tests.md	88	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/ac-tests.md	371	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/ac-tests.md	404	R5b	.pharn	pharn/.run
+pharn/pharn-contracts/ac-tests.md	645	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/ac-tests.md	656	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/ac-tests.md	680	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/cost-ledger.md	137	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	788	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	788	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/cost-ledger.md	986	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1016	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1019	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1020	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/cost-ledger.md	1030	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1041	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1062	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1069	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1123	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/cost-ledger.md	1124	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/cost-ledger.md	1201	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/cost-ledger.md	1201	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/eval-format.md	163	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/eval-format.md	163	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/finding-shape.md	84	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/finding-shape.md	86	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/finding-shape.md	87	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/finding-shape.md	128	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/finding-shape.md	131	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/gate-run-record.md	32	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/gate-run-record.md	37	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/gate-run-record.md	147	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/gate-run-record.md	355	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/gate-run-record.md	382	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/loop-record.md	39	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/loop-record.md	135	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/loop-record.md	302	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/loop-record.md	302	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/reconciliation-record.md	23	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/reconciliation-record.md	39	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/reconciliation-record.md	45	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/reconciliation-record.md	53	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	55	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	60	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	74	R3	memory-bank/	pharn/memory-bank/
+pharn/pharn-contracts/reconciliation-record.md	87	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	93	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	378	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	395	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/reconciliation-record.md	399	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/reconciliation-record.md	407	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/reconciliation-record.md	409	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/reconciliation-record.md	411	R3	memory-bank/	pharn/memory-bank/
+pharn/pharn-contracts/reconciliation-record.md	432	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/regression-report.md	35	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/regression-report.md	229	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/regression-report.md	409	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/regression-report.md	449	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/seam-config.md	114	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/ship-briefing.md	107	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/ship-record.md	54	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/ship-record.md	60	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/ship-record.md	175	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/spec-template.md	5	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/spec-template.md	42	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/spec-template.md	52	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/spec-template.md	60	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/spec-template.md	62	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/spec-template.md	103	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/spec-template.md	111	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/spec-template.md	113	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/stage-exit.md	56	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/stage-exit.md	60	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/stage-exit.md	80	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/stage-exit.md	326	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/templates/spec-template.md	9	R4	pharn.spec-template.md	pharn/spec-template.md
+pharn/pharn-contracts/test-results-record.md	89	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/test-results-record.md	89	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/test-results-record.md	95	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/verify-report.md	254	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-contracts/verify-report.md	254	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-contracts/verify-report.md	412	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/verify-report.md	420	R5	.pharn/	pharn/.run/
+pharn/pharn-contracts/verify-report.md	441	R5	.pharn/	pharn/.run/
+pharn/pharn-core/installed-skill-selection/installed-skill-selection.md	86	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-core/seam-resolver/evals/expected/injected-extra-field-ignored.md	19	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-core/seam-resolver/seam-resolver.md	90	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-core/seam-resolver/seam-resolver.md	101	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-pipeline/grillers/migrations/evals/expected/plan-fake-migration-injection.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-pipeline/grillers/migrations/evals/expected/plan-fake-migration-injection.md	29	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-pipeline/grillers/migrations/migrations.md	238	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-pipeline/grillers/migrations/migrations.md	238	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-pipeline/grillers/observability/observability.md	226	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-pipeline/grillers/observability/observability.md	226	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/copy-paste-drift/copy-paste-drift.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/copy-paste-drift/copy-paste-drift.md	153	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/copy-paste-drift/evals/cases/case-drift-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/duplicated-logic/duplicated-logic.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/duplicated-logic/duplicated-logic.md	151	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/duplicated-logic/evals/cases/case-duplicated-block.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/duplicated-logic/evals/cases/case-duplicated-function.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/duplicated-logic/evals/cases/case-not-duplicated-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/duplicated-logic/evals/cases/case-unique.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/hallucinated-api/evals/cases/case-hallucinated-call.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/hallucinated-api/hallucinated-api.md	32	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/hallucinated-api/hallucinated-api.md	145	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/injection/evals/cases/case-parameterized.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/injection/evals/cases/case-safe-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/injection/evals/cases/case-sql-concat.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/injection/injection.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/injection/injection.md	145	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/input-validation/evals/cases/case-unvalidated-sink.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/input-validation/input-validation.md	33	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/input-validation/input-validation.md	128	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/insecure-crypto/evals/cases/case-bcrypt-clean.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/insecure-crypto/evals/cases/case-insecure-random.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/insecure-crypto/evals/cases/case-md5-cachekey.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/insecure-crypto/evals/cases/case-md5-password.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/insecure-crypto/evals/cases/case-secure-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/insecure-crypto/insecure-crypto.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/insecure-crypto/insecure-crypto.md	147	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/magic-values/evals/cases/case-allowed-and-empty.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/magic-values/evals/cases/case-magic-number-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/magic-values/evals/cases/case-magic-string-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/magic-values/evals/cases/case-named-constant.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/magic-values/magic-values.md	31	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/magic-values/magic-values.md	172	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/missing-await/evals/cases/case-floating-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-await/missing-await.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-await/missing-await.md	165	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/missing-error-handling/evals/cases/case-guarded.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-error-handling/evals/cases/case-injection-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-error-handling/evals/cases/case-unguarded-await.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-error-handling/evals/cases/case-unguarded-json-parse.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-error-handling/missing-error-handling.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-error-handling/missing-error-handling.md	178	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/missing-timeout/evals/cases/case-fetch-no-timeout-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-timeout/missing-timeout.md	31	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/missing-timeout/missing-timeout.md	182	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/n-plus-one/evals/cases/case-query-in-loop-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/n-plus-one/n-plus-one.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/n-plus-one/n-plus-one.md	166	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/null-deref/evals/cases/case-guarded-deref.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/null-deref/evals/cases/case-injection-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/null-deref/evals/cases/case-optional-chain.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/null-deref/evals/cases/case-unchecked-deref.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/null-deref/null-deref.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/null-deref/null-deref.md	160	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/off-by-one/evals/cases/case-boundary-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/off-by-one/off-by-one.md	28	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/off-by-one/off-by-one.md	158	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/path-traversal/evals/cases/case-fs-concat.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/path-traversal/evals/cases/case-safe-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/path-traversal/evals/cases/case-safe-config.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/path-traversal/path-traversal.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/path-traversal/path-traversal.md	162	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/placeholder-as-done/evals/cases/case-complete.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/placeholder-as-done/evals/cases/case-done-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/placeholder-as-done/evals/cases/case-empty-body.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/placeholder-as-done/evals/cases/case-not-implemented.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/placeholder-as-done/evals/cases/case-todo-marker.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/placeholder-as-done/placeholder-as-done.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/placeholder-as-done/placeholder-as-done.md	148	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/race-condition/evals/cases/case-check-then-act-injection.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/race-condition/race-condition.md	30	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/race-condition/race-condition.md	142	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/resource-leak/evals/cases/case-intentional-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/resource-leak/evals/cases/case-open-no-close.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/resource-leak/evals/cases/case-try-finally-close.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/resource-leak/evals/cases/case-using-declaration.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/resource-leak/resource-leak.md	31	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/resource-leak/resource-leak.md	161	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/secrets-in-code/evals/cases/case-hardcoded-key.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/secrets-in-code/evals/cases/case-not-a-secret-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/secrets-in-code/secrets-in-code.md	28	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/secrets-in-code/secrets-in-code.md	138	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/ssrf/evals/cases/case-allowlisted-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/ssrf/evals/cases/case-fetch-reqquery.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/ssrf/evals/cases/case-fixed-host-path.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/ssrf/evals/cases/case-fixed-url-clean.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/ssrf/ssrf.md	31	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/ssrf/ssrf.md	170	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/swallowed-exception/evals/cases/case-empty-catch.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/swallowed-exception/evals/cases/case-intentional-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/swallowed-exception/evals/cases/case-log-only-catch.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/swallowed-exception/evals/cases/case-proper-handling.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/swallowed-exception/swallowed-exception.md	29	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/swallowed-exception/swallowed-exception.md	155	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/trust-fence/evals/cases/case-injection-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/trust-fence/trust-fence.md	23	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/trust-fence/trust-fence.md	85	R2	LIMITS.md	pharn/LIMITS.md
+pharn/pharn-review/unsafe-deserialization/evals/cases/case-pickle-loads.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/unsafe-deserialization/evals/cases/case-safe-comment.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/unsafe-deserialization/evals/cases/case-safe-yaml.md	8	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/unsafe-deserialization/unsafe-deserialization.md	35	R1	THREAT-MODEL.md	pharn/THREAT-MODEL.md
+pharn/pharn-review/unsafe-deserialization/unsafe-deserialization.md	169	R2	LIMITS.md	pharn/LIMITS.md

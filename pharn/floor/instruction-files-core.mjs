@@ -587,7 +587,7 @@ export function reportBody(set) {
     files,
     total_bytes: total,
     estimated_tokens: Math.ceil(total / 4),
-    estimate_basis: "bytes / 4 — an estimate, never a measurement (LIMITS.md §1c)",
+    estimate_basis: "bytes / 4 — an estimate, never a measurement (pharn/LIMITS.md §1c)",
     path_scoped: set.scoped,
     notes: set.notes,
   };

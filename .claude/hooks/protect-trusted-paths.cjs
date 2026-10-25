@@ -14,13 +14,13 @@
 // overwriting one disarms that guard on the very next write, and either settings file can unwire both.
 // A guard the agent may rewrite is not a floor op — it is a suggestion (P0).
 //
-// Also protected by default: the project's own SPEC template, pharn.spec-template.md at the root (see the entry in
+// Also protected by default: the project's own SPEC template, pharn/spec-template.md (see the entry in
 // DEFAULT_PROTECTED below). It is an INSTRUCTION channel to /pharn-spec, so it is guarded like the trusted docs.
 //
-// The control surface includes the writes-scope guard's INPUT, not only its code. .pharn/writes-scope.json
+// The control surface includes the writes-scope guard's INPUT, not only its code. pharn/.run/writes-scope.json
 // is the file enforce-writes-scope.cjs reads to decide EVERY write. That hook guards it with a single
-// byte-EXACT compare (rel === SCOPE_FILE) while its ALWAYS glob leaves the rest of .pharn/ writable, so
-// on a case-insensitive volume .pharn/WRITES-SCOPE.JSON named the same inode and slipped past: the Write
+// byte-EXACT compare (rel === SCOPE_FILE) while its ALWAYS glob leaves the rest of pharn/.run/ writable, so
+// on a case-insensitive volume pharn/.run/WRITES-SCOPE.JSON named the same inode and slipped past: the Write
 // tool could rewrite the active scope and then write anywhere fix #2 does not backstop. Reproduced live
 // (enforce → 0 on the upper-case spelling, 2 on the lower-case one). The entry is added HERE rather than
 // by widening that compare because this hook already full-case-folds, strips Windows trailing dot/space,
@@ -29,9 +29,9 @@
 // set-writes-scope.cjs is unaffected: it writes the file with fs.writeFileSync, which PreToolUse never sees.
 //
 // ── MEMORY-BANK CANON (the canon-write denylist) ────────────────────────────────────────────────────
-// `memory-bank/` and `.dev/memory-bank/` are denied as ROOTED SUBTREES, with one narrow escape.
+// `pharn/memory-bank/` and `.dev/memory-bank/` are denied as ROOTED SUBTREES, with one narrow escape.
 //
-// WHY IT IS HERE AT ALL. THREAT-MODEL.md §2 #3 calls memory-bank poisoning the "worst persistence
+// WHY IT IS HERE AT ALL. pharn/THREAT-MODEL.md §2 #3 calls memory-bank poisoning the "worst persistence
 // vector" — write-once-influence-forever, silent and cumulative, with no rollback signal — and §3 maps
 // it to the floor primitive "pre-write hook". That mapping did not hold: this file had ZERO memory-bank
 // references, so the composed verdict rested entirely on enforce-writes-scope.cjs, whose scope for
@@ -39,7 +39,7 @@
 // (set-writes-scope.cjs --from-plan), and whose CONTROL_SURFACE refusal covers only the four .claude/
 // control paths — never canon. A `## Files` entry naming a canon file therefore granted a direct,
 // ungated canon write, and no human approves a PRODUCT PLAN.md. Measured before the fix: a Write payload
-// naming memory-bank/lessons-learned.md exited 0 here.
+// naming pharn/memory-bank/lessons-learned.md exited 0 here.
 //
 // NOT A HYPOTHETICAL (P7). It happened twice and both are in canon: lessons-learned L7 (a `writes:`
 // over-declaration handed /review "a direct, ungated canon write") and L20 (a `## Files` over-grant
@@ -50,7 +50,7 @@
 // THE ESCAPE, AND EXACTLY WHAT IT IS NOT. A PreToolUse hook is fed on STDIN, never argv, so
 // set-writes-scope.cjs's `--allow-claude-dir` shape is not literally available. The authorization signal
 // is instead the ORIGIN of the active writes-scope: canonWriteAuthorized() permits a canon write only
-// when .pharn/writes-scope.json parses to an object whose `set_by` is an exact member of
+// when pharn/.run/writes-scope.json parses to an object whose `set_by` is an exact member of
 // PROMOTE_COMMANDS and whose `scope` is a SINGLE entry equal to the write target. Every other state —
 // absent, unparseable, non-object, wrong origin, multi-entry, or naming a different canon file — DENIES.
 //   • What it genuinely buys: `set_by` is written from the setter's ARGV, so NO `writes:` declaration and
@@ -62,18 +62,18 @@
 //     Bash. set-writes-scope.cjs writes its record with fs.writeFileSync, which PreToolUse never sees,
 //     so an agent can run the setter with promote-shaped argv, or forge the record outright, with no
 //     human gate. NO mechanism without that hole was found, and none is claimed. It grants nothing new:
-//     the same actor could already `cat >> memory-bank/lessons-learned.md`, which this hook has never
+//     the same actor could already `cat >> pharn/memory-bank/lessons-learned.md`, which this hook has never
 //     covered. What changes is that on the guarded tool surface a canon write now costs a SEPARATE,
 //     EXPLICIT, auditable act a build plan cannot cause, instead of arriving as an ordinary in-scope
 //     build write. That is a NARROWING, not a closure.
-//   • It is also NOT evidence a human approved. The floor cannot verify a form answer (LIMITS.md §1d);
+//   • It is also NOT evidence a human approved. The floor cannot verify a form answer (pharn/LIMITS.md §1d);
 //     the promote commands' accept/deny halt stays exactly as advisory as it is today.
 //   • It never authorizes a target whose physical path holds a backslash on a `/` system
 //     (write-guard-narrowing). The escape compares toKey() keys, and toKey() reads `\` as `/` and collapses
-//     `..`, so `memory-bank/x\..\lessons-learned.md` — a NEW file beside canon, named `x\..\lessons-learned.md`
+//     `..`, so `pharn/memory-bank/x\..\lessons-learned.md` — a NEW file beside canon, named `x\..\lessons-learned.md`
 //     — folded onto the one file a promote-origin scope authorizes. An exact-match ALLOW must not rest on a
 //     fold that changes which file a path names, so such a target is denied as canon. The whole path is
-//     tested, so a project whose own path holds a backslash (unsupported: LIMITS.md §7) has no escape at all.
+//     tested, so a project whose own path holds a backslash (unsupported: pharn/LIMITS.md §7) has no escape at all.
 //
 // A CAPABILITY THIS DELIBERATELY REMOVES. .claude/commands/pharn-dev-memory-promote.md documents a
 // second, legitimate canon route: the L1-L17 retro-tagging increment travelled "the ordinary gated build
@@ -99,12 +99,12 @@
 //
 // PROTECTED_SUBTREES is the ONE deliberate exception to exact matching, and it is NOT a return to the
 // removed branches. A canon directory cannot be spelled as an exact path, so it is matched as a ROOTED
-// PREFIX — `<guarded root>/memory-bank/…` — which is still trust-by-LOCATION. The removed fragment
+// PREFIX — `<guarded root>/pharn/memory-bank/…` — which is still trust-by-LOCATION. The removed fragment
 // branch denied a user's docs/ARCHITECTURE.md ANYWHERE in the tree because it matched a path SEGMENT
 // wherever it appeared; this matches only what actually sits under a guarded root's canon directory, so
 // a nested vendor copy at src/vendor/memory-bank/x.md is untouched. The honest over-block that remains
-// is a user's OWN unrelated memory-bank/ at the guarded root — structural, exactly as for the
-// root-level THREAT-MODEL.md / LIMITS.md / CODEOWNERS entries.
+// is a user's OWN unrelated pharn/memory-bank/ at the guarded root — structural, exactly as for the
+// pharn/THREAT-MODEL.md / pharn/LIMITS.md / CODEOWNERS entries.
 //
 // ── WHAT THIS FILE LEARNED FROM BEING ATTACKED ──────────────────────────────────────────────────────
 // The first repo-relative draft of this matcher was correct on every case its author thought of, and
@@ -133,7 +133,7 @@
 //      below read `\` as `/` on every platform — resolveWriteTarget() splits on it and toKey() folds it — while
 //      on a `/` system the kernel reads it as part of a file NAME. So a symlink named `s\x` pointing at `.`
 //      carried a write to `<root>/s\x/LIMITS.md` past this hook: both readings saw `s/x/LIMITS.md`, a path
-//      that does not exist, while the kernel wrote LIMITS.md. Under a scope a PLAN had set, the same route
+//      that does not exist, while the kernel wrote pharn/LIMITS.md. Under a scope a PLAN had set, the same route
 //      wrote memory-bank canon — the `## Files` → canon vector the canon denylist exists to close (L7, L20).
 //      Measured by a security review, in the dev posture too. The fix keeps both old readings, unchanged, and
 //      ADDS the filesystem's own, judged second: resolvePhysicalTarget(), below.
@@ -147,7 +147,7 @@
 // which then dereferences), and a pathological path (path.join spread past the argument limit) — and
 // the decision itself is wrapped so that ANY unexpected error DENIES rather than allows. The canon
 // escape inherits this posture in the strictest direction: every failure to read, parse or validate
-// .pharn/writes-scope.json returns "not authorized", i.e. the write is DENIED.
+// pharn/.run/writes-scope.json returns "not authorized", i.e. the write is DENIED.
 //
 // ── HONEST BOUNDS (P0) ──────────────────────────────────────────────────────────────────────────────
 // • Case-folding is fail-SAFE, not free. On a case-SENSITIVE volume `pharn/constitution.md` is a
@@ -156,10 +156,11 @@
 //   under-block the real doc on the two commonest development platforms. Same for the trailing
 //   dot/space strip (Windows semantics) and the Unicode fold, which is close to — but not provably
 //   identical with — the filesystem's own equivalence.
-// • Root-level entries (THREAT-MODEL.md, LIMITS.md, CODEOWNERS) still over-block a user's own
-//   same-named file at the guarded root. That is structural: PHARN's own copies live there. The canon
+// • Fixed-path entries (pharn/THREAT-MODEL.md, pharn/LIMITS.md, CODEOWNERS) still over-block a user's own
+//   file at that path. That is structural: PHARN's own copies live there.
+//   (migration, 7.0.0: a root LIMITS.md or THREAT-MODEL.md is a user's own file again.) The canon
 //   SUBTREES over-block on the same terms and for the same reason.
-// • The .pharn/writes-scope.json entry closes the WRITE-TOOL vector only. The claim is "the Write-tool
+// • The pharn/.run/writes-scope.json entry closes the WRITE-TOOL vector only. The claim is "the Write-tool
 //   self-escalation is closed", NEVER "the scope file cannot be rewritten" — see the Bash bound below,
 //   which reaches it exactly as it reaches every other guarded path.
 // • The canon denylist covers the Write/Edit/MultiEdit/NotebookEdit surface ONLY. "Canon cannot be
@@ -205,11 +206,11 @@
 // that denylist holds no matter what scope was set, so neutering the setter's refusal still does not
 // make a control file writable. THE CANON BRANCH IS THE ONE EXCEPTION, and the qualifier is load-bearing
 // (it was previously stated without one, and this increment made that sentence false): a canon write
-// CONSULTS .pharn/writes-scope.json, so for canon the two guards are coupled by the record's SHAPE —
+// CONSULTS pharn/.run/writes-scope.json, so for canon the two guards are coupled by the record's SHAPE —
 // `set_by` plus a one-entry `scope`, as emitted at set-writes-scope.cjs's `const record = {…}`. A ✧ test
 // pins that the setter's live output still satisfies canonWriteAuthorized(), so the two cannot drift
 // into disagreement unnoticed. The setter's CONTROL_SURFACE deliberately does NOT carry
-// .pharn/writes-scope.json: the two sets are pinned equal on the .claude/-prefixed entries by a ✧ test
+// pharn/.run/writes-scope.json: the two sets are pinned equal on the .claude/-prefixed entries by a ✧ test
 // in set-writes-scope.test.cjs, and a scope naming the file is inert anyway — both this hook and
 // enforce-writes-scope.cjs deny the write regardless of scope.
 //
@@ -376,8 +377,8 @@ const DEFAULT_PROTECTED = [
   // basenames — a basename denies a user's own same-named file and protects the wrong one).
   "pharn/CONSTITUTION.md",
   "pharn/ARCHITECTURE.md",
-  "THREAT-MODEL.md",
-  "LIMITS.md",
+  "pharn/THREAT-MODEL.md",
+  "pharn/LIMITS.md",
   // CODEOWNERS at the three GitHub-recognized locations; whichever exists is a live review gate.
   "CODEOWNERS",
   ".github/CODEOWNERS",
@@ -392,31 +393,31 @@ const DEFAULT_PROTECTED = [
   ".claude/hooks/enforce-writes-scope.cjs",
   ".claude/hooks/set-writes-scope.cjs",
   ".claude/hooks/require-loop-record.cjs",
-  // The writes-scope guard's INPUT (see the header). Deliberately this ONE file and not ".pharn/**":
-  // the rest of .pharn/ is disposable runtime scratch that stages legitimately write, and the
+  // The writes-scope guard's INPUT (see the header). Deliberately this ONE file and not "pharn/.run/**":
+  // the rest of pharn/.run/ is disposable runtime scratch that stages legitimately write, and the
   // product lessons-index cache lives there too. First entry naming a GENERATED file rather than a
   // committed one — the deny is by path, so it holds whether or not the file exists yet.
-  ".pharn/writes-scope.json",
+  "pharn/.run/writes-scope.json",
   // The project's own SPEC template (pharn/pharn-contracts/spec-template.md, "The project template"). Its guidance
   // comments are instructions /pharn-spec follows, so it is a persistent instruction channel: a build agent that
   // could write it would steer every later SPEC. That is also why its path is FIXED in
   // pharn/floor/spec-template-core.mjs rather than read from a config file no guard protects. Denied by path,
-  // whether or not the file exists (the .pharn/writes-scope.json precedent above); a human edits it directly. The
+  // whether or not the file exists (the pharn/.run/writes-scope.json precedent above); a human edits it directly. The
   // core's copy of the path and this entry are pinned equal by a test in pharn/floor/check-spec.test.mjs.
   // Bounded as every entry here is: a Bash write reaches it.
-  "pharn.spec-template.md",
+  "pharn/spec-template.md",
 ];
 
 // Memory-bank canon, denied as ROOTED SUBTREES (see the header). Both halves of the deliberate
 // dev/product copy-pair are listed, because the second copy is where a pair's obligation gets dropped
 // (lessons-learned L31). No trailing slash here — one is appended once, at fold time.
-const PROTECTED_SUBTREES = ["memory-bank", ".dev/memory-bank"];
+const PROTECTED_SUBTREES = ["pharn/memory-bank", ".dev/memory-bank"];
 
 // The four canon files the two promote commands' TARGET_ENUMs actually name. Used ONLY to collect
 // hard-link inodes (a bounded four stats, versus a recursive walk of the subtrees on every tool call).
 const CANON_FILES = [
-  "memory-bank/lessons-learned.md",
-  "memory-bank/pattern-library.md",
+  "pharn/memory-bank/lessons-learned.md",
+  "pharn/memory-bank/pattern-library.md",
   ".dev/memory-bank/lessons-learned.md",
   ".dev/memory-bank/pattern-library.md",
 ];
@@ -427,7 +428,7 @@ const CANON_FILES = [
 const PROMOTE_COMMANDS = [".claude/commands/pharn-memory-promote.md", ".claude/commands/pharn-dev-memory-promote.md"];
 
 // The writes-scope guard's input, read (never written) by the canon escape.
-const SCOPE_FILE = ".pharn/writes-scope.json";
+const SCOPE_FILE = "pharn/.run/writes-scope.json";
 
 const extra = (process.env.PHARN_PROTECTED || "")
   .split(",")
@@ -439,7 +440,7 @@ const extra = (process.env.PHARN_PROTECTED || "")
 //
 // The fold is toUpperCase().toLowerCase(), NOT a bare toLowerCase(): toLowerCase alone is SIMPLE case
 // mapping while this filesystem compares with FULL case folding (header, #5). The trailing dot/space
-// strip is Windows semantics — the OS drops them, so `LIMITS.md.` opens LIMITS.md there; on POSIX those
+// strip is Windows semantics — the OS drops them, so `pharn/LIMITS.md.` opens pharn/LIMITS.md there; on POSIX those
 // are distinct names and stripping them is a deliberate over-block in the safe direction.
 function toKey(rel) {
   return path.posix
@@ -458,8 +459,8 @@ const ROOT_PREFIXES = ROOTS.map((r) => {
   return k.endsWith("/") ? k : k + "/";
 });
 
-// Canon subtrees as folded prefixes WITH the trailing slash, so `memory-banked/x.md` cannot match
-// `memory-bank`. The bare directory itself is not a write target, so requiring something after the
+// Canon subtrees as folded prefixes WITH the trailing slash, so `pharn/memory-banked/x.md` cannot match
+// `pharn/memory-bank`. The bare directory itself is not a write target, so requiring something after the
 // slash is correct as well as narrower.
 const PROTECTED_SUBTREE_KEYS = PROTECTED_SUBTREES.map((s) => toKey(s) + "/");
 const PROMOTE_COMMAND_KEYS = new Set(PROMOTE_COMMANDS.map(toKey));
@@ -804,7 +805,7 @@ const DENY_REASONS = {
   gitmeta: (shown) =>
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) git metadata — a \`.git\` entry under a guarded root. The write tools may not change repository metadata: a \`.git\` entry decides which working tree each write guard judges, so re-pointing one would move this guard off the tree it protects, and \`.git/hooks\` / \`.git/config\` run code on the next git command. FIX (pick one): • make the change with the git command that owns it (\`git worktree add\`, \`git config\`, …), which is the supported route; • or have a human edit it outside the agent loop. Declaring the path in \`writes:\` CANNOT authorize this write — that is the specific thing this guard refuses.`,
   canon: (shown) =>
-    `BLOCKED by PHARN floor: ${shown} is (or resolves to) memory-bank CANON (CONSTITUTION P2 / fix #2; THREAT-MODEL.md §2 #3 — memory poisoning is silent, cumulative, and has no rollback signal). Canon is written only through the gated promotion path. FIX (pick one): • run /pharn-memory-promote (or /pharn-dev-memory-promote), which after its human accept/deny gate sets a writes-scope whose ORIGIN authorizes exactly this one canon file; • or have a human edit canon by hand, outside the agent loop. Re-scoping a build from a PLAN's \`## Files\` CANNOT authorize this write — that is the specific thing this guard refuses, deliberately.`,
+    `BLOCKED by PHARN floor: ${shown} is (or resolves to) memory-bank CANON (CONSTITUTION P2 / fix #2; pharn/THREAT-MODEL.md §2 #3 — memory poisoning is silent, cumulative, and has no rollback signal). Canon is written only through the gated promotion path. FIX (pick one): • run /pharn-memory-promote (or /pharn-dev-memory-promote), which after its human accept/deny gate sets a writes-scope whose ORIGIN authorizes exactly this one canon file; • or have a human edit canon by hand, outside the agent loop. Re-scoping a build from a PLAN's \`## Files\` CANNOT authorize this write — that is the specific thing this guard refuses, deliberately.`,
 };
 
 function denyMalformedHookInput(detail) {
@@ -845,7 +846,7 @@ const isWrite = /^(Write|Edit|MultiEdit|NotebookEdit)$/i.test(toolName) || (!too
 if (isWrite) {
   // A NUL byte in any payload path denies before either pass judges it (audit SEC-11, 2026-10-12). No file has such a
   // name — Node's `fs` refuses it — so the passes below would judge a name that is no file a write can reach:
-  // `LIMITS.md\u0000x` resolved to itself, matched no trusted path, and was allowed. Fixed text; never echoed.
+  // `pharn/LIMITS.md\u0000x` resolved to itself, matched no trusted path, and was allowed. Fixed text; never echoed.
   if (extractPaths(toolInput).some((p) => p.includes("\0"))) denyMalformedHookInput("a path contains a NUL byte");
   // Deny if EITHER the literal path (resolved against CWD, which is what a relative payload path means)
   // OR its symlink-canonicalized real target is protected. Evaluated per path and FAIL-CLOSED: if

@@ -5,7 +5,7 @@ purpose: "Eval fixture (PATH TRAVERSAL): CODE that reads a file by joining a req
 
 # Eval case — fs-concat (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects the request-source-into-fs-path-sink shape from the text.
 
 ```js

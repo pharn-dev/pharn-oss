@@ -24,7 +24,7 @@ still holds the rules every session needs; this file adds detail and does not ov
   one lands — so cataloguing capabilities nobody has yet authored would be the speculative half of
   that same pair. Two design questions would also have to be answered first, and neither has a good
   answer today: the `product-lessons-index` precedent puts derived product output in the **gitignored
-  `.pharn/` cache**, which leaves a human-readable catalog with **no reader** (the index is different
+  `pharn/.run/` cache**, which leaves a human-readable catalog with **no reader** (the index is different
   — `/pharn-plan` machine-reads it); and a user repo has no `npm run docs:check`, so a ported drift
   guard would have **no invoker** and its byte-equality guarantee would be unreachable. **Reopens
   when** the first `role:`-bearing capability is authored **outside** PHARN's own shipped surface —

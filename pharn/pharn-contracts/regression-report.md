@@ -32,7 +32,7 @@ when the run's entry gates recorded changes, `entry_gate_changes` (6.42.0), all 
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
-`.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
+`pharn/.run/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
 appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, since 6.40.0 `head_install`, then `base_source`
 (regress-base-integrity), since 6.66.0, when present, `base_install`, and since 6.42.0, when present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
 the checker prints with, so every key the checker printed keeps its bytes: the report minus those blocks is the
@@ -226,7 +226,7 @@ reader can re-derive it, and it must **never** be read as an invariant the repo 
   shape. Should a real failure surface, that is the trigger to give it a floor check, and this section is
   where the change would be recorded.
 
-## Residual (named, not hidden — `LIMITS.md §2`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`)
 
 Narrower than the verify-report's, and narrower for a structural reason rather than by luck: this
 artifact carries **no untrusted free text** (outside a dev report's `per_test.new_failures` ids, which no floor op
@@ -406,7 +406,7 @@ document; a `scope-escaped` refusal's `REGRESSION.md` names it beside the escape
 
 **The rule, and its bounds (P0).** FLOOR: the subtraction is decided by tested code over content hashes, the marker's
 bytes and closed enums, in the invocation that runs the partition. ADVISORY: the block a resumed chain renders (it is
-re-read from `scope.json`, a `.pharn/` file the write tools reach while a chain is paused). Agreement, never
+re-read from `scope.json`, a `pharn/.run/` file the write tools reach while a chain is paused). Agreement, never
 provenance (L43): a Bash writer can forge the git-dir record bound to the right marker. The subtraction never
 attributes — a path an earlier run escaped with is pre-run state for the next run, so a re-run reports it rather than
 refusing — and it touches the escape set only: `inside` is unchanged, so a pre-run change that breaks a gate still
@@ -446,7 +446,7 @@ HEAD gates run in. Every other state proceeds exactly as before, and the report 
   record shows NO present member of (an install configured to omit that class leaves it absent after every `npm ci`).
   Counted, never drift. An absent member of a class that WAS installed is `missing`, i.e. drift.
 - `null` — the stored block was absent or malformed when the report was written (it is re-read from
-  `.pharn/pharn-regress/head-install.json`, a file the write tools reach while a chain is paused). A report written
+  `pharn/.run/pharn-regress/head-install.json`, a file the write tools reach while a chain is paused). A report written
   before 6.40.0 has no such key.
 - `REGRESSION.md` renders it as ONE line beside the install lines: `clean` says what was compared, `not-checked` says
   a red gate may come from the install rather than from the change.

@@ -10,7 +10,7 @@
 // it. `stage-verify-core.test.mjs` pins this module's import list, with an injected-import control.
 //
 // ==================================== THE CLOSED RULES ====================================
-// • VERIFY_PATHS — the ONE owner of the stage's `.pharn/pharn-verify/` scratch layout; `loop-fresh-core.mjs`'s
+// • VERIFY_PATHS — the ONE owner of the stage's `pharn/.run/pharn-verify/` scratch layout; `loop-fresh-core.mjs`'s
 //   `DEFAULT_STAMPS.verify` is derived from it (L35).
 // • PHASES / RESUMABLE_PHASES — the order `stage-verify.mjs` runs, and the only two phases it ever persists. The
 //   phase literals the script passes to its checkpoint writer are pinned EQUAL to RESUMABLE_PHASES by a test
@@ -37,11 +37,11 @@ import { FEATURE_SLUG_RE, actualForExpected, REUSED_REASON } from "./gate-run-co
  *  `<gates>/completeness.json`: both file names are `run-gates.mjs`'s, which writes them under `--out`.
  *  ---------------------------------------------------------------------------------------------- */
 export const VERIFY_PATHS = Object.freeze({
-  root: ".pharn/pharn-verify",
-  gates: ".pharn/pharn-verify/gates",
-  stageJson: ".pharn/pharn-verify/stage.json",
+  root: "pharn/.run/pharn-verify",
+  gates: "pharn/.run/pharn-verify/gates",
+  stageJson: "pharn/.run/pharn-verify/stage.json",
   // 6.40.0 — the HEAD install check's block, written at init and re-read at verdict (install-drift.mjs).
-  headInstall: ".pharn/pharn-verify/head-install.json",
+  headInstall: "pharn/.run/pharn-verify/head-install.json",
 });
 
 /** THE PHASE ENUM, in EXECUTION ORDER. Every refusal and the one question are raised before "drain", the first
@@ -52,7 +52,7 @@ export const PHASES = Object.freeze(["fresh", "chain", "pairs", "verifiers", "in
 export const RESUMABLE_PHASES = Object.freeze(["drain", "verdict"]);
 
 /** ------------------------------------------------------------------------------------------------
- *  THE PROGRESS RECORD — `.pharn/pharn-verify/stage.json`, schema `pharn-stage-verify-progress/1`. It carries
+ *  THE PROGRESS RECORD — `pharn/.run/pharn-verify/stage.json`, schema `pharn-stage-verify-progress/1`. It carries
  *  EXACTLY what a resumed invocation needs: the feature, the two budget numbers, the NEXT phase, and the verifier
  *  count (taken before the slow steps, so a resume does not re-walk the tree for it). Everything else a resume
  *  needs — the gate set, the stamp, the completeness capture — is already durable under `<gates>/`, written by

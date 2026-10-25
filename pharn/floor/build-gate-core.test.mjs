@@ -34,11 +34,11 @@ test("✧ L34/L36 — MODES and EXIT are closed, frozen, non-empty, and EXIT nev
   assert.equal(new Set(Object.values(EXIT)).size, Object.keys(EXIT).length);
 });
 
-test("buildGatePaths — every path sits under .pharn/pharn-build/<name>/", () => {
+test("buildGatePaths — every path sits under pharn/.run/pharn-build/<name>/", () => {
   const p = buildGatePaths("demo");
-  assert.equal(BUILD_GATE_ROOT, ".pharn/pharn-build");
+  assert.equal(BUILD_GATE_ROOT, "pharn/.run/pharn-build");
   for (const v of [p.root, p.targets, p.out("full"), p.out("targeted"), p.times("full"), p.times("targeted")]) {
-    assert.ok(v.startsWith(".pharn/pharn-build/demo"), v);
+    assert.ok(v.startsWith("pharn/.run/pharn-build/demo"), v);
   }
   assert.notEqual(p.out("full"), p.out("targeted"));
 });
@@ -70,7 +70,7 @@ test("targetFiles — keeps exactly the declared test files that exist, through 
     "-x.test.js", // led by '-' (badPath): a runner would read it as a flag
     "/abs/c.test.js", // absolute (badPath)
     "../up.test.js", // not normalized (badPath)
-    ".pharn/x.test.js", // under the state root (badPath)
+    "pharn/.run/x.test.js", // under the state root (badPath)
   ];
   const got = targetFiles({ declared, acTestsText: AC_TEXT, isRegularFile: (p) => exists.has(p) });
   assert.deepEqual(got, ["src/__tests__/b.ts", "tests/a.test.js", "tests/ac/u.test.js"]);
@@ -160,7 +160,7 @@ test("renderSummary — GREEN lists each gate's exit and runner-call time and no
     mode: "full",
     feature: "demo",
     stamp: stampOf([run(0, "test", 0), run(1, "typecheck", 0)]),
-    outDir: ".pharn/pharn-build/demo/full",
+    outDir: "pharn/.run/pharn-build/demo/full",
     times: { 0: 1500, 1: 200 },
     perGate: { test: { results: record([]), outText: "", errText: "" } },
   });
@@ -284,7 +284,7 @@ test("review R3 — the 16,384-byte cap HOLDS: every section past it is named by
     mode: "full",
     feature: "demo",
     stamp: stampOf(runs),
-    outDir: ".pharn/pharn-build/demo/full",
+    outDir: "pharn/.run/pharn-build/demo/full",
     times: {},
     perGate,
   });
@@ -314,7 +314,7 @@ test("review R3 — adversarial: 200 explicit gates with 256-char ids and huge l
     mode: "full",
     feature: "demo",
     stamp: { ...stampOf(runs), source: "explicit" },
-    outDir: ".pharn/pharn-build/demo/full",
+    outDir: "pharn/.run/pharn-build/demo/full",
     times: {},
     perGate,
   });

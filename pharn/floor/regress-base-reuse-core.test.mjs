@@ -681,7 +681,7 @@ test("✧ PARITY — the marker age ceiling is the write guard's and the Stop gu
   const require = createRequire(import.meta.url);
   assert.equal(require("../../.claude/hooks/require-loop-record.cjs").AGE_CEILING_MS, MARKER_AGE_CEILING_MS);
   const { markerPath } = await import("./run-marker.mjs");
-  assert.equal(markerPath("/r", "pharn-ship", FEATURE), "/r/.pharn/pharn-ship/demo/active.json");
+  assert.equal(markerPath("/r", "pharn-ship", FEATURE), "/r/pharn/.run/pharn-ship/demo/active.json");
   assert.deepEqual([...DELIVERY_COMMANDS], ["pharn-loop", "pharn-ship"]);
   assert.equal(RECORD_BASENAME, "pharn-regress-base-reuse.json");
   assert.equal(RECORD_SCHEMA, "pharn-regress-base-reuse/1");

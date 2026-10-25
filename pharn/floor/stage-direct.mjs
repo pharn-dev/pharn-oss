@@ -22,15 +22,15 @@
 // lines did, in one process, and the orchestrators pin it instead. The thin callers stay, unchanged, for a person.
 //
 // ── WHAT ONE CALL DOES, IN ORDER ──────────────────────────────────────────────────────────────────────
-//   0. TAKE THE IN-FLIGHT LOCK (GATE-2 review R1): create `.pharn/stage-direct/in-flight.json` with O_EXCL|O_NOFOLLOW,
+//   0. TAKE THE IN-FLIGHT LOCK (GATE-2 review R1): create `pharn/.run/stage-direct/in-flight.json` with O_EXCL|O_NOFOLLOW,
 //      holding this process's pid, the start time, the stage and the name. A lock already there whose pid is ALIVE —
 //      or whose record cannot be read — refuses: exit 2, `stage-direct: refused (in-flight)`, nothing set, run or
-//      marked. A lock whose pid is dead is stale: removed, then taken. `.pharn` or `.pharn/stage-direct` that is not a
+//      marked. A lock whose pid is dead is stale: removed, then taken. `pharn/.run` or `pharn/.run/stage-direct` that is not a
 //      real directory (a link, a file), or any other filesystem failure, refuses `lock-unusable`. The lock is
 //      released in a `finally` — and only while it still holds this call's own record.
 //   1. SET THE SCOPE: spawn `.claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-<stage>.md
-//      --target .pharn/pharn-<stage>/stage.json` — the thin caller's own pinned setter line, so its claim holds here
-//      too: while the script runs, no Write-tool write lands outside `.pharn/**` (fix #7, a hook). A setter that does
+//      --target pharn/.run/pharn-<stage>/stage.json` — the thin caller's own pinned setter line, so its claim holds here
+//      too: while the script runs, no Write-tool write lands outside `pharn/.run/**` (fix #7, a hook). A setter that does
 //      not exit 0 → exit 2 with a `stage-direct:` line and NO object: nothing else runs or is written.
 //   2. A FRESH call writes the stage-start marker (stage, iteration) through `mark-phase.mjs`'s `tryMarkPhase` — the
 //      one printed encoding, so the line binds the run (`run-window-core.mjs`, rule 6). A resume writes none.
@@ -46,16 +46,16 @@
 //      stdout is 1 — a crash, never a verdict, exactly as the stage-exit table reads it.
 //
 // ── FAILURE MODES (each stated; GRILL G2) ─────────────────────────────────────────────────────────────
-//   * The setter fails — no thin-caller command file in the install, an unusable `.pharn/`, the setter missing →
+//   * The setter fails — no thin-caller command file in the install, an unusable `pharn/.run/`, the setter missing →
 //     exit 2, nothing run, no marker. The orchestrators map it as the stage's own `unusable` (S9 / STOP).
 //   * A marker cannot be written → its line is `MARKER_NOT_WRITTEN`; the call goes on and the exit is the script's.
 //   * The script cannot be spawned, or dies on a signal → exit 1 (the return marker is still written).
-//   * `--clear` fails → a `stage-direct:` note on stderr, the exit unchanged; the `.pharn/**`-only scope left behind is
+//   * `--clear` fails → a `stage-direct:` note on stderr, the exit unchanged; the `pharn/.run/**`-only scope left behind is
 //     overwritten by the next scoped step (the same degradation the thin callers' own release has, L19).
 //   * The Bash tool's 600 s limit does NOT kill the call: the tool MOVES IT TO THE BACKGROUND, where the stage script
 //     and steps 4–6 run on to the end (GATE-2 review R1, reproduced at a 3 s tool timeout; 600 s is assumed to behave
 //     the same). The orchestrators wait for its completion notice and branch on the exit and object it reports. Were a
-//     second call started meanwhile — the resume line, say — two stage scripts would share `.pharn/pharn-<stage>/`, the
+//     second call started meanwhile — the resume line, say — two stage scripts would share `pharn/.run/pharn-<stage>/`, the
 //     first call's late `--clear` would release a scope the second had set, and its return marker would land in the
 //     middle of a later stage. Step 0's lock refuses that second call instead.
 //   * Another call holds the lock → `refused (in-flight)`, exit 2, nothing touched; the orchestrators map it as the
@@ -65,7 +65,7 @@
 //
 // ── BOUNDS (P0) ───────────────────────────────────────────────────────────────────────────────────────
 //   * DETECTED, NEVER PREVENTED, as before: the call's own writes — the scope file and two markers — are Bash writes
-//     outside fix #7 (L19), all under `.pharn/`, outside the reconciled set; the script's own writes are the
+//     outside fix #7 (L19), all under `pharn/.run/`, outside the reconciled set; the script's own writes are the
 //     script's, unchanged.
 //   * The scope covers the script's run, not the gap between two calls: around a `continue` no stage scope is set and
 //     the guard's default applies (the thin callers kept theirs across resumes).
@@ -77,7 +77,7 @@
 //   * THE LOCK excludes stage-direct calls from each other, in one tree — nothing else. A person running a thin
 //     caller, or the stage script directly, beside a call is not seen. "Alive" is `kill(pid, 0)`: a dead holder whose
 //     pid the OS has reused for another process reads as alive, so that call refuses (fail-closed) until the file is
-//     removed. The lock is a Bash write outside fix #7 (L19), unauthenticated `.pharn/` state like the markers.
+//     removed. The lock is a Bash write outside fix #7 (L19), unauthenticated `pharn/.run/` state like the markers.
 
 import "./runtime-floor.mjs";
 import { spawnSync } from "node:child_process";
@@ -176,7 +176,7 @@ function realDir(root, rel) {
  * `reason` a LOCK_REFUSALS member. A dead holder's lock is removed once, then taken.
  */
 export function acquireLock(root, { stage, name, now = Date.now(), pid = process.pid }) {
-  for (const rel of [".pharn", LOCK_DIR]) {
+  for (const rel of ["pharn", "pharn/.run", LOCK_DIR]) {
     const bad = realDir(root, rel);
     if (bad) return { ok: false, reason: "lock-unusable", detail: bad };
   }

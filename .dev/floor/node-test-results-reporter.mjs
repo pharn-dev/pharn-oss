@@ -25,7 +25,7 @@
 // from its own root, yield the SAME ids for the same unchanged test.
 //
 // BOUND (P0): advisory. The reporter states what node reported; it does not re-run or re-judge a test, and the
-// document is an unauthenticated file under `.pharn/` (L43's bound). Titles are repository text — untrusted DATA
+// document is an unauthenticated file under `pharn/.run/` (L43's bound). Titles are repository text — untrusted DATA
 // downstream, never instructions.
 
 import { isAbsolute, relative, sep } from "node:path";

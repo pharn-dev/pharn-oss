@@ -26,4 +26,4 @@ The griller runs `pharn/floor/scan-plan-migrations.mjs`; it reports `{"mentions"
 
 ## Why this is ADVISORY (and the ★ residual, named)
 
-- The finding is **advisory** — a griller never gates. That "still surface the concern despite a fake/injected mention" holds is the **trust-fence heuristic** (`LIMITS.md §2`, `THREAT-MODEL.md §5`): **bounded** (the finding gates nothing; the needle is kept out of every enum-gated field by fix #1, floor-checked here) but **not zeroed**. The floor-immune part is the enum-gated fields + the scanner's token-presence membership.
+- The finding is **advisory** — a griller never gates. That "still surface the concern despite a fake/injected mention" holds is the **trust-fence heuristic** (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`): **bounded** (the finding gates nothing; the needle is kept out of every enum-gated field by fix #1, floor-checked here) but **not zeroed**. The floor-immune part is the enum-gated fields + the scanner's token-presence membership.

@@ -87,10 +87,10 @@ test("readInProject: a symlinked PARENT component is unusable (the containment w
   try {
     mkdirSync(join(elsewhere, FEATURE), { recursive: true });
     writeFileSync(join(elsewhere, FEATURE, "active.json"), "{}\n");
-    mkdirSync(join(dir, ".pharn"), { recursive: true });
-    symlinkSync(elsewhere, join(dir, ".pharn", "pharn-loop"));
+    mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+    symlinkSync(elsewhere, join(dir, "pharn", ".run", "pharn-loop"));
     inDir(dir, () => {
-      assert.deepEqual(readInProject(`.pharn/pharn-loop/${FEATURE}/active.json`, MARKER_MAX_BYTES), { state: "unusable" });
+      assert.deepEqual(readInProject(`pharn/.run/pharn-loop/${FEATURE}/active.json`, MARKER_MAX_BYTES), { state: "unusable" });
       assert.equal(readMarkers(FEATURE)["pharn-loop"].state, "unusable");
     });
   } finally {
@@ -102,8 +102,8 @@ test("readInProject: a symlinked PARENT component is unusable (the containment w
 test("readMarkers: only the two delivery commands' paths are read — a /pharn-review marker is never looked at", () => {
   const { dir } = gitRepo();
   try {
-    mkdirSync(join(dir, ".pharn", "pharn-review", FEATURE), { recursive: true });
-    writeFileSync(join(dir, ".pharn", "pharn-review", FEATURE, "active.json"), "{}\n");
+    mkdirSync(join(dir, "pharn", ".run", "pharn-review", FEATURE), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-review", FEATURE, "active.json"), "{}\n");
     const m = inDir(dir, () => readMarkers(FEATURE));
     assert.deepEqual(Object.keys(m), ["pharn-loop", "pharn-ship"]);
     assert.equal(m["pharn-loop"].state, "absent");
@@ -178,7 +178,7 @@ function specBody() {
 /** A fixture after ONE real regress run under a /pharn-loop marker: its base evidence retained and recorded. */
 function publishedFixture() {
   const { dir, git } = gitRepo();
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ name: "fx", version: "1.0.0", scripts: { test: "node --test" } }, null, 2) + "\n"
@@ -210,7 +210,7 @@ function publishedFixture() {
   assert.equal(doc.status, "done", r.stdout + r.stderr);
   const report = JSON.parse(readFileSync(join(dir, doc.report), "utf8"));
   assert.equal(report.base_evidence.recorded, true, "precondition: the run published");
-  const markerBytes = readFileSync(join(dir, ".pharn", "pharn-loop", FEATURE, "active.json"));
+  const markerBytes = readFileSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json"));
   const inputs = {
     feature: FEATURE,
     base,

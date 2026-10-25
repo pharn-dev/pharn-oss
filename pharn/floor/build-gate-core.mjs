@@ -17,7 +17,7 @@
 // ================================ THE TARGET RULE ================================
 // targetFiles: the feature's declared writes (scope-inputs.mjs `declaredWrites` — PLAN `## Files` ∪ AC-TESTS
 // `## Files`, the setter's grammar), kept when ac-tests-core.mjs `badPath` accepts the path (no glob, not absolute, no
-// leading `-` a runner would read as a flag, normalized, outside `.pharn/` and `pharn/features/`), stage-regress-core.mjs
+// leading `-` a runner would read as a flag, normalized, outside `pharn/.run/` and `pharn/features/`), stage-regress-core.mjs
 // `isTestFile` matches it, AC-TESTS.md's mapping does not place it at level `e2e` (an e2e test runs under an e2e gate,
 // never `test`), and it is a regular file now (the caller's predicate). Sorted, unique. Every rule is imported (L35).
 // BOUND: "targeted" is the RUNNER's reading of file arguments — vitest filters by substring and Jest by pattern, so
@@ -52,7 +52,7 @@ export const STAGE = "build";
 export const EXIT = Object.freeze({ green: 0, unusable: 2, red: 3, "no-gates": 4, continue: 5 });
 
 /** The state root this helper writes under, and its per-feature layout — the ONE owner of these paths. */
-export const BUILD_GATE_ROOT = ".pharn/pharn-build";
+export const BUILD_GATE_ROOT = "pharn/.run/pharn-build";
 export function buildGatePaths(name) {
   const root = `${BUILD_GATE_ROOT}/${name}`;
   return {

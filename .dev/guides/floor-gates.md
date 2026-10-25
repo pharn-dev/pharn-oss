@@ -50,9 +50,9 @@ come from the single code block this text was moved from, so the entry they name
 # `pre_anchor_artifacts`, written before the build's anchor). A partition test pins EXCLUDED u INCLUDED ==
 # reconcile-ignore.json pipeline_artifacts.names u pre_anchor_artifacts.names, so a new pipeline artifact
 # fails CI until someone classifies it for both consumers — and its bound is L43's: it certifies the three
-# stores AGREE, never that the set is correct. `.pharn/` is excluded EXPLICITLY and that is load-bearing in
+# stores AGREE, never that the set is correct. `pharn/.run/` is excluded EXPLICITLY and that is load-bearing in
 # THIS increment, not only the next: enumerate() derives exclusion from git-ignore, so in an install that
-# does NOT ignore `.pharn/` the runner's own logs would move the fingerprint between EVERY pair of gates and
+# does NOT ignore `pharn/.run/` the runner's own logs would move the fingerprint between EVERY pair of gates and
 # refuse every run. MEASURED, never inherited (L24): 1925 paths, ~463 ms cold / ~75-85 ms warm on this repo.
 # BOUNDS: POSIX only; gates assumed order-independent; a `setsid` descendant escapes the group kill; a
 # harness SIGTERM/SIGINT/SIGHUP before --timeout-ms is FORWARDED to the gate's group and the runner dies by it,
@@ -66,7 +66,7 @@ come from the single code block this text was moved from, so the entry they name
 # their content; logs are bounded per stage by init's recreate of <out> and are otherwise unbounded across
 # /pharn-loop iterations. The runner writes ONLY inside the state root (containment-checked, no symlink
 # component), so it needs NO reconcile-ignore.json exemption. EVERY path operand (--out, --spec-from,
-# --discover, --scope-json, --ac-tests) resolves against the INVOKING directory, whose `.pharn/` is that state root;
+# --discover, --scope-json, --ac-tests) resolves against the INVOKING directory, whose `pharn/.run/` is that state root;
 # --cwd moves only where gates RUN and which tree is fingerprinted (6.9.3 — before it, init resolved --out
 # and --spec-from against --cwd while `run --next` did not, so /pharn-regress's base side, the one --cwd
 # caller, failed at init with spec-mismatch; its pinned lines are now EXECUTED by stage-regress.test.mjs, since
@@ -221,11 +221,11 @@ node pharn/floor/check-regress.mjs verdict <base.json> <head.json> --base <ref> 
 # rules moved out of command prose: TEST_FILE_RULE (vitest/Jest/`node --test` conventions), STYLE_CONFIG_RULE (the
 # config-touch skip for style/format gates), INSTALL_RULE (exactly one lockfile family at the BASE commit resolves
 # the install command — npm MEASURED, pnpm/yarn/bun UNMEASURED, labelled as such), BASE_RULE (`--base` / a dirty
-# tree / origin/main's merge-base / ask). `REGRESS_PATHS` is the ONE owner of the stage's `.pharn/pharn-regress/`
+# tree / origin/main's merge-base / ask). `REGRESS_PATHS` is the ONE owner of the stage's `pharn/.run/pharn-regress/`
 # scratch layout; `loop-fresh-core.mjs`'s `DEFAULT_STAMPS.regressHead`/`regressBase` derive from it.
 # THE BUDGET (`--budget-ms`) solves the 600 s Bash-tool cap: a slow step (the base-commit install, or one gate)
 # starts only if it is the FIRST slow step of THIS invocation, or `elapsed + timeoutMs <= budgetMs`; otherwise the
-# script persists `.pharn/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/4` since regress-base-integrity — `/2` (6.33.0) added the BASE-reuse decision, `/3` (6.49.0) the entry decision and `installOverride`, `/4` `baseSource`, `baseWorktree` and `installNeeded`) and exits 5
+# script persists `pharn/.run/pharn-regress/stage.json` (schema `pharn-stage-regress-progress/4` since regress-base-integrity — `/2` (6.33.0) added the BASE-reuse decision, `/3` (6.49.0) the entry decision and `installOverride`, `/4` `baseSource`, `baseWorktree` and `installNeeded`) and exits 5
 # `continue`. `--resume` accepts ONLY `--budget-ms` and reads everything else from that record, so the resume line
 # carries no state (L44). With no `--budget-ms` (a code caller, never a Bash-tool caller), nothing is budgeted.
 # `pharn/floor/render-regression.mjs` (pure, no CLI) renders `REGRESSION.md` from the verdict JSON, the scope
@@ -244,8 +244,8 @@ node pharn/floor/check-regress.mjs verdict <base.json> <head.json> --base <ref> 
 # declared regress artifacts. Now the script writes them through `fs`, reached via Bash and outside that hook
 # (L19, declared) — a write anywhere else is DETECTED, never PREVENTED, by `/pharn-verify`'s `reconcile` gate.
 # Offsetting it, STRONGER since 6.23.0: the command's writes-scope is set to the strictest one the setter can
-# express, `.pharn/pharn-regress/stage.json` (which resolves to `.pharn/**` alone, since `writes: []` is refused
-# by the setter), so no Write-tool write may land outside `.pharn/**` at all while the script runs — a real,
+# express, `pharn/.run/pharn-regress/stage.json` (which resolves to `pharn/.run/**` alone, since `writes: []` is refused
+# by the setter), so no Write-tool write may land outside `pharn/.run/**` at all while the script runs — a real,
 # probed guarantee (`.dev/floor/command-hygiene.test.mjs`'s STAGE_SCRIPT_WIRING).
 # BASE-EVIDENCE INTEGRITY (regress-base-integrity, the 2026-10-07 audit's P1-B/P2-C/P2-D/P2-E). (1) The report records
 # `base_source` (stage-regress-core.mjs BASE_SOURCES: explicit | dirty-head | merge-base); /pharn-ship now captures
@@ -292,7 +292,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # decision, the timeout, the stamp/fingerprint versions, and the content of every root-level HEAD path in `inside`,
 # because the base worktree was nested in the HEAD tree until regress-base-integrity moved it to the temp root — kept,
 # since binding more than is reachable can only cause a miss; no-install, failed-install and timed-out evidence is never
-# reused); pharn/floor/regress-base-reuse.mjs is the storage. The evidence stays in .pharn/pharn-regress/base-gates/
+# reused); pharn/floor/regress-base-reuse.mjs is the storage. The evidence stays in pharn/.run/pharn-regress/base-gates/
 # (the fresh start now keeps that one directory); the binding record is <git rev-parse --absolute-git-dir>/
 # pharn-regress-base-reuse.json, out of the write tools' reach (the composed guards deny it: protect-trusted-paths in a main checkout, enforce-writes-scope in a linked worktree), bound to the run marker's bytes and
 # mtime (the write guard's own 24 h rule; markers are hashed, never parsed). A persisted HIT is re-decided in full at
@@ -347,7 +347,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # offered only through pharn/floor/head-reuse-offer.mjs's record in the GIT DIR (`pharn-regress-head-offer.json`; the
 # module also holds the acceptance rule) — denied to the write tools in a main checkout and a linked worktree (★ HOOK),
 # NOT for a separate git dir under a temp root in an installed project with no run open (GATE-2 review, the BASE record's
-# bound too); a stamp planted under `.pharn/` by a --quick build is never offered (grill B2): stage-regress
+# bound too); a stamp planted under `pharn/.run/` by a --quick build is never offered (grill B2): stage-regress
 # discards it at its fresh start and publishes it once the HEAD stamp is final, bound to the stamp's bytes and the open
 # run marker; stage-verify passes `--reuse-stamp`/`--reuse-sha256` only when that offer names THIS run and these bytes.
 # A HIT is recorded as `ran: false, reason: "reused"` + `reused: {stage, side, seq, stamp_sha256}` with the source's
@@ -359,7 +359,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # the inherited env, the git index and ignored files are unbound), and verify loses its second sample of a flaky gate.
 # NAMED residuals: verify-reuse-rederive (nothing re-derives the decision later), verify-paused-chain-integrity (the
 # in-progress `reuse` binding is write-tool reachable while a verify chain is paused), verify-reuse-inherited-env,
-# verify-reuse-excluded-artifacts, a Bash writer can forge offer + stamp together (L19). LIMITS.md's "/pharn-verify re-runs
+# verify-reuse-excluded-artifacts, a Bash writer can forge offer + stamp together (L19). pharn/LIMITS.md's "/pharn-verify re-runs
 # the project's own gates" is human-only and now partly stale — flagged, not edited. Contracts: gate-run-record.md
 # "Reused entries", verify-report.md "The additive gate_reuse block".
 # `test` IS NEVER REUSED, AND NOT ONLY FOR THE AC GATE (6.72.2, audit LOOP-8 closed won't-fix): regress HEAD runs `test`
@@ -379,7 +379,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # `path-containment`/`git-failed`/`child-crashed`/`child-refused`/`no-progress`/`progress-malformed`). THE TRIGGER
 # (P7) is Phase 1.1's: the command prescribed 14 + d + G + P tool calls over a 55,683-byte prompt. PHASES
 # (stage-verify-core.mjs, the one owner): fresh -> chain -> pairs -> verifiers -> init -> drain -> verdict -> render.
-# "fresh" removes THIS feature's earlier verify-report.json/VERIFY.md and clears `.pharn/pharn-verify/` (the progress
+# "fresh" removes THIS feature's earlier verify-report.json/VERIFY.md and clears `pharn/.run/pharn-verify/` (the progress
 # record first) right after the slug and the lstat containment walk, BEFORE the rest of argv is validated; ONLY
 # ENOENT counts as absence, so a removal that fails is a crash, never a verdict. The verdict is
 # `check-verify.mjs --stamp … --ac-gate`, read only when its exit AGREES with its printed verdict (classifyVerdict —
@@ -397,7 +397,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # FAILS (anything but ENOENT) is now a crash there too, never swallowed (GATE 2 F5; follow-up
 # regress-stale-unlink-swallow closed). THE WEAKER CLAIM, stated: the two artifacts are `fs` writes through
 # Bash (L19) AFTER this stage's own reconcile gate, so a stray write by the script is neither prevented nor
-# detected; the command's writes-scope is `.pharn/pharn-verify/stage.json` (it resolves to `.pharn/**` alone). BOUNDS:
+# detected; the command's writes-scope is `pharn/.run/pharn-verify/stage.json` (it resolves to `pharn/.run/**` alone). BOUNDS:
 # a resume re-derives the verdict from the same stamp, but the AC gate reads live files, so a resume over a moved
 # tree may differ — check-loop-fresh F catches that in the loop; /pharn-ship has no such check, and a resume over a
 # moved tree still ends `done` (GATE 2 review F4). A SEPARATE residual: a stop before the slug and containment point,
@@ -435,7 +435,7 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 ```bash
 # WHY RECONCILE FAILED (6.55.0, reconcile-reasons-in-reports) — no CLI: pharn/floor/reconcile-detail-core.mjs (pure;
 # imports quote-core.mjs only). At "verdict", stage-verify.mjs finds the reconcile run in the stamp bytes the verdict
-# read, reads `<seq>-reconcile.out` under .pharn/pharn-verify/gates/ (one O_NOFOLLOW fd, fstat regular file, <= 8 MiB) only when its
+# read, reads `<seq>-reconcile.out` under pharn/.run/pharn-verify/gates/ (one O_NOFOLLOW fd, fstat regular file, <= 8 MiB) only when its
 # sha256 equals the run's stdout_sha256, and `reconcileDetail` parses check-bash-reconcile.mjs's JSON document into
 # verify-report.json's `reconcile_detail` (last merged key; null with no reconcile run). Closed states: parsed |
 # log-missing | log-unreadable | log-digest-mismatch | not-checker-json — a non-parsed state renders ONE line plus the
@@ -459,7 +459,7 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # `targeted`: the `test` gate over this feature's declared test files (PLAN ∪ AC-TESTS `## Files`, through badPath +
 # isTestFile + a regular-file lstat, e2e-mapped files left out); `full`: the set /pharn-verify discovers minus E2E_SET (the
 # project's gate exclusion applies), whose exit is the build's gate. Both through run-gates.mjs's new `build` stage,
-# stage-runtime.mjs's drain and budget (unchanged), logs under .pharn/pharn-build/<name>/<mode>/. The summary is bounded
+# stage-runtime.mjs's drain and budget (unchanged), logs under pharn/.run/pharn-build/<name>/<mode>/. The summary is bounded
 # (per gate exit + runner-call wall time; failing tests' ids with a fenced excerpt of their first message — the adapters
 # now carry `messages` on parsed entries, NO record does — or a fenced log tail; at most 16,384 bytes, enforced). The same
 # line starts and continues a run (only while the tree fingerprint and --gates spec are unchanged). No gate to run (no
@@ -486,12 +486,12 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-
 # the shape stage-verify-core.mjs checkCompleteness accepts. THE DELETION: /pharn-build runs apply-plan-deletions.mjs once,
 # unconditionally, last in Step 3 — the pinned line carries only <name> (no PLAN path reaches a shell; SHELL_VALUES).
 # Validate-all-then-unlink; refusals are a closed set (REFUSALS): usage, no-plan, plan-files-unparseable,
-# delete-near-miss, conflicting-declaration, delete-not-concrete, bad-path (ac-tests-core badPath + `.pharn/`,
+# delete-near-miss, conflicting-declaration, delete-not-concrete, bad-path (ac-tests-core badPath + `pharn/.run/`,
 # `pharn/features/` and a `.git` segment in any letter case + a backslash), control-path (reconcile-ignore.json's
 # always-reconciled set, exact and case-folded, plus dev/ino against the existing exact members), containment,
 # not-a-regular-file (links never followed, L59), unlink-failed. GATE-2 REVIEW FIX (same release): bad-path and
 # control-path also run over the leaf's realpathSync.native spelling — the spelling-only first version deleted
-# LIMITS.md via `LIMITſ.md` (U+017F, folded by APFS, not by toLowerCase); realpath failure refuses (fail closed).
+# pharn/LIMITS.md via `LIMITſ.md` (U+017F, folded by APFS, not by toLowerCase); realpath failure refuses (fail closed).
 # BOUNDS added there: validate-all-then-unlink is check-then-act (a parent swapped for a symlink in between is followed;
 # non-adversarial model); the always-reconciled set is imported from reconcile-ignore-core.mjs (6.57.0, the former
 # follow-up `apply-deletions-core-extract`; before, from the reconcile CLI module); the marker is exactly ONE space then `(delete)` — two spaces or a tab is a near-miss,
@@ -519,7 +519,7 @@ node pharn/floor/check-build-complete.mjs <PLAN.md> [repoDir]
 # name passed falsely (REVIEW.md F1, reproduced). Now the pinned line carries ONLY the slug and a resolved 40-hex base,
 # both validated (FEATURE_SLUG_RE; SHA_RE + `git rev-parse --verify <base>^{commit}`), and the code builds both sets:
 # pharn/floor/scope-inputs.mjs — the ONE owner stage-regress.mjs's partition phase also calls (L35) — lists the changed
-# paths (`git diff --name-only --no-renames -z <base>` ∪ `git ls-files -z --others --exclude-standard`, minus `.pharn/`)
+# paths (`git diff --name-only --no-renames -z <base>` ∪ `git ls-files -z --others --exclude-standard`, minus `pharn/.run/`)
 # and the declared writes (PLAN.md ∪ AC-TESTS.md `## Files`), and check-regress.mjs's exported `partitionScope` decides
 # with its closed exemptions. Paths travel as ARRAYS: no shell, no comma list, no trim, no flag scan reads one
 # (check-quick-scope.test.mjs EXECUTES both commands' committed lines on hostile names, 6.25.0's line as the control).
@@ -559,7 +559,7 @@ node pharn/floor/check-quick-scope.mjs --feature <name> --base <40-hex>
 # request (this repo's set = CLAUDE.md; budget from pharn.config.json at the base, default 2048), and
 # `npm run check:instruction-growth` runs `--growth --base-rule` locally — kept OUT of `npm run check`, which a clone
 # with no origin/main would turn INCONCLUSIVE. Wiring pinned and the CI line executed: .dev/floor/instruction-growth-wiring.test.mjs W1–W3.
-# 6.65.0 (audit CTX-14): /pharn-loop Step 1a runs `--report` into .pharn/pharn-loop/<name>/instruction-files.json, and
+# 6.65.0 (audit CTX-14): /pharn-loop Step 1a runs `--report` into pharn/.run/pharn-loop/<name>/instruction-files.json, and
 # RUN-REPORT.md's ## Tokens shows its estimate (advisory; /pharn-ship records none — follow-up ship-instruction-set).
 # Exit: 0 within/reported · 1 over · 2 inconclusive (closed reason_code).
 node pharn/floor/check-instruction-files.mjs --report
@@ -588,7 +588,7 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 # tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
 # `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
 # `regress-base-pre-run-overlay`) and a pre-run-changed test file is not compared at regress; a green loop never commits
-# a subtracted path. LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
+# a subtracted path. pharn/LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 ```
@@ -603,7 +603,7 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 # asks on either. A gate's own writes are recorded beside
 # the pre-run snapshot (regression-report.md `entry_gate_changes`). Rules, bounds and the P7 trigger:
 # pharn/floor/entry-gates.mjs and entry-gates-core.mjs headers; gate-run-record.md's `entry` bullet.
-# Since 6.48.0 each mode also appends observations for the cost ledger to `.pharn/cost/<name>/entry.jsonl`
+# Since 6.48.0 each mode also appends observations for the cost ledger to `pharn/.run/cost/<name>/entry.jsonl`
 # (entry-observations.mjs; cost-ledger.md "Entry gate observations") — after its control record, best-effort, read by
 # nothing here; exits and stdout documents are unchanged (a test runs every append failing and compares them).
 # Exit (--wait): 0 green · 4 red · 6 unmeasured · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2;

@@ -26,7 +26,7 @@
 // module recomputes from canon. Read the narrowing carefully, because it is NOT the dev surface's guarantee
 // (there the output is a COMMITTED page, held to byte-equality by its own checker):
 //
-//   - OUT_PATH is `.pharn/`, which is GITIGNORED runtime scratch. So this is a STALENESS check over a
+//   - OUT_PATH is `pharn/.run/`, which is GITIGNORED runtime scratch. So this is a STALENESS check over a
 //     disposable CACHE — NOT the dev surface's "the COMMITTED index equals the recompute" byte-equality.
 //     Nothing durably pins these bytes.
 //   - Its COVERAGE is therefore machine-local and ephemeral: a fresh clone has no cache at all (a normal
@@ -66,9 +66,9 @@ import { DEFAULT_CANON_ROOT, CANON_ROOT_FLAG, parseCanonRoot } from "./canon-roo
 // title refusals. The CHECK-5 refusal in buildIndex() still runs over the whole rendered page, notes included.
 //
 // The PRODUCT profile, and why each value is what it is:
-// - canonPath — the USER's memory-bank (`memory-bank/`, or the `--canon-root` a caller passes; canon-root.mjs
+// - canonPath — the USER's memory-bank (`pharn/memory-bank/`, or the `--canon-root` a caller passes; canon-root.mjs
 //   states that flag's bound). It must agree with what /pharn-plan reads and with check-provenance.mjs's targets.
-// - outPath — `.pharn/` runtime scratch, never a committed `docs/` page: `docs/` in a user's repo is THE USER'S
+// - outPath — `pharn/.run/` runtime scratch, never a committed `docs/` page: `docs/` in a user's repo is THE USER'S
 //   directory, and writing there would be a scope claim on ground PHARN does not own. The cost is the narrowed
 //   property stated above.
 // - regen — a bare `node` invocation, never an npm script (lessons-learned.md L2: a doc may cite only a LIVE op);
@@ -87,11 +87,11 @@ const PRODUCT_COLUMNS_NOTE = (absent, malformed) =>
   `a contradiction beside a \`0 untagged\` header. \`${malformed}\` = a tag line is\n` +
   `present but failed its gate — that is unexpected; read the entry in canon. \`~tokens\` is\n` +
   `\`ceil(chars / ${CHARS_PER_TOKEN})\` over the FULL section (heading through the line before the next \`##\`), an\n` +
-  `ESTIMATE with a confidence band, never a measurement (\`LIMITS.md §1c\`). Titles are canon free text,\n` +
+  `ESTIMATE with a confidence band, never a measurement (\`pharn/LIMITS.md §1c\`). Titles are canon free text,\n` +
   `reproduced verbatim as DATA.\n`;
 
 /**
- * The product profile for a canon root (default: the user's `memory-bank`). The root goes through canon-root.mjs's
+ * The product profile for a canon root (default: the user's `pharn/memory-bank`). The root goes through canon-root.mjs's
  * grammar here as well as at the CLI, so an importer cannot build a profile the flag would refuse; a refused root
  * THROWS (a caller bug, never a canon state).
  */
@@ -102,13 +102,13 @@ export function productProfile(root = DEFAULT_CANON_ROOT) {
   const regen = root === DEFAULT_CANON_ROOT ? `node ${PRODUCT_GEN} .` : `node ${PRODUCT_GEN} ${CANON_ROOT_FLAG} ${root} .`;
   return Object.freeze({
     canonPath: `${root}/lessons-learned.md`,
-    outPath: ".pharn/lessons-index.md",
+    outPath: "pharn/.run/lessons-index.md",
     gen: PRODUCT_GEN,
     regen,
     storageNote:
-      `**This file is a disposable CACHE.** It lives in gitignored \`.pharn/\` runtime scratch, so it is not\n` +
+      `**This file is a disposable CACHE.** It lives in gitignored \`pharn/.run/\` runtime scratch, so it is not\n` +
       `committed and nothing durably pins it. Delete it freely; regenerate with \`${regen}\`. If your own\n` +
-      `linters or formatters scan \`.pharn/\`, exclude this path — a tool that rewrites it makes the cache\n` +
+      `linters or formatters scan \`pharn/.run/\`, exclude this path — a tool that rewrites it makes the cache\n` +
       `disagree with canon for a reason that has nothing to do with canon.\n`,
     columnsNote: PRODUCT_COLUMNS_NOTE(ABSENT, MALFORMED),
   });
@@ -120,7 +120,7 @@ export const STATUS_OK = "ok";
 export const STATUS_NO_CANON = "no-canon";
 
 // The ~4-chars-per-token heuristic, named rather than sprinkled. It is an ESTIMATE, never a measurement
-// (`LIMITS.md §1c`: a static token figure is an estimate with a confidence band) — which is why every
+// (`pharn/LIMITS.md §1c`: a static token figure is an estimate with a confidence band) — which is why every
 // rendered value carries a leading `~`.
 export const CHARS_PER_TOKEN = 4;
 
@@ -226,7 +226,7 @@ function parseTagLine(line) {
 
 // A rendered TITLE is canon FREE TEXT and therefore `trust: untrusted` DATA (P2) — it is copied through
 // verbatim and never interpreted. Canon is a user's memory-bank, and memory poisoning is the worst
-// persistence vector (`THREAT-MODEL.md §2`), so two vectors are closed by REFUSAL rather than
+// persistence vector (`pharn/THREAT-MODEL.md §2`), so two vectors are closed by REFUSAL rather than
 // sanitization (fail closed, P5):
 //   1. a fence-closing sequence would break the title out of the ```text block into live markdown;
 //   2. a control char would corrupt the rendered bytes the drift check compares.
@@ -403,17 +403,17 @@ export function buildIndex(targetDir, profile = PRODUCT_PROFILE) {
   }
   const content = renderIndex(entries, profile);
 
-  // Neither `.pharn/` (the product outPath) nor `docs/` (the dev one) is in pharn/floor/validate.mjs's
-  // EXCLUDE_SEGMENTS (which holds only .claude/commands, .dev, pharn/floor, node_modules and .git), so the
-  // generated file lands on the validate-SCANNED surface (lessons-learned.md L10) — being gitignored does not
-  // exempt a file from validate's walk.
+  // `docs/` (the dev outPath) is not in pharn/floor/validate.mjs's EXCLUDE_SEGMENTS, so that generated file lands on
+  // the validate-SCANNED surface (lessons-learned.md L10) — being gitignored does not exempt a file from validate's
+  // walk. The product outPath `pharn/.run/` IS excluded since 7.0.0; the refusal is kept for both profiles, which
+  // is stricter than the product one needs (fail-closed).
   // validate CHECK 5 fires on any file containing BOTH `rule_id:` and `problem:` and lacking the
   // enum-gated/free-text split documentation — so a pair of canon titles could otherwise RED a user's
   // floor for a reason unrelated to their code. Refuse rather than emit it (fail-closed, P5).
   if (/rule_id:/.test(content) && /problem:/.test(content)) {
     throw new Error(
       `lessons-index: the rendered index contains both \`rule_id:\` and \`problem:\` (from canon free text) — ` +
-        `refusing to emit it, because ${profile.outPath} sits on validate.mjs's scanned surface and would trip CHECK 5`
+        `refusing to emit it, because an index on validate.mjs's scanned surface (docs/ is; pharn/.run/ is not) would trip CHECK 5`
     );
   }
   return { status: STATUS_OK, entries, content };

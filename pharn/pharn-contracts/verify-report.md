@@ -251,7 +251,7 @@ measure** makes the verdict `INCONCLUSIVE`, exit 2, with `reason_code` **`gate-n
   accord reads as not started. Like every stamp reading, this certifies internal consistency, never provenance: a stamp
   forged to `timed_out: false` reads as before (L43).
 
-## Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`)
 
 `verifiers.findings[]` and `completeness.missing[]` / `.undeleted[]` carry untrusted free text into a committed artifact
 that humans and later LLM stages read. No floor consumer reads either — probed above — so the blast
@@ -409,7 +409,7 @@ is their first gate run.
   `--gates` does not change the check.
 - **Every other state proceeds exactly as before**, and the report carries `head_install` as its last merged key —
   `{state, why, family, lockfile, counts}`, enums and integers only, or `null` when the stored block
-  (`.pharn/pharn-verify/head-install.json`) was absent or malformed at the verdict. `VERIFY.md` renders one line for it
+  (`pharn/.run/pharn-verify/head-install.json`) was absent or malformed at the verdict. `VERIFY.md` renders one line for it
   between the gates and completeness.
 - **ADDITIVE and ADVISORY.** `check-verify.mjs` is unchanged and no verdict, stop or freshness check reads the block; a
   report written before 6.40.0 has no such key.
@@ -417,7 +417,7 @@ is their first gate run.
 ## The additive `reconcile_detail` block (6.55.0)
 
 WHY the `reconcile` gate failed, so a human need not re-run `check-bash-reconcile.mjs` by hand. At the verdict,
-`stage-verify.mjs` reads the reconcile gate's recorded stdout (`<seq>-reconcile.out` under `.pharn/pharn-verify/gates/`)
+`stage-verify.mjs` reads the reconcile gate's recorded stdout (`<seq>-reconcile.out` under `pharn/.run/pharn-verify/gates/`)
 only when its SHA-256 equals the `stdout_sha256` the verify stamp records for that run, and
 `pharn/floor/reconcile-detail-core.mjs` parses the checker's JSON document (`reconciliation-record.md` §2) — never its
 prose. The report carries it as its last merged key:
@@ -438,5 +438,5 @@ merged_count, reason? }` — `escapes` holds at most the first 20 entries, `esca
   inside a fence; an escape's `reason` and the checker `verdict` render inline only after a membership test of their
   closed sets.
 - **ADDITIVE and ADVISORY.** No verdict, stop or freshness check reads the block. The digest binding says the bytes are
-  the ones the runner recorded, not that the checker was right; the log and the stamp both live under `.pharn/`, which
+  the ones the runner recorded, not that the checker was right; the log and the stamp both live under `pharn/.run/`, which
   Bash reaches. A report written before 6.55.0 has no such key.

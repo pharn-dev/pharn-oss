@@ -33,12 +33,12 @@ node pharn/floor/reconcile-baseline.mjs --anchor --by pharn-dev-build
 ```
 
 **The anchor runs AFTER the setter, and the order is load-bearing.** `--anchor` snapshots the live
-`.pharn/writes-scope.json` **into** the baseline, so the scope this build was given is the scope
+`pharn/.run/writes-scope.json` **into** the baseline, so the scope this build was given is the scope
 `/pharn-dev-verify` later judges its writes against. Anchoring first would snapshot the previous stage's
 scope. **This opens the reconciliation epoch:** every worktree change from here to the next reconcile is
 compared against it, and `pharn/floor/check-bash-reconcile.mjs` REDs on any path the guards would have
 denied — which is how a **Bash** write, invisible to both `PreToolUse` guards, becomes detectable
-(`pharn/pharn-contracts/reconciliation-record.md`; `LIMITS.md §6`). Anchoring is deliberately **not**
+(`pharn/pharn-contracts/reconciliation-record.md`; `pharn/LIMITS.md §6`). Anchoring is deliberately **not**
 repeated at grill/regress: each anchor RESETS the baseline, so a later one would erase an earlier escape.
 **ADVISORY (P0):** this is a Bash call outside the `PreToolUse` gate (L19) — nothing forces it, and a run
 that skips it leaves `/pharn-dev-verify` with no baseline, which its `--require-baseline` turns into a
@@ -96,7 +96,7 @@ cite, don't restate, P4):
 **Format EXACTLY the paths this build was scoped to — never the whole repo** (`lessons-learned.md` L19):
 
 ```bash
-SCOPE=.pharn/writes-scope.json
+SCOPE=pharn/.run/writes-scope.json
 if [ ! -r "$SCOPE" ]; then
   echo "Step 2b: $SCOPE not readable — skipping the format pass (ADVISORY step; it never blocks)"
 else
@@ -127,9 +127,9 @@ else
 fi
 ```
 
-- The path list is read from `.pharn/writes-scope.json` — the list Step 0's setter already parsed
+- The path list is read from `pharn/.run/writes-scope.json` — the list Step 0's setter already parsed
   **deterministically** (P5) — never a fresh model reading of the plan. **Say how many paths you
-  formatted**: `.pharn/` is gitignored runtime state that other stages re-set, so a surprising count is
+  formatted**: `pharn/.run/` is gitignored runtime state that other stages re-set, so a surprising count is
   how a stale scope becomes visible instead of silent.
 - **All three gates the block names are gates the block RUNS** — prettier, markdownlint, and eslint —
   and `.dev/floor/command-hygiene.test.mjs` iterates that set so one cannot be silently dropped or left

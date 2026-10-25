@@ -151,17 +151,21 @@ const REFUSAL_CASES = Object.freeze([
   ["bad-path", "- `/etc/hosts` (delete) — absolute", "- `etc/hosts` (delete) — relative"],
   ["bad-path", "- `.git/config` (delete) — git metadata", "- `git/config` (delete) — ordinary"],
   ["bad-path", "- `.GIT/config` (delete) — any letter case", "- `GIT/config` (delete) — ordinary"],
-  ["bad-path", "- `.pharn/x.json` (delete) — state root", "- `pharn-x.json` (delete) — ordinary"],
+  ["bad-path", "- `pharn/.run/x.json` (delete) — state root", "- `pharn-x.json` (delete) — ordinary"],
   ["bad-path", "- `pharn/features/demo/PLAN.md` (delete) — the pipeline's own", "- `pharn/notes.md` (delete) — ordinary"],
   ["bad-path", "- `a\\b.ts` (delete) — backslash", "- `a/b.ts` (delete) — slash"],
-  ["control-path", "- `LIMITS.md` (delete) — trusted doc", "- `LIMITS.txt` (delete) — ordinary"],
-  ["control-path", "- `limits.md` (delete) — case-folded", "- `limits.txt` (delete) — ordinary"],
+  ["control-path", "- `pharn/LIMITS.md` (delete) — trusted doc", "- `LIMITS.txt` (delete) — ordinary"],
+  ["control-path", "- `pharn/limits.md` (delete) — case-folded", "- `pharn/limits.txt` (delete) — ordinary"],
   ["control-path", "- `pharn/floor/validate.mjs` (delete) — a floor", "- `pharn/flooring.mjs` (delete) — ordinary"],
   ["control-path", "- `.claude/hooks/enforce-writes-scope.cjs` (delete) — a guard", "- `.claude/notes.md` (delete) — ordinary"],
-  ["control-path", "- `memory-bank/lessons-learned.md` (delete) — canon", "- `memory-banks/x.md` (delete) — ordinary"],
-  ["control-path", "- `pharn.spec-template.md` (delete) — the SPEC template", "- `pharn.spec.md` (delete) — ordinary"],
+  ["control-path", "- `pharn/memory-bank/lessons-learned.md` (delete) — canon", "- `memory-banks/x.md` (delete) — ordinary"],
+  ["control-path", "- `pharn/spec-template.md` (delete) — the SPEC template", "- `pharn.spec.md` (delete) — ordinary"],
   // 6.56.0 GATE-2 review (F2/F3): the reserved prefixes and the control set in another ASCII letter case.
-  ["bad-path", "- `.PHARN/writes-scope.json` (delete) — state root, upper case", "- `.PHARNX/writes-scope.json` (delete) — ordinary"],
+  [
+    "bad-path",
+    "- `PHARN/.RUN/writes-scope.json` (delete) — state root, upper case",
+    "- `PHARN/.RUNX/writes-scope.json` (delete) — ordinary",
+  ],
   ["bad-path", "- `PHARN/features/other/SPEC.md` (delete) — pipeline, upper case", "- `PHARN/featured/other/SPEC.md` (delete) — ordinary"],
   ["control-path", "- `.CLAUDE/settings.json` (delete) — the wiring, upper case", "- `.CLAUDE/notes.json` (delete) — ordinary"],
   ["control-path", "- `Pharn/Floor/validate.mjs` (delete) — a floor, mixed case", "- `Pharn/Flooring.mjs` (delete) — ordinary"],
@@ -246,8 +250,8 @@ test("★ a hostile path never reaches a shell, and its bytes reach the output o
 
 // ── THE ON-DISK IDENTITY (6.56.0 GATE-2 review, blocking finding) ───────────────────────────────────────────
 // A case-insensitive volume (APFS by default) equates spellings no lexical fold reproduces: U+017F `ſ` names `s`. The
-// spelling-only refusal let `LIMITſ.md` delete LIMITS.md. These rows need such a volume, so the tmpdir volume is PROBED
-// and the rows are SKIPPED, with the reason, where it is case-sensitive (there `LIMITſ.md` simply names another file).
+// spelling-only refusal let `pharn/LIMITſ.md` delete pharn/LIMITS.md. These rows need such a volume, so the tmpdir volume is PROBED
+// and the rows are SKIPPED, with the reason, where it is case-sensitive (there `pharn/LIMITſ.md` simply names another file).
 function foldsLongS() {
   const dir = mkdtempSync(join(tmpdir(), "pharn-apd-probe-"));
   try {
@@ -262,10 +266,10 @@ const FOLD_SKIP = FOLDING ? false : "the tmpdir volume does not fold U+017F to `
 
 // [declared spelling, the real file it reaches, expected code] — each with a control below that must still delete.
 const ON_DISK_CASES = Object.freeze([
-  ["LIMITſ.md", "LIMITS.md", "control-path"],
+  ["pharn/LIMITſ.md", "pharn/LIMITS.md", "control-path"],
   [".claude/ſettings.json", ".claude/settings.json", "control-path"],
   ["pharn/featureſ/other/SPEC.md", "pharn/features/other/SPEC.md", "bad-path"],
-  [".pharn/writeſ-scope.json", ".pharn/writes-scope.json", "bad-path"],
+  ["pharn/.run/writeſ-scope.json", "pharn/.run/writes-scope.json", "bad-path"],
   ["pharn/floor/validate.mjſ", "pharn/floor/validate.mjs", "control-path"],
 ]);
 
@@ -292,8 +296,8 @@ test(
 );
 
 test("★ ON-DISK: a hard link to a trusted file is refused by device and inode, on any volume", () => {
-  withProject("- `notes.md` (delete) — a hard link to LIMITS.md", ["LIMITS.md"], (root) => {
-    spawnSync("ln", [join(root, "LIMITS.md"), join(root, "notes.md")]);
+  withProject("- `notes.md` (delete) — a hard link to pharn/LIMITS.md", ["pharn/LIMITS.md"], (root) => {
+    spawnSync("ln", [join(root, "pharn/LIMITS.md"), join(root, "notes.md")]);
     assert.equal(present(root, "notes.md"), true, "the fixture made the link");
     const r = run(root);
     assert.equal(r.status, 2, r.stdout);
@@ -301,9 +305,9 @@ test("★ ON-DISK: a hard link to a trusted file is refused by device and inode,
     assert.equal(present(root, "notes.md"), true);
   });
   // CONTROL: an ordinary file beside it is deleted.
-  withProject("- `notes.md` (delete) — an ordinary file", ["LIMITS.md", "notes.md"], (root) => {
+  withProject("- `notes.md` (delete) — an ordinary file", ["pharn/LIMITS.md", "notes.md"], (root) => {
     assert.equal(run(root).status, 0);
-    assert.equal(present(root, "LIMITS.md"), true);
+    assert.equal(present(root, "pharn/LIMITS.md"), true);
   });
 });
 

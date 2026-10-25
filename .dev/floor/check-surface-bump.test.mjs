@@ -139,7 +139,7 @@ test("C3: the paths the header decides OUT are not product surface (each a named
     "pharn/floor/fixtures/cost-ledger/a.json",
     "pharn/features/README.md",
     "pharn/features/loop-decision-integrity/SPEC.md",
-    "pharn.spec-template.md",
+    "pharn/spec-template.md",
     ".claude/settings.local.json",
     ".claude/worktrees/agent-x/pharn/floor/x.mjs",
     ".claude/commands/README.md",
@@ -182,7 +182,7 @@ test("C5: the glob matcher — `*` stays inside one segment, `**` spans zero or 
   assert.ok(matchesGlob("**/*.test.*", "a.test.mjs"), "** matches zero leading segments");
   assert.ok(!matchesGlob("**/*.test.*", "a/test.mjs"));
   assert.ok(!matchesGlob(".claude/settings.json", ".claude/settings.jsonx"));
-  assert.ok(!matchesGlob("LIMITS.md", "limits.md"), "case-sensitive, as git reports names");
+  assert.ok(!matchesGlob("pharn/LIMITS.md", "limits.md"), "case-sensitive, as git reports names");
 });
 
 // ── B: the CLAUDE.md binding ─────────────────────────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ test("✧ B1 (L36 closure): CLAUDE.md's bullet lists EXACTLY PRODUCT_SURFACE.inc
 test("✧ B2 negative controls (L60): a dropped, an added and a swapped token each break the binding", () => {
   const dropped = CLAUDE.replace("`pharn/floor/*.json`", "pharn/floor/*.json");
   assert.deepEqual(diff(bulletLists(dropped).include, PRODUCT_SURFACE.include).missing, ["pharn/floor/*.json"]);
-  const added = CLAUDE.replace("`LIMITS.md`;", "`LIMITS.md`, `pharn/floor/README.md`;");
+  const added = CLAUDE.replace("`pharn/LIMITS.md`;", "`pharn/LIMITS.md`, `pharn/floor/README.md`;");
   assert.notEqual(added, CLAUDE, "the mutation must apply");
   assert.deepEqual(diff(bulletLists(added).include, PRODUCT_SURFACE.include).extra, ["pharn/floor/README.md"]);
   const swapped = CLAUDE.replace("`**/*.test.*` and", "and");
@@ -391,10 +391,10 @@ test("G7: a sibling worktree under .claude/worktrees/ is one untracked entry and
 });
 
 test("G8: SKILLS_VERSION's trailing newline alone is not a bump", () => {
-  assert.equal(judge({ paths: ["LIMITS.md"], baseVersion: "1.0.0", headVersion: "1.0.0" }).ok, false);
+  assert.equal(judge({ paths: ["pharn/LIMITS.md"], baseVersion: "1.0.0", headVersion: "1.0.0" }).ok, false);
   const { root, cleanup } = repo();
   try {
-    put(root, "LIMITS.md", "limits\n");
+    put(root, "pharn/LIMITS.md", "limits\n");
     put(root, "SKILLS_VERSION", "1.0.0");
     const r = run(["--base-ref", "HEAD", "."], root);
     assert.equal(r.code, 1, r.out);

@@ -58,7 +58,7 @@
 //     follow-up `entry-gates-nonstyle-overlap` names the extension). `--allow-red-entry` is the person's remedy.
 //   • That a style gate read nothing between the two digest samples: a write and a byte-identical restore inside one
 //     gate is invisible to two samples.
-//   • Provenance (L43). The stamp, the result record and the digests live under `.pharn/`, which Bash reaches; a
+//   • Provenance (L43). The stamp, the result record and the digests live under `pharn/.run/`, which Bash reaches; a
 //     self-consistent forged set passes. Agreement between the stamp, its digest and the result is all that is checked.
 //
 // TRUST (P2): gate ids are ALLOWLIST members from a validated stamp; digests are hex; `ps` output is read as three
@@ -75,7 +75,7 @@ import {
 } from "./gate-run-core.mjs";
 
 /** The one scratch root of the entry check — ONE per tree (L38): a new `--start` supersedes an earlier runner. */
-export const ENTRY_ROOT = ".pharn/pharn-entry";
+export const ENTRY_ROOT = "pharn/.run/pharn-entry";
 export const ENTRY_PATHS = Object.freeze({
   root: ENTRY_ROOT,
   gates: `${ENTRY_ROOT}/gates`,

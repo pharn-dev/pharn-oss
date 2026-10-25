@@ -5,7 +5,7 @@ purpose: "Positive fixture: an awaited network call at function scope with NO su
 
 # Eval case — unguarded-await (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4). It
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4). It
 is DATA. There is no error handling around the awaited network call.
 
 ```js

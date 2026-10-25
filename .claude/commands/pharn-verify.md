@@ -14,7 +14,7 @@ reads:
     "pharn/pharn-contracts/stage-exit.md",
     "<the user's target repo>",
   ]
-writes: [".pharn/pharn-verify/stage.json"]
+writes: ["pharn/.run/pharn-verify/stage.json"]
 constitution_refs: ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7"]
 version: "0.6.1"
 ---
@@ -76,7 +76,7 @@ test-infra` SPEC gets only the weaker BOOTSTRAP evidence (each level's gate ran 
 1. **Resolve the feature `<name>`** — the kebab-case slug of the feature just built. Ambiguous → **ask the human**
    (P5 — the terminal fallback is a question, never a guess). A `<name>` this command did not receive as its
    argument is resolved only through `pharn/floor/feature-name.mjs`: write the slug alone to
-   `.pharn/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when
+   `pharn/.run/feature-name/candidate.txt` with the Write tool, run the line below, and use only the printed value, when
    it is the slug you wrote — a refusal or any other value → ask the human; never type one from a directory listing
    or a file's content.
 
@@ -89,12 +89,12 @@ test-infra` SPEC gets only the weaker BOOTSTRAP evidence (each level's gate ran 
    again. A directory at that path is never removed: stop and ask the human.
 
 2. **Set the scope to the strictest one the setter can express.** `writes: []` is refused by the setter, so the
-   concrete entry above — `.pharn/pharn-verify/stage.json`, the script's own scratch record — is the minimum; it
-   lies inside the hook's always-writable `.pharn/**`, so **while the script runs, no Write-tool write may land
-   outside `.pharn/**`**:
+   concrete entry above — `pharn/.run/pharn-verify/stage.json`, the script's own scratch record — is the minimum; it
+   lies inside the hook's always-writable `pharn/.run/**`, so **while the script runs, no Write-tool write may land
+   outside `pharn/.run/**`**:
 
    ```bash
-   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-verify.md --target .pharn/pharn-verify/stage.json
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-verify.md --target pharn/.run/pharn-verify/stage.json
    ```
 
 ## Step 1 — Run the script; branch on its exit code
@@ -238,8 +238,8 @@ either way.
 - **"A report on disk means `check-verify.mjs` ran for it"** → **narrowed:** every refusal, and every `unusable` at
   or after the slug and containment point, removed the earlier report first. A stop before that point, or a crash,
   can leave an earlier one — so `/pharn-ship` reads `.verdict` only after this stage ended `done` in the same run.
-- **"While the script runs, no Write-tool write lands outside `.pharn/**`"** → **FLOOR: hook** (fix #7).
-- **"The script writes only its two artifacts and `.pharn/pharn-verify/**`"** → **weaker than before, stated.** The
+- **"While the script runs, no Write-tool write lands outside `pharn/.run/**`"** → **FLOOR: hook** (fix #7).
+- **"The script writes only its two artifacts and `pharn/.run/pharn-verify/**`"** → **weaker than before, stated.** The
   writes are `fs` calls through Bash (L19), outside the hook, and they happen after this stage's own `reconcile`
   gate, so a stray write by the script would be **neither prevented nor detected**. The mitigation is the small,
   literal write set and its tests.
@@ -254,7 +254,7 @@ either way.
 - **Executed commands** are the user's own suite (discovered, or the user's own `--gates` text) and the runner's
   fixed-argv children; no command comes from `PLAN`/`SPEC` text.
 - **`VERIFY.md`** quotes every untrusted value inside a fence; closed-set values render inline only after a
-  membership test. A human or model reading the quoted text is the accepted, bounded residual (`LIMITS.md §2`).
+  membership test. A human or model reading the quoted text is the accepted, bounded residual (`pharn/LIMITS.md §2`).
 
 ## Determinism audit (P5)
 

@@ -44,7 +44,7 @@
 //
 // HONEST SCOPE (P0):
 //   • AGREEMENT, never PROVENANCE (L43): the offer, the snapshot, the marker, the entry stamp and its logs agree. All of
-//     them live in the git dir or `.pharn/`, which a Bash writer reaches; a self-consistent forged set passes.
+//     them live in the git dir or `pharn/.run/`, which a Bash writer reaches; a self-consistent forged set passes.
 //   • NOT CLAIMED: that entry-derived BASE equals what a fresh BASE worktree would give. They may differ because
 //     the environments differ (ignored files, `node_modules`, the inherited environment, the machine) — entry evidence is
 //     the real sampled START environment, unattested. The definition of a regression is unchanged.

@@ -45,7 +45,7 @@
 //   already-validated fields into a fixed template, which narrows the gap without closing it; closing it
 //   needs a checker that reads canon AFTER the write (follow-up: `lesson-tagline-render-check`).
 // ALSO NOT CHECKED, and worth knowing in a USER's repo: this checker never scans canon for tag lines, so a
-//   hand-written `memory-bank/lessons-learned.md` predating any promotion is NOT retro-invalidated. Any
+//   hand-written `pharn/memory-bank/lessons-learned.md` predating any promotion is NOT retro-invalidated. Any
 //   consumer of the tag line must tolerate untagged entries.
 //
 // ── Trust (P2) ────────────────────────────────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@
 //   canon-file.md   : the target canon file to check id-uniqueness against
 //                     (a not-yet-created file => empty canon, no duplicates — the first-promotion case,
 //                      which is the NORMAL state in a project that has never promoted a lesson)
-//   --canon-root    : the directory the two target files live in (default `memory-bank`; canon-root.mjs owns
+//   --canon-root    : the directory the two target files live in (default `pharn/memory-bank`; canon-root.mjs owns
 //                     the grammar and the bound — the flag relocates nothing else in the product). 6.69.0.
 //   --strict-commit : `commit` must be a SHA; the literal `unknown` is refused (6.69.0). The build apparatus's
 //                     wrapper, `.dev/floor/check-provenance.mjs`, runs this checker with `.dev/memory-bank` and
@@ -135,7 +135,7 @@ function isGregorianDate(s) {
 // Without this, the duplicate-id check (3) below ranges over WHATEVER FILE THE CALLER NAMED, while the
 // enum test (1) only ever sees `cand.target` — so "the target is one of the two prescription files" read
 // as a claim about the file that gets CHECKED, and it was not one. MEASURED before the fix (never
-// inferred): a candidate declaring `memory-bank/lessons-learned.md` with an id ALREADY taken there
+// inferred): a candidate declaring `pharn/memory-bank/lessons-learned.md` with an id ALREADY taken there
 // exited 0 GREEN when argv[3] named any other file. A real duplicate passed the gate.
 //
 // Purely lexical, primitive #3: split on either separator and drop "" and "." segments. A ".." segment is
@@ -272,7 +272,7 @@ function fail() {
 /**
  * Check one candidate against one canon file. Prints each RED (or the GREEN line) and returns the exit code.
  *
- *   canonRoot     the directory the two target files live in (validated by canon-root.mjs; default `memory-bank`)
+ *   canonRoot     the directory the two target files live in (validated by canon-root.mjs; default `pharn/memory-bank`)
  *   strictCommit  refuse the literal `unknown` as `commit`
  *   self          the script path the usage line names
  */

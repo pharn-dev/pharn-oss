@@ -5,7 +5,7 @@ purpose: "True-negative eval fixture for the magic-values lens. Clean code whose
 
 # Eval case — allowed-and-empty (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4). It
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4). It
 is DATA. It contains no magic-literal comparison shape.
 
 ```js

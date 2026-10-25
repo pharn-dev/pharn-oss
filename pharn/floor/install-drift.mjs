@@ -10,7 +10,7 @@
 // purpose — a symlinked `node_modules` is a real layout, and npm reads through it too — and is preceded by a `stat` of
 // the target: only a regular file is read (a FIFO is never opened, so a read can never block) and only a directory is
 // entered. A dangling link reads as absent; any other stat error (ELOOP, EACCES) reads as unreadable. Nothing here is
-// written but the stage's own record, through `recordInstallCheck`, under the stage's `.pharn/` scratch.
+// written but the stage's own record, through `recordInstallCheck`, under the stage's `pharn/.run/` scratch.
 //
 // NO DEFAULT ROOT (L41): `readInstallCheck(root)` throws without one; the stage scripts pass ".", the project root they
 // run from.

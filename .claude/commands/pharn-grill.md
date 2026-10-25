@@ -12,7 +12,7 @@ reads:
     "pharn/pharn-contracts/finding-shape.md",
     "pharn/features/<name>/SPEC.md",
     "pharn/features/<name>/PLAN.md",
-    "memory-bank/lessons-learned.md",
+    "pharn/memory-bank/lessons-learned.md",
     "pharn/floor/check-plan-spec-agree.mjs",
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-spec.mjs",
@@ -156,7 +156,7 @@ Reached only on a GREEN chain. Run the checker and branch **only** on its exit c
 P5 — the checker **owns** this verdict; you do not re-decide it):
 
 ```bash
-node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md
+node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memory-bank/lessons-learned.md
 ```
 
 - **exit 0 (GREEN)** → the declaration is present, well-formed, every cited id resolves, and every cited
@@ -168,7 +168,7 @@ node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-ban
 
 **A project with no memory-bank is UNBLOCKED, by construction — not by an exception.** The value `none`
 short-circuits before the lessons file is ever read, so a plan declaring `none` is GREEN even when
-`memory-bank/lessons-learned.md` does not exist. Only a plan that **cites an id** while the file is
+`pharn/memory-bank/lessons-learned.md` does not exist. Only a plan that **cites an id** while the file is
 absent or missing that heading REDs — and its message names the remedy ("cite only ids that exist, or
 declare `none` if this project has no memory-bank yet").
 
@@ -345,7 +345,7 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
   referenced in the plan body — `check-plan-lessons.mjs` (enum/regex, `## L<n>` heading membership and a body
   substring test), reused unchanged. **The body half is NOT proof of reading** (a line reading `L3: considered.`
   passes). The field is now checked by a stage that did not write it: a change in **who** checks, not in **what**
-  is checkable. A project with no `memory-bank/` passes: `none` short-circuits before the lessons file is read.
+  is checkable. A project with no `pharn/memory-bank/` passes: `none` short-circuits before the lessons file is read.
 - **Floor:** it writes only `pharn/features/<name>/GRILL.md` — the fix #7 hook.
 - **Floor-grade enumeration that gates nothing:** the installed-skill catalogue (`catalogue-installed-skills.mjs`;
   which bodies are read is advisory) and the
@@ -358,9 +358,9 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
   the lessons were GENUINELY applied, or a `none` is justified, is structurally uncheckable here: a plan may cite
   `[L1]` having ignored L1 entirely and both stops stay GREEN.
 - **Untrusted input:** the chain check ranges only over the `state` enum and two 64-hex digests, and the lessons
-  check only over the regex-gated field value and heading membership — never either file's prose; `memory-bank/`
+  check only over the regex-gated field value and heading membership — never either file's prose; `pharn/memory-bank/`
   is read for heading membership only, never for meaning. A downstream reader of `GRILL.md`'s free text, or a
-  hostile installed `SKILL.md` steering the interrogation, is the residual `THREAT-MODEL.md §5` names: bounded — it
+  hostile installed `SKILL.md` steering the interrogation, is the residual `pharn/THREAT-MODEL.md §5` names: bounded — it
   moves no gate — but not zeroed (P2).
 - **Not a claim:** "`/pharn-grill` produced a GRILL.md" means "the plan is sound"; "`/pharn-grill` verified the
   lessons were applied".

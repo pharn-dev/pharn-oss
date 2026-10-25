@@ -2,7 +2,7 @@
 name: spec-template
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the SPEC template — the shape /pharn-spec fills to write pharn/features/<name>/SPEC.md (PHARN's shipped default, or the project's own template at the fixed, hook-protected path pharn.spec-template.md, validated before it can be pinned), and the opt-in rules pharn/floor/check-spec.mjs enforces on a SPEC that declares `spec_template`. Schema only, zero behavior. Defines what the floor checks (presence / regex / count / id membership) and what stays advisory (whether the intent is sound, whether a criterion is really observable, whether any test exists) (P0, P2, P5)."
+purpose: "Single source of truth for the SPEC template — the shape /pharn-spec fills to write pharn/features/<name>/SPEC.md (PHARN's shipped default, or the project's own template at the fixed, hook-protected path pharn/spec-template.md, validated before it can be pinned), and the opt-in rules pharn/floor/check-spec.mjs enforces on a SPEC that declares `spec_template`. Schema only, zero behavior. Defines what the floor checks (presence / regex / count / id membership) and what stays advisory (whether the intent is sound, whether a criterion is really observable, whether any test exists) (P0, P2, P5)."
 ---
 
 # Contract — spec-template
@@ -36,10 +36,10 @@ owner chooses to migrate it, which means re-filling it from the template.
 
 ## Templates
 
-| id              | file                                                     | shipped |
-| --------------- | -------------------------------------------------------- | ------- |
-| `pharn-default` | `pharn/pharn-contracts/templates/spec-template.md`       | yes     |
-| `project`       | `pharn.spec-template.md`, at the project root (optional) | no      |
+| id              | file                                               | shipped |
+| --------------- | -------------------------------------------------- | ------- |
+| `pharn-default` | `pharn/pharn-contracts/templates/spec-template.md` | yes     |
+| `project`       | `pharn/spec-template.md` (optional)                | no      |
 
 The enforcing copy of this registry is the `TEMPLATES` map in `pharn/floor/spec-template-core.mjs`; this table is
 its documentation, and the two agreeing is discipline, not a check. The default lives under
@@ -49,23 +49,24 @@ repository holds for every registry entry.
 
 ## The project template
 
-A project replaces the default by putting its own template at **one fixed path, `pharn.spec-template.md` at the
-project root**, beside `pharn.config.json`. The usual start is a copy of the default. PHARN never installs,
+A project replaces the default by putting its own template at **one fixed path, `pharn/spec-template.md`**,
+beside PHARN's own files under `pharn/`. The usual start is a copy of the default. PHARN never installs,
 updates or deletes that file.
 
 **Why the path is fixed and protected, not configurable.** A template's guidance comments are instructions
 `/pharn-spec` follows. If the path were read from `pharn.config.json`, which no write guard protects, a build
 agent could point every future `/pharn-spec` run at a file it wrote: a persistent instruction channel (P2). So
 the path is a constant, and `.claude/hooks/protect-trusted-paths.cjs` denies Write/Edit/MultiEdit/NotebookEdit
-to it by path, whether or not the file exists (the `.pharn/writes-scope.json` precedent). **The consequence,
+to it by path, whether or not the file exists (the `pharn/.run/writes-scope.json` precedent). **The consequence,
 for users:** nobody edits the project template through Claude's write tools. A human edits it directly, as with
-`LIMITS.md`. An existing install gets that protection when `pharn update` replaces the hook script.
+`pharn/LIMITS.md`. An existing install gets that protection when `pharn update` replaces the hook script.
 
 **Resolution** (`check-spec.mjs --resolve-template-ref`): the project template when it exists and validates,
-else `pharn-default`. It "exists" when an entry in the project root case-folds to its name. From then on every
+else `pharn-default`. It "exists" when each segment of its path, `pharn` in the project root and then `spec-template.md` in it, has an entry that case-folds to that segment. From then on every
 failure is a refusal (exit 1, nothing on stdout), **never a silent fallback to the default**. A case variant
-(`PHARN.SPEC-TEMPLATE.MD`) is itself a refusal, so a case-insensitive and a case-sensitive filesystem resolve
+(`pharn/SPEC-TEMPLATE.MD`) is itself a refusal, so a case-insensitive and a case-sensitive filesystem resolve
 the same checkout the same way. `check-spec.mjs --template-path <id>` then prints the file to fill.
+(migration: a root `pharn.spec-template.md` left unmoved is NOT read; the default applies until it moves.)
 
 **Validation.** Both print modes validate a template before printing its reference, the shipped default
 included. A refusal names one code from `TEMPLATE_REFUSALS` in `pharn/floor/spec-template-core.mjs` (cited,
@@ -100,7 +101,7 @@ Deleting or renaming the project template never REDs a SPEC already pinned to it
 **Bounds, stated:**
 
 - **Bash.** The hook covers the Write/Edit/MultiEdit/NotebookEdit surface only; a Bash write reaches the file
-  (`LIMITS.md §6`). `check-bash-reconcile.mjs` delegates to the same hook, so it DETECTS a non-adversarial
+  (`pharn/LIMITS.md §6`). `check-bash-reconcile.mjs` delegates to the same hook, so it DETECTS a non-adversarial
   Bash write to the file between a build's anchor and its verify — unless the file is git-ignored. That window
   opens after `/pharn-spec` ran, so a write that steered the SPEC is never detected.
 - **The read.** The checker reads the file through an `O_NOFOLLOW` descriptor and checks it with `fstat`, which
@@ -108,9 +109,9 @@ Deleting or renaming the project template never REDs a SPEC already pinned to it
   untested. `/pharn-spec`'s own later Read of the file is not tied to the digested bytes.
 - **Who can change the file.** The hook stops Claude's write tools only. Anything that lands the file by other
   means — a merged pull request, a pulled branch, a human editor, a Bash write — is what `/pharn-spec` then obeys,
-  including under `--model-approve` in an unattended `/pharn-loop`. Review a change to `pharn.spec-template.md`
+  including under `--model-approve` in an unattended `/pharn-loop`. Review a change to `pharn/spec-template.md`
   like a change to code.
-- The hook's Windows trailing dot/space fold is not mirrored: on POSIX `pharn.spec-template.md.` is a different
+- The hook's Windows trailing dot/space fold is not mirrored: on POSIX `pharn/spec-template.md.` is a different
   file, never read.
 
 **Out of scope, named:** a template declaring EXTRA required sections (follow-up `template-required-sections`),

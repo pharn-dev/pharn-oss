@@ -51,13 +51,13 @@ ship-record: # pharn/features/<name>/ship-record.json — a JSON object
 The `attestation` object MUST contain **exactly** these three keys (no more) or it is `malformed` — this
 prevents smuggling extra fields past the shape gate. `by`'s single-line bounded regex is deliberate (fix
 F2): it keeps an untrusted handle from becoming a multi-line / markup injection vector in the rendered seal
-clause or the record (P2; bounds — does not zero — the `LIMITS.md §2` residual).
+clause or the record (P2; bounds — does not zero — the `pharn/LIMITS.md §2` residual).
 
 ## The `cost` block (ADVISORY — measured tokens, never a guarantee)
 
 `cost` is the measured token cost of the run that produced the record, rendered by
 `pharn/floor/render-cost-record.mjs` (cited, not restated — P4). It is the floor reduction of
-`LIMITS.md §1c`'s true statement — the real number is the **measured** runtime cost, not a declared
+`pharn/LIMITS.md §1c`'s true statement — the real number is the **measured** runtime cost, not a declared
 `est_tokens`.
 
 ```yaml
@@ -172,7 +172,7 @@ therefore hash **identical bytes** by construction, so a genuine attestation can
 - **State is ALWAYS shown.** The seal renders `· attested by <by>` (present ∧ hash-valid) or `· unattested`
   (absent) — a silent omission would let "written" masquerade as "verified", recreating the disease (P0).
 
-## Residual (named, not hidden — `LIMITS.md §2`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`)
 
 When a human or downstream LLM reads the rendered `· attested by <by>` clause, "this `by` is a real,
 comprehending human" is a heuristic again — bounded (nothing floor-gates on identity or comprehension; `by`

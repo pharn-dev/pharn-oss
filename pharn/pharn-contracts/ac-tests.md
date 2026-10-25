@@ -85,7 +85,7 @@ without joining the build's scope, and a second extractor would mean editing a p
 | `in-plan-files`     | a test file is in PLAN.md `## Files`, so the build would be scoped to it                                                                                                                |
 | `claimed-elsewhere` | another feature's AC-TESTS.md `## Files` already names the file                                                                                                                         |
 | `no-files`          | there is no `## Files`, or it names nothing                                                                                                                                             |
-| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                                              |
+| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `pharn/.run/` or `pharn/features/`                                                          |
 
 **One more kind, since 6.36.0 — `level-excluded`:** a mapping row whose level's gates the project's
 `pharn.config.json` `gates.exclude` leaves nothing of. The rule is `gate-run-core.mjs` `levelExcludedGates`, which the
@@ -368,7 +368,7 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
   partition, and `--quick`'s `check-quick-scope.mjs`, read it `scope-escaped` unless the PLAN declares
   `pharn.config.json`.
   **Two windows, stated:**
-  - `/pharn-test` runs before the reconcile anchor (`LIMITS.md §9`), so an exclusion written DURING it is pinned as if
+  - `/pharn-test` runs before the reconcile anchor (`pharn/LIMITS.md §9`), so an exclusion written DURING it is pinned as if
     it were legitimate. The backstop holds only CONDITIONALLY. It is regress's scope partition (under `--quick`,
     `check-quick-scope.mjs`), which has no exemption for `pharn.config.json`, so a change since base reads
     `scope-escaped`. It does NOT hold in three cases:
@@ -401,7 +401,7 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
 **The token pass — ONE closed, literal rule, never a shell parse** (`test-infra-core.mjs`'s header is its spec):
 `scriptTokens()` splits a value on whitespace and `; & | ( )` and strips one pair of matching quotes. A FILE is a
 token (split on `=`, a leading `./` stripped) that is a clean relative path — not led by `-` or `/`, no `.`/`..`/empty
-segment, no whitespace, quote, shell or glob character, first segment not `node_modules` or `.pharn` — with an
+segment, no whitespace, quote, shell or glob character, first segment not `node_modules` or `pharn/.run` — with an
 extension a gate executes (`.bash .cjs .cts .js .jsx .mjs .mts .sh .ts .tsx .zsh`); the token after an OUTPUT redirect (`>`,
 `>>`, `2>`), `-o` or an `--out…` flag (and an `--out…=` value) is an OUTPUT and is skipped, while an input redirect's
 target is not (`node < tools/x.mjs` executes it). A CHAIN is `npm`/`pnpm`/`yarn`, its flags skipped, then
@@ -642,7 +642,7 @@ check and `/pharn-loop`'s freshness check I refuse it.
 `/pharn-regress` does not report them as build escapes; `/pharn-regress` also declares AC-TESTS.md's `## Files`
 alongside PLAN.md's, because those test files are `/pharn-test`'s writes.
 
-The red run's scratch, `.pharn/pharn-test/gates`, is git-ignored runtime state that the next run wipes; the evidence
+The red run's scratch, `pharn/.run/pharn-test/gates`, is git-ignored runtime state that the next run wipes; the evidence
 lives in the lock.
 
 For **reconcile** the two differ, deliberately. `AC-TESTS.md` is exempt, like `PLAN.md`: it is a plan file, and a
@@ -653,7 +653,7 @@ leaves the lock stale is caught by `ac-tests-lock.mjs --check`. **Since 6.31.0 n
 (`ac-artifact-in-plan`), so a Write-tool rewrite of either is DENIED by the write guard, and a Bash rewrite of the lock
 is DETECTED by reconcile — before, a PLAN naming the lock scoped the build to it, reconcile read that write as
 in-scope, and a rewritten lock passed every check. Detected, never prevented, as for every Bash write
-(`LIMITS.md §6`); the AC-TESTS.md half rests on the lock pinning its bytes.
+(`pharn/LIMITS.md §6`); the AC-TESTS.md half rests on the lock pinning its bytes.
 
 ## What it proves, and what it does not (P0)
 
@@ -677,7 +677,7 @@ in-scope, and a rewritten lock passed every check. Detected, never prevented, as
   whose files it sits in (enum membership over the record's `anomalies`).
 - **Bounded:** the build exclusion holds for the PLAN.md the checker read. An edit to PLAN.md after `/pharn-test`
   reopens it until something re-checks; since 6.19.0 `/pharn-build` does, first thing (the test-stage gate, below). A Bash write bypasses every
-  write hook (`LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not
+  write hook (`pharn/LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not
   reconciled. **`/pharn-verify` does not re-run the mapping check** (its chain phase is `check-plan-spec-agree.mjs`
   alone), so a run that ignores the plan check and the test-stage gate — both RED for a PLAN naming the lock — and
   sets the build's scope itself still reaches a verify PASS over a build that re-pinned the lock (measured, 6.31.0).

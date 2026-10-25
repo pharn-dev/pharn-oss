@@ -5,7 +5,7 @@ purpose: "Eval fixture (BENIGN-CONTEXT nuance): CODE fetches from a FIXED host w
 
 # Eval case — fixed-host-path (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects the request-source-into-outbound-URL-sink shape from the text.
 
 ```js

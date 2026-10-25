@@ -17,7 +17,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, symlinkSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -135,7 +135,7 @@ test("stop:unknown is REACHABLE — markers with no stage-start, and a stage tok
   assert.equal(derive(noStart, "FAIL", "no-regressions").decision, `${STOP_PREFIX}${UNKNOWN_STAGE}`);
 
   // FAIL-CLOSED ON A HOSTILE RECORD. `mark-phase.mjs` validates `--stage` at WRITE time, but the markers
-  // file is ordinary state under `.pharn/` that Bash reaches (LIMITS.md §6), so a reader that trusted the
+  // file is ordinary state under `pharn/.run/` that Bash reaches (pharn/LIMITS.md §6), so a reader that trusted the
   // writer would be trusting a file anyone can edit. Each row is a token the write-side grammar would
   // have refused; every one must land on the terminal fallback rather than be copied through.
   const hostile = ["../../etc/passwd", "Pharn-Verify", "pharn verify", "pharn/verify", "-leading-hyphen", "", "x".repeat(65)];
@@ -578,7 +578,12 @@ function shipLine(re, label) {
 function runCommitted(lines) {
   const cwd = mkdtempSync(join(tmpdir(), "pharn-ship-wiring-"));
   try {
-    symlinkSync(join(REPO, "pharn"), join(cwd, "pharn"));
+    // 7.0.0: the state root is pharn/.run, and a symlinked pharn is refused (it would carry scratch into the repo),
+    // so pharn/ is a real directory here whose shipped members are linked one by one.
+    mkdirSync(join(cwd, "pharn"));
+    for (const e of readdirSync(join(REPO, "pharn"))) {
+      if (![".run", ".backup", "features", "memory-bank"].includes(e)) symlinkSync(join(REPO, "pharn", e), join(cwd, "pharn", e));
+    }
     mkdirSync(join(cwd, ".claude"));
     symlinkSync(join(REPO, ".claude", "hooks"), join(cwd, ".claude", "hooks"));
     symlinkSync(join(REPO, ".claude", "commands"), join(cwd, ".claude", "commands"));
@@ -595,7 +600,7 @@ function runCommitted(lines) {
       const want = /stage-direct\.mjs/.test(line) ? 2 : 0;
       assert.equal(r.status, want, `${line}\n${r.stdout}${r.stderr}`);
     }
-    return readMarkers(join(cwd, ".pharn", "cost", "wiring-feat", "markers.jsonl"));
+    return readMarkers(join(cwd, "pharn", ".run", "cost", "wiring-feat", "markers.jsonl"));
   } finally {
     rmSync(cwd, { recursive: true, force: true });
   }
@@ -631,13 +636,18 @@ test("★ WIRING — the committed QUICK run-start, build and verify lines deriv
     // NEGATIVE CONTROL: the quick line with a value outside MARKER_MODES is refused (exit 2) and writes nothing.
     const cwd = mkdtempSync(join(tmpdir(), "pharn-ship-wiring-bad-"));
     try {
-      symlinkSync(join(REPO, "pharn"), join(cwd, "pharn"));
+      // 7.0.0: the state root is pharn/.run, and a symlinked pharn is refused (it would carry scratch into the repo),
+      // so pharn/ is a real directory here whose shipped members are linked one by one.
+      mkdirSync(join(cwd, "pharn"));
+      for (const e of readdirSync(join(REPO, "pharn"))) {
+        if (![".run", ".backup", "features", "memory-bank"].includes(e)) symlinkSync(join(REPO, "pharn", e), join(cwd, "pharn", e));
+      }
       const r = spawnSync("sh", ["-c", quickStart.replace("--mode quick", "--mode fast").replaceAll("'<name>'", "'wiring-feat'")], {
         cwd,
         encoding: "utf8",
       });
       assert.equal(r.status, 2, r.stderr);
-      assert.deepEqual(readMarkers(join(cwd, ".pharn", "cost", "wiring-feat", "markers.jsonl")), []);
+      assert.deepEqual(readMarkers(join(cwd, "pharn", ".run", "cost", "wiring-feat", "markers.jsonl")), []);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

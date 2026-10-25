@@ -1,7 +1,7 @@
 // pharn/floor/seam-config-materialize.test.mjs — black-box tests for /pharn-build Step 2c's seam-config extractor.
 //
 // Run as a subprocess in a fresh temp project per case (the script reads `pharn.config.json` and writes
-// `.pharn/seam-config.json` relative to its cwd), asserting only on its public surface: exit code, the one stdout or
+// `pharn/.run/seam-config.json` relative to its cwd), asserting only on its public surface: exit code, the one stdout or
 // stderr line, and the bytes it wrote (or did not write). Every written file is also fed to check-seam-config.mjs,
 // the validator the next pinned line runs, so the two lines are tested as the command runs them.
 //
@@ -27,12 +27,12 @@ const SENTINEL = "SENTINEL — written before the run";
 
 // The replaced line, verbatim (the `node -e` argument from .claude/commands/pharn-build.md Step 2c through 6.66.0).
 const ONE_LINER =
-  "const fs=require('fs');const DEF={resolutionOrder:['official-skill','pinned-docs','model','fetch','ask']};let c={},raw;try{raw=fs.readFileSync('pharn.config.json','utf8')}catch(e){if(e.code!=='ENOENT'){console.error('HALT: pharn.config.json unreadable: '+e.message);process.exit(1)}}if(raw!==undefined){try{c=JSON.parse(raw)}catch(e){console.error('HALT: pharn.config.json is present but not valid JSON ('+e.message+') — refusing to substitute the permissive default for your seam policy; fix the file.');process.exit(1)}}const seam=c.seam??DEF;fs.mkdirSync('.pharn',{recursive:true});fs.writeFileSync('.pharn/seam-config.json',JSON.stringify(seam,null,2))";
+  "const fs=require('fs');const DEF={resolutionOrder:['official-skill','pinned-docs','model','fetch','ask']};let c={},raw;try{raw=fs.readFileSync('pharn.config.json','utf8')}catch(e){if(e.code!=='ENOENT'){console.error('HALT: pharn.config.json unreadable: '+e.message);process.exit(1)}}if(raw!==undefined){try{c=JSON.parse(raw)}catch(e){console.error('HALT: pharn.config.json is present but not valid JSON ('+e.message+') — refusing to substitute the permissive default for your seam policy; fix the file.');process.exit(1)}}const seam=c.seam??DEF;fs.mkdirSync('pharn/.run',{recursive:true});fs.writeFileSync('pharn/.run/seam-config.json',JSON.stringify(seam,null,2))";
 
 /**
  * Run `argv` in a fresh project. `config` is the `pharn.config.json` text (undefined = absent; a `{ dir: true }`
  * marker makes it a directory, so reading it fails with EISDIR). `prep(dir)` may plant anything else first.
- * Returns the spawn result plus the bytes of `.pharn/seam-config.json` (null when absent).
+ * Returns the spawn result plus the bytes of `pharn/.run/seam-config.json` (null when absent).
  */
 function runIn(argv, config, prep) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-seam-mat-"));
@@ -41,7 +41,7 @@ function runIn(argv, config, prep) {
     else if (config !== undefined) writeFileSync(join(dir, "pharn.config.json"), config);
     if (prep) prep(dir);
     const r = spawnSync(process.execPath, argv, { cwd: dir, encoding: "utf8" });
-    const out = join(dir, ".pharn", "seam-config.json");
+    const out = join(dir, "pharn", ".run", "seam-config.json");
     let written = null;
     try {
       written = readFileSync(out, "utf8");
@@ -59,8 +59,8 @@ function runIn(argv, config, prep) {
 const run = (config, prep) => runIn([SCRIPT], config, prep);
 const runOld = (config, prep) => runIn(["-e", ONE_LINER], config, prep);
 const plantSentinel = (dir) => {
-  mkdirSync(join(dir, ".pharn"));
-  writeFileSync(join(dir, ".pharn", "seam-config.json"), SENTINEL);
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+  writeFileSync(join(dir, "pharn", ".run", "seam-config.json"), SENTINEL);
 };
 const lines = (s) => s.split("\n").filter(Boolean);
 
@@ -68,7 +68,7 @@ test("(a) an absent pharn.config.json writes the default order, which the valida
   const r = run(undefined);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.written, DEFAULT_BYTES);
-  assert.deepEqual(lines(r.stdout), ["seam-config: wrote .pharn/seam-config.json from default (pharn.config.json absent)"]);
+  assert.deepEqual(lines(r.stdout), ["seam-config: wrote pharn/.run/seam-config.json from default (pharn.config.json absent)"]);
   assert.equal(r.stderr, "");
   assert.equal(r.check.status, 0, r.check.stdout);
 });
@@ -108,7 +108,7 @@ test("(d) malformed JSON HALTs with exit 1, writes nothing, and leaves an older 
 
   const kept = run("{ not json", plantSentinel);
   assert.equal(kept.status, 1);
-  assert.equal(kept.written, SENTINEL, "an existing .pharn/seam-config.json is untouched on HALT");
+  assert.equal(kept.written, SENTINEL, "an existing pharn/.run/seam-config.json is untouched on HALT");
 });
 
 test("(d) a top level that is not a JSON object HALTs (null, array, string, number) — the 6.67.0 change", () => {
@@ -129,12 +129,15 @@ test("(d) an unreadable pharn.config.json (a directory) HALTs with Node's reason
   assert.equal(lines(r.stderr).length, 1);
 });
 
-test("a failed scratch write HALTs with one line instead of a stack (.pharn is a file)", () => {
-  const r = run(undefined, (dir) => writeFileSync(join(dir, ".pharn"), "not a directory"));
+test("a failed scratch write HALTs with one line instead of a stack (pharn/.run is a file)", () => {
+  const r = run(undefined, (dir) => {
+    mkdirSync(join(dir, "pharn"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run"), "not a directory");
+  });
   assert.equal(r.status, 1);
   assert.equal(r.stdout, "");
   assert.equal(lines(r.stderr).length, 1, r.stderr);
-  assert.match(r.stderr, /^HALT: could not write \.pharn\/seam-config\.json: /);
+  assert.match(r.stderr, /^HALT: could not write pharn\/\.run\/seam-config\.json: /);
 });
 
 test('L62: a hostile value never reaches a message — `{"toString":1}` anywhere is copied or ignored, never thrown on', () => {

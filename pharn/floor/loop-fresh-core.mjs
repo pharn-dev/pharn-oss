@@ -102,7 +102,7 @@
 //     one flipped AWAY from quick in a quick run meets check A's missing regression report first (a `regress` re-run,
 //     which /pharn-loop's quick section maps to S11). Nothing here sees who chose the kind.
 //   • FORGERY. Stamps, reports, logs and the budget ledger all live in the writable tree, which `Bash`
-//     reaches unhooked (LIMITS.md §6). This certifies AGREEMENT between those artifacts and the live tree,
+//     reaches unhooked (pharn/LIMITS.md §6). This certifies AGREEMENT between those artifacts and the live tree,
 //     never PROVENANCE (lessons-learned L43) — a self-consistent fabricated set passes, and a test builds
 //     one to prove it.
 //   • RECENCY. Freshness is TREE IDENTITY, not run recency: if a build changed nothing, the previous
@@ -125,7 +125,7 @@
 //
 // Check J's one legitimate-looking trip, named so it is not a mystery stop: a gate that leaves a DETACHED
 // descendant holding its log fd (the runner kills the group only on timeout) can append after the runner
-// hashed the file. Anything else is an edit to, or a prune of, `.pharn/`.
+// hashed the file. Anything else is an edit to, or a prune of, `pharn/.run/`.
 //
 // DELIBERATE CO-LOCATION (P3, stated): the re-run BUDGET ledger is a second, smaller concern — the re-run
 // policy can change without the freshness rules changing. It stays in this file because it is ~40 lines,
@@ -191,11 +191,11 @@ export const DEFAULT_STAMPS = Object.freeze({
 });
 
 /** The budget ledger's directory; the file is `<LEDGER_DIR>/<name>/freshness.jsonl`. /pharn-loop Step 1a
- *  already creates `.pharn/pharn-loop/<name>/`. */
-export const LEDGER_DIR = ".pharn/pharn-loop";
+ *  already creates `pharn/.run/pharn-loop/<name>/`. */
+export const LEDGER_DIR = "pharn/.run/pharn-loop";
 export const LEDGER_FILE = "freshness.jsonl";
 export const DEFAULT_MAX_RERUNS = 1;
-export const LESSONS_CANON = "memory-bank/lessons-learned.md";
+export const LESSONS_CANON = "pharn/memory-bank/lessons-learned.md";
 
 /** The check ids, in evaluation order. Materialized once; the tests iterate it (L29/L52). */
 export const CHECKS = Object.freeze(["A", "B", "C", "D", "J", "E", "H", "F", "G", "I"]);
@@ -792,7 +792,7 @@ function lstatOrNull(p) {
   }
 }
 
-/** The ledger path, containment-checked: under `<repo>/.pharn/`, built from a shape-gated slug, and no
+/** The ledger path, containment-checked: under `<repo>/pharn/.run/`, built from a shape-gated slug, and no
  *  component that exists — including a DANGLING link, which `lstat` sees and `stat` does not — may be a
  *  symlink. */
 function ledgerPath(ctx) {

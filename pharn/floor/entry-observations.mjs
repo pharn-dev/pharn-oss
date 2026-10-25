@@ -8,9 +8,9 @@
 // The entry runner (`entry-gates.mjs`, 6.42.0) runs `/pharn-verify`'s gates in a detached process while /pharn-spec,
 // /pharn-plan and /pharn-grill work, deliberately with no stage marker: a marker would put concurrent work into the
 // SEQUENTIAL phase stream that attributes model requests. So its execution appeared nowhere in `cost.json`, the
-// foreground `--wait` call fell into the gap between two marked stages, and `.pharn/pharn-entry/` — which holds no
+// foreground `--wait` call fell into the gap between two marked stages, and `pharn/.run/pharn-entry/` — which holds no
 // timestamp anyway — is wiped by the next `--start`. Each process therefore appends ONE line per lifecycle boundary it
-// already has, at the moment of the act ([[L42]]), to `<.pharn/cost>/<feature>/entry.jsonl`, beside `markers.jsonl`.
+// already has, at the moment of the act ([[L42]]), to `<pharn/.run/cost>/<feature>/entry.jsonl`, beside `markers.jsonl`.
 //
 // ── THE EVENTS (schema `pharn-entry-observation/1`, one JSON object per line, CLOSED keys per event) ──────────────────
 //   start          --start, once, at its end: `run` = the current run-start `{seq, ts}` read from `markers.jsonl` at
@@ -47,7 +47,7 @@
 // EXACTLY the ledger's current run-start `(seq, ts)` (run-window-core.mjs `currentRunMarkers`, the one definition). An
 // event of any other nonce is UNBOUND: counted, never attached ([[L66]] — never bound by presence, feature name, pid,
 // session or proximity). Any disagreement between the reader here and the ledger's own `markers[]` (a reset
-// `.pharn/cost`, a run-start the emitter's normalization drops) therefore reads UNBOUND, never another run's. A nonce
+// `pharn/.run/cost`, a run-start the emitter's normalization drops) therefore reads UNBOUND, never another run's. A nonce
 // whose start records CONFLICT is bound to no run at all — a contested binding is left unattached (GATE-2 review).
 // Two lines with one identity key and different content are CONFLICTING: kept as facts, counted, and the invocation's
 // lifetime reads `unmeasured conflicting-records` — never resolved by picking one; a segment's begin and end that
@@ -60,7 +60,7 @@
 //   `check-cost-ledger.mjs` recomputes from the ledger's own facts.
 // ADVISORY: that a line was written for every boundary (a write is best-effort; a process killed between two boundaries
 //   leaves a segment `incomplete`, and a refusal before the nonce exists writes nothing); that the events describe what
-//   ran or were not edited (`.pharn/` is Bash-reachable, LIMITS.md §6 — agreement, never provenance, [[L43]]); what a
+//   ran or were not edited (`pharn/.run/` is Bash-reachable, pharn/LIMITS.md §6 — agreement, never provenance, [[L43]]); what a
 //   wall-clock interval between two processes contains (clocks can step; see `clock-went-back`).
 // OBSERVATIONAL ONLY: nothing reads an event to decide a verdict, an exit, a takeover, an abort, a route, a reuse or a
 //   commit. `recordEntryEvent` never throws and never writes to stdout.
@@ -265,7 +265,7 @@ export function readEntryEvents(file) {
 
 /**
  * Is `<base>/<feature>/` a real directory chain, the READ side of `appendJsonLine`'s walk (GATE-2 review: the reads
- * followed a symlinked `.pharn/cost` or feature directory)? Returns `"ok"`, `"absent"` (a component does not exist —
+ * followed a symlinked `pharn/.run/cost` or feature directory)? Returns `"ok"`, `"absent"` (a component does not exist —
  * nothing to read), or `"unsafe"` (a component is a symlink, not a directory, or cannot be lstat'ed). A relative `base`
  * is walked segment by segment from `root`; an absolute one (a test's temporary directory) is checked at `base` itself
  * and at the feature directory — the system's own ancestors (`/var` → `/private/var` on macOS) are not this file's to

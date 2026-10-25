@@ -186,9 +186,9 @@ test("a WARN about malformed tag lines never flips the GREEN verdict", () => {
   }
 });
 
-// ── 6.69.0: `--canon-root` (audit CTX-8 — a repo whose canon is not at memory-bank/ can run the sweep) ──
+// ── 6.69.0: `--canon-root` (audit CTX-8 — a repo whose canon is not at pharn/memory-bank/ can run the sweep) ──
 
-/** A temp repo whose canon lives under `root/` instead of memory-bank/. */
+/** A temp repo whose canon lives under `root/` instead of pharn/memory-bank/. */
 function tmpRepoAt(root, canon) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-check-lessons-root-"));
   mkdirSync(join(dir, root), { recursive: true });
@@ -204,7 +204,7 @@ test("--canon-root reads canon under that root: COLD, then GREEN after the gener
     assert.match(cold.stdout, /regenerate with: node pharn\/floor\/gen-lessons-index\.mjs --canon-root team\/canon \./);
     generate(dir, productProfile("team/canon"));
     assert.equal(runCli([dir, "--canon-root", "team/canon", "--verdict"]).stdout, "GREEN\n");
-    // L41 — the DEFAULT (no flag) is the production path: here it still reads memory-bank/, which is absent.
+    // L41 — the DEFAULT (no flag) is the production path: here it still reads pharn/memory-bank/, which is absent.
     assert.equal(runCli([dir, "--verdict"]).stdout, "NO_CANON\n");
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -214,7 +214,7 @@ test("--canon-root reads canon under that root: COLD, then GREEN after the gener
 test("a cache generated from one root reads STALE under another — the header names its root", () => {
   const dir = tmpRepoAt("team/canon", CANON_ONE);
   try {
-    mkdirSync(join(dir, "memory-bank"));
+    mkdirSync(join(dir, "pharn", "memory-bank"), { recursive: true });
     writeFileSync(join(dir, CANON_PATH), CANON_ONE);
     generate(dir); // default root
     assert.equal(runCli([dir, "--verdict"]).stdout, "GREEN\n");

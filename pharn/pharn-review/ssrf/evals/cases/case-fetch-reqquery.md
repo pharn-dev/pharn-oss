@@ -5,7 +5,7 @@ purpose: "Eval fixture (SSRF): CODE makes an outbound fetch to a URL taken strai
 
 # Eval case — fetch-reqquery (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects the request-source-into-outbound-URL-sink shape from the text.
 
 ```js

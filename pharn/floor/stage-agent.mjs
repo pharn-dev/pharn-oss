@@ -63,7 +63,7 @@
 //     (`MARKER_DEFERRED`); the round trip's own `finish` writes it, and a run that STOPS on the question runs the
 //     command's inline return line first.
 //   * A marker that cannot be written prints `MARKER_NOT_WRITTEN` and changes no exit: a marker is advisory.
-// BOUNDS: `start` reads the run's markers file, unauthenticated `.pharn/` state (`mark-phase.mjs`, TRUST BOUND): a
+// BOUNDS: `start` reads the run's markers file, unauthenticated `pharn/.run/` state (`mark-phase.mjs`, TRUST BOUND): a
 // forged last line can only make it keep instead of write a marker. A crash of either subcommand (node's exit 1)
 // leaves the marker unwritten, and the orchestrator runs the stage inline (`start`) or stops (`finish`), as before.
 //
@@ -112,10 +112,10 @@
 // 10 000 ms — about 30 times the slowest spawn measured, headroom for a cold, loaded CI machine. Past it,
 // the child is killed (SIGKILL) and the stage runs inline as `resolve-failed`, never a hang.
 //
-// ── THE RESULT FILE — `.pharn/<command>/<name>/stage-result.json` (`RESULT_FILE`) ──────────────────────
+// ── THE RESULT FILE — `pharn/.run/<command>/<name>/stage-result.json` (`RESULT_FILE`) ──────────────────────
 // A BASH WRITE, OUTSIDE fix #7, declared (L19): `report` writes it and `route`/`read` remove it through
 // `fs`, reached through Bash, which `PreToolUse` never sees. All three stay inside the state root:
-//   * CONTAINMENT (L54, L59): `.pharn`, `.pharn/<command>` and `.pharn/<command>/<name>` are each tested
+//   * CONTAINMENT (L54, L59): `pharn/.run`, `pharn/.run/<command>` and `pharn/.run/<command>/<name>` are each tested
 //     with `lstat`, one component at a time. A symbolic link — dangling, looping, or to a directory — and
 //     anything that is not a directory is REFUSED, never followed and never read as absent; only an lstat
 //     ENOENT is absence. The result path itself must be absent or a regular file.
@@ -130,9 +130,9 @@
 //     for a new agent; a leftover it cannot clear makes it refuse (exit 2), and the orchestrator then runs
 //     the stage inline (`route-unavailable`).
 // BOUNDS, stated: the walk and the write are not atomic with each other (a component swapped in between is
-// a TOCTOU window this file does not close); `.pharn/` is unauthenticated state a Bash write reaches
-// (LIMITS.md §6), so a hand-written result is read like an honest one — the shape is floor, the content is
-// the stage agent's claim (advisory). No reconcile exemption is needed: `.pharn/` is outside the reconciled
+// a TOCTOU window this file does not close); `pharn/.run/` is unauthenticated state a Bash write reaches
+// (pharn/LIMITS.md §6), so a hand-written result is read like an honest one — the shape is floor, the content is
+// the stage agent's claim (advisory). No reconcile exemption is needed: `pharn/.run/` is outside the reconciled
 // set, and outside `check-regress.mjs scope`'s inside set (L17).
 //
 // ── Trust (P2) ────────────────────────────────────────────────────────────────────────────────────────
@@ -382,14 +382,14 @@ export function parseArgs(sub, argv) {
 
 // ── The containment walk ─────────────────────────────────────────────────────────────────────────────
 
-/** The three state-root components, relative, for messages. */
+/** The state-root components, relative, for messages. Both segments of the scratch root are walked (7.0.0). */
 function stateParts(command, name) {
-  return [".pharn", `.pharn/${command}`, `.pharn/${command}/${name}`];
+  return ["pharn", "pharn/.run", `pharn/.run/${command}`, `pharn/.run/${command}/${name}`];
 }
 
 /**
  * lstat each state-root component in turn. Returns `{ok: true, firstMissing}` — the index of the first
- * absent component, or -1 when all three exist as real directories — or `{ok: false, reason}` for a
+ * absent component, or -1 when every one exists as a real directory — or `{ok: false, reason}` for a
  * symbolic link, a non-directory, or an error other than ENOENT. Never follows a link (L54, L59).
  */
 export function walkStateDirs(root, command, name) {
@@ -420,7 +420,7 @@ function resultKind(path) {
 }
 
 function resultRel(command, name) {
-  return `.pharn/${command}/${name}/${RESULT_FILE}`;
+  return `pharn/.run/${command}/${name}/${RESULT_FILE}`;
 }
 
 /** Remove a leftover result (route, before a spawn). Returns null on success, else a reason. */
@@ -428,7 +428,7 @@ export function clearResult(root, command, name) {
   const walk = walkStateDirs(root, command, name);
   if (!walk.ok) return walk.reason;
   if (walk.firstMissing !== -1) return null;
-  const path = join(root, ".pharn", command, name, RESULT_FILE);
+  const path = join(root, "pharn", ".run", command, name, RESULT_FILE);
   const kind = resultKind(path);
   if (kind === "absent") return null;
   if (kind !== "file") return `${resultRel(command, name)} is not a regular file (${kind}) — clear it by hand`;
@@ -456,7 +456,7 @@ export function writeResult(root, result) {
       }
     }
   }
-  const dir = join(root, rel[2]);
+  const dir = join(root, rel[rel.length - 1]); // the run's own directory: the LAST component
   const path = join(dir, RESULT_FILE);
   const kind = resultKind(path);
   if (kind !== "absent" && kind !== "file") return `${resultRel(command, name)} is not a regular file (${kind}) — clear it by hand`;
@@ -489,7 +489,7 @@ export function consumeResult(root, expect) {
   const walk = walkStateDirs(root, command, name);
   if (!walk.ok) return { verdict: unusableVerdict("unreadable"), defect: "state-dir-refused" };
   if (walk.firstMissing !== -1) return { verdict: unusableVerdict("no-result"), defect: "no-state-dir" };
-  const path = join(root, ".pharn", command, name, RESULT_FILE);
+  const path = join(root, "pharn", ".run", command, name, RESULT_FILE);
   const kind = resultKind(path);
   if (kind === "absent") return { verdict: unusableVerdict("no-result"), defect: "no-result-file" };
   if (kind !== "file") return { verdict: unusableVerdict("unreadable"), defect: "not-a-regular-file" };
@@ -660,7 +660,7 @@ export function resultPresent(root, command, name) {
   const walk = walkStateDirs(root, command, name);
   if (!walk.ok) return true;
   if (walk.firstMissing !== -1) return false;
-  return resultKind(join(root, ".pharn", command, name, RESULT_FILE)) !== "absent";
+  return resultKind(join(root, "pharn", ".run", command, name, RESULT_FILE)) !== "absent";
 }
 
 /** The wait's anchor: this stage's own OPEN stage-start time in ms (the run's latest marker), or null. */

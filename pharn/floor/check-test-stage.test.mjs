@@ -508,11 +508,11 @@ test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the
     git("init", "-q", ".");
     git("config", "user.email", "t@t");
     git("config", "user.name", "t");
-    mkdirSync(join(repo, ".pharn"), { recursive: true });
+    mkdirSync(join(repo, "pharn", ".run"), { recursive: true });
     mkdirSync(join(repo, "pharn", "features", NAME), { recursive: true });
     mkdirSync(join(repo, "tests", "ac"), { recursive: true });
     mkdirSync(join(repo, "src"), { recursive: true });
-    writeFileSync(join(repo, ".gitignore"), ".pharn/\nsrc/ignored.js\ntests/ac/ignored.test.js\n");
+    writeFileSync(join(repo, ".gitignore"), "pharn/.run/\nsrc/ignored.js\ntests/ac/ignored.test.js\n");
     writeFileSync(join(repo, "src", "a.js"), "a\n");
     writeFileSync(join(repo, "src", "ignored.js"), "i\n");
     writeFileSync(join(repo, UNIT), "t\n");
@@ -520,7 +520,7 @@ test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the
     git("add", "-A");
     git("commit", "-qm", "init");
     writeFileSync(
-      join(repo, ".pharn", "writes-scope.json"),
+      join(repo, "pharn", ".run", "writes-scope.json"),
       JSON.stringify({ set_by: `pharn/features/${NAME}/PLAN.md`, scope: ["src/a.js", "src/ignored.js"] })
     );
     const lock = (path) =>
@@ -548,7 +548,7 @@ test("★ WIRING — /pharn-loop's Step 6c staging builder, EXECUTED: stages the
     lock("tests/ac/ignored.test.js");
     assert.equal(run().status, 4, "a pinned test that git ignores refuses the commit (the lock would not verify on a clone)");
     lock(UNIT);
-    writeFileSync(join(repo, ".gitignore"), ".pharn/\nsrc/ignored.js\ntests/ac/ignored.test.js\npharn/features/*/AC-TESTS.lock.json\n");
+    writeFileSync(join(repo, ".gitignore"), "pharn/.run/\nsrc/ignored.js\ntests/ac/ignored.test.js\npharn/features/*/AC-TESTS.lock.json\n");
     assert.equal(run().status, 4, "an ignored LOCK refuses the commit too (REVIEW finding 7)");
   } finally {
     rmSync(repo, { recursive: true, force: true });

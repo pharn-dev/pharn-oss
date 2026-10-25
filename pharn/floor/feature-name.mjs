@@ -17,7 +17,7 @@
 // is typed into later lines. The pinned lines that run this CLI carry NO placeholder at all.
 //
 // ================================ THE PROTOCOL ================================
-//   1. the model writes the slug alone to `.pharn/feature-name/candidate.txt` (CANDIDATE_REL), relative to the INVOKING
+//   1. the model writes the slug alone to `pharn/.run/feature-name/candidate.txt` (CANDIDATE_REL), relative to the INVOKING
 //      directory — the project root, which the relative pinned line already requires;
 //   2. it runs `node pharn/floor/feature-name.mjs` (or `--fresh`, /pharn-loop S1 and S2);
 //   3. exit 0 prints exactly `<name>\n`; the caller uses that value, and only when it is the slug it wrote (with `--fresh`:
@@ -31,7 +31,7 @@
 //   after the choice is not seen: the check holds at choice time only.
 //
 // ================================ READING THE CANDIDATE (L54, L59 — the link is asked, never followed) ================================
-//   • `.pharn` and `.pharn/feature-name` pass stage-runtime.mjs's `containmentWalk` (no symlink component — an lstat ENOENT
+//   • `pharn/.run` and `pharn/.run/feature-name` pass stage-runtime.mjs's `containmentWalk` (no symlink component — an lstat ENOENT
 //     is the only proof of absence) and the latter must be a directory; else `unsafe-path`, and nothing is read or removed.
 //   • the leaf is classified by `lstat` first. A DIRECTORY is left in place (`not-a-file` — a person removes it). A symlink,
 //     FIFO, socket or device is removed with `unlink` (which never follows) and refused `not-a-file`. A regular file over
@@ -91,7 +91,7 @@ import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
 
 /** The one path a caller writes the candidate to, relative to the invoking directory. */
-export const CANDIDATE_REL = ".pharn/feature-name/candidate.txt";
+export const CANDIDATE_REL = "pharn/.run/feature-name/candidate.txt";
 
 /** A candidate longer than this cannot be a name: FEATURE_SLUG_RE allows 64 characters, plus one trailing `\n`. */
 export const MAX_CANDIDATE_BYTES = 65;
@@ -99,13 +99,14 @@ export const MAX_CANDIDATE_BYTES = 65;
 /** The closed refusal set. Each remedy is a fixed string, true for every way its code can arise (L27). */
 export const REFUSALS = Object.freeze({
   "usage-error": "usage: node pharn/floor/feature-name.mjs [--fresh] — it takes no other argument; nothing was read or removed",
-  "no-candidate": "write the slug alone to .pharn/feature-name/candidate.txt with the Write tool, then run this line again",
-  "unsafe-path": ".pharn or .pharn/feature-name is a symlink or not a directory; nothing was read or removed — a person clears that path",
+  "no-candidate": "write the slug alone to pharn/.run/feature-name/candidate.txt with the Write tool, then run this line again",
+  "unsafe-path":
+    "pharn/.run or pharn/.run/feature-name is a symlink or not a directory; nothing was read or removed — a person clears that path",
   "not-a-file":
     "the candidate path held something other than a regular file; it was removed (a directory is left for a person to remove) — write the slug again with the Write tool",
-  unreadable: "a path this check must read could not be read; a person checks .pharn/feature-name (or, with --fresh, pharn/features)",
+  unreadable: "a path this check must read could not be read; a person checks pharn/.run/feature-name (or, with --fresh, pharn/features)",
   "not-removed":
-    "the candidate could not be removed, so no name is printed; a person removes .pharn/feature-name/candidate.txt, then the slug is written again",
+    "the candidate could not be removed, so no name is printed; a person removes pharn/.run/feature-name/candidate.txt, then the slug is written again",
   "not-a-name":
     "the candidate is not a feature slug (a-z, 0-9 and -, not starting with -, at most 64 characters, at most one trailing newline); it was removed — write one that is",
   "no-fresh-name": "every suffix of this slug up to 64 characters is taken under pharn/features/; choose a shorter or a different slug",
@@ -171,7 +172,7 @@ function asName(bytes) {
 /** Read, consume and validate the candidate under `root`; with `fresh`, pick the first absent feature directory. */
 export function takeName({ root, fresh = false } = {}) {
   if (typeof root !== "string" || !isAbsolute(root) || typeof fresh !== "boolean") return refuse("usage-error");
-  const dirAbs = join(root, ".pharn", "feature-name");
+  const dirAbs = join(root, "pharn", ".run", "feature-name");
   if (!containmentWalk(root, dirAbs).ok) return refuse("unsafe-path");
   const dir = lstatSafe(dirAbs);
   if (!dir.ok) return refuse("unreadable");

@@ -214,7 +214,19 @@ test("★ run-gates — a >64 KiB refusal document reaches a pipe whole (6.67.1,
   const dir = mkdtempSync(join(tmpdir(), "flush-rg-"));
   try {
     const acTests = `${"a/".repeat(36000)}AC-TESTS.md`;
-    const args = ["init", "--stage", "ac-test", "--feature", "f", "--out", ".pharn/g", "--discover", "package.json", "--ac-tests", acTests];
+    const args = [
+      "init",
+      "--stage",
+      "ac-test",
+      "--feature",
+      "f",
+      "--out",
+      "pharn/.run/g",
+      "--discover",
+      "package.json",
+      "--ac-tests",
+      acTests,
+    ];
     const r = spawnSync(process.execPath, [join(HERE, "run-gates.mjs"), ...args], { cwd: dir, encoding: "utf8" });
     const bytes = Buffer.byteLength(r.stdout);
     assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);

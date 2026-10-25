@@ -6,19 +6,19 @@
 // for all of them, so the four cannot come to accept different spellings (P3: one reason to change — the option's
 // grammar).
 //
-// THE DEFAULT is `memory-bank`, a user's own memory-bank, and every product command line runs without the flag. So
+// THE DEFAULT is `pharn/memory-bank`, a user's own memory-bank, and every product command line runs without the flag. So
 // the default IS the production path: each CLI's suite keeps a no-flag case for it (lessons-learned L41 — a default
 // every hermetic test overrides is exercised by nothing).
 //
 // WHAT THE FLAG DOES, AND THE BOUND (P0). It changes which file these four CLIs READ (and, for check-provenance,
 // which two files are members of the target enum). It does NOT relocate a project's memory-bank: every other canon
 // path in the product — check-plan-lessons.mjs's argument in /pharn-plan and /pharn-grill, /pharn-memory-promote's
-// target, /pharn-plan's "read canon" step — stays pinned to `memory-bank/`. Its consumers are this repo's own dev
+// target, /pharn-plan's "read canon" step — stays pinned to `pharn/memory-bank/`. Its consumers are this repo's own dev
 // surface and a contributor's shell, nothing else.
 //
 // THE GRAMMAR (primitive #3 — regex and set membership, no filesystem access): a repo-relative POSIX path whose
 // segments match SEGMENT_RE and do not start with `-`; no `.` or `..` segment; not absolute; no backslash; no control character; at most
-// MAX_LEN characters. A leading `./` and trailing `/`s are normalized away, so `./memory-bank/` and `memory-bank`
+// MAX_LEN characters. A leading `./` and trailing `/`s are normalized away, so `./pharn/memory-bank/` and `pharn/memory-bank`
 // are one root. Refusal is fail-closed: the caller exits without reading anything.
 //
 // NOT CHECKED, and stated: the check is LEXICAL. A root that is a symlink to a directory outside the repo is
@@ -28,7 +28,7 @@
 //
 // Non-LLM, stdlib-only, no I/O.
 
-export const DEFAULT_CANON_ROOT = "memory-bank";
+export const DEFAULT_CANON_ROOT = "pharn/memory-bank";
 export const CANON_ROOT_FLAG = "--canon-root";
 
 const MAX_LEN = 256;

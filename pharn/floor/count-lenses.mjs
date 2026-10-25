@@ -37,7 +37,15 @@ const TARGET = process.argv[2] || ".";
 // doubled this count (22 lenses -> 44, measured). Closure, not a second member — an arbitrarily named
 // `.claude/<x>/` fires it identically. The `.claude/commands/` case this list has always covered (a real
 // `role: lens` in a stage command) stays covered by the wider segment.
-const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
+// 7.0.0: `pharn/.run/` (runtime scratch) and `pharn/.backup/` (the CLI's backup, full capability copies) too.
+const EXCLUDE_SEGMENTS = [
+  `${sep}.claude${sep}`,
+  `${sep}.dev${sep}`,
+  `${sep}node_modules${sep}`,
+  `${sep}.git${sep}`,
+  `${sep}pharn${sep}.run${sep}`,
+  `${sep}pharn${sep}.backup${sep}`,
+];
 
 /** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {

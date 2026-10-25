@@ -70,7 +70,7 @@ import { shown } from "./quote-core.mjs";
 
 export const SCHEMA = "lens-groups/v1";
 export const FAMILY_MAP_PATH = "pharn/floor/lens-family-map.json";
-/** The attempt-0 injection probe (THREAT-MODEL.md §5): it shares its context with no other lens. */
+/** The attempt-0 injection probe (pharn/THREAT-MODEL.md §5): it shares its context with no other lens. */
 export const FENCE_LENS = "trust-fence";
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

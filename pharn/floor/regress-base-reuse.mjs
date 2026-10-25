@@ -5,23 +5,23 @@
 // the core when a RULE does (P3).
 //
 // ================================ WHERE EACH PIECE LIVES, AND WHO CAN WRITE IT ================================
-// • The EVIDENCE stays where the runner writes it and check-loop-fresh.mjs reads it: `.pharn/pharn-regress/base-gates/`
+// • The EVIDENCE stays where the runner writes it and check-loop-fresh.mjs reads it: `pharn/.run/pharn-regress/base-gates/`
 //   (REGRESS_PATHS.baseGates — the stamp plus each gate's .out / .err / results file). Nothing is copied. The fresh
-//   start keeps that one directory (`stage-regress.mjs`, phaseFreshLate); everything else under `.pharn/pharn-regress/`
+//   start keeps that one directory (`stage-regress.mjs`, phaseFreshLate); everything else under `pharn/.run/pharn-regress/`
 //   is still cleared.
 // • The RECORD — the binding a later invocation compares against — is `<git rev-parse --absolute-git-dir>/`
-//   `<RECORD_BASENAME>`, one per worktree. `enforce-writes-scope.cjs` always lets the write tools write `.pharn/**`, so
+//   `<RECORD_BASENAME>`, one per worktree. `enforce-writes-scope.cjs` always lets the write tools write `pharn/.run/**`, so
 //   a record there could be rewritten by the very build the next regress judges (L65). The write tools cannot write
 //   the git dir: `protect-trusted-paths.cjs` denies any path with a `.git` segment under a guarded root, and for a
 //   linked worktree, a submodule or a separate git dir `enforce-writes-scope.cjs` denies a path inside another git tree
 //   or outside the project, in every posture (stage-regress.test.mjs's ★ HOOK test runs both hooks on both layouts).
 //   The record binds the stamp by sha256 and the stamp binds each log by sha256, so a write-tool edit of any retained
 //   evidence file reads as a miss.
-// • The RUN MARKERS are read, never written and never parsed: `.pharn/<pharn-loop|pharn-ship>/<feature>/active.json`,
+// • The RUN MARKERS are read, never written and never parsed: `pharn/.run/<pharn-loop|pharn-ship>/<feature>/active.json`,
 //   owned by require-loop-record.cjs and run-marker.mjs. Hashed, and aged by their mtime (the write guard's rule).
 //
-// WHAT REMAINS WRITABLE, stated (P0): a Bash writer reaches the git dir and `.pharn/` alike (L19) and can forge the
-// record and the evidence together; nothing detects it. The markers are in `.pharn/`, so restoring an earlier run's
+// WHAT REMAINS WRITABLE, stated (P0): a Bash writer reaches the git dir and `pharn/.run/` alike (L19) and can forge the
+// record and the evidence together; nothing detects it. The markers are in `pharn/.run/`, so restoring an earlier run's
 // marker bytes re-binds that run's record. And the base side's own in-progress scratch (`stage.json`,
 // `base-gates/state.json`) is write-tool reachable while its chain is paused at a `continue`: forging it falsifies that
 // invocation's base evidence, as it can on the fresh path, and the publication below would then bind it for later
@@ -107,7 +107,7 @@ export function readInProject(relPath, maxBytes) {
 /** What stands at each delivery command's run-marker path for `feature`. A `/pharn-review` marker is never looked at. */
 export function readMarkers(feature) {
   const out = {};
-  for (const command of DELIVERY_COMMANDS) out[command] = readInProject(`.pharn/${command}/${feature}/active.json`, MARKER_MAX_BYTES);
+  for (const command of DELIVERY_COMMANDS) out[command] = readInProject(`pharn/.run/${command}/${feature}/active.json`, MARKER_MAX_BYTES);
   return out;
 }
 

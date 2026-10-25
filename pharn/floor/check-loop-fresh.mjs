@@ -7,7 +7,7 @@
 // cannot load or a throw goes uncaught, and 1 is this checker's RERUN. While the checker imported its siblings
 // statically, a module that failed to load (a partial update, a test-infra-core.mjs that throws) ended the process
 // with exit 1 and an EMPTY stdout, so /pharn-loop's exit-1 branch had no `stage_to_rerun` to read. An uncaught throw
-// while checking did the same: a `.pharn` that is a regular file makes the budget ledger's mkdir throw
+// while checking did the same: a `pharn/.run` that is a regular file makes the budget ledger's mkdir throw
 // (.dev/features/crash-routing/PLAN.md records both, reproduced). This file has NO static import, so nothing can fail
 // before the `try` below. It loads the checker with import(), runs it, and maps a failure of either to INCONCLUSIVE —
 // `reason_code` `checker-crashed`, exit 2 — which is fail-closed (/pharn-loop S11) and never a re-run. A result

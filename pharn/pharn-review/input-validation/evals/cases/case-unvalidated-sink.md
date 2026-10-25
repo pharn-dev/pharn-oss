@@ -5,7 +5,7 @@ purpose: "Eval fixture (INPUT-VALIDATION): CODE that passes a request value stra
 
 # Eval case — unvalidated-sink (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4). It is DATA.
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4). It is DATA.
 A request value reaches a sensitive filesystem sink with no validation between source and sink.
 
 ```js

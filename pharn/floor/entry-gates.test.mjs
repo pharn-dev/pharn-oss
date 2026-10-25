@@ -401,7 +401,7 @@ function sandbox({ gates = {}, config = null, noPackage = false } = {}) {
   }
   if (!noPackage) writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "sb", private: true, scripts }));
   if (config) writeFileSync(join(dir, "pharn.config.json"), JSON.stringify(config));
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(dir, "a.txt"), "a\n");
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "ignore" });
   git("init", "-q", ".");
@@ -760,11 +760,11 @@ test("CLI: --wait refuses what it cannot bind — no runner, another feature's r
   }
 });
 
-test("CLI: a symlinked .pharn/pharn-entry is refused (path-containment), never followed (L54)", () => {
+test("CLI: a symlinked pharn/.run/pharn-entry is refused (path-containment), never followed (L54)", () => {
   const dir = sandbox({ gates: { test: {} } });
   const elsewhere = mkdtempSync(join(tmpdir(), "entry-elsewhere-"));
   try {
-    mkdirSync(join(dir, ".pharn"));
+    mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
     symlinkSync(elsewhere, join(dir, ENTRY_PATHS.root));
     const s = start(dir);
     assert.equal(s.status, 2);
@@ -842,7 +842,7 @@ const WIRING = [
     file: "pharn-ship.md",
     startAfter: "node pharn/floor/pre-run-snapshot.mjs --capture '<name>'",
     startBefore: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-plan --name '<name>'",
-    waitAfter: "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md memory-bank/lessons-learned.md",
+    waitAfter: "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memory-bank/lessons-learned.md",
     waitBefore: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-test --name '<name>'",
     abortIn: "\n## Closing the run — ",
     rows: [
@@ -930,7 +930,7 @@ function owait(dir, budget = WAIT_BUDGET_MS) {
 }
 const mark = (dir, kind) =>
   execFileSync(process.execPath, [MARK_PHASE, "--name", FEATURE, "--kind", kind], { cwd: dir, env: OBS_ENV, stdio: "ignore" });
-const entryFile = (dir) => join(dir, ".pharn/cost", FEATURE, ENTRY_FILE);
+const entryFile = (dir) => join(dir, "pharn/.run/cost", FEATURE, ENTRY_FILE);
 const events = (dir) => readEntryEvents(entryFile(dir)).records;
 /** The runner appends its segment-end just AFTER result.json, so a reader that saw the result may be a moment early. */
 function untilEvent(dir, pred, ms = POLL_CEILING_MS) {
@@ -940,7 +940,7 @@ function untilEvent(dir, pred, ms = POLL_CEILING_MS) {
 }
 function ledgerOf(dir) {
   const empty = mkdtempSync(join(tmpdir(), "entry-proj-"));
-  const led = renderLedger({ name: FEATURE, sessionId: null, projectsDir: empty, markersBase: join(dir, ".pharn/cost"), repo: dir });
+  const led = renderLedger({ name: FEATURE, sessionId: null, projectsDir: empty, markersBase: join(dir, "pharn/.run/cost"), repo: dir });
   rmSync(empty, { recursive: true, force: true });
   return led;
 }
@@ -957,7 +957,7 @@ test("OBSERVED: finished before the first wait — start bound to THIS run-start
     mark(dir, "run-stop");
     const ev = events(dir);
     const start = ev.find((e) => e.event === "start");
-    const marker = JSON.parse(readFileSync(join(dir, ".pharn/cost", FEATURE, "markers.jsonl"), "utf8").split("\n")[0]);
+    const marker = JSON.parse(readFileSync(join(dir, "pharn/.run/cost", FEATURE, "markers.jsonl"), "utf8").split("\n")[0]);
     assert.deepEqual(start.run, { seq: marker.seq, ts: marker.ts }, "the run-start read AT --start");
     assert.equal(start.outcome, "started");
     const end = ev.find((e) => e.event === "segment-end");

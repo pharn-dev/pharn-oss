@@ -536,7 +536,7 @@ test("bad-path — every rejected shape (L52), each listed AND mapped so nothing
     "tests/../x.test.js",
     "tests//x.test.js",
     "tests/dir/",
-    ".pharn/x.test.js",
+    "pharn/.run/x.test.js",
     "pharn/features/demo/x.test.js",
     // grill G4: the red run hands mapped files to a runner as argv, and `--` stops npm's parsing, not the runner's
     "-u",

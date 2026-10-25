@@ -550,7 +550,7 @@ test("★ GATE-1 pin, live — the REAL runner records a gate that handles SIGTE
     sh("git", ["init", "-q"]);
     mkdirSync(join(root, "pharn/features/demo"), { recursive: true });
     writeFileSync(join(root, "a.txt"), "x\n");
-    writeFileSync(join(root, ".gitignore"), ".pharn/\n");
+    writeFileSync(join(root, ".gitignore"), "pharn/.run/\n");
     writeFileSync(join(root, "pharn/features/demo/PLAN.md"), "---\nspec_id: demo\n---\n# PLAN\n\n## Files\n\n- a.txt — x\n");
     // A file, not `node -e`: `--gates` splits on commas, and the handler needs one.
     writeFileSync(join(root, "on-term-exit-0.mjs"), 'process.on("SIGTERM", () => process.exit(0));\nsetInterval(() => {}, 1000);\n');
@@ -567,16 +567,16 @@ test("★ GATE-1 pin, live — the REAL runner records a gate that handles SIGTE
       "nosuchbinary_pharn_xyz::missing",
       "true::ok",
     ].join(",");
-    const init = sh(process.execPath, [RG, "init", "--stage", "verify", "--feature", "demo", "--out", ".pharn/v", "--gates", gates]);
+    const init = sh(process.execPath, [RG, "init", "--stage", "verify", "--feature", "demo", "--out", "pharn/.run/v", "--gates", gates]);
     assert.equal(init.status, 0, init.stdout + init.stderr);
     for (let i = 0; i < 10; i++) {
       // 3000 ms (GATE-2 review F1): wide enough that a loaded machine's /bin/sh has installed its trap before the
       // group SIGTERM lands, so the premise below is never a load artifact.
-      const r = sh(process.execPath, [RG, "run", "--next", "--out", ".pharn/v", "--timeout-ms", "3000"]);
+      const r = sh(process.execPath, [RG, "run", "--next", "--out", "pharn/.run/v", "--timeout-ms", "3000"]);
       assert.equal(r.status, 0, r.stdout + r.stderr);
       if (JSON.parse(r.stdout).finalized) break;
     }
-    const stamp = JSON.parse(readFileSync(join(root, ".pharn/v/stamp.json"), "utf8"));
+    const stamp = JSON.parse(readFileSync(join(root, "pharn/.run/v/stamp.json"), "utf8"));
     const byId = Object.fromEntries(stamp.runs.map((r) => [r.id, r]));
     assert.equal(byId.trapzero.exit, 0, "the premise: the gate that handles SIGTERM exited 0");
     assert.equal(byId.trapzero.timed_out, true, "the premise: the runner recorded its kill");
@@ -584,7 +584,7 @@ test("★ GATE-1 pin, live — the REAL runner records a gate that handles SIGTE
     assert.equal(byId.hang.timed_out, true);
     assert.equal(byId.missing.exit, 127, "the premise: an unstartable command is 127");
     assert.equal(byId.ok.timed_out, false);
-    const cv = sh(process.execPath, [CV, "--stamp", ".pharn/v/stamp.json", "--feature", "demo"]);
+    const cv = sh(process.execPath, [CV, "--stamp", "pharn/.run/v/stamp.json", "--feature", "demo"]);
     assert.equal(cv.status, 2, cv.stdout);
     const report = JSON.parse(cv.stdout);
     assert.equal(report.verdict, "INCONCLUSIVE");

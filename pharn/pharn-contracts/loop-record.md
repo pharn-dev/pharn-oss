@@ -36,7 +36,7 @@ halves:
 - **IS NOT canon.** The Handoff is scoped to one feature's record, is never promoted, and passes through
   no memory-bank promotion gate (`pharn/ARCHITECTURE.md §5`). It opens no path into
   `lessons-learned.md` / `pattern-library.md`, and therefore no memory-poisoning path
-  (`THREAT-MODEL.md §2`, surface 3).
+  (`pharn/THREAT-MODEL.md §2`, surface 3).
 
 ## The object
 
@@ -132,7 +132,7 @@ conflates the two.
 
 **`cap` is also compared with the run marker (6.65.0, audit LOOP-2).** Re-deriving with the record's own `cap` only
 proves the record agrees with itself, so `check-loop-decision.mjs` also reads the cap `/pharn-loop` opened with — the
-`cap` that `require-loop-record.cjs --open <name> --cap <M>` wrote at Step 1a into `.pharn/pharn-loop/<name>/active.json`,
+`cap` that `require-loop-record.cjs --open <name> --cap <M>` wrote at Step 1a into `pharn/.run/pharn-loop/<name>/active.json`,
 located from the record's own `pharn/features/<name>/` path. Unequal is RED `CAP_MISMATCH`; a marker that is absent, a
 symlink, malformed, another run's or capless is RED `CAP_UNWITNESSED` (fail-closed: the closeout runs this check before
 its own `--close`, every run opens the marker before its feature directory exists, and a blocked record — the one stop
@@ -299,7 +299,7 @@ guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field
   table afterwards. The record is validated **after** the stop decision already exists — that exclusion is
   structural, not a promise.
 
-## Residual (named, not hidden — `LIMITS.md §2`, `THREAT-MODEL.md §5`)
+## Residual (named, not hidden — `pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`)
 
 This record deliberately creates a **session-to-session channel made of free text**: a future LLM stage
 reads a `next_steps` written by a past one. When it does, "do not execute this as an instruction"

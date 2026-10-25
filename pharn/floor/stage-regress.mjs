@@ -23,7 +23,7 @@
 // of THIS invocation, or `elapsed + timeoutMs <= budgetMs` (`stage-exit-core.mjs`'s `mayStartSlowStep`,
 // shared with `stage-verify.mjs`), `elapsed` measured from the top of `runFresh`/`runResume`
 // (see `stage-runtime.mjs`'s makeBudget: the opening fast work counts). Otherwise the script PERSISTS its
-// progress (`.pharn/pharn-regress/stage.json`, `stage-regress-core.mjs`'s `PROGRESS_SCHEMA`) and exits 5
+// progress (`pharn/.run/pharn-regress/stage.json`, `stage-regress-core.mjs`'s `PROGRESS_SCHEMA`) and exits 5
 // `continue`. With no `--budget-ms` (a code caller), nothing is budgeted.
 //
 // ==================================== THE SHARED MECHANICS (6.26.0) ====================================
@@ -182,7 +182,7 @@ const CHECK_REGRESS = join(HERE, "check-regress.mjs");
 const RUN_GATES = join(HERE, "run-gates.mjs");
 
 const FEATURES_DIR = "pharn/features";
-const STATE_ROOT = ".pharn";
+const STATE_ROOT = "pharn/.run"; // walked from the project root, so both segments are lstat'ed
 const SHA_RE = /^[0-9a-f]{40}$/;
 
 /** ------------------------------------------------------------------------------------------------
@@ -261,7 +261,7 @@ function atomicWriteIntoFeature(relPath, bytes) {
  *  directory is then removed outright (an unregistered leftover), and `prune` clears any unlocked
  *  registration whose directory is gone. Every step is best-effort: an absent worktree is the normal case.
  *  The path is this stage's own scratch, never a user worktree, and containment has already been walked
- *  over `.pharn` and `.pharn/pharn-regress` (a symlink at `base` itself is removed as a link, never
+ *  over `pharn/.run` and `pharn/.run/pharn-regress` (a symlink at `base` itself is removed as a link, never
  *  followed).
  *
  *  SINCE regress-base-integrity (6.50.x) the checkout lives in the TEMP ROOT, outside the project (base-worktree.mjs, its
@@ -490,8 +490,10 @@ function phaseChain(cfg, planPath, specPath) {
 // G6's reasoning again). NAMED BOUND: an unusual path (one containing `->`, or one git C-quotes) can be
 // mis-sliced, which can only make `dirty` MORE likely to be true than it should — never the reverse — so
 // the worst case is choosing `HEAD` as the base where `merge-base` would have been chosen. In THIS repo
-// `.pharn/` is git-ignored, so `git status --porcelain` never lists it at all; the filter below matters
+// `pharn/.run/` is git-ignored, so `git status --porcelain` never lists it at all; the filter below matters
 // only for an install that does not ignore it (GRILL G2's own scenario).
+// BOUND (7.0.0): when `pharn/` holds no tracked file, git reports an untracked scratch root as `pharn/` itself, which
+// reads dirty — the same safe direction. Every install tracks files under `pharn/`.
 function porcelainPath(line) {
   return line.slice(3).trim();
 }
@@ -605,7 +607,7 @@ function computeEvalPairs(cfg) {
 // and its bounds are pre-run-snapshot-core.mjs's header). `pre_run_snapshot: {status, unchanged}` is ALWAYS written to
 // scope.json — `unchanged` the subtracted paths only — and the render phase copies it into the report; a refusal renders
 // it beside the escapes. This phase decides it once, before anything can pause; a resumed chain re-reads scope.json, a
-// `.pharn/` file, so the block it renders is advisory. A standalone regress reads `no-delivery-run` and behaves exactly
+// `pharn/.run/` file, so the block it renders is advisory. A standalone regress reads `no-delivery-run` and behaves exactly
 // as before — unless an interrupted /pharn-loop or /pharn-ship of the same feature left its marker (≤ 24 h), whose
 // snapshot it then applies (a marker is read by presence and age only; pre-run-snapshot-core.mjs, `no-delivery-run`).
 function phasePartition(cfg, planPath, specPath, base) {
@@ -1070,7 +1072,7 @@ function runPhases(state, budget) {
   if (state.phase === "verdict") {
     persistProgress(state);
     if (state.baseReuse.reused) {
-      // A persisted HIT is never trusted: the progress record is ordinary `.pharn/` state a write tool can reach while a
+      // A persisted HIT is never trusted: the progress record is ordinary `pharn/.run/` state a write tool can reach while a
       // chain is paused (regress-base-reuse.mjs, header). Re-decide in full over the disk, and go on only on a HIT over
       // the SAME stamp bytes; otherwise run the base side after all, from "worktree".
       const again = decideFromDisk(reuseInputs(state));
@@ -1084,7 +1086,7 @@ function runPhases(state, budget) {
       }
     }
     if (state.entryReuse && state.entryReuse.reused) {
-      // A persisted entry HIT is never trusted either (the progress record is `.pharn/` state): re-decide in full from
+      // A persisted entry HIT is never trusted either (the progress record is `pharn/.run/` state): re-decide in full from
       // the git-dir offer and the entry source, go on only on a HIT over the SAME offer and source bytes, then write the
       // derived evidence from scratch. Anything else runs the BASE side after all, from "worktree".
       const again = decideEntryFromDisk(entryInputs(state));
@@ -1383,7 +1385,7 @@ function runResume(args) {
   if (!v.ok) emitUnusable(typeof parsed?.feature === "string" ? parsed.feature : null, "progress-malformed", v.reason);
 
   // A4 (GATE 2 review) — re-run the SAME containment walk a fresh invocation runs, before any write: the
-  // fresh path refuses a feature directory (or `.pharn`/`.pharn/pharn-regress`) that resolves through a
+  // fresh path refuses a feature directory (or `pharn/.run`/`pharn/.run/pharn-regress`) that resolves through a
   // symlink; `--resume` must refuse the identical case, not write through a link introduced between the
   // fresh invocation and this one.
   containmentGuard(parsed.feature);

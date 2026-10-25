@@ -1,5 +1,5 @@
 ---
-file: "THREAT-MODEL.md"
+file: "pharn/THREAT-MODEL.md"
 trust: trusted
 editable_by: "human only"
 purpose: "The security foundation. Defines the two threat models, B's attack surface, and how the architecture answers each — including the bypasses the red-team found and their closure status. Elaborates P2; never contradicts CONSTITUTION.md."
@@ -60,7 +60,7 @@ memory, is an agent operating on hostile input. The concrete surface:
    `pharn/floor/scan-installed-skills.mjs`) and feed the model the catalogue's descriptions plus the bodies of the
    skills they select (`pharn/pharn-core/installed-skill-selection/`), all as untrusted context. Same delivery
    mechanism as 6 — markdown is
-   executable (`LIMITS.md §1a`) — but a **different privilege story**: a Capability's `kind`/`seal`
+   executable (`pharn/LIMITS.md §1a`) — but a **different privilege story**: a Capability's `kind`/`seal`
    are enum-gated by `validate.mjs`, whereas **nothing gates a `.claude/skills/` drop** —
    `validate.mjs` never scans `.claude/`. The sharpest risk here is **suppression, not addition**: a
    hostile skill that talks a lens out of reporting a real finding is invisible, because a suppressed
@@ -73,7 +73,8 @@ memory, is an agent operating on hostile input. The concrete surface:
    is Claude Code's behaviour, not a PHARN grant. `/pharn-loop` pre-approves the Skill tool only as `Skill(pharn-spec *)`,
    `Skill(pharn-plan *)`, `Skill(pharn-grill *)`, `Skill(pharn-test *)` and `Skill(pharn-build *)`; the grant
    matches by name, so whatever answers to one of those five names runs under it.
-9. **the project's SPEC template** — `pharn.spec-template.md` at the project root (6.14.0). Its guidance
+9. **the project's SPEC template** — `pharn/spec-template.md` (6.14.0;
+   migration: the root `pharn.spec-template.md` before 7.0.0). Its guidance
    comments are instructions `/pharn-spec` follows when it writes a SPEC, including under
    `--model-approve` in an unattended `/pharn-loop`, where no human reads the SPEC before it is planned.
    A write to it is therefore a **persistent instruction channel** into every later SPEC — the
@@ -92,31 +93,31 @@ memory, is an agent operating on hostile input. The concrete surface:
     secrets, or on the next git command in the person's shell. Other routes to code that runs after the run stay
     open: a hook manager configured elsewhere (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in
     `package.json`), and what a workflow or an existing hook runs from elsewhere in the repository (a local action,
-    a script, the project's own tests) — `LIMITS.md §6` lists them. Nor is any of this containment: code a plan writes
+    a script, the project's own tests) — `pharn/LIMITS.md §6` lists them. Nor is any of this containment: code a plan writes
     still runs during the run, because the pinned gates run the project's tests. `package.json` scripts are not
     refused, since a feature legitimately edits `package.json`; a changed gate command is at most detected, at
     `/pharn-verify`, by the test-infrastructure pin of a run that carries an AC lock, never prevented
-    (`LIMITS.md §9`). The bounds of the refusals — lexical, run through `Bash`, and reading only the git config files
-    the setter names — are in `LIMITS.md §6`.
+    (`pharn/LIMITS.md §9`). The bounds of the refusals — lexical, run through `Bash`, and reading only the git config files
+    the setter names — are in `pharn/LIMITS.md §6`.
 
 ---
 
 ## 3. How the architecture answers each (map to the floor + the fixes)
 
-Every answer reduces to the floor (P0) or is labeled a limit (`LIMITS.md`).
+Every answer reduces to the floor (P0) or is labeled a limit (`pharn/LIMITS.md`).
 
 | Surface                 | Structural answer                                                                                                           | Floor primitive             |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | ai_docs poisoning       | content-hash pin; re-fetch that changes content requires re-review diff                                                     | content-hash _(specified; ships with the guarded surface)_ |
 | seam fetch fallback     | terminal fallback is **ask** (P5); resolution pinned + content-hashed                                                       | content-hash + (ask) _(specified; ships with the guarded surface)_ |
-| memory poisoning        | promotion to canon is a **gated write** with per-entry provenance                                                           | pre-write hook — `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write still reaches canon **unhooked**, but is no longer **undetected**: canon is `never_exempt` in the 4.0.0 reconciler, so a change to it between build and verify REDs the stage unless it arrived as an upstream merge (`merged`, `reconciliation-record.md` §2a) (`LIMITS.md §6`). Detected, not prevented |
+| memory poisoning        | promotion to canon is a **gated write** with per-entry provenance                                                           | pre-write hook — `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write still reaches canon **unhooked**, but is no longer **undetected**: canon is `never_exempt` in the 4.0.0 reconciler, so a change to it between build and verify REDs the stage unless it arrived as an upstream merge (`merged`, `reconciliation-record.md` §2a) (`pharn/LIMITS.md §6`). Detected, not prevented |
 | reviewed-code injection | finding is computed from enum-gated fields; injected comment reaches only free-text (fix #1)                                | enum check                  |
 | seam-record poisoning   | content-hash on resolution; drift is loud, not silent                                                                       | content-hash _(specified; ships with the guarded surface)_ |
 | community Capability    | `kind` is a **privilege level**: community = markdown-only, no `.cjs`; cannot declare trusted-write or off-allowlist egress | `seal`-gating enforced (validate.mjs); markdown-only/no-`.cjs` and trusted-write pre-write hook + pre-egress (specified; ships with the guarded surface) |
 | cross-model response    | egress-fenced + response returns in an untrusted fence + advisory-only (never gates ship)                                   | pre-egress (specified; ships with the guarded surface) + enum gate |
 | user-installed skill    | Enumerated deterministically, then fed to three stages as untrusted DATA. **Partial bound only:** for a lens whose `pharn/floor/lens-scanner-map.json` entry names a scanner, that scanner's MATCH is a regex verdict a skill cannot erase — but that covers only that it matched, never that the lens REPORTS it, and it does not exist at all for the scanner-less entries (read that membership from the map, not from here). See `.claude/commands/pharn-review.md` Step 3b | enum/regex — **ENUMERATION ONLY** (`scan-installed-skills.mjs`; its catalogue `catalogue-installed-skills.mjs` shares the discovery), and it **GATES NOTHING**: no proceed/stop/scope in any stage reads its output. **No primitive is specified or planned for this row** |
-| project SPEC template   | one fixed path, never read from config — a configurable pointer would itself be unguarded, agent-writable state; `check-spec.mjs` validates a MINIMUM shape before printing its reference and never authenticates the guidance text | pre-write hook — `protect-trusted-paths.cjs` denies it by path, whether or not the file exists, on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write reaches it and is detected only inside a build's anchor-to-verify window, which opens after `/pharn-spec` ran, and only for a non-adversarial writer on a file that is not git-ignored (`LIMITS.md §1d`, §6). A change landed by a merge, a pull or a human editor is obeyed as-is |
-| plan as write-scope input | the setter refuses a plan naming the control surface and, in an installed project, PHARN's installed files, a CI workflow or a git hooks directory; both write guards then enforce the scope it emits | enum/regex membership in a setter run through `Bash` — an opt-in, a forged record or a `Bash` write passes it (`LIMITS.md §6`). Hook managers configured elsewhere, files a workflow or hook runs from elsewhere, and `package.json` scripts are not refused; a changed gate command is at most detected, by the AC lock's pin (`LIMITS.md §9`) |
+| project SPEC template   | one fixed path, never read from config — a configurable pointer would itself be unguarded, agent-writable state; `check-spec.mjs` validates a MINIMUM shape before printing its reference and never authenticates the guidance text | pre-write hook — `protect-trusted-paths.cjs` denies it by path, whether or not the file exists, on `Write`/`Edit`/`MultiEdit`/`NotebookEdit` only. A `Bash` write reaches it and is detected only inside a build's anchor-to-verify window, which opens after `/pharn-spec` ran, and only for a non-adversarial writer on a file that is not git-ignored (`pharn/LIMITS.md §1d`, §6). A change landed by a merge, a pull or a human editor is obeyed as-is |
+| plan as write-scope input | the setter refuses a plan naming the control surface and, in an installed project, PHARN's installed files, a CI workflow or a git hooks directory; both write guards then enforce the scope it emits | enum/regex membership in a setter run through `Bash` — an opt-in, a forged record or a `Bash` write passes it (`pharn/LIMITS.md §6`). Hook managers configured elsewhere, files a workflow or hook runs from elsewhere, and `package.json` scripts are not refused; a changed gate command is at most detected, by the AC lock's pin (`pharn/LIMITS.md §9`) |
 
 ---
 
@@ -136,7 +137,7 @@ The red-team's verdict: a **single disease in five places — "written in the co
    is not denied — preventing it rests on the Claude Code permission layer, which gates commands, not
    paths, and is not a PHARN floor primitive. Since 4.0.0 such a write is **detected** after the fact
    when it lands inside a build's anchor-to-verify window (`check-bash-reconcile.mjs`, as in item 7);
-   outside that window it is neither denied nor detected (residual — `LIMITS.md §6`)._
+   outside that window it is neither denied nor detected (residual — `pharn/LIMITS.md §6`)._
 3. **Deterministic gate over probabilistic severity** — split into floor-gate (blocks guaranteed
    invariants from actual content) vs advisory-gate (reads LLM severity, never sole basis for a
    guaranteed block) (fix #3). _Closed by separation; the advisory half is labeled, not "fixed."_
@@ -151,9 +152,9 @@ The red-team's verdict: a **single disease in five places — "written in the co
    — not denied — but as of 4.0.0 it is **detected** after the fact: `check-bash-reconcile.mjs` re-hashes
    between build and verify and REDs any changed path the guards would have denied, except one whose bytes are exactly the upstream bytes HEAD merged in during the window, which is reported as `merged` (`reconciliation-record.md` §2a). So `writes:` is no
    longer merely a declaration there; it is an unenforced boundary whose violation costs a red stage.
-   Detected, never prevented (residual — `LIMITS.md §6`)._
+   Detected, never prevented (residual — `pharn/LIMITS.md §6`)._
 
-**Not closeable — relabeled as limits (`LIMITS.md`), not bugs:**
+**Not closeable — relabeled as limits (`pharn/LIMITS.md`), not bugs:**
 
 8a. **Markdown is executable** — a community Capability is a prompt-injection delivery mechanism
 _by design_. "markdown-only = safe" is **struck**. Backstop: community Capabilities cannot declare

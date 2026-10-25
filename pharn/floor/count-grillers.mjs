@@ -39,7 +39,15 @@ const TARGET = process.argv[2] || ".";
 // this count (13 grillers -> 26, measured). Closure, not a second member — an arbitrarily named
 // `.claude/<x>/` fires it identically. The stage-command case (a real `role: griller` in pharn-dev-grill.md)
 // stays covered by the wider segment.
-const EXCLUDE_SEGMENTS = [`${sep}.claude${sep}`, `${sep}.dev${sep}`, `${sep}node_modules${sep}`, `${sep}.git${sep}`];
+// 7.0.0: `pharn/.run/` (runtime scratch) and `pharn/.backup/` (the CLI's backup, full capability copies) too.
+const EXCLUDE_SEGMENTS = [
+  `${sep}.claude${sep}`,
+  `${sep}.dev${sep}`,
+  `${sep}node_modules${sep}`,
+  `${sep}.git${sep}`,
+  `${sep}pharn${sep}.run${sep}`,
+  `${sep}pharn${sep}.backup${sep}`,
+];
 
 /** Report an error on stderr and return the exit code; `main` returns it, so nothing reaches stdout. */
 function fail(msg) {

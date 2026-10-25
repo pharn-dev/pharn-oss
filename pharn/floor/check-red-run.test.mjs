@@ -95,7 +95,7 @@ function makeStamp(outDir, gates, { feature = "demo" } = {}) {
 function scratch(config = { [CONFIG_KEY]: { test: "vitest-json" } }) {
   const root = mkdtempSync(join(tmpdir(), "rrc-"));
   if (config !== null) writeFileSync(join(root, CONFIG_FILE), JSON.stringify(config));
-  const outDir = join(root, ".pharn", "pharn-test", "gates");
+  const outDir = join(root, "pharn", ".run", "pharn-test", "gates");
   mkdirSync(outDir, { recursive: true });
   return { root, outDir, done: () => rmSync(root, { recursive: true, force: true }) };
 }
@@ -527,7 +527,7 @@ function project(rows) {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   mkdirSync(join(dir, "tests", "ac"), { recursive: true });
   for (const f of [UNIT, STATIC, OTHER]) writeFileSync(join(dir, f), `// ${f}\n`);
   writeFileSync(join(dir, "fixture.json"), FIXTURE);
@@ -537,7 +537,7 @@ function project(rows) {
       'const fs = require("fs");',
       'const doc = fs.readFileSync(__dirname + "/fixture.json", "utf8").split("/work/proj").join(process.cwd());',
       "fs.writeFileSync(process.env.PHARN_TEST_RESULTS, doc);",
-      'fs.writeFileSync(".pharn/argv.json", JSON.stringify(process.argv.slice(2)));',
+      'fs.writeFileSync("pharn/.run/argv.json", JSON.stringify(process.argv.slice(2)));',
       "process.exit(1);",
       "",
     ].join("\n")
@@ -551,7 +551,7 @@ function project(rows) {
   return dir;
 }
 const node = (dir, script, args) => spawnSync(process.execPath, [script, ...args], { cwd: dir, encoding: "utf8" });
-const OUT = ".pharn/pharn-test/gates";
+const OUT = "pharn/.run/pharn-test/gates";
 const AC = "pharn/features/demo/AC-TESTS.md";
 
 /** The pinned order: --write the lock, init, drain, then the verdict. Returns the verdict's result. */
@@ -587,7 +587,11 @@ test("END TO END: a GREEN red run is recorded in the lock, bound to its files; -
     const v = redRun(dir);
     assert.equal(v.status, 0, v.stdout);
     assert.match(v.stdout, /RED-AS-REQUIRED — AC-1 \(unit\)/);
-    assert.deepEqual(JSON.parse(readFileSync(join(dir, ".pharn/argv.json"), "utf8")), [UNIT], "the test gate got exactly the mapped file");
+    assert.deepEqual(
+      JSON.parse(readFileSync(join(dir, "pharn/.run/argv.json"), "utf8")),
+      [UNIT],
+      "the test gate got exactly the mapped file"
+    );
     const stamp = JSON.parse(readFileSync(join(dir, OUT, "stamp.json"), "utf8"));
     assert.deepEqual(stamp.required, ["test"], "lint is discovered but no level needs it");
     const before = node(dir, LOCK, ["--check", "demo", "--require-red-run"]);
@@ -813,7 +817,7 @@ test("★ WIRING — /pharn-test's pinned mode, preflight, lock, red-run, verdic
     write: pinnedLine(/ac-tests-lock\.mjs --write <name>$/),
     check: pinnedLine(/ac-tests-lock\.mjs --check <name>$/),
     init: pinnedLine(/run-gates\.mjs init --stage ac-test/),
-    drain: pinnedLine(/run-gates\.mjs run --next --out \.pharn\/pharn-test\/gates/),
+    drain: pinnedLine(/run-gates\.mjs run --next --out pharn\/\.run\/pharn-test\/gates/),
     verdict: pinnedLine(/check-red-run\.mjs --verdict/),
     record: pinnedLine(/ac-tests-lock\.mjs --record-red-run/),
     requireRed: pinnedLine(/ac-tests-lock\.mjs --check <name> --require-red-run$/),
@@ -855,7 +859,7 @@ test("★ WIRING 6.36.0 — /pharn-test's pinned lines run GREEN over a project 
     write: pinnedLine(/ac-tests-lock\.mjs --write <name>$/),
     check: pinnedLine(/ac-tests-lock\.mjs --check <name>$/),
     init: pinnedLine(/run-gates\.mjs init --stage ac-test/),
-    drain: pinnedLine(/run-gates\.mjs run --next --out \.pharn\/pharn-test\/gates/),
+    drain: pinnedLine(/run-gates\.mjs run --next --out pharn\/\.run\/pharn-test\/gates/),
     verdict: pinnedLine(/check-red-run\.mjs --verdict/),
     record: pinnedLine(/ac-tests-lock\.mjs --record-red-run/),
     requireRed: pinnedLine(/ac-tests-lock\.mjs --check <name> --require-red-run$/),
@@ -1070,7 +1074,7 @@ test("bindStamp refuses a red run fingerprinted with a previous ALGO even when i
     assert.deepEqual(bindStamp({ stamp: at(ALGO), rows, feature: "demo", root: s.root }), { ok: true }, "control: the live ALGO binds");
     const old = bindStamp({ stamp: at("worktree-fingerprint/1+sha256"), rows, feature: "demo", root: s.root });
     assert.equal(old.ok, false);
-    assert.match(old.reason, /fingerprinted with worktree-fingerprint\/1\+sha256, the live tree with worktree-fingerprint\/2\+sha256/);
+    assert.match(old.reason, /fingerprinted with worktree-fingerprint\/1\+sha256, the live tree with worktree-fingerprint\/3\+sha256/);
     assert.doesNotMatch(old.reason, /tree changed/, "the digests are equal — the tree did not change");
   } finally {
     s.done();

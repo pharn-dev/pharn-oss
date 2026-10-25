@@ -150,7 +150,7 @@ const TEMPLATE_KEY_LINE_RE = /^spec_template:/m;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = new Map([
   ["pharn-default", { rel: join("..", "pharn-contracts", "templates", "spec-template.md"), shipped: true }],
-  ["project", { rel: join("..", "..", "pharn.spec-template.md"), shipped: false }],
+  ["project", { rel: join("..", "..", "pharn", "spec-template.md"), shipped: false }],
 ]);
 
 /** The id of the project's own template (a static registry member, whether or not its file exists). */
@@ -174,7 +174,7 @@ export function projectRoot() {
 /**
  * The comparison key for a file NAME: NFC, then full case folding (toUpperCase().toLowerCase(), not a bare
  * toLowerCase(), which is only simple case mapping). The same fold protect-trusted-paths.cjs's toKey applies, minus
- * its Windows trailing dot/space strip (on POSIX `pharn.spec-template.md.` is a different file, never read).
+ * its Windows trailing dot/space strip (on POSIX `pharn/spec-template.md.` is a different file, never read).
  */
 export function foldName(name) {
   return String(name).normalize("NFC").toUpperCase().toLowerCase();

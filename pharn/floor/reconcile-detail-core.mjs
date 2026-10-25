@@ -29,8 +29,8 @@
 // ADVISORY presentation. No verdict reads the block: `check-verify.mjs` decides from the exit code alone, and
 // `check-loop.mjs` from `failing_gates`. Reading a gate's stdout here does not change the runner's rule that no VERDICT
 // reads gate content. The digest binding says the bytes are the ones the runner recorded for that run — not that the
-// checker told the truth, and not that the log was not rewritten together with the stamp (both live under `.pharn/`,
-// which Bash reaches: the LIMITS.md §6 class). RECONCILE_VERDICTS is a second copy of the checker's verdict enum
+// checker told the truth, and not that the log was not rewritten together with the stamp (both live under `pharn/.run/`,
+// which Bash reaches: the pharn/LIMITS.md §6 class). RECONCILE_VERDICTS is a second copy of the checker's verdict enum
 // (contract §2); drift fails LOUD, not silent — a verdict added upstream classifies the log `not-checker-json`.
 //
 // ONE COPY (L35): the closed escape-`reason` enum lives HERE; `check-bash-reconcile.mjs` imports it back.

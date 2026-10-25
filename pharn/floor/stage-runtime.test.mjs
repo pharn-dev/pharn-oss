@@ -164,9 +164,9 @@ test("atomicWrite: the artifact lands, and no tmp file is left beside it or unde
   const cwd = process.cwd();
   try {
     process.chdir(root);
-    atomicWrite(".pharn/x", "pharn/features/demo/VERIFY.md", "hello\n");
+    atomicWrite("pharn/.run/x", "pharn/features/demo/VERIFY.md", "hello\n");
     assert.equal(readFileSync(join(root, "pharn/features/demo/VERIFY.md"), "utf8"), "hello\n");
-    assert.deepEqual(execFileSync("ls", ["-A", join(root, ".pharn/x")], { encoding: "utf8" }), "");
+    assert.deepEqual(execFileSync("ls", ["-A", join(root, "pharn/.run/x")], { encoding: "utf8" }), "");
     assert.deepEqual(execFileSync("ls", ["-A", join(root, "pharn/features/demo")], { encoding: "utf8" }).trim(), "VERIFY.md");
   } finally {
     process.chdir(cwd);
@@ -217,7 +217,7 @@ function runnerRepo() {
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   writeFileSync(join(dir, "a.txt"), "a\n");
   git("add", "-A");
   git("commit", "-q", "-m", "init");
@@ -249,12 +249,12 @@ function initGates(dir, out) {
 test("★ drainGates — {kind: budget} starts nothing when the budget forbids the first call it is asked about", () => {
   const dir = runnerRepo();
   try {
-    initGates(dir, ".pharn/g");
+    initGates(dir, "pharn/.run/g");
     const res = inDir(dir, () =>
-      drainGates({ outDir: ".pharn/g", timeoutMs: 30000, budget: { may: () => false, spent: () => assert.fail("nothing ran") } })
+      drainGates({ outDir: "pharn/.run/g", timeoutMs: 30000, budget: { may: () => false, spent: () => assert.fail("nothing ran") } })
     );
     assert.deepEqual(res, { kind: "budget" });
-    assert.equal(JSON.parse(readFileSync(join(dir, ".pharn/g/state.json"), "utf8")).runs.length, 0);
+    assert.equal(JSON.parse(readFileSync(join(dir, "pharn/.run/g/state.json"), "utf8")).runs.length, 0);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -263,17 +263,17 @@ test("★ drainGates — {kind: budget} starts nothing when the budget forbids t
 test("★ drainGates — {kind: done} after every entry ran (each counted once), and an idempotent repeat is done too", () => {
   const dir = runnerRepo();
   try {
-    initGates(dir, ".pharn/g");
+    initGates(dir, "pharn/.run/g");
     let spent = 0;
     const budget = { may: () => true, spent: () => spent++ };
     assert.deepEqual(
-      inDir(dir, () => drainGates({ outDir: ".pharn/g", timeoutMs: 30000, budget })),
+      inDir(dir, () => drainGates({ outDir: "pharn/.run/g", timeoutMs: 30000, budget })),
       { kind: "done" }
     );
     assert.equal(spent, 4, "a, b and the two injected entries (instruction-growth, reconcile) — each a slow step");
-    assert.ok(existsSync(join(dir, ".pharn/g/stamp.json")));
+    assert.ok(existsSync(join(dir, "pharn/.run/g/stamp.json")));
     assert.deepEqual(
-      inDir(dir, () => drainGates({ outDir: ".pharn/g", timeoutMs: 30000, budget })),
+      inDir(dir, () => drainGates({ outDir: "pharn/.run/g", timeoutMs: 30000, budget })),
       { kind: "done" },
       "exit 3 is an idempotent repeat"
     );
@@ -285,7 +285,7 @@ test("★ drainGates — {kind: done} after every entry ran (each counted once),
 test("★ drainGates — {kind: refused} carries the runner's parsed refusal for the CALLER to word", () => {
   const dir = runnerRepo();
   try {
-    const res = inDir(dir, () => drainGates({ outDir: ".pharn/none", timeoutMs: 30000, budget: { may: () => true, spent: () => {} } }));
+    const res = inDir(dir, () => drainGates({ outDir: "pharn/.run/none", timeoutMs: 30000, budget: { may: () => true, spent: () => {} } }));
     assert.equal(res.kind, "refused");
     assert.equal(res.status, 2);
     assert.equal(res.parsed.reason_code, "stamp-missing");

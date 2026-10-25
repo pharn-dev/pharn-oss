@@ -1493,7 +1493,7 @@ test("partition: dropping each of the nine sections from the filled template RED
 // Re-pointed in spec-template-override: /pharn-spec now resolves the template (project's own, else the default)
 // and then asks for the path to fill, so the two pinned lines are --resolve-template-ref and --template-path <id>.
 // The expected id is pharn-default when this repo has no project template; a contributor who drops a local
-// pharn.spec-template.md at the root gets any registry id instead of a confusing RED.
+// pharn/spec-template.md at the root gets any registry id instead of a confusing RED.
 
 const PINNED_RESOLVE_LINE = /^\s*node pharn\/floor\/check-spec\.mjs --resolve-template-ref\s*$/;
 const PINNED_PATH_LINE = /^\s*node pharn\/floor\/check-spec\.mjs --template-path <id>\s*$/;
@@ -1508,7 +1508,7 @@ test("★ WIRING — /pharn-spec pins exactly one --resolve-template-ref line an
   assert.equal(ok.status, 0, ok.stderr);
   const m = ok.stdout.match(/^([a-z0-9-]+)@sha256:[0-9a-f]{64}\n$/);
   assert.ok(m, ok.stdout);
-  const localProject = readdirSync(REPO).includes("pharn.spec-template.md");
+  const localProject = readdirSync(REPO).includes("pharn/spec-template.md");
   if (localProject) assert.ok(knownTemplateIds().includes(m[1]), m[1]);
   else assert.equal(m[1], "pharn-default");
   const where = spawnSync("sh", ["-c", path[0].trim().replace("<id>", m[1])], { cwd: REPO, encoding: "utf8" });
@@ -1525,7 +1525,7 @@ test("★ WIRING — /pharn-spec pins exactly one --resolve-template-ref line an
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════════
-// The PROJECT template (spec-template-override): pharn.spec-template.md at the project root, resolved before the
+// The PROJECT template (spec-template-override): pharn/spec-template.md at the project root, resolved before the
 // shipped default, validated before either can be pinned, and protected by the pre-write hook.
 //
 // What these tests are, stated before they are trusted (P0):
@@ -1543,7 +1543,7 @@ const DEFAULT_TEXT = readFileSync(TEMPLATE, "utf8");
 // check-spec.mjs's base section set, for the direct validator calls. check-spec.mjs runs its CLI at import, so it
 // cannot be imported; this one copy is pinned to its REQUIRED_SECTIONS literal by the test below (L35).
 const BASE_REQUIRED = ["intent", "scope", "acceptance criteria", "constraints"];
-const PROJECT_FILE = "pharn.spec-template.md";
+const PROJECT_FILE = "pharn/spec-template.md";
 const HOOK = join(REPO, ".claude", "hooks", "protect-trusted-paths.cjs");
 
 // A scratch install: the checker and its two cores under <root>/pharn/floor/, the shipped default (unless
@@ -1680,14 +1680,17 @@ const TEMPLATE_REFUSAL_CASES = [
     setup: (root) => mkdirSync(join(root, PROJECT_FILE)),
   },
   {
-    name: "a case variant PHARN.SPEC-TEMPLATE.MD sits at the root (same verdict on every filesystem)",
+    name: "a case variant pharn/SPEC-TEMPLATE.MD sits where the template belongs (same verdict on every filesystem)",
     code: "name-case",
-    setup: (root) => writeFileSync(join(root, "PHARN.SPEC-TEMPLATE.MD"), DEFAULT_TEXT),
+    setup: (root) => {
+      mkdirSync(join(root, "pharn"), { recursive: true });
+      writeFileSync(join(root, "pharn", "SPEC-TEMPLATE.MD"), DEFAULT_TEXT);
+    },
   },
   {
     name: "a registry mutant points outside the project root (containment runs before any filesystem call)",
     code: "outside-root",
-    coreEdit: ['join("..", "..", "pharn.spec-template.md")', 'join("..", "..", "..", "pharn.spec-template.md")'],
+    coreEdit: ['join("..", "..", "pharn", "spec-template.md")', 'join("..", "..", "..", "pharn", "spec-template.md")'],
   },
   {
     name: "the checker is reached through a symlinked pharn/ (a valid project template is NOT silently skipped — F1)",
@@ -1732,7 +1735,7 @@ test("project template control: a valid project template (the default, copied) r
     assert.equal(r.stdout, `project@sha256:${sha(own)}\n`);
     const p = run("--template-path", "project");
     assert.equal(p.status, 0, p.stderr);
-    assert.equal(p.stdout, "pharn.spec-template.md\n");
+    assert.equal(p.stdout, "pharn/spec-template.md\n");
     // --template-ref's contract is unchanged with a project template present: the named id is what it prints.
     const d = run("--template-ref", "pharn-default");
     assert.equal(d.stdout.trim(), REF);

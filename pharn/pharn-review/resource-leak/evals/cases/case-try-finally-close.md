@@ -5,7 +5,7 @@ purpose: "Eval fixture (RESOURCE-LEAK, true-negative): CODE that opens a write s
 
 # Eval case — try-finally-close (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects a cleanup call on the binding and reports it CLEAN.
 
 ```js

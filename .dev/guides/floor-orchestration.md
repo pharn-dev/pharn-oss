@@ -56,7 +56,7 @@ node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --
 #   tree-moved-since-verify) · G regress head final == verify init (RERUN regress) · I (--front) the three
 #   front checkers exit 0, GRILL.md exists and check-test-stage exits 0 (6.19.0) (STOP front-stage-red; since
 #   6.20.0 a check-test-stage RED is STOP ac-evidence-invalid, which /pharn-loop maps to S13).
-# THE BUDGET IS A COUNTER, NOT PROSE: .pharn/pharn-loop/<name>/freshness.jsonl, one row per authorized re-run,
+# THE BUDGET IS A COUNTER, NOT PROSE: pharn/.run/pharn-loop/<name>/freshness.jsonl, one row per authorized re-run,
 # --max-reruns (default 1) per (iter, stage), then STOP rerun-budget-exhausted; --commit-gate never re-runs and
 # never writes a row (a RERUN-class cause becomes STOP with its own code). The ledger path is lstat-checked
 # for symlinks INCLUDING a dangling one (existsSync follows a link, so a dangling one read as absent and the
@@ -68,7 +68,7 @@ node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --
 # changed nothing reuses old evidence — a test PINS it; closing it needs transcript binding, a PENDING
 # follow-up); AGREEMENT, NEVER PROVENANCE (a self-consistent fabricated stamp/log/report set over the live
 # tree passes — every fixture in the suite IS one, L43); it runs from the worktree and cannot vouch for
-# itself; the ledger is unauthenticated `.pharn/` state Bash reaches (LIMITS.md §6); GRILL.md presence is
+# itself; the ledger is unauthenticated `pharn/.run/` state Bash reaches (pharn/LIMITS.md §6); GRILL.md presence is
 # membership only; markers are not consulted. A gate whose DETACHED descendant keeps writing its log after
 # exit trips J — named, not a mystery. Mutating gates do NOT trip F: F compares verify's FINAL fingerprint.
 # Exit: 0 FRESH · 1 RERUN `stage_to_rerun` · 2 INCONCLUSIVE (unusable input, fail-closed) · 4 STOP. Since 6.21.1
@@ -86,7 +86,7 @@ node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <
 # The /pharn-loop STOP GUARD (added 6.11.0) — a turn end during an open unattended run requires a record.
 # THE GAP (P7): after #230 (gate map is tested code) and #242 (a stale stage is re-run), nothing stopped the
 # model from ENDING THE TURN anyway — the §6.3.0 incident was a run that finished early with a summary naming
-# the gates it skipped. `.claude/hooks/require-loop-record.cjs` is a Stop hook: while `.pharn/pharn-loop/<name>/
+# the gates it skipped. `.claude/hooks/require-loop-record.cjs` is a Stop hook: while `pharn/.run/pharn-loop/<name>/
 # active.json` (written by `--open` at /pharn-loop Step 1a, removed by `--close` in its Final step — ONE file owns
 # the schema, L35) names THIS session, the run has a feature directory, and `pharn/features/<name>/LOOP.md` is
 # absent or empty, it refuses the turn end — K = 3 per (session, run) in TOTAL (PHARN_STOP_GUARD_MAX 1..7, kept
@@ -100,7 +100,7 @@ node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <
 # any non-zero exit is non-blocking by the platform's own rules. The refusal renders as a "Stop hook error"
 # (cosmetic, anthropics/claude-code#34600; `additionalContext` is the documented non-error alternative).
 # WHAT IT CANNOT DO (verbatim from its header): make a model do work; judge a record; tell a real record from
-# a fabricated one (`touch LOOP.md` satisfies it); act when Claude Code does not start it (LIMITS.md §7);
+# a fabricated one (`touch LOOP.md` satisfies it); act when Claude Code does not start it (pharn/LIMITS.md §7);
 # reach an existing install except by hand (`pharn update` never edits settings.json). As of 6.12.0 the
 # shipped `.claude/settings.json` WIRES it (matcher-less, exec form, timeout 10); hook-wiring.test.cjs
 # binds the committed file to that entry. SESSION BINDING IS OBSERVED, NOT PROBED: CLAUDE_CODE_SESSION_ID
@@ -108,7 +108,7 @@ node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <
 # payload's id ever differs, the guard is INERT (fail-open, silently useless), and follow-up
 # `stop-guard-live-probe` checks it once wired. Inert-path cost: ~0.03 ms in-process; a spawn is node's
 # own startup (~70 ms). Exits for a person: `--close <name>`, interrupt, or unwire — a model reaches the
-# first and third through Bash too (LIMITS.md §6).
+# first and third through Bash too (pharn/LIMITS.md §6).
 node .claude/hooks/require-loop-record.cjs --open <name> --cap <M>   # /pharn-loop Step 1a
 node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loop Final step
 ```
@@ -144,7 +144,7 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # the SPEC's kind selects, read in any state (Step 6a's Draft revert never touches the kind line) — else RED
 # MODE_MISMATCH: a run invoked without --quick over a quick SPEC ends there, uncommitted. Agreement between files,
 # never provenance (L43); a quick line cites verify-report.json alone.
-# Since 6.65.0 (audit LOOP-2) it also reads the cap the run OPENED with — `.pharn/pharn-loop/<name>/active.json`, the
+# Since 6.65.0 (audit LOOP-2) it also reads the cap the run OPENED with — `pharn/.run/pharn-loop/<name>/active.json`, the
 # Stop guard's marker, located from the record's own pharn/features/<name>/ path, opened once with
 # O_RDONLY|O_NOFOLLOW|O_NONBLOCK and type-checked (fstat, a regular file) and read through that one descriptor, so a
 # symlink is never followed and the file cannot be swapped between check and read — and REDs CAP_MISMATCH
@@ -260,7 +260,7 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # `run 2`, never merged; anything else is unmeasured with a closed reason and `elapsed_ms: null` (never 0, never a
 # guessed end). OBSERVED WALL CLOCK between two processes' toISOString() reads — not CPU/model/tool time, not
 # monotonic, never decomposed. mark-phase.mjs and its printed binding line are UNCHANGED. `work[]` is FACTS: at `done`
-# stage-regress.mjs / stage-verify.mjs append one `pharn-stage-work/1` line to `.pharn/cost/<feature>/work.jsonl`
+# stage-regress.mjs / stage-verify.mjs append one `pharn-stage-work/1` line to `pharn/.run/cost/<feature>/work.jsonl`
 # (pharn/floor/stage-work.mjs, the one owner), counted from the stamp the verdict used — executed / reused / no_files /
 # required, BASE `fresh|reused|entry` (6.49.0: `entry` = taken from this run's entry gates — executed 0, install null,
 # its work counted once, in the `entry` view), the install's exit and ms (the ONE new timer). Best-effort and OBSERVATIONAL (no
@@ -269,7 +269,7 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # cost-ledger.md "Stage executions and deterministic work".
 # ENTRY GATE OBSERVATIONS (6.48.0, entry-gates-ledger-row) — two more additive `/2` keys, no schema bump, no marker
 # change. `entry_events[]` FACTS: entry-gates.mjs appends one `pharn-entry-observation/1` line per boundary it already
-# has (start, runner/takeover segment begin+end, each --wait call, each --abort) to `.pharn/cost/<feature>/entry.jsonl`
+# has (start, runner/takeover segment begin+end, each --wait call, each --abort) to `pharn/.run/cost/<feature>/entry.jsonl`
 # (pharn/floor/entry-observations.mjs, the one owner; the append is stage-work.mjs appendJsonLine). `entry` VIEW: bound
 # to the run ONLY by the run-start {seq, ts} the start recorded; lifetime (wall clock, placement), segments (monotonic),
 # wait calls (monotonic), interval UNIONS never sums, overlap with measured `executions` rows (placement, not a saving);
@@ -319,7 +319,7 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # earlier run's green reports left on disk no longer count, and a /pharn-ship ledger never copies a
 # LOOP.md (source chosen by --command). Residual, pinned by a test: a stage that starts then refuses leaves
 # the old report, which is accepted. The stage token is re-tested at READ time, never trusted from
-# the writer, because markers.jsonl is ordinary .pharn/ state a Bash write reaches (LIMITS.md §6).
+# the writer, because markers.jsonl is ordinary pharn/.run/ state a Bash write reaches (pharn/LIMITS.md §6).
 # A SKIPPED OR WRONG MODE MARKER NEVER YIELDS gate2: a quick run-start written without --mode quick reads as
 # full and has no regress stage-start (stop:pharn-verify); a skipped quick run-start joins the previous
 # run's window, which reads `undetermined` when its stage markers follow that run's run-stop or repeat one
@@ -398,7 +398,7 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # 6.9.2: two more ledger states are rendered HONESTLY. (1) coverage `unavailable` under a KNOWN window →
 # "Run usage: UNAVAILABLE — not measured, and NOT a zero" + the coverage_note quoted, never a measured
 # empty window. (2) a STALE ledger — the live markers' latest run-start (seq AND ts; identity, so a reset
-# .pharn/ cannot fool it) is not the one cost.json recorded — means a later run's emission failed; the
+# pharn/.run/ cannot fool it) is not the one cost.json recorded — means a later run's emission failed; the
 # report renders STALE LEDGER and never shows that file's outcome/tokens/base as this run's. With no live
 # markers file it says "currency not checked". check-cost-ledger stays GREEN on a stale file (consistency only).
 node pharn/floor/render-run-report.mjs <name> [--base <dir>] [--repo <dir>] [--markers-base <dir>] [--stdout]
@@ -451,7 +451,7 @@ node pharn/floor/check-ship-briefing.mjs <BRIEFING.md>
 # WITH its `RED — ` line, so a crashed or missing checker (node's own exit 1) is `resolve-failed`, never
 # `config-red` (GATE-2 review A4); `inherit` and a claude-* id route INLINE, each with its own reason (L32/L39). `brief`
 # prints the stage agent's rules, rendered by code: the orchestrator's Agent prompt is ONE pinned line, so no model
-# transcribes them (L5). `report` writes the closed pharn-stage-agent-result/1 to .pharn/<command>/<name>/
+# transcribes them (L5). `report` writes the closed pharn-stage-agent-result/1 to pharn/.run/<command>/<name>/
 # stage-result.json — a Bash write outside fix #7 (L19), contained by a per-component lstat walk that refuses a
 # symlink or a non-directory (L54/L59); `read` validates it BOTH ways, REMOVES it and exits with the stage-exit
 # numbers, and names a refused result on stderr by ONE fixed code (READ_DEFECTS), never by a byte the file carries
@@ -489,7 +489,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # no-result + `wait-capped`; no usable anchor → no-result + `wait-unanchored`. /pharn-loop pins `--budget-ms 570000` on
 # its four finish lines (Bash timeout 600000), runs them after EVERY Agent call, omits run_in_background, and TaskStops
 # a leftover background agent before S9 (ADVISORY). /pharn-ship pins no budget: unchanged. The anchor is unauthenticated
-# .pharn/ state — a marker rewritten before each call lengthens the wait (named residual). Exit: start = route's 0/3 (2
+# pharn/.run/ state — a marker rewritten before each call lengthens the wait (named residual). Exit: start = route's 0/3 (2
 # refused, nothing written); finish = read's 0/2/3/4, plus 5 with --budget-ms. An inline-run stage closes with
 # `mark-phase.mjs --kind orchestrator` (the inline return line).
 node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool] [--no-foreground-agent]
@@ -508,11 +508,11 @@ node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <s
 # failure modes: pharn/floor/stage-direct.mjs's header (no new contract). The thin callers stay, unchanged, for a person.
 # Wiring: .dev/floor/command-hygiene.test.mjs DIRECT_STAGE_WIRING (the copy-pair's obligation set, closure, EXECUTED).
 # A Bash call that reaches the tool's timeout is MOVED TO THE BACKGROUND, not killed (GATE-2 review R1), so the call
-# first takes an IN-FLIGHT LOCK, .pharn/stage-direct/in-flight.json (O_EXCL; pid + start time; stale only when that pid
+# first takes an IN-FLIGHT LOCK, pharn/.run/stage-direct/in-flight.json (O_EXCL; pid + start time; stale only when that pid
 # is dead; released only while it holds the call's own record): a second call refuses `in-flight`, and the orchestrators
 # wait for a backgrounded call instead of resuming it. One lock for both stages, beside their roots (each script's fresh
 # start deletes its own root; the two share one scope file). BOUNDS: its own writes (scope file, markers, lock) are
-# Bash writes under .pharn/ (L19); the lock sees only stage-direct calls, and a reused pid reads as alive (refuses); no
+# Bash writes under pharn/.run/ (L19); the lock sees only stage-direct calls, and a reused pid reads as alive (refuses); no
 # stage scope between two calls around a `continue`; its node start-up and setter spawns are outside the script's
 # budget clock. Ships: bumps SKILLS_VERSION. Exit: the script's 0/2/3/4/5; 2 also for its own refusal (bad argv, a scope
 # it could not set, `in-flight` / `lock-unusable`); 1 crash.

@@ -122,7 +122,7 @@
 //   THE BOUND, stated here and printed on stdout (lessons-learned L43): a stamp certifies INTERNAL
 //   CONSISTENCY, never provenance. A self-consistent FABRICATED stamp passes, and a test builds one to
 //   prove it. The stamp and its logs live in the writable tree, which `Bash` reaches unhooked
-//   (LIMITS.md §6). No child process is spawned here — the stamp grammar is imported from
+//   (pharn/LIMITS.md §6). No child process is spawned here — the stamp grammar is imported from
 //   gate-run-core.mjs, so this file's "no child process" property above is unchanged.
 //
 // Usage:

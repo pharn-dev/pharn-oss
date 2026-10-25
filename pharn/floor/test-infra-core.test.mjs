@@ -421,7 +421,7 @@ test("6.31.0 THE TOKEN PASS — scriptPathCandidates: every clause of the closed
   is("run a\u007fb.js", [], "DEL");
   is("run node_modules/x/cli.js", [], "a dependency (node_modules first)");
   is("run lib/node_modules/x.js", ["lib/node_modules/x.js"], "node_modules deeper is not a dependency root");
-  is("run .pharn/x.mjs", [], "runtime scratch (.pharn first)");
+  is("run pharn/.run/x.mjs", [], "runtime scratch (pharn/.run first)");
   is(`run ${"a/".repeat(600)}x.js`, [], "over the length bound");
   // outputs are never pinned: the token after an OUTPUT redirect, after -o, after or inside an --out… flag
   for (const op of [">", ">>", "2>", "2>>", "&>", "&>>", ">|"]) {

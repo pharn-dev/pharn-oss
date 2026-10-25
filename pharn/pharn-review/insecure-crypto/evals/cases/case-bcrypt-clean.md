@@ -5,7 +5,7 @@ purpose: "Eval fixture (CLEAN): CODE hashes a user password with bcrypt — a st
 
 # Eval case — bcrypt-clean (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. No known-weak crypto primitive is named, so the scanner reports no hit.
 
 ```js

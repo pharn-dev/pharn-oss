@@ -5,7 +5,7 @@ purpose: "Eval fixture (SECRET LITERAL): CODE that hardcodes an AWS-access-key-s
 
 # Eval case — hardcoded-key (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The deterministic scanner detects the secret-shaped literal from the text.
 
 ```js

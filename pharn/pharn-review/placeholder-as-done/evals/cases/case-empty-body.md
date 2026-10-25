@@ -5,7 +5,7 @@ purpose: "Eval fixture (placeholder-as-done): an exported function with an empty
 
 # Eval case — empty-body (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. The scanner detects the empty function body by masking then brace-matching.
 
 ```js

@@ -68,12 +68,12 @@ allowed-tools:
     "Bash(git rev-parse HEAD)",
     "Bash(git symbolic-ref --short -q HEAD)",
     "Bash(echo detached)",
-    "Bash(mkdir -p .pharn/pharn-loop/*)",
-    "Bash(git status --porcelain -uall > .pharn/pharn-loop/*/pre-run-status.txt)",
+    "Bash(mkdir -p pharn/.run/pharn-loop/*)",
+    "Bash(git status --porcelain -uall > pharn/.run/pharn-loop/*/pre-run-status.txt)",
     "Bash(node .claude/hooks/require-loop-record.cjs --open * --cap *)",
     "Bash(node pharn/floor/pre-run-snapshot.mjs --capture *)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind run-start)",
-    "Bash(node pharn/floor/check-instruction-files.mjs --report > .pharn/pharn-loop/*/instruction-files.json)",
+    "Bash(node pharn/floor/check-instruction-files.mjs --report > pharn/.run/pharn-loop/*/instruction-files.json)",
     "Bash(node pharn/floor/entry-gates.mjs --start --feature * --timeout-ms 540000)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage * --route 'inline:route-unavailable')",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind orchestrator)",
@@ -109,7 +109,7 @@ allowed-tools:
     "Bash(echo unknown)",
     "Bash(node pharn/floor/loop-closeout.mjs --feature * --base *)",
     "Bash(git status --short --branch)",
-    "Bash(cat .pharn/pharn-loop/*/closeout-phase 2>/dev/null)",
+    "Bash(cat pharn/.run/pharn-loop/*/closeout-phase 2>/dev/null)",
     'Bash(echo "no git step reached")',
     "Bash(node pharn/floor/check-loop-record.mjs pharn/features/*/LOOP.md)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --clear)",
@@ -117,7 +117,7 @@ allowed-tools:
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-grill.md --target pharn/features/*/GRILL.md)",
     "Bash(node pharn/floor/grill-scan.mjs pharn/features/*/PLAN.md)",
     "Bash(node pharn/floor/check-plan-spec-agree.mjs pharn/features/*/PLAN.md pharn/features/*/SPEC.md)",
-    "Bash(node pharn/floor/check-plan-lessons.mjs pharn/features/*/PLAN.md memory-bank/lessons-learned.md)",
+    "Bash(node pharn/floor/check-plan-lessons.mjs pharn/features/*/PLAN.md pharn/memory-bank/lessons-learned.md)",
     "Bash(node pharn/floor/catalogue-installed-skills.mjs .)",
     "Bash(node pharn/floor/griller-extract.mjs .)",
     "Bash(node pharn/floor/feature-name.mjs)",
@@ -135,10 +135,10 @@ allowed-tools:
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-test.md --target pharn/features/*/AC-TESTS.lock.json)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --write *)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --check *)",
-    "Bash(node pharn/floor/run-gates.mjs init --stage ac-test --feature * --out .pharn/pharn-test/gates --discover package.json --ac-tests pharn/features/*/AC-TESTS.md)",
-    "Bash(node pharn/floor/run-gates.mjs run --next --out .pharn/pharn-test/gates --timeout-ms 540000)",
-    "Bash(node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/*/AC-TESTS.md --out .pharn/pharn-test/gates --root .)",
-    "Bash(node pharn/floor/ac-tests-lock.mjs --record-red-run * --out .pharn/pharn-test/gates)",
+    "Bash(node pharn/floor/run-gates.mjs init --stage ac-test --feature * --out pharn/.run/pharn-test/gates --discover package.json --ac-tests pharn/features/*/AC-TESTS.md)",
+    "Bash(node pharn/floor/run-gates.mjs run --next --out pharn/.run/pharn-test/gates --timeout-ms 540000)",
+    "Bash(node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/*/AC-TESTS.md --out pharn/.run/pharn-test/gates --root .)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --record-red-run * --out pharn/.run/pharn-test/gates)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --check * --require-red-run)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --write-bootstrap *)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --check * --require-red-run --allow-bootstrap)",
@@ -146,7 +146,7 @@ allowed-tools:
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/*/PLAN.md)",
     "Bash(node pharn/floor/reconcile-baseline.mjs --anchor --by pharn-build)",
     "Bash(node pharn/floor/seam-config-materialize.mjs)",
-    "Bash(node pharn/floor/check-seam-config.mjs .pharn/seam-config.json)",
+    "Bash(node pharn/floor/check-seam-config.mjs pharn/.run/seam-config.json)",
     "Bash(node pharn/floor/apply-plan-deletions.mjs --feature *)",
     "Bash(node pharn/floor/build-gate.mjs --feature * --mode targeted --timeout-ms 540000 --budget-ms 570000)",
     "Bash(node pharn/floor/build-gate.mjs --feature * --mode full --timeout-ms 540000 --budget-ms 570000)",
@@ -217,7 +217,7 @@ node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md '<heading>'
   allow rules). **What the grant widens:** a `*` matches any text, so a pinned script runs with whatever arguments
   the run gives it (the inline build's `reconcile-baseline.mjs --anchor` included), and a shell redirection on a
   granted line writes that script's output wherever Claude Code's Edit rules allow — outside both PHARN write
-  guards, as every Bash write is (`LIMITS.md §6`). And the pinned gate lines run your project's own tests, which
+  guards, as every Bash write is (`pharn/LIMITS.md §6`). And the pinned gate lines run your project's own tests, which
   execute code the build wrote, with no prompt: run an unattended loop only where that is acceptable (a sandbox, a
   container, a throwaway checkout). The compaction re-read's `*` leaves only the heading free: its file is fixed to
   this command, and `command-section.mjs` reads nothing but a regular `pharn-*.md` directly in `.claude/commands`
@@ -257,7 +257,7 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
 
 1. **S1 — the slug.** Choose one short kebab-case slug for the intent. **Neither the description nor the slug is
    typed into a shell command before code has checked it.** Write the slug alone to
-   `.pharn/feature-name/candidate.txt` with the **Write tool** — never through the shell — then run:
+   `pharn/.run/feature-name/candidate.txt` with the **Write tool** — never through the shell — then run:
 
    ```bash
    node pharn/floor/feature-name.mjs --fresh
@@ -288,13 +288,13 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
 4. **Snapshot the dirty tree** (`-uall` lists an untracked directory as its files):
 
    ```bash
-   mkdir -p .pharn/pharn-loop/<name> && git status --porcelain -uall > .pharn/pharn-loop/<name>/pre-run-status.txt
+   mkdir -p pharn/.run/pharn-loop/<name> && git status --porcelain -uall > pharn/.run/pharn-loop/<name>/pre-run-status.txt
    ```
 
    **Non-zero → STOP**, stuck point **S9** (`blocked: stage-refused`). The run's own state directory
-   `.pharn/pharn-loop/<name>/` could not be made or written: something other than a directory stands at
-   `.pharn`, `.pharn/pharn-loop` or `.pharn/pharn-loop/<name>` (the Write tool can plant a file there, since
-   `.pharn/**` is writable in every posture), or `git status` failed. Do not run the next line, and do not
+   `pharn/.run/pharn-loop/<name>/` could not be made or written: something other than a directory stands at
+   `pharn/.run`, `pharn/.run/pharn-loop` or `pharn/.run/pharn-loop/<name>` (the Write tool can plant a file there, since
+   `pharn/.run/**` is writable in every posture), or `git status` failed. Do not run the next line, and do not
    remove what is there. `pharn/features/<name>/` does not exist yet, so no record is written (Step 2): go
    straight to the Step 7 summary and name the path, so a person can clear it.
 
@@ -308,7 +308,7 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    **Non-zero → STOP**, **S9** again (`blocked: stage-refused`), in the same way and for the same reason:
    any non-zero exit stops the run.
 
-   This writes `.pharn/pharn-loop/<name>/active.json`, which also holds an installed project's write guard on
+   This writes `pharn/.run/pharn-loop/<name>/active.json`, which also holds an installed project's write guard on
    its fail-closed default while fresh. While it is open, the `Stop` hook refuses to let this session's turn end
    until `pharn/features/<name>/LOOP.md` exists (`.claude/hooks/require-loop-record.cjs`, header). **A blocked
    stop is a valid record**, so the way to end a run that cannot continue is Step 6b's blocked record, never a
@@ -339,7 +339,7 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    Then record the always-loaded instruction set's size estimate, which `RUN-REPORT.md`'s `## Tokens` shows (6.65.0):
 
    ```bash
-   node pharn/floor/check-instruction-files.mjs --report > .pharn/pharn-loop/<name>/instruction-files.json
+   node pharn/floor/check-instruction-files.mjs --report > pharn/.run/pharn-loop/<name>/instruction-files.json
    ```
 
    Any exit → go on: it never stops the run, and an unusable file renders as `n/a` in a full run's report (a quick
@@ -534,7 +534,7 @@ S4, S5, S6, S6b, S6c, S7, S8, S9 and S10.
 
 **Bounds.** A stage agent's report is another model's output. Only `finish`'s exit code and its closed first line are
 floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the Agent tool
-returns the agent's final text into your context, which is `THREAT-MODEL.md §5`'s free-text residual (a model
+returns the agent's final text into your context, which is `pharn/THREAT-MODEL.md §5`'s free-text residual (a model
 consuming another model's free text) in a new place, bounded — no stop reads it — and not zeroed (P2). A
 compromised stage agent can lie in its report, which moves only this advisory
 mapping — the floor verdicts on disk still decide the stop, and Step 5's freshness check still re-derives them.

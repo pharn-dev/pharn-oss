@@ -23,7 +23,7 @@
 //   conflicting-declaration  — a path is marked in one item and unmarked in another
 //   delete-not-concrete      — a marked item is a glob or a placeholder
 //   bad-path                 — ac-tests-core.mjs `badPath` (absolute, not normalized, `..`, leading `-`), a path under
-//                              `.pharn/` or `pharn/features/` or with a `.git` segment (each in any letter case), or a
+//                              `pharn/.run/` or `pharn/features/` or with a `.git` segment (each in any letter case), or a
 //                              backslash
 //   control-path             — reconcile-ignore.json's always-reconciled set (the guards, the floors, the trusted docs,
 //                              CODEOWNERS, the SPEC template, canon), compared exactly AND case-folded — or the same
@@ -33,7 +33,7 @@
 //
 // THE ON-DISK SPELLING IS JUDGED TOO (6.56.0 review, blocking finding). `bad-path` and `control-path` run over the
 // declared spelling AND, once the leaf is a regular file, over `realpathSync.native`'s spelling of it: a case-insensitive
-// volume equates spellings no lexical fold reproduces — on APFS `LIMITſ.md` (U+017F) IS `LIMITS.md`, and the
+// volume equates spellings no lexical fold reproduces — on APFS `pharn/LIMITſ.md` (U+017F) IS `pharn/LIMITS.md`, and the
 // spelling-only test deleted it. BOUND: the identity is read on the volume as it stands when this runs; a platform whose
 // realpath does not return the stored spelling falls back to the declared-spelling test and the dev/ino comparison.
 // BOUND, check-then-act (TOCTOU): every path is validated first and unlinked after, and `unlinkSync` re-resolves the
@@ -95,7 +95,7 @@ class Refusal {
 }
 
 /** The always-reconciled set, compared exactly and case-folded (the guards case-fold; a case-insensitive volume would
- *  otherwise let `limits.md` name `LIMITS.md`). */
+ *  otherwise let `pharn/limits.md` name `pharn/LIMITS.md`). */
 function controlMatcher(data) {
   const lower = (xs) => xs.map((x) => x.toLowerCase());
   const folded = {
@@ -148,15 +148,15 @@ export function planDeletions(planText, root, data) {
   const isControl = controlMatcher(data);
   // The refusal rules over ONE spelling of a path. Run over the declared spelling first and, once the leaf is known to be
   // a regular file, over its ON-DISK spelling too (below) — a case-insensitive volume equates spellings no lexical fold
-  // reproduces (U+017F `ſ` names `s` on APFS), so a spelling test alone let `LIMITſ.md` delete LIMITS.md (6.56.0 review).
+  // reproduces (U+017F `ſ` names `s` on APFS), so a spelling test alone let `pharn/LIMITſ.md` delete pharn/LIMITS.md (the 6.56.0 review's case, at today's path).
   const spellingRefusal = (p, shown) => {
     const why = badPath(p);
     if (why) return new Refusal("bad-path", shown, `the path is ${why}`);
     if (p.includes("\\")) return new Refusal("bad-path", shown, "the path holds a backslash");
     const lower = p.toLowerCase();
     // badPath's two reserved prefixes, folded (badPath compares them as written).
-    if (lower === ".pharn" || lower.startsWith(".pharn/") || lower.startsWith("pharn/features/")) {
-      return new Refusal("bad-path", shown, "the path is under .pharn/ or pharn/features/ (any letter case)");
+    if (lower === "pharn/.run" || lower.startsWith("pharn/.run/") || lower.startsWith("pharn/features/")) {
+      return new Refusal("bad-path", shown, "the path is under pharn/.run/ or pharn/features/ (any letter case)");
     }
     if (p.split("/").some((seg) => seg.toLowerCase() === ".git")) return new Refusal("bad-path", shown, "the path is inside git metadata");
     if (isControl(p)) return new Refusal("control-path", shown, "a guard, floor, trusted or canon path — a human deletes it");

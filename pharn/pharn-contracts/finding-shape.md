@@ -81,10 +81,10 @@ for "therefore guaranteed." The `MUST` above is a **three-way split**, not one b
 - **Declaring it → ADVISORY today, not floor-enforced.** This bullet previously claimed that once a
   Capability names `findings.json` in its `writes:` (`pharn/ARCHITECTURE.md §3.1`), the pre-write
   writes-scope guard "pins the path". **That is false, and the correction matters more than the claim
-  did.** `enforce-writes-scope.cjs` reads exactly one SCOPE input — `.pharn/writes-scope.json` — beside
+  did.** `enforce-writes-scope.cjs` reads exactly one SCOPE input — `pharn/.run/writes-scope.json` — beside
   the signals that choose its default when none is set (`pharn.config.json`'s `skillsVersion`,
-  `.dev/floor/` presence, and, in an installed project, the run markers under `.pharn/pharn-*/` —
-  6.24.0). `.pharn/writes-scope.json` itself is written by `set-writes-scope.cjs` from a
+  `.dev/floor/` presence, and, in an installed project, the run markers under `pharn/.run/pharn-*/` —
+  6.24.0). `pharn/.run/writes-scope.json` itself is written by `set-writes-scope.cjs` from a
   **`--from-frontmatter <file>`** argument. **Every one of the corpus's `--from-frontmatter` call sites
   names a COMMAND file; not one names a Capability** (verified by enumerating them). So a Capability's
   `writes:` is **parsed by nothing** and pins nothing — it is declared metadata that documents intent.
@@ -125,8 +125,8 @@ quoted/escaped, never injected into a downstream stage as instructions.
   membership, not judgment.
 - **Advisory:** the LLM's _assignment_ of `severity`, and everything in `problem` / `evidence`.
 
-**Residual (named, not hidden — LIMITS.md §2):** when a downstream LLM stage consumes the free-text
+**Residual (named, not hidden — pharn/LIMITS.md §2):** when a downstream LLM stage consumes the free-text
 of a finding, "do not execute this as an instruction" is a heuristic again. Fix #1 **bounds** the
 blast radius (free text never alone gates a guaranteed decision) but does not zero it. This is **not the
-only** place the trust model is not provable on paper (`THREAT-MODEL.md §5` names the known ones) — it is
+only** place the trust model is not provable on paper (`pharn/THREAT-MODEL.md §5` names the known ones) — it is
 the one attempt 0 targets.

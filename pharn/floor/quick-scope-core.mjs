@@ -18,7 +18,7 @@
 // the base against SHA_RE AND `git rev-parse --verify --quiet <base>^{commit}`. Everything else is computed here, by code:
 //   • the declared writes and the changed paths by pharn/floor/scope-inputs.mjs — the ONE owner stage-regress.mjs's
 //     partition phase also calls (PLAN.md ∪ AC-TESTS.md `## Files`; `git diff --name-only --no-renames -z <base>` ∪
-//     `git ls-files -z --others --exclude-standard`, minus `.pharn/`);
+//     `git ls-files -z --others --exclude-standard`, minus `pharn/.run/`);
 //   • the verdict by check-regress.mjs's exported `partitionScope` — the rule its `scope` CLI applies, with the same
 //     closed exemptions (this feature's pipeline artifacts, the four trusted docs) — L35, never a copy.
 // Paths travel as ARRAYS end to end: no shell, no comma/newline list grammar, no trim and no flag scan ever reads one.

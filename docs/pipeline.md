@@ -83,7 +83,7 @@ shipping pipeline.
 ### Your own SPEC template
 
 `/pharn-spec` fills PHARN's default SPEC template unless your project has its own. To use your own, copy
-`pharn/pharn-contracts/templates/spec-template.md` to `pharn.spec-template.md` at the project root and edit it
+`pharn/pharn-contracts/templates/spec-template.md` to `pharn/spec-template.md` and edit it
 there: rename or reword sections, change the guidance comments, adjust the example. `/pharn-spec` then picks it
 up on its next run, and every SPEC it writes records `project@sha256:…` as its template.
 
@@ -96,7 +96,7 @@ arrives by pull request or `git pull`: review edits to this file like code.
 Before `/pharn-spec` fills a template it is checked. It needs the five required sections (Intent, Scope,
 Acceptance Criteria, Constraints, Assumptions) as visible headings, one example criterion in the `- **AC-<n>**
 Given … When … Then …` shape with one `verify:` line, the `**Out of scope…**` label under Scope, and a
-`spec_template:` line in its frontmatter. It must also be a regular file named exactly `pharn.spec-template.md`,
+`spec_template:` line in its frontmatter. It must also be a regular file named exactly `pharn/spec-template.md`,
 not a symlink, and PHARN's own `pharn/` must not be reached through a symlink. If your template fails, `/pharn-spec` stops and names the reason; it does not fall back to the
 default. Deleting the file later switches future SPECs back to the default, and it does not affect SPECs
 already approved.

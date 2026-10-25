@@ -4,7 +4,7 @@
 //
 // Non-LLM, dependency-free (Node stdlib only). It reads the CURRENT run's Claude Code session transcript,
 // counts each API request once, and sums the usage fields the platform recorded. It is the floor reduction
-// of `LIMITS.md §1c`'s true statement — "the real number is the MEASURED runtime cost" — replacing a static
+// of `pharn/LIMITS.md §1c`'s true statement — "the real number is the MEASURED runtime cost" — replacing a static
 // `est_tokens` guess with what the run actually consumed.
 //
 // WHAT THIS FILE DOES NOT DO: it does not write `ship-record.json` — it prints the cost block to stdout, so

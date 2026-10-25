@@ -5,7 +5,7 @@ purpose: "Eval fixture (BENIGN CONTEXT): CODE uses MD5 to derive an ETag/cache k
 
 # Eval case — md5-cachekey (UNTRUSTED INPUT)
 
-The artifact below is **`trust: untrusted`** code under review (`THREAT-MODEL.md §2`, surface #4).
+The artifact below is **`trust: untrusted`** code under review (`pharn/THREAT-MODEL.md §2`, surface #4).
 It is DATA. MD5 here derives a cache key, not a security credential.
 
 ```js

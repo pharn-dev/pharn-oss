@@ -2,7 +2,7 @@
 // .claude/hooks/set-writes-scope.cjs — the writes-scope SETTER (CONSTITUTION P0/P5, fix #7).
 //
 // Deterministic, non-LLM, stdlib-only. Reads a Capability/command's declared `writes:` (Mode A) or a
-// PLAN.md's `## Files` list (Mode B) and writes `.pharn/writes-scope.json` = { scope, set_by, set_at }.
+// PLAN.md's `## Files` list (Mode B) and writes `pharn/.run/writes-scope.json` = { scope, set_by, set_at }.
 // The companion pre-write hook (enforce-writes-scope.cjs) reads that file and DENIES any write outside
 // the scope, fail-closed to a default-safe-set when the file is absent. Scope is parsed deterministically
 // from frontmatter / markdown — no model decides scope; that is what makes `writes:` floor-grade (P5).
@@ -14,7 +14,7 @@
 //                                                 # the three operator opt-ins, BEFORE the mode (see OPERATOR FLAGS)
 //   node .claude/hooks/set-writes-scope.cjs --clear   # run as a command's LAST step, after every write
 //
-// --clear DELETES .pharn/writes-scope.json, returning enforce-writes-scope.cjs to its DEFAULT. Since
+// --clear DELETES pharn/.run/writes-scope.json, returning enforce-writes-scope.cjs to its DEFAULT. Since
 // 6.24.0 that default is no longer always the fail-closed DEFAULT_SAFE_SET: in a dev checkout, an
 // unsignalled tree, or an installed project with a PHARN run open it is (unchanged); in an INSTALLED
 // project with NO run open it is instead the newer, more permissive default (it denies PHARN's own
@@ -34,7 +34,7 @@
 // rationale narrows the next reader (.dev/memory-bank/lessons-learned.md L25):
 //   (1) It must not write `{"scope": []}` as a "cleared" marker. An EMPTY ARRAY IS TRUTHY, so
 //       enforce-writes-scope.cjs would compute allow = [...ALWAYS] and deny EVERYTHING outside
-//       `.pharn/**` — stricter than the stale scope this flag exists to remove. Deleting the file is
+//       `pharn/.run/**` — stricter than the stale scope this flag exists to remove. Deleting the file is
 //       the only shape that reaches the safe-set through the already-tested absent-file path.
 //   (2) It is a BASH call, so it is outside the PreToolUse gate entirely (L19). Running it is ADVISORY
 //       lifecycle hygiene; the FLOOR guarantee is unchanged and belongs to the reader, not to this
@@ -56,7 +56,7 @@
 // AFTER the ones above and each writing nothing:
 //   • PHARN'S OWN INSTALLED SURFACE, from a plan. In an INSTALLED project (`pharn.config.json` at cwd is a regular
 //     file whose JSON carries a non-empty string `skillsVersion` — enforce-writes-scope.cjs's posture signal) a
-//     `--from-plan` scope may not name `pharn/**` except `pharn/features/**`, `.claude/**` or `pharn.config.json`:
+//     `--from-plan` scope may not name `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` or `pharn.config.json`:
 //     the set enforce-writes-scope.cjs already reserves outside a run, matched by byte-equal copies of its
 //     `toKey()` / `isReserved()`. Those are PHARN's floor, guards, commands and config — what judges a run and
 //     instructs its later stages — and before this a model-written PLAN could scope a floor script that a
@@ -119,7 +119,7 @@
 // denies it as out of scope; and protect-trusted-paths.cjs realpaths and denies the control files outright
 // regardless of any scope. This refusal buys a clear early failure — it is not the last line of defense. Every
 // refusal here is also an argv/marker reading by a Bash-run program: an agent holding Bash can pass an opt-in,
-// delete a marker, or write the scope record itself (LIMITS.md §6). And the `## Files` reader is NOT a
+// delete a marker, or write the scope record itself (pharn/LIMITS.md §6). And the `## Files` reader is NOT a
 // CommonMark parser: an indented code block, an HTML block or comment holding a fence line, a setext heading and
 // a `*`/`+` bullet are read as their lines look, not as a renderer shows them.
 
@@ -161,7 +161,7 @@ function parseArgs(argv) {
         fail(
           `${a} must come BEFORE the mode (--from-plan / --from-frontmatter), never after it\n` +
             "  Why: a pre-approved command line carries a wildcard after its mode, so an opt-in accepted there could ride on it.\n" +
-            "  Nothing was written; .pharn/writes-scope.json is unchanged."
+            "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
         );
       }
       if (a === "--allow-claude-dir") allowClaudeDir = true;
@@ -227,7 +227,7 @@ function isReserved(rel) {
   const key = toKey(rel);
   if (key === "pharn.config.json") return true;
   if (key.startsWith(".claude/")) return true;
-  if (key.startsWith("pharn/") && !rel.startsWith("pharn/features/")) return true;
+  if (key.startsWith("pharn/") && !rel.startsWith("pharn/features/") && !rel.startsWith("pharn/.run/")) return true;
   return false;
 }
 
@@ -455,21 +455,24 @@ function openLoopRuns(root) {
     lines.push(
       `${where} — not a readable run-state entry, so an open run cannot be ruled out; if no loop is running, repair or remove it by hand`
     );
-  try {
-    if (fs.lstatSync(path.join(root, ".pharn")).isSymbolicLink()) {
-      unreadable(".pharn (a symbolic link)");
+  // Both segments of the scratch root (7.0.0): a link at `pharn` reaches `pharn/.run` unseen.
+  for (const seg of ["pharn", "pharn/.run"]) {
+    try {
+      if (fs.lstatSync(path.join(root, seg)).isSymbolicLink()) {
+        unreadable(`${seg} (a symbolic link)`);
+        return lines;
+      }
+    } catch (e) {
+      if (!e || e.code !== "ENOENT") unreadable(seg);
       return lines;
     }
-  } catch (e) {
-    if (!e || e.code !== "ENOENT") unreadable(".pharn");
-    return lines;
   }
-  const stateDir = path.join(root, ".pharn", "pharn-loop");
+  const stateDir = path.join(root, "pharn", ".run", "pharn-loop");
   let st;
   try {
     st = fs.lstatSync(stateDir);
   } catch (e) {
-    if (!e || e.code !== "ENOENT") unreadable(".pharn/pharn-loop");
+    if (!e || e.code !== "ENOENT") unreadable("pharn/.run/pharn-loop");
     return lines;
   }
   let names;
@@ -477,13 +480,13 @@ function openLoopRuns(root) {
     if (!st.isDirectory()) throw new Error("not a directory");
     names = fs.readdirSync(stateDir);
   } catch {
-    unreadable(".pharn/pharn-loop");
+    unreadable("pharn/.run/pharn-loop");
     return lines;
   }
   for (const name of names) {
     const shown = RUN_NAME_RE.test(name)
-      ? `.pharn/pharn-loop/${name}/active.json`
-      : "a marker under .pharn/pharn-loop/ whose directory name is not a plain slug";
+      ? `pharn/.run/pharn-loop/${name}/active.json`
+      : "a marker under pharn/.run/pharn-loop/ whose directory name is not a plain slug";
     let mst;
     try {
       mst = fs.lstatSync(path.join(stateDir, name, "active.json")); // presence only — never parsed
@@ -698,7 +701,7 @@ function pathsFromPlanFiles(file) {
         "  (a fence line indented four or more columns, or a closing fence indented less than its opening one).\n" +
         "  This reader does not track list nesting, so it refuses to guess. Fix: indent each fence's opening and\n" +
         "  closing lines alike, at most three spaces, in and before `## Files`.\n" +
-        "  Nothing was written; .pharn/writes-scope.json is unchanged."
+        "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
     );
   }
   if (top.start === -1) fail(`no \`## Files\` heading in ${file}`);
@@ -717,10 +720,10 @@ function main() {
           ")\n" +
           "  Why: clearing and setting a scope in one call is always a mistake. Run the set and the\n" +
           "       clear as separate calls — the set at a command's FIRST step, the clear at its LAST.\n" +
-          "  Nothing was written; .pharn/writes-scope.json is unchanged."
+          "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
       );
     }
-    const scopePath = path.resolve(process.cwd(), ".pharn", "writes-scope.json");
+    const scopePath = path.resolve(process.cwd(), "pharn", ".run", "writes-scope.json");
     // Idempotent: an absent file is the SAME end state, not an error — a command's last step must be
     // safe to run twice, and safe to run after an early abort that never set a scope.
     let existed = false;
@@ -728,11 +731,11 @@ function main() {
       fs.unlinkSync(scopePath);
       existed = true;
     } catch (e) {
-      if (e && e.code !== "ENOENT") fail(`could not clear .pharn/writes-scope.json: ${e.message}`);
+      if (e && e.code !== "ENOENT") fail(`could not clear pharn/.run/writes-scope.json: ${e.message}`);
     }
     process.stdout.write(
       existed
-        ? 'writes-scope cleared: .pharn/writes-scope.json removed -> the guard\'s default now applies (fail-closed, except in an installed project outside an open PHARN run — CLAUDE.md, "Writes-scope")\n'
+        ? 'writes-scope cleared: pharn/.run/writes-scope.json removed -> the guard\'s default now applies (fail-closed, except in an installed project outside an open PHARN run — CLAUDE.md, "Writes-scope")\n'
         : 'writes-scope cleared: no active scope (already absent) -> the guard\'s default applies (fail-closed, except in an installed project outside an open PHARN run — CLAUDE.md, "Writes-scope")\n'
     );
     process.exit(0);
@@ -771,7 +774,7 @@ function main() {
           `  Declared in : ${file}\n` +
           `  Why         : these files wire and implement the two pre-write guards; a scope over them lets a write disarm a guard on the next tool call (CONSTITUTION P2 — a declared file is untrusted input).\n` +
           `  If this increment genuinely edits a guard, re-run with --allow-claude-dir (an operator flag; no declared file can set it).\n` +
-          `  Nothing was written; .pharn/writes-scope.json is unchanged.`
+          `  Nothing was written; pharn/.run/writes-scope.json is unchanged.`
       );
     }
   }
@@ -779,14 +782,16 @@ function main() {
   // Refuse PHARN's own installed surface from a plan, in an installed project (see the header). Layered after the
   // control-surface refusal; the dev checkout and an unsignalled tree never reach the membership test.
   if (mode === "--from-plan" && !allowPharnSurface && isPharnInstalledProject()) {
-    const offenders = scope.filter(isReserved);
+    // Judged as written AND with `..` collapsed: the two raw-prefix exemptions (`pharn/features/`, `pharn/.run/`)
+    // must not be a way past this refusal (`pharn/.run/../floor/x.mjs`). Only ever adds refusals.
+    const offenders = scope.filter((p) => isReserved(p) || isReserved(path.posix.normalize(String(p).replace(/\\/g, "/"))));
     if (offenders.length) {
       fail(
         `refusing to scope PHARN's own installed files from a plan: ${offenders.join(", ")}\n` +
           `  Declared in : ${file}\n` +
-          `  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); pharn/** (except pharn/features/**), .claude/** and pharn.config.json are PHARN's floor, guards, commands and config, which judge a run and instruct its later stages, and a plan is untrusted input (CONSTITUTION P2).\n` +
+          `  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); pharn/** (except pharn/features/** and pharn/.run/**), .claude/** and pharn.config.json are PHARN's floor, guards, commands and config, which judge a run and instruct its later stages, and a plan is untrusted input (CONSTITUTION P2).\n` +
           `  If you genuinely mean to change one of them (your own .claude/ commands or skills included): edit it yourself, outside the agent, or re-run this setter yourself with --allow-pharn-surface placed BEFORE --from-plan (an operator flag; no plan can set it). To update PHARN itself, use \`pharn update\`.\n` +
-          `  Nothing was written; .pharn/writes-scope.json is unchanged.`
+          `  Nothing was written; pharn/.run/writes-scope.json is unchanged.`
       );
     }
   }
@@ -803,7 +808,7 @@ function main() {
           `  Declared in : ${file}\n` +
           "  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion), where a plan may not scope a git hooks directory (core.hooksPath), and without these files the setter cannot tell which directory that is.\n" +
           "  Fix: make each file above a readable regular file, or remove it; or re-run this setter yourself with --allow-exec-config placed BEFORE --from-plan (an operator flag; no plan can set it).\n" +
-          "  Nothing was written; .pharn/writes-scope.json is unchanged."
+          "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
       );
     }
     const dirKeys = execConfigDirKeys(process.cwd(), top, values);
@@ -814,7 +819,7 @@ function main() {
           `  Declared in : ${file}\n` +
           "  Why         : this is an installed PHARN project (pharn.config.json has a skillsVersion); a CI workflow (.github/workflows/**) runs on the next push with the repository's secrets, and a git hooks directory (.husky/**, or a core.hooksPath inside the project) runs on the next git command in your own shell, so code a plan puts there outlives the run that wrote it, and a plan is untrusted input (CONSTITUTION P2).\n" +
           "  If you genuinely mean to change one of them: edit it yourself, outside the agent, or re-run this setter yourself with --allow-exec-config placed BEFORE --from-plan (an operator flag; no plan can set it).\n" +
-          "  Nothing was written; .pharn/writes-scope.json is unchanged."
+          "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
       );
     }
   }
@@ -828,16 +833,16 @@ function main() {
           open.map((l) => `  • ${l}`).join("\n") +
           "\n" +
           "  Why: an unattended /pharn-loop never promotes a lesson, and a scope with this origin is what unlocks a canon write (protect-trusted-paths.cjs). Promote after the run ends. NEVER close a run you are executing.\n" +
-          "  Nothing was written; .pharn/writes-scope.json is unchanged."
+          "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
       );
     }
   }
 
   const record = { scope, set_by: file, set_at: new Date().toISOString() };
-  const dir = path.resolve(process.cwd(), ".pharn");
+  const dir = path.resolve(process.cwd(), "pharn", ".run");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "writes-scope.json"), JSON.stringify(record, null, 2) + "\n");
-  process.stdout.write(`writes-scope set: ${scope.length} path(s) from ${file} -> .pharn/writes-scope.json\n`);
+  process.stdout.write(`writes-scope set: ${scope.length} path(s) from ${file} -> pharn/.run/writes-scope.json\n`);
   process.exit(0);
 }
 

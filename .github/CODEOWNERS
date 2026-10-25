@@ -5,5 +5,5 @@
 # so the human-only write-guard is readable at the GitHub layer.
 CONSTITUTION.md @PrzemekGalarowicz
 ARCHITECTURE.md @PrzemekGalarowicz
-THREAT-MODEL.md @PrzemekGalarowicz
-LIMITS.md @PrzemekGalarowicz
+pharn/THREAT-MODEL.md @PrzemekGalarowicz
+pharn/LIMITS.md @PrzemekGalarowicz

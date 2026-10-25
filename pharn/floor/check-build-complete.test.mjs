@@ -194,10 +194,10 @@ test("★ PARITY: `declared` equals set-writes-scope.cjs's `--from-plan` scope o
         "",
       ].join("\n")
     );
-    // The setter writes root/.pharn/writes-scope.json (cwd=root, so the repo's real scope is untouched).
+    // The setter writes root/pharn/.run/writes-scope.json (cwd=root, so the repo's real scope is untouched).
     const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
-    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+    const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
     const declared = json(run([plan, root])).declared;
     assert.deepEqual([...declared].sort(), [...scope].sort()); // lock-step extraction
     assert.deepEqual([...scope].sort(), ["keep/one.md", "keep/two.mjs"]);
@@ -225,7 +225,7 @@ test("★ PARITY: clean() strips only a SPACE-separated trailing annotation, exa
     );
     const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
-    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope.sort();
+    const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope.sort();
     const declared = [...json(run([plan, root])).declared].sort();
     assert.deepEqual(declared, scope, "the core and the setter disagreed about a parenthesised name");
     assert.deepEqual(scope, ["src/a(b)", "src/c.mjs"]);
@@ -244,7 +244,7 @@ test("★ PARITY: a WRAPPED path-item description containing the cue does NOT tr
     const both = () => {
       const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
       assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
-      const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+      const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
       return { scope: [...scope].sort(), declared: [...json(run([plan, root])).declared].sort() };
     };
     write(["- `src/a.mjs` — the adapter; everything the SPEC calls", "  out of scope stays untouched", "- `src/b.mjs` — y"]);
@@ -290,7 +290,7 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
 
     const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
-    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+    const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
     const declared = json(run([plan, root])).declared;
 
     // Lock-step: whatever the cue does, it does to BOTH.
@@ -421,7 +421,7 @@ test("★ PARITY: FENCE_FIXTURES — the setter's scope and the checker's `decla
         assert.match(json(c).reason, /reads differently depending on whether a code fence sits inside a list item/, fx.name);
       } else {
         assert.equal(s.status, 0, `${fx.name}: setter failed: ${s.stderr}`);
-        const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+        const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
         assert.deepEqual(scope, fx.want, `${fx.name}: setter scope`);
         assert.deepEqual(json(c).declared, fx.want, `${fx.name}: checker declared`);
       }
@@ -574,7 +574,7 @@ test("★ PARITY: the setter scopes a marked item's bare path — setter scope =
     );
     const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
-    const scope = JSON.parse(readFileSync(join(root, ".pharn", "writes-scope.json"), "utf8")).scope;
+    const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
     const o = json(run([plan, root]));
     assert.deepEqual([...o.declared, ...o.deletions].sort(), [...scope].sort());
     assert.deepEqual([...scope].sort(), [".vscode/settings.json", "gone/two.tsx", "keep/one.md"]);

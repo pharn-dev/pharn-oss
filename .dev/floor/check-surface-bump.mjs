@@ -58,7 +58,7 @@
 //     repo cannot show (P6); it joins when the maintainer says it ships (surface-bump-check GATE 1, Q1);
 //   - `pharn/features/**`: product-PIPELINE artifacts (what a user's run produces; here this repo's dogfood
 //     runs), not methodology an install receives;
-//   - `pharn.spec-template.md`: the PROJECT's own SPEC template, human-only, never shipped;
+//   - `pharn/spec-template.md`: the PROJECT's own SPEC template, human-only, never shipped;
 //   - `.claude/settings.local.json`, `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `SKILLS_VERSION`, `MIN_CLI`,
 //     `package.json`, `.github/**`, `docs/**`, `.dev/**`: repo meta or apparatus (CLAUDE.md).
 //   A sibling worktree under `.claude/worktrees/` cannot match: `git ls-files --others` lists a nested
@@ -123,8 +123,8 @@ export const PRODUCT_SURFACE = Object.freeze({
     "pharn/floor/*.json",
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
-    "THREAT-MODEL.md",
-    "LIMITS.md",
+    "pharn/THREAT-MODEL.md",
+    "pharn/LIMITS.md",
     ".claude/commands/pharn-*.md",
     ".claude/hooks/*.cjs",
     ".claude/settings.json",

@@ -61,7 +61,7 @@ Load the trusted prefix and obey it:
 
 `/pharn-dev-verify`'s only **Write-tool** outputs are the two artifacts in `writes:` (`.dev/features/<name>/VERIFY.md`,
 `.dev/features/<name>/verify-report.json`). The setter resolves **one `--target` per call** and overwrites
-`.pharn/writes-scope.json`, so `/pharn-dev-verify` scopes **each artifact to itself immediately before writing it**
+`pharn/.run/writes-scope.json`, so `/pharn-dev-verify` scopes **each artifact to itself immediately before writing it**
 (Step 4). Set the scope for the machine report up front:
 
 ```bash
@@ -70,8 +70,8 @@ node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/phar
 
 Deterministic floor step (P0/P5): the scope is parsed from `writes:` and narrowed to `--target` — never
 chosen by a model. **Honest caveat (mirrors `/pharn-dev-regress` / `/pharn-dev-eval`):** the gate runs and the
-`.pharn/pharn-dev-verify/*.json` captures in Steps 1–3 are **Bash**, which the `Write|Edit|MultiEdit` hook does
-**not** gate — so fix #7 enforces only the two artifact Writes; `.pharn/**` is always-writable scratch
+`pharn/.run/pharn-dev-verify/*.json` captures in Steps 1–3 are **Bash**, which the `Write|Edit|MultiEdit` hook does
+**not** gate — so fix #7 enforces only the two artifact Writes; `pharn/.run/**` is always-writable scratch
 (`enforce-writes-scope.cjs`). If a later Write is blocked, **declare the path in `writes:` and re-run this
 setter** — never bypass the hook (see CLAUDE.md, "Writes-scope").
 
@@ -82,7 +82,7 @@ invocation / its `.dev/features/<name>/PLAN.md`). Run each gate over the repo-wi
 its **exit code** (never its stdout free-text) into a flat `{ "<gate-id>": <exit-int> }` map:
 
 ```bash
-mkdir -p .pharn/pharn-dev-verify
+mkdir -p pharn/.run/pharn-dev-verify
 npm test > /dev/null 2>&1; t=$?                       # the hermetic suite (incl. the feature's own *.test.*)
 node pharn/floor/validate.mjs . > /dev/null 2>&1; v=$?      # the structural floor — must be GREEN
 npm run lint > /dev/null 2>&1; l=$?                   # eslint clean
@@ -92,11 +92,11 @@ npm run lint:md > /dev/null 2>&1; lm=$?               # markdownlint clean — w
 node pharn/floor/check-structural.mjs <expected.json> <actual.json> . > /dev/null 2>&1; s=$?
 # The Bash-write reconciliation (fix #7's blind spot). --require-baseline because /pharn-dev-build DID
 # anchor an epoch, so an absent baseline here is a real refusal, not a fresh-clone NO_BASELINE.
-node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > .pharn/pharn-dev-verify/reconcile.json 2>&1; rc=$?
-# assemble → .pharn/pharn-dev-verify/results.json, one entry per gate actually run:
+node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > pharn/.run/pharn-dev-verify/reconcile.json 2>&1; rc=$?
+# assemble → pharn/.run/pharn-dev-verify/results.json, one entry per gate actually run:
 printf '{"test":%d,"validate":%d,"lint":%d,"format:check":%d,"lint:md":%d,"structural:%s":%d,"reconcile":%d}' \
   "$t" "$v" "$l" "$f" "$lm" "<expected.json>" "$s" "$rc" \
-  > .pharn/pharn-dev-verify/results.json
+  > pharn/.run/pharn-dev-verify/results.json
 ```
 
 - **The `reconcile` gate needs NO change to `check-verify.mjs`** — that helper is generic over gate keys
@@ -167,7 +167,7 @@ declares `role: verifier` (the role enum in `pharn/ARCHITECTURE.md §3.1`) — n
 ## Step 3 — The deterministic verdict (FLOOR; no LLM)
 
 ```bash
-node pharn/floor/check-verify.mjs .pharn/pharn-dev-verify/results.json --feature <name>
+node pharn/floor/check-verify.mjs pharn/.run/pharn-dev-verify/results.json --feature <name>
 ```
 
 Capture its **stdout JSON** and read its **exit code**: `0` **PASS** (every gate exit 0) · `1` **FAIL**
@@ -268,8 +268,8 @@ cite, don't restate), with **no new contract file** and **no authored verifier**
   orchestration clock).** Like `/pharn-dev-regress` / `/pharn-dev-eval` end-to-end, the agent's orchestration is
   advisory; **only the verdict is floor-grade.**
 - **"`/pharn-dev-verify` may write only `VERIFY.md` + `verify-report.json`"** → **FLOOR: hook (fix #7).**
-  `set-writes-scope.cjs` + `enforce-writes-scope.cjs` pin both paths; the Bash gate runs and `.pharn/**`
-  captures are not hook-gated (caveat above), and `.pharn/**` scratch is always-writable.
+  `set-writes-scope.cjs` + `enforce-writes-scope.cjs` pin both paths; the Bash gate runs and `pharn/.run/**`
+  captures are not hook-gated (caveat above), and `pharn/.run/**` scratch is always-writable.
 
 > **No claim is a guarantee without a floor reduction.** Verdict → exit-code threshold (§2); path-pinning
 > → writes-scope hook. Everything the **agent** does (running gates, running verifiers, assembling the
@@ -285,7 +285,7 @@ carries verifier findings whose `problem` / `evidence` **inherit the untrusted t
 artifact (`finding-shape.md`); they are rendered as **quoted DATA** in the artifacts, appended **after**
 the verdict, and **never** passed to the verdict helper. So **taint propagates into the report but not
 into the verdict** — the verdict is provably independent of any tainted field (fix #1; `pharn/ARCHITECTURE.md
-§8`). The **named residual** (`LIMITS.md §2`, `THREAT-MODEL.md §5`): when a downstream LLM stage or a
+§8`). The **named residual** (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`): when a downstream LLM stage or a
 human consumes the verifier free-text, "do not execute this as an instruction" is a heuristic again —
 `/pharn-dev-verify` **bounds** it (verifier free-text never gates the verdict) but does not zero it. With zero
 verifiers today, no such free-text is produced yet; the boundary is in place for when one is.

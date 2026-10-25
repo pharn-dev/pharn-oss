@@ -112,7 +112,7 @@ function project() {
   git("config", "user.email", "t@example.invalid");
   git("config", "user.name", "t");
   git("config", "commit.gpgsign", "false");
-  writeFileSync(join(dir, ".gitignore"), ".pharn/\n");
+  writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
   git("add", "-A");
   git("commit", "-q", "-m", "seed");
   mkdirSync(join(dir, "pharn", "features", "demo"), { recursive: true });
@@ -130,7 +130,7 @@ for (const quick of [false, true]) {
       const start = ["pharn/floor/mark-phase.mjs", "--name", "demo", "--kind", "run-start", ...(quick ? ["--mode", "quick"] : [])];
       assert.equal(p.node(...start).status, 0);
       assert.equal(p.node("pharn/floor/run-marker.mjs", "--open", "pharn-ship", "demo").status, 0);
-      assert.ok(existsSync(join(p.dir, ".pharn", "pharn-ship", "demo", "active.json")));
+      assert.ok(existsSync(join(p.dir, "pharn", ".run", "pharn-ship", "demo", "active.json")));
       const r = p.node("pharn/floor/ship-closeout.mjs", "--feature", "demo");
       assert.equal(r.status, EXIT.DONE, `${r.stdout}${r.stderr}`);
       const lines = r.stdout.trimEnd().split("\n");
@@ -139,7 +139,7 @@ for (const quick of [false, true]) {
       assert.equal(doc.mode, quick ? "quick" : "full");
       assert.equal(doc.base_sha, p.head);
       assert.equal(doc.run_marker_close, "ok");
-      assert.equal(existsSync(join(p.dir, ".pharn", "pharn-ship", "demo", "active.json")), false, "the run marker is closed");
+      assert.equal(existsSync(join(p.dir, "pharn", ".run", "pharn-ship", "demo", "active.json")), false, "the run marker is closed");
       assert.ok(
         lines.some((l) => /^marker \d+: run-stop /.test(l)),
         "mark-phase's own line printed whole"
@@ -158,7 +158,7 @@ test("★ END-TO-END — a refused argv exits 2 with a closing document and runs
     const r = p.node("pharn/floor/ship-closeout.mjs", "--feature", "x;touch PWNED");
     assert.equal(r.status, EXIT.UNUSABLE);
     assert.equal(JSON.parse(r.stdout.trim()).refusal, "usage");
-    assert.equal(existsSync(join(p.dir, ".pharn", "cost")), false, "no marker was written");
+    assert.equal(existsSync(join(p.dir, "pharn", ".run", "cost")), false, "no marker was written");
     assert.equal(existsSync(join(p.dir, "PWNED")), false);
   } finally {
     p.done();

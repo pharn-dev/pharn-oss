@@ -493,7 +493,7 @@ test("✧ the wrapper passes the dev root and strict commit — targets are .dev
   assert.match(src, /canonRoot: DEV_CANON_ROOT,/);
   assert.match(src, /strictCommit: true,/);
   // behaviourally: a user-canon target is not a member here
-  const r = runWith({ ...VALID, target: "memory-bank/lessons-learned.md" });
+  const r = runWith({ ...VALID, target: "pharn/memory-bank/lessons-learned.md" });
   assert.equal(r.status, 1);
   assert.match(r.stdout, /not in \{\.dev\/memory-bank\/lessons-learned\.md, \.dev\/memory-bank\/pattern-library\.md\}/);
 });
@@ -542,7 +542,7 @@ function runOn(checker, candidate, canonRel) {
 // than restated here — so this guard cannot drift from either enum.
 function validCandidateFor(checker) {
   // The target is the first member of each surface's enum: the product default root, or the dev root.
-  return { ...VALID, target: checker === PRODUCT_CHECK ? "memory-bank/lessons-learned.md" : VALID.target };
+  return { ...VALID, target: checker === PRODUCT_CHECK ? "pharn/memory-bank/lessons-learned.md" : VALID.target };
 }
 
 test("✧ BEHAVIOUR: both copies REFUSE each named input, with the same reason", () => {
@@ -648,14 +648,14 @@ test("✧ the L7 guard DISCRIMINATES — it would flag a canon path in a non-pro
     const writes = fm[1].match(/^writes:[\s\S]*?\]/m);
     return !!(writes && /memory-bank/.test(writes[0]));
   };
-  assert.ok(flags('---\nwrites: ["memory-bank/lessons-learned.md"]\n---\nbody'), "inline form must be flagged");
+  assert.ok(flags('---\nwrites: ["pharn/memory-bank/lessons-learned.md"]\n---\nbody'), "inline form must be flagged");
   assert.ok(
-    flags('---\nwrites:\n  [\n    "features/x.md",\n    "memory-bank/pattern-library.md",\n  ]\n---\nbody'),
+    flags('---\nwrites:\n  [\n    "features/x.md",\n    "pharn/memory-bank/pattern-library.md",\n  ]\n---\nbody'),
     "multi-line form must be flagged"
   );
   assert.ok(!flags('---\nwrites: ["features/<name>/PLAN.md"]\n---\nbody'), "a normal declaration must not be flagged");
   assert.ok(
-    !flags('---\nreads: ["memory-bank/lessons-learned.md"]\nwrites: ["features/<name>/PLAN.md"]\n---\nbody'),
+    !flags('---\nreads: ["pharn/memory-bank/lessons-learned.md"]\nwrites: ["features/<name>/PLAN.md"]\n---\nbody'),
     "a READ of canon must not be flagged"
   );
   assert.ok(!flags("no frontmatter, but the words memory-bank and writes: appear in prose"), "prose must not be flagged (L6)");
