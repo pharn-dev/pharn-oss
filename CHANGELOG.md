@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-10-25: **The pharn-ci gate moves to v0.2.0 with test integrity in block mode.** `.github/workflows/ci.yml`
+  and `.github/workflows/pharn-ci-comment.yml` pin `pharn-dev/pharn-ci@0873ce23f3595a3497325635b7bf3ee93ea77687`
+  (v0.2.0) and set `test-integrity: block`, so a pull request that weakens a test (a skip, a removed assertion, a
+  lowered coverage threshold) fails the check unless a reviewer other than the author applies `pharn/accepted` and
+  the check is re-run. The comment workflow uses the same mode so its comment matches the gate. CI only; nothing
+  shipped changes.
+
 ## [6.75.0] - 2026-10-25
 
 ### Added

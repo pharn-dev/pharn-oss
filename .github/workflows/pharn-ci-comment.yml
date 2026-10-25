@@ -27,10 +27,11 @@ jobs:
         env:
           PR_FILE: ${{ runner.temp }}/pharn-ci-input/pr-number
         run: echo "number=$(tr -dc '0-9' < "$PR_FILE" | head -c 10)" >> "$GITHUB_OUTPUT"
-      - uses: pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c # v0.1.0
+      - uses: pharn-dev/pharn-ci@0873ce23f3595a3497325635b7bf3ee93ea77687 # v0.2.0
         timeout-minutes: 5
         with:
           coverage-file: ${{ runner.temp }}/pharn-ci-input/coverage/lcov.info
           pr-number: ${{ steps.pr.outputs.number }}
           head-sha: ${{ github.event.workflow_run.head_sha }}
+          test-integrity: block # the same mode as ci.yml, so the comment shows the same severities
           fail-on-threshold: false
