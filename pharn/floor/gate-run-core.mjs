@@ -1169,8 +1169,8 @@ export function timedOutRunIds(stamp) {
  *  exit — a gate that traps the group's SIGTERM can exit 0, which read as a pass before 6.59.0), else `not-started` when
  *  the exit is in NOT_STARTED_EXITS. A signal exit (>= 128) the runner did not cause is a MEASURED failure — the runner
  *  records nothing for a harness signal it forwarded, so a signal in a stamp came from inside the gate's group or the
- *  kernel (a segfault, an abort, an OOM kill). The ONE owner of this predicate: check-verify.mjs's stamp path reads it;
- *  check-regress.mjs reads `timedOutRunIds` alone (its 126/127 handling is unchanged — the regression-report contract). */
+ *  kernel (a segfault, an abort, an OOM kill). The ONE owner of this predicate: check-verify.mjs's stamp path reads it, and so
+ *  does entry-gates-core.mjs `entryVerdict` (6.75.0, minus the `base:test` slot); check-regress.mjs reads `timedOutRunIds` alone (its 126/127 handling is unchanged — the regression-report contract). */
 export function unmeasuredRuns(stamp) {
   const out = [];
   for (const r of stamp.runs) {

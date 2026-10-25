@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-6.74.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-6.75.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -132,7 +132,9 @@ regress → verify until a deterministic stop — green, the `--max-iter` cap, o
 result it must not retry — commits a green result to a new local branch (never pushed or merged), and
 ends with a summary of what was done. While the spec, plan and grill stages work, it runs your project's gates once
 in the background on the tree it started from (6.42.0). If one is already red, the run stops before `/pharn-test`
-writes anything (`blocked: gates-red-at-entry`); pass `--allow-red-entry` when fixing that gate is the feature.
+writes anything (`blocked: gates-red-at-entry`). If none is red but one did not finish inside the per-gate timeout or
+could not start, it stops there too, as `blocked: gates-unmeasured-at-entry` (6.75.0), since that gate was not measured. Pass
+`--allow-red-entry` to go on past either, when fixing that gate is the feature.
 `/pharn-ship` runs the same check and asks you whether to stop or continue. When it reaches a point that needs a human decision, it stops and
 says what it needs instead of guessing. On any stop other than a committed green result it reverts its
 own spec approval — a procedural step, so an aborted run can skip it. Start it outside plan mode: in plan mode it stops

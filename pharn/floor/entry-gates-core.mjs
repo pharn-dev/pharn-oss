@@ -13,7 +13,12 @@
 // ============================== THE VERDICT RULE (`entryVerdict`) ==============================
 // Over a stamp `validateStamp` accepted as `{stage: "entry", feature}` and the feature-directory digests the runner
 // recorded around each gate:
-//   • a gate is RED when its recorded exit is non-zero or it timed out — membership over the stamp, never its output;
+//   • a gate is UNMEASURED (6.75.0, entry-timeout-unmeasured) when gate-run-core.mjs `unmeasuredRuns` — the ONE owner
+//     of "not measured", which check-verify.mjs's stamp path reads too (L35) — lists it: the runner killed it at
+//     `--timeout-ms`, or it could not start. It goes into `unmeasured: [{id, cause}]`, never into `red` or
+//     `unattributed`, a style gate included: the cause is the clock or a missing program, never front-stage content,
+//     so there is nothing to attribute. What "not measured" does and does not establish is that function's header;
+//   • otherwise a gate is RED when its recorded exit is non-zero — membership over the stamp, never its output;
 //   • a red NON-style gate is ATTRIBUTABLE: it counts;
 //   • a red STYLE_SET gate is attributable only when the run's own feature directory held its START digest (`d0`, taken
 //     by `--start`) both before and after that gate ran — i.e. nothing the front stages wrote AFTER the start existed
@@ -23,12 +28,19 @@
 //     UNATTRIBUTED: reported, never a stop. The style gates run FIRST (gate-run-core.mjs resolveSet orders an `entry`
 //     source that way) so this is the normal case; a style gate slow enough to overlap a front-stage write leaves its
 //     red to /pharn-verify, exactly as before this check existed.
-// status `red` iff at least one attributable red exists, else `green`.
+// status `red` iff at least one attributable red exists, else `unmeasured` iff at least one gate was not measured, else
+// `green`. RED FIRST, unlike check-verify.mjs (which ranks unmeasured first so /pharn-loop never rebuilds toward a
+// hang): at entry both statuses stop the run and nothing rebuilds, a measured red is the certain claim, and the
+// document lists both, so a red stop still names the unmeasured gates.
+//
+// THE P7 TRIGGER FOR THE SPLIT (6.75.0): two measured 6.73.2 /pharn-loop runs in a user's project stopped S14 "red at
+// entry" on a `test` gate the runner killed at 540 s (exit 143, `timed_out: true`), while the base:test slot ran the
+// same suite green in about 538 s (.dev/measurements/loop-wall-clock-2026-10-25.md §5). Nothing had been measured red.
 //
 // THE BASE TEST SLOT (6.49.0, entry-run-as-base-evidence). The set may also hold gate-run-core.mjs ENTRY_BASE_TEST_ID:
 // the `test` command handed regress's own default test list, so /pharn-regress can take its BASE `test` result from
 // this run (entry-base-evidence-core.mjs). It is EVIDENCE, not a gate /pharn-verify runs: it is listed in `gates` (and
-// `mutated` when it moved the tree) but never counted red or unattributed, so it can never cause S14.
+// `mutated` when it moved the tree) but never counted red, unattributed or unmeasured, so it can never cause S14 or S14b.
 //
 // THE GATES' OWN WRITES (review R1). A gate the stamp marks `mutated` changed the tree itself (`next build` rewriting
 // `next-env.d.ts`) AFTER the run's pre-run snapshot. `entryVerdict` returns those paths — from the runner's per-gate
@@ -39,6 +51,8 @@
 // ============================== WHAT IT DOES NOT CLAIM (P0) ==============================
 //   • That the run would have failed verify. A gate red at entry predicts a red verify gate only if the run does not
 //     fix it; a gate green at entry may still go red. The stop says "red on the tree the run started from".
+//   • That an UNMEASURED gate would fail, or pass, at verify. It says only that the runner's clock ran out or the gate
+//     could not start; a hang, a slow machine and a too-small timeout look the same (gate-run-core.mjs, cited).
 //   • That a NON-style gate read nothing a front stage wrote. The front writes only markdown under
 //     `pharn/features/<name>/`, and that `test` / `typecheck` / `build` / `e2e` do not read it is ADVISORY (the
 //     follow-up `entry-gates-nonstyle-overlap` names the extension). `--allow-red-entry` is the person's remedy.
@@ -51,7 +65,14 @@
 // integer columns. Nothing here is evaluated, spawned or interpolated into a shell. A value quoted into a detail goes
 // through `shown()`, which cannot throw (L62).
 
-import { STYLE_SET, FEATURE_SLUG_RE, ENTRY_BASE_TEST_ID, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
+import {
+  STYLE_SET,
+  FEATURE_SLUG_RE,
+  ENTRY_BASE_TEST_ID,
+  UNMEASURED_CAUSES,
+  unmeasuredRuns,
+  REASON_CODES as RUNNER_REASON_CODES,
+} from "./gate-run-core.mjs";
 
 /** The one scratch root of the entry check — ONE per tree (L38): a new `--start` supersedes an earlier runner. */
 export const ENTRY_ROOT = ".pharn/pharn-entry";
@@ -73,8 +94,10 @@ export const PROGRESS_SCHEMA = "pharn-entry-progress/1";
 export const DOC_SCHEMA = "pharn-entry-gates/1";
 
 /** `--wait`'s statuses and their exit codes. `1` is never chosen, so node's own crash exit is never a verdict. */
-export const STATUSES = Object.freeze(["green", "red", "no-gates", "continue", "unusable"]);
-export const EXIT = Object.freeze({ green: 0, red: 4, "no-gates": 3, continue: 5, unusable: 2 });
+export const STATUSES = Object.freeze(["green", "red", "unmeasured", "no-gates", "continue", "unusable"]);
+export const EXIT = Object.freeze({ green: 0, red: 4, unmeasured: 6, "no-gates": 3, continue: 5, unusable: 2 });
+/** The statuses decided over a completed run (a verdict): each carries a CHANGES_RECORD member. */
+const VERDICT_STATUSES = Object.freeze(["green", "red", "unmeasured"]);
 
 /** The closed reasons of an `unusable` exit (and of a `--start` refusal). */
 export const REASON_CODES = Object.freeze([
@@ -111,6 +134,7 @@ const DOC_KEYS = Object.freeze([
   "gates",
   "red",
   "unattributed",
+  "unmeasured",
   "mutated",
   "changed_paths",
   "changes_record",
@@ -250,14 +274,18 @@ export function entryVerdict({ stamp, featureDir, d0, gateChanges = [] }) {
   const red = [];
   const unattributed = [];
   const mutated = [];
+  // 6.75.0: the runs that are not a measurement, from the ONE owner (L35) — the base:test slot is evidence, never listed.
+  const unmeasured = unmeasuredRuns(stamp).filter((u) => u.id !== ENTRY_BASE_TEST_ID);
+  const unmeasuredIds = new Set(unmeasured.map((u) => u.id));
   for (const r of stamp.runs) {
     gates.push({ id: r.id, exit: r.exit, timed_out: r.timed_out, mutated: r.mutated });
     if (r.mutated === true) {
       mutated.push(r.id);
       for (const [p, d] of changesById.get(r.id) ?? []) changedMap.set(p, d);
     }
-    if (!(r.exit !== 0 || r.timed_out === true)) continue;
     if (r.id === ENTRY_BASE_TEST_ID) continue; // evidence only (6.49.0): never a red the run stops on
+    if (unmeasuredIds.has(r.id)) continue; // listed in `unmeasured`, never red (6.75.0)
+    if (r.exit === 0) continue;
     if (!STYLE_SET.includes(r.id)) {
       red.push(r.id);
       continue;
@@ -268,11 +296,12 @@ export function entryVerdict({ stamp, featureDir, d0, gateChanges = [] }) {
   }
   const excluded = isPlainObject(stamp.excluded) && Array.isArray(stamp.excluded.ids) ? [...stamp.excluded.ids] : [];
   const changed = [...changedMap.entries()].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  return { status: red.length ? "red" : "green", gates, red, unattributed, mutated, changed, excluded };
+  const status = red.length ? "red" : unmeasured.length ? "unmeasured" : "green";
+  return { status, gates, red, unattributed, unmeasured, mutated, changed, excluded };
 }
 
 /** The ONE document `--wait` prints, closed keys for every status. `changesRecord` is a CHANGES_RECORD member on a
- *  green/red verdict, else null. */
+ *  green, red or unmeasured verdict, else null. Every status's document carries `unmeasured` (`[]` off a verdict). */
 export function entryDocument({
   status,
   feature,
@@ -289,6 +318,7 @@ export function entryDocument({
     gates: verdict ? verdict.gates : [],
     red: verdict ? verdict.red : [],
     unattributed: verdict ? verdict.unattributed : [],
+    unmeasured: verdict ? verdict.unmeasured : [],
     mutated: verdict ? verdict.mutated : [],
     changed_paths: verdict ? verdict.changed.map(([p]) => p) : [],
     changes_record: changesRecord,
@@ -307,8 +337,17 @@ export function documentDefect(d) {
   if (d.schema !== DOC_SCHEMA) return "schema";
   if (!STATUSES.includes(d.status)) return "status";
   if (d.status === "unusable" ? !REASON_CODES.includes(d.reason_code) : d.reason_code !== null) return "reason_code";
-  for (const k of ["gates", "red", "unattributed", "mutated", "changed_paths", "excluded"]) if (!Array.isArray(d[k])) return k;
-  const verdict = d.status === "green" || d.status === "red";
+  for (const k of ["gates", "red", "unattributed", "unmeasured", "mutated", "changed_paths", "excluded"])
+    if (!Array.isArray(d[k])) return k;
+  for (const u of d.unmeasured) {
+    if (!isPlainObject(u) || !exactKeys(u, ["id", "cause"])) return "unmeasured";
+    if (typeof u.id !== "string" || u.id === "" || !UNMEASURED_CAUSES.includes(u.cause)) return "unmeasured";
+  }
+  // 6.75.0: an `unmeasured` status is the one with no attributable red and at least one gate not measured.
+  if (d.status === "unmeasured" && (d.unmeasured.length === 0 || d.red.length !== 0)) return "unmeasured";
+  // …and the converse: a green document names no unmeasured gate (GATE 2 review finding 4).
+  if (d.status === "green" && d.unmeasured.length !== 0) return "unmeasured";
+  const verdict = VERDICT_STATUSES.includes(d.status);
   if (verdict ? !CHANGES_RECORD.includes(d.changes_record) : d.changes_record !== null) return "changes_record";
   return null;
 }

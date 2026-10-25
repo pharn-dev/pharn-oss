@@ -34,7 +34,8 @@
 //          re-run when out of it; with no gate run in progress at all → `runner-died`. On a verdict it RECORDS the paths a
 //          `mutated` gate changed beside the pre-run snapshot (pre-run-snapshot.mjs `recordEntryChanges`, review R1), so
 //          /pharn-regress and the quick scope check report them rather than count them as the build's escape. Prints ONE
-//          JSON document (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 3 no-gates · 5 continue · 2 unusable.
+//          JSON document (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 6 unmeasured (6.75.0: no attributable
+//          red, but a gate the runner killed at --timeout-ms or could not start) · 3 no-gates · 5 continue · 2 unusable.
 // --abort  a no-op (exit 0) when no runner record exists, it names another feature, or its pid is not this runner's.
 //          Otherwise (review R4): SIGSTOP the runner's process group (so it starts nothing new), then list
 //          `ps -A -o pid=,ppid=,pgid=` and SIGSTOP every descendant's process group, re-listing until the set is stable;
@@ -66,11 +67,11 @@
 //     change to that reader reaches this check too.
 //   • THE BASE EVIDENCE (6.49.0, entry-run-as-base-evidence): `--start` also hands run-gates the list regress's own
 //     default rule would give its `test` gate (scope-inputs.mjs `defaultTestUniverse` minus `changedPaths(HEAD)`), so
-//     the set holds the evidence-only `base:test` slot (gate-run-core.mjs ENTRY_BASE_TEST_ID; never an S14 red). Any
+//     the set holds the evidence-only `base:test` slot (gate-run-core.mjs ENTRY_BASE_TEST_ID; never an S14 or S14b stop). Any
 //     problem with that list — a listing that fails, a path ac-tests-core.mjs `badPath` refuses, a shape resolveSet would
 //     refuse, more than BASE_TESTS_MAX_ARGV_BYTES of argv, a regress BASE checkout still standing at
 //     `.pharn/pharn-regress/base` (a runner's path filters could match its copies) — means NO slot, never a refusal. A
-//     `--wait` that decided green or red, after every check above, then PUBLISHES the offer /pharn-regress reads
+//     `--wait` that decided green, red or unmeasured, after every check above, then PUBLISHES the offer /pharn-regress reads
 //     (entry-base-evidence.mjs `publishEntryOffer`, in the git dir); `--start` discards an earlier one. Publication is
 //     best-effort: a failure is one `note —` line on stderr and changes no document, exit or record.
 //   • OBSERVATIONS (6.48.0, entry-gates-ledger-row): `--start`, the runner, a `--wait` call (and its takeover) and
@@ -703,7 +704,7 @@ function decideDone(feature, runnerRec, res) {
     const w = recordEntryChanges(feature, verdict.changed);
     changesRecord = w.ok ? "recorded" : CHANGES_RECORD.includes(w.code) ? w.code : "write-failed";
   }
-  // 6.49.0: every check above passed and the verdict is green or red — offer this completed run to /pharn-regress as
+  // 6.49.0: every check above passed and the verdict is green, red or unmeasured — offer this completed run to /pharn-regress as
   // BASE evidence, bound to the stamp bytes just validated and the open run marker. Best-effort: no exit, document or
   // record depends on it; without an open delivery run there is nothing to bind and nothing is said.
   const offered = publishEntryOffer({

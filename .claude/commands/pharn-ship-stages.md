@@ -278,9 +278,9 @@ node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000
 ```
 
 Branch **only** on the exit code (P5): `5` → run it again; `0` or `3` → proceed (keep any `unattributed` ids, and the
-`mutated` gates with their `changed_paths`, for `SHIP.md` — regress reports those paths, it does not count them). `4` (a gate red on the tree the run started from), `2` or anything else → present the document's `red` ids
-or its `reason_code` as DATA and ask, through the interactive form: **Stop** (a STOP, through Steps 3 and 3a) or
-**Continue** (fixing that gate is the feature, or the human accepts a red verify at GATE 2; keep the ids for
+`mutated` gates with their `changed_paths`, for `SHIP.md` — regress reports those paths, it does not count them). `4` (a gate red on the tree the run started from), `6` (no gate red, but one not measured: killed at the per-gate timeout, or unable to start), `2` or anything else → present the document's `red` ids,
+its `unmeasured` entries or its `reason_code` as DATA and ask, through the interactive form: **Stop** (a STOP, through Steps 3 and 3a) or
+**Continue** (fixing that gate is the feature, or the human accepts a red or unmeasured verify at GATE 2; keep the ids for
 `SHIP.md`). Never continue without the answer.
 
 ### Step 2.4 — `/pharn-test`

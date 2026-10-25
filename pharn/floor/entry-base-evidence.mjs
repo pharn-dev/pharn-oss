@@ -10,7 +10,7 @@
 //   6.34.0's HEAD offer and 6.37.0's snapshot, L35). The write tools are denied the git dir in the layouts the ★ HOOK test
 //   probes (a main checkout: protect-trusted-paths.cjs, a `.git` segment; a linked worktree: enforce-writes-scope.cjs, a
 //   path in another git tree), with 6.34.0's named separate-git-dir bound. It is published ONLY by `entry-gates.mjs
-//   --wait` after every one of its checks passed, for a green or red verdict, and discarded by every `--start` (L66:
+//   --wait` after every one of its checks passed, for a green, red or unmeasured verdict, and discarded by every `--start` (L66:
 //   regress never reads whatever happens to remain in `.pharn/pharn-entry/` — only a source an offer binds by sha256).
 // • The SOURCE stays where the runner wrote it: `.pharn/pharn-entry/gates/` (the stamp and each gate's logs), which the
 //   write tools reach. The offer binds the stamp's bytes and the stamp binds each log's, so an edit reads as a MISS.
@@ -82,8 +82,8 @@ export function discardEntryOffer() {
 }
 
 /**
- * Publish the offer for a VALIDATED, completed entry run (entry-gates.mjs `--wait`, after `entryVerdict`, green or red
- * only). `stampBytes` are the exact bytes `--wait` hashed and validated. Bound to the delivery run whose marker is open
+ * Publish the offer for a VALIDATED, completed entry run (entry-gates.mjs `--wait`, after `entryVerdict`, green, red
+ * or unmeasured only). `stampBytes` are the exact bytes `--wait` hashed and validated. Bound to the delivery run whose marker is open
  * for `feature` now. Returns `{published: true}` or `{published: false, why}` — `no-delivery-run`, `git-dir-unresolved`,
  * `malformed` or `write-failed`. Never throws.
  */

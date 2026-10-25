@@ -1770,6 +1770,7 @@ const STUCK_POINTS = [
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
   { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
+  { id: "S14b", blocked: "gates-unmeasured-at-entry" }, // 6.75.0: no red, but a gate the entry runner did not measure
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1868,7 +1869,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 16, "the stuck-point table is S1–S14 plus S6b and S6c");
+  assert.equal(STUCK_POINTS.length, 17, "the stuck-point table is S1–S14 plus S6b, S6c and S14b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
