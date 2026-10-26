@@ -21,10 +21,10 @@ repository. PHARN is strict about one thing: claims backed by deterministic chec
 model or human judgment remains advisory.
 
 ```bash
-npx @pharn-dev/pharn@latest init --ref latest
+npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.1.3-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.1.4-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -116,14 +116,15 @@ Node added in 22.18 / 24.2. Since 6.50.0 every guarded tool refuses an older Nod
 and exits `2` instead of exiting `0` without running its checks. CI and local contributor gates use Node 24. In your project root:
 
 ```bash
-npx @pharn-dev/pharn@latest init --ref latest
+npx @pharn-dev/pharn@latest init
 ```
 
-`--ref latest` installs the newest PHARN **release**: a tag `v<SKILLS_VERSION>` that this repository's release workflow
-creates only after the CI checks `main` requires, those that run on a push, passed on that commit. The installer records the choice, so `update` keeps
-following releases. When no release can be resolved, it exits 1 and names `--ref main` instead of falling back on its
-own. Without `--ref`, the installer takes the tip of `main`: every merge, before its checks on `main` have finished.
-That channel is for contributors who want each change as it lands.
+`init` installs the newest PHARN **release**: a tag `v<SKILLS_VERSION>` that this repository's release workflow
+creates only after the CI checks `main` requires, those that run on a push, passed on that commit. The installer records the
+choice (`"ref": "latest"`), so `update` keeps following releases. When no release can be resolved, it exits 1 and names
+`--ref main` instead of falling back on its own. `--ref main` takes the tip of `main`: every merge, before its checks on
+`main` have finished. That channel is for contributors who want each change as it lands. Releases are the default from
+`@pharn-dev/pharn` 0.15.0, which `@latest` resolves to; an older installer takes the tip of `main` unless given `--ref latest`.
 
 Then open Claude Code in the same project and run the full loop:
 
@@ -192,7 +193,9 @@ Every stage is also available as its own command; see [Commands](#commands).
 Already installed? `npx @pharn-dev/pharn status` reports your installed skills version and drift.
 `update` re-fetches the latest skills version, `add` and `remove` manage capabilities, and `list` prints
 what is installed. `init` installs into the project rather than onto your `PATH`, so keep the `npx`
-prefix unless you installed the CLI globally.
+prefix unless you installed the CLI globally. An install made with `--ref main`, or before `@pharn-dev/pharn` 0.15.0
+without `--ref latest`, follows `main`, and `update` keeps it there; `npx @pharn-dev/pharn@latest update --ref latest`
+switches it to releases.
 
 **Two version numbers, on purpose.** The `pharn` badge above tracks
 [`SKILLS_VERSION`](./SKILLS_VERSION) — the content an install receives, and what `status` and

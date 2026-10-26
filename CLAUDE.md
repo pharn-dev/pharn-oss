@@ -90,8 +90,9 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   already shipped; **minor** = a newly shipped capability / command / checker; **major** = a breaking
   shape change (a contract / finding-shape / frontmatter change that invalidates existing installs).
 - **Every PR adds at least one new CHANGELOG entry and edits nothing already merged, because every merge
-  to `main` reaches users** (pharn-cli installs the tip of `main` by default, and `pharn update` points users
-  at `CHANGELOG.md`). A merge that bumps `SKILLS_VERSION` also becomes a release (`release.yml`,
+  to `main` reaches users** (pharn-cli's `main` channel installs the tip of `main` — an install recording no `ref`,
+  `--ref main`, and an older pharn-cli's default; new installs default to releases since 0.15.0 — and `pharn update` points
+  users at `CHANGELOG.md`). A merge that bumps `SKILLS_VERSION` also becomes a release (`release.yml`,
   CONTRIBUTING "Releases").
 
 ## Hard constraints (these will bite you)
@@ -110,7 +111,8 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    other contributors only: the owner's account is the ruleset's bypass actor and `enforce_admins` is off, so any
    merge made with the owner's credentials skips both — including an agent running `gh pr merge --admin` with the
    owner's token. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
-   commit, so pharn-cli's `--ref latest` does not receive a red tree through the workflow; `main`, its default channel, still can.
+   commit, so pharn-cli's `--ref latest` (the default for new installs since 0.15.0) does not receive a red tree through
+   the workflow; its `main` channel (an install recording no `ref`, `--ref main`, an older pharn-cli's default) still can.
    **It also protects the two guards' own
    control surface** — **both** settings files that wire the hooks (`.claude/settings.json` and
    `.claude/settings.local.json`, which is loaded too and can wire or override the same hooks), the

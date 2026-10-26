@@ -173,8 +173,11 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   automatic proportionality — nothing measures whether a change is "small" — the flag is a person's choice (under
   `/pharn-loop --quick` the model then writes and approves the quick SPEC), and a change too large for it stops (S6c,
   under `/pharn-loop --quick`) or takes the full pipeline.
-- **Packaging is still pre-release shaped.** There are no GitHub releases or git tags yet; the installer
-  currently fetches the repository's `main` and records the exact installed commit.
+- **Releases are tagged by CI, and `main` still reaches users.** A `SKILLS_VERSION` bump is tagged `v<SKILLS_VERSION>`
+  once its required checks pass on `main`, and `@pharn-dev/pharn` 0.15.0 or newer installs the newest such release by
+  default. The `main` channel (`--ref main`, an install that records no `ref`, or an older installer's default) takes every merge
+  before its checks on `main` finish. Either way the installer records the exact installed commit
+  ([`pharn/LIMITS.md §11`](../pharn/LIMITS.md)).
 
 [`pharn/LIMITS.md`](../pharn/LIMITS.md) documents what PHARN does not guarantee.
 [`pharn/THREAT-MODEL.md`](../pharn/THREAT-MODEL.md) documents the attack surface and trust assumptions.

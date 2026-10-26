@@ -23,6 +23,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.1.4] - 2026-10-26
+
+### Changed
+
+- 2026-10-26: **The docs now say that a new install takes the newest verified release by default, as
+  `@pharn-dev/pharn` 0.15.0 does ([pharn-dev/pharn-cli#326](https://github.com/pharn-dev/pharn-cli/pull/326)).**
+  `pharn init` with no `--ref` installs the newest `v<SKILLS_VERSION>` release and records `"ref": "latest"`; when no
+  release resolves it exits 1 and names `--ref main`, never falling back on its own. `--ref main` is the contributor
+  channel, and it records no `ref`. `main` is still what three kinds of install receive: one whose
+  `pharn.config.json` records no `ref` (`pharn update` keeps it on `main` and says so once), one made with
+  `--ref main`, and the default install of a pharn-cli older than 0.15.0. So every merge to `main` still reaches users; `main`
+  is no longer the default. `pharn/LIMITS.md §11`, the README install commands (which drop `--ref latest`, since
+  `@latest` resolves to 0.15.0 or newer) and its channel paragraph, CONTRIBUTING "Releases" and "CHANGELOG entries",
+  and `CLAUDE.md` say so, and the README adds `update --ref latest` for an existing install on `main`.
+  `docs/limitations.md` drops its "no GitHub releases or git tags yet" bullet, which v7.1.2 made false. `MIN_CLI`
+  stays 0.14.0: an older CLI still installs a working tree, from `main`. Patch bump because `pharn/LIMITS.md` ships.
+
 ## [7.1.3] - 2026-10-26
 
 ### Added
