@@ -342,6 +342,42 @@ verdict alone — in a table the SPEC's pinned kind chooses, never the flag. Its
 not `STOP_GREEN`; the record (`LOOP.md`, `mode: quick`), the commit message and the summary name the mode and list
 what was not checked. It writes `cost.json` but no `RUN-REPORT.md`.
 
+### Running /pharn-loop in a container
+
+An unattended `/pharn-loop` runs your project's tests and the code its build wrote with nobody watching, and PHARN
+cannot sandbox the shell it uses ([`pharn/LIMITS.md`](../pharn/LIMITS.md) §6). So since 7.1.0 the loop's first step,
+`pharn/floor/check-run-isolation.mjs`, refuses to start (`blocked: not-isolated`) unless it finds a container marker
+(`/.dockerenv`, `/run/.containerenv`, a container runtime in `/proc/1/cgroup`, a dev-container, Codespaces, Gitpod
+or GitHub Actions variable, or `PHARN_ISOLATED=1`) and none of the credentials it lists (`~/.ssh`, an SSH agent, gh,
+git credentials and helpers, `.netrc`, AWS, npm tokens and a few deploy-platform tokens). Pass
+`--accept-host-execution` before the description to run anyway; the record, the run report and the commit message
+then say so. The full lists and their reasons are in
+[`loop-record.md`](../pharn/pharn-contracts/loop-record.md), "The isolation field".
+
+The check reads a fixed list, so it is not proof of isolation. A credential it does not list (a project `.env`, a
+keychain, a cloud metadata endpoint) is not seen. A container it does not recognize (containerd or Kubernetes on
+cgroup v2, where `/proc/1/cgroup` reads `0::/`) needs `PHARN_ISOLATED=1`, which is your assertion, not a detection.
+Claude Code's own credential (`ANTHROPIC_API_KEY`) is always present, so a compromised run can still send data out
+through it.
+
+An example, illustrative and **advisory**: no file in this repository builds or checks it. It mounts only the
+repository and passes only the model credential:
+
+```bash
+docker run --rm -it \
+  -v "$PWD":/work -w /work \
+  -e ANTHROPIC_API_KEY \
+  -e GIT_AUTHOR_NAME="pharn-loop" -e GIT_AUTHOR_EMAIL="pharn-loop@localhost" \
+  -e GIT_COMMITTER_NAME="pharn-loop" -e GIT_COMMITTER_EMAIL="pharn-loop@localhost" \
+  node:24 bash -c 'npm install -g @anthropic-ai/claude-code && claude'
+```
+
+Git gets its identity from the environment, not from a mounted `~/.gitconfig`. A mounted config would bring its
+credential helper (refused as `cred:credential-helper`) and its signing settings: with `commit.gpgsign=true` and no
+signing key in the container, the loop's green commit fails and the run ends `not committed: commit failed`. Inside
+the container, run `/pharn-loop <description>` as usual. The green branch it commits lives in the mounted repository;
+nothing is pushed.
+
 ## Capability coverage
 
 Capabilities are named for the problem they inspect, not the framework they run in. Grillers interrogate

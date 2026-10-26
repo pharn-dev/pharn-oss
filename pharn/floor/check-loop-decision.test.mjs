@@ -43,6 +43,9 @@ function loopRecord(fm) {
 
 // The run's Stop-guard marker, as require-loop-record.cjs --open writes it (6.65.0, LOOP-2).
 const MARKER_NAME = "demo";
+// 7.1.0 (loop-isolation-stop): check-loop-record.mjs requires the isolation line and its witness; this checker ignores
+// both. The fixtures that also run the record checker carry ISO, and withFixture writes the witness beside the marker.
+const ISO = '{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}';
 const markerDoc = (cap, extra = {}) => ({
   schema: "pharn-loop-active/1",
   name: MARKER_NAME,
@@ -66,6 +69,7 @@ function withFixture(fm, verifyObj, regressObj, fn, spec = null, marker = "auto"
     mkdirSync(mdir, { recursive: true });
     const doc = marker === "auto" ? markerDoc(/^\d+$/.test(fm.cap ?? "") ? Number(fm.cap) : 3) : marker;
     writeFileSync(join(mdir, "active.json"), typeof doc === "string" ? doc : `${JSON.stringify(doc)}\n`);
+    writeFileSync(join(mdir, "isolation.json"), `${ISO}\n`);
   }
   try {
     const loopPath = join(dir, "LOOP.md");
@@ -329,12 +333,12 @@ test("★ D8's OWN RECORD (grill G1) — STOP_GREEN_QUICK, no mode, over a quick
       assert.match(r.out, /MODE_MISMATCH/, "the invocation (full) and the SPEC's kind (quick) disagree");
       assert.doesNotMatch(r.out, /DECISION_MISMATCH/, "the decision itself is what the quick table computes");
       // The same record through the shape checker: the cross-field rule REDs it first.
-      writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", ...REC })));
+      writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", ...REC, isolation: ISO })));
       const shape = spawnSync(process.execPath, [RECORD_CHECKER, r.loopPath], { encoding: "utf8" });
       assert.equal(shape.status, 1, shape.stdout);
       assert.match(shape.stdout, /requires `mode: quick`/);
       // CONTROL: "repairing" it by writing mode: quick turns BOTH green — which is exactly why Step 6b never edits `mode`.
-      writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", mode: "quick", ...REC })));
+      writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", mode: "quick", ...REC, isolation: ISO })));
       assert.equal(spawnSync(process.execPath, [RECORD_CHECKER, r.loopPath], { encoding: "utf8" }).status, 0);
       assert.equal(spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" }).status, 0);
     },
@@ -385,11 +389,15 @@ test("a malformed record mode → RED before any re-run (shape: cleanScalar + me
 test("✧ ENUM PARITY — every decision token is accepted by BOTH record checkers and refused by both outside the set (behavioural)", () => {
   const dir = mkdtempSync(join(tmpdir(), "pharn-loop-decision-enum-"));
   try {
-    const p = join(dir, "LOOP.md");
+    // 7.1.0: the record sits at pharn/features/<name>/LOOP.md with its isolation witness, as check-loop-record.mjs needs.
+    mkdirSync(join(dir, "pharn", "features", MARKER_NAME), { recursive: true });
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", MARKER_NAME), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", MARKER_NAME, "isolation.json"), `${ISO}\n`);
+    const p = join(dir, "pharn", "features", MARKER_NAME, "LOOP.md");
     // A blocked record takes the shape path in check-loop-decision.mjs without a re-run, so each token's MEMBERSHIP is
     // what decides there; STOP_GREEN_QUICK carries mode: quick, which check-loop-record.mjs requires.
     const verdictOf = (checker, decision) => {
-      const fm = { decision, blocked: "no-slug", ...REC, ...(decision === "STOP_GREEN_QUICK" ? { mode: "quick" } : {}) };
+      const fm = { decision, blocked: "no-slug", ...REC, isolation: ISO, ...(decision === "STOP_GREEN_QUICK" ? { mode: "quick" } : {}) };
       writeFileSync(p, withHandoff(loopRecord(fm)));
       const r = spawnSync(process.execPath, [checker, p], { encoding: "utf8" });
       return { status: r.status, out: r.stdout };

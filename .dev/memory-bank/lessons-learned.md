@@ -2439,3 +2439,18 @@ type: process · concepts: [relocation, sweep-scope, dated-record, migration, fa
 - commit: `2ae9f0241a089578a62835c4449c537e6f09a47e`
 - source: .dev/features/pharn-footprint-move/REVIEW.md § Proposed lesson candidate + § Advisory findings (LIMITS §7, reconciliation-record.md:39, stage-regress-core.mjs:94)
 - promoted: 2026-10-25 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L79 — A "cannot omit" claim over an output built from .pharn/ state must name the write tools, not only Bash
+
+type: contract · concepts: [overclaim, run-state, mirrored-state, writes-scope]
+
+**Lesson.** When tested code builds an output — a commit paragraph, a report line — from a file under `.pharn/`, the output is only as fixed as that file. `.pharn/**` is writable by the Write tool in every posture (`enforce-writes-scope.cjs`), `Bash` reaches it too, and reconcile never sees it, because it is git-ignored. So a sentence saying "the record and the commit cannot leave out X" holds only while that file is unaltered. In `loop-isolation-stop` the claim reached four places (`.claude/commands/pharn-loop.md`, the LIMITS/THREAT-MODEL drafts, `docs/guarantees.md`, and the PLAN's own amendment A1), and every stage before review was green over it. Remedy: when a claim's evidence is a `.pharn/` file, state its bound in terms of the write tools as well as `Bash`, and say whether a mismatch gates anything — here the record check's RED did not gate the commit.
+
+**Why it matters.** It is [[L65]]'s mechanism (a pin is only as strong as the scope around its record) reaching a claim in shipped text rather than a gate: no checker reads the sentence, so it survived plan, grill, build, regress and verify and fell only to an independent review that parsed a hand-written witness. **Bound (P0):** discipline only; nothing checks the wording of a claim against where its evidence lives. **Honest trigger (P7):** one increment, four occurrences, found by `/pharn-dev-review` before merge.
+
+**Provenance.**
+
+- feature: `loop-isolation-stop`
+- commit: `7e71753ce2ba3ed7493264d5e7a2430d45a46440` (working-tree build on this commit; uncommitted at promotion time)
+- source: .dev/features/loop-isolation-stop/REVIEW.md F1,F2,F3,F4
+- promoted: 2026-10-25 via gated `/pharn-dev-memory-promote` (human-approved).

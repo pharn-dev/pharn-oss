@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.0.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.1.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -160,6 +160,12 @@ both human gates:
 For a small, well-scoped change, both commands take `--quick` (`/pharn-ship --quick`, 6.25.0;
 `/pharn-loop --quick`, 6.28.0): a shorter spine that checks less. [Quick mode](./docs/pipeline.md#quick-mode) says
 what it skips and what still stops it.
+
+Run an unattended loop in a container that holds none of your credentials. At entry it checks a fixed list of
+container markers and credential files and env vars. When it finds no container marker, or finds a credential, it
+refuses to start unless you pass `--accept-host-execution`. When it cannot read your home directory or git config, it
+refuses even with that flag (7.1.0;
+[Running /pharn-loop in a container](./docs/pipeline.md#running-pharn-loop-in-a-container)).
 
 Use the full `/pharn-loop` for a feature that spans several files, has acceptance tests, or is likely to need more
 than one iteration, and `--quick` for everything else. Two measured full-loop runs of one small feature in a user
@@ -351,7 +357,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 142** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 144** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

@@ -182,7 +182,9 @@ node pharn/floor/pre-run-snapshot.mjs --capture '<name>'
 ```
 
 **Non-zero → STOP** before `/pharn-plan`, as for the marker line: present its `pre-run-snapshot:` refusal and hand to
-the human. Like every STOP, it goes through Steps 3 and 3a.
+the human. Like every STOP, it goes through Steps 3 and 3a. Unlike `/pharn-loop`, this command runs no isolation
+check (`check-run-isolation.mjs`): a person approved its SPEC at GATE 1 and decides at GATE 2, so do not add one by
+analogy.
 
 **Then start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on this tree in the
 background while `/pharn-plan` and `/pharn-grill` work; the read before `/pharn-test` decides

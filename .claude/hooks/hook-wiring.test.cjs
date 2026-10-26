@@ -99,6 +99,44 @@ test("✧ the disableAllHooks check DISCRIMINATES: the key with either value fai
   assert.throws(() => assertHooksNotDisabled([], "planted"), /not a JSON object/);
 });
 
+// 7.1.0 (loop-isolation-stop): /pharn-loop's entry isolation check reads only the environment, and a project settings
+// file's `env` block sets the environment of every command Claude Code runs. So neither project file may set any input
+// of that check: `PHARN_ISOLATED`, an env isolation code's or a credential env var's name (read from the core, the one
+// owner — L35), HOME / USERPROFILE / SSH_AUTH_SOCK, git's config redirection (`GIT_CONFIG*`, XDG_CONFIG_HOME), or any
+// key containing `ACCEPT` (the opt-in is argv, never env; the pin keeps it that way). BOUND (P0): this repo's own files
+// only — tests never ship, so an install's settings, and a user-level ~/.claude/settings.json, are unchecked
+// (pharn/pharn-contracts/loop-record.md, "The isolation field").
+async function isolationInputOffenders(settings) {
+  const core = await import(join(REPO, "pharn", "floor", "check-run-isolation-core.mjs"));
+  const names = new Set([...core.ISOLATION_ENV.map((e) => e.name), ...core.CREDENTIAL_ENV, ...core.PROBE_ENV, "XDG_CONFIG_HOME"]);
+  const env = settings && typeof settings.env === "object" && settings.env !== null ? settings.env : {};
+  return Object.keys(env).filter((k) => names.has(k) || /^GIT_CONFIG/.test(k) || /ACCEPT/i.test(k));
+}
+
+test("✧ no project settings file's `env` sets an input of /pharn-loop's isolation check", async () => {
+  let checked = 0;
+  for (const rel of PROJECT_SETTINGS) {
+    const abs = join(REPO, rel);
+    if (rel.endsWith("settings.local.json") && !fs.existsSync(abs)) continue;
+    assert.deepEqual(
+      await isolationInputOffenders(JSON.parse(fs.readFileSync(abs, "utf8"))),
+      [],
+      `${rel} sets an isolation input under env`
+    );
+    checked += 1;
+  }
+  assert.ok(checked >= 1, "the committed settings.json must always be checked");
+});
+
+test("✧ the isolation-input check DISCRIMINATES: each class of planted key fails it (L40 negative control)", async () => {
+  const settings = JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8"));
+  for (const key of ["PHARN_ISOLATED", "CODESPACES", "GH_TOKEN", "HOME", "GIT_CONFIG_GLOBAL", "PHARN_ACCEPT_HOST_EXECUTION"]) {
+    const planted = { ...JSON.parse(JSON.stringify(settings)), env: { ...(settings.env || {}), [key]: "1" } };
+    assert.deepEqual(await isolationInputOffenders(planted), [key], `env.${key} must fail`);
+  }
+  assert.deepEqual(await isolationInputOffenders({ env: { NODE_OPTIONS: "x" } }), [], "an unrelated key passes");
+});
+
 test("precondition: the subdirectory these tests start the guards from exists", () => {
   assert.ok(fs.statSync(SUBDIR).isDirectory(), `${SUBDIR} must exist for the subdirectory cases to mean anything`);
 });
