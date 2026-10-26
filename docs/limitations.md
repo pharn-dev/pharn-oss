@@ -177,8 +177,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   once its required checks pass on `main`, and `@pharn-dev/pharn` 0.15.0 or newer installs the newest such release by
   default; resolving that release uses `api.github.com`'s unauthenticated limit of 60 requests an hour, and when none
   resolves the installer exits 1 rather than fall back. The `main` channel takes every merge before its checks on
-  `main` finish. Either way the installer records the exact installed commit
-  ([`pharn/LIMITS.md §11`](../pharn/LIMITS.md)).
+  `main` finish, and records no commit when its GitHub lookup fails; a release install always records the commit its
+  tag points at ([`pharn/LIMITS.md §11`](../pharn/LIMITS.md)).
 
 [`pharn/LIMITS.md`](../pharn/LIMITS.md) documents what PHARN does not guarantee.
 [`pharn/THREAT-MODEL.md`](../pharn/THREAT-MODEL.md) documents the attack surface and trust assumptions.

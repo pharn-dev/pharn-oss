@@ -39,7 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `@latest` resolves to 0.15.0 or newer) and its channel paragraph, CONTRIBUTING "Releases" and "CHANGELOG entries",
   and `CLAUDE.md` say so, and the README adds `update --ref latest` for an existing install on `main`.
   `docs/limitations.md` drops its "no GitHub releases or git tags yet" bullet, which v7.1.2 made false. `MIN_CLI`
-  stays 0.14.0: an older CLI still installs a working tree, from `main`. Patch bump because `pharn/LIMITS.md` ships.
+  stays 0.14.0: an older CLI still installs a working tree, from `main` by default. Patch bump because `pharn/LIMITS.md` ships.
 
 ## [7.1.3] - 2026-10-26
 
