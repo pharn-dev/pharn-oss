@@ -266,7 +266,8 @@ written for whichever member was in front of the author):
 ## Step 2c — CHANGELOG entry check (GATE 2 only; recorded, never a proceed/stop input)
 
 Runs **at GATE 2 only** — after Step 2b, before the Step-3 `SHIP.md` write — because every merge to
-`main` is a release and CI's per-PR step will run the same check on the pull request. Run exactly these
+`main` reaches users (pharn-cli's default channel installs the tip of `main`) and CI's per-PR step will run the
+same check on the pull request. Run exactly these
 two lines, in order:
 
 ```bash

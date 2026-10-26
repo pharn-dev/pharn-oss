@@ -21,7 +21,7 @@ repository. PHARN is strict about one thing: claims backed by deterministic chec
 model or human judgment remains advisory.
 
 ```bash
-npx @pharn-dev/pharn@latest init
+npx @pharn-dev/pharn@latest init --ref latest
 ```
 
 [![pharn](https://img.shields.io/badge/pharn-7.1.2-blue)](./CHANGELOG.md)
@@ -116,8 +116,14 @@ Node added in 22.18 / 24.2. Since 6.50.0 every guarded tool refuses an older Nod
 and exits `2` instead of exiting `0` without running its checks. CI and local contributor gates use Node 24. In your project root:
 
 ```bash
-npx @pharn-dev/pharn@latest init
+npx @pharn-dev/pharn@latest init --ref latest
 ```
+
+`--ref latest` installs the newest PHARN **release**: a tag `v<SKILLS_VERSION>` that this repository's release workflow
+creates only after the CI checks `main` requires, those that run on a push, passed on that commit. The installer records the choice, so `update` keeps
+following releases. When no release can be resolved, it exits 1 and names `--ref main` instead of falling back on its
+own. Without `--ref`, the installer takes the tip of `main`: every merge, before its checks on `main` have finished.
+That channel is for contributors who want each change as it lands.
 
 Then open Claude Code in the same project and run the full loop:
 

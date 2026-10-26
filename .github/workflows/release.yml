@@ -1,0 +1,189 @@
+name: release
+
+# Publishes a verified release: the annotated tag `v<SKILLS_VERSION>` and a GitHub release, created only after the
+# required checks concluded `success` on the exact commit being tagged. pharn-cli's `--ref latest` channel resolves
+# the newest release (pharn-cli `src/lib/release.ts`): it requires the tag `v<SKILLS_VERSION>`, refuses a draft or a
+# prerelease, and refuses a tagged tree whose root SKILLS_VERSION differs from the tag (pharn-cli `src/lib/repo.ts`).
+#
+# THE GUARDS, in order, on the run's own commit ($GITHUB_SHA):
+#   1. Resolve — refuse unless the ref is refs/heads/main. Read SKILLS_VERSION; the tag must match TAG_RE. Tag
+#      absent: release. Tag present at another commit: fail — a tag is never moved. Tag present at this commit: a
+#      published release for it means "already released" (exit 0, nothing else runs); no release means a run created
+#      the tag and failed, so only the release is created; a draft or prerelease is left alone and the run fails.
+#      An [Unreleased]-only merge therefore releases nothing new once its version is tagged.
+#   2. Wait — poll this commit's check runs every POLL_INTERVAL_S seconds, at most POLL_MAX times. For each required
+#      check (app slug + name), the run with the highest id counts (a re-run supersedes the run it re-ran). A required
+#      run that concluded anything but `success` fails the job at once; the bound fails it too. A failed API call is
+#      one poll that saw nothing, retried within the same bound.
+#   3. CHANGELOG — the newest version section must be SKILLS_VERSION's (check-skills-version-recorded.mjs), and this
+#      commit's own diff must keep the per-PR convention (check-changelog-entry.mjs --base-ref HEAD^1).
+#   4. Body — that version's CHANGELOG section, cut by .dev/floor/changelog-section.mjs (no token in that step).
+#   5. Tag and release — the tag object and its ref (creating a ref that exists fails, never overwrites), then
+#      `gh release create --verify-tag --latest`: not a draft, not a prerelease.
+#
+# REQUIRED_CHECKS is a COPY of ruleset 18045407's required status checks, minus `Socket Security: Pull Request
+# Alerts`, which runs on pull requests only and never posts on a push to main (measured on the two main commits before
+# this file; it is still enforced on the pull request by the ruleset). Change the two together. The copy drifts
+# unevenly: a check renamed in a workflow makes this job time out (fails closed), but a check ADDED to the ruleset and
+# not here is simply not waited for (fails open). The app slug pins which app's run counts, which the ruleset does
+# only for Socket.
+#
+# BOUNDS (P0): this is a property of this workflow, not a PHARN floor primitive. It does not stop a person with
+# admin rights from creating or moving a tag by hand (a tag ruleset protecting v* is a maintainer setting), and it
+# says nothing about `main` itself: the owner's ruleset bypass can still merge a red tree, which pharn-cli's default
+# `main` channel installs. GitHub keeps one PENDING run per concurrency group, so a newer push cancels an older
+# pending run (never a running one); the next run releases the then-current SKILLS_VERSION at its own commit. A
+# failed run is fixed and re-run with workflow_dispatch on main — never by moving or re-creating a tag.
+#
+# WHO MAY EDIT THIS FILE: set-writes-scope.cjs refuses `.github/workflows/**` from a plan in an INSTALLED PHARN project
+# only. In this repository (the dev checkout) a /pharn-dev-build plan may scope it — this file was written that way —
+# so review is what guards it. The pins and the executed run blocks: .dev/floor/release-workflow.test.mjs.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      checks: read
+    env:
+      # pharn-cli's RELEASE_TAG_RE language (`src/lib/validate.ts`) and its SKILLS_VERSION_FILE (`src/lib/constants.ts`).
+      TAG_RE: '^v\d+\.\d+\.\d+$'
+      SKILLS_VERSION_FILE: SKILLS_VERSION
+      # The `check` job takes about 11 minutes on main; 45 polls a minute apart leave room for a slow runner.
+      POLL_INTERVAL_S: 60
+      POLL_MAX: 45
+      # One per line: the app slug, a space, the check name.
+      REQUIRED_CHECKS: |
+        github-actions floor
+        github-actions check
+        github-actions Analyze (javascript-typescript)
+        socket-security Socket Security: Project Report
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Resolve the release
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$GITHUB_REF" = "refs/heads/main" ] || fail "NOT_MAIN: a release is made from refs/heads/main only, not $GITHUB_REF"
+          version=$(cat -- "$SKILLS_VERSION_FILE") || fail "NO_VERSION: cannot read $SKILLS_VERSION_FILE"
+          export TAG="v$version"
+          node -e 'process.exit(new RegExp(process.env.TAG_RE).test(process.env.TAG) ? 0 : 1)' || fail "BAD_VERSION: $SKILLS_VERSION_FILE does not make a tag matching $TAG_RE"
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$TAG" --jq '.[] | select(.ref == "refs/tags/" + env.TAG) | [.object.type, .object.sha] | @tsv') || fail "API: cannot list tags"
+          if [ -z "$ref" ]; then
+            action=tag-and-release
+          else
+            IFS=$'\t' read -r type sha <<< "$ref"
+            if [ "$type" = "tag" ]; then
+              ref=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '[.object.type, .object.sha] | @tsv') || fail "API: cannot read the tag object of $TAG"
+              IFS=$'\t' read -r type sha <<< "$ref"
+            fi
+            [ "$type" = "commit" ] || fail "TAG_NOT_COMMIT: $TAG does not point at a commit"
+            [ "$sha" = "$GITHUB_SHA" ] || fail "TAG_ELSEWHERE: $TAG points at $sha, not $GITHUB_SHA; a tag is never moved"
+            rel=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate --jq '.[] | select(.tag_name == env.TAG) | [.draft, .prerelease] | @tsv') || fail "API: cannot list releases"
+            if [ -z "$rel" ]; then
+              action=release-only
+            elif [ "$rel" = $'false\tfalse' ]; then
+              action=done
+            else
+              fail "RELEASE_NOT_PUBLISHED: a draft or prerelease exists for $TAG; it is left alone"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "action=$action" >> "$GITHUB_OUTPUT"
+          if [ "$action" = "done" ]; then echo "already released: $TAG is published at $GITHUB_SHA"; else echo "$TAG: $action"; fi
+      - name: Wait for the required checks
+        if: ${{ steps.resolve.outputs.action != 'done' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          count=0
+          while IFS= read -r line; do
+            if [ -n "${line// /}" ]; then count=$((count + 1)); fi
+          done <<< "$REQUIRED_CHECKS"
+          [ "$count" -gt 0 ] || fail "NO_REQUIRED_CHECKS: the required-check list is empty"
+          poll=1
+          while [ "$poll" -le "$POLL_MAX" ]; do
+            if runs=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" --paginate --jq '.check_runs[] | [.id, .app.slug, .name, .status, (.conclusion // "")] | @tsv'); then
+              pending=0
+              while IFS= read -r line; do
+                [ -n "${line// /}" ] || continue
+                app=${line%% *}
+                name=${line#* }
+                latest=$(printf '%s\n' "$runs" | APP="$app" NAME="$name" awk -F'\t' '$2 == ENVIRON["APP"] && $3 == ENVIRON["NAME"] && $1 + 0 > best { best = $1 + 0; row = $0 } END { print row }')
+                if [ -z "$latest" ]; then
+                  pending=$((pending + 1))
+                  echo "poll $poll: waiting for $name ($app): no run yet"
+                  continue
+                fi
+                IFS=$'\t' read -r _ _ _ status conclusion <<< "$latest"
+                if [ "$status" != "completed" ]; then
+                  pending=$((pending + 1))
+                  echo "poll $poll: waiting for $name ($app): $status"
+                  continue
+                fi
+                [ "$conclusion" = "success" ] || fail "CHECK_FAILED: $name ($app) concluded ${conclusion:-without a conclusion} on $GITHUB_SHA; no tag"
+              done <<< "$REQUIRED_CHECKS"
+              if [ "$pending" -eq 0 ]; then
+                echo "all $count required checks succeeded on $GITHUB_SHA"
+                exit 0
+              fi
+            else
+              echo "::warning::poll $poll: the check-runs API call failed; retrying"
+            fi
+            if [ "$poll" -lt "$POLL_MAX" ]; then sleep "$POLL_INTERVAL_S"; fi
+            poll=$((poll + 1))
+          done
+          fail "TIMEOUT: the required checks had not all succeeded after $POLL_MAX polls"
+      - name: CHANGELOG checks
+        if: ${{ steps.resolve.outputs.action != 'done' }}
+        run: |
+          node .dev/floor/check-skills-version-recorded.mjs .
+          node .dev/floor/check-changelog-entry.mjs --base-ref HEAD^1
+      - name: Release body
+        if: ${{ steps.resolve.outputs.action != 'done' }}
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node .dev/floor/changelog-section.mjs . "$TAG" > "$RUNNER_TEMP/release-notes.md"
+      - name: Tag and release
+        if: ${{ steps.resolve.outputs.action != 'done' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          ACTION: ${{ steps.resolve.outputs.action }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          if [ "$ACTION" = "tag-and-release" ]; then
+            obj=$(gh api "repos/$GITHUB_REPOSITORY/git/tags" -f tag="$TAG" -f message="$TAG" -f object="$GITHUB_SHA" -f type=commit --jq .sha) || fail "TAG_OBJECT: cannot create the tag object for $TAG"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$obj" --silent || fail "TAG_REF: cannot create refs/tags/$TAG; an existing tag is never overwritten"
+            echo "created the annotated tag $TAG on $GITHUB_SHA"
+          elif [ "$ACTION" != "release-only" ]; then
+            fail "BAD_ACTION: unexpected action $ACTION"
+          fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/release-notes.md" --latest || fail "RELEASE: cannot create the release for $TAG"
+          echo "released $TAG"

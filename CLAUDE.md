@@ -90,8 +90,9 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   already shipped; **minor** = a newly shipped capability / command / checker; **major** = a breaking
   shape change (a contract / finding-shape / frontmatter change that invalidates existing installs).
 - **Every PR adds at least one new CHANGELOG entry and edits nothing already merged, because every merge
-  to `main` is a release** (pharn-cli installs the tip of `main`, and `pharn update` points users at
-  `CHANGELOG.md`).
+  to `main` reaches users** (pharn-cli installs the tip of `main` by default, and `pharn update` points users
+  at `CHANGELOG.md`). A merge that bumps `SKILLS_VERSION` also becomes a release (`release.yml`,
+  CONTRIBUTING "Releases").
 
 ## Hard constraints (these will bite you)
 
@@ -108,7 +109,9 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks, but it binds
    other contributors only: the owner's account is the ruleset's bypass actor and `enforce_admins` is off, so any
    merge made with the owner's credentials skips both — including an agent running `gh pr merge --admin` with the
-   owner's token. **It also protects the two guards' own
+   owner's token. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
+   commit, so pharn-cli's `--ref latest` does not receive a red tree through the workflow; `main`, its default channel, still can.
+   **It also protects the two guards' own
    control surface** — **both** settings files that wire the hooks (`.claude/settings.json` and
    `.claude/settings.local.json`, which is loaded too and can wire or override the same hooks), the
    four hook scripts (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`,

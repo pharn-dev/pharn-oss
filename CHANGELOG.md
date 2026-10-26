@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-26: **A merge that bumps `SKILLS_VERSION` now becomes a GitHub release once its required checks pass on
+  `main`, so pharn-cli's `--ref latest` has a release to install.** The new `.github/workflows/release.yml` runs on
+  every push to `main` and on a manual run. It waits until `floor`, `check`, `Analyze (javascript-typescript)` and
+  `Socket Security: Project Report` have concluded `success` on that commit (polling once a minute, at most 45
+  times), then creates the annotated tag `v<SKILLS_VERSION>` and a release whose body is that version's CHANGELOG
+  section, cut by the new `.dev/floor/changelog-section.mjs`. A tag that already exists at another commit fails the
+  job and is never moved. An `[Unreleased]` merge releases nothing new. `Socket Security: Pull Request Alerts` is
+  left out because it never runs on a push to `main`. This covers what the workflow tags only: an admin merge still
+  lands a red tree on `main`, which pharn-cli installs by default. The README now recommends `--ref latest` to users,
+  and CONTRIBUTING says how a failed release is re-run. No `SKILLS_VERSION` bump: no shipped bytes change.
+
 ## [7.1.2] - 2026-10-26
 
 ### Added
