@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.0.2] - 2026-10-26
+
+### Fixed
+
+- **`pharn/LIMITS.md` §9 cites the test-infrastructure pin's module by its 7.0.1 name.** 7.0.1 renamed
+  `pharn/floor/test-infra-core.mjs` to `pharn/floor/ac-test-infra-core.mjs` (a bare `node --test` in an install ran
+  the old name as one of the project's tests), and its CHANGELOG entry named this cite as not covered: the trusted doc
+  is a human-only edit, proposed in `.dev/features/floor-test-glob-names/HUMAN-PATCH.md`. The maintainer applied it,
+  so the "Agreement, never provenance" bullet now points at `pharn/floor/ac-test-infra-core.mjs`, the module whose
+  header lists what the pin does not see. Only that path changed.
+
 ## [7.0.1] - 2026-10-25
 
 ### Fixed
