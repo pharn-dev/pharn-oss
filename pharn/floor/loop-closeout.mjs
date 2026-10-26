@@ -59,7 +59,10 @@
 //     commit message is `pharn-loop(<name>): <decision> after <N> iteration(s)` plus the fixed second paragraph, with
 //     <decision> and <N> the record's enum token and digits — and, since 6.65.0 (audit LOOP-4), a third paragraph
 //     naming the gates the project's `gates.exclude` removed from the final verify / regress (`excludedGates`, read
-//     after step 3 into the document's `excluded_gates`; ALLOWLIST tokens and digits only), when there were any.
+//     after step 3 into the document's `excluded_gates`; ALLOWLIST tokens and digits only), when there were any. Since
+//     7.1.0 (loop-isolation-stop) a paragraph after the fixed one ALWAYS names the run's Step 1a isolation outcome,
+//     read from the witness `pharn/.run/pharn-loop/<name>/isolation.json` (`isolationWitness`, the core's grammar), never
+//     from the record: `isolation: <outcome>`, plus ` (host execution accepted by operator)`, or the not-recorded line.
 //     Hooks run (never --no-verify; nothing is pushed or merged). A failed add → `stage failed`, a failed commit → `commit failed`, each followed by the undo the close
 //     part prescribed — reset of the list, `git checkout - --`, `git branch -d <branch>` — exit 4. Success → the SHA
 //     from `git rev-parse HEAD`, `committed <branch>`, exit 0.
@@ -98,7 +101,7 @@
 // GIT_LITERAL_PATHSPECS=1, never through a shell. Child output is echoed as DATA; no branch reads it.
 
 import "./runtime-floor.mjs";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, openSync, fstatSync, readSync, closeSync, constants } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { FEATURE_SLUG_RE, SHA_RE, ALLOWLIST, excludedFacts } from "./gate-run-core.mjs";
@@ -107,6 +110,7 @@ import { LOOP_MODES } from "./loop-mode-core.mjs";
 import { cleanScalar } from "./mark-phase.mjs";
 import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
 import { closingLine, echo, floorScript, indent, ledgerSteps, runLedgerTail, runStep, runStop, step } from "./closeout-core.mjs";
+import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
 
 export const SCHEMA = "pharn-loop-closeout/1";
 
@@ -273,7 +277,7 @@ export function gitRun(args, { literal = false, timeoutMs = GIT_TIMEOUT_MS } = {
 export function addArgs(list) {
   return ["add", "-A", `--pathspec-from-file=${list}`, "--pathspec-file-nul"];
 }
-export function commitArgs(list, feature, decision, iterations, excluded = null) {
+export function commitArgs(list, feature, decision, iterations, excluded = null, isolation = null) {
   const note = exclusionNote(excluded);
   return [
     "commit",
@@ -284,8 +288,44 @@ export function commitArgs(list, feature, decision, iterations, excluded = null)
     `pharn-loop(${feature}): ${decision} after ${iterations} iteration(s)`,
     "-m",
     COMMIT_BODY,
+    // 7.1.0 (loop-isolation-stop): ALWAYS a paragraph — the outcome, the accepted suffix when the flag was used, or
+    // the not-recorded line. Built from the WITNESS by the core's one line (only enum tokens and the slug reach it,
+    // P2), so a committed branch names the outcome whatever the record says (the record check does not gate the commit).
+    "-m",
+    isolationLine(isolation, feature),
     ...(note === null ? [] : ["-m", note]),
   ];
+}
+
+/** 7.1.0 — the run's Step 1a isolation witness, `pharn/.run/pharn-loop/<name>/isolation.json`, as a record, or null (absent,
+ *  a link, not a regular file, over 4096 bytes, unreadable, or outside the core's witness grammar). Opened once with
+ *  O_NOFOLLOW and read through that descriptor, capped — the same read check-loop-record.mjs and render-run-report.mjs
+ *  make (review finding 6). */
+export function isolationWitness(feature) {
+  let fd;
+  try {
+    fd = openSync(
+      join("pharn", ".run", "pharn-loop", feature, "isolation.json"),
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+    );
+  } catch {
+    return null;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return null;
+    const buf = Buffer.alloc(4097);
+    let n = 0;
+    for (;;) {
+      const got = readSync(fd, buf, n, buf.length - n, null);
+      n += got;
+      if (got === 0 || n >= buf.length) break;
+    }
+    return n >= buf.length ? null : parseIsolationLine(buf.subarray(0, n).toString("utf8"));
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /** 6.65.0 (audit LOOP-4) — the commit message's third paragraph when the final verify or regress ran without gates the
@@ -676,7 +716,10 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   }
   trace.phase = "commit";
   writePhase(feature, "commit", log);
-  const cm = git(commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations, doc.excluded_gates), { literal: true });
+  const cm = git(
+    commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations, doc.excluded_gates, isolationWitness(feature)),
+    { literal: true }
+  );
   echo(log, { id: "git commit" }, cm);
   if (cm.status !== 0) {
     writePhase(feature, "undo", log);

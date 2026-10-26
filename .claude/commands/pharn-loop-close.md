@@ -57,6 +57,9 @@ capture rules:
   `--quick` as its first argument token, blocked records included, and write no `mode` line otherwise (absent means
   `full`). It is **never copied from `check-loop.mjs`'s JSON**, whose `mode` is the table the SPEC's kind selected:
   `check-loop-decision.mjs` compares the two, and a copy could never disagree with its own source.
+- **`isolation`** (7.1.0) is **copied verbatim** from `pharn/.run/pharn-loop/<name>/isolation.json`, the witness Step 1a's
+  isolation line wrote: `isolation:` followed by that file's one line, byte for byte. Never retype, reorder or edit
+  it, and never edit the witness; on every record, blocked ones included.
 - **`commit`** is captured now, **before** any commit this run makes:
 
   ```bash
@@ -214,6 +217,11 @@ Report, plainly and without asking anything:
 
 - that the run **finished**, the `decision`, the iteration count, and the `blocked:` id if any — with what the
   run needs from a person to continue (the row's trigger, in one sentence);
+- **the isolation line** (7.1.0), from the witness `pharn/.run/pharn-loop/<name>/isolation.json`: `isolation: <outcome>`,
+  plus `(host execution accepted by operator)` when the flag was used, and its evidence codes. On an S15 stop, the
+  check's stderr reason code instead (or that it printed none) and the way out that reason's stderr line names. This
+  screen line is advisory; the run report and the commit message carry the same line from code, read from a witness
+  the run itself can rewrite;
 - **each stage's route** (6.27.0), one line per stage and iteration: the token its stage-start marker recorded
   (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
   `/pharn-grill`, `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs`. A route
@@ -299,6 +307,16 @@ last three feeds `check-loop.mjs`'s inputs.
   `check-loop.mjs` live. **Bounded:** it proves the decision is **re-derivable**, never that the reports are honest —
   with the freshness check, the forgery narrows to a self-consistent fabricated stamp set, and it does not close it. A
   **blocked** stop is exempt by construction.
+- **Floor verdict, ADVISORY evidence (7.1.0):** an unattended run starts only past Step 1a's isolation check —
+  `check-run-isolation.mjs` (closed lists, string equality, set membership); obeying it is **ADVISORY**. The record's
+  `isolation` is the witness's line (`check-loop-record.mjs`: shape, an admitted run's, byte-equal — agreement, never
+  provenance, and it does not gate the commit), and the commit message and `RUN-REPORT.md` print the outcome from the
+  witness, marking one no admitted run could write. The witness is git-ignored `pharn/.run/` state the Write tool and Bash
+  both reach, so these lines are faithful only while nobody rewrites it. **Struck:** "a record and a commit cannot
+  leave out that the flag was used", "the environment was isolated" and "no credential was reachable" — every probe input is
+  environment-supplied, the operator and a project's own `.claude/settings.json` `env` block can set them, the lists
+  are partial, and the agent's own model credential is always present. The floor sees argv, never who typed
+  `--accept-host-execution`.
 - **Tested code over floor verdicts (6.44.0):** the commit — `pharn/floor/loop-closeout.mjs` commits only when the
   record's `decision` is the green token of its `mode` (enum membership), `check-loop-decision.mjs` re-derives it
   GREEN and the commit-gate freshness check exits 0; it stages the list its builder computes, runs the steps in Step

@@ -104,7 +104,7 @@
 //           absent. Fail-closed: nothing is written.
 
 import "./runtime-floor.mjs";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, openSync, fstatSync, readSync, closeSync, constants } from "node:fs";
 import { join, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import {
@@ -128,6 +128,7 @@ import { quoteData, dataText } from "./quote-core.mjs";
 import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
 import { UNMEASURED_CAUSES, excludedFacts } from "./gate-run-core.mjs";
+import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -813,7 +814,41 @@ function isQuickShip(cost) {
   return Boolean(cost) && cost.command === SHIP_COMMAND && Array.isArray(cost.markers) && runMode(cost.markers) === "quick";
 }
 
-function verdictsSection({ verify, regress, cost, stale = false }) {
+/** 7.1.0 (loop-isolation-stop) — the run's Step 1a isolation witness text, read once through an O_NOFOLLOW descriptor
+ *  (a link is never followed), capped; null when absent, a link, not a regular file or unreadable. */
+function readWitnessText(path) {
+  let fd;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch {
+    return null;
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return null;
+    const buf = Buffer.alloc(4097);
+    let n = 0;
+    for (;;) {
+      const got = readSync(fd, buf, n, buf.length - n, null);
+      n += got;
+      if (got === 0 || n >= buf.length) break;
+    }
+    return n >= buf.length ? null : buf.subarray(0, n).toString("utf8");
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** The `## Verdicts` isolation line: from the WITNESS through the core's one grammar and one line, never from the
+ *  record (P2: enum tokens and the slug only). A `/pharn-ship` run runs no isolation check, and says so. */
+export function isolationVerdictLine(repo, name, cost) {
+  if (cost && cost.command === SHIP_COMMAND) return "- isolation: n/a — `/pharn-ship` runs no isolation check (a person approves its SPEC)";
+  const rec = parseIsolationLine(readWitnessText(join(repo, "pharn", ".run", "pharn-loop", name, "isolation.json")));
+  return `- ${isolationLine(rec, name)}`;
+}
+
+function verdictsSection({ verify, regress, cost, stale = false, isolation = null }) {
   const iters = cost && cost.outcome && cost.outcome.iterations;
   const label = typeof iters === "number" ? `iteration ${iters} (final)` : "the final iteration";
   const out = [
@@ -830,6 +865,7 @@ function verdictsSection({ verify, regress, cost, stale = false }) {
     "stop and this",
     "report will not invent them. Per-iteration **cost** is genuine and is in `## Tokens` above.",
     "",
+    ...(isolation === null ? [] : [isolation, ""]),
   ];
   if (!verify) {
     out.push(`- verify: ${na("no verify-report.json — the run stopped before a verify, or it was blocked")}`);
@@ -1232,7 +1268,13 @@ export function renderRunReport(name, opts = {}) {
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Entry gates (background)": entrySection(cost, staleReason),
     "## Files": filesSection({ cost, repo, planEntries, dirtyBefore, dirtyNote, absentReason: staleReason }),
-    "## Verdicts": verdictsSection({ verify, regress, cost: staleReason ? null : cost, stale: Boolean(staleReason) }),
+    "## Verdicts": verdictsSection({
+      verify,
+      regress,
+      cost: staleReason ? null : cost,
+      stale: Boolean(staleReason),
+      isolation: isolationVerdictLine(repo, name, cost),
+    }),
     "## Briefing": briefingSection({ dir, cost: staleReason ? null : cost }),
     "## What the run ran into": handoffSection(loopText, cost),
   };

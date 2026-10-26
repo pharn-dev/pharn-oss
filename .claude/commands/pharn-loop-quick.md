@@ -29,7 +29,7 @@ reads.
 **The deltas below, in step order — every other line of Steps 1–7 and the Final step runs exactly as written for a
 `--quick` invocation too; only what is listed here changes.**
 
-1. **Entry.** `/pharn-loop --quick [--allow-red-entry] [--max-iter N] <increment description>`. Step 1a runs unchanged
+1. **Entry.** `/pharn-loop --quick [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`. Step 1a runs unchanged
    (its entry gates included), and writes no mode marker: the loop's mode is the SPEC's kind, and a marker would be a
    second, unverified copy of it.
 

@@ -593,6 +593,40 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 ```
 
+## `check-run-isolation.mjs` — the entry isolation check
+
+```bash
+# THE ENTRY ISOLATION CHECK (7.1.0, loop-isolation-stop) — an unattended /pharn-loop starts only with evidence of an
+# isolated environment holding none of the listed credentials, or after the operator's --accept-host-execution. THE
+# TRIGGER (P7): audit SEC-1/SEC-3/SEC-5 (2026-10-12) each reproduced prompt-free execution in an unattended run; each fix
+# left pharn/LIMITS.md §6's residual (only a sandbox prevents a Bash write), which pharn-loop.md met with one advisory
+# sentence. /pharn-loop Step 1a runs it after `require-loop-record.cjs --open` and before `pre-run-snapshot.mjs
+# --capture`, stdout redirected to the witness `pharn/.run/pharn-loop/<name>/isolation.json`; any non-zero exit is S15
+# (`blocked: not-isolated`), a Step 1a stop: no feature directory, no record, the Final step closes the marker.
+# /pharn-ship does NOT run it (two human gates). THE RULE (check-run-isolation-core.mjs, pure, the one owner): frozen
+# ISOLATION_CODES (fs:dockerenv, fs:containerenv, fs:proc1-cgroup, the REMOTE_CONTAINERS / CODESPACES /
+# GITPOD_WORKSPACE_ID / GITHUB_ACTIONS env codes, operator:PHARN_ISOLATED) and CREDENTIAL_CODES (16: ~/.ssh, an SSH
+# agent, gh hosts.yml, GH_TOKEN, .git-credentials, a plain or URL-scoped credential helper, .netrc, .aws/credentials,
+# an .npmrc _authToken in HOME or the project, and six token env vars) → HOST (no isolation code) /
+# ISOLATED_WITH_CREDENTIALS / ISOLATED; only ISOLATED exits 0 without the flag. Unknown evidence (unreadable HOME, a
+# git that cannot answer) refuses WITH the flag too. PROBES (the CLI): lstat first, never followed, ENOENT/ENOTDIR the
+# only absence, a non-regular credential path a hit, only regular files opened (O_NOFOLLOW|O_NONBLOCK, 64 KiB cap), the
+# git spawn bounded at 10 s; codes only leave it, never a value (L62). THE RECORD: LOOP.md's mandatory `isolation:` is
+# the witness line verbatim; check-loop-record.mjs REDs it MISSING / MALFORMED / INCONSISTENT / UNWITNESSED / MISMATCH
+# (it does not gate the commit); the commit message and RUN-REPORT.md's `## Verdicts` print `isolation: <outcome>`
+# (+ " (host execution accepted by operator)") from the WITNESS. BOUNDS (P0): a refusal, never a sandbox; every input
+# is environment-supplied — the operator AND a project's own .claude/settings.json `env` can fake it (hook-wiring.test.cjs
+# pins this repo's files only); the lists are partial (a project .env, a keychain, cloud metadata unseen); an unlisted
+# container on cgroup v2 needs PHARN_ISOLATED=1; the floor sees argv, never who typed the flag; the record agrees with a
+# run-writable witness, never provenance (L43) — git-ignored `pharn/.run/` state the Write tool and Bash both reach and
+# reconcile never sees, so every line built from it (record, report, commit) repeats a rewrite; a witness no admitted
+# run can write is marked NOT ADMITTED; the agent's own model credential is always present — the exfiltration
+# residual this stop does not touch. Exit: 0 admitted (record on stdout) · 2 refused (`check-run-isolation: refused
+# <reason> — …` on stderr; the record on stdout for not-isolated / credentials-present only) · node's 1 on a module that
+# cannot load.
+node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]
+```
+
 ## `entry-gates.mjs` — the entry gates
 
 ```bash

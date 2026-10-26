@@ -1771,6 +1771,7 @@ const STUCK_POINTS = [
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
   { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
   { id: "S14b", blocked: "gates-unmeasured-at-entry" }, // 6.75.0: no red, but a gate the entry runner did not measure
+  { id: "S15", blocked: "not-isolated" }, // 7.1.0: Step 1a's isolation check refused (check-run-isolation.mjs)
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -1869,7 +1870,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 17, "the stuck-point table is S1–S14 plus S6b, S6c and S14b");
+  assert.equal(STUCK_POINTS.length, 18, "the stuck-point table is S1–S15 plus S6b, S6c and S14b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -4928,8 +4929,12 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // loop-scope-hardening (6.61.0): the `allowed-tools` grant became the 84 exact pinned lines of the loop's run and of
   // the four stages it may run inline, plus the reworded grant bullet — 58,663 bytes measured after merging 6.59.0,
   // 5,927 over 52,736; raised by the rule (+10%, up to a multiple of 512).
-  "pharn-loop.md": 65024,
-  "pharn-loop-close.md": 34816,
+  // loop-isolation-stop (7.1.0): the isolation check's two pinned lines, the S15 row, the flag's rule and two grants —
+  // 67,613 bytes measured, 2,589 over 65,024; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-loop.md": 74752,
+  // loop-isolation-stop (7.1.0): Step 6b's `isolation` capture rule, the Step 7 line and one claims bullet — 35,042
+  // bytes measured, 226 over 34,816; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-loop-close.md": 38912,
   "pharn-loop-quick.md": 12288,
   "pharn-memory-promote.md": 27648,
   // loop-scope-hardening (6.61.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —

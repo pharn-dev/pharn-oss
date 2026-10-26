@@ -1,0 +1,72 @@
+{
+  "base": "7e71753ce2ba3ed7493264d5e7a2430d45a46440",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop-quick.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-stages.md",
+    ".claude/hooks/hook-wiring.test.cjs",
+    ".dev/features/loop-isolation-stop/GRILL.md",
+    ".dev/features/loop-isolation-stop/HUMAN-PATCH.md",
+    ".dev/features/loop-isolation-stop/PLAN.md",
+    ".dev/features/loop-isolation-stop/PROBE.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/stage-load-budget.test.mjs",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "docs/guarantees.md",
+    "docs/limitations.md",
+    "docs/pipeline.md",
+    "pharn/floor/check-loop-decision.test.mjs",
+    "pharn/floor/check-loop-record.mjs",
+    "pharn/floor/check-loop-record.test.mjs",
+    "pharn/floor/check-run-isolation-core.mjs",
+    "pharn/floor/check-run-isolation-core.test.mjs",
+    "pharn/floor/check-run-isolation.mjs",
+    "pharn/floor/check-run-isolation.test.mjs",
+    "pharn/floor/entry-gates.test.mjs",
+    "pharn/floor/loop-closeout.mjs",
+    "pharn/floor/loop-closeout.test.mjs",
+    "pharn/floor/render-run-report.mjs",
+    "pharn/floor/render-run-report.test.mjs",
+    "pharn/floor/stage-runtime.test.mjs",
+    "pharn/floor/test-infra-core.test.mjs",
+    "pharn/pharn-contracts/loop-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5260,
+      "failed": 0,
+      "skipped": 4,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5263,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

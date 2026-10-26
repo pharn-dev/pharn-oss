@@ -39,7 +39,11 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   the anchor is a shell step, so a run that skips it silently reuses an earlier epoch instead of failing.
   **The only true prevention remains OS-level sandboxing of the `Bash` process, which PHARN does not
   implement** — a harness-layer capability, not something markdown methodology can express, and the same
-  category the missing authenticated baseline store falls into.
+  category the missing authenticated baseline store falls into. Since 7.1.0 an unattended `/pharn-loop` refuses to
+  start without evidence of one (a container marker and none of a fixed list of credentials) unless you pass
+  `--accept-host-execution`. That is a refusal, not a sandbox: the evidence comes from the environment, so you, or a
+  project's own `.claude/settings.json` `env` block, can fake it; the lists are partial; and the agent's own model
+  credential is always present.
 - **No shell command is ever parsed, and that is deliberate.** The reconciler compares hashes and paths;
   it never reads a `Bash` command string. Shell parsing is undecidable and a verb denylist would be a
   heuristic, which the constitution forbids labelling a guarantee — so `sed -i`, a here-doc, `node -e`, a

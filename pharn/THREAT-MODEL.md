@@ -169,6 +169,14 @@ radius and converts some attacks into findings, but does **not** make the LLM la
 proof. The claim is **struck**. Backstop: every _guaranteed_ decision is enum-gated (fix #1, #3),
 so residual injection moves only _advisory_ judgments.
 
+8c. **An unattended run's `Bash` escape is closed only by a sandbox** — the 2026-10-12 review's SEC-1, SEC-3 and SEC-5
+each reproduced prompt-free execution in an unattended `/pharn-loop`, and each fix left the same residual. Since 7.1.0
+the loop refuses to start without evidence of an isolated environment holding none of a fixed list of credentials,
+unless the operator passes `--accept-host-execution` (`pharn/floor/check-run-isolation.mjs`). The record, the run
+report and the commit message repeat the outcome from a witness file the run itself can rewrite. That is a refusal,
+not a closure: the evidence is environment-supplied and fakeable, the lists are partial, and the agent's own model
+credential is always present (`pharn/LIMITS.md §6`).
+
 ---
 
 ## 5. The residuals (named, bounded, not zeroed)

@@ -2,10 +2,10 @@
 
 - spec_content_hash: d5a974303fd0b9568945c60423ae5a89c57d7b65f5baa03657e317fbe64f33a5
 - applied_lessons: [L68]
-- increment: release the maintainer's `pharn/LIMITS.md` §9 cite fix (commit `66a368c9`) as 7.0.2.
+- increment: release the maintainer's `pharn/LIMITS.md` §9 cite fix (commit `66a368c9`) as 7.1.1.
 - layer(s): trusted doc (human edit, already committed), release metadata
 - constitution_refs: [P0, P6]
-- base: `origin/main` @ `9a5936f6` (7.0.1)
+- base: `origin/main` @ `7dd3e425` (7.1.0)
 
 ## Why
 
@@ -13,7 +13,7 @@
 maintainer applied `.dev/features/floor-test-glob-names/HUMAN-PATCH.md`, so `pharn/LIMITS.md:632` shipped citing a
 module that no longer exists. The maintainer applied it on this branch (`66a368c9`, LIMITS.md only). A trusted doc is
 product surface, so it ships as a patch release; the released [7.0.1] section is frozen, so its "Not covered" sentence
-stays and a new [7.0.2] entry records the fix.
+stays and a new [7.1.1] entry (cut as 7.0.2; renumbered after 7.1.0, PR #398, merged first) records the fix.
 
 ## Applied lessons
 
@@ -22,9 +22,9 @@ stays and a new [7.0.2] entry records the fix.
 
 ## Files
 
-- `SKILLS_VERSION` — 7.0.1 → 7.0.2
+- `SKILLS_VERSION` — 7.1.0 → 7.1.1
 - `README.md` — the version badge only
-- `CHANGELOG.md` — new `## [7.0.2]` section, `### Fixed`
+- `CHANGELOG.md` — new `## [7.1.1]` section, `### Fixed`
 - `.dev/features/limits-ac-test-infra-cite/PLAN.md` — this plan
 
 ### Not touched

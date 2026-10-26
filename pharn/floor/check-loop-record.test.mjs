@@ -31,7 +31,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -58,9 +58,13 @@ const HANDOFF = [
   "",
 ].join("\n");
 
+// 7.1.0: the mandatory `isolation` line, and the witness `run()` writes beside every record unless told otherwise.
+const ISO = '{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}';
+const ISO_LINE = `isolation: ${ISO}`;
+
 // Build a record. `fm` overrides envelope fields; `handoff` replaces the whole Handoff block.
 function record({ fm = {}, handoff = HANDOFF, body = "" } = {}) {
-  const fields = { decision: "STOP_GREEN", iterations: "2", commit: SHA, date: "2026-08-06", ...fm };
+  const fields = { decision: "STOP_GREEN", iterations: "2", commit: SHA, date: "2026-08-06", isolation: ISO, ...fm };
   const lines = Object.entries(fields)
     .filter(([, v]) => v !== undefined)
     .map(([k, v]) => `${k}: ${v}`);
@@ -69,10 +73,18 @@ function record({ fm = {}, handoff = HANDOFF, body = "" } = {}) {
 
 // `raw` writes the file verbatim (bypassing the record() builder); passing text === null with no `raw`
 // omits the file entirely, so the checker is handed a path that does not exist.
-function run(text, { args, raw } = {}) {
+// 7.1.0: the record sits at `<dir>/pharn/features/demo/LOOP.md` and its isolation witness at
+// `<dir>/pharn/.run/pharn-loop/demo/isolation.json` (`witness: null` omits it; a string replaces its bytes).
+function run(text, { args, raw, witness = `${ISO}\n` } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "pharn-loop-record-"));
   try {
-    const p = join(dir, "LOOP.md");
+    const fd = join(dir, "pharn", "features", "demo");
+    mkdirSync(fd, { recursive: true });
+    const p = join(fd, "LOOP.md");
+    if (witness !== null) {
+      mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+      writeFileSync(join(dir, "pharn", ".run", "pharn-loop", "demo", "isolation.json"), witness);
+    }
     const content = raw ?? text;
     if (content !== null && content !== undefined) writeFileSync(p, content);
     const r = spawnSync(process.execPath, args ?? [CHECKER, p], { encoding: "utf8" });
@@ -259,7 +271,7 @@ test("✦ L15: frontmatter keys named after prototype members are inert (the OUT
   // surface is the enum lookup, pinned by the next test.
   // Written RAW: `__proto__:` in an object literal sets the PROTOTYPE rather than an own property, so the
   // record() builder would never emit that line at all and the test would silently prove nothing.
-  const raw = `---\ndecision: STOP_GREEN\niterations: 2\ncommit: ${SHA}\ndate: 2026-08-06\ntoString: STOP_TERMINAL\n__proto__: 99\nhasOwnProperty: x\n---\n\n# LOOP — a feature\n\n${HANDOFF}`;
+  const raw = `---\ndecision: STOP_GREEN\niterations: 2\ncommit: ${SHA}\ndate: 2026-08-06\n${ISO_LINE}\ntoString: STOP_TERMINAL\n__proto__: 99\nhasOwnProperty: x\n---\n\n# LOOP — a feature\n\n${HANDOFF}`;
   const r = run(null, { raw });
   assert.equal(r.status, 0, r.out); // the four real fields are read; the prototype-named keys are inert
   assert.match(r.out, /decision STOP_GREEN/); // NOT STOP_TERMINAL — no inherited member displaced it
@@ -476,7 +488,7 @@ test("✦ L6: a fenced `decision:` in the BODY never displaces the real frontmat
   // nothing. Here the frontmatter says STOP_CAP and a fenced body block says STOP_GREEN: GREEN, and the
   // reported value must be the frontmatter's. This fails under a whole-file-scan mutant; the earlier
   // no-frontmatter form did not.
-  const raw = `---\ndecision: STOP_CAP\niterations: 2\ncommit: ${SHA}\ndate: 2026-08-06\n---\n\n# LOOP — a feature\n\n\`\`\`text\ndecision: STOP_GREEN\n\`\`\`\n\n${HANDOFF}`;
+  const raw = `---\ndecision: STOP_CAP\niterations: 2\ncommit: ${SHA}\ndate: 2026-08-06\n${ISO_LINE}\n---\n\n# LOOP — a feature\n\n\`\`\`text\ndecision: STOP_GREEN\n\`\`\`\n\n${HANDOFF}`;
   const r = run(null, { raw });
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /decision STOP_CAP/);
@@ -617,7 +629,7 @@ test("double-quoted envelope scalars are accepted, and the UNQUOTED value is wha
   // Quote-stripping is load-bearing and was documented only in a code comment: /pharn-loop's frontmatter
   // is model-written, so quoted YAML scalars are a realistic emission, and the contract's canonical
   // template uses only unquoted values — so the ✧ agreement test never reaches this path.
-  const raw = `---\ndecision: "STOP_GREEN"\niterations: "2"\ncommit: "${SHA}"\ndate: "2026-08-06"\n---\n\n# LOOP — a feature\n\n${HANDOFF}`;
+  const raw = `---\ndecision: "STOP_GREEN"\niterations: "2"\ncommit: "${SHA}"\ndate: "2026-08-06"\n${ISO_LINE}\n---\n\n# LOOP — a feature\n\n${HANDOFF}`;
   const r = run(null, { raw });
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /decision STOP_GREEN/);
@@ -781,4 +793,135 @@ test("✧ CLOSURE (L36) — the accepted decisions EQUAL check-loop.mjs's stop t
     assert.equal(run(record({ fm })).status, 0, decision);
   }
   assert.equal(run(record({ fm: { decision: "CONTINUE" } })).status, 1);
+});
+
+// ── `isolation` — MANDATORY since 7.1.0 (loop-isolation-stop) ─────────────────────────────────────────────────────
+
+test("★ a record written without `isolation` → RED ISOLATION_MISSING (the new-record rule), every other field valid", () => {
+  const r = run(record({ fm: { isolation: undefined } }));
+  assert.equal(r.status, 1);
+  assert.match(r.out, /ISOLATION_MISSING/);
+});
+
+test("★ an accepted HOST record with its matching witness → GREEN, naming the acceptance", () => {
+  const host = '{"outcome":"HOST","evidence":["cred:ssh-dir","cred:credential-helper"],"accepted_host_execution":true}';
+  const r = run(record({ fm: { isolation: host } }), { witness: `${host}\n` });
+  assert.equal(r.status, 0, r.out);
+  assert.match(r.out, /isolation HOST \(host execution accepted\) and witnessed/);
+});
+
+test("★ a value outside the witness grammar → RED ISOLATION_MALFORMED, and the value is never quoted (L62)", () => {
+  const forms = [
+    '{"outcome":"ISOLATED","evidence":["fs:dockerenv"]}',
+    '{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false,"note":"x"}',
+    '{"outcome":"ISOLATED","evidence":["cred:ssh-dir"],"accepted_host_execution":false}',
+    '{"outcome":"ISOLATED", "evidence":["fs:dockerenv"],"accepted_host_execution":false}',
+    '{"outcome":"ISOLATED","evidence":["fs:secret-planted-zz9"],"accepted_host_execution":false}',
+    "ISOLATED",
+  ];
+  for (const v of forms) {
+    const r = run(record({ fm: { isolation: v } }), { witness: `${v}\n` });
+    assert.equal(r.status, 1, v);
+    assert.match(r.out, /ISOLATION_MALFORMED/, v);
+    assert.ok(!r.out.includes("secret-planted-zz9"), "a record value is never echoed");
+  }
+});
+
+test("★ a refused run's outcome (HOST or ISOLATED_WITH_CREDENTIALS without the flag) → RED ISOLATION_INCONSISTENT", () => {
+  for (const v of [
+    '{"outcome":"HOST","evidence":[],"accepted_host_execution":false}',
+    '{"outcome":"ISOLATED_WITH_CREDENTIALS","evidence":["fs:dockerenv","cred:ssh-agent"],"accepted_host_execution":false}',
+  ]) {
+    const r = run(record({ fm: { isolation: v } }), { witness: `${v}\n` });
+    assert.equal(r.status, 1, v);
+    assert.match(r.out, /ISOLATION_INCONSISTENT/, v);
+  }
+});
+
+test("★ no witness, a witness that is a link, a directory or off-layout record → RED ISOLATION_UNWITNESSED", () => {
+  const none = run(record(), { witness: null });
+  assert.equal(none.status, 1);
+  assert.match(none.out, /ISOLATION_UNWITNESSED/);
+  assert.match(none.out, /no witness at pharn\/\.run\/pharn-loop\/demo\/isolation\.json/);
+  const offLayout = run(null, { args: [CHECKER, join(tmpdir(), "no-such-dir-pharn", "LOOP.md")] });
+  assert.equal(offLayout.status, 1, "an unreadable record is RED before any witness question");
+  const dir = mkdtempSync(join(tmpdir(), "pharn-loop-record-off-"));
+  try {
+    const p = join(dir, "LOOP.md");
+    writeFileSync(p, record());
+    const r = spawnSync(process.execPath, [CHECKER, p], { encoding: "utf8" });
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /ISOLATION_UNWITNESSED/);
+    assert.match(r.stdout, /not at pharn\/features\/<name>\/LOOP\.md/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const linked = mkdtempSync(join(tmpdir(), "pharn-loop-record-link-"));
+  try {
+    const fd = join(linked, "pharn", "features", "demo");
+    mkdirSync(fd, { recursive: true });
+    mkdirSync(join(linked, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+    writeFileSync(join(linked, "real.json"), `${ISO}\n`);
+    symlinkSync(join(linked, "real.json"), join(linked, "pharn", ".run", "pharn-loop", "demo", "isolation.json"));
+    writeFileSync(join(fd, "LOOP.md"), record());
+    const r = spawnSync(process.execPath, [CHECKER, join(fd, "LOOP.md")], { encoding: "utf8" });
+    assert.equal(r.status, 1, "a witness that is a link is never followed, even to the right bytes");
+    assert.match(r.stdout, /ISOLATION_UNWITNESSED/);
+  } finally {
+    rmSync(linked, { recursive: true, force: true });
+  }
+});
+
+test("★ a witness whose line differs from the record's value → RED ISOLATION_MISMATCH", () => {
+  const other = '{"outcome":"ISOLATED","evidence":["env:CODESPACES"],"accepted_host_execution":false}';
+  for (const w of [`${other}\n`, `${ISO}\n\n`, ` ${ISO}\n`, ""]) {
+    const r = run(record(), { witness: w });
+    assert.equal(r.status, 1, JSON.stringify(w));
+    assert.match(r.out, /ISOLATION_MISMATCH/, JSON.stringify(w));
+  }
+  assert.equal(run(record(), { witness: ISO }).status, 0, "a witness without its trailing newline is the same line");
+});
+
+// ── 7.1.0: a witness whose read fails ───────────────────────────────────────────────────────────────────────────────
+import { pathToFileURL } from "node:url";
+
+// Preloaded into the checker's process: a read on a descriptor opened on `isolation.json` throws EIO.
+const READ_FAULT = `import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+const open = fs.openSync;
+const read = fs.readSync;
+const fds = new Set();
+fs.openSync = (p, ...rest) => {
+  const fd = open(p, ...rest);
+  if (typeof p === "string" && p.endsWith("isolation.json")) fds.add(fd);
+  return fd;
+};
+fs.readSync = (fd, ...rest) => {
+  if (fds.has(fd)) throw Object.assign(new Error("EIO: injected read fault"), { code: "EIO" });
+  return read(fd, ...rest);
+};
+syncBuiltinESMExports();
+`;
+
+test("★ a witness that opens but whose read fails → RED ISOLATION_UNWITNESSED `the witness is unreadable`", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-loop-record-eio-"));
+  try {
+    const fd = join(dir, "pharn", "features", "demo");
+    mkdirSync(fd, { recursive: true });
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", "demo", "isolation.json"), `${ISO}\n`);
+    writeFileSync(join(fd, "LOOP.md"), record());
+    const preload = join(dir, "read-fault.mjs");
+    writeFileSync(preload, READ_FAULT);
+    const ok = spawnSync(process.execPath, [CHECKER, join(fd, "LOOP.md")], { encoding: "utf8" });
+    assert.equal(ok.status, 0, `the same witness reads normally: ${ok.stdout}${ok.stderr}`);
+    const r = spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, CHECKER, join(fd, "LOOP.md")], {
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stdout, /ISOLATION_UNWITNESSED/);
+    assert.match(r.stdout, /the witness is unreadable/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

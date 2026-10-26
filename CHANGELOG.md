@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [7.0.2] - 2026-10-26
+## [7.1.1] - 2026-10-26
 
 ### Fixed
 
@@ -33,6 +33,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   is a human-only edit, proposed in `.dev/features/floor-test-glob-names/HUMAN-PATCH.md`. The maintainer applied it,
   so the "Agreement, never provenance" bullet now points at `pharn/floor/ac-test-infra-core.mjs`, the module whose
   header lists what the pin does not see. Only that path changed.
+
+## [7.1.0] - 2026-10-25
+
+### Added
+
+- 2026-10-25: **An unattended `/pharn-loop` refuses to start outside an isolated environment unless the operator
+  opts in.** The trigger is the 2026-10-12 review's SEC-1, SEC-3 and SEC-5: each fix left `pharn/LIMITS.md §6`'s residual,
+  that only a sandbox stops a `Bash` write, and `pharn-loop.md` answered it with one advisory sentence. A new floor
+  checker, `pharn/floor/check-run-isolation.mjs` (CLI) over `check-run-isolation-core.mjs` (pure), runs at Step 1a
+  between `require-loop-record.cjs --open` and `pre-run-snapshot.mjs --capture`. It reads a frozen list of isolation
+  evidence (`/.dockerenv`, `/run/.containerenv`, a runtime in `/proc/1/cgroup`, the dev-container, Codespaces, Gitpod
+  and Actions variables, or `PHARN_ISOLATED=1`) and a frozen list of 16 credential signals (`~/.ssh`, an SSH agent,
+  gh, `GH_TOKEN`, git credentials, a plain or URL-scoped credential helper, `.netrc`, `.aws/credentials`, an npm
+  `_authToken` and six token env vars). The outcome is `ISOLATED`, `HOST` or `ISOLATED_WITH_CREDENTIALS`, and only
+  `ISOLATED` starts the run without `--accept-host-execution`. A refusal is the new stop S15
+  (`blocked: not-isolated`). Like the other Step 1a stops it writes no record, and the summary names the way out for
+  its reason (a container, `PHARN_ISOLATED=1` or the flag; for an unreadable HOME or git config, fixing it, since the
+  flag never accepts unknown evidence). `--quick` runs the same check. `/pharn-ship` does not, because a person approves its SPEC and decides at its
+  end.
+  - **The record.** The CLI's one JSON line is the witness, `pharn/.run/pharn-loop/<name>/isolation.json`. `LOOP.md` gains
+    a mandatory `isolation:` key copying it verbatim (`pharn/pharn-contracts/loop-record.md`, "The isolation field").
+    `check-loop-record.mjs` REDs it `ISOLATION_MISSING`, `_MALFORMED`, `_INCONSISTENT`, `_UNWITNESSED` or `_MISMATCH`.
+    That RED does not gate the commit. Instead the commit message and `RUN-REPORT.md`'s `## Verdicts` print
+    `isolation: <outcome>`, plus `(host execution accepted by operator)` when the flag was used, built by code from
+    the witness. A witness no admitted run could write is marked `NOT ADMITTED`.
+  - **What it is not.** It is a refusal, not a sandbox. Every input comes from the environment, so the operator, or a
+    project's own `.claude/settings.json` `env` block, can fake it (`hook-wiring.test.cjs` pins that this repository's
+    settings set none). The lists are partial. The floor sees argv, never who typed the flag. The witness is
+    git-ignored `pharn/.run/` state that the Write tool and Bash both reach and reconcile never sees, so the record, the
+    report and the commit repeat it faithfully only while nobody rewrites it. That is agreement, never provenance. The agent's own model credential is always present: that is
+    the exfiltration residual this stop does not touch. A record written before 7.1.0 has no `isolation` key, so a run
+    started on 7.0.1 or earlier and closed on 7.1.0 REDs `ISOLATION_MISSING` at its record check (its commit still happens).
+  - **Measured.** In a credential-free container with `commit.gpgsign=true` and no signing key, the closeout's own
+    `git commit` exits 128 (gpg absent, gpg with no key, gpg not on `PATH`), which is `not committed: commit failed`,
+    exit 4, the Step 6d undo. Reported, not changed (`.dev/features/loop-isolation-stop/PROBE.md`).
+  - **Docs.** README, `docs/pipeline.md` ("Running /pharn-loop in a container", an advisory `docker run` example),
+    `docs/guarantees.md`, `docs/limitations.md` and `.dev/guides/floor-gates.md`. A human applied the
+    `pharn/LIMITS.md §6` and `pharn/THREAT-MODEL.md §4` text from `.dev/features/loop-isolation-stop/HUMAN-PATCH.md`.
+    `MIN_CLI` stays at `0.14.0`: the installer copies `pharn/floor/` whole minus tests, and the witness lives
+    under 7.0.0's scratch root `pharn/.run/`.
 
 ## [7.0.1] - 2026-10-25
 

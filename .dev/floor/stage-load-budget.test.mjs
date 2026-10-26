@@ -132,7 +132,7 @@ const STAGE_LOADS = Object.freeze({
 const STAGE_LOAD_CEILINGS = Object.freeze({
   "pharn-build": 77824, // 70,669
   "pharn-grill": 285184, // 258,995 — 13 grillers (188,978)
-  "pharn-loop": 151040, // 136,903 — re-measured at 6.67.0 (loop-grant-seam-skill, after merging 6.66.0)
+  "pharn-loop": 172544, // 156,848 — re-measured at 7.1.0 (loop-isolation-stop: the isolation check, its contract section)
   "pharn-memory-promote": 62976, // 56,925
   "pharn-plan": 61440, // 55,565
   "pharn-regress": 34304, // 30,738
