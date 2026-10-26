@@ -513,13 +513,13 @@ two lines did), and you run them in this order:
    summary's route line.
 
    With an Agent tool whose parameters list no `run_in_background`, append `--no-foreground-agent` to the start line:
-   it records `inline:no-foreground-agent` and exits `3` — ADVISORY, your own reading of the tool's schema. Such a
-   tool, as read in Claude Code's desktop app, runs every agent in the background, for which item 3's wait has not
-   been measured.
+   it records `inline:no-foreground-agent` and exits `3` — ADVISORY, your own reading of the tool's schema. What
+   such a tool was measured to do, and what item 3's wait did with it, is `stage-agent-core.mjs`'s residual
+   `stage-agent-background`.
 
 2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
-   after `agent:`), `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; the
-   tool's default is the foreground (ADVISORY, and unmeasured in a real loop) — and **no `isolation`** — the stages
+   after `agent:`), `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; item 3
+   runs after the call whichever launch the harness picks — and **no `isolation`** — the stages
    write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's
    pinned one-line brief prompt, `<name>` (and `<N>`) substituted; the stage agent runs that line first and
    receives its rules from code. Only `/pharn-spec`'s prompt carries anything more: the increment description,
@@ -564,12 +564,13 @@ evidence (S13). The rows a stage agent may report at all are `LOOP_ROWS` in `pha
 S4, S5, S6, S6b, S6c, S7, S8, S9 and S10.
 
 **Bounds.** A stage agent's report is another model's output. Only `finish`'s exit code and its closed first line are
-floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the Agent tool
-returns the agent's final text into your context, which is `pharn/THREAT-MODEL.md §5`'s free-text residual (a model
-consuming another model's free text) in a new place, bounded — no stop reads it — and not zeroed (P2). A
+floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the agent's final
+text reaches your context, as the Agent result or as a later completion notice, which is
+`pharn/THREAT-MODEL.md §5`'s free-text residual (a model consuming another model's free text) in a new place,
+bounded — no stop reads it — and not zeroed (P2). A
 compromised stage agent can lie in its report, which moves only this advisory
 mapping — the floor verdicts on disk still decide the stop, and Step 5's freshness check still re-derives them.
-The other bounds (a hung stage agent, what a route records) are the header's named residuals.
+The other bounds (a hung stage agent, a background launch, what a route records) are the header's named residuals.
 
 ## Quick mode — `/pharn-loop --quick` (6.28.0)
 

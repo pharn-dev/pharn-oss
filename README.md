@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.1.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.1.2-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -140,7 +140,10 @@ says what it needs instead of guessing. On any stop other than a committed green
 own spec approval — a procedural step, so an aborted run can skip it. Start it outside plan mode: in plan mode it stops
 at once and asks you nothing (6.58.0). It pre-approves its own commands for the run, but its stage agents run your
 project's gates under your session's permission mode, so when nobody will be watching, use one that does not prompt
-for them (auto mode, or allow rules).
+for them (auto mode, or allow rules). In the measured runs, an interactive `claude --permission-mode auto` session on
+Claude Code 2.1.310 launched each stage agent in the background and the loop waited it out (one completed `--quick`
+run, PHARN 7.1.1); a headless `claude -p --permission-mode auto` session ran them in the foreground on 6.73.2, which
+sent `run_in_background: false` (headless under 7.1.1, which sends no such parameter, is not measured).
 
 The test stage needs your project's test runner and its per-test results: a `test` script (and a `test:e2e` or
 `e2e` script for end-to-end criteria) whose reporter writes JSON to the path PHARN passes
@@ -171,8 +174,12 @@ Use the full `/pharn-loop` for a feature that spans several files, has acceptanc
 than one iteration, and `--quick` for everything else. Two measured full-loop runs of one small feature in a user
 project on 6.73.2 both stopped at the entry check, when that project's test suite ran past the 540 s gate timeout,
 after about 19 minutes and 5.5–5.9 million processed context tokens each (input, cache-write and cache-read tokens,
-plus about 31 thousand output tokens), with only the spec and plan done. The cost of a complete loop is not yet
-measured ([the measurement](./.dev/measurements/loop-wall-clock-2026-10-25.md)).
+plus about 31 thousand output tokens), with only the spec and plan done
+([the measurement](./.dev/measurements/loop-wall-clock-2026-10-25.md)). A measured `--quick` loop of one small feature
+in the same project on PHARN 7.1.1 took about 18 minutes and 11.2 million processed context tokens (10.7 million
+cache-read, 0.47 million cache-write, 208 uncached input, plus about 50 thousand output tokens) and completed green in
+one iteration; a full loop is still unmeasured
+([the measurement](./.dev/measurements/loop-interactive-cli-2026-10-26.md)).
 
 Every stage is also available as its own command; see [Commands](#commands).
 

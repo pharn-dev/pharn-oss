@@ -147,6 +147,13 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   why. Effort is not routed. A green checker means two files agree, and a route records what was REQUESTED:
   `cost.json` shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
   platform veto, and what deleting the block costs — are stated once, in [`pharn/LIMITS.md`](../pharn/LIMITS.md) § 8.
+- **A routed stage agent may run in the background, and `/pharn-loop` waits it out; that is handled, not gone.**
+  The harness decides how an agent is launched. In the measured runs, Claude Code 2.1.310's interactive CLI launched
+  every `/pharn-loop` stage agent in the background, and `stage-agent.mjs finish --budget-ms` waited each one out on
+  disk; one `--quick` run completed on PHARN 7.1.1. Not measured: a stage longer than one 570 s wait, the wait's cap,
+  whether `TaskStop` can stop an agent left running, other Claude Code versions, and a full loop. The bounds live in
+  `pharn/floor/stage-agent-core.mjs` (residual `stage-agent-background`); the run is
+  [the measurement](../.dev/measurements/loop-interactive-cli-2026-10-26.md).
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and
   `/pharn-review` fans the applicable lenses out to parallel subagents, one per lens family; `/pharn-loop` repeats
   build → regress → verify up to the cap, unattended — each pass runs your suite at HEAD and the verify gates,
