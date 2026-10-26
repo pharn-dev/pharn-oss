@@ -1,9 +1,11 @@
-// pharn/floor/test-results-core.mjs — derive a deterministic PER-TEST record for one gate of a gate-run
+// pharn/floor/per-test-results-core.mjs — derive a deterministic PER-TEST record for one gate of a gate-run
 // stamp, from the machine-readable results file the project's own test run wrote into the runner's `<out>`.
 // Contract: pharn/pharn-contracts/test-results-record.md. This file changes when what a record MEANS changes
 // (its binding to the stamp, identity, caps, the exit-code cross-check); a reporter's format lives in
-// test-results-formats.mjs (P3). No `child_process`, no network, no eval — its only I/O is reading
+// per-test-results-formats.mjs (P3). No `child_process`, no network, no eval — its only I/O is reading
 // `<root>/pharn.config.json` and the one results file.
+// Named test-results-core.mjs before 7.0.1: Node's default test patterns match `test-*.mjs`, so a bare `node --test` in an
+// installed project ran it as one of the project's own tests (default-test-glob.test.mjs fails if a shipped name matches).
 //
 // ================================ WHY THIS EXISTS (and its honest trigger) ================================
 // The floor sees only whole-gate exit codes (run-gates.mjs; gate-run-record.md). It cannot say whether ONE
@@ -34,7 +36,7 @@
 //     `testResults` key outside RESULTS_GATES), a file that is absent, changed after the runner hashed it, malformed
 //     or over a cap, and a report that contradicts the gate's exit.
 //   • PER TEST for its ANOMALIES (6.31.0): a test whose status the report does not give plainly — one flaky test or
-//     expected failure the report MARKS (test-results-formats.mjs names which formats mark which), or any other status
+//     expected failure the report MARKS (per-test-results-formats.mjs names which formats mark which), or any other status
 //     outside the closed map (`unknown-status`) — and every test whose id another test shares (`duplicate-test-id`)
 //     is listed in `anomalies` (ANOMALY_REASONS), never in `tests`, and the record stays `ok`. The CONSUMER decides
 //     what an anomaly means for it: the red run and the AC gate refuse an AC only when an anomaly sits in a file that
@@ -58,7 +60,7 @@ import { createHash } from "node:crypto";
 import { closeSync, fstatSync, openSync, readFileSync, readSync, realpathSync, constants as fsConstants } from "node:fs";
 import { join, resolve } from "node:path";
 import { E2E_SET, resultsFileName, validateStamp } from "./gate-run-core.mjs";
-import { ENTRY_ANOMALIES, RECORD_STATUSES, RESULTS_FORMATS, parseResults } from "./test-results-formats.mjs";
+import { ENTRY_ANOMALIES, RECORD_STATUSES, RESULTS_FORMATS, parseResults } from "./per-test-results-formats.mjs";
 import { shown } from "./quote-core.mjs";
 
 /** The config file and key a project opts in with: `{"testResults": {"<gate-id>": "<format>"}}`. */

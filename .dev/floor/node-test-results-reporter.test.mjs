@@ -1,6 +1,6 @@
 // .dev/floor/node-test-results-reporter.test.mjs — the node:test reporter /pharn-dev-regress runs the outside suite
 // through, measured over REAL `node --test` runs (never a hand-built event stream), so a change in node's event shapes
-// turns a test here red. Then its document through test-results-core.mjs's builder and through check-regress.mjs
+// turns a test here red. Then its document through per-test-results-core.mjs's builder and through check-regress.mjs
 // `verdict --per-test`, end to end, and the pinned command lines that wire it (L22, L45).
 
 import { test } from "node:test";
@@ -11,8 +11,8 @@ import { dirname, join } from "node:path";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import pharnTestResults, { recordFile } from "./node-test-results-reporter.mjs";
-import { parseResults } from "../../pharn/floor/test-results-formats.mjs";
-import { buildRecord } from "../../pharn/floor/test-results-core.mjs";
+import { parseResults } from "../../pharn/floor/per-test-results-formats.mjs";
+import { buildRecord } from "../../pharn/floor/per-test-results-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");

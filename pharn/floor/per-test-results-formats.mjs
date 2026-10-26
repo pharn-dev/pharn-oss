@@ -1,10 +1,12 @@
-// pharn/floor/test-results-formats.mjs — the per-FORMAT adapters for a project's test-results file. Each
+// pharn/floor/per-test-results-formats.mjs — the per-FORMAT adapters for a project's test-results file. Each
 // adapter turns ONE format's JSON document into a flat list of `{file, path[], title, status, anomaly, messages}` entries
 // (`status` null and `anomaly` set for an entry whose status it cannot read — ENTRY_ANOMALIES) plus a count of
 // suite-level errors, or refuses the whole document with a closed reason (FORMAT_REFUSALS). This file changes when a FORMAT's definition
 // changes (a reporter's output, or PHARN's own neutral schema), and for no other reason (P3). The record's
 // semantics — the stamp binding, the caps, identity, duplicates, the exit-code cross-check — live in
-// test-results-core.mjs, which imports this file; this file imports nothing from it.
+// per-test-results-core.mjs, which imports this file; this file imports nothing from it.
+// Named test-results-formats.mjs before 7.0.1: Node's default test patterns match `test-*.mjs`, so a bare `node --test` in an
+// installed project ran it as one of the project's own tests (default-test-glob.test.mjs fails if a shipped name matches).
 //
 // ================================ THE FORMATS, AND WHERE THEY CAME FROM ================================
 //
@@ -46,7 +48,7 @@
 //
 // AN UNMAPPED STATUS IS A PER-TEST ANOMALY, NOT A REFUSAL OF THE DOCUMENT (6.31.0). The entry is kept with
 // `status: null` and `anomaly: {reason_code: "unknown-status", reason}` (ENTRY_ANOMALIES), and the record lists it
-// apart from the tests whose status it can read (test-results-core.mjs). Before 6.31.0 one such test ANYWHERE in the
+// apart from the tests whose status it can read (per-test-results-core.mjs). Before 6.31.0 one such test ANYWHERE in the
 // suite refused the whole document, so an unrelated flaky test made every AC in the project unmeasurable; now the
 // consumer decides, and the red run and the AC gate refuse only over an anomaly in a file an AC maps
 // (red-run-core.mjs observeAc). A document whose SHAPE is wrong is still refused whole (FORMAT_REFUSALS).
@@ -76,7 +78,7 @@
 // FAILURE MESSAGES (6.39.0, build-gate-bounded) ride on each entry as `messages`, an array of strings: vitest/Jest
 // `failureMessages`, Playwright's per-result `errors[].message` (else `error.message`), and none for `pharn-json`,
 // whose schema has no message field. A non-string or non-array value yields `[]` — never a refusal, never a status
-// input. They exist for build-gate.mjs's bounded summary ALONE: test-results-core.mjs `buildRecord` copies
+// input. They exist for build-gate.mjs's bounded summary ALONE: per-test-results-core.mjs `buildRecord` copies
 // `id/file/title/status` only, so no record — the red run's, the AC gate's, a report's — carries a message.
 //
 // TRUST (P2): the document is written by PROJECT code — untrusted DATA. Only the fields named above are read,
@@ -99,11 +101,11 @@ export const RESULTS_FORMATS = Object.freeze(["jest-json", "pharn-json", "playwr
 /** The closed status set a record entry may carry. */
 export const RECORD_STATUSES = Object.freeze(["passed", "failed", "skipped"]);
 
-/** The refusals of a whole DOCUMENT an adapter can return. test-results-core.mjs's RECORD_REASONS must contain each. */
+/** The refusals of a whole DOCUMENT an adapter can return. per-test-results-core.mjs's RECORD_REASONS must contain each. */
 export const FORMAT_REFUSALS = Object.freeze(["over-cap", "results-malformed"]);
 
 /** The anomalies an adapter can attach to ONE entry (its `anomaly.reason_code`), kept in the record apart from the
- *  tests whose status it can read. test-results-core.mjs's ANOMALY_REASONS must contain each. */
+ *  tests whose status it can read. per-test-results-core.mjs's ANOMALY_REASONS must contain each. */
 export const ENTRY_ANOMALIES = Object.freeze(["unknown-status"]);
 
 /** The one schema string a `pharn-json` document must carry. A later version is a new format member, never a

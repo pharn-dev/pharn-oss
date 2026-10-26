@@ -29,11 +29,11 @@
 // the cell verbatim — a cell that matched only after folding was never collected (6.20.5).
 //
 // THE TEST INFRASTRUCTURE STAYS OUT OF THE BUILD'S SCOPE TOO (6.21.0, `test-infra-in-plan`): `/pharn-test` pins the root
-// runner configs and the level gates' scripts BEFORE the build (test-infra-core.mjs), so a PLAN.md `## Files` entry the
+// runner configs and the level gates' scripts BEFORE the build (ac-test-infra-core.mjs), so a PLAN.md `## Files` entry the
 // setter would scope to a root runner config certifies a build whose own in-scope edit reads `test-infra-changed` at
-// `/pharn-verify` — no rebuild clears it. The entry is classified by test-infra-core's testInfraPathKind (the pin's own
+// `/pharn-verify` — no rebuild clears it. The entry is classified by ac-test-infra-core's testInfraPathKind (the pin's own
 // predicate, imported — never a second regex). Since 6.31.0 the kind also covers the root package-manager configs the
-// pin hashes (`.npmrc`, `.yarnrc`, `.yarnrc.yml`) and every file the level gates' scripts NAME (test-infra-core's
+// pin hashes (`.npmrc`, `.yarnrc`, `.yarnrc.yml`) and every file the level gates' scripts NAME (ac-test-infra-core's
 // scriptNamedFiles over the tree at the invoking directory — the reporter a `pharn-json` gate loads, say; the review's
 // H2 wB: a build scoped to it wrote a reporter that said `passed`). `package.json` / `pharn.config.json` get an ADVISORY
 // `NOTE —` line and no RED, never changing the exit code: the build may legitimately change a dependency, and this
@@ -63,7 +63,7 @@
 //     refuse without a GREEN lock). A Bash write bypasses the write hooks entirely (pharn/LIMITS.md §6);
 //   • that `/pharn-test` read only SPEC, PLAN and AC-TESTS.md — `reads:` is not enforced (ARCHITECTURE §3.1);
 //   • that the files the level gates' scripts name are ALL of what those gates run — the token pass is a closed,
-//     literal rule, and what it does not read is listed once, in test-infra-core.mjs's header.
+//     literal rule, and what it does not read is listed once, in ac-test-infra-core.mjs's header.
 //
 // TRUST (P2): all three files are untrusted DATA. Verdicts range over ids, a closed level enum, paths and the chain
 // check's exit code. The target text is never interpreted; a RED quotes at most a bounded id or path.
@@ -93,7 +93,7 @@ import { fileURLToPath } from "node:url";
 import { specAcceptanceCriteria, specVerdict, SPEC_KINDS, TEST_FIRST_KINDS } from "./spec-template-core.mjs";
 import { clean, pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { LEVELS, badPath, mappingOf, scopeKey, scopedPath } from "./ac-tests-core.mjs";
-import { isPackageManagerConfigName, scriptNamedFiles, testInfraPathKind } from "./test-infra-core.mjs";
+import { isPackageManagerConfigName, scriptNamedFiles, testInfraPathKind } from "./ac-test-infra-core.mjs";
 import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
 import { levelExcludedGates } from "./gate-run-core.mjs";
 import { loadGateExclusion } from "./gate-exclusion-core.mjs";
@@ -139,7 +139,7 @@ function shown(v) {
 /**
  * The pure check (no chain check, no filesystem beyond what the caller passes). `acArtifacts` — THIS feature's
  * AC-TESTS.md and AC-TESTS.lock.json, spelled relative to the project root — and `scriptFiles` — the files the level
- * gates' scripts name (test-infra-core scriptNamedFiles) — are REQUIRED arrays (L41): an omitted one would silently
+ * gates' scripts name (ac-test-infra-core scriptNamedFiles) — are REQUIRED arrays (L41): an omitted one would silently
  * switch its RED off. `excludedLevels` (6.36.0, review R5, REQUIRED for the same reason) maps a level to the gates the
  * project's `gates.exclude` leaves it nothing of (gate-run-core levelExcludedGates — the red-run preflight's own rule);
  * a mapping row at such a level is `level-excluded` HERE, at plan time, rather than ~20 minutes later at /pharn-test.

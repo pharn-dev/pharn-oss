@@ -269,7 +269,7 @@ export function logBasename(seq, id) {
 export const RESULTS_ENV = "PHARN_TEST_RESULTS";
 
 /** The file name of a gate's results file under `<out>/`: the log basename plus `.test-results.json`. ONE
- *  copy (L35): run-gates.mjs passes it to the gate and hashes it; test-results-core.mjs reads it back.
+ *  copy (L35): run-gates.mjs passes it to the gate and hashes it; per-test-results-core.mjs reads it back.
  *  Deliberately NOT `results.json` — that name would read as a second store of the gate map. */
 export function resultsFileName(seq, id) {
   return `${logBasename(seq, id)}.test-results.json`;

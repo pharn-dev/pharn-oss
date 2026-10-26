@@ -25,7 +25,7 @@ import {
 } from "./ac-gate-core.mjs";
 import { filesDigest } from "./ac-tests-lock.mjs";
 import { RESERVED_IDS, resultsFileName } from "./gate-run-core.mjs";
-import { RECORD_REASONS } from "./test-results-core.mjs";
+import { RECORD_REASONS } from "./per-test-results-core.mjs";
 import { spawnGate } from "./run-gates.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

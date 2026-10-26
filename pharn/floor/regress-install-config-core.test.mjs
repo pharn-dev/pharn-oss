@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { INSTALL_KEY, REGRESS_KEY, REGRESS_KEYS, loadRegressInstall, readRegressInstall } from "./regress-install-config-core.mjs";
 import { DECLARED_INSTALL_VALUES, HEAD_MODULES_LINK, INSTALL_DECLARED_IN, LOCKFILE_FAMILIES } from "./stage-regress-core.mjs";
-import { CONFIG_FILE } from "./test-results-core.mjs";
+import { CONFIG_FILE } from "./per-test-results-core.mjs";
 
 const doc = (regress) => JSON.stringify({ gates: { exclude: [] }, regress });
 

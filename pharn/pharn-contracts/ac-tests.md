@@ -99,7 +99,7 @@ ROOT runner config the test-infrastructure pin covers (below) — since 6.31.0 a
 covers (`.npmrc`, `.yarnrc`, `.yarnrc.yml`), or a file a level gate's script NAMES (the token pass, below: the
 `pharn-json` reporter a `test` script loads, say). Every write the build could make there changes the pin, so the plan
 could never reach green: `/pharn-verify` would read `test-infra-changed`. The remedy is to split the change into a
-`spec_kind: test-infra` increment first. The name test is `test-infra-core.mjs`'s own predicate and the named files
+`spec_kind: test-infra` increment first. The name test is `ac-test-infra-core.mjs`'s own predicate and the named files
 are its own `scriptNamedFiles()` over the tree at the invoking directory — every named file that is not an existing
 directory, absent ones included, since a file the build creates there is one the pin reads at verify — imported,
 never a second rule. A tree the pin cannot read (an unparseable `package.json`, a chain past the hop bound) prints an
@@ -332,7 +332,7 @@ The lock pins the test FILES; this pins the parts of what RUNS them listed below
 is a `--check` RED ("test infrastructure changed — …", which the test-stage gate reads as `lock-red`) and reads
 `test-infra-changed` at the AC gate, and the test's pass no longer counts. It is not the whole runner: what the pin
 does not see is stated after the list. `--write` takes it (before the red run, which therefore runs under it) and `--check` and the AC gate recompute it from
-the live tree and compare EXACTLY. Computed by `pharn/floor/test-infra-core.mjs`:
+the live tree and compare EXACTLY. Computed by `pharn/floor/ac-test-infra-core.mjs`:
 
 - **`levels`** — the mapped levels the pin was taken for, so a recompute ranges over the same candidate gates.
 - **`gates`** — for each gate its levels map to (`test` for unit/integration, `test:e2e`/`e2e` for e2e) that
@@ -398,7 +398,7 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
   `tsconfig.json`, a Prettier or markdownlint config). Those are usually source a feature legitimately edits — a
   bundler's entry (`tsup src/index.ts`) — so pinning them would turn ordinary features RED.
 
-**The token pass — ONE closed, literal rule, never a shell parse** (`test-infra-core.mjs`'s header is its spec):
+**The token pass — ONE closed, literal rule, never a shell parse** (`ac-test-infra-core.mjs`'s header is its spec):
 `scriptTokens()` splits a value on whitespace and `; & | ( )` and strips one pair of matching quotes. A FILE is a
 token (split on `=`, a leading `./` stripped) that is a clean relative path — not led by `-` or `/`, no `.`/`..`/empty
 segment, no whitespace, quote, shell or glob character, first segment not `node_modules` or `pharn/.run` — with an
@@ -412,7 +412,7 @@ id already pinned and REFUSES past 8 hops (real chains are one or two), or at a 
 
 A difference names the gate id, the chained script's id (quoted and bounded), the config path or the script-named
 path, never a script's text or a file's content. **What it does NOT catch, stated** — restated from
-`test-infra-core.mjs`'s header, the one copy:
+`ac-test-infra-core.mjs`'s header, the one copy:
 
 - **The in-process bound, the widest:** code the build writes runs INSIDE the test process, so it can switch off the
   assertion library or the reporter there — `assert.equal = () => {}` in the only in-scope file made verify PASS with

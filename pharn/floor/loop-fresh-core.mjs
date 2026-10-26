@@ -158,7 +158,7 @@ import {
   resultsFileName,
 } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
-import { sha256RegularFile } from "./test-infra-core.mjs";
+import { sha256RegularFile } from "./ac-test-infra-core.mjs";
 import { REGRESS_PATHS } from "./stage-regress-core.mjs";
 import { VERIFY_PATHS } from "./stage-verify-core.mjs";
 import { loopModeOf } from "./loop-mode-core.mjs";
@@ -566,7 +566,7 @@ function checkJ(ctx) {
       // file's, or E's re-derivation would read a verdict mismatch where the truth is an edited results file (grill G6).
       if (typeof run.results_sha256 === "string") {
         const file = resultsFileName(run.seq, run.id);
-        // Read as the runner and test-results-core read it — O_NOFOLLOW|O_NONBLOCK, a regular file only (REVIEW
+        // Read as the runner and per-test-results-core read it — O_NOFOLLOW|O_NONBLOCK, a regular file only (REVIEW
         // finding 7, L59): a symlink or a FIFO swapped in here is a mismatch, never followed or blocked on.
         if (sha256RegularFile(join(dir, file)) !== run.results_sha256) {
           return failure({

@@ -1377,7 +1377,7 @@ test("★ WIRING — check I routes only a RED test stage to ac-evidence-invalid
     (r) => {
       const out0 = pin.decision.replaceAll("'<name>'", `'${FEATURE}'`).replaceAll("'<base sha>'", `'${r.base}'`).replaceAll("<N>", "1");
       // 6.20.6 (2026-09-24 review finding 2): the lock child CRASHES at run time — exit 1 like its RED, but no RED line. A
-      // RUN-TIME throw in its --check path, never a load failure: this checker imports test-infra-core.mjs itself, so a
+      // RUN-TIME throw in its --check path, never a load failure: this checker imports ac-test-infra-core.mjs itself, so a
       // load failure there would stop it before check I runs (grill R2) — since 6.21.1 as INCONCLUSIVE `checker-crashed`,
       // exercised by the load-crash tests at the end of this file.
       const lockSrc = join(r.proj, "pharn/floor/ac-tests-lock.mjs");
@@ -1547,7 +1547,7 @@ function expectCrashDoc(r, label, copy) {
 
 test("6.21.1 — a checker that cannot LOAD is INCONCLUSIVE `checker-crashed`, exit 2: every module of its static graph × every mode", () => {
   const graph = staticClosure();
-  for (const m of ["loop-fresh-core.mjs", "gate-run-core.mjs", "worktree-fingerprint.mjs", "test-infra-core.mjs"]) {
+  for (const m of ["loop-fresh-core.mjs", "gate-run-core.mjs", "worktree-fingerprint.mjs", "ac-test-infra-core.mjs"]) {
     assert.ok(graph.includes(m), `the computed graph must hold ${m}: ${graph}`);
   }
   assert.ok(
@@ -1736,7 +1736,7 @@ test("★ WIRING (6.21.1) — through both pinned /pharn-loop lines, a module th
         );
       iterate(r);
       for (const line of [pin.decision, pin.commit]) assert.equal(sh(line).status, EXIT.FRESH, `control: ${line}`);
-      const infra = join(r.proj, "pharn/floor/test-infra-core.mjs");
+      const infra = join(r.proj, "pharn/floor/ac-test-infra-core.mjs");
       const keep = readFileSync(infra);
       appendFileSync(infra, '\nthrow new Error("simulated module-load failure");\n');
       for (const line of [pin.decision, pin.commit]) expectCrashDoc(sh(line), `load failure at ${line}`, r.proj);

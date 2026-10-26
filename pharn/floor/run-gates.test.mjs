@@ -30,7 +30,7 @@ import {
 import { createHash } from "node:crypto";
 import { RESULTS_ENV, resultsFileName, LEVEL_GATES, ENTRY_BASE_TEST_ID, logBasename } from "./gate-run-core.mjs";
 import { spawnGate, CI_GATE_IDS } from "./run-gates.mjs";
-import { testRecord } from "./test-results-core.mjs";
+import { testRecord } from "./per-test-results-core.mjs";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";

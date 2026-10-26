@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resultsFileName } from "./gate-run-core.mjs";
-import { CONFIG_FILE, CONFIG_KEY } from "./test-results-core.mjs";
+import { CONFIG_FILE, CONFIG_KEY } from "./per-test-results-core.mjs";
 import {
   MAX_ANOMALY_EXAMPLES,
   OWN_REASONS,
@@ -245,7 +245,7 @@ test("jest-json — a TOP-LEVEL require is not collected, another feature's AC-1
 
 test("jest-json — STATED BOUND: an in-body `await import()` under plain Jest fails for the WRONG reason and still reads GREEN", () => {
   // Measured: it fails because plain Jest cannot run a dynamic import without --experimental-vm-modules, and it still
-  // fails after the target exists (test-results-core.test.mjs, over jest-after.json). The verdict reads status only,
+  // fails after the target exists (per-test-results-core.test.mjs, over jest-after.json). The verdict reads status only,
   // so it cannot tell — which is why /pharn-test's convention names the form each module mode can run.
   const v = jestVerdict([row("AC-4", UNIT)]);
   assert.equal(v.green, true, JSON.stringify(v.acs));

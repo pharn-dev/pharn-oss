@@ -26,7 +26,7 @@
 //   red_run    null, or (test-first only) the red-run evidence `--record-red-run` writes:
 //              { stamp_sha256, files_sha256, gates: [{ gate, results_sha256 }], acs: [{ id, tests: [...] }] }
 //   test_infra test-first (/6) { levels, gates, chained, configs, script_files, jest, exclude, other_gates,
-//              other_chained } — the TEST-INFRASTRUCTURE PIN test-infra-core.mjs computes: the mapped levels, the
+//              other_chained } — the TEST-INFRASTRUCTURE PIN ac-test-infra-core.mjs computes: the mapped levels, the
 //              package.json scripts and testResults formats of their gates, the scripts those chain to, the root runner
 //              and package-manager configs in a closed name set, the files the scripts name, a digest of package.json's
 //              `jest` key, the project's declared gate exclusion (pharn.config.json `gates.exclude`) and (6.68.0) the
@@ -75,7 +75,7 @@
 //                  (6.49.3), a listed file missing or not a regular file, a test
 //                  infrastructure that cannot be pinned — an unparseable package.json, a symlinked runner or
 //                  package-manager config, a symlinked or unreadable file a level gate's script names, a chain deeper
-//                  than test-infra-core.mjs's MAX_CHAIN_HOPS, and since 6.68.0 an allowlisted gate's script or a script
+//                  than ac-test-infra-core.mjs's MAX_CHAIN_HOPS, and since 6.68.0 an allowlisted gate's script or a script
 //                  it chains to that is not a string or is over the size bound)
 //       --write-bootstrap  0 written · 2 refused (the SPEC is not Approved and un-drifted, is not
 //                  `spec_kind: test-infra`, has no usable criteria, or an AC-TESTS.md exists; or, since 6.21.1, the
@@ -106,9 +106,9 @@ import { matchFrontmatter, readField } from "./frontmatter-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
 import { LEVELS, acRowsOf, scopedPath } from "./ac-tests-core.mjs";
 import { specAcceptanceCriteria } from "./spec-template-core.mjs";
-import { RESULTS_GATES } from "./test-results-core.mjs";
+import { RESULTS_GATES } from "./per-test-results-core.mjs";
 import { evaluateRedRun } from "./red-run-core.mjs";
-import { computeTestInfra, pinShapeError, sha256RegularFile, testInfraReds } from "./test-infra-core.mjs";
+import { computeTestInfra, pinShapeError, sha256RegularFile, testInfraReds } from "./ac-test-infra-core.mjs";
 import { childCrashedLine, crashedDetail, shelledVerdict } from "./shelled-verdict-core.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
@@ -222,7 +222,7 @@ export function unpinnedMappedFiles(rows, pinned) {
 }
 
 /** Build the test-first lock for feature `name`: AC-TESTS.md's facts plus the test-infrastructure pin over the tree at
- *  `root` (test-infra-core.mjs). Returns `{ok, lock}` or a refusal. `root` is required (L41). */
+ *  `root` (ac-test-infra-core.mjs). Returns `{ok, lock}` or a refusal. `root` is required (L41). */
 export function buildLock(name, base, root) {
   if (typeof root !== "string" || root === "") throw new TypeError("buildLock: `root` must be a non-empty string");
   const f = mappingFacts(name, base, root);
@@ -542,7 +542,7 @@ export function redRunReds(lock, name, base, root, { requireRedRun = false } = {
   return reds;
 }
 
-/** PURE: the test-infrastructure pin, recomputed over `root` (test-infra-core.mjs): `{changed, unpinned}` — two fields,
+/** PURE: the test-infrastructure pin, recomputed over `root` (ac-test-infra-core.mjs): `{changed, unpinned}` — two fields,
  *  never one list split by prefix (L6). `changed`: what differs from the recorded pin. `unpinned` (a /5, /4 or /3 pin,
  *  6.31.0 / 6.36.0 / 6.68.0): what the live tree has that a newer pin covers and this one never recorded. A lock with no pin (/2, /1)
  *  has nothing to hold here — the AC gate names that absence `test-infra-unpinned`; `--check` does not. */

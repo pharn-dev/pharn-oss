@@ -23,6 +23,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.0.1] - 2026-10-25
+
+### Fixed
+
+- **A bare `node --test` in an installed project no longer runs three PHARN floor modules as the project's own
+  tests.** Node's default test patterns include `**/test-*.?(c|m)js`, so `pharn/floor/test-infra-core.mjs`,
+  `pharn/floor/test-results-core.mjs` and `pharn/floor/test-results-formats.mjs` ran in every install whose `test`
+  script is a bare `node --test`. Measured on 2026-10-25 in a scratch project installed with pharn-cli 0.14.1 from
+  7.0.0: the entry gate counted 4 tests, and 3 were these modules. They passed, so nothing went red, but they inflated
+  the project's test count and appeared in its per-test results records. They are renamed
+  `pharn/floor/ac-test-infra-core.mjs`, `pharn/floor/per-test-results-core.mjs` and
+  `pharn/floor/per-test-results-formats.mjs`, and every importer, test, contract cite (`ac-tests.md`,
+  `test-results-record.md`) and floor guide follows. Node's coverage skips files that match its test patterns, so the
+  old names were also missing from `lcov.info`; the new names are measured. A new suite,
+  `pharn/floor/default-test-glob.test.mjs`, lays out every floor and hook file an install copies in a temporary
+  project and asks Node which ones a bare `node --test` runs, so a later floor or hook file whose name the default
+  patterns of the Node running the suite match fails `npm test`. That copy rule is restated in the test from
+  pharn-cli, so a file the CLI starts copying is not covered until the test is updated.
+  **Existing installs:** `pharn update` installs the new names and lists the three old files under ORPHANED. It
+  never deletes them, and until they
+  are gone a bare `node --test` still runs them. A later release can also change a sibling they import, and then they
+  fail to load and a bare `node --test` reports them as failing. So delete them by hand once `pharn update` has
+  updated every floor file: if it skipped a floor file you edited, that file may still import an old name, so bring it
+  up to date first. `MIN_CLI` is unchanged: pharn-cli copies the floor directory by walking it (read at pharn-cli
+  `33d0ec9`), so a CLI the gate admits installs the new names. Released sections still link to the three old paths;
+  they are frozen, so those links stay broken. Not covered: a `test` script that names its own globs, and
+  `pharn/LIMITS.md` §9's cite of the old `test-infra-core.mjs` path, a human-only edit proposed in
+  `.dev/features/floor-test-glob-names/HUMAN-PATCH.md`.
+
 ## [7.0.0] - 2026-10-25
 
 ### Changed
