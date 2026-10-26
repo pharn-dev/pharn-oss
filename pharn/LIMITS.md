@@ -652,7 +652,7 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
   the files it names and its own configuration (`eslint.config.*`, `tsconfig.json`, a Prettier config)
   stay agent-editable. The pin also does not see, among others, a setup file a config imports,
   configuration read from the environment, a chain through another runner (`npm-run-all`, `turbo`), npm
-  configuration outside the project root or the runner's version (`pharn/floor/test-infra-core.mjs` states
+  configuration outside the project root or the runner's version (`pharn/floor/ac-test-infra-core.mjs` states
   the full list).
 - **Those commands run with your environment.** The project's gate scripts and `/pharn-regress`'s base install
   (`npm ci` or the lockfile's equivalent, unless `--no-install`) run with your full process environment
