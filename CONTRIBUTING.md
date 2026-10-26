@@ -89,13 +89,13 @@ A merge that bumps [`SKILLS_VERSION`](./SKILLS_VERSION) becomes a release once i
 - **An `[Unreleased]` merge is not a release.** Once its version is tagged, the job finds the tag and stops.
 - **A failed release job is fixed and re-run** from the Actions tab with **Run workflow** on `main` (`workflow_dispatch`). It tags the tip of `main` at that time. Never move, delete or re-create a tag by hand.
 - **The check list in `release.yml` is a copy of the ruleset's.** It leaves out `Socket Security: Pull Request Alerts`, which runs on pull requests only. Change the two together. A check added to the ruleset and not to `release.yml` is not waited for.
-- **What it does not cover.** An admin merge still lands on `main`, and `pharn-cli`'s `main` channel installs it: an install whose `pharn.config.json` records no `ref`, one made with `--ref main`, and the default install of a `pharn-cli` older than 0.15.0. New installs default to releases. The release job only keeps such a commit from becoming a tag.
+- **What it does not cover.** An admin merge still lands on `main`, and `pharn-cli`'s `main` channel installs it ([`pharn/LIMITS.md §11`](./pharn/LIMITS.md) says which installs are on it). New installs default to releases. The release job only keeps such a commit from becoming a tag.
 
 The job's guards are pinned, and its `run:` blocks executed against a stub `gh`, by [`.dev/floor/release-workflow.test.mjs`](./.dev/floor/release-workflow.test.mjs).
 
 ### CHANGELOG entries
 
-`pharn-cli`'s `main` channel installs the tip of `main` — an install whose `pharn.config.json` records no `ref`, one made with `--ref main`, and the default install of a `pharn-cli` older than 0.15.0 — and `pharn update` points users at [`CHANGELOG.md`](./CHANGELOG.md). New installs default to releases since 0.15.0, but every merge to `main` still reaches the `main` channel's users, release or not, and the CHANGELOG is the only record a user reads of what reached them. Four rules:
+`pharn-cli`'s `main` channel installs the tip of `main` ([`pharn/LIMITS.md §11`](./pharn/LIMITS.md)), and `pharn update` points users at [`CHANGELOG.md`](./CHANGELOG.md). New installs default to releases since 0.15.0, but every merge to `main` still reaches the `main` channel's users, release or not, and the CHANGELOG is the only record a user reads of what reached them. Four rules:
 
 - **Every PR adds at least one new entry.**
 - **A PR that does not bump [`SKILLS_VERSION`](./SKILLS_VERSION)** writes its entry under `## [Unreleased]`, as a top-level bullet starting with its authored date — the date as `YYYY-MM-DD:` followed by a space:

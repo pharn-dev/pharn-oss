@@ -121,8 +121,9 @@ npx @pharn-dev/pharn@latest init
 
 `init` installs the newest PHARN **release**: a tag `v<SKILLS_VERSION>` that this repository's release workflow
 creates only after the CI checks `main` requires, those that run on a push, passed on that commit. The installer records the
-choice (`"ref": "latest"`), so `update` keeps following releases. When no release can be resolved, it exits 1 and names
-`--ref main` instead of falling back on its own. `--ref main` takes the tip of `main`: every merge, before its checks on
+choice (`"ref": "latest"`), so `update` keeps following releases. When no release can be resolved (none published,
+`api.github.com` unreachable, or its unauthenticated limit of 60 requests an hour used up, which `status --strict` on a
+shared CI address can hit), it exits 1 and names `--ref main` instead of falling back on its own. `--ref main` takes the tip of `main`: every merge, before its checks on
 `main` have finished. That channel is for contributors who want each change as it lands. Releases are the default from
 `@pharn-dev/pharn` 0.15.0, which `@latest` resolves to; an older installer takes the tip of `main` unless given `--ref latest`.
 
