@@ -19,8 +19,8 @@ a stop that did not end in a committed green stop — `STOP_GREEN`, or `STOP_GRE
 `/pharn-loop --quick` (6.28.0) (fix #7 scopes each of the two writes separately). It carries two cleanly separated
 halves:
 
-1. a **deterministic envelope** — YAML frontmatter holding four mandatory enum/regex-gated scalars, plus the
-   optional `cap` and `mode`; and
+1. a **deterministic envelope** — YAML frontmatter holding four mandatory enum/regex-gated scalars, the mandatory
+   `isolation` line (7.1.0, "The isolation field" below), plus the optional `cap` and `mode`; and
 2. a **human-facing body** — the existing stop roll-up (stages, per-iteration verdicts, standing reds,
    pointers) plus a **`## Handoff`** section of narrative free text.
 
@@ -49,6 +49,7 @@ iterations: 2
 cap: 3
 commit: 59def15eade582f2df662ab2129d107667267790
 date: 2026-08-06
+isolation: {"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}
 ---
 
 # LOOP — <name>
@@ -86,6 +87,7 @@ The next concrete step, stated as one — free text, untrusted DATA. Informs; ne
 | `date`       | `^\d{4}-\d{2}-\d{2}$`                                                                       | **value** shape-gated; that it is the real date is advisory                       |
 | `cap`        | `^\d+$` **and** `>= 1` — **OPTIONAL**, not one of the four mandatory                        | **value** shape-gated when present; see "The fifth, optional field" below         |
 | `mode`       | exact membership in `{full, quick}` — **OPTIONAL**, absent means `full` (6.28.0)            | **value** shape-gated when present; see "The sixth, optional field" below         |
+| `isolation`  | one JSON line in the witness grammar — **MANDATORY** on a record written by 7.1.0 or later  | shape-gated, re-derived, and witness-bound; see "The isolation field" below       |
 
 Every anchored regex above is applied **only after** a control-char + length guard on the raw value —
 composed, never replaced (PHARN's own build-loop lesson **L14**, cited not restated — P4). The
@@ -164,6 +166,118 @@ on every record, blocked ones included. The checkers' rules:
 **The directions that do not read back, stated:** an install rolled back below 6.28.0 REDs a `LOOP.md` carrying
 `STOP_GREEN_QUICK` in both checkers (the token is outside their older enum), and its older `check-loop.mjs` reads a
 quick run as full.
+
+### The isolation field (7.1.0, `loop-isolation-stop`)
+
+`/pharn-loop` Step 1a runs `pharn/floor/check-run-isolation.mjs` before any model work and refuses an unattended run
+(stuck point S15, `blocked: not-isolated`) unless it finds evidence of an isolated environment holding none of the
+listed credentials, or the operator passed `--accept-host-execution`. The CLI's stdout is redirected to the
+**witness**, `pharn/.run/pharn-loop/<name>/isolation.json`: one JSON line holding exactly `outcome`, `evidence` and
+`accepted_host_execution`. The record's `isolation` value is **that line, copied verbatim**, for example
+`isolation: {"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}`. A JSON object is a
+valid YAML flow mapping, and it keeps the envelope one `key: value` line per key. The rules (the frozen lists, the
+outcome, the exit, the witness grammar) have one owner, `pharn/floor/check-run-isolation-core.mjs`, cited here and not
+restated (P4). The tables below are pinned to it both ways by `check-run-isolation-core.test.mjs`.
+
+`outcome` is one of <!-- ISOLATION-OUTCOMES: ISOLATED, HOST, ISOLATED_WITH_CREDENTIALS -->`ISOLATED`, `HOST` and
+`ISOLATED_WITH_CREDENTIALS`. No isolation code reads `HOST`. An isolation code with a credential code reads
+`ISOLATED_WITH_CREDENTIALS`. An isolation code alone reads `ISOLATED`, the only outcome that starts a run without the
+flag. `evidence` lists codes only, in the order below. No value from the environment or from a file is ever recorded.
+
+**Isolation evidence** (one hit is evidence of an isolated environment):
+
+<!-- ISOLATION-CODES:BEGIN -->
+
+| code                      | what it means                                                              |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `fs:dockerenv`            | `/.dockerenv` exists (Docker)                                              |
+| `fs:containerenv`         | `/run/.containerenv` exists (Podman)                                       |
+| `fs:proc1-cgroup`         | `/proc/1/cgroup` names docker, containerd, podman, lxc or kubepods         |
+| `env:REMOTE_CONTAINERS`   | `REMOTE_CONTAINERS=true` (a VS Code dev container)                         |
+| `env:CODESPACES`          | `CODESPACES=true`                                                          |
+| `env:GITPOD_WORKSPACE_ID` | `GITPOD_WORKSPACE_ID` is set                                               |
+| `env:GITHUB_ACTIONS`      | `GITHUB_ACTIONS=true`                                                      |
+| `operator:PHARN_ISOLATED` | `PHARN_ISOLATED=1`, the operator's assertion for a sandbox the list misses |
+
+<!-- ISOLATION-CODES:END -->
+
+**Credential signals** (checked whether or not there is isolation evidence, because a container holding the user's
+secrets is not isolated for this purpose; one hit means credentialed):
+
+<!-- CREDENTIAL-CODES:BEGIN -->
+
+| code                             | what it means                                                                     |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| `cred:ssh-dir`                   | `$HOME/.ssh` is non-empty, a link (never followed), or not a plain directory      |
+| `cred:ssh-agent`                 | `SSH_AUTH_SOCK` names a path that exists (a forwarded agent signs with host keys) |
+| `cred:gh-hosts`                  | `$HOME/.config/gh/hosts.yml` exists                                               |
+| `cred:env:GH_TOKEN`              | `GH_TOKEN` is set                                                                 |
+| `cred:git-credentials`           | `$HOME/.git-credentials` exists                                                   |
+| `cred:credential-helper`         | git config names a credential helper, plain or URL-scoped                         |
+| `cred:netrc`                     | `$HOME/.netrc` exists (git's HTTPS credentials)                                   |
+| `cred:aws-credentials`           | `$HOME/.aws/credentials` exists                                                   |
+| `cred:npmrc-home`                | `$HOME/.npmrc` holds `_authToken`                                                 |
+| `cred:npmrc-repo`                | the project's `.npmrc` holds `_authToken`                                         |
+| `cred:env:NPM_TOKEN`             | `NPM_TOKEN` is set                                                                |
+| `cred:env:AWS_ACCESS_KEY_ID`     | `AWS_ACCESS_KEY_ID` is set                                                        |
+| `cred:env:AWS_SECRET_ACCESS_KEY` | `AWS_SECRET_ACCESS_KEY` is set                                                    |
+| `cred:env:VERCEL_TOKEN`          | `VERCEL_TOKEN` is set                                                             |
+| `cred:env:SUPABASE_ACCESS_TOKEN` | `SUPABASE_ACCESS_TOKEN` is set                                                    |
+| `cred:env:STRIPE_SECRET_KEY`     | `STRIPE_SECRET_KEY` is set                                                        |
+
+<!-- CREDENTIAL-CODES:END -->
+
+**The selection rule:** a file or env var whose presence alone gives a process write, push or deploy access to a
+remote system (git hosting, a package registry, a cloud account, a deploy platform). **Not on the list, by design:**
+
+- `GITHUB_TOKEN`. In GitHub Actions it is ephemeral, scoped by the workflow's `permissions:`, and present in every
+  run, so listing it would make `env:GITHUB_ACTIONS` useless. In a codespace it is long-lived, but the codespace's
+  credential helper is already a signal, so a codespace reads `ISOLATED_WITH_CREDENTIALS` either way.
+- `ANTHROPIC_API_KEY` and `~/.claude/`. These are the agent's own model credential, always present. That credential
+  is the exfiltration residual this stop does not touch.
+- `~/.docker/config.json` and `~/.kube/config`. Either can hold only non-secret settings, and no failure has named
+  them yet (P7).
+
+**The checker's rules** (`pharn/floor/check-loop-record.mjs`, all RED, keys and codes named, never a value):
+`ISOLATION_MISSING` when the key is absent; `ISOLATION_MALFORMED` when the value is not the witness grammar (one
+canonical line, the three keys, closed values, codes in order without repeats, an outcome equal to what the codes
+classify to); `ISOLATION_INCONSISTENT` when the record is of a run that the check refused (an outcome other than
+`ISOLATED` without `accepted_host_execution: true`, which no started run can produce); `ISOLATION_UNWITNESSED` when
+the witness beside the record's own `pharn/features/<name>/LOOP.md` path is absent, a link, not a regular file or
+unreadable; and `ISOLATION_MISMATCH` when the witness line is not byte-equal to the record's value.
+
+**What it buys, and what it does not (P0).**
+
+- FLOOR: a record handed to `check-loop-record.mjs` REDs when its `isolation` is absent, malformed, a refused run's, or
+  other than the witness says. That is a verdict on a record the checker sees, never a property of every record.
+- The commit message and `RUN-REPORT.md`'s `## Verdicts` print `isolation: <outcome>`, plus
+  `(host execution accepted by operator)` when the flag was used, and a `— NOT ADMITTED …` marker when the witness
+  holds an outcome no admitted run can write. Both are built by tested code from the **witness**
+  (`loop-closeout.mjs`, `render-run-report.mjs`), never from the record, so a committed branch names what the witness
+  says whatever the record says. A `--quick` run writes no `RUN-REPORT.md`.
+- The record check does **not** gate the commit: after one `--after-repair` the closeout goes on, as for every record
+  RED.
+- Agreement between two files the run can write, never provenance (lessons-learned L43). The witness is git-ignored
+  `pharn/.run/` state: the Write tool reaches `pharn/.run/**` in every posture, a `Bash` write reaches it too, and reconcile
+  never sees it. So a run can rewrite the witness and the record together, and every line built from the witness then
+  repeats the rewrite. **Struck:** "a record and a commit cannot leave out that the flag was used".
+- **ADVISORY, struck as a guarantee: "the environment was isolated" and "no credential was reachable."** Every probe
+  input comes from the environment. The operator can set `PHARN_ISOLATED=1`, plant `/.dockerenv` or empty `HOME`, and
+  so can a project's own `.claude/settings.json` `env` block, which is project content, not the operator. The check
+  binds the honest operator, not the hostile one. The lists are closed and partial: a token in a project `.env`, a
+  keychain or a cloud metadata endpoint is not seen.
+- The floor sees argv, never who typed `--accept-host-execution`.
+- Two cases refuse routinely by design, because the brief's rule keeps them: a committed `.npmrc` holding the
+  placeholder `_authToken=${NPM_TOKEN}`, and a `~/.ssh` holding only `known_hosts`. The way out is to remove the file
+  from the container, or the flag. `PHARN_ISOLATED=1` asserts isolation, never the absence of a credential.
+
+**Legacy and readers.** No reader parses the envelope's `isolation`: `loop-closeout.mjs`'s `recordFacts` and
+`render-run-report.mjs` read the witness, and `/pharn-loop` Step 1b reads only a prior record's `## Handoff`. So a
+record without the key reads exactly as before everywhere except in `check-loop-record.mjs`. That checker REDs it,
+and it runs only on the current run's record at the closeout: nothing re-checks a committed record. Stated bound: a
+run started on 7.0.1 or earlier and closed on 7.1.0 REDs `ISOLATION_MISSING` at its record check (and does not lose its commit,
+since that check does not gate it). A blocked record carries the key like every other: every record belongs to a run
+that passed Step 1a, because S15 stops before `pharn/features/<name>/` exists and writes no record.
 
 **`STOP_TERMINAL` changed meaning in `SKILLS_VERSION` 6.0.0, and the record carries no version field.**
 Records written before 6.0.0 used it for any real red — a verify `FAIL`, an inconclusive verdict, or a
@@ -265,7 +379,8 @@ guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field
 
 - **FLOOR (deterministic, `pharn/floor/check-loop-record.mjs`):** given a record, the envelope's four
   mandatory fields and its optional `cap` and `mode` are shape-valid, no frontmatter key repeats, `decision` and
-  `mode` are a consistent pair,
+  `mode` are a consistent pair, the mandatory `isolation` line is in the witness grammar, is an admitted run's, and
+  equals the run's witness file (7.1.0, "The isolation field"),
   and the Handoff's structure is exactly as specified — enum membership, anchored regexes over control-char-guarded
   values, and heading-list equality (`pharn/ARCHITECTURE.md §2` primitive #3).
   **This is the verdict GIVEN a record handed to the checker.** That a record is ever written, or ever

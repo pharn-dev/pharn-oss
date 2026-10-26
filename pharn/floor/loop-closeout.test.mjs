@@ -38,6 +38,7 @@ import {
   buildStageList,
   closeLoop,
   commitArgs,
+  isolationWitness,
   commitGateArgs,
   createBranch,
   gitRun,
@@ -55,6 +56,10 @@ import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
 const FEATURE = "demo";
+// 7.1.0 (loop-isolation-stop): every fixture record carries the isolation line, and every fixture writes its witness.
+const ISO = '{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}';
+/** The commit body a fixture's green commit carries: the fixed paragraph, then the witness's isolation line. */
+const GREEN_BODY = `${COMMIT_BODY}\n\nisolation: ISOLATED`;
 
 // ── fixtures ─────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -63,7 +68,7 @@ function sh(dir, ...args) {
 }
 
 /** A throwaway repository with a seed commit, the feature directory, SPEC.md, PLAN.md and LOOP.md. */
-function fixture({ record = loopRecord(), spec = "Draft", reflog = true } = {}) {
+function fixture({ record = loopRecord(), spec = "Draft", reflog = true, witness = `${ISO}\n` } = {}) {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "loop-closeout-")));
   sh(dir, "init", "-q");
   if (!reflog) sh(dir, "config", "core.logAllRefUpdates", "false");
@@ -83,6 +88,7 @@ function fixture({ record = loopRecord(), spec = "Draft", reflog = true } = {}) 
   writeFileSync(join(fd, "PLAN.md"), "# PLAN\n\n## Files\n\n- `src/a.js` — the change\n");
   if (record !== null) writeFileSync(join(fd, "LOOP.md"), record);
   mkdirSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE), { recursive: true });
+  if (witness !== null) writeFileSync(join(dir, "pharn", ".run", "pharn-loop", FEATURE, "isolation.json"), witness);
   mkdirSync(join(dir, "src"), { recursive: true });
   writeFileSync(join(dir, "src", "a.js"), "export const a = 1;\n");
   const head = () =>
@@ -94,7 +100,7 @@ function fixture({ record = loopRecord(), spec = "Draft", reflog = true } = {}) 
 function loopRecord({ decision = "STOP_GREEN", mode, blocked, iterations = "1", cap = "3" } = {}) {
   return (
     `---\ndecision: ${decision}\n${blocked ? `blocked: ${blocked}\n` : ""}iterations: ${iterations}\ncap: ${cap}\n` +
-    `commit: unknown\ndate: 2026-10-05\n${mode ? `mode: ${mode}\n` : ""}---\n\n# LOOP — demo\n\n## Handoff\n\n` +
+    `commit: unknown\ndate: 2026-10-05\n${mode ? `mode: ${mode}\n` : ""}isolation: ${ISO}\n---\n\n# LOOP — demo\n\n## Handoff\n\n` +
     "### investigated\n\nx\n\n### learned\n\nx\n\n### next_steps\n\nx\n"
   );
 }
@@ -247,7 +253,7 @@ test("★ exit 0 — a green stop commits exactly the list, in today's order, wi
       "src/a.js",
     ]);
     assert.equal(sh(fx.dir, "log", "-1", "--format=%s").stdout.trim(), "pharn-loop(demo): STOP_GREEN after 1 iteration(s)");
-    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), COMMIT_BODY);
+    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), GREEN_BODY);
     assert.equal(sh(fx.dir, "status", "--porcelain", "--", "unrelated.txt").stdout.trim(), "?? unrelated.txt", "left untouched");
     assert.match(out, /── git commit \(exit 0\)/);
   } finally {
@@ -318,7 +324,7 @@ test("★ LOOP-4 — no exclusion leaves the message byte-identical; no readable
     writeReports(fx, { verdict: "PASS", failing_gates: [], gate_run: {} }, { verdict: "no-regressions", regressions: [] });
     const { doc } = close(fx, { run: stub().run });
     assert.deepEqual(doc.excluded_gates, { ids: [], unlisted: 0 });
-    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), COMMIT_BODY);
+    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), GREEN_BODY);
   } finally {
     fx.done();
   }
@@ -341,7 +347,7 @@ test("★ LOOP-4 — a quick record reads verify alone: a stale regression repor
     );
     const { doc } = close(fx, { run: stub().run });
     assert.deepEqual(doc.excluded_gates, { ids: [], unlisted: 0 });
-    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), COMMIT_BODY);
+    assert.equal(sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(), GREEN_BODY);
   } finally {
     fx.done();
   }
@@ -832,6 +838,9 @@ test("the add, commit and undo argv equal the close part's former lines", () => 
     "pharn-loop(<name>): <decision> after <N> iteration(s)",
     "-m",
     "The SPEC was approved by the model (approved_by: model), not by a person. Nothing was merged or pushed; review this branch before merging.",
+    // 7.1.0: the isolation paragraph is always there; with no witness record it says so.
+    "-m",
+    "isolation: not recorded (no usable pharn/.run/pharn-loop/<name>/isolation.json)",
   ]);
   assert.deepEqual(
     undoArgs(list, "<branch>").map((u) => [u.literal, ...u.args]),
@@ -1081,6 +1090,77 @@ test("★ END-TO-END — a refused argv prints a closing document and exits 2; a
     const crash = spawnSync(process.execPath, ["broken.mjs"], { cwd: fx.dir });
     assert.equal(crash.status, 1);
     assert.ok(![EXIT.COMMITTED, EXIT.NOT_COMMITTED, EXIT.OWED, EXIT.REPAIR, EXIT.UNUSABLE].includes(crash.status));
+  } finally {
+    fx.done();
+  }
+});
+
+// ── 7.1.0 (loop-isolation-stop): the commit names the isolation outcome, from the WITNESS ──────────────────────────
+
+test("★ isolation paragraph: the outcome, the accepted suffix, and the not-recorded line for every unusable witness", () => {
+  const host = '{"outcome":"HOST","evidence":["cred:ssh-dir"],"accepted_host_execution":true}';
+  const cases = [
+    [`${ISO}\n`, "isolation: ISOLATED"],
+    [`${host}\n`, "isolation: HOST (host execution accepted by operator)"],
+    [null, "isolation: not recorded (no usable pharn/.run/pharn-loop/demo/isolation.json)"],
+    ["{not json\n", "isolation: not recorded (no usable pharn/.run/pharn-loop/demo/isolation.json)"],
+    [
+      '{"outcome":"ISOLATED","evidence":["cred:ssh-dir"],"accepted_host_execution":false}\n',
+      "isolation: not recorded (no usable pharn/.run/pharn-loop/demo/isolation.json)",
+    ],
+  ];
+  for (const [witness, expected] of cases) {
+    const fx = fixture({ witness });
+    try {
+      const rec = inDir(fx.dir, () => isolationWitness(FEATURE));
+      const argv = commitArgs("L", FEATURE, "STOP_GREEN", "1", null, rec);
+      assert.equal(argv[argv.indexOf(COMMIT_BODY) + 2], expected, JSON.stringify(witness));
+    } finally {
+      fx.done();
+    }
+  }
+  const linked = fixture({ witness: null });
+  try {
+    writeFileSync(join(linked.dir, "real.json"), `${ISO}\n`);
+    symlinkSync(join(linked.dir, "real.json"), join(linked.dir, "pharn", ".run", "pharn-loop", FEATURE, "isolation.json"));
+    assert.equal(
+      inDir(linked.dir, () => isolationWitness(FEATURE)),
+      null,
+      "a linked witness is never followed"
+    );
+  } finally {
+    linked.done();
+  }
+});
+
+test("★ a green commit made with an accepted-host witness carries the suffix in the real commit message", () => {
+  const host = '{"outcome":"HOST","evidence":["cred:ssh-dir"],"accepted_host_execution":true}';
+  const fx = fixture({ witness: `${host}\n` });
+  try {
+    const list = join(fx.dir, stageListPath(FEATURE));
+    writeFileSync(list, "src/a.js\0");
+    assert.equal(sh(fx.dir, "add", "-A", `--pathspec-from-file=${list}`, "--pathspec-file-nul").status, 0);
+    const c = spawnSync(
+      "git",
+      commitArgs(
+        list,
+        FEATURE,
+        "STOP_GREEN",
+        "1",
+        null,
+        inDir(fx.dir, () => isolationWitness(FEATURE))
+      ),
+      {
+        cwd: fx.dir,
+        env: { ...process.env, GIT_LITERAL_PATHSPECS: "1" },
+        encoding: "utf8",
+      }
+    );
+    assert.equal(c.status, 0, c.stderr);
+    assert.equal(
+      sh(fx.dir, "log", "-1", "--format=%b").stdout.trim(),
+      `${COMMIT_BODY}\n\nisolation: HOST (host execution accepted by operator)`
+    );
   } finally {
     fx.done();
   }

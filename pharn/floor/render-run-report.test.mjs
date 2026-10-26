@@ -2577,3 +2577,49 @@ test("6.48.0 — the entry section copies the stored view, apart from the stage 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── 7.1.0 (loop-isolation-stop): `## Verdicts` names the Step 1a isolation outcome, read from the WITNESS ────────────
+import { symlinkSync } from "node:fs";
+
+/** The `## Verdicts` section text of a report rendered for `feat` with the given witness bytes (null = no file). */
+function verdictsWith(witness, files = { "verify-report.json": { verdict: "PASS" } }, plant = null) {
+  const root = scratch();
+  try {
+    feature(root, "feat", files);
+    const wdir = join(root, "pharn", ".run", "pharn-loop", "feat");
+    mkdirSync(wdir, { recursive: true });
+    if (witness !== null) writeFileSync(join(wdir, "isolation.json"), witness);
+    if (plant) plant(root, wdir);
+    const md = renderRunReport("feat", { repo: root });
+    return md.slice(md.indexOf("## Verdicts"), md.indexOf("## Briefing"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("★ isolation: an ISOLATED witness, an accepted-host witness, and the not-recorded line for every unusable one", () => {
+  assert.match(
+    verdictsWith('{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}\n'),
+    /^- isolation: ISOLATED$/m
+  );
+  assert.match(
+    verdictsWith('{"outcome":"HOST","evidence":["cred:ssh-dir"],"accepted_host_execution":true}\n'),
+    /^- isolation: HOST \(host execution accepted by operator\)$/m
+  );
+  const missing = /^- isolation: not recorded \(no usable pharn\/\.run\/pharn-loop\/feat\/isolation\.json\)$/m;
+  assert.match(verdictsWith(null), missing);
+  assert.match(verdictsWith("{oops\n"), missing);
+  assert.match(
+    verdictsWith(null, undefined, (root, wdir) => {
+      writeFileSync(join(root, "real.json"), '{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}\n');
+      symlinkSync(join(root, "real.json"), join(wdir, "isolation.json"));
+    }),
+    missing,
+    "a linked witness is never followed"
+  );
+});
+
+test("★ isolation: a /pharn-ship report says the check is not part of that command", () => {
+  const v = verdictsWith(null, { "cost.json": shipCost(), "verify-report.json": { verdict: "PASS" } });
+  assert.match(v, /^- isolation: n\/a — `\/pharn-ship` runs no isolation check/m);
+});

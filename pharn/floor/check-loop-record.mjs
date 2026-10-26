@@ -57,6 +57,19 @@
 //   — so "the loop cannot leave a malformed record" is FALSE, while "a record the checker sees is
 //   malformed-DETECTABLE" is true. Do not collapse the two.
 //
+// ── `isolation` — MANDATORY (7.1.0, loop-isolation-stop) ───────────────────────────────────────────────────────
+// Unlike `cap` (below), this key is required: every record /pharn-loop writes from 7.1.0 carries Step 1a's isolation
+// witness (`pharn/.run/pharn-loop/<name>/isolation.json`), copied verbatim. The legacy cost `cap` avoided is accepted here
+// on the `check-loop-decision.mjs` `cap` precedent's own ground: no reader parses the key (the closeout and the run
+// report read the WITNESS), and nothing re-checks a committed record — this checker runs on the current run's record at
+// its closeout. RED, in order (contract: pharn/pharn-contracts/loop-record.md, "The isolation field"):
+// ISOLATION_MISSING, ISOLATION_MALFORMED (the core's one witness grammar, `parseIsolationLine` — L35), ISOLATION_INCONSISTENT
+// (a refused run's outcome — `admitted`), ISOLATION_UNWITNESSED (no regular-file witness beside the record's own
+// pharn/features/<name>/ path; opened once with O_NOFOLLOW — L54) and ISOLATION_MISMATCH (not byte-equal). BOUND (L43):
+// agreement between two files the run can write, never provenance; and the RED does not gate the commit (the closeout
+// goes on after one --after-repair, as for every RED here) — the commit message carries the witness's outcome instead.
+// COST, stated: a hand re-check of a record whose `pharn/.run/` was cleared is RED ISOLATION_UNWITNESSED.
+//
 // ── `cap` — OPTIONAL, additive (loop-decision-integrity) ────────────────────────────────────────────────
 // A fifth envelope field, `cap` (the loop's `--max-iter` value): validated with the SAME shape rule as
 // `iterations` WHEN PRESENT, but never MANDATORY. This is deliberately additive, not a fifth required
@@ -92,10 +105,12 @@
 //
 // Exit: 0 (GREEN) only when every check above holds; 1 (RED) on every refusal (fail-closed).
 
-import { readFileSync } from "node:fs";
+import { readFileSync, openSync, fstatSync, readSync, closeSync, constants } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { FM_RE, describeRepeats, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
+import { admitted, parseIsolationLine } from "./check-run-isolation-core.mjs";
 
 // The `decision` enum — exactly the values check-loop.mjs EMITS as `.decision` at a stop, STOP_GREEN_QUICK included
 // (6.28.0). `CONTINUE` (which check-loop.mjs also emits) is deliberately absent: a record is written only at a STOP, so
@@ -158,6 +173,44 @@ function envelope(text) {
     fields.set(key, raw.trim().replace(/^(["'])(.*)\1$/, "$2"));
   }
   return { fields, repeated: fm.repeated };
+}
+
+/** The run's isolation witness, located from the record's own `<root>/pharn/features/<name>/LOOP.md` path (never an
+ *  argument): `{ ok: true, text }` or `{ ok: false, why }`, `why` a fixed phrase (L62). Opened once with O_NOFOLLOW and
+ *  read through that descriptor, so a link is never followed and the file cannot be swapped between check and read. */
+function isolationWitness(recordPath) {
+  const abs = resolve(recordPath);
+  const featureDir = dirname(abs);
+  const name = basename(featureDir);
+  const featuresDir = dirname(featureDir);
+  const pharnDir = dirname(featuresDir);
+  if (basename(abs) !== "LOOP.md" || basename(featuresDir) !== "features" || basename(pharnDir) !== "pharn") {
+    return { ok: false, why: "the record is not at pharn/features/<name>/LOOP.md, so its witness cannot be located" };
+  }
+  const witness = join(dirname(pharnDir), "pharn", ".run", "pharn-loop", name, "isolation.json");
+  let fd;
+  try {
+    fd = openSync(witness, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (e) {
+    if (e && e.code === "ENOENT") return { ok: false, why: `no witness at pharn/.run/pharn-loop/${name}/isolation.json` };
+    return { ok: false, why: "the witness cannot be opened, or is a link (never followed)" };
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return { ok: false, why: "the witness is not a regular file" };
+    const buf = Buffer.alloc(4097);
+    let n = 0;
+    for (;;) {
+      const got = readSync(fd, buf, n, buf.length - n, null);
+      n += got;
+      if (got === 0 || n >= buf.length) break;
+    }
+    if (n >= buf.length) return { ok: false, why: "the witness is over 4096 bytes" };
+    return { ok: true, text: buf.subarray(0, n).toString("utf8") };
+  } catch {
+    return { ok: false, why: "the witness is unreadable" };
+  } finally {
+    closeSync(fd);
+  }
 }
 
 // The Handoff scan is DELEGATED to loop-record-core.mjs, never re-derived here. The core also returns
@@ -274,6 +327,47 @@ function gate(recordPath) {
     );
   }
 
+  // (A7) isolation — MANDATORY (7.1.0). The witness grammar is check-run-isolation-core.mjs's, never re-derived here
+  // (L35). No refusal below quotes the value: only codes, key names and fixed phrases (L62).
+  if (!fields.has("isolation")) {
+    return red(
+      `loop-record's frontmatter declares no \`isolation\` (${recordPath}) — ISOLATION_MISSING. Every record /pharn-loop ` +
+        `writes since 7.1.0 carries Step 1a's isolation witness, copied verbatim from ` +
+        `pharn/.run/pharn-loop/<name>/isolation.json. See pharn/pharn-contracts/loop-record.md, "The isolation field".`
+    );
+  }
+  const isoText = fields.get("isolation");
+  const iso = cleanScalar(isoText, 4096) ? parseIsolationLine(isoText) : null;
+  if (iso === null) {
+    return red(
+      `loop-record's \`isolation\` is not one line of the witness grammar (${recordPath}) — ISOLATION_MALFORMED: ` +
+        `exactly {"outcome","evidence","accepted_host_execution"} in that order, canonical JSON, an outcome in the enum, ` +
+        `evidence codes from the frozen lists in order without repeats, and an outcome equal to what the codes ` +
+        `classify to. Copy the witness line verbatim.`
+    );
+  }
+  if (!admitted(iso)) {
+    return red(
+      `loop-record's \`isolation\` is ${iso.outcome} without accepted_host_execution (${recordPath}) — ` +
+        `ISOLATION_INCONSISTENT: Step 1a refuses that outcome (S15) before any record can exist, so no started run ` +
+        `carries it.`
+    );
+  }
+  const witnessed = isolationWitness(recordPath);
+  if (!witnessed.ok) {
+    return red(
+      `loop-record's \`isolation\` (${recordPath}) is not witnessed — ${witnessed.why} — ISOLATION_UNWITNESSED. ` +
+        `/pharn-loop's Step 1a writes the witness; it is agreement between two files the run can write, never provenance.`
+    );
+  }
+  const witnessLine = witnessed.text.endsWith("\n") ? witnessed.text.slice(0, -1) : witnessed.text;
+  if (witnessLine !== isoText) {
+    return red(
+      `loop-record's \`isolation\` (${recordPath}) is not byte-equal to its witness, ` +
+        `pharn/.run/pharn-loop/<name>/isolation.json — ISOLATION_MISMATCH. Copy the witness line verbatim; never edit either.`
+    );
+  }
+
   // ── (B) The Handoff — structure only; the bodies are never read for meaning (P2) ────────────────────
   const body = text.slice(text.match(FM_RE)[0].length);
   const { count, subs, nonEmpty } = handoff(body);
@@ -316,7 +410,8 @@ function gate(recordPath) {
 
   console.log(
     `GREEN — loop-record is well-shaped (${recordPath}): decision ${decision}, mode ${mode}, iterations ${iterations}, ` +
-      `commit ${commit}, date ${date}; Handoff carries ${HANDOFF_SECTIONS.join(", ")}. NOTE (P0): this is ` +
+      `commit ${commit}, date ${date}, isolation ${iso.outcome}${iso.accepted_host_execution ? " (host execution accepted)" : ""}` +
+      ` and witnessed; Handoff carries ${HANDOFF_SECTIONS.join(", ")}. NOTE (P0): this is ` +
       `the verdict GIVEN this record — that a record was written at all, that its narrative is ACCURATE, ` +
       `that \`decision\` AGREES with check-loop.mjs's emitted value, and that \`commit\`/\`date\` are ` +
       `TRUE, are all ADVISORY. "Well-shaped" NEVER means "continuity was achieved".`

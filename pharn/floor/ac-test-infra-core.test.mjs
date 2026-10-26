@@ -811,8 +811,10 @@ test("✧ L36 CLOSURE — every non-test floor module tests the config-name rege
     const src = readFileSync(join(HERE, f), "utf8");
     for (const m of src.matchAll(/CONFIG_NAME_RE\.test\(/g)) hits.push(`${f}@${m.index}`);
     if (f !== "ac-test-infra-core.mjs" && /\/\^\(\?:vitest\\\.config/.test(src)) hits.push(`${f}: a second copy of the regex`);
-    // 6.31.0: the package-manager config names live in ONE constant, too
-    if (/["']\.npmrc["']|["']\.yarnrc(?:\.yml)?["']/.test(src)) pmHits.push(f);
+    // 6.31.0: the package-manager config names live in ONE constant, too. 7.1.0: check-run-isolation.mjs names
+    // `.npmrc` as a CREDENTIAL path (an `_authToken` in it is a credential signal), never as a runner-config name, so
+    // it is the one other module allowed the literal — exempted by name here, and only for that reason.
+    if (f !== "check-run-isolation.mjs" && /["']\.npmrc["']|["']\.yarnrc(?:\.yml)?["']/.test(src)) pmHits.push(f);
   }
   assert.equal(hits.length, 1, JSON.stringify(hits));
   assert.match(hits[0], /^ac-test-infra-core\.mjs@/);

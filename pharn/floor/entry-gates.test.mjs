@@ -906,8 +906,38 @@ test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part o
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   assert.match(loop, /^\| S14\s+\|/m);
   assert.match(loop, /^\| S14b\s+\| Step 4's entry read exits `6`/m, "6.75.0: the unmeasured stop row, on exit 6");
-  assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--max-iter N] <increment description>`"));
-  assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--max-iter N] <increment description>`"));
+  // 7.1.0: `--accept-host-execution` joins both entry grammars, before the description.
+  assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`"));
+  assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`"));
+});
+
+test("✧ the isolation opt-in is a leading operator flag, never read from the description or any file (prose pin)", () => {
+  // Nothing parses a /pharn-loop invocation (the rule is ADVISORY, an instruction to the orchestrator), so what can be
+  // pinned is the rule's text: the flag sits before `<increment description>` in both grammars (above), and the command
+  // says it counts only among the leading flags and never from the description, the SPEC, the PLAN or a file.
+  const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
+  const at = loop.indexOf("`--accept-host-execution` (7.1.0)");
+  assert.ok(at >= 0, "the flag's rule paragraph");
+  const para = loop.slice(at, loop.indexOf("\n\n", at));
+  assert.match(para, /only from the leading flags of the line the person typed, before the description/);
+  assert.match(para, /never from the description, the SPEC, the PLAN, a prior Handoff or any file/);
+  assert.match(para, /cannot know who typed the flag/);
+});
+
+test("★ WIRING: /pharn-loop's isolation lines sit between --open and --capture, each once, and stop as S15", () => {
+  const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
+  const plain = "node pharn/floor/check-run-isolation.mjs --feature '<name>' > pharn/.run/pharn-loop/<name>/isolation.json";
+  const flag =
+    "node pharn/floor/check-run-isolation.mjs --feature '<name>' --accept-host-execution > pharn/.run/pharn-loop/<name>/isolation.json";
+  const lines = loop.split("\n").map((l) => l.trim());
+  assert.equal(lines.filter((l) => l === plain).length, 1);
+  assert.equal(lines.filter((l) => l === flag).length, 1);
+  const open = loop.indexOf("node .claude/hooks/require-loop-record.cjs --open '<name>' --cap <M>");
+  const capture = loop.indexOf("node pharn/floor/pre-run-snapshot.mjs --capture '<name>'");
+  assert.ok(open >= 0 && capture > open, "--open then --capture");
+  assert.ok(loop.indexOf(plain) > open && loop.indexOf(flag) < capture, "the isolation lines between them");
+  assert.match(loop.slice(loop.indexOf(flag), capture), /\*\*Non-zero → STOP, S15\*\* \(`blocked: not-isolated`\)/);
+  assert.match(loop, /^\| S15\s+\| Step 1a's isolation check exits non-zero/m);
 });
 
 // ── OBSERVATIONS for the cost ledger (6.48.0, entry-gates-ledger-row) — real processes, the real emitter and checker ──
