@@ -881,3 +881,47 @@ test("★ a witness whose line differs from the record's value → RED ISOLATION
   }
   assert.equal(run(record(), { witness: ISO }).status, 0, "a witness without its trailing newline is the same line");
 });
+
+// ── 7.1.0: a witness whose read fails ───────────────────────────────────────────────────────────────────────────────
+import { pathToFileURL } from "node:url";
+
+// Preloaded into the checker's process: a read on a descriptor opened on `isolation.json` throws EIO.
+const READ_FAULT = `import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+const open = fs.openSync;
+const read = fs.readSync;
+const fds = new Set();
+fs.openSync = (p, ...rest) => {
+  const fd = open(p, ...rest);
+  if (typeof p === "string" && p.endsWith("isolation.json")) fds.add(fd);
+  return fd;
+};
+fs.readSync = (fd, ...rest) => {
+  if (fds.has(fd)) throw Object.assign(new Error("EIO: injected read fault"), { code: "EIO" });
+  return read(fd, ...rest);
+};
+syncBuiltinESMExports();
+`;
+
+test("★ a witness that opens but whose read fails → RED ISOLATION_UNWITNESSED `the witness is unreadable`", () => {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-loop-record-eio-"));
+  try {
+    const fd = join(dir, "pharn", "features", "demo");
+    mkdirSync(fd, { recursive: true });
+    mkdirSync(join(dir, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+    writeFileSync(join(dir, "pharn", ".run", "pharn-loop", "demo", "isolation.json"), `${ISO}\n`);
+    writeFileSync(join(fd, "LOOP.md"), record());
+    const preload = join(dir, "read-fault.mjs");
+    writeFileSync(preload, READ_FAULT);
+    const ok = spawnSync(process.execPath, [CHECKER, join(fd, "LOOP.md")], { encoding: "utf8" });
+    assert.equal(ok.status, 0, `the same witness reads normally: ${ok.stdout}${ok.stderr}`);
+    const r = spawnSync(process.execPath, ["--import", pathToFileURL(preload).href, CHECKER, join(fd, "LOOP.md")], {
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stdout, /ISOLATION_UNWITNESSED/);
+    assert.match(r.stdout, /the witness is unreadable/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

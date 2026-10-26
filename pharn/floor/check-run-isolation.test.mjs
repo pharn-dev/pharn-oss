@@ -333,3 +333,54 @@ test("★ credentialHelper: a git that cannot spawn is null (probe-failed), neve
     sb.done();
   }
 });
+
+// ── 7.1.0: the probe fails closed when a credential path cannot be opened, read or listed ─────────────────────────────
+import fsModule from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+
+/** Runs `fn` with one fs call failing for paths ending in `suffix`: `openSync` / `readdirSync` throw EACCES on the path,
+ *  `readSync` throws EIO on a descriptor opened on it. Every other call reaches the real fs. Production code imports
+ *  these names from node:fs, so `syncBuiltinESMExports` carries the swap to it and back. */
+function withFsFault(call, suffix, fn) {
+  const real = { openSync: fsModule.openSync, readSync: fsModule.readSync, readdirSync: fsModule.readdirSync };
+  const hit = (p) => typeof p === "string" && p.endsWith(suffix);
+  const fault = (code) => Object.assign(new Error(`${code}: injected ${call} fault`), { code });
+  const fds = new Set();
+  fsModule.openSync = (p, ...rest) => {
+    if (call === "openSync" && hit(p)) throw fault("EACCES");
+    const fd = real.openSync(p, ...rest);
+    if (hit(p)) fds.add(fd);
+    return fd;
+  };
+  fsModule.readSync = (fd, ...rest) => {
+    if (call === "readSync" && fds.has(fd)) throw fault("EIO");
+    return real.readSync(fd, ...rest);
+  };
+  fsModule.readdirSync = (p, ...rest) => {
+    if (call === "readdirSync" && hit(p)) throw fault("EACCES");
+    return real.readdirSync(p, ...rest);
+  };
+  syncBuiltinESMExports();
+  try {
+    return fn();
+  } finally {
+    Object.assign(fsModule, real);
+    syncBuiltinESMExports();
+  }
+}
+
+test("★ an .npmrc that cannot be opened or read, or a .ssh that cannot be listed, is a hit (fail-closed)", () => {
+  const sb = sandbox();
+  try {
+    writeFileSync(join(sb.home, ".npmrc"), "registry=https://registry.npmjs.org/\n");
+    mkdirSync(join(sb.home, ".ssh"));
+    const evidence = () => evaluate(buildProbe({ env: sb.env, cwd: sb.project, git: () => false })).record.evidence;
+    assert.deepEqual(evidence(), [], "a token-free .npmrc and an empty .ssh are no hit");
+    assert.deepEqual(withFsFault("openSync", ".npmrc", evidence), ["cred:npmrc-home"], "an .npmrc that cannot be opened");
+    assert.deepEqual(withFsFault("readSync", ".npmrc", evidence), ["cred:npmrc-home"], "an .npmrc whose read fails");
+    assert.deepEqual(withFsFault("readdirSync", ".ssh", evidence), ["cred:ssh-dir"], "a .ssh that cannot be listed");
+    assert.deepEqual(evidence(), [], "the real fs is back after each fault");
+  } finally {
+    sb.done();
+  }
+});

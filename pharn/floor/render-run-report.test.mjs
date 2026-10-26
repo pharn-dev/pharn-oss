@@ -2623,3 +2623,47 @@ test("★ isolation: a /pharn-ship report says the check is not part of that com
   const v = verdictsWith(null, { "cost.json": shipCost(), "verify-report.json": { verdict: "PASS" } });
   assert.match(v, /^- isolation: n\/a — `\/pharn-ship` runs no isolation check/m);
 });
+
+// ── 7.1.0: a witness whose read fails is not recorded ───────────────────────────────────────────────────────────────
+import fsModule from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+
+/** Runs `fn` with one fs call failing for paths ending in `suffix`: `openSync` / `readdirSync` throw EACCES on the path,
+ *  `readSync` throws EIO on a descriptor opened on it. Every other call reaches the real fs. Production code imports
+ *  these names from node:fs, so `syncBuiltinESMExports` carries the swap to it and back. */
+function withFsFault(call, suffix, fn) {
+  const real = { openSync: fsModule.openSync, readSync: fsModule.readSync, readdirSync: fsModule.readdirSync };
+  const hit = (p) => typeof p === "string" && p.endsWith(suffix);
+  const fault = (code) => Object.assign(new Error(`${code}: injected ${call} fault`), { code });
+  const fds = new Set();
+  fsModule.openSync = (p, ...rest) => {
+    if (call === "openSync" && hit(p)) throw fault("EACCES");
+    const fd = real.openSync(p, ...rest);
+    if (hit(p)) fds.add(fd);
+    return fd;
+  };
+  fsModule.readSync = (fd, ...rest) => {
+    if (call === "readSync" && fds.has(fd)) throw fault("EIO");
+    return real.readSync(fd, ...rest);
+  };
+  fsModule.readdirSync = (p, ...rest) => {
+    if (call === "readdirSync" && hit(p)) throw fault("EACCES");
+    return real.readdirSync(p, ...rest);
+  };
+  syncBuiltinESMExports();
+  try {
+    return fn();
+  } finally {
+    Object.assign(fsModule, real);
+    syncBuiltinESMExports();
+  }
+}
+
+test("★ isolation: a witness that opens but whose read fails gives the not-recorded line", () => {
+  const iso = '{"outcome":"ISOLATED","evidence":["fs:dockerenv"],"accepted_host_execution":false}\n';
+  assert.match(verdictsWith(iso), /^- isolation: ISOLATED$/m, "the same witness reads normally");
+  assert.match(
+    withFsFault("readSync", "isolation.json", () => verdictsWith(iso)),
+    /^- isolation: not recorded \(no usable pharn\/\.run\/pharn-loop\/feat\/isolation\.json\)$/m
+  );
+});
