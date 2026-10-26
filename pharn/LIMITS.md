@@ -698,3 +698,27 @@ first, and below Node 24.2.0 it prints one line and exits 2 instead of exiting 0
 [6.50.0]). The refusal is floor for those CLIs only. A script with no entry gate runs on any Node, an API an older
 Node lacks fails loudly rather than silently, and a caller that ignores exit codes is outside it. The installer's own
 `engines` field lives in a separate repository and is not governed by this tree.
+
+---
+
+## 11. A merge to `main` is not a release; only the release channel waits for CI
+
+pharn-cli installs one of two channels. The default, `main`, takes the tip of `main`: whatever merged last, before
+its checks on `main` have finished. `--ref latest` takes the newest GitHub release. Since `.github/workflows/release.yml`,
+a release exists only for a commit on which `floor`, `check`, `Analyze (javascript-typescript)` and
+`Socket Security: Project Report` concluded `success`. The workflow tags it `v<SKILLS_VERSION>` and never moves a tag
+that points elsewhere.
+
+- **Struck claim:** "every merge to `main` is a release."
+- **True statement:** every merge reaches the `main` channel; a merge that bumps `SKILLS_VERSION` also becomes a
+  release once its required checks are green on `main`; an `[Unreleased]` merge releases nothing new.
+- **Bounds.** The gate is a property of a GitHub Actions workflow, not a PHARN floor primitive.
+  - The owner's ruleset bypass still merges a red tree onto `main`, and the `main` channel installs it. The release
+    job only keeps that commit from being tagged.
+  - A person with admin rights can create or move a tag by hand unless a tag ruleset protects `v*`.
+  - The workflow's check list is a copy of the ruleset's. A check added to the ruleset and not to the workflow is
+    not waited for. `Socket Security: Pull Request Alerts` is left out on purpose: it runs on pull requests only.
+  - A newer push cancels an older _pending_ release run, so a version bumped twice before the first run starts gets
+    no tag of its own.
+- **Backstop:** pharn-cli refuses a draft or prerelease, a tag that does not match `v<X.Y.Z>`, and a tagged tree
+  whose root `SKILLS_VERSION` differs from the tag (pharn-cli `src/lib/release.ts`, `src/lib/repo.ts`).

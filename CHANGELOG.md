@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.1.3] - 2026-10-26
+
 ### Added
 
 - 2026-10-26: **A merge that bumps `SKILLS_VERSION` now becomes a GitHub release once its required checks pass on
@@ -35,6 +37,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   left out because it never runs on a push to `main`. This covers what the workflow tags only: an admin merge still
   lands a red tree on `main`, which pharn-cli installs by default. The README now recommends `--ref latest` to users,
   and CONTRIBUTING says how a failed release is re-run. No `SKILLS_VERSION` bump: no shipped bytes change.
+
+### Changed
+
+- 2026-10-26: **`pharn/LIMITS.md` §11 now says a merge to `main` is not a release, and `pharn/THREAT-MODEL.md` §4 item
+  2 names the release gate.** Every merge still reaches pharn-cli's default `main` channel; only a merge that bumps
+  `SKILLS_VERSION` becomes a release, once the required checks that run on a push succeed on `main`
+  (`.github/workflows/release.yml`). §11 lists what that gate does not stop: the owner's ruleset bypass onto
+  `main`, a tag made by hand, a check added to the ruleset but not to the workflow, and a pending run cancelled by a
+  newer push. Applied by a human from `.dev/features/release-workflow/HUMAN-PATCH.md`, because both docs are
+  human-only. Trusted-doc prose ships, so this is a patch bump.
 
 ## [7.1.2] - 2026-10-26
 
