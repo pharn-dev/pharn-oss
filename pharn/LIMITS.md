@@ -703,8 +703,14 @@ Node lacks fails loudly rather than silently, and a caller that ignores exit cod
 
 ## 11. A merge to `main` is not a release; only the release channel waits for CI
 
-pharn-cli installs one of two channels. The default, `main`, takes the tip of `main`: whatever merged last, before
-its checks on `main` have finished. `--ref latest` takes the newest GitHub release. Since `.github/workflows/release.yml`,
+pharn-cli installs one of two channels. The default since pharn-cli 0.15.0, `--ref latest`, takes the newest GitHub
+release and records `"ref": "latest"`. When no release can be resolved (none published, `api.github.com`
+unreachable, or its unauthenticated limit of 60 requests an hour used up, which `pharn status --strict` on a shared
+CI address can hit), pharn-cli exits 1 and names `--ref main`; it never falls back to `main` on its own.
+`main` takes the tip of `main`: whatever merged last, before its checks on
+`main` have finished. It is what an install receives when its `pharn.config.json` records no `ref`: one made with
+`--ref main`, or by a pharn-cli older than 0.15.0 without `--ref latest`. `pharn update` keeps such an install on
+`main` until `pharn update --ref latest` switches it. Since `.github/workflows/release.yml`,
 a release exists only for a commit on which `floor`, `check`, `Analyze (javascript-typescript)` and
 `Socket Security: Project Report` concluded `success`. The workflow tags it `v<SKILLS_VERSION>` and never moves a tag
 that points elsewhere.
