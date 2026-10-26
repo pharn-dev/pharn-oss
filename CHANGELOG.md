@@ -23,6 +23,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.1.2] - 2026-10-26
+
+### Added
+
+- 2026-10-26: **A record of the first interactive `/pharn-loop --quick` attempt on 7.1.1,
+  `.dev/measurements/loop-interactive-cli-2026-10-26.md`: both stage agents went to the background, and
+  `stage-agent.mjs finish --budget-ms` waited both out.** In Claude Code 2.1.310's interactive CLI the orchestrator
+  sent no `run_in_background`. The spec and plan agents still launched in the background. `finish` returned their
+  results after 88.7 s and 137.3 s, each under a second after the agent reported and about ten seconds before Claude
+  Code's own completion notice. This is the first measured success of 6.74.0's wait in a real loop. A longer stage, a
+  re-run on exit 5 and the cap were not exercised. The run stopped S9 at the plan stage because its preparation had
+  excluded the `test` gate while every criterion was unit-level. The record also covers:
+  - the auto-mode classifier's denial of the blocked stop's SPEC-revert setter, sent inside a compound command;
+  - three findings proposed, not built: a stop row for an excluded AC level; how the close-out lines meet the
+    classifier; and 7.1.1's `--no-foreground-agent` rule, which the orchestrator did not apply. That rule's companion
+    sentence, "the tool's default is the foreground", is contradicted by this attempt's two calls. 7.1.2 corrects that sentence (below); whether the
+    rule itself stays is still the follow-up `loop-foreground-default-prose`.
+
+  The record also says what attempt 2 changes. Apparatus only; nothing shipped changes.
+
+### Changed
+
+- **The interactive `/pharn-loop` background launch is measured as handled: on Claude Code 2.1.310 the interactive CLI
+  launched every stage agent in the background with no `run_in_background` sent, and `stage-agent.mjs finish
+--budget-ms` waited each one out, in the one run that completed.** That run is attempt 2 of
+  `.dev/measurements/loop-interactive-cli-2026-10-26.md`: PHARN 7.1.1, `/pharn-loop --quick`, four stage agents (spec,
+  plan, test, build), each `finish` exiting 0 with a `done` result in one call after 92.3 s to 249.9 s, and `STOP_GREEN_QUICK` after
+  one iteration, committed to a local branch. With attempt 1, that is six Agent calls, all launched in the background.
+  The residual `stage-agent-background` is handled by THE WAIT, not gone, and a harness that changes its default again
+  changes nothing in PHARN, because `finish` runs after every Agent call. Headless `claude -p --permission-mode auto`
+  is the other measured path: its stage agents ran in the foreground on 6.73.2, which sent `run_in_background: false`
+  (headless under 7.1.1, which sends none, is not measured), and neither of its two runs completed a loop. One run is not a bound: a stage longer than one 570 s wait, the wait's cap, whether `TaskStop` reaches an
+  agent, other Claude Code versions and a full loop are not measured.
+  - Shipped text: `pharn/floor/stage-agent-core.mjs`'s residual entry carries the measured fact and no longer calls
+    the tool's default unmeasured. `/pharn-loop`'s routed-stage items 1–2 drop their stale reasons ("for which item
+    3's wait has not been measured", "the tool's default is the foreground … unmeasured in a real loop") and cite that
+    entry, and its Bounds paragraph says a stage agent's text can also arrive as a later completion notice. No
+    behaviour changes. The `--no-foreground-agent` rule stays: no orchestrator applied it (0 of 6 routed start lines),
+    and whether it stays is the follow-up `loop-foreground-default-prose`.
+  - Docs: README's `/pharn-loop` intro names the two measured session forms, and its cost paragraph adds the first
+    completed loop: a `--quick` loop of one small feature took about 18 minutes and 11.2 million processed context
+    tokens (10.7 million cache-read, 0.47 million cache-write, 208 uncached input) plus about 50 thousand output
+    tokens. A full loop is still unmeasured. `docs/pipeline.md` (the `/pharn-loop` paragraph and "Running /pharn-loop
+    in a container") and `docs/limitations.md` (one bullet) say the same.
+  - Recorded, proposed, not built (the record's §7): a `--quick` run still schedules the entry check's `base:test`
+    evidence slot, which nothing in `--quick` reads; killed at 540 s, it kept the entry wait going for 298.5 s of the
+    1,098 s run. With the operator's two allow rules present, none of the 14 setter and `reconcile-baseline.mjs` calls
+    was denied.
+  - Trusted docs, applied by the maintainer from the text proposed in
+    `.dev/features/loop-background-cli/TRUSTED-DOC-PROPOSALS.md`: `pharn/LIMITS.md` §8 gains a bullet saying how a
+    routed stage agent is launched is the harness's choice and `/pharn-loop` waits either way, with the measured runs
+    and what one run does not show; `pharn/THREAT-MODEL.md` §5 item (4) says a stage agent's final text reaches the
+    orchestrator as the Agent result or as a later completion notice.
+
 ## [7.1.1] - 2026-10-26
 
 ### Fixed

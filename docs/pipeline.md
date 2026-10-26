@@ -74,7 +74,11 @@ re-derive is not committed. None of this proves the reports are honest: a self-c
 stamps and reports still passes. Every other outcome reverts a
 model-approved spec to `Draft`, or the run says it could not; a spec the run never approved (a stop on a
 clarification marker, say) simply stays a `Draft`. The human decision comes after the run, on the branch or the
-working tree it leaves.
+working tree it leaves. A stage the loop routes runs as its own agent, and the loop waits for that agent's result on
+disk after every Agent call, so a background launch is waited out (up to the wait's cap) instead of stopping the run; a
+`finish` that returns no result or crashes still stops it (`blocked: stage-refused`). In the
+measured runs, Claude Code 2.1.310's interactive CLI launched every stage agent in the background and the loop waited
+each one out ([one completed `--quick` run on 7.1.1](../.dev/measurements/loop-interactive-cli-2026-10-26.md)).
 
 **Standalone:** `/pharn-review` is not a pipeline stage. It runs review lenses in parallel as subagents
 and merges their structured findings deterministically. You can run it against code independently of the
@@ -375,8 +379,12 @@ docker run --rm -it \
 Git gets its identity from the environment, not from a mounted `~/.gitconfig`. A mounted config would bring its
 credential helper (refused as `cred:credential-helper`) and its signing settings: with `commit.gpgsign=true` and no
 signing key in the container, the loop's green commit fails and the run ends `not committed: commit failed`. Inside
-the container, run `/pharn-loop <description>` as usual. The green branch it commits lives in the mounted repository;
-nothing is pushed.
+the container, run `/pharn-loop <description>` as usual, in an interactive `claude --permission-mode auto` session or
+headless with `claude -p --permission-mode auto`. Both forms are measured, outside a container: the interactive one
+completed a `--quick` loop with its stage agents in the background (PHARN 7.1.1, Claude Code 2.1.310), and the headless
+one ran its stage agents in the foreground but stopped at the entry check (6.73.2, which sent `run_in_background:
+false`; 7.1.1 sends no such parameter, and headless under it is not measured). The green branch it commits lives
+in the mounted repository; nothing is pushed.
 
 ## Capability coverage
 

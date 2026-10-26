@@ -162,8 +162,8 @@
 //                             S9, and the agent ran on after the stop (~97k tokens; the measuring session's
 //                             record, outside this repo).
 //                             6.74.0 (stage-agent-background-wait): /pharn-loop's Agent call names no
-//                             `run_in_background` at all (ADVISORY: what the model sends; that the tool's default
-//                             is the foreground is unmeasured in a real loop), and its four finish lines carry
+//                             `run_in_background` at all (ADVISORY: what the model sends; the launch it gets is the
+//                             harness's — MEASURED below), and its four finish lines carry
 //                             `--budget-ms`, run after EVERY Agent call, so a background launch is waited out on
 //                             disk (THE WAIT, above). FLOOR: the presence test, the exit codes, the cap measured
 //                             from the stage-start marker. ADVISORY: that the orchestrator runs `finish` after
@@ -178,6 +178,19 @@
 //                             shortens the wait, but a marker rewritten to a fresh `ts` before each call
 //                             lengthens it without bound — accounting against tooling, not a control against a
 //                             Bash writer (pharn/LIMITS.md §6).
+//                             MEASURED 2026-10-26 (PHARN 7.1.1; Claude Code 2.1.310 interactive CLI, auto mode;
+//                             .dev/measurements/loop-interactive-cli-2026-10-26.md): the CLI launched every stage
+//                             agent in the background with no `run_in_background` sent — six Agent calls in two
+//                             runs — and `finish --budget-ms` waited each one out, each in one call (waits of
+//                             88.7–249.9 s). One run completed (`--quick`, four stage agents, STOP_GREEN_QUICK).
+//                             So this residual is HANDLED by THE WAIT, not gone: a harness that changes the default
+//                             again changes nothing here, since `finish` runs after every Agent call either way.
+//                             Headless `claude -p --permission-mode auto` is the other measured path (stage agents
+//                             in the foreground on 6.73.2, which sent `run_in_background: false`; headless under
+//                             7.1.1, which sends none, is not measured; neither of its two runs completed a loop).
+//                             Not measured: a stage past one budget (exit 5), the cap, TaskStop's reach, another
+//                             Claude Code version, a full loop; and no orchestrator applied `--no-foreground-agent`
+//                             (0 of 6).
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.

@@ -196,8 +196,10 @@ can be skipped, and its convention or its argument about a finding then never re
 rules in `pharn/pharn-core/installed-skill-selection/installed-skill-selection.md` narrow this; nothing structural
 closes it, and the catalogue's `ok` status means only "syntactically readable", never "a complete account".
 Measured in `.dev/features/selective-skill-reads/EVAL.md`, not bounded by it. (4) The **stage-report** channel
-(6.27.0): when `/pharn-ship` or `/pharn-loop` routes a stage to its own agent, the Agent tool returns that agent's
-final text into the orchestrator's context — a model consuming another model's free text. Only the exit code of
+(6.27.0): when `/pharn-ship` or `/pharn-loop` routes a stage to its own agent, that agent's final text reaches the
+orchestrator's context — as the Agent tool's result, or, when the harness launched the agent in the background, as
+Claude Code's later completion notice (measured on Claude Code 2.1.310's interactive CLI,
+`.dev/measurements/loop-interactive-cli-2026-10-26.md`) — a model consuming another model's free text. Only the exit code of
 `pharn/floor/stage-agent.mjs finish` and its closed first line are floor, and `/pharn-loop`'s stop is still decided
 from the floor verdicts on disk; that neither orchestrator's control flow uses the prose is its own discipline
 (`pharn-loop.md`, `pharn-ship-stages.md`). (5) The **handoff** channel

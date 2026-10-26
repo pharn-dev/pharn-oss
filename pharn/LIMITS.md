@@ -602,6 +602,17 @@ What either certifies is narrower than the config's presence suggests.
   lists), and the orchestrators themselves all run on the model of the session running the orchestrator, not
   on one chosen for the stage. A stage that could have been routed records its reason on its marker; the
   policy's own inline stages are named as such in the run's summary.
+- **How a routed stage agent is launched is the harness's choice; `/pharn-loop` waits either way.** Claude Code
+  decides whether an Agent call runs in the foreground or the background, and PHARN does not control it. Measured on
+  Claude Code 2.1.310's interactive CLI (PHARN 7.1.1, `.dev/measurements/loop-interactive-cli-2026-10-26.md`): every
+  stage agent was launched in the background with no `run_in_background` sent, six Agent calls in two runs, and
+  `stage-agent.mjs finish --budget-ms` waited each one out; one `--quick` run completed. The residual
+  (`pharn/floor/stage-agent-core.mjs`, `stage-agent-background`) is therefore handled by that wait, not gone, and a
+  harness that changes its default again changes nothing in PHARN. Headless `claude -p --permission-mode auto` is
+  the other measured path: its stage agents ran in the foreground on 6.73.2, which sent `run_in_background: false`;
+  headless under 7.1.1, which sends no such parameter, is not measured. One run is not a bound: a stage longer than
+  one 570 s wait, the wait's cap, whether `TaskStop` stops an agent left running, other Claude Code versions and a
+  full loop are not measured.
 - **Deleting the block loses routing as well as the check.** Probed, not reasoned about: a config with no
   `models.stages`, and an absent config file, each exit **0 GREEN by design** in the checker — the
   `check-lessons-index` NO_CANON / COLD precedent, the honest normal state of an install that does not use
@@ -622,6 +633,7 @@ model to a hook.
 
 <!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->
 <!-- §8 was revised in .dev/features/stage-model-routing and applied by a human (SKILLS_VERSION 6.27.0). -->
+<!-- §8 gained the launch bullet in .dev/features/loop-background-cli, applied by a human (SKILLS_VERSION 7.1.2). -->
 
 ---
 
