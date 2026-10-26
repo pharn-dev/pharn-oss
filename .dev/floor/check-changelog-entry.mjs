@@ -50,9 +50,9 @@
 //   - HEADING_INSERTED     : a version heading absent at base is not the first version heading at head
 //   - UNRELEASED_NOT_MOVED : NEW exists and some head entry is still under `[Unreleased]`
 //
-// WHY THIS EXISTS (P7, at its true weight). Every merge to `main` is a release — pharn-cli installs the tip
-// of `main` and `pharn update` points users at CHANGELOG.md — so the CHANGELOG is the one record a user
-// reads of what reached them. The per-PR entry rule and append-only are at the maintainer's DIRECTION
+// WHY THIS EXISTS (P7, at its true weight). Every merge to `main` reaches users — pharn-cli installs the tip
+// of `main` by default and `pharn update` points users at CHANGELOG.md; a bump also becomes a release
+// (`.github/workflows/release.yml`) — so the CHANGELOG is the one record a user reads of what reached them. The per-PR entry rule and append-only are at the maintainer's DIRECTION
 // (P5 — ask the human; recorded, not dressed in an invented trigger). The closest observed failures are
 // edits to released text: a committed merge-conflict marker that #249 found and dropped from between two
 // released entries, and #199 (`4e3daf5`) correcting a released entry in place. HEADING_INSERTED,
