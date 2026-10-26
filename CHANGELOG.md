@@ -23,6 +23,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-10-26: **A record of the first interactive `/pharn-loop --quick` attempt on 7.1.1,
+  `.dev/measurements/loop-interactive-cli-2026-10-26.md`: both stage agents went to the background, and
+  `stage-agent.mjs finish --budget-ms` waited both out.** In Claude Code 2.1.310's interactive CLI the orchestrator
+  sent no `run_in_background`. The spec and plan agents still launched in the background. `finish` returned their
+  results after 88.7 s and 137.3 s, each under a second after the agent reported and about ten seconds before Claude
+  Code's own completion notice. This is the first measured success of 6.74.0's wait in a real loop. A longer stage, a
+  re-run on exit 5 and the cap were not exercised. The run stopped S9 at the plan stage because its preparation had
+  excluded the `test` gate while every criterion was unit-level. The record also covers:
+  - the auto-mode classifier's denial of the blocked stop's SPEC-revert setter, sent inside a compound command;
+  - three findings proposed, not built: a stop row for an excluded AC level; how the close-out lines meet the
+    classifier; and 7.1.1's `--no-foreground-agent` rule, which the orchestrator did not apply. That rule's companion
+    sentence, "the tool's default is the foreground", is contradicted by this attempt's two calls. Correcting it is the follow-up
+    `loop-foreground-default-prose`.
+
+  The record also says what attempt 2 changes. Apparatus only; nothing shipped changes.
+
 ## [7.1.1] - 2026-10-26
 
 ### Fixed

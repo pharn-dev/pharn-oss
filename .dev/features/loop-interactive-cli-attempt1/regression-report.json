@@ -1,0 +1,43 @@
+{
+  "base": "e4b1704899f5284608b98caefb7a7f79dff4a383",
+  "inside": [
+    ".dev/features/loop-interactive-cli-attempt1/GRILL.md",
+    ".dev/features/loop-interactive-cli-attempt1/PLAN.md",
+    ".dev/measurements/loop-interactive-cli-2026-10-26.md",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6087,
+      "failed": 0,
+      "skipped": 6,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6092,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
