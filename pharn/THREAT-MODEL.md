@@ -137,7 +137,10 @@ The red-team's verdict: a **single disease in five places — "written in the co
    is not denied — preventing it rests on the Claude Code permission layer, which gates commands, not
    paths, and is not a PHARN floor primitive. Since 4.0.0 such a write is **detected** after the fact
    when it lands inside a build's anchor-to-verify window (`check-bash-reconcile.mjs`, as in item 7);
-   outside that window it is neither denied nor detected (residual — `pharn/LIMITS.md §6`)._
+   outside that window it is neither denied nor detected (residual — `pharn/LIMITS.md §6`). The same split
+   holds one layer up, at GitHub: `main`'s ruleset binds other contributors but not the owner's bypass, so a red
+   tree can still reach `main`; since `release.yml`, only a commit whose required checks succeeded is tagged, so
+   pharn-cli's `--ref latest` channel does not receive it (`pharn/LIMITS.md §11`)._
 3. **Deterministic gate over probabilistic severity** — split into floor-gate (blocks guaranteed
    invariants from actual content) vs advisory-gate (reads LLM severity, never sole basis for a
    guaranteed block) (fix #3). _Closed by separation; the advisory half is labeled, not "fixed."_
