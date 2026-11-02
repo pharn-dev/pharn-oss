@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-02: **Lessons L80 and L81, from the 7.2.0 batch.** L80 (#408): L41 recurs through a fixture's
+  environment. Every reconcile test inherited a `.gitignore` that ignores `pharn/.run/`, so an install that does not
+  ignore it was tested by nothing. L81 (#409): a test that copies a hand-picked list of floor modules into a scratch
+  tree holds a second copy of their imports, so a new import breaks it. Both were promoted through
+  `/pharn-dev-memory-promote` with the maintainer's accept, `docs/lessons-index.md` was regenerated, and the two
+  features' `SHIP.md` now record `promoted L80` / `promoted L81`. Dev-only: no `SKILLS_VERSION` bump.
+
 ## [7.2.0] - 2026-11-02
 
 ### Fixed

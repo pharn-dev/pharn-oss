@@ -41,10 +41,7 @@ changelog-entry: exit 0
 
 ## Lesson
 
-lesson: pending — the human chose Promote at 2b.3 (2026-11-02, asked by the orchestrator) for the candidate in
-`REVIEW.md` (a hand-listed scratch-tree module copy breaks on a new import). `/pharn-dev-memory-promote` runs after
-this branch merges, outside every build window, and its own gate decides; that change replaces this line with
-`promoted L<n>` or `skipped`.
+lesson: promoted L81
 
 deferred: two concurrent agents shared one scratchpad directory, and a sibling's `regress-base` worktree already held
 the name this run first chose. This run used unique names; the convention is not written down anywhere.
