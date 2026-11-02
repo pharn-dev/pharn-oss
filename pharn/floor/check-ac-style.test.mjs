@@ -53,8 +53,9 @@ function project({ scripts, config = null } = {}) {
   execFileSync("cp", ["-R", HERE, join(dir, "pharn", "floor")]);
   return { dir, done: () => rmSync(dir, { recursive: true, force: true }) };
 }
-const run = (dir, ...args) =>
-  spawnSync(process.execPath, [join(dir, "pharn", "floor", "check-ac-style.mjs"), ...args], { cwd: dir, encoding: "utf8" });
+// The committed checker, run from the scratch project: it reads only its invoking directory, and running the copy
+// would credit a temp path in the coverage report instead of this file. The WIRING test below runs the copy.
+const run = (dir, ...args) => spawnSync(process.execPath, [join(HERE, "check-ac-style.mjs"), ...args], { cwd: dir, encoding: "utf8" });
 const before = (dir) => run(dir, "--before", "demo", "--timeout-ms", "60000");
 const after = (dir) => run(dir, "--after", "demo", "--timeout-ms", "60000");
 const writeTest = (dir, text) => writeFileSync(join(dir, TEST_FILE), text);
@@ -195,6 +196,16 @@ test("UNUSABLE (exit 2): --after with no --before, a changed gate set, a foreign
     r = run(p.dir, "--before", "nope", "--timeout-ms", "1000");
     assert.equal(r.status, 2);
     assert.match(r.stdout, /cannot read pharn\/features\/nope\/AC-TESTS\.md/);
+
+    writeFileSync(STYLE(p.dir, "before.json"), "{not json");
+    r = after(p.dir);
+    assert.equal(r.status, 2);
+    assert.match(r.stdout, /^UNUSABLE — pharn\/\.run\/pharn-test\/style\/before\.json is not valid JSON/m);
+
+    writeFileSync(join(p.dir, "package.json"), "{not json");
+    r = before(p.dir);
+    assert.equal(r.status, 2);
+    assert.match(r.stdout, /^UNUSABLE — package\.json is not valid JSON/m);
   } finally {
     p.done();
   }
