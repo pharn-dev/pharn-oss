@@ -51,6 +51,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   only `refused --row S4…S10`, so a missing runner was reported as S9 and recorded as S12. `stage-agent-core.mjs`'s
   new `CHECKER_ROW_STAGES` (`pharn-test`) gives that brief one row-less `refused` line and a rule 3 that says the
   loop's checkers decide the row; `LOOP_ROWS` is unchanged, so no agent can claim S11–S15.
+- **A routed stage that outlives the wait's cap is no longer closed as a refusal
+  ([#410](https://github.com/pharn-dev/pharn-oss/issues/410)).** A `/pharn-loop` build agent was still running when the
+  session ended. A day later its `stage-agent.mjs finish --budget-ms` was past the one-hour cap measured from the
+  stage's start, so it printed `unusable no-result` and wrote the return marker. That closed the stage for good: every
+  later `finish` read `wait-unanchored`. The loop stopped at S9 `stage-refused` with 14 half-edited files. At the cap
+  with no result, `finish` now exits `6` with `capped — …` and `marker: withheld (capped)`, and writes no return marker.
+  The stage stays open, so a result that arrives later is still consumed by a later `finish`. `/pharn-loop` stops at a
+  new row, S9b (`blocked: stage-outlived-wait`). It also stops there when, on resuming, it finds the session ended while
+  a stage agent ran. The remedy: stop that agent with TaskStop and never resume it, set its partial work aside and
+  re-run. `pharn-contracts/cost-ledger.md` says what the open stage bills. `/pharn-ship` pins no `--budget-ms`, so it is
+  unchanged. Not covered: re-anchoring the cap when a stage agent is resumed, and the run markers' 24-hour ceiling.
 
 ## [7.1.4] - 2026-10-26
 

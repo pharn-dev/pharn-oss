@@ -33,7 +33,8 @@
 //           1 included, is a crash, and a caller must read a crash as no verdict.
 //   start   `route`'s 0 / 3 with TWO stdout lines (the token, then the marker line) · 2 refused, nothing written.
 //   finish  `read`'s 0 / 2 / 3 / 4 with TWO stdout lines (the closed verdict line, then the marker line); with
-//           `--budget-ms`, also 5 (`WAITING_LINE`, then `MARKER_WAITING`): no result yet, run the same line again.
+//           `--budget-ms`, also 5 (`WAITING_LINE`, then `MARKER_WAITING`): no result yet, run the same line again;
+//           and 6 (`CAPPED_LINE`, then `MARKER_CAPPED`; 7.2.0): no result within the wait's cap, the stage left open.
 // Every path ends by setting `process.exitCode`, never `process.exit()` (the 6.20.4 flush rule).
 //
 // ── START / FINISH (6.43.0, orchestrator-direct-stage-calls — audit candidate C1) ─────────────────────
@@ -57,7 +58,7 @@
 //     stage-start (`ship-outcome-core.mjs` reads a non-verdict stage started twice as `undetermined`). Neither the
 //     flag nor the open-stage rule is new behaviour: both keep what the four-line form did.
 //   * `finish` consumes the result exactly as `read` does (with `--budget-ms`, after THE WAIT, below — and on its exit 5
-//     it consumes nothing and writes no marker), then writes the `orchestrator` return marker, and prints
+//     or 6 it consumes nothing and writes no marker), then writes the `orchestrator` return marker, and prints
 //     the closed verdict line, then the marker line — except after a `question` (exit 4), when the stage is not over
 //     (ship's round trip continues inside it, and its agent's later rows must bill to the stage): no marker
 //     (`MARKER_DEFERRED`); the round trip's own `finish` writes it, and a run that STOPS on the question runs the
@@ -83,7 +84,10 @@
 //   * the cap, FINISH_WAIT_CAP_MS = 3 600 000 ms from the anchor: the longest routed stage measured ran 1,541.4 s
 //     (build; the five ran 211.1–1,541.4 s — `.dev/measurements/loop-wall-clock-2026-10-05.md` §2), so the cap is
 //     about 2.3 times that, and a stage costs at most ⌈3 600 / 570⌉ = 7 finish calls. A constant, not a flag, so no
-//     caller lengthens it; `--budget-ms` only shortens a call (the tests' knob), never past the cap;
+//     caller lengthens it; `--budget-ms` only shortens a call (the tests' knob), never past the cap. At the cap, one
+//     last consume; with still no result, exit 6 (`CAPPED_EXIT`) and NO return marker (7.2.0, issue #410: the old
+//     no-result + marker closed a stage whose agent outlived the session for good) — the stage stays open, so a
+//     later `finish` still consumes a result that arrives, and /pharn-loop stops at S9b rather than wait again;
 //   * POLL_MS = 250, the `entry-gates.mjs --wait` interval: it bounds how late a present result is noticed, and is
 //     not a measured optimum.
 // Without `--budget-ms` nothing waits — /pharn-ship's finish lines carry none, so ship's path is unchanged.
@@ -186,6 +190,8 @@ import {
   quote,
   WAIT_EXIT,
   WAITING_LINE,
+  CAPPED_EXIT,
+  CAPPED_LINE,
   waitDecision,
 } from "./stage-agent-core.mjs";
 import { inlineToken } from "./route-token-core.mjs";
@@ -247,6 +253,10 @@ export const POLL_MS = 250;
 
 /** `finish`'s second line on `WAIT_EXIT`: the stage is still open, so its return marker waits. */
 export const MARKER_WAITING = "marker: deferred (waiting)";
+
+/** `finish`'s second line on `CAPPED_EXIT` (7.2.0): no result came within the cap, and the return marker is withheld,
+ *  so the stage stays open — never closed as if it had returned (issue #410). */
+export const MARKER_CAPPED = "marker: withheld (capped)";
 
 const BUDGET_RE = /^[1-9][0-9]{0,5}$/;
 
@@ -686,7 +696,7 @@ export function waitForResult(opts, { root, base, budgetMs }) {
 const NO_RESULT_DEFECTS = Object.freeze(["no-state-dir", "no-result-file"]);
 
 /** `finish`: (with `budgetMs`, the wait), read, then the orchestrator return marker (deferred after a question, and
- *  after `WAIT_EXIT`). Returns `{exit, out, err}`. */
+ *  after `WAIT_EXIT`; withheld after `CAPPED_EXIT`). Returns `{exit, out, err}`. */
 export function finishStage(opts, { root = process.cwd(), sessionId = null, base = join(root, DEFAULT_BASE), budgetMs = null } = {}) {
   let waitDefect = null;
   if (budgetMs !== null) {
@@ -696,6 +706,11 @@ export function finishStage(opts, { root = process.cwd(), sessionId = null, base
     else if (w === "unanchored") waitDefect = "wait-unanchored";
   }
   const { verdict, defect } = consumeResult(root, { command: opts.command, name: opts.name, stage: opts.stage, iteration: opts.iteration });
+  // At the cap with still no result (the last consume found none), the stage is left OPEN: no return marker, so a
+  // result that arrives later is still consumed by a later finish, and the orchestrator stops on its own row (#410).
+  if (waitDefect === "wait-capped" && NO_RESULT_DEFECTS.includes(defect)) {
+    return { exit: CAPPED_EXIT, out: [CAPPED_LINE, MARKER_CAPPED], err: [`read: ${waitDefect}`] };
+  }
   const shown = waitDefect !== null && NO_RESULT_DEFECTS.includes(defect) ? waitDefect : defect;
   const err = shown ? [`read: ${shown}`] : [];
   let second;

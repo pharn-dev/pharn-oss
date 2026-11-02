@@ -57,6 +57,8 @@ import {
   fixListFields,
   WAIT_EXIT,
   WAITING_LINE,
+  CAPPED_EXIT,
+  CAPPED_LINE,
   WAIT_DECISIONS,
   waitDecision,
 } from "./stage-agent-core.mjs";
@@ -695,6 +697,19 @@ test("✧ PARITY: WAIT_EXIT is stage-exit's `continue` (re-run the line), never 
   assert.ok(!Object.values(READ_EXIT).includes(WAIT_EXIT), "a result status never maps to the wait's exit");
   assert.notEqual(WAIT_EXIT, 1);
   assert.match(WAITING_LINE, /^waiting — .*run this finish line again$/);
+});
+
+test("✧ PARITY (7.2.0, #410): CAPPED_EXIT is 6 — outside READ_EXIT, not WAIT_EXIT, not 1, no stage-exit number", () => {
+  assert.equal(CAPPED_EXIT, 6);
+  assert.ok(!Object.values(READ_EXIT).includes(CAPPED_EXIT), "a result status never maps to the cap's exit");
+  assert.notEqual(CAPPED_EXIT, WAIT_EXIT);
+  assert.notEqual(CAPPED_EXIT, 1, "node's crash code");
+  assert.ok(!Object.values(EXIT_CODE).includes(CAPPED_EXIT), "no stage-exit meaning can be read into it");
+  assert.match(CAPPED_LINE, /^capped — .*the stage stays open$/);
+  assert.ok(
+    [...CAPPED_LINE].every((c) => c.charCodeAt(0) >= 0x20 && c.charCodeAt(0) !== 0x7f),
+    "fixed text, no control character"
+  );
 });
 
 test("waitDecision — every outcome, decided from numbers only; the cap is checked before the budget", () => {
