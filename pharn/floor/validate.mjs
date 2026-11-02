@@ -32,6 +32,7 @@
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { stripBom } from "./frontmatter-core.mjs";
+import { listMarkdownFiles } from "./capability-files-core.mjs";
 
 // A CRASH IS INCONCLUSIVE, NEVER RED (6.72.1, audit TST-10 — lessons-learned L62's shape). An uncaught throw used to
 // exit 1, RED's own code, with no `FLOOR:` line, so a crash read as a RED with no findings. Now it prints one
@@ -162,25 +163,14 @@ function finding(severity, rule_id, file, problem) {
   findings.push({ type: "FINDING", rule_id, severity, file, problem });
 }
 
-function walk(dir, acc = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return acc;
-  }
-  for (const name of entries) {
-    const p = join(dir, name);
-    let st;
-    try {
-      st = statSync(p);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) walk(p, acc);
-    else if (name.endsWith(".md")) acc.push(p);
-  }
-  return acc;
+// The capability walk (issue #407): the markdown list the four capability readers share, from
+// capability-files-core.mjs — inside a git work tree, the files git tracks or would track plus the target's own
+// pharn/; otherwise, or when git cannot answer, the readdirSync walk this file used to carry (`walkMarkdown`, which
+// still swallows an unreadable directory, so every "GREEN over zero" residual named above stands). Before it, a
+// git-ignored copy of pharn/ (a build cache) was validated as product surface: 90 capabilities reported, 60 of them
+// the copies, GREEN.
+function walk(dir) {
+  return listMarkdownFiles(dir).files;
 }
 
 // --- tiny dependency-free frontmatter parser (handles the subset PHARN uses) ---

@@ -73,9 +73,14 @@
 // invoked with execFileSync + an argv array, so no shell parses a filename. No network, no eval.
 //
 // ================================== THE BOUNDS, STATED, NOT HIDDEN ==================================
-//  1. THE RECONCILED SET is `tracked ∪ untracked-not-ignored`. A git-ignored path is INVISIBLE — by
-//     design (it is what makes `pharn/.run/` scratch, `runs/**` and `node_modules/` free) and by consequence
-//     (a Bash write there is never reported). See pharn/floor/reconcile-ignore.json. A symlink is reconciled as
+//  1. THE RECONCILED SET is `tracked ∪ untracked-not-ignored`, minus PHARN's own state root `pharn/.run/`.
+//     A git-ignored path is INVISIBLE — by design (it is what makes `runs/**` and `node_modules/` free) and by
+//     consequence (a Bash write there is never reported). See pharn/floor/reconcile-ignore.json. The state root
+//     is invisible WHETHER OR NOT the project ignores it (7.2.0, issue #408 — `isStateRootPath`, owned by
+//     reconcile-baseline.mjs, is applied to the enumeration and to a legacy baseline's keys below): the guards
+//     allow every write there except `pharn/.run/writes-scope.json`, which the setter writes through Bash by
+//     design and which this checker never judges against (it reads the baseline's snapshot). A Bash write to
+//     that file is therefore unreported, as it already was wherever `pharn/.run/` is ignored. A symlink is reconciled as
 //     the LINK (its text, since 6.20.8), never as its target: a write through it lands on the target's own
 //     path, and a target outside the set (outside the repo, or ignored) is not seen through the link. A DELETION is
 //     a change (6.57.0): a path the anchor hashed that is gone from disk is judged like a write, whether git still
@@ -145,7 +150,7 @@ import { resolve, join, basename } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { enumerate, hashFile, RECORD_VERSION, RECORD_PATH } from "./reconcile-baseline.mjs";
+import { enumerate, hashFile, RECORD_VERSION, RECORD_PATH, isStateRootPath } from "./reconcile-baseline.mjs";
 import { openRun } from "./run-marker.mjs";
 import { WIDENED_REASON, ESCAPE_REASONS } from "./reconcile-detail-core.mjs";
 import { IGNORE_DATA_PATH, loadIgnoreData, isHumanOnly, isAlwaysReconciled } from "./reconcile-ignore-core.mjs";
@@ -677,6 +682,8 @@ function main(argv) {
 
   const en = enumerate(root);
   if (!en.ok) emit({ verdict: "INCONCLUSIVE", reason: en.reason }, 2);
+  // PHARN's own state root is outside the reconciled set, ignored or not (bound 1; 7.2.0, issue #408).
+  en.paths = en.paths.filter((rel) => !isStateRootPath(rel));
 
   // --- the control surface, reconciled ALWAYS and against COMMITTED BLOB IDS ------------------------
   // Not "always when there is no baseline" — ALWAYS. The baseline lives under `pharn/.run/`, which Bash
@@ -735,6 +742,9 @@ function main(argv) {
     // change, unless it is still on disk AND git says it is ignored (ignoredByGit) — only then a WARN (bound 1).
     for (const rel of Object.keys(baseline.entries)) {
       if (seen.has(rel)) continue;
+      // A baseline anchored before 7.2.0, in a project that does not ignore `pharn/.run/`, hashed state-root
+      // files; they are outside the set now (bound 1), so their absence is not a change.
+      if (isStateRootPath(rel)) continue;
       const state = absenceState(root, rel);
       if (state === "present" && ignoredByGit(root, rel)) {
         warnings.push(`present at anchor, still on disk, now git-ignored — not judged: ${rel}`);

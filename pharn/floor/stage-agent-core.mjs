@@ -84,7 +84,8 @@
 // never re-emitted as output tokens by the orchestrator (GRILL G-P0). `renderBrief` fills only closed-table
 // values and a feature slug the CLI validated first. Its seven rules: read the constitution; follow
 // `.claude/commands/<stage>.md` as its fixed invocation, never re-resolving the name; ask no one (ship:
-// report `question` with the question verbatim; loop: report `refused` with a Step-2 row); run only this
+// report `question` with the question verbatim; loop: report `refused` with a Step-2 row, or with none for a
+// CHECKER_ROW_STAGES stage, whose row the loop's checkers decide); run only this
 // stage — never the orchestrator's own lines (since 6.43.0 that list names `stage-agent.mjs start` / `finish`, which
 // write the stage's markers, and `stage-direct.mjs`, which runs /pharn-regress or /pharn-verify) — and author every
 // file inside the project with the write tools, never through Bash (`WRITE_TOOL_RULE`,
@@ -120,7 +121,12 @@
 // from four numbers: this stage's own stage-start marker time (the ANCHOR), now, the call's start, and the budget.
 //   unanchored  the run's latest marker is not this stage's own stage-start, or its `ts` does not parse, or lies in
 //               the future — no wait: today's `no-result`, stderr `wait-unanchored`;
-//   capped      `now - anchor >= capMs` — one last presence check, then `no-result`, stderr `wait-capped`;
+//   capped      `now - anchor >= capMs` — one last presence check; with still no result, exit `CAPPED_EXIT` (6,
+//               7.2.0), line 1 `CAPPED_LINE`, stderr `wait-capped`, and NO return marker: the stage stays open, so
+//               a result that arrives later is consumed by a later `finish` (presence is checked before the cap).
+//               THE RECORDED FAILURE (#410): until 7.2.0 the cap printed `no-result` (exit 2) and wrote the return
+//               marker, so a stage whose agent outlived the session was closed for good (every later `finish` read
+//               `wait-unanchored`) and /pharn-loop stopped S9 `stage-refused`; it now stops S9b;
 //   waiting     the call's budget is spent — exit `WAIT_EXIT` (5, `stage-exit.md`'s `continue` number: re-run the
 //               line), line 1 `WAITING_LINE`, no return marker (the stage is still open, so the anchor holds);
 //   poll        sleep, look again.
@@ -188,9 +194,12 @@
 //                             Headless `claude -p --permission-mode auto` is the other measured path (stage agents
 //                             in the foreground on 6.73.2, which sent `run_in_background: false`; headless under
 //                             7.1.1, which sends none, is not measured; neither of its two runs completed a loop).
-//                             Not measured: a stage past one budget (exit 5), the cap, TaskStop's reach, another
-//                             Claude Code version, a full loop; and no orchestrator applied `--no-foreground-agent`
-//                             (0 of 6).
+//                             Not measured: a stage past one budget (exit 5), TaskStop's reach, another Claude Code
+//                             version, a full loop; and no orchestrator applied `--no-foreground-agent` (0 of 6).
+//                             OBSERVED 2026-10-28 (PHARN 7.1.4; issue #410): the cap fired in a real run — the
+//                             session ended while the build agent ran, and the first `finish` a day later was past
+//                             the cap. 7.2.0 leaves such a stage open (`CAPPED_EXIT`) and /pharn-loop stops S9b
+//                             (stop the agent, set its work aside, re-run); resuming a stage agent is not built.
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
@@ -349,6 +358,13 @@ export const INLINE_REMEDIES = Object.freeze({
 /** The rows a /pharn-loop stage agent may report (a subset of pharn-loop.md Step 2's stuck points). S6c (6.28.0): a
  *  quick spec agent whose fit checks fail — `/pharn-spec --quick --model-approve` refuses a misfit. */
 export const LOOP_ROWS = Object.freeze(["S4", "S5", "S6", "S6b", "S6c", "S7", "S8", "S9", "S10"]);
+
+/** The /pharn-loop stages whose stop row a CHECKER decides, never the agent (issue #411 B). The loop reads the test
+ *  stage's row from `check-test-stage.mjs --require-test-first` and the pinned preflight (pharn-loop.md Step 4: S12 or
+ *  S9) and ignores what `finish` printed, so its agent reports `refused` with no `--row` — offering it LOOP_ROWS made it
+ *  pick a row it knew was wrong (S9 for a missing runner the loop records as S12). LOOP_ROWS is unchanged, so no agent
+ *  can claim a checker's row. */
+export const CHECKER_ROW_STAGES = Object.freeze(["pharn-test"]);
 
 /** The report fields the loop's rebuild reads as DATA, each with the stage whose report carries it. */
 export const FIX_LIST_SOURCES = Object.freeze({
@@ -545,8 +561,8 @@ export function briefLine({ command, stage, name, iteration = null, mode = FULL_
 /**
  * Every exact `report` line this cell's brief offers, in the order the brief lists them. Ship: done (build:
  * one per gate value), refused, question. Loop: done (build: one per gate), then refused once per
- * LOOP_ROWS member — the loop's agent never reports `question` (rule 3), and every line is complete, so
- * the agent copies one and fills in nothing.
+ * LOOP_ROWS member — or, for a CHECKER_ROW_STAGES stage, one refused line with no row — the loop's agent never
+ * reports `question` (rule 3), and every line is complete, so the agent copies one and fills in nothing.
  */
 export function reportLines({ command, stage, name, iteration = null }) {
   const base = { command, name, stage, iteration };
@@ -554,6 +570,7 @@ export function reportLines({ command, stage, name, iteration = null }) {
     stage === "pharn-build"
       ? GATES.map((gate) => reportLine({ ...base, status: "done", gate }))
       : [reportLine({ ...base, status: "done" })];
+  if (command === "pharn-loop" && CHECKER_ROW_STAGES.includes(stage)) return [...done, reportLine({ ...base, status: "refused" })];
   if (command === "pharn-loop") return [...done, ...LOOP_ROWS.map((row) => reportLine({ ...base, status: "refused", row }))];
   return [...done, reportLine({ ...base, status: "refused" }), reportLine({ ...base, status: "question" })];
 }
@@ -595,7 +612,13 @@ export function renderBrief({ command, mode = FULL_MODE, stage, name, iteration 
       `\`${name}\`: use it as given; never re-resolve it and never ask for it.` +
       (stage === "pharn-spec" && isLoop ? " The user's increment description is the fenced block below the first line of your prompt." : "")
   );
-  if (isLoop) {
+  if (isLoop && CHECKER_ROW_STAGES.includes(stage)) {
+    lines.push(
+      "3. Where the stage says to end your turn, stop and report (rule 6). Where it says to ask the human, ask no one: " +
+        `report \`refused\`, with no \`--row\`. ${orchestrator} decides this stage's stop row from its own checkers ` +
+        "(`.claude/commands/pharn-loop.md` Step 4), never from your report, so there is no row for you to choose."
+    );
+  } else if (isLoop) {
     lines.push(
       "3. Where the stage says to end your turn, stop and report (rule 6). Where it says to ask the human, ask no one: " +
         "report `refused` with `--row` set to the row of `.claude/commands/pharn-loop.md` Step 2 (its stuck-point table) " +
@@ -739,6 +762,14 @@ export const WAIT_EXIT = 5;
 
 /** `finish`'s closed first line for `WAIT_EXIT`. Fixed text: it carries nothing from the result or the marker. */
 export const WAITING_LINE = "waiting — no result yet; run this finish line again";
+
+/** `finish`'s exit when the wait reached its cap with no result (7.2.0, issue #410): the stage is left OPEN (no return
+ *  marker). Not in READ_EXIT (no result status maps to it), not WAIT_EXIT, not 1 (node's crash code), and not one of
+ *  `stage-exit.md`'s numbers, so no caller can read it as a stage-exit meaning. */
+export const CAPPED_EXIT = 6;
+
+/** `finish`'s closed first line for `CAPPED_EXIT`. Fixed text: it carries nothing from the result or the marker. */
+export const CAPPED_LINE = "capped — no result within the wait's cap from the stage's start; the stage stays open";
 
 /** The four outcomes of one wait round (THE WAIT, in the header). */
 export const WAIT_DECISIONS = Object.freeze(["poll", "waiting", "capped", "unanchored"]);

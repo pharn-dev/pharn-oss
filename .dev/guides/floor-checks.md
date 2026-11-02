@@ -35,6 +35,10 @@ come from the single code block this text was moved from, so the entry they name
 # the target has no pharn/ at all.
 # Exit: 0 GREEN (or GREEN-with-warnings) · 1 RED · 2 INCONCLUSIVE — an uncaught throw prints one
 # `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line).
+# THE CAPABILITY LIST (7.2.0, issue #407): validate.mjs and count-lenses / count-grillers / count-verifiers take their
+# markdown list from pharn/floor/capability-files-core.mjs — inside a git work tree, git's tracked + untracked-not-ignored
+# files plus the target's own pharn/; otherwise, or when git cannot answer, the old readdirSync walk. A git-ignored copy
+# of pharn/ (a build cache) is no longer counted. Rule and bounds: that module's header.
 node pharn/floor/validate.mjs [target-dir]
 ```
 
@@ -132,6 +136,14 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # deletion the build commits stays an escape. LOAD GRAPH: IGNORE_DATA_PATH / loadIgnoreData / isHumanOnly /
 # isAlwaysReconciled live in reconcile-ignore-core.mjs (one owner, also imported by apply-plan-deletions.mjs); this
 # checker re-exports them, pinned identical by reconcile-ignore-core.test.mjs.
+# STATE ROOT (7.2.0, issue #408, contract §1): `pharn/.run/` is outside the reconciled set WHETHER OR NOT the project
+# ignores it — --anchor never hashes it, the checker drops it from the enumeration and skips it among a legacy
+# baseline's keys. `isStateRootPath` / STATE_ROOT_SEGMENT live in reconcile-baseline.mjs (worktree-fingerprint.mjs
+# re-exports them; its digest did not move). Before, an install that never ignored pharn/.run/ failed verify on 54 of
+# 55 escapes, all PHARN's own run state: the snapshot match lacked the hook's always-writable `pharn/.run/**`, and the
+# setter's own writes-scope.json is Write-tool-denied. Cost: a Bash write to writes-scope.json is unreported, as it
+# already was wherever pharn/.run/ is ignored (the checker reads the baseline's snapshot, never the live file).
+# Every reconcile fixture's default .gitignore ignores pharn/.run/ (L41) — a state-root test must pass its own.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]

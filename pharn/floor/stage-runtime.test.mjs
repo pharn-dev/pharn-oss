@@ -587,6 +587,7 @@ test("gitFailureDetail is TOTAL (L62) — hostile and odd shapes yield text, nev
 const GIT_SPAWN_RE = /\b(?:execFileSync|spawnSync|execSync|execFile|spawn|exec)\(\s*(["'`])git\1/g;
 const BOUNDED = new Set(["rev-parse", "merge-base"]);
 const GIT_SPAWNS = {
+  "capability-files-core.mjs": ["--literal-pathspecs"], // 7.2.0 (#407): the capability readers' `ls-files` listing
   "check-bash-reconcile.mjs": [null, null, "diff"], // 6.52.0: the merged classification's two argv helpers
   "check-run-isolation.mjs": ["config"], // 7.1.0: `config --get-regexp` for a credential helper, with a maxBuffer
   "instruction-files.mjs": [null, null],
@@ -666,10 +667,10 @@ test("★ GIT CEILING — every git spawn in a shipped floor module is listed, a
   assert.deepEqual(map, GIT_SPAWNS, "the enumeration (L29): list a new or removed git spawn here in the same diff");
   assert.equal(
     spawns.length,
-    18,
-    "non-vacuity (L34): the eighteen spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0; the reconciler's three, " +
+    19,
+    "non-vacuity (L34): the nineteen spawns the sweep found (loop-closeout.mjs's gitRun, 6.44.0; the reconciler's three, " +
       "6.52.0; the review emitter's work-tree probe and directory listing, review-fanout; the isolation check's " +
-      "credential-helper read, 7.1.0)"
+      "credential-helper read, 7.1.0; the capability readers' listing, 7.2.0)"
   );
   assert.deepEqual(
     ceilingViolations(spawns).map((s) => `${s.file}: ${s.text}`),

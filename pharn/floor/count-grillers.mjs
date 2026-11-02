@@ -9,7 +9,7 @@
 // at the grill stage, exactly as verifiers are to /verify.
 //
 // It MIRRORS pharn/floor/count-verifiers.mjs (the established membership-counter precedent,
-// verifier-membership-frontmatter) — the same `walk` + EXCLUDE_SEGMENTS capability surface AND the same
+// verifier-membership-frontmatter) — the same file list + EXCLUDE_SEGMENTS capability surface AND the same
 // `frontmatterRole` fence/line algorithm (itself mirroring validate.mjs `parseFrontmatter`) — so it
 // counts EXACTLY the files validate.mjs treats as role-bearing capabilities, differing ONLY in the enum
 // it tests (`griller`, not `verifier`). Cite, don't restate (P4); a separate file with its own single
@@ -27,9 +27,12 @@
 //         Exits non-zero (writing NOTHING to stdout) if targetDir is missing / not a directory — never a
 //         silent 0 from looking in the wrong place (P5, fail-closed).
 
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { readFileSync, statSync, existsSync } from "node:fs";
+import { relative, sep } from "node:path";
 import { stripBom } from "./frontmatter-core.mjs";
+// The markdown list is the shared one (issue #407): git's tracked + untracked-not-ignored files, plus the target's
+// own pharn/, with the old walk as the fallback — capability-files-core.mjs's header holds the rule and its bounds.
+import { listMarkdownFiles } from "./capability-files-core.mjs";
 
 const TARGET = process.argv[2] || ".";
 // Same exclusions as pharn/floor/count-verifiers.mjs / validate.mjs: tooling (.claude/, .dev/) and
@@ -53,28 +56,6 @@ const EXCLUDE_SEGMENTS = [
 function fail(msg) {
   process.stderr.write("count-grillers: " + msg + "\n");
   return 1;
-}
-
-// Recursive *.md collector — mirrors pharn/floor/count-verifiers.mjs `walk`.
-function walk(dir, acc = []) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    return acc;
-  }
-  for (const name of entries) {
-    const p = join(dir, name);
-    let st;
-    try {
-      st = statSync(p);
-    } catch {
-      continue;
-    }
-    if (st.isDirectory()) walk(p, acc);
-    else if (name.endsWith(".md")) acc.push(p);
-  }
-  return acc;
 }
 
 // Mirrors pharn/floor/count-verifiers.mjs `isExcluded` — the same EXCLUDE_SEGMENTS surface.
@@ -114,7 +95,7 @@ function main() {
   }
 
   const grillers = [];
-  for (const file of walk(TARGET)) {
+  for (const file of listMarkdownFiles(TARGET).files) {
     if (isExcluded(file)) continue;
     let text;
     try {

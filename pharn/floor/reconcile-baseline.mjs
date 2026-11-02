@@ -33,10 +33,23 @@
 // arguments and as object keys — never eval'd, executed, spawned, or interpolated into a shell string
 // (git is invoked with execFileSync + an argv array, so no shell parses a filename).
 //
-// HONEST SCOPE (P0). The reconciled set is exactly `tracked ∪ untracked-not-ignored`. A git-ignored path
-// is INVISIBLE here by construction — that is a design choice, not an oversight, and it is what makes
-// `pharn/.run/` scratch, `runs/**` and `node_modules/` cost nothing. Anchoring proves NOTHING about the
-// bytes it records: it states what was there, never that it was correct or that a human approved it.
+// HONEST SCOPE (P0). The reconciled set is exactly `tracked ∪ untracked-not-ignored`, minus PHARN's own
+// state root `pharn/.run/` (7.2.0, below). A git-ignored path is INVISIBLE here by construction — that is a
+// design choice, not an oversight, and it is what makes `runs/**` and `node_modules/` cost nothing.
+// Anchoring proves NOTHING about the bytes it records: it states what was there, never that it was correct
+// or that a human approved it.
+//
+// THE STATE ROOT IS OUTSIDE THE SET WHETHER OR NOT THE PROJECT IGNORES IT (7.2.0, issue #408). In a project
+// whose `.gitignore` has no `pharn/.run/` line, every stage log, gate output and cost marker PHARN writes
+// there, and this baseline itself, used to land in the set, and verify's reconcile reported each as an
+// escape: under a set scope the snapshot match did not carry the write guard's always-writable
+// `pharn/.run/**`, and `pharn/.run/writes-scope.json` is the setter's own designed Bash write, which both
+// guards deny to the Write tool. A correct build failed verify (measured: 4 of 4 state-root changes in a
+// fixture, 54 of 55 escapes in the reported run). `isStateRootPath` is the ONE definition reconcile and
+// worktree-fingerprint.mjs share (L35); it is a literal, case-sensitive prefix, so a variant spelling
+// (`PHARN/.run/x`) or a look-alike (`pharn/.runner/x`) stays in the set, the fail-closed direction.
+// run-gates.mjs, stage-regress.mjs and build-gate.mjs keep their own `pharn/.run` constants: those are
+// containment walks (refuse a symlinked state root), a different question from set membership.
 //
 // --ANCHOR REFUSES WITH NO USABLE SCOPE (D6, 6.24.0). `snapshotScope()` returning `null` — absent or an
 // unusable `pharn/.run/writes-scope.json` — now means `--anchor` writes NOTHING and exits 2, rather than
@@ -75,6 +88,13 @@ import { createHash } from "node:crypto";
 export const RECORD_VERSION = 1;
 export const RECORD_PATH = "pharn/.run/reconcile/baseline.json";
 export const SCOPE_PATH = "pharn/.run/writes-scope.json";
+
+// PHARN's own state root (see "THE STATE ROOT IS OUTSIDE THE SET" above). Re-exported by
+// worktree-fingerprint.mjs under the same name; this module is the owner because that one imports it.
+export const STATE_ROOT_SEGMENT = "pharn/.run/";
+export function isStateRootPath(rel) {
+  return typeof rel === "string" && (rel === "pharn/.run" || rel.startsWith(STATE_ROOT_SEGMENT));
+}
 
 function die(reason, code = 2) {
   console.error(`reconcile-baseline: ${reason}`);
@@ -243,6 +263,7 @@ export function buildRecord(baseDir, by) {
   const entries = {};
   let hashed = 0;
   for (const rel of en.paths) {
+    if (isStateRootPath(rel)) continue; // never hashed, ignored or not (7.2.0)
     const h = hashFile(resolve(baseDir, rel));
     if (h !== null) {
       entries[rel] = h;

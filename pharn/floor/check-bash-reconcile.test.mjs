@@ -46,7 +46,7 @@ import {
   absenceState,
   ignoredByGit,
 } from "./check-bash-reconcile.mjs";
-import { RECORD_PATH, buildRecord, hashFile } from "./reconcile-baseline.mjs";
+import { RECORD_PATH, buildRecord, hashFile, isStateRootPath, STATE_ROOT_SEGMENT } from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
@@ -1976,4 +1976,99 @@ test("★ TST-7: removeProbeSandboxes() removes what it recorded and COUNTS a fa
   assert.equal(removeProbeSandboxes(), 0);
   assert.equal(existsSync(fine), false, "a recorded sandbox is gone after the call");
   assert.equal(removeProbeSandboxes(), 0, "nothing is left recorded, so a second call is a no-op");
+});
+
+// ------------------------------------------------------------------ the state root (7.2.0, issue #408)
+//
+// L41: makeRepo()'s default .gitignore ignores pharn/.run/, which is exactly the default that hid #408 from
+// this whole suite. Every fixture below passes a .gitignore WITHOUT that line, the shape of an install whose
+// project never ignored PHARN's run state, and commits one state-root file, as the reported project had.
+
+function makeUnignoredStateRootRepo() {
+  const dir = makeRepo({ devRepo: false, gitignore: "node_modules/\n" });
+  mkdirSync(join(dir, "pharn/.run/cost"), { recursive: true });
+  writeFileSync(join(dir, "pharn/.run/cost/tracked.jsonl"), "a\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "run state committed, as in #408");
+  setScope(dir, ["pharn/features/keep.md"]);
+  assert.equal(anchor(dir).status, 0);
+  return dir;
+}
+
+// What a correct build->verify run does to the state root: append to a tracked cost file, add a new stage log,
+// and re-write the scope record from a later stage's setter (the anchor already wrote the baseline itself).
+function pipelineStateRootWrites(dir) {
+  writeFileSync(join(dir, "pharn/features/keep.md"), "built, in scope\n");
+  writeFileSync(join(dir, "pharn/.run/cost/tracked.jsonl"), "a\nb\n");
+  mkdirSync(join(dir, "pharn/.run/pharn-build/t/full"), { recursive: true });
+  writeFileSync(join(dir, "pharn/.run/pharn-build/t/full/0-test.out"), "gate log\n");
+  setScopeBy(dir, ["pharn/features/t/VERIFY.md"], ".claude/commands/pharn-verify.md");
+}
+
+test("★ #408: PHARN's own run state is not an escape where the project does not ignore pharn/.run/", () => {
+  const dir = makeUnignoredStateRootRepo();
+  pipelineStateRootWrites(dir);
+  assert.equal(ignoredByGit(dir, "pharn/.run/cost/tracked.jsonl"), false, "precondition: the state root is NOT ignored here");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
+  assert.deepEqual(r.json.escapes, []);
+  assert.equal(r.json.reconciled, 1, "only the in-scope build write was a candidate");
+});
+
+test("★ #408 NON-VACUITY (L34): the same tree still reports an ordinary out-of-scope write, and only that", () => {
+  const dir = makeUnignoredStateRootRepo();
+  pipelineStateRootWrites(dir);
+  writeFileSync(join(dir, "SNEAKY.txt"), "written outside the guarded surface\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["SNEAKY.txt"]
+  );
+});
+
+test("★ #408 boundary: a look-alike of the state root is still reconciled (literal prefix, fail-closed)", () => {
+  const dir = makeUnignoredStateRootRepo();
+  mkdirSync(join(dir, "pharn/.runner"), { recursive: true });
+  writeFileSync(join(dir, "pharn/.runner/x"), "not the state root\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["pharn/.runner/x"]
+  );
+});
+
+test("★ #408 legacy baseline: a state-root entry hashed before 7.2.0, now gone, is neither a candidate nor a warning", () => {
+  const dir = makeUnignoredStateRootRepo();
+  // The legacy shape on disk: a baseline anchored by pre-7.2.0 code in such a project carried state-root keys.
+  // Current buildRecord() no longer writes one, so the entry is added by hand — the record a legacy anchor left.
+  const abs = join(dir, RECORD_PATH);
+  const record = JSON.parse(readFileSync(abs, "utf8"));
+  assert.equal(record.entries["pharn/.run/cost/tracked.jsonl"], undefined, "precondition: the new anchor skipped it");
+  record.entries["pharn/.run/cost/tracked.jsonl"] = hashFile(join(dir, "pharn/.run/cost/tracked.jsonl"));
+  writeFileSync(abs, JSON.stringify(record, null, 2) + "\n");
+  gitIn(dir, "rm", "-q", "-r", "pharn/.run/cost");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN");
+  assert.equal(
+    r.json.warnings.filter((w) => w.includes("pharn/.run/")).length,
+    0,
+    `no warning names the state root: ${JSON.stringify(r.json.warnings)}`
+  );
+});
+
+test("✧ no always-reconciled path lies under the state root — the exclusion can never drop a control path", () => {
+  const d = loadIgnoreData();
+  assert.ok(d.ok, d.reason);
+  const raw = JSON.parse(readFileSync(IGNORE_JSON, "utf8")).always_reconciled;
+  const members = [...raw.exact, ...raw.human_only, ...raw.prefixes, ...raw.human_only_prefixes];
+  assert.ok(members.length > 0, "non-vacuity: the control set is not empty");
+  assert.deepEqual(
+    members.filter((m) => isStateRootPath(m) || STATE_ROOT_SEGMENT.startsWith(m)),
+    [],
+    "no member is under, or a prefix of, pharn/.run/"
+  );
 });

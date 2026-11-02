@@ -22,7 +22,17 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
-import { enumerate, hashFile, snapshotScope, buildRecord, RECORD_VERSION, RECORD_PATH, SCOPE_PATH } from "./reconcile-baseline.mjs";
+import {
+  enumerate,
+  hashFile,
+  snapshotScope,
+  buildRecord,
+  RECORD_VERSION,
+  RECORD_PATH,
+  SCOPE_PATH,
+  STATE_ROOT_SEGMENT,
+  isStateRootPath,
+} from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ANCHOR = join(HERE, "reconcile-baseline.mjs");
@@ -617,4 +627,46 @@ test("★ a baseline written BEFORE scope_amendments existed is amendable — th
   const r = spawnSync(process.execPath, [ANCHOR, "--amend-scope", "--base", dir], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(read().scope_amendments.length, 1);
+});
+
+// ------------------------------------------------------------------ the state root (7.2.0, issue #408)
+
+test("★ --anchor never hashes PHARN's state root, even where the project does NOT ignore it", () => {
+  // L41: makeRepo() ignores pharn/.run/, which is exactly the default that hid #408. This fixture does not.
+  const dir = mkdtempSync(join(tmpdir(), "pharn-anchor-test-"));
+  made.push(dir);
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  git("init", "-q");
+  git("config", "user.email", "t@example.invalid");
+  git("config", "user.name", "t");
+  writeFileSync(join(dir, ".gitignore"), "node_modules/\n");
+  writeFileSync(join(dir, "tracked.md"), "a\n");
+  mkdirSync(join(dir, "pharn/.run/cost"), { recursive: true });
+  writeFileSync(join(dir, "pharn/.run/cost/tracked.jsonl"), "committed run state\n");
+  git("add", "-A");
+  git("commit", "-q", "-m", "seed");
+  writeFileSync(join(dir, "pharn/.run/stage.log"), "untracked, not ignored\n");
+  writeFileSync(join(dir, "pharn/.runner.md"), "a look-alike prefix, NOT the state root\n");
+  seedScope(dir, ["tracked.md"]);
+  assert.ok(enumerate(dir).paths.includes("pharn/.run/cost/tracked.jsonl"), "precondition: git does list the state root here");
+  const r = spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "test"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const keys = Object.keys(JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8")).entries);
+  assert.deepEqual(
+    keys.filter((k) => k === "pharn/.run" || k.startsWith("pharn/.run/")),
+    [],
+    "no state-root key is recorded"
+  );
+  assert.ok(keys.includes("tracked.md"), "ordinary paths are still recorded (non-vacuity, L34)");
+  assert.ok(keys.includes("pharn/.runner.md"), "a look-alike prefix is not the state root");
+});
+
+test("✧ isStateRootPath: the root itself and paths under it, literally and case-sensitively", () => {
+  for (const p of ["pharn/.run", "pharn/.run/x", "pharn/.run/a/b.json", "pharn/.run/writes-scope.json"]) {
+    assert.equal(isStateRootPath(p), true, p);
+  }
+  for (const p of ["pharn/.runner/x", "pharn/.runx", "PHARN/.run/x", "pharn/.RUN/x", "x/pharn/.run/y", "pharn/run/x", "", null]) {
+    assert.equal(isStateRootPath(p), false, String(p));
+  }
+  assert.equal(STATE_ROOT_SEGMENT, "pharn/.run/");
 });

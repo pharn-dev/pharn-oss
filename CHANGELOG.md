@@ -23,6 +23,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.2.0] - 2026-11-02
+
+### Fixed
+
+- **Capability discovery no longer counts git-ignored copies of the `pharn/` tree
+  ([#407](https://github.com/pharn-dev/pharn-oss/issues/407)).** `validate.mjs`, `count-grillers.mjs`,
+  `count-lenses.mjs` and `count-verifiers.mjs` each walked the target with their own copy of a `readdirSync` walk. In
+  a project whose build cache held two copies of `pharn/`, every griller registered three times (30 instead of 10), a
+  full `/pharn-grill` loaded about 212 KB of griller text where about 71 KB was needed, and validate reported 90
+  capabilities, 60 of them the copies, still GREEN. The four now share one list from the new
+  `pharn/floor/capability-files-core.mjs`: inside a git work tree, the files `git ls-files --cached --others
+--exclude-standard` lists for the target, plus everything under the target's own `pharn/` (so an install a
+  project chose not to commit is still found); outside a work tree, when git cannot answer, or when git lists nothing
+  for the target, the old walk. A symlinked directory, a submodule and a nested repository are no longer descended
+  inside a work tree; the walk fallback keeps every old residual, the ignored copies included. Counts in this
+  repository are unchanged (37 capabilities, 13 grillers, 22 lenses, 0 verifiers).
+- **The cost-ledger check no longer warns on a `/pharn-loop` stop before the first build
+  ([#411](https://github.com/pharn-dev/pharn-oss/issues/411) A).** `loop-record.md` counts such a stop as
+  `iterations: 1`, and only build, regress and verify stage-starts carry an `iteration`, so a record that followed the
+  contract always drew "no stage-start marker carries iteration(s) 1". `check-cost-ledger.mjs` now skips that part of
+  its marker-completeness WARN when no stage-start carries an iteration and the total is exactly 1. A larger total
+  with no iteration marker still warns.
+- **A routed `/pharn-loop` test-stage agent reports `refused` with no row
+  ([#411](https://github.com/pharn-dev/pharn-oss/issues/411) B).** The loop decides that stage's stop row from
+  `check-test-stage.mjs` and the pinned preflight (S12 or S9) and ignores the report, but the brief offered the agent
+  only `refused --row S4…S10`, so a missing runner was reported as S9 and recorded as S12. `stage-agent-core.mjs`'s
+  new `CHECKER_ROW_STAGES` (`pharn-test`) gives that brief one row-less `refused` line and a rule 3 that says the
+  loop's checkers decide the row; `LOOP_ROWS` is unchanged, so no agent can claim S11–S15.
+- **`/pharn-verify`'s reconcile gate no longer fails a correct build on PHARN's own run state when the project does
+  not git-ignore `pharn/.run/` ([#408](https://github.com/pharn-dev/pharn-oss/issues/408)).** In such a project, every
+  stage log, gate output and cost marker under `pharn/.run/` was a reconcile candidate, and the run that reported it
+  failed verify on 55 escapes, 54 of them under `pharn/.run/`. Two things went wrong. Under a set scope, the snapshot
+  match lacked the write guard's always-writable `pharn/.run/**`, so writes the guard allowed read as escapes; the
+  baseline file itself was one of them. And `pharn/.run/writes-scope.json`, which every stage's setter rewrites
+  through Bash, is a path both guards deny to the Write tool. `reconcile-baseline.mjs --anchor` and
+  `check-bash-reconcile.mjs` now leave `pharn/.run/` out of the reconciled set whether it is ignored or not, tracked
+  or not. A baseline anchored before this release that still holds state-root entries is read the same way.
+  `worktree-fingerprint.mjs` and regress's scope check already excluded it; reconcile and the fingerprint now share
+  one `isStateRootPath`, and the fingerprint digest is unchanged. In a project that ignores `pharn/.run/`, this
+  repository included, the reconciled set is unchanged. A Bash write to `writes-scope.json` is not reported, as it
+  already was not wherever `pharn/.run/` is ignored, because reconcile judges against the baseline's own scope
+  snapshot. Not covered: the installer still does not add `pharn/.run/` or `pharn/.backup/` to the project's
+  `.gitignore`, so run state can still be committed. That is a `pharn-cli` change.
+- **`/pharn-test` no longer pins AC tests that break a style gate that passed before them
+  ([#409](https://github.com/pharn-dev/pharn-oss/issues/409)).** In a test-first `/pharn-loop` run, five of nine pinned
+  AC test files failed the project's `format:check`. The build may not touch pinned tests, so its full gate and
+  `/pharn-verify` stayed red. The new `pharn/floor/check-ac-style.mjs` runs the project's style gates (`lint`,
+  `format:check`, `lint:md`, those `package.json` has, minus `gates.exclude`) once before Step 3 writes the tests
+  (new Step 2c) and once after (new Step 3b). A gate that passed before and fails after is `RED`, and so is a red gate
+  when mapped test files already existed before the run. The stage then fixes its own test files once with Write/Edit,
+  never with a formatter's `--write`/`--fix`. If the gate is still red, it stops with `ac-tests-unformatted` before
+  the pin. A gate already red before, or one slower than the 170 s per-gate timeout, is only a `NOTE`. Running the
+  step is command discipline: `check-test-stage.mjs` does not re-check it. Cost: two style runs per `/pharn-test`
+  (about 4 minutes in this repository, where `format:check` takes about 111 s). `/pharn-loop`'s `allowed-tools`
+  gains the two new pinned lines; nothing else in it changes.
+- **A routed stage that outlives the wait's cap is no longer closed as a refusal
+  ([#410](https://github.com/pharn-dev/pharn-oss/issues/410)).** A `/pharn-loop` build agent was still running when the
+  session ended. A day later its `stage-agent.mjs finish --budget-ms` was past the one-hour cap measured from the
+  stage's start, so it printed `unusable no-result` and wrote the return marker. That closed the stage for good: every
+  later `finish` read `wait-unanchored`. The loop stopped at S9 `stage-refused` with 14 half-edited files. At the cap
+  with no result, `finish` now exits `6` with `capped — …` and `marker: withheld (capped)`, and writes no return marker.
+  The stage stays open, so a result that arrives later is still consumed by a later `finish`. `/pharn-loop` stops at a
+  new row, S9b (`blocked: stage-outlived-wait`). It also stops there when, on resuming, it finds the session ended while
+  a stage agent ran. The remedy: stop that agent with TaskStop and never resume it, set its partial work aside and
+  re-run. `pharn-contracts/cost-ledger.md` says what the open stage bills. `/pharn-ship` pins no `--budget-ms`, so it is
+  unchanged. Not covered: re-anchoring the cap when a stage agent is resumed, and the run markers' 24-hour ceiling.
+
 ## [7.1.4] - 2026-10-26
 
 ### Changed

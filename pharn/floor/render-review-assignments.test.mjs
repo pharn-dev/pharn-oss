@@ -55,8 +55,16 @@ function fakeRepo({ mapOverride } = {}) {
   mkdirSync(join(dir, "pharn/pharn-review/secrets-in-code"), { recursive: true });
   mkdirSync(join(dir, "pharn/pharn-review/trust-fence"), { recursive: true });
   // The scanner's two imports travel with it: the runtime floor and the shared CLI front end (review-fanout).
-  // count-lenses.mjs's one import travels with it too: the frontmatter core's BOM strip (6.65.2).
-  for (const f of ["count-lenses.mjs", "frontmatter-core.mjs", "scan-code-secrets.mjs", "runtime-floor.mjs", "code-scanner-cli.mjs"]) {
+  // count-lenses.mjs's two imports travel with it too: the frontmatter core's BOM strip (6.65.2) and the shared
+  // capability file list (7.2.0, #407).
+  for (const f of [
+    "count-lenses.mjs",
+    "frontmatter-core.mjs",
+    "capability-files-core.mjs",
+    "scan-code-secrets.mjs",
+    "runtime-floor.mjs",
+    "code-scanner-cli.mjs",
+  ]) {
     cpSync(join("pharn/floor", f), join(dir, "pharn/floor", f));
   }
   writeFileSync(

@@ -486,11 +486,16 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # non-directory ends the wait and is refused), then consumes it as before; budget spent with no result → exit 5
 # (`waiting …`, `marker: deferred (waiting)`, no return marker); FINISH_WAIT_CAP_MS 3_600_000 from the stage's own
 # stage-start marker (~2.3x the longest routed stage measured, build 1,541.4 s — loop-wall-clock-2026-10-05.md §2) →
-# no-result + `wait-capped`; no usable anchor → no-result + `wait-unanchored`. /pharn-loop pins `--budget-ms 570000` on
+# exit 6 (`capped …`, `marker: withheld (capped)`, stderr `wait-capped`) with NO return marker, so the stage stays open
+# and a later finish still consumes a result that arrives (7.2.0, issue #410 — before, the cap printed no-result and
+# wrote the marker, closing for good a stage whose agent outlived the session); no usable anchor → no-result +
+# `wait-unanchored`. /pharn-loop pins `--budget-ms 570000` on
 # its four finish lines (Bash timeout 600000), runs them after EVERY Agent call, omits run_in_background, and TaskStops
-# a leftover background agent before S9 (ADVISORY). /pharn-ship pins no budget: unchanged. The anchor is unauthenticated
+# a leftover background agent before S9 (ADVISORY); on exit 6, or on finding the session ended while a stage agent
+# ran, it TaskStops the agent and stops S9b `stage-outlived-wait` (never resumes it). /pharn-ship pins no budget:
+# unchanged. The anchor is unauthenticated
 # pharn/.run/ state — a marker rewritten before each call lengthens the wait (named residual). Exit: start = route's 0/3 (2
-# refused, nothing written); finish = read's 0/2/3/4, plus 5 with --budget-ms. An inline-run stage closes with
+# refused, nothing written); finish = read's 0/2/3/4, plus 5 and 6 with --budget-ms. An inline-run stage closes with
 # `mark-phase.mjs --kind orchestrator` (the inline return line).
 node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool] [--no-foreground-agent]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>] [--budget-ms <B>]

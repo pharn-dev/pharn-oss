@@ -508,6 +508,7 @@ function scratchTree() {
   const floor = [
     "count-lenses.mjs",
     "frontmatter-core.mjs", // count-lenses.mjs imports its BOM strip (6.65.2)
+    "capability-files-core.mjs", // and its capability file list (7.2.0, #407)
     "render-review-assignments.mjs",
     "runtime-floor.mjs",
     "code-scanner-cli.mjs",

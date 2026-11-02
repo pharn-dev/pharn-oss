@@ -27,6 +27,7 @@ import {
   INVOCATIONS,
   INLINE_REMEDIES,
   LOOP_ROWS,
+  CHECKER_ROW_STAGES,
   FIX_LIST_FIELDS,
   FIX_LIST_SOURCES,
   FIX_LIST_REPORTS,
@@ -56,6 +57,8 @@ import {
   fixListFields,
   WAIT_EXIT,
   WAITING_LINE,
+  CAPPED_EXIT,
+  CAPPED_LINE,
   WAIT_DECISIONS,
   waitDecision,
 } from "./stage-agent-core.mjs";
@@ -489,6 +492,13 @@ test("reportLines — the closed set per command and stage, in order (counts pin
   assert.equal(reportLines({ command: "pharn-ship", stage: "pharn-build", name: "d", iteration: 1 }).length, 4);
   assert.equal(reportLines({ command: "pharn-loop", stage: "pharn-plan", name: "d" }).length, 1 + LOOP_ROWS.length);
   assert.equal(reportLines({ command: "pharn-loop", stage: "pharn-build", name: "d", iteration: 2 }).length, 2 + LOOP_ROWS.length);
+  // #411 B: the loop's test stage — its row is the checkers' — gets done and one row-less refused, and nothing else.
+  assert.deepEqual(CHECKER_ROW_STAGES, ["pharn-test"]);
+  assert.deepEqual(reportLines({ command: "pharn-loop", stage: "pharn-test", name: "d" }), [
+    "node pharn/floor/stage-agent.mjs report --command pharn-loop --name 'd' --stage pharn-test --status done",
+    "node pharn/floor/stage-agent.mjs report --command pharn-loop --name 'd' --stage pharn-test --status refused",
+  ]);
+  assert.equal(reportLines({ command: "pharn-ship", stage: "pharn-test", name: "d" }).length, 3, "ship's test stage is unchanged");
   assert.equal(
     reportLine({ command: "pharn-ship", name: "d", stage: "pharn-build", iteration: 1, status: "done", gate: "pass" }),
     "node pharn/floor/stage-agent.mjs report --command pharn-ship --name 'd' --stage pharn-build --iteration 1 --status done --gate pass"
@@ -687,6 +697,19 @@ test("✧ PARITY: WAIT_EXIT is stage-exit's `continue` (re-run the line), never 
   assert.ok(!Object.values(READ_EXIT).includes(WAIT_EXIT), "a result status never maps to the wait's exit");
   assert.notEqual(WAIT_EXIT, 1);
   assert.match(WAITING_LINE, /^waiting — .*run this finish line again$/);
+});
+
+test("✧ PARITY (7.2.0, #410): CAPPED_EXIT is 6 — outside READ_EXIT, not WAIT_EXIT, not 1, no stage-exit number", () => {
+  assert.equal(CAPPED_EXIT, 6);
+  assert.ok(!Object.values(READ_EXIT).includes(CAPPED_EXIT), "a result status never maps to the cap's exit");
+  assert.notEqual(CAPPED_EXIT, WAIT_EXIT);
+  assert.notEqual(CAPPED_EXIT, 1, "node's crash code");
+  assert.ok(!Object.values(EXIT_CODE).includes(CAPPED_EXIT), "no stage-exit meaning can be read into it");
+  assert.match(CAPPED_LINE, /^capped — .*the stage stays open$/);
+  assert.ok(
+    [...CAPPED_LINE].every((c) => c.charCodeAt(0) >= 0x20 && c.charCodeAt(0) !== 0x7f),
+    "fixed text, no control character"
+  );
 });
 
 test("waitDecision — every outcome, decided from numbers only; the cap is checked before the budget", () => {
