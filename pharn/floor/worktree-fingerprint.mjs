@@ -27,7 +27,9 @@
 //     for EVERY gate, and every run would refuse `tree-changed-between-gates`. The exclusion is
 //     therefore a correctness requirement of the runner, and it is stated that way rather than deferred.
 //     This is NOT a second copy of `.gitignore` (lessons-learned L35): it names ONE scratch namespace the
-//     runner itself writes, not a mirror of the ignore file.
+//     runner itself writes, not a mirror of the ignore file. Since 7.2.0 the predicate is
+//     reconcile-baseline.mjs's `isStateRootPath`, which check-bash-reconcile.mjs applies to the reconciled set
+//     for the same reason (issue #408); the excluded set is unchanged, so ALGO did not move.
 //
 // (2) The active feature's POST-BUILD pipeline artifacts — a set of its OWN, deliberately NOT
 //     reconcile-ignore.json's. The two answer DIFFERENT QUESTIONS (lessons-learned L39: one declaration
@@ -97,7 +99,7 @@
 import "./runtime-floor.mjs";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
-import { enumerate, hashFile } from "./reconcile-baseline.mjs";
+import { enumerate, hashFile, STATE_ROOT_SEGMENT, isStateRootPath } from "./reconcile-baseline.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 /** The algorithm identity, recorded in every stamp. Bump on ANY change to what is hashed or how the
@@ -128,8 +130,9 @@ export function productFeatureDir(feature) {
   return `pharn/features/${feature}/`;
 }
 
-/** The scratch namespace the runner itself writes. See exclusion (1) in the header. */
-export const STATE_ROOT_SEGMENT = "pharn/.run/";
+/** The scratch namespace the runner itself writes. See exclusion (1) in the header. Owned by reconcile-baseline.mjs
+ *  since 7.2.0 (reconcile excludes the same root, L35) and re-exported here under the same name. */
+export { STATE_ROOT_SEGMENT };
 
 /** POST-BUILD artifacts: written at or after regress, so a change cannot alter what a gate judged. */
 export const EXCLUDED_ARTIFACTS = Object.freeze([
@@ -174,7 +177,7 @@ export function featureRoots(feature) {
  */
 export function isExcluded(file, feature) {
   if (typeof file !== "string" || file.length === 0) return false;
-  if (file === "pharn/.run" || file.startsWith(STATE_ROOT_SEGMENT)) return true;
+  if (isStateRootPath(file)) return true;
   if (!feature || !FEATURE_SLUG_RE.test(feature)) return false;
   for (const root of featureRoots(feature)) {
     if (!file.startsWith(root)) continue;

@@ -51,6 +51,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   only `refused --row S4…S10`, so a missing runner was reported as S9 and recorded as S12. `stage-agent-core.mjs`'s
   new `CHECKER_ROW_STAGES` (`pharn-test`) gives that brief one row-less `refused` line and a rule 3 that says the
   loop's checkers decide the row; `LOOP_ROWS` is unchanged, so no agent can claim S11–S15.
+- **`/pharn-verify`'s reconcile gate no longer fails a correct build on PHARN's own run state when the project does
+  not git-ignore `pharn/.run/` ([#408](https://github.com/pharn-dev/pharn-oss/issues/408)).** In such a project, every
+  stage log, gate output and cost marker under `pharn/.run/` was a reconcile candidate, and the run that reported it
+  failed verify on 55 escapes, 54 of them under `pharn/.run/`. Two things went wrong. Under a set scope, the snapshot
+  match lacked the write guard's always-writable `pharn/.run/**`, so writes the guard allowed read as escapes; the
+  baseline file itself was one of them. And `pharn/.run/writes-scope.json`, which every stage's setter rewrites
+  through Bash, is a path both guards deny to the Write tool. `reconcile-baseline.mjs --anchor` and
+  `check-bash-reconcile.mjs` now leave `pharn/.run/` out of the reconciled set whether it is ignored or not, tracked
+  or not. A baseline anchored before this release that still holds state-root entries is read the same way.
+  `worktree-fingerprint.mjs` and regress's scope check already excluded it; reconcile and the fingerprint now share
+  one `isStateRootPath`, and the fingerprint digest is unchanged. In a project that ignores `pharn/.run/`, this
+  repository included, the reconciled set is unchanged. A Bash write to `writes-scope.json` is not reported, as it
+  already was not wherever `pharn/.run/` is ignored, because reconcile judges against the baseline's own scope
+  snapshot. Not covered: the installer still does not add `pharn/.run/` or `pharn/.backup/` to the project's
+  `.gitignore`, so run state can still be committed. That is a `pharn-cli` change.
 
 ## [7.1.4] - 2026-10-26
 

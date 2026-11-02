@@ -4,8 +4,9 @@
   "derived_ignore": {
     "source": "git-ignore",
     "how": "`git ls-files --cached --others --exclude-standard` enumerates the reconciled set, so every git-ignored path is excluded BY DERIVATION and is never listed here.",
-    "why": "Re-listing them would be a second copy to keep in sync with .gitignore (lessons-learned L35: when one fact is stored twice, retire the second copy). node_modules/, pharn/.run/, runs/, .env and .DS_Store are covered by this and MUST NOT be added below.",
-    "bound": "The reconciled set is therefore exactly `tracked ∪ untracked-not-ignored`. A change to a git-ignored path is INVISIBLE to this checker, by construction and by design — that is the Phase-2 exemption class, and it is why `pharn/.run/` scratch, `runs/**` and machine reports cost nothing."
+    "why": "Re-listing them would be a second copy to keep in sync with .gitignore (lessons-learned L35: when one fact is stored twice, retire the second copy). node_modules/, runs/, .env and .DS_Store are covered by this and MUST NOT be added below.",
+    "state_root": "PHARN's own state root `pharn/.run/` is outside the reconciled set WHETHER OR NOT the project ignores it (7.2.0, issue #408): `isStateRootPath` in reconcile-baseline.mjs, applied by --anchor and by the checker, the same predicate worktree-fingerprint.mjs excludes. Not listed here and not read from here: it is not a mirror of .gitignore, and a project that never ignored it used to fail verify on PHARN's own stage logs, gate outputs and cost markers.",
+    "bound": "The reconciled set is therefore exactly `tracked ∪ untracked-not-ignored`, minus the state root. A change to a git-ignored path, or under `pharn/.run/`, is INVISIBLE to this checker, by construction and by design — that is the Phase-2 exemption class, and it is why `pharn/.run/` scratch, `runs/**` and machine reports cost nothing."
   },
 
   "always_reconciled": {

@@ -53,9 +53,22 @@ entry cleared a Bash edit of
 
 ## 1. The baseline record — `pharn/.run/reconcile/baseline.json`
 
-Written by `pharn/floor/reconcile-baseline.mjs --anchor`. Gitignored (it lives under `pharn/.run/`), and
-**disposable**: absent means "no epoch has been opened", which is the honest normal state of a fresh
-clone.
+Written by `pharn/floor/reconcile-baseline.mjs --anchor`. It lives under `pharn/.run/`, which is outside the
+reconciled set, and it is **disposable**: absent means "no epoch has been opened", which is the honest normal state
+of a fresh clone.
+
+**The reconciled set is `tracked ∪ untracked-not-ignored`, minus PHARN's state root `pharn/.run/` (7.2.0).** The
+state root is left out whether or not the project git-ignores it: `--anchor` never hashes a path under it, and the
+checker drops those paths from its enumeration and skips them among a baseline's keys (a baseline anchored before
+7.2.0 may hold some). The test is `isStateRootPath` in `reconcile-baseline.mjs`, a literal case-sensitive prefix that
+`worktree-fingerprint.mjs` also uses. **Why:** in a project that did not ignore `pharn/.run/`, every stage log, gate
+output and cost marker PHARN writes there was a candidate. Under a set scope, the snapshot match lacked the write
+guard's always-writable `pharn/.run/**`, so each one was reported as an escape the guard had never denied. And
+`pharn/.run/writes-scope.json`, which every stage's setter rewrites through Bash by design, is a path both guards deny
+to the Write tool. So a correct build failed verify ([#408](https://github.com/pharn-dev/pharn-oss/issues/408): 54 of
+55 escapes). **What this costs:** a Bash write to `pharn/.run/writes-scope.json` is not reported, as it was already
+not reported wherever `pharn/.run/` is ignored. The checker judges against this record's `scope_snapshot` and
+`scope_amendments`, never against the live scope file.
 
 **Since 6.24.0, `--anchor` REFUSES to open an epoch with no usable scope to snapshot (D6).** When
 `snapshotScope()` returns `null` — an absent or unusable `pharn/.run/writes-scope.json` — the command exits 2
@@ -376,7 +389,7 @@ quantified over a set, the enumeration is the deliverable). Five keys:
 
 | Key                  | What it holds                                                                                                                                                                                                                                                                                                                                                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored`, so `node_modules/`, `pharn/.run/`, `runs/` cost nothing                                                                                                                                                                                          |
+| `derived_ignore`     | git's own ignore rules — **never re-listed** here (**L35**: retire the second copy). The reconciled set is `tracked ∪ untracked-not-ignored` minus the state root (§1), so `node_modules/`, `runs/` and, ignored or not, `pharn/.run/` cost nothing                                                                                                                                            |
 | `always_reconciled`  | Never exemptible, and compared against HEAD's committed blobs on every run, with or without a baseline: tracked changes and **added untracked files** (6.53.0). `exact` + `prefixes` are the guards' control surface and the floors; `human_only` + `human_only_prefixes` are the human-only surface and canon (§4a). Each list is a **copy** of the hooks' own sets, pinned set-equal by test |
 | `pipeline_artifacts` | A stage's **own** output (`pharn/features/<slug>/PLAN.md`, `VERIFY.md`, `lenses/<lens>/findings.json`, …) — **exact** enum membership, never a `**` glob, so a stray file under the same directory is still reported. A copy of `check-regress.mjs`'s `PIPELINE_ARTIFACTS`, pinned set-equal by test                                                                                           |
 | `exempt`             | Tracked paths a **named** command legitimately rewrites through Bash. Deliberately tiny; each entry carries its `writer`                                                                                                                                                                                                                                                                       |
@@ -476,7 +489,7 @@ the baseline.
   faithful copy, pinned by an example-based parity test — not a proof of equivalence. The two must be
   updated together.
 - **"no Bash escape occurred"** → **STRUCK.** Four bounds: the reconciled set excludes git-ignored
-  paths; the window is anchor→reconcile; the model is one worktree per session; no attribution.
+  paths and the state root `pharn/.run/` (§1); the window is anchor→reconcile; the model is one worktree per session; no attribution.
 - **"a shell command was analysed"** → **STRUCK, and structurally impossible here.** No Bash command
   string is ever read. Shell parsing is undecidable and a verb denylist is a heuristic, which P0 forbids
   labelling a guarantee.

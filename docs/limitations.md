@@ -22,8 +22,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `origin`'s default branch during the window, which reports it as `merged` instead: a merge is not a write, while a
   commit the build makes itself still fails. **The claim is exactly "a write to a path the active scope would have denied
   is detected and fails the stage" — never "Bash writes are prevented."** Four bounds, all in
-  [`reconciliation-record.md`](../pharn/pharn-contracts/reconciliation-record.md): git-ignored paths are
-  outside the reconciled set; the window is anchor→verify; the model is one worktree per session; and
+  [`reconciliation-record.md`](../pharn/pharn-contracts/reconciliation-record.md): git-ignored paths, and
+  PHARN's own run state under `pharn/.run/` whether or not your project ignores it, are outside the reconciled
+  set; the window is anchor→verify; the model is one worktree per session; and
   there is no attribution — it reports _what_, never _who_. A clean verdict means **no escape was
   detected**, not that none occurred. **And this is accounting, not security.** The baseline is
   unauthenticated state inside the writable tree, so a writer who edits a denied file **and** rewrites
