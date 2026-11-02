@@ -1765,6 +1765,7 @@ const STUCK_POINTS = [
   { id: "S7", blocked: "plan-ambiguity" },
   { id: "S8", blocked: "seam-unresolved" },
   { id: "S9", blocked: "stage-refused" },
+  { id: "S9b", blocked: "stage-outlived-wait" }, // 7.2.0 (#410): finish exit 6 (the wait's cap), or a session that ended mid-stage
   { id: "S10", blocked: "unlisted-ask" },
   { id: "S11", blocked: "stale-evidence" },
   { id: "S12", blocked: "no-test-runner" }, // 6.19.0: /pharn-test's preflight found a level with no runner
@@ -1870,7 +1871,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 18, "the stuck-point table is S1–S15 plus S6b, S6c and S14b");
+  assert.equal(STUCK_POINTS.length, 19, "the stuck-point table is S1–S15 plus S6b, S6c, S9b and S14b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -4526,6 +4527,21 @@ for (const cmd of STAGE_AGENT_WIRING) {
       assert.match(s, /Exit `5` \(`waiting …`\) → run the same finish line again/);
       assert.match(s, /Exit `5` \(`waiting …`,\s+`marker: deferred \(waiting\)`\) is no stuck point: the same finish line again/);
       assert.match(s, /stop that stage\s+agent with TaskStop first/);
+      // 7.2.0 (#410): the wait's cap is its own outcome (finish exit 6), stopped at S9b with the remedy that fits it
+      // (L27: present on its own branch AND absent from S9's) — the agent stopped first, the stage left open, never
+      // resumed; the mapping names its CLI, because entry-gates.mjs's exit 6 is S14b in the same command.
+      assert.match(
+        s,
+        /On a finish exit `6` \(`capped …`\), stop it\s+with TaskStop the same way, whatever launch it had, then \*\*S9b\*\*/
+      );
+      assert.match(s, /run no inline return line: the stage stays\s+open/);
+      assert.match(s, /\*\*If the session ended while a stage agent ran, never resume that agent when work resumes\*\*/);
+      assert.match(
+        s,
+        /`stage-agent\.mjs finish`'s exit `6` \(`capped …`, `marker: withheld \(capped\)`\) is \*\*S9b\*\* at every routed stage/
+      );
+      assert.match(s, /Not `entry-gates\.mjs`'s exit `6`,\s+which is S14b/);
+      assert.doesNotMatch(s, /after the wait's cap too/, "a capped stage is no longer mapped to S9");
     }
     assert.match(s, /\*\*no\s+`isolation`\*\*/);
     assert.match(s, cmd.waitRule, "the wait-before-finish rule");

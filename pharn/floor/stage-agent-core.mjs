@@ -121,7 +121,12 @@
 // from four numbers: this stage's own stage-start marker time (the ANCHOR), now, the call's start, and the budget.
 //   unanchored  the run's latest marker is not this stage's own stage-start, or its `ts` does not parse, or lies in
 //               the future — no wait: today's `no-result`, stderr `wait-unanchored`;
-//   capped      `now - anchor >= capMs` — one last presence check, then `no-result`, stderr `wait-capped`;
+//   capped      `now - anchor >= capMs` — one last presence check; with still no result, exit `CAPPED_EXIT` (6,
+//               7.2.0), line 1 `CAPPED_LINE`, stderr `wait-capped`, and NO return marker: the stage stays open, so
+//               a result that arrives later is consumed by a later `finish` (presence is checked before the cap).
+//               THE RECORDED FAILURE (#410): until 7.2.0 the cap printed `no-result` (exit 2) and wrote the return
+//               marker, so a stage whose agent outlived the session was closed for good (every later `finish` read
+//               `wait-unanchored`) and /pharn-loop stopped S9 `stage-refused`; it now stops S9b;
 //   waiting     the call's budget is spent — exit `WAIT_EXIT` (5, `stage-exit.md`'s `continue` number: re-run the
 //               line), line 1 `WAITING_LINE`, no return marker (the stage is still open, so the anchor holds);
 //   poll        sleep, look again.
@@ -189,9 +194,12 @@
 //                             Headless `claude -p --permission-mode auto` is the other measured path (stage agents
 //                             in the foreground on 6.73.2, which sent `run_in_background: false`; headless under
 //                             7.1.1, which sends none, is not measured; neither of its two runs completed a loop).
-//                             Not measured: a stage past one budget (exit 5), the cap, TaskStop's reach, another
-//                             Claude Code version, a full loop; and no orchestrator applied `--no-foreground-agent`
-//                             (0 of 6).
+//                             Not measured: a stage past one budget (exit 5), TaskStop's reach, another Claude Code
+//                             version, a full loop; and no orchestrator applied `--no-foreground-agent` (0 of 6).
+//                             OBSERVED 2026-10-28 (PHARN 7.1.4; issue #410): the cap fired in a real run — the
+//                             session ended while the build agent ran, and the first `finish` a day later was past
+//                             the cap. 7.2.0 leaves such a stage open (`CAPPED_EXIT`) and /pharn-loop stops S9b
+//                             (stop the agent, set its work aside, re-run); resuming a stage agent is not built.
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
@@ -754,6 +762,14 @@ export const WAIT_EXIT = 5;
 
 /** `finish`'s closed first line for `WAIT_EXIT`. Fixed text: it carries nothing from the result or the marker. */
 export const WAITING_LINE = "waiting — no result yet; run this finish line again";
+
+/** `finish`'s exit when the wait reached its cap with no result (7.2.0, issue #410): the stage is left OPEN (no return
+ *  marker). Not in READ_EXIT (no result status maps to it), not WAIT_EXIT, not 1 (node's crash code), and not one of
+ *  `stage-exit.md`'s numbers, so no caller can read it as a stage-exit meaning. */
+export const CAPPED_EXIT = 6;
+
+/** `finish`'s closed first line for `CAPPED_EXIT`. Fixed text: it carries nothing from the result or the marker. */
+export const CAPPED_LINE = "capped — no result within the wait's cap from the stage's start; the stage stays open";
 
 /** The four outcomes of one wait round (THE WAIT, in the header). */
 export const WAIT_DECISIONS = Object.freeze(["poll", "waiting", "capped", "unanchored"]);

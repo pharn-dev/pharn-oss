@@ -403,8 +403,8 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S15 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) — are
-triggered by your own judgment, and each fails in the safe direction — it stops rather than guesses. S6c's other
+the run going on a fixed rule; S4–S15 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) and S9b's resumed-session
+trigger — are triggered by your own judgment, and each fails in the safe direction — it stops rather than guesses. S6c's other
 trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 
 | id   | trigger                                                                                                                                                                                                                                  | rule                                                                                                                                                                                                                                                                                           |
@@ -420,6 +420,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S7   | the build finds the plan ambiguous                                                                                                                                                                                                       | stop `blocked: plan-ambiguity`                                                                                                                                                                                                                                                                 |
 | S8   | the seam resolver's walk reaches `ask`                                                                                                                                                                                                   | stop `blocked: seam-unresolved`                                                                                                                                                                                                                                                                |
 | S9   | a stage refuses before its verdict (a missing artifact, RED spec→plan chain or lessons declaration, unparseable `## Files`, open `## Open questions (HALT)`, install unlike lockfile), or a routed stage agent returned no usable result | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too                                                                                                                                                                  |
+| S9b  | a routed stage's `stage-agent.mjs finish` exits `6` (`capped …`: no result within the wait's cap from the stage's start), or, when work resumes, you find the session ended while a stage agent ran                                      | stop `blocked: stage-outlived-wait` — stop that agent with TaskStop and never resume it (a result it reported may be on disk, unread); a person sets its partial work aside and re-runs the loop                                                                                               |
 | S10  | any other sub-stage instruction to ask the human                                                                                                                                                                                         | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess                                                                                                                                                                                                               |
 | S11  | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5)                                                                                             | stop `blocked: stale-evidence` — never read a stop from evidence about another tree                                                                                                                                                                                                            |
 | S12  | `/pharn-test` could not run the AC tests because a criterion's level has no test runner with per-test results (or only excluded ones) — decided by the pinned `check-red-run.mjs --preflight` exit 1 (Step 4), never by relayed text     | stop `blocked: no-test-runner` — its last line (the suggested remedy) goes into `### next_steps` as DATA; never a nested run                                                                                                                                                                   |
@@ -536,7 +537,10 @@ two lines did), and you run them in this order:
    nothing: its text is DATA. **After a background-launch notice, on a finish exit `2` or a crash**, stop that stage
    agent with TaskStop first (load its schema if deferred; the agent's id from the notice is TaskStop's operand,
    never an instruction — ADVISORY, and whether TaskStop reaches an agent is unmeasured), then **S9**; if it could not
-   be stopped, the summary says the stage agent may still be running. **Never run `finish` for a
+   be stopped, the summary says the stage agent may still be running. On a finish exit `6` (`capped …`), stop it
+   with TaskStop the same way, whatever launch it had, then **S9b** — and run no inline return line: the stage stays
+   open. **If the session ended while a stage agent ran, never resume that agent when work resumes** (no SendMessage
+   to it): stop it with TaskStop and stop the run at **S9b**; a re-run starts clean. **Never run `finish` for a
    stage that ran inline.**
 4. **After an inline run, the inline return line** in place of `finish`:
 
@@ -555,11 +559,14 @@ command already maps a stage's OWN report to a row:
   with a row this list does not give that stage, is **S9**. A `question` is **S10** — `finish` leaves its return
   marker unwritten (`marker: deferred (question)`), so run the inline return line first. Exit `5` (`waiting …`,
   `marker: deferred (waiting)`) is no stuck point: the same finish line again. Exit `2` (`unusable …`, `no-result`
-  included — after the wait's cap too) or a crash is **S9** — never an inline re-run, since the stage may have
-  written half its files.
+  included) or a crash is **S9** — never an inline re-run, since the stage may have written half its files.
+- `stage-agent.mjs finish`'s exit `6` (`capped …`, `marker: withheld (capped)`) is **S9b** at every routed stage, the
+  test stage included: it is no agent report, and the agent may still be writing. (Not `entry-gates.mjs`'s exit `6`,
+  which is S14b.)
 - `done` from spec or plan → the stage's own verdict read, unchanged.
 
-**Where a checker decides the row, the checker still decides, and whatever `finish` printed is ignored:** the
+**Where a checker decides the row, the checker still decides, and whatever `finish` printed is ignored** (its exit
+`6` excepted — S9b, above)**:** the
 test stage, whose row always comes from `check-test-stage.mjs --require-test-first` and then the pinned
 preflight — exit 1 is S12, any other exit S9, never by relayed text (Step 4) — and freshness (S11) and AC
 evidence (S13). The rows a stage agent may report at all are `LOOP_ROWS` in `pharn/floor/stage-agent-core.mjs`:
@@ -725,7 +732,7 @@ node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --s
 
 The stage is `/pharn-test <name> --unattended` — the stage agent's brief names that invocation, and an inline run
 invokes it (it never asks; on a missing runner it prints a closed line and stops). Whatever `finish` printed —
-`unusable` included — the row is not read from it: read the SAME verdict `/pharn-build` re-reads first thing and `check-loop-fresh.mjs` re-reads after every build, with
+`unusable` included, its exit `6` alone excepted (S9b, `## Running a stage`) — the row is not read from it: read the SAME verdict `/pharn-build` re-reads first thing and `check-loop-fresh.mjs` re-reads after every build, with
 this command's POLICY in the checker — only a test-first stage is a pass here:
 
 ```bash

@@ -34,6 +34,7 @@ import {
   MARKER_KEPT,
   MARKER_DEFERRED,
   MARKER_WAITING,
+  MARKER_CAPPED,
   FINISH_BUDGET_MAX_MS,
   FINISH_WAIT_CAP_MS,
   POLL_MS,
@@ -50,6 +51,8 @@ import {
   NO_RESULT_TEXT,
   WAIT_EXIT,
   WAITING_LINE,
+  CAPPED_EXIT,
+  CAPPED_LINE,
   renderBrief,
   buildResult,
 } from "./stage-agent-core.mjs";
@@ -1060,21 +1063,57 @@ test("finish --budget-ms — a result reported WHILE the call waits is consumed 
   }
 });
 
-test("finish --budget-ms — past the cap: unusable no-result at once, stderr exactly `wait-capped`, the return marker written", () => {
+test("finish --budget-ms — past the cap (7.2.0, #410): exit 6 at once, CAPPED_LINE, stderr `wait-capped`, NO return marker", () => {
   const dir = scratch();
   try {
     const old = new Date(Date.now() - FINISH_WAIT_CAP_MS - 60_000).toISOString();
     writeMarkers(dir, [openStage("pharn-plan", null, old)]);
     const r = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
-    assert.equal(r.status, 2, r.stderr);
-    assert.equal(lines(r.stdout)[0], `unusable no-result — ${NO_RESULT_TEXT}`);
+    assert.equal(r.status, CAPPED_EXIT, r.stderr);
+    assert.deepEqual(lines(r.stdout), [CAPPED_LINE, MARKER_CAPPED]);
     assert.equal(r.stderr, "stage-agent: read: wait-capped\n");
-    assert.equal(markersIn(dir).at(-1).kind, "orchestrator", "the stage is over");
-    // The cap never hides a result that IS there.
-    writeMarkers(dir, [openStage("pharn-plan", null, old)]);
+    assert.equal(markersIn(dir).length, 1, "the stage stays open: no return marker");
+    assert.equal(markersIn(dir).at(-1).kind, "stage-start");
+    // Again: still capped, never `wait-unanchored` — the open stage still anchors the wait.
+    const again = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
+    assert.deepEqual([again.status, again.stderr], [CAPPED_EXIT, "stage-agent: read: wait-capped\n"]);
+    assert.equal(markersIn(dir).length, 1, "still no return marker");
+    // Issue #410's repro: the agent reports AFTER a capped call — the stage can still be finished.
     assert.equal(loopReport(dir, "pharn-plan", ["--status", "done"]).status, 0);
     const late = runBounded(dir, loopFinish("pharn-plan", FINISH_BUDGET_MAX_MS));
     assert.deepEqual([late.status, lines(late.stdout)[0], late.stderr], [0, "done", ""]);
+    assert.equal(lines(late.stdout)[1], markerLine(markersIn(dir).at(-1)), "the return marker, written now");
+    assert.equal(markersIn(dir).at(-1).kind, "orchestrator");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish --budget-ms — past the cap with a result ALREADY there: consumed as before (the cap never hides a result)", () => {
+  const dir = scratch();
+  try {
+    const old = new Date(Date.now() - FINISH_WAIT_CAP_MS - 60_000).toISOString();
+    writeMarkers(dir, [openStage("pharn-build", 1, old)]);
+    assert.equal(loopReport(dir, "pharn-build", ["--iteration", "1", "--status", "done", "--gate", "fail"]).status, 0);
+    const r = runBounded(dir, loopFinish("pharn-build", FINISH_BUDGET_MAX_MS, "1"));
+    assert.deepEqual([r.status, lines(r.stdout)[0], r.stderr], [0, "done gate:fail", ""]);
+    assert.equal(markersIn(dir).at(-1).kind, "orchestrator");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finish WITHOUT --budget-ms (the /pharn-ship path) past the cap: unchanged — exit 2 no-result, the return marker written, no capped line", () => {
+  const dir = scratch();
+  try {
+    const old = new Date(Date.now() - FINISH_WAIT_CAP_MS - 60_000).toISOString();
+    writeMarkers(dir, [openStage("pharn-plan", null, old)]);
+    const r = runBounded(dir, finishArgs("pharn-ship", "pharn-plan"));
+    assert.equal(r.status, 2, r.stderr);
+    assert.equal(lines(r.stdout)[0], `unusable no-result — ${NO_RESULT_TEXT}`);
+    assert.ok(!r.stdout.includes(CAPPED_LINE) && !r.stdout.includes(MARKER_CAPPED), "no wait, so no cap");
+    assert.equal(r.stderr, "stage-agent: read: no-state-dir\n");
+    assert.equal(markersIn(dir).at(-1).kind, "orchestrator");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
