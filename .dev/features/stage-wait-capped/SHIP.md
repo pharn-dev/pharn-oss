@@ -37,9 +37,7 @@ changelog-entry: exit 0
 - Orchestration deviations (scratch runners for the refused shell forms; run 1 of regress superseded):
   `REGRESSION.md` and `VERIFY.md`.
 
-lesson: pending — a candidate is proposed in `REVIEW.md` ("Lesson candidate"); Step 2b.3's question goes to the human
-through the orchestrator, because this stage could not ask directly. The orchestrator records the answer (`promoted
-L<n>` | `skipped` | `none`).
+lesson: skipped
 
 deferred: none
 

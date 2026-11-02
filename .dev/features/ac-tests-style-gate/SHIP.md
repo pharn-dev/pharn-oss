@@ -41,10 +41,10 @@ changelog-entry: exit 0
 
 ## Lesson
 
-lesson: pending — one candidate is proposed in `REVIEW.md`: a hand-listed scratch-tree module copy breaks on a new
-import. Step 2b.3's question goes to the human through the orchestrator, because this agent cannot ask. Replace this
-line with `lesson: promoted L<n>` or `lesson: skipped` once answered. This is a deliberate, recorded departure from
-2b.4's closed set, at the orchestrator's instruction.
+lesson: pending — the human chose Promote at 2b.3 (2026-11-02, asked by the orchestrator) for the candidate in
+`REVIEW.md` (a hand-listed scratch-tree module copy breaks on a new import). `/pharn-dev-memory-promote` runs after
+this branch merges, outside every build window, and its own gate decides; that change replaces this line with
+`promoted L<n>` or `skipped`.
 
 deferred: two concurrent agents shared one scratchpad directory, and a sibling's `regress-base` worktree already held
 the name this run first chose. This run used unique names; the convention is not written down anywhere.

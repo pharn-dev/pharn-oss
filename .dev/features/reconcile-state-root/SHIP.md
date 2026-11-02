@@ -101,9 +101,10 @@ deterministic failures. The steps, in order:
 
 changelog-entry: exit 0
 
-lesson: pending — candidate in `REVIEW.md` § Proposed lesson candidate (L41 recurred through a fixture's inherited
-`.gitignore`). It was presented to the human via the orchestrator; Step 2b.3 was not asked by this subagent. Replace
-this line with the closed-set outcome (`promoted L<n>` / `skipped`) once the human answers.
+lesson: pending — the human chose Promote at 2b.3 (2026-11-02, asked by the orchestrator) for the candidate in
+`REVIEW.md` § Proposed lesson candidate (L41 recurred through a fixture's inherited `.gitignore`).
+`/pharn-dev-memory-promote` runs after this branch merges, outside every build window, and its own gate decides; that
+change replaces this line with `promoted L<n>` or `skipped`.
 
 deferred:
 
