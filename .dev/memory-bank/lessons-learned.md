@@ -2454,3 +2454,33 @@ type: contract · concepts: [overclaim, run-state, mirrored-state, writes-scope]
 - commit: `7e71753ce2ba3ed7493264d5e7a2430d45a46440` (working-tree build on this commit; uncommitted at promotion time)
 - source: .dev/features/loop-isolation-stop/REVIEW.md F1,F2,F3,F4
 - promoted: 2026-10-25 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L80 — L41 recurs through a fixture's environment: when every fixture copies the dev repo's own configuration, an install's default posture is tested by nothing
+
+type: process · concepts: [test-blindspot, default-values, fixture-environment, lesson-recurrence, floor-escalation]
+
+**Lesson.** [[L41]] named a default every test OVERRIDES. This is its sibling: a setting every test INHERITS, and it lives in the fixture's environment (an ignore file, a config file), not in a function parameter, so a reading of the code under test never shows it. `check-bash-reconcile.test.mjs`'s `makeRepo()` and `reconcile-baseline.test.mjs` both default to a `.gitignore` that ignores `pharn/.run/`, and so does this repository's own `.gitignore`. Neither the suite nor dogfood ever ran reconcile over a tree where PHARN's run state is visible to git. In an installed project it was visible, and a correct build failed verify on 55 escapes, 54 of them under `pharn/.run/` (#408). Remedy: when a floor check's answer depends on the host project's configuration (ignore rules, config files, the install posture), at least one fixture must take the posture of an install that never touched that configuration, and the dev repo's own configuration must not be the fixture default.
+
+**Why it matters.** It is L41's second occurrence, which is [[L20]]'s bar for giving the remedy a floor check (for example, a test pin that every reconcile fixture asserting state-root behaviour passes its `.gitignore` explicitly). Every new checker that reads git's ignore rules reuses the same fixture helper, so it would recur. **Bound (P0):** discipline only; nothing checks which posture a fixture takes, and this entry adds no checker.
+
+**Provenance.**
+
+- feature: `reconcile-state-root`
+- commit: `ea11383a65ce3901f4867ce34025ba1ffaac2530`
+- source: .dev/features/reconcile-state-root/REVIEW.md § Proposed lesson candidate; .dev/features/reconcile-state-root/PLAN.md § The failure
+- promoted: 2026-11-02 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L81 — A test that copies a hand-picked list of floor modules into a scratch tree holds a second copy of their imports — a new import breaks it with no edit to the test
+
+type: floor · concepts: [test-fixtures, scratch-tree, copy-list, dependency-set, second-copy]
+
+**Lesson.** A test that builds a scratch tree by copying NAMED modules (to run a checker against a fixture, or to mutate one module and run it) carries the copied modules' import closure as a hand-written list. Nothing ties that list to the imports, so the first new import in any copied module breaks the test with `ERR_MODULE_NOT_FOUND`, in a file the change never touched. Measured in 7.2.0: `607d82c2` (#407) made `validate.mjs` and `count-lenses.mjs` import the new `capability-files-core.mjs`, and 12 tests in three files failed (`lens-groups.test.mjs`, `render-review-assignments.test.mjs`, and `validate.test.mjs`'s CHECK 6 mutation control, whose mutant then exited 1 instead of 0). The fix, `0b18864b`, added the file to each list by hand. Remedy: copy the whole directory (as `check-ac-style.test.mjs` does), or derive the list from the modules' own `import` lines, never a hand list; a mutation control that writes one module alone into a temp dir has the same defect.
+
+**Why it matters.** It is [[L35]]'s second copy, hidden in a test: the import list lives once in the module and again in each test that copies it. It is not the first occurrence: `cost-transcript-hostile-values` found `transcript-core.test.mjs`'s `mutantCore()` writing one module alone into a temp dir, so a new import broke its mutant controls. By [[L20]]'s bar a floor check is now eligible, for example a test that every scratch-tree copy list covers its modules' static imports. **Bound (P0):** discipline only; this entry adds no checker, and the hand-added entries in `0b18864b` are still hand lists.
+
+**Provenance.**
+
+- feature: `ac-tests-style-gate`
+- commit: `ea11383a65ce3901f4867ce34025ba1ffaac2530`
+- source: .dev/features/ac-tests-style-gate/REVIEW.md § Proposed lesson candidate; .dev/features/ac-tests-style-gate/PLAN.md § Notes — mid-run fast-forward and re-anchor
+- promoted: 2026-11-02 via gated `/pharn-dev-memory-promote` (human-approved).
