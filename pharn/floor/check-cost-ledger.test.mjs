@@ -376,6 +376,22 @@ test("a missing iteration marker is a WARN WITH A COUNT, never a RED and never a
   );
 });
 
+test("a stop before the first build (iterations 1, no iterated stage started) produces no iteration WARN (#411 A)", () => {
+  const led = cleanLedger();
+  // The contract's pre-build record: front stages only, so no stage-start carries an `iteration`.
+  led.markers = led.markers.filter((m) => m.kind !== "stage-start" || m.iteration === undefined || m.iteration === null);
+  assert.ok(
+    led.markers.every((m) => m.kind !== "stage-start" || !Number.isInteger(m.iteration)),
+    "fixture: no stage-start carries an iteration"
+  );
+  led.outcome = { decision: "STOP_BLOCKED", iterations: 1, source: "LOOP.md", blocked: "needs-clarification" };
+  const { warns } = checkLedger(led);
+  assert.ok(!warns.some((w) => /iteration/.test(w)), `expected no iteration WARN, got: ${warns.join(" | ")}`);
+  // The falsifier (L60): the same record claiming 2 iterations still warns — iterated stages ran, every marker lost.
+  led.outcome = { decision: "STOP_CAP", iterations: 2, source: "LOOP.md" };
+  assert.ok(checkLedger(led).warns.some((w) => /marker completeness/.test(w) && /1, 2/.test(w)));
+});
+
 test("a complete marker set produces no completeness WARN", () => {
   const led = cleanLedger();
   led.outcome = { decision: "STOP_GREEN", iterations: 1, source: "LOOP.md" };

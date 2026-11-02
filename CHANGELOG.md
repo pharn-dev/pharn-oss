@@ -23,6 +23,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.2.0] - 2026-11-02
+
+### Fixed
+
+- **Capability discovery no longer counts git-ignored copies of the `pharn/` tree
+  ([#407](https://github.com/pharn-dev/pharn-oss/issues/407)).** `validate.mjs`, `count-grillers.mjs`,
+  `count-lenses.mjs` and `count-verifiers.mjs` each walked the target with their own copy of a `readdirSync` walk. In
+  a project whose build cache held two copies of `pharn/`, every griller registered three times (30 instead of 10), a
+  full `/pharn-grill` loaded about 212 KB of griller text where about 71 KB was needed, and validate reported 90
+  capabilities, 60 of them the copies, still GREEN. The four now share one list from the new
+  `pharn/floor/capability-files-core.mjs`: inside a git work tree, the files `git ls-files --cached --others
+--exclude-standard` lists for the target, plus everything under the target's own `pharn/` (so an install a
+  project chose not to commit is still found); outside a work tree, when git cannot answer, or when git lists nothing
+  for the target, the old walk. A symlinked directory, a submodule and a nested repository are no longer descended
+  inside a work tree; the walk fallback keeps every old residual, the ignored copies included. Counts in this
+  repository are unchanged (37 capabilities, 13 grillers, 22 lenses, 0 verifiers).
+- **The cost-ledger check no longer warns on a `/pharn-loop` stop before the first build
+  ([#411](https://github.com/pharn-dev/pharn-oss/issues/411) A).** `loop-record.md` counts such a stop as
+  `iterations: 1`, and only build, regress and verify stage-starts carry an `iteration`, so a record that followed the
+  contract always drew "no stage-start marker carries iteration(s) 1". `check-cost-ledger.mjs` now skips that part of
+  its marker-completeness WARN when no stage-start carries an iteration and the total is exactly 1. A larger total
+  with no iteration marker still warns.
+- **A routed `/pharn-loop` test-stage agent reports `refused` with no row
+  ([#411](https://github.com/pharn-dev/pharn-oss/issues/411) B).** The loop decides that stage's stop row from
+  `check-test-stage.mjs` and the pinned preflight (S12 or S9) and ignores the report, but the brief offered the agent
+  only `refused --row S4…S10`, so a missing runner was reported as S9 and recorded as S12. `stage-agent-core.mjs`'s
+  new `CHECKER_ROW_STAGES` (`pharn-test`) gives that brief one row-less `refused` line and a rule 3 that says the
+  loop's checkers decide the row; `LOOP_ROWS` is unchanged, so no agent can claim S11–S15.
+
 ## [7.1.4] - 2026-10-26
 
 ### Changed

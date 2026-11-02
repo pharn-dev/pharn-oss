@@ -561,7 +561,8 @@ command already maps a stage's OWN report to a row:
 test stage, whose row always comes from `check-test-stage.mjs --require-test-first` and then the pinned
 preflight — exit 1 is S12, any other exit S9, never by relayed text (Step 4) — and freshness (S11) and AC
 evidence (S13). The rows a stage agent may report at all are `LOOP_ROWS` in `pharn/floor/stage-agent-core.mjs`:
-S4, S5, S6, S6b, S6c, S7, S8, S9 and S10.
+S4, S5, S6, S6b, S6c, S7, S8, S9 and S10. The test stage's brief offers no row: its agent reports `refused`
+without one.
 
 **Bounds.** A stage agent's report is another model's output. Only `finish`'s exit code and its closed first line are
 floor. That control flow never uses the agent's prose is **ADVISORY** — your own discipline: the agent's final

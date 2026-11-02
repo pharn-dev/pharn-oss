@@ -35,6 +35,10 @@ come from the single code block this text was moved from, so the entry they name
 # the target has no pharn/ at all.
 # Exit: 0 GREEN (or GREEN-with-warnings) · 1 RED · 2 INCONCLUSIVE — an uncaught throw prints one
 # `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line).
+# THE CAPABILITY LIST (7.2.0, issue #407): validate.mjs and count-lenses / count-grillers / count-verifiers take their
+# markdown list from pharn/floor/capability-files-core.mjs — inside a git work tree, git's tracked + untracked-not-ignored
+# files plus the target's own pharn/; otherwise, or when git cannot answer, the old readdirSync walk. A git-ignored copy
+# of pharn/ (a build cache) is no longer counted. Rule and bounds: that module's header.
 node pharn/floor/validate.mjs [target-dir]
 ```
 

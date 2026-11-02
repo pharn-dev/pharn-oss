@@ -27,6 +27,7 @@ import {
   INVOCATIONS,
   INLINE_REMEDIES,
   LOOP_ROWS,
+  CHECKER_ROW_STAGES,
   FIX_LIST_FIELDS,
   FIX_LIST_SOURCES,
   FIX_LIST_REPORTS,
@@ -489,6 +490,13 @@ test("reportLines — the closed set per command and stage, in order (counts pin
   assert.equal(reportLines({ command: "pharn-ship", stage: "pharn-build", name: "d", iteration: 1 }).length, 4);
   assert.equal(reportLines({ command: "pharn-loop", stage: "pharn-plan", name: "d" }).length, 1 + LOOP_ROWS.length);
   assert.equal(reportLines({ command: "pharn-loop", stage: "pharn-build", name: "d", iteration: 2 }).length, 2 + LOOP_ROWS.length);
+  // #411 B: the loop's test stage — its row is the checkers' — gets done and one row-less refused, and nothing else.
+  assert.deepEqual(CHECKER_ROW_STAGES, ["pharn-test"]);
+  assert.deepEqual(reportLines({ command: "pharn-loop", stage: "pharn-test", name: "d" }), [
+    "node pharn/floor/stage-agent.mjs report --command pharn-loop --name 'd' --stage pharn-test --status done",
+    "node pharn/floor/stage-agent.mjs report --command pharn-loop --name 'd' --stage pharn-test --status refused",
+  ]);
+  assert.equal(reportLines({ command: "pharn-ship", stage: "pharn-test", name: "d" }).length, 3, "ship's test stage is unchanged");
   assert.equal(
     reportLine({ command: "pharn-ship", name: "d", stage: "pharn-build", iteration: 1, status: "done", gate: "pass" }),
     "node pharn/floor/stage-agent.mjs report --command pharn-ship --name 'd' --stage pharn-build --iteration 1 --status done --gate pass"

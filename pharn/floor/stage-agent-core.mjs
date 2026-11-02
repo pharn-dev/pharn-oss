@@ -84,7 +84,8 @@
 // never re-emitted as output tokens by the orchestrator (GRILL G-P0). `renderBrief` fills only closed-table
 // values and a feature slug the CLI validated first. Its seven rules: read the constitution; follow
 // `.claude/commands/<stage>.md` as its fixed invocation, never re-resolving the name; ask no one (ship:
-// report `question` with the question verbatim; loop: report `refused` with a Step-2 row); run only this
+// report `question` with the question verbatim; loop: report `refused` with a Step-2 row, or with none for a
+// CHECKER_ROW_STAGES stage, whose row the loop's checkers decide); run only this
 // stage — never the orchestrator's own lines (since 6.43.0 that list names `stage-agent.mjs start` / `finish`, which
 // write the stage's markers, and `stage-direct.mjs`, which runs /pharn-regress or /pharn-verify) — and author every
 // file inside the project with the write tools, never through Bash (`WRITE_TOOL_RULE`,
@@ -350,6 +351,13 @@ export const INLINE_REMEDIES = Object.freeze({
  *  quick spec agent whose fit checks fail — `/pharn-spec --quick --model-approve` refuses a misfit. */
 export const LOOP_ROWS = Object.freeze(["S4", "S5", "S6", "S6b", "S6c", "S7", "S8", "S9", "S10"]);
 
+/** The /pharn-loop stages whose stop row a CHECKER decides, never the agent (issue #411 B). The loop reads the test
+ *  stage's row from `check-test-stage.mjs --require-test-first` and the pinned preflight (pharn-loop.md Step 4: S12 or
+ *  S9) and ignores what `finish` printed, so its agent reports `refused` with no `--row` — offering it LOOP_ROWS made it
+ *  pick a row it knew was wrong (S9 for a missing runner the loop records as S12). LOOP_ROWS is unchanged, so no agent
+ *  can claim a checker's row. */
+export const CHECKER_ROW_STAGES = Object.freeze(["pharn-test"]);
+
 /** The report fields the loop's rebuild reads as DATA, each with the stage whose report carries it. */
 export const FIX_LIST_SOURCES = Object.freeze({
   ".failing_gates[]": "pharn-verify",
@@ -545,8 +553,8 @@ export function briefLine({ command, stage, name, iteration = null, mode = FULL_
 /**
  * Every exact `report` line this cell's brief offers, in the order the brief lists them. Ship: done (build:
  * one per gate value), refused, question. Loop: done (build: one per gate), then refused once per
- * LOOP_ROWS member — the loop's agent never reports `question` (rule 3), and every line is complete, so
- * the agent copies one and fills in nothing.
+ * LOOP_ROWS member — or, for a CHECKER_ROW_STAGES stage, one refused line with no row — the loop's agent never
+ * reports `question` (rule 3), and every line is complete, so the agent copies one and fills in nothing.
  */
 export function reportLines({ command, stage, name, iteration = null }) {
   const base = { command, name, stage, iteration };
@@ -554,6 +562,7 @@ export function reportLines({ command, stage, name, iteration = null }) {
     stage === "pharn-build"
       ? GATES.map((gate) => reportLine({ ...base, status: "done", gate }))
       : [reportLine({ ...base, status: "done" })];
+  if (command === "pharn-loop" && CHECKER_ROW_STAGES.includes(stage)) return [...done, reportLine({ ...base, status: "refused" })];
   if (command === "pharn-loop") return [...done, ...LOOP_ROWS.map((row) => reportLine({ ...base, status: "refused", row }))];
   return [...done, reportLine({ ...base, status: "refused" }), reportLine({ ...base, status: "question" })];
 }
@@ -595,7 +604,13 @@ export function renderBrief({ command, mode = FULL_MODE, stage, name, iteration 
       `\`${name}\`: use it as given; never re-resolve it and never ask for it.` +
       (stage === "pharn-spec" && isLoop ? " The user's increment description is the fenced block below the first line of your prompt." : "")
   );
-  if (isLoop) {
+  if (isLoop && CHECKER_ROW_STAGES.includes(stage)) {
+    lines.push(
+      "3. Where the stage says to end your turn, stop and report (rule 6). Where it says to ask the human, ask no one: " +
+        `report \`refused\`, with no \`--row\`. ${orchestrator} decides this stage's stop row from its own checkers ` +
+        "(`.claude/commands/pharn-loop.md` Step 4), never from your report, so there is no row for you to choose."
+    );
+  } else if (isLoop) {
     lines.push(
       "3. Where the stage says to end your turn, stop and report (rule 6). Where it says to ask the human, ask no one: " +
         "report `refused` with `--row` set to the row of `.claude/commands/pharn-loop.md` Step 2 (its stuck-point table) " +
