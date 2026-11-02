@@ -4952,7 +4952,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-ship-quick.md": 12800,
   "pharn-ship-stages.md": 33280, // 6.70.0 ship-step2-part: 29,967 B measured + 10% → next 512
   "pharn-spec.md": 27136,
-  "pharn-test.md": 20480,
+  "pharn-test.md": 25088, // 7.2.0 ac-tests-style-gate (#409): 22,523 B measured + 10% → next 512 (was 20480)
   "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
   // ship-step2-part (6.70.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
   // rounded up to 512. R3–R5 do not apply to them (header).

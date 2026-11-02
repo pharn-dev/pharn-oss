@@ -135,6 +135,8 @@ allowed-tools:
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-plan.md --target pharn/features/*/AC-TESTS.md)",
     "Bash(node pharn/floor/check-ac-tests.mjs pharn/features/*/AC-TESTS.md pharn/features/*/SPEC.md pharn/features/*/PLAN.md)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/*/AC-TESTS.md)",
+    "Bash(node pharn/floor/check-ac-style.mjs --before * --timeout-ms 170000)",
+    "Bash(node pharn/floor/check-ac-style.mjs --after * --timeout-ms 170000)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-test.md --target pharn/features/*/AC-TESTS.lock.json)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --write *)",
     "Bash(node pharn/floor/ac-tests-lock.mjs --check *)",
