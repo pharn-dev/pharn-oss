@@ -344,10 +344,13 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   Since 6.57.0 a deletion is judged like a write: a path present at the anchor and gone from disk at verify — removed
   with `rm`, with `git rm`, or by a commit, tracked or untracked — fails the stage when no recorded scope covers it,
   unless upstream deleted it in a merge inside the window (`merged[]`). A path still on disk that has left the
-  reconciled set, because it became git-ignored, is only a warning. **The supported claim is exactly "a write to a path the active
+  reconciled set, because it became git-ignored, is only a warning. A Bash write to
+  `pharn/.run/writes-scope.json` is never reported, because reconcile judges against the scope snapshot in its own
+  baseline, never against the live scope file. **The supported claim is exactly "a write to a path the active
   scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
-  bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
-  reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions
+  bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths, and since 7.2.0 PHARN's own state
+  root `pharn/.run/` whether or not the project ignores it, are outside the reconciled set; the window is
+  anchor-to-verify; the model is **one worktree per session** (two sessions
   sharing a tree share `pharn/.run/`, so a second session's writes can surface as this one's escape —
   [[L38]], which this inherits and cannot fix); and there is **no attribution** — it reports *what*,
   never *who*.
@@ -611,8 +614,10 @@ What either certifies is narrower than the config's presence suggests.
   harness that changes its default again changes nothing in PHARN. Headless `claude -p --permission-mode auto` is
   the other measured path: its stage agents ran in the foreground on 6.73.2, which sent `run_in_background: false`;
   headless under 7.1.1, which sends no such parameter, is not measured. One run is not a bound: a stage longer than
-  one 570 s wait, the wait's cap, whether `TaskStop` stops an agent left running, other Claude Code versions and a
-  full loop are not measured.
+  one 570 s wait, whether `TaskStop` stops an agent left running, other Claude Code versions and a full loop are not
+  measured. The wait's cap fired once in a real run (issue #410, PHARN 7.1.4: the session ended while the build
+  agent ran); since 7.2.0 it leaves the stage open and `/pharn-loop` stops at S9b instead of closing the stage as a
+  refusal.
 - **Deleting the block loses routing as well as the check.** Probed, not reasoned about: a config with no
   `models.stages`, and an absent config file, each exit **0 GREEN by design** in the checker — the
   `check-lessons-index` NO_CANON / COLD precedent, the honest normal state of an install that does not use
