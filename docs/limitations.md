@@ -151,8 +151,10 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **A routed stage agent may run in the background, and `/pharn-loop` waits it out; that is handled, not gone.**
   The harness decides how an agent is launched. In the measured runs, Claude Code 2.1.310's interactive CLI launched
   every `/pharn-loop` stage agent in the background, and `stage-agent.mjs finish --budget-ms` waited each one out on
-  disk; one `--quick` run completed on PHARN 7.1.1. Not measured: a stage longer than one 570 s wait, the wait's cap,
-  whether `TaskStop` can stop an agent left running, other Claude Code versions, and a full loop. The bounds live in
+  disk; one `--quick` run completed on PHARN 7.1.1. Not measured: a stage longer than one 570 s wait, whether
+  `TaskStop` can stop an agent left running, other Claude Code versions, and a full loop. The wait's cap fired once in
+  a real run (issue #410, PHARN 7.1.4: the session ended while the build agent ran); since 7.2.0 it leaves the stage
+  open and `/pharn-loop` stops at S9b instead of closing the stage as a refusal. The bounds live in
   `pharn/floor/stage-agent-core.mjs` (residual `stage-agent-background`); the run is
   [the measurement](../.dev/measurements/loop-interactive-cli-2026-10-26.md).
 - **It is token-hungry by construction.** `/pharn-grill` runs the grillers over your plan and

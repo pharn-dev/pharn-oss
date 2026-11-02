@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.2.1] - 2026-11-02
+
 ### Added
 
 - 2026-11-02: **Lessons L80 and L81, from the 7.2.0 batch.** L80 (#408): L41 recurs through a fixture's
@@ -30,7 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   ignore it was tested by nothing. L81 (#409): a test that copies a hand-picked list of floor modules into a scratch
   tree holds a second copy of their imports, so a new import breaks it. Both were promoted through
   `/pharn-dev-memory-promote` with the maintainer's accept, `docs/lessons-index.md` was regenerated, and the two
-  features' `SHIP.md` now record `promoted L80` / `promoted L81`. Dev-only: no `SKILLS_VERSION` bump.
+  features' `SHIP.md` now record `promoted L80` / `promoted L81`. The lessons are dev-only; this release's version
+  comes from the `pharn/LIMITS.md` correction below.
+
+### Fixed
+
+- **`pharn/LIMITS.md` catches up with 7.2.0 (#408, #410).** §6's reconcile bounds now say that PHARN's own state root
+  `pharn/.run/` is outside the reconciled set whether or not the project ignores it, and that a Bash write to
+  `pharn/.run/writes-scope.json` is never reported, because reconcile judges against its baseline's scope snapshot.
+  §8 no longer lists the stage wait's cap as not measured: it fired once in a real run (#410), and since 7.2.0 it
+  leaves the stage open and `/pharn-loop` stops at S9b. `docs/limitations.md` mirrors the §8 sentence. The maintainer
+  made the `LIMITS.md` edit (it is human-only); no behaviour changes.
 
 ## [7.2.0] - 2026-11-02
 
