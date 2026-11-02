@@ -76,6 +76,13 @@ that agent the loop's checkers decide its row. `LOOP_ROWS` is unchanged, so no a
 - `CHANGELOG.md`
 - `README.md`
 - `.dev/features/issues-407-411-small/PLAN.md`
+- `pharn/floor/render-review-assignments.test.mjs`
+- `pharn/floor/lens-groups.test.mjs`
+- `pharn/floor/validate.test.mjs`
+
+Added after the first full gate (12 failures): these three tests copy `count-lenses.mjs` / `validate.mjs` into a
+scratch tree with an explicit list of their imports, and the list lacked `capability-files-core.mjs`. The first epoch
+reconciled CLEAN before the widening, then the setter and `--anchor` were re-run for the second epoch.
 
 ## Applied lessons
 

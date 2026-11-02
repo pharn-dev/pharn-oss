@@ -943,9 +943,11 @@ test("★ CHECK 6 NON-VACUITY: the RED disappears when CHECK 6's branch is disab
     assert.match(real.stdout, CHECK6_RE);
 
     // Mutant: same fixture, CHECK 6 disabled -> GREEN. This is what proves the RED was CHECK 6's.
-    // validate.mjs imports its BOM strip from the shared core (6.65.2), so the mutant needs the core beside it.
+    // validate.mjs imports its BOM strip from the shared core (6.65.2) and its capability file list (7.2.0, #407),
+    // so the mutant needs both cores beside it.
     const core = readFileSync(join(here, "frontmatter-core.mjs"), "utf8");
-    withRepo({ "validate.mjs": mutant, "frontmatter-core.mjs": core }, (mutantRoot) => {
+    const files = readFileSync(join(here, "capability-files-core.mjs"), "utf8");
+    withRepo({ "validate.mjs": mutant, "frontmatter-core.mjs": core, "capability-files-core.mjs": files }, (mutantRoot) => {
       const m = spawnSync(process.execPath, [join(mutantRoot, "validate.mjs"), root], { encoding: "utf8" });
       assert.equal(m.status, 0, `with CHECK 6 disabled the same fixture must be GREEN; got:\n${m.stdout}`);
       assert.doesNotMatch(m.stdout, CHECK6_RE);
