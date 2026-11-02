@@ -84,6 +84,31 @@ node pharn/floor/check-red-run.mjs --preflight --ac-tests <AC-TESTS.md> --discov
 node pharn/floor/check-red-run.mjs --verdict --ac-tests <AC-TESTS.md> --out <dir> --root <dir>
 ```
 
+## `check-ac-style.mjs` — the AC tests must not break a style gate
+
+```bash
+# THE STYLE CHECK (added 7.2.0, ac-tests-style-gate, issue #409) — /pharn-test Step 2c (`--before`, before Step 3 writes
+# any test) and Step 3b (`--after`, before Step 4 pins them). The trigger: a test-first /pharn-loop run pinned five AC
+# test files that failed the project's `prettier --check .`; the build may not touch pinned tests, so its full gate and
+# verify stayed red. The gate set is STYLE_SET (lint, format:check, lint:md) ∩ package.json scripts − gates.exclude, each
+# run as `npm run <id>` through run-gates.mjs spawnGate, one after another, `--timeout-ms` per gate (REQUIRED, no
+# default; /pharn-test pins 170000 so three gates fit the 600000 ms Bash maximum). Records + logs under
+# pharn/.run/pharn-test/style/ (`--before` recreates it; containment-walked). VERDICT (ac-style-core.mjs styleVerdict),
+# per gate: after measured 0 → nothing; after not measured (timed out, 126/127 — gate-run-core unmeasuredRuns' rule) →
+# NOTE; measured non-zero after and 0 before → RED `ac-tests-unformatted` (flipped); red/unmeasured before and no mapped
+# test file existed at --before → NOTE (not attributed); red/unmeasured before and a mapped test file already existed →
+# RED (tests-existed — fail-closed, the re-run-after-refusal case). An empty set is GREEN on its own line. A different
+# gate set between the runs or a record of another feature is UNUSABLE. Exit 0 recorded/GREEN · 1 RED · 2 UNUSABLE (a
+# crash exits 2 too). /pharn-test: exit 1 → fix only its own test files once with Write/Edit (never a --write/--fix form
+# through Bash), --after again, still 1 → refusal `ac-tests-unformatted`; exit 2 → `style-check-unusable`. Neither
+# needs a /pharn-loop mapping: the refusal leaves check-test-stage non-zero, which the loop reads as S9. BOUNDS (the
+# module header owns them): advisory that the command runs it (check-test-stage does not re-check); a NOTE gate's
+# failure by the new tests is still pinned; the hook confines only the write tools between the runs; a style script
+# that writes runs twice before the reconcile anchor; the logs are never parsed; agreement, not provenance (L43).
+node pharn/floor/check-ac-style.mjs --before <name> --timeout-ms <N>
+node pharn/floor/check-ac-style.mjs --after <name> --timeout-ms <N>
+```
+
 ## `check-test-stage.mjs` — the test-stage gate
 
 ```bash

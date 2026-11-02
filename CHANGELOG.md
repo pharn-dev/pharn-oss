@@ -51,6 +51,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   only `refused --row S4…S10`, so a missing runner was reported as S9 and recorded as S12. `stage-agent-core.mjs`'s
   new `CHECKER_ROW_STAGES` (`pharn-test`) gives that brief one row-less `refused` line and a rule 3 that says the
   loop's checkers decide the row; `LOOP_ROWS` is unchanged, so no agent can claim S11–S15.
+- **`/pharn-test` no longer pins AC tests that break a style gate that passed before them
+  ([#409](https://github.com/pharn-dev/pharn-oss/issues/409)).** In a test-first `/pharn-loop` run, five of nine pinned
+  AC test files failed the project's `format:check`. The build may not touch pinned tests, so its full gate and
+  `/pharn-verify` stayed red. The new `pharn/floor/check-ac-style.mjs` runs the project's style gates (`lint`,
+  `format:check`, `lint:md`, those `package.json` has, minus `gates.exclude`) once before Step 3 writes the tests
+  (new Step 2c) and once after (new Step 3b). A gate that passed before and fails after is `RED`, and so is a red gate
+  when mapped test files already existed before the run. The stage then fixes its own test files once with Write/Edit,
+  never with a formatter's `--write`/`--fix`. If the gate is still red, it stops with `ac-tests-unformatted` before
+  the pin. A gate already red before, or one slower than the 170 s per-gate timeout, is only a `NOTE`. Running the
+  step is command discipline: `check-test-stage.mjs` does not re-check it. Cost: two style runs per `/pharn-test`
+  (about 4 minutes in this repository, where `format:check` takes about 111 s). `/pharn-loop`'s `allowed-tools`
+  gains the two new pinned lines; nothing else in it changes.
 
 ## [7.1.4] - 2026-10-26
 
