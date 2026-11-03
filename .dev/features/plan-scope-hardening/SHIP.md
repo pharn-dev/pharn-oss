@@ -32,7 +32,20 @@ Branch `fix/plan-scope-hardening`, base `dd0bb3d3` (`origin/batch/audit-2026-11-
 - `lesson: none` — no candidate clears L20's bar: each of the four adversarial rounds' catches was remedied by a code
   change with a test pin, never by "remember next time" (`REVIEW.md`, "Lesson candidate"). No human could be asked
   at 2b.3 in this delegated run; with no candidate there was nothing to ask.
-- `deferred: none`
+- `deferred:` to integration (review findings, not lesson candidates — no further lesson candidate was surfaced):
+  - the Step 2b symlinked-parent PICK fix — `&& real === path.join(root, p)` in `.claude/commands/pharn-dev-build.md`
+    Step 2b, one assertion in the `.dev/floor/command-hygiene.test.mjs` PICK test, and the matching wording in the
+    build-command comment, `.dev/guides/writes-scope.md` and the CHANGELOG entry (`REVIEW.md`, the important finding);
+  - the stale colon-rule comment at `pharn/floor/apply-plan-deletions.mjs:135`;
+  - the 17-vs-14 count wording (`.dev/guides/writes-scope.md:223` vs the CHANGELOG's "14 CI workflow");
+  - the `.claude/commands/pharn-loop.md:124` grant line, which lands in G2's file and must survive the integration
+    merge.
+
+## GATE 2 decision
+
+**Decided by the batch orchestrator (a model) under the owner's delegation, 2026-11-03** — not a human approval:
+**MERGE as is.** No round 4, and no `--allow-claude-dir` from an agent. The deferred items above go to the integrator,
+whose own plan scope covers those files without any opt-in.
 
 ## Pointers
 
