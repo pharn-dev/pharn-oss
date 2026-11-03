@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.3.0] - 2026-11-03
+
+This release collects the fixes for the 2026-11-03 principal review, built on separate branches and integrated on
+`batch/audit-2026-11-03`.
+
 ### Added
 
 - 2026-11-03: **`set-writes-scope.cjs --check` and a plan-time `## Files` check.** `--check` (placed before the mode)
@@ -50,6 +55,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-03: **The four trusted docs state what 7.3.0 changed, and canon gains a correction entry** (audit
+  2026-11-03; a maintainer-applied patch, since the agent cannot write these files). `pharn/LIMITS.md`: §1a (no hook
+  reads a capability's `kind:`), §3a (the review set has no overall bound; under `/pharn-loop` the model picks the
+  quick kind and the marker records the mode), §3f and §6 (the setter's new refusals and their bounds), §6
+  (`writes-scope.json` outside reconcile, one baseline per tree, CI exec config always reconciled, the
+  `--accept-host-execution` line not pre-approved, the isolation witness denied to the write tools), §7
+  (`"onFailure": "block"` on 2.1.295 or later, the Stop-guard marker's re-open refusal), §10 (three CLIs load the
+  runtime floor inside
+  `run()`) and §11 (ruleset 25907495 has no bypass, so the owner's bypass skips only the review and classic
+  protection's `gitleaks`; the release waits for `gitleaks`; tag ruleset 25907484). `pharn/THREAT-MODEL.md` §2 item 10,
+  §4 item 2, §5 8a and 8c say the same. `pharn/CONSTITUTION.md` says the constitution is loaded as a prefix by
+  instruction, with no injector. `pharn/ARCHITECTURE.md`: hooks are the layer a prompt cannot argue with, not one a
+  `Bash` write cannot reach; the memory bank is under `pharn/memory-bank/`; the finding `type` list is closed. Canon:
+  L82 corrects L14's stated reason (JavaScript's `$` does not match before a trailing newline; the guard-first rule
+  holds because validators trim first). `.dev/floor/specified-primitives.json`'s `community-privilege` marker follows
+  the new §1a text, and `docs/lessons-index.md` is regenerated.
 - 2026-11-03: **`/pharn-review`'s `REVIEW.md` is written by a floor renderer, not by the model** (audit 2026-11-03).
   New `pharn/floor/render-review.mjs` renders it from `findings.json`, `merge-report.json` (`v1` or `v2`),
   `assignments.json` and the orchestrator's own notes (`pharn/.run/pharn-review-notes/<name>.md`, fenced as
