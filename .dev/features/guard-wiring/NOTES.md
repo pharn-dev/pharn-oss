@@ -43,6 +43,13 @@ Effect on running guards: both exit only 0 or 2 (`process.exit` sites: protect :
 :1245, :1260, :1277, :1392; a crash after the handler registers exits 2), so on ≥ 2.1.295 `"block"` changes no verdict
 of a guard that runs.
 
+Live probe of the field itself (Claude Code 2.1.312, `claude -p --allowedTools Write --model haiku`, two scratch
+projects whose only `PreToolUse` handler runs a missing `.claude/hooks/missing-guard.cjs`; script `g3/probe-p.mjs`):
+
+- `onFailure: "block"` → `probe.txt` NOT created; the tool error read `PreToolUse:Write hook error: [node
+"${CLAUDE_PROJECT_DIR}"/.claude/hooks/missing-guard.cjs]: failed; blocking because onFailure is "block"`.
+- field unset (control) → `probe.txt` created: the missing guard let the write through, which is the defect fixed here.
+
 ## 2. Scratchpad finding (MED) — non-bug in code
 
 `ownScratchpadDir()` (enforce-writes-scope.cjs:864-874) is the one rule both postures call; it accepts only
@@ -63,4 +70,27 @@ LIMITS §6 (:311-316) already did — no trusted-doc proposal for it.
 
 ## Gates
 
-(recorded below after the run)
+Worktree, branch head before the human patch (settings.json unpatched):
+
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."`
+- `npm run -s docs:check` → `CATALOG: GREEN …`, `LESSONS-INDEX: GREEN …`; `npm run -s check:changelog` → GREEN
+  (`3 dated [Unreleased] entr(ies)`)
+- `node .dev/floor/check-changelog-entry.mjs --merge-base origin/main` → `CHANGELOG-ENTRY: GREEN — 3 new entr(ies)`
+- `node .dev/floor/check-surface-bump.mjs --merge-base origin/main` → GREEN (no product path changed yet); it REDs
+  (`NOT_BUMPED`) once the settings.json patch is committed — expected in this batch (COMMON.md)
+- The new `✧ both PreToolUse guard handlers carry "onFailure": "block"` test is RED here until the patch is applied;
+  every other new test passes.
+
+apply.py proof, throwaway clone of `origin/fix/guard-wiring` @ `4c8715ca` in the session scratchpad (`g3/clone`), ROOT
+pointed at the clone:
+
+- `apply.py` → `OK .claude/settings.json`, BEFORE `af2b1543…6d37`, AFTER `d218f551…3e05`, exit 0; a second run →
+  `ABORT … current d218f551… != pinned BEFORE …`, `Nothing written.`, exit 1.
+- `node --test hook-wiring + enforce-writes-scope` → `# tests 221 # pass 221 # fail 0`; with `protect-trusted-paths`
+  added → 390/390.
+- `npm test` → exit 0 (host load average ~93; the run took ~25 min).
+- `format:check`, `lint`, `lint:md`, `docs:check`, `check:markers`, `check:badge`, `check:changelog`, `check:contributing`
+  → exit 0. `check:reconcile` → `ESCAPE` on the UNCOMMITTED `.claude/settings.json` (always-reconciled control surface);
+  after a local commit in the clone → `escapes: []`, exit 0 — so the maintainer commits the patch before running gates
+  (L68).
+- `validate.mjs` → GREEN 37.
