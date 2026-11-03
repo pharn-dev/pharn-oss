@@ -58,9 +58,12 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
    making them read it would assert an agreement the platform may not see) — unchanged behaviour there.
 3. **Symlinks (L59).** `walkMarkdown` classifies each entry with `lstatSync`: a link to a directory is not descended
    and is recorded; a link to a file is still listed (the header's stated bound); a dangling link is skipped as
-   before. `listMarkdownFiles` returns `linkedDirs` (sorted, from the walks; git mode's own listing never descends
-   a link), and a `pharn` root that is itself a link is recorded instead of walked. validate.mjs REDs each linked
-   directory at or under `<target>/pharn/` outside its EXCLUDE_SEGMENTS — `P6/symlinked-dir`, blocking.
+   before. `listMarkdownFiles` returns `linkedDirs`: the linked directories the walks did not descend that sit at or
+   under `<target>/pharn/` (sorted; git mode's own listing never descends a link, and a link elsewhere is skipped
+   silently, as git mode always did), and a `pharn` root that is itself a link is recorded instead of walked.
+   validate.mjs REDs each one outside its EXCLUDE_SEGMENTS — `P6/symlinked-dir`, blocking — and the three count-\*
+   walkers refuse (exit 1, nothing on stdout, the link named on stderr), so a lens behind a link is never silently
+   dropped from the registry (added at grill, G2).
    `canonDirs()` and `walkExts()` use `lstatSync` and skip a link to a directory. The header's bound is rewritten
    to what the walk now does (L37: probed by the new tests, not read off the code).
 4. **Zero capabilities (L34).** When `CANON_DIRS` is non-empty, no capability was found and nothing blocking was
@@ -101,7 +104,7 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
 
 - pharn/floor/frontmatter-core.mjs — LOOSE_FIELD_LINE_RE, looseFrontmatter, looseScalar, looseValue; header — product floor
 - pharn/floor/validate.mjs — shared reader, P6/frontmatter-offset, P6/symlinked-dir, lstat in canonDirs/walkExts, CHECK 8 read, zero-capability INCONCLUSIVE, sentinel exits — product floor
-- pharn/floor/count-lenses.mjs — frontmatterRole through looseFrontmatter — product floor
+- pharn/floor/count-lenses.mjs — frontmatterRole through looseFrontmatter; refuse a linked dir under pharn/ — product floor
 - pharn/floor/count-grillers.mjs — same — product floor
 - pharn/floor/count-verifiers.mjs — same — product floor
 - pharn/floor/check-model-config.mjs — frontmatterModelEffort through looseFrontmatter (displaced = none) — product floor
@@ -110,7 +113,7 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
 - .dev/floor/capability-catalog-core.mjs — parseFrontmatter through the product core — dev floor
 - pharn/floor/frontmatter-core.test.mjs — loose reader units, LOOSE_FAMILY_CLIS twins, widened closures — test
 - pharn/floor/validate.test.mjs — offset RED, symlinked-dir RED, zero-capability INCONCLUSIVE, CHECK 8 EACCES — test
-- pharn/floor/capability-files-core.test.mjs — PATH_KINDS walk test, linkedDirs, linked pharn root — test
+- pharn/floor/capability-files-core.test.mjs — PATH_KINDS walk test, linkedDirs, linked pharn root, counters refuse — test
 - pharn/floor/cli-stdout-flush.test.mjs — validate.mjs row, form sentinel-uncaught, >64 KiB round-trip — test
 - pharn/floor/check-model-config.test.mjs — CRLF twin; a displaced command reads as no model — test
 - .dev/floor/check-config.test.mjs — CRLF twin — test
@@ -181,3 +184,6 @@ No capability is added or changed; the floor's own tests are the evals.
   (planned — git mode already never descended them), or RED them too (a pnpm-style tree would RED)?
 - Q3 (recommendation: as planned). A `pharn/` root that is itself a link: record and RED (planned, consistent
   "never descended"), or keep following it in git mode as today?
+- Q4 (recommendation: as planned). The count-\* walkers on a linked directory under `pharn/`: refuse (planned —
+  their callers already fail closed on a non-zero exit, so `/pharn-review` / `/pharn-grill` / verify stop instead of
+  silently running without the linked lens), or register what they can and leave the RED to validate alone?
