@@ -19,6 +19,14 @@ Branch `fix/review-quoting`, cut from `origin/batch/audit-2026-11-03` @ `fb997e4
    lint, format:check, lint:md, structural and reconcile (`CLEAN`).
 7. `/pharn-dev-review`: `REVIEW.md` (advisory). It found 0 floor-gate findings and 6 advisory ones (1 important, 5
    minor). Cite the file; its findings are not restated here (P4).
+8. **GATE 2 (first pass)**: decided **FIX, then re-verify** by the batch orchestrator (a model) under the owner's
+   delegation, not a human decision. It asked for four fixes and left two items as they were (see `REVIEW.md`, "GATE
+   2 outcome"). The fixes are in `e43e9061`. They added no new path, so the plan's `## Files` and the anchor were
+   unchanged.
+9. `/pharn-dev-regress` run 4: `.verdict` **`no-regressions`**. This is the recorded `regression-report.json`.
+10. `/pharn-dev-verify` (second run, at `e43e9061`): `.verdict` **`PASS`**. All seven gates exited 0; reconcile
+    `CLEAN`.
+11. `/pharn-dev-review`: re-reviewed the fix delta. No new finding; four advisory findings fixed, two left by decision.
 
 Mid-run coordination by the orchestrator, recorded:
 

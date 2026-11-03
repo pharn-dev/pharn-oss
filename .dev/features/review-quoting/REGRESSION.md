@@ -44,7 +44,16 @@ commit; run 1 above is the restarted run.
 The renderer's caps, the claims bullet and the CHANGELOG changed after run 2, so head was run again with the same gate
 set (the inside list now also holds `REGRESSION.md` and `regression-report.json`). Every gate 0 → 0; per test,
 6,098 passed / 0 failed / 1 skipped on both sides; `regressions: []`, `new_failures: []`, `check-regress.mjs verdict`
-exit 0. `regression-report.json` is this run's output verbatim.
+exit 0.
+
+## Run 4 — after the GATE 2 fixes (`e43e9061`)
+
+GATE 2 (the orchestrator's FIX decision, under the owner's delegation) changed the command, both floor modules, the
+contract, the CHANGELOG and two dev tests. The two tests, `command-hygiene` and `review-lens-agent`, are now inside, so
+the scope check names 176 outside test files and finds nothing escaped. Head ran the SAME 178-file list as base, which
+is a superset of the 176, so that the per-test comparison is like for like. Every gate went 0 → 0. Per test: 6,098
+passed / 0 failed / 1 skipped on both sides; `regressions: []`, `new_failures: []`; `check-regress.mjs verdict` exit 0.
+`regression-report.json` is this run's output verbatim.
 
 **REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** This catches what the outside
 suite catches, nothing more; host load averaged 150–230 during the runs.
