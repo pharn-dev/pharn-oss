@@ -29,3 +29,28 @@ No `apply.py` is tracked on any merged branch. DOCS-PROPOSAL.md files now on the
   VERSION-BADGE GREEN (7.2.1), SKILLS-VERSION-RECORDED GREEN (23 dated `[Unreleased]` entries), CONTRIBUTING-GATES GREEN,
   reconcile `NO_BASELINE` (this worktree never anchored), `node --test`: tests 6244, pass 6243, fail 0, skipped 1,
   duration 2 577 s (host load average 130–320 from other agents' suites; no timing failure).
+
+## Phase A, round 2 (2026-11-03)
+
+- `fix/loop-marker-integrity` (G2) @`65b72253` → `64bddc96`. Conflict: `CHANGELOG.md` only. G2's one `### Fixed` entry
+  (with sub-bullets) moved to the top of `### Fixed`; its second heading dropped. Auto-merged with S:
+  `check-run-isolation{,-core}.mjs` (S's `cred:env:GITHUB_TOKEN` / `CREDENTIAL_ENV_OFF_ACTIONS` and G2's flag-first
+  `parseArgs` + usage line both present), `check-run-isolation.test.mjs`, `entry-gates.test.mjs`, `loop-record.md`,
+  `command-hygiene.test.mjs`, `protect-trusted-paths.test.cjs`, `CLAUDE.md`, `README.md`. One INT edit:
+  `check-run-isolation.mjs`'s header said the witness is state "the Write tool and Bash both reach"; since G2's
+  `RUN_STATE_SUBTREES` deny in `protect-trusted-paths.cjs` only Bash does, and the header now says so (the contract,
+  `loop-record.md`, already did). The protected hook scripts arrived only through the merge: `require-loop-record.cjs`
+  and `protect-trusted-paths.cjs` are byte-equal to G2's head, `enforce-writes-scope.cjs` / `set-writes-scope.cjs`
+  unchanged, `.claude/settings.json` byte-equal to G3's head.
+- `fix/loop-record-honesty` (G6) @`bec9e110` → `e4c1da77`. Conflict: `CHANGELOG.md` only. G6's three `### Fixed`
+  entries moved to the top of `### Fixed`. Auto-merged with G2: `pharn-loop-close.md`, `pre-run-snapshot-core.mjs`,
+  `.dev/guides/floor-gates.md`, `.dev/guides/floor-orchestration.md` (disjoint hunks; read and kept). `loop-closeout.mjs`
+  was touched by G6 only.
+- CHANGELOG check (same script, all six branches' added lines): OK; `[Unreleased]` holds one heading per type, 27
+  entries. No lockfile change.
+
+### Gates after round 2
+
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."`.
+- `npm run check` at `e4c1da77` → exit 0. Every pre-test gate green as in round 1 (reconcile `NO_BASELINE`);
+  `node --test`: tests 6327, pass 6326, fail 0, cancelled 0, skipped 1, duration 1 583 s.
