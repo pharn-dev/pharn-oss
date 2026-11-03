@@ -40,8 +40,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`core.hooksPath` stays fail-closed in an installed project and is read best-effort elsewhere); the instruction files
   `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) in an installed project; in a dev or unsignalled tree
   while a `/pharn-loop` or `/pharn-ship` marker is open, PHARN's own surface and the instruction files; and in every
-  project an entry that is absolute, climbs out with `..`, or is led by `-` (each class refusal tests the relative
-  spelling, so an absolute path to canon passed them all — found by an adversarial review of the first patch). With no product
+  project an entry holding a quote, a back-tick, a backslash or a control character, or one that — whole or in any
+  space-separated part — is absolute, climbs out with `..`, or is led by `-` (each class refusal tests the relative
+  spelling, so an absolute path to canon passed them all, and `src/a.js --plugin=./evil.mjs` reached Step 2b's
+  formatter as two arguments and loaded the plugin — found by adversarial reviews of the first two patches). With no product
   run open, a dev build still scopes `pharn/floor/**` and `.claude/commands/**` (self-hosting) — so the review's
   BLOCKER is narrowed, not closed: a model-approved dev plan can still scope the floor, and what guards that is GATE 1
   and the GitHub review layer. The hook change was applied by the maintainer; the trusted-doc wording is proposed in
@@ -51,11 +53,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`set-writes-scope.cjs` and `pharn/floor/plan-files-core.mjs`, held together by byte-equal pins and parity fixtures
   checked against markdown-it): lines split on `\r\n`, `\r` or `\n`; a comment block (a line beginning `<!--`, through
   the first line holding `-->`) is never the list, an inline comment closed on its line is cut, and an unclosed inline
-  `<!--` is literal text; a raw HTML block inside `## Files` refuses; a second visible `## Files` heading refuses with
-  both line numbers; and any line between two path items other than a blank line or the item's own indented wrapped
-  text — a label in any spelling, a blockquote, a non-path bullet, a setext underline — refuses, so `Excluded:` /
-  `NOT in scope:` can no longer scope the paths under them. 32 of 342 committed plans would be refused; plans are not
-  re-run, so none was edited — new plans write one contiguous list. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
+  `<!--` is literal text outside `## Files` and refuses inside it; a raw HTML block inside `## Files` refuses; a second
+  visible `## Files` heading refuses with both line numbers; an item marker is `-` plus spaces or tabs only (never a
+  no-break space), and an item indented four or more columns past the previous item's text refuses; and any line
+  between two path items other than a blank line or the item's own indented wrapped text — a label in any spelling, a
+  blockquote, a non-path bullet, a setext underline — refuses, so `Excluded:` / `NOT in scope:` can no longer scope
+  the paths under them. Over the 342 committed plans (pre-batch setter vs 7.3.0, dev posture): 293 identical, 44 newly
+  refused (27 split list, 14 CI workflow, 3 canon), 5 already refused and now refused first by the split-list rule, 0
+  silent changes; plans are not re-run, so none was edited — new plans write one contiguous list. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
   reads "not found") and skips comment-hidden headings; `apply-plan-deletions.mjs` reports the reader's own refusal
   reason instead of a fixed "no `## Files` heading".
 
@@ -64,8 +69,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 2026-11-03: **Memory-bank canon leaves the formatters' reach, and `/pharn-dev-build` Step 2b runs `npx --no-install`.**
   `.prettierignore` and `.markdownlint-cli2.jsonc` list `.dev/memory-bank/` and `pharn/memory-bank/`, so canon leaves
   `format:check` / `lint:md` and the promote commands' advisory `--check` lines over canon no longer check anything.
-  Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, and
-  its Step 0 says a setter refusal is a stop for the human — never an `--allow-*` flag the agent adds.
+  Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, take
+  the scoped paths NUL-separated (`join('\0')` + `xargs -0 -r`, so no entry is split at a space or read as quoted),
+  and end each tool's options with `--` (all three treat what follows as paths); its Step 0 says a setter refusal is a
+  stop for the human — never an `--allow-*` flag the agent adds. That block is the only shell consumer of
+  `pharn/.run/writes-scope.json` (`loop-closeout.mjs` already stages through `--pathspec-file-nul` with literal pathspecs).
 
 ## [7.2.1] - 2026-11-02
 

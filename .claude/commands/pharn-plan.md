@@ -210,9 +210,10 @@ applied_lessons: none | [L1, L2] # MANDATORY — floor-checked (Step 4b); `none`
 > installed project the setter refuses a plan that names PHARN's own files (`pharn/**` but `pharn/features/**`,
 > `.claude/**`, `pharn.config.json`) or an instruction file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`), and in every
 > project memory-bank canon, a CI workflow or local action, a git hooks directory and `.mcp.json`, so never name them.
-> **One contiguous list; no labels between items:** any line between two path items other than a blank line or the
-> item's own indented wrapped text — a label, a blockquote, a non-path bullet, prose — makes the setter refuse; group
-> with a blank line only. **Caveat:** a bare, non-blockquote prose line that reads like an exclusion (wording such as
+> **`## Files` lists only files this increment writes; put anything excluded under its own `###` heading after the
+> list.** It is one contiguous list with no labels between items: any line between two path items other than a blank
+> line or the item's own indented wrapped text — a label, a blockquote, a non-path bullet, prose, an unclosed `<!--` —
+> makes the setter refuse; group with a blank line only. **Caveat:** a bare, non-blockquote prose line that reads like an exclusion (wording such as
 > _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off limits_) ends the list, and refuses if a
 > path item follows it. Keep narrative before the list, after it, or as a **path-item description**
 > (``- `path` — note``), and use the `### Explicitly not touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **list items** whose

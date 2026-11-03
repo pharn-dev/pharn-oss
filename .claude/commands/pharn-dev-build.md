@@ -106,18 +106,21 @@ else
   # ALL scoped paths -> prettier. `--ignore-unknown` is REQUIRED, not decorative: without it prettier
   # exits 1 on an extension-less path (e.g. a plan that declares `SKILLS_VERSION`). `.prettierignore`
   # IS honored for explicitly-named paths, so generated artifacts stay protected.
-  # `npx --no-install` (7.3.0): a missing local binary fails here instead of being fetched from the registry.
-  node -p "require('./$SCOPE').scope.join('\n')" | xargs npx --no-install prettier --ignore-unknown --write
+  # 7.3.0: `npx --no-install` — a missing local binary fails here instead of being fetched from the registry; the
+  # paths travel NUL-separated (`join('\0')` + `xargs -0`), so xargs never splits an entry at a space or reads a
+  # quote, and `--` ends each tool's options, so no path is read as a flag (the setter also refuses such entries);
+  # `-r` runs nothing on an empty list (BSD and GNU xargs both accept it).
+  node -e "process.stdout.write(require('./$SCOPE').scope.join('\0'))" | xargs -0 -r npx --no-install prettier --ignore-unknown --write --
   # The .md SUBSET -> markdownlint. `--no-globs` is LOAD-BEARING: markdownlint-cli2 ADDS its config's
   # `globs` (`**/*.md`) to the paths on argv rather than replacing them, so without the flag this line
   # lints and FIXES every markdown file the globs reach — measured `Linting: 1340 files` for ONE named
   # file — and, from a checkout holding other sessions' worktrees, it rewrote files inside them
   # (`ignores` match only at the root). With it: exactly the named files, every `ignores` entry intact.
-  # The explicit non-empty test predates the flag (L16): with an empty list, GNU xargs runs the command
-  # ONCE WITH NO ARGUMENTS, and BSD xargs does not run it. Under `--no-globs` that path-less run lints 0
-  # files (measured), so here the test is defense in depth; it stays load-bearing for eslint below.
-  MD=$(node -p "require('./$SCOPE').scope.filter(p=>p.endsWith('.md')).join('\n')")
-  [ -n "$MD" ] && printf '%s\n' "$MD" | xargs npx --no-install markdownlint-cli2 --no-globs --fix
+  # The empty-list guard predates the flag (L16): with an empty list, GNU xargs runs the command ONCE WITH
+  # NO ARGUMENTS, and BSD xargs does not run it. Since 7.3.0 the guard is `xargs -r` (a shell variable cannot
+  # hold the NUL-separated list). Under `--no-globs` a path-less run lints 0 files (measured), so here the
+  # guard is defense in depth; it stays load-bearing for eslint below.
+  node -e "process.stdout.write(require('./$SCOPE').scope.filter(p=>p.endsWith('.md')).join('\0'))" | xargs -0 -r npx --no-install markdownlint-cli2 --no-globs --fix --
   # The JS SUBSET -> eslint, READ-ONLY (no `--fix`: the finding that forced this line,
   # `no-useless-assignment`, has no autofix, and mechanizing a fixer is a different axis). The same
   # non-empty test is LOAD-BEARING for the same reason (L16), and MEASURED for this linter rather than
@@ -126,8 +129,7 @@ else
   # unrelated pre-existing error as this increment's (L11). This line is PINNED rather than described,
   # because the prose it replaces ("Confirm `npm run lint` is clean") left the invocation open and the
   # open choice was the one that got skipped (L22).
-  JS=$(node -p "require('./$SCOPE').scope.filter(p=>/\.(mjs|cjs|js)$/.test(p)).join('\n')")
-  [ -n "$JS" ] && printf '%s\n' "$JS" | xargs npx --no-install eslint
+  node -e "process.stdout.write(require('./$SCOPE').scope.filter(p=>/\.(mjs|cjs|js)$/.test(p)).join('\0'))" | xargs -0 -r npx --no-install eslint --
 fi
 ```
 

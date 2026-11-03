@@ -228,16 +228,20 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
     in an installed project. With no product marker open, `/pharn-dev-build` scopes `pharn/floor/**`,
     `.claude/commands/**` and root `CLAUDE.md` as before — self-hosting. **Not closed:** a model-approved DEV plan can
     still scope the floor; GATE 1 and the GitHub layer guard that.
-  - **an entry that is not a plain project-relative path, in every posture, with no opt-in**: absolute (POSIX,
-    drive or UNC), climbing out of the project once `..` is collapsed, or led by `-`. Every class refusal tests the
+  - **an entry that is not a plain project-relative path, in every posture, with no opt-in**: one holding a quote, a
+    back-tick, a backslash or a control character, or one that — whole or in any whitespace-separated token — is
+    absolute, climbs out of the project once `..` is collapsed, or is led by `-` (plain spaces are kept). Every class refusal tests the
     relative spelling, so `<abs root>/.dev/memory-bank/…` passed them all and Step 2b's formatters rewrote canon
     through it (adversarial review of the first patch).
   - **the `## Files` reader** (both copies, ★ parity): lines split on `\r\n`, `\r` or `\n`; an HTML comment block (a
     line beginning `<!--`, through the first line with `-->`) is never read, an inline comment closed on its line is
     cut, an unclosed inline `<!--` is literal; a raw HTML block in the section refuses; a second visible `## Files`
     refuses; the path items form ONE contiguous list — any line between two items other than a blank line or the
-    item's own indented wrapped text refuses, naming both lines. Measured: 32 of 342 committed plans would be
-    refused (labels, exclusion intros or prose between items); plans are not re-run, so none was edited.
+    item's own indented wrapped text refuses, naming both lines; an inline `<!--` left open on a line inside the
+    section refuses; an item marker is `-` plus spaces or tabs only, and an item indented four or more columns past
+    the previous item's text refuses. Measured over the 342 committed plans (pre-batch setter vs 7.3.0, dev posture):
+    293 identical, 44 newly refused (27 split list, 14 CI workflow, 3 canon), 5 already refused (control surface) and
+    now refused first by the split-list rule, 0 silent changes; plans are not re-run, so none was edited.
   - **`--check`** (before the mode) runs every parse and refusal and writes nothing; `/pharn-plan` and
     `/pharn-dev-plan` run it on the PLAN they just wrote, so a refusal surfaces at plan time.
   - A refusal is a STOP for the human: an agent never adds an `--allow-*` flag itself (`/pharn-dev-build` Step 0). The

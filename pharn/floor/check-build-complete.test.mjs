@@ -496,8 +496,18 @@ const READER_FIXTURES = [
     want: ["src/a.ts", "src/b.ts"],
   },
   {
-    name: "an unclosed inline `<!--` mid-line is literal — it hides no later heading (review round 2, 2a)",
+    // Round 2 made it literal, so it no longer hides the later heading (2a); round 3 refuses it outright (B2), since a
+    // renderer may hide what follows it.
+    name: "an unclosed inline `<!--` mid-line inside `## Files` refuses (2a, B2)",
     plan: ["## Files", "", "- `src/a.js` — a stray <!-- in prose", "", "### Explicitly not touched", "", "- `pharn/floor/x.mjs`", ""],
+    want: {
+      setter: /line 3 under `## Files` .*opens an HTML comment it does not close/,
+      core: /line 3 under `## Files` opens an HTML comment it does not close/,
+    },
+  },
+  {
+    name: "an unclosed inline `<!--` outside `## Files` is literal text and hides no heading (2a)",
+    plan: ["# PLAN", "", "Prose with a stray <!-- here.", "", "## Files", "", "- `src/a.js`", ""],
     want: ["src/a.js"],
   },
   {
@@ -524,6 +534,49 @@ const READER_FIXTURES = [
     name: "a fence inside a `<div>` refuses (2b)",
     plan: ["## Files", "", "- `src/a.ts`", "<div>", "```", "</div>", "- `pharn/floor/x.mjs`", "```", ""],
     want: { setter: /line 4 under `## Files` .*starts a raw HTML block/, core: /line 4 under `## Files` starts a raw HTML block/ },
+  },
+  // review round 3 (B): an item hidden as lazy paragraph text inside an inline comment, by indentation or by NBSP.
+  {
+    name: "an inline `<!--` left open, then an indented item and the closer, refuses (B2)",
+    plan: ["## Files", "", "- `src/a.js` <!--", "      - `pharn/floor/validate.mjs`", "      -->", ""],
+    want: {
+      setter: /line 3 under `## Files` .*opens an HTML comment it does not close/,
+      core: /line 3 under `## Files` opens an HTML comment it does not close/,
+    },
+  },
+  {
+    name: "an inline `<!--` left open, then an item with the closer at column 0, refuses (B2)",
+    plan: ["## Files", "", "- `src/a.js` <!--", "- `pharn/floor/validate.mjs` -->", ""],
+    want: {
+      setter: /line 3 under `## Files` .*opens an HTML comment it does not close/,
+      core: /line 3 under `## Files` opens an HTML comment it does not close/,
+    },
+  },
+  {
+    name: "an item indented 4+ columns past the previous item's text refuses (B1)",
+    plan: ["## Files", "", "- `src/a.js`", "      - `pharn/floor/validate.mjs`", ""],
+    want: {
+      setter: /line 4 under `## Files` .*is a path item indented four or more columns/,
+      core: /line 4 under `## Files` is a path item indented four or more columns/,
+    },
+  },
+  {
+    name: "a first item indented 4+ columns refuses (B1)",
+    plan: ["## Files", "", "    - `pharn/floor/validate.mjs`", ""],
+    want: {
+      setter: /line 3 under `## Files` .*is a path item indented four or more columns/,
+      core: /line 3 under `## Files` is a path item indented four or more columns/,
+    },
+  },
+  {
+    name: "a no-break space is not an item marker's space, nor an indent: the line interrupts the list (B1)",
+    plan: ["## Files", "", "- `src/a.js`", "  - `pharn/floor/x.mjs`", "- `pharn/floor/y.mjs`", "- `src/b.js`", ""],
+    want: SPLIT(4, 6),
+  },
+  {
+    name: "a tab after the marker and a nested item at the parent's text column are list items",
+    plan: ["## Files", "", "-\t`src/a.ts`", "  - `src/a.test.ts`", "    - `src/a.fixture.ts`", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/a.test.ts", "src/a.fixture.ts", "src/b.ts"],
   },
   {
     name: "bound: a comment block opened inside an item hides past the item's end (the renderer shows b)",

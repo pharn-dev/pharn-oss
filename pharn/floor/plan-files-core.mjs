@@ -78,7 +78,13 @@
 // item, a cue or a list break. An inline `<!-- … -->` closed on the same line, outside a back-tick code span and not
 // backslash-escaped, is cut from the line's `text`. An unclosed `<!--` that does not start a line is literal text —
 // the first patch treated it as a comment running on, which hid a later visible `### Explicitly not touched` heading
-// and scoped the path under it (fail-open; reproduced). A fence line inside a comment block is not a fence.
+// and scoped the path under it (fail-open; reproduced) — and inside `## Files` it REFUSES with its line number (third
+// review: renderers hide the indented or lazy lines after it, so `- a <!--` / `      - b` / `      -->` scoped a hidden
+// `b`). Outside `## Files` it stays literal. A fence line inside a comment block is not a fence.
+// ITEM MARKERS. A path item is `-` followed by spaces or tabs only — a no-break space or other Unicode space is not a
+// marker's space, and is not an indent — then a back-tick path. An item indented four or more columns past the
+// previous item's text column (or at the margin, before the first item) is code or lazy paragraph text to a renderer,
+// so it REFUSES with its line number.
 // RAW HTML BLOCKS. Inside `## Files`, a line beginning (0–3 spaces) with `<` and a tag name, `/`, `?`, `!` + letter or
 // `![CDATA[` starts an HTML block other than a comment (CommonMark types 1, 3–7) that can hide what follows from a
 // renderer (`<div>` + a comment, a fence inside a `<div>`), so the reader REFUSES with the line number instead of
@@ -93,11 +99,15 @@
 // list, and a later path item makes the reader REFUSE, naming both line numbers. A nested path item right under a
 // wrapped continuation (`- a` / `  Excluded:` / `  - b`) refuses the same way. The exclusion cue (Boundary 2) still
 // ends the list where nothing follows; a cue line before the first item with items after it refuses too. This
-// replaces the first patch's colon rule, which a label without a trailing ASCII colon walked past. Measured at 7.2.1:
-// 32 of 342 committed plans would be refused (every one a label or exclusion intro, or prose, between items — the
-// exclusions among them were read correctly before and now refuse loudly); plans are not re-read once built.
+// replaces the first patch's colon rule, which a label without a trailing ASCII colon walked past. Measured at 7.2.1,
+// every committed PLAN / AC-TESTS (342) through the pre-batch setter and the 7.3.0 one, `--from-plan`, dev posture:
+// 293 identical, 44 newly refused — 27 by this rule (a label, exclusion intro or prose between items; the exclusions
+// among them were read correctly before and now refuse loudly), 14 naming a CI workflow, 3 naming canon — 5 already
+// refused (control surface) and now refused first by this rule, 0 silent changes, 0 newly accepted; 0 by the HTML,
+// unclosed-comment, indented-item, second-heading or project-relative refusals. Plans are not re-read once built.
 // Remaining bound: an intro BEFORE the first item is prose, so `Excluded:` there with the items under it is scoped
-// unless it uses one of the cue's words — the `### …` heading stays the form that always excludes.
+// unless it uses one of the cue's words — the plan commands say `## Files` lists only files the increment writes, and
+// the `### …` heading stays the form that always excludes.
 // The comment and HTML fixtures were checked against markdown-it 15.0.3 offline
 // (`.dev/features/plan-scope-hardening/BUILD.md`), not by a test that imports it. Probed bounds, all on the side of
 // FEWER paths: a comment block opened inside a list item hides until its `-->` even past the item's end, where a
@@ -205,7 +215,7 @@ export const AMBIGUOUS_FENCE_REASON =
 /**
  * The refusal reason for a reading's `refusal` (7.3.0 — see the header). Line numbers only, never the line's text:
  * the PLAN is untrusted (P2).
- * @param {{kind: "second-heading" | "split-list" | "html-block", lines: [number, number]}} refusal
+ * @param {{kind: "second-heading" | "split-list" | "html-block" | "unclosed-comment" | "indented-item", lines: [number, number]}} refusal
  */
 export function refusalReason({ kind, lines: [a, b] }) {
   if (kind === "second-heading") {
@@ -213,6 +223,12 @@ export function refusalReason({ kind, lines: [a, b] }) {
   }
   if (kind === "html-block") {
     return `line ${a} under \`## Files\` starts a raw HTML block, which can hide lines from a rendered PLAN — remove it; write the list as plain markdown`;
+  }
+  if (kind === "unclosed-comment") {
+    return `line ${a} under \`## Files\` opens an HTML comment it does not close, which can hide the lines after it from a rendered PLAN — close it on the same line, or remove it`;
+  }
+  if (kind === "indented-item") {
+    return `line ${a} under \`## Files\` is a path item indented four or more columns past the previous item's text (or at the margin, before the first item), which a renderer shows as code or paragraph text, not a list item — indent it at most to the previous item's text column`;
   }
   return `line ${a} under \`## Files\` interrupts the path list and a path item follows it (line ${b}), so the reader cannot tell what that line says about the items after it — write ONE contiguous list with no labels or prose between items, and put excluded paths under a \`### …\` heading after the list`;
 }
@@ -279,7 +295,7 @@ export function scanLines(lines, nested = false) {
   for (const line of lines) {
     if (block) {
       if (line.includes("-->")) block = false;
-      out.push({ fenced: false, comment: true, text: line });
+      out.push({ fenced: false, comment: true, text: line, unclosed: false });
       continue;
     }
     const f = line.match(FENCE_LINE_RE);
@@ -289,17 +305,17 @@ export function scanLines(lines, nested = false) {
       if (fence === null) fence = { char, len: f[2].length, indent: f[1].length };
       else if (closes && (!nested || f[1].length >= fence.indent)) fence = null;
       else if (closes) fence = { char, len: f[2].length, indent: f[1].length }; // a list item ended; a new block opens
-      out.push({ fenced: true, comment: false, text: line });
+      out.push({ fenced: true, comment: false, text: line, unclosed: false });
       continue;
     }
     if (fence !== null) {
-      out.push({ fenced: true, comment: false, text: line });
+      out.push({ fenced: true, comment: false, text: line, unclosed: false });
       continue;
     }
     if (/^ {0,3}<!--/.test(line)) {
       // A comment block (CommonMark HTML block type 2) ends at the first line containing `-->`, this one included.
       if (!line.includes("-->")) block = true;
-      out.push({ fenced: false, comment: true, text: line });
+      out.push({ fenced: false, comment: true, text: line, unclosed: false });
       continue;
     }
     let text = "";
@@ -314,7 +330,8 @@ export function scanLines(lines, nested = false) {
       text += rest.slice(0, s);
       rest = rest.slice(e + 3);
     }
-    out.push({ fenced: false, comment: false, text });
+    // An opener left open on this line: literal text here, flagged for the `## Files` reader to refuse.
+    out.push({ fenced: false, comment: false, text, unclosed: commentStart(rest) !== -1 });
   }
   return out;
 }
@@ -337,6 +354,21 @@ const CUE_RE = /\bnot\W*(touch|writ|modif|edit|chang)|\bexplicitly\W*excluded|\b
 /** A line that starts a raw HTML block other than a comment (CommonMark types 1, 3–7) — see the header. */
 const HTML_BLOCK_RE = /^ {0,3}<(?:[A-Za-z]|\/|\?|![A-Za-z]|!\[CDATA\[)/;
 
+// The columns of a path item's marker and of its text (a tab advances to the next multiple of 4), or null when `line`
+// is not a path item: `-`, then spaces or tabs only (never another whitespace character, such as a no-break space),
+// then a back-tick path. A byte-equal copy lives in set-writes-scope.cjs, pinned by a ✧ test.
+function pathItemColumns(line) {
+  const m = /^([ \t]*)-([ \t]+)`[^`]+`/.exec(line);
+  if (!m) return null;
+  let col = 0;
+  for (const c of m[1]) col = c === "\t" ? col + 4 - (col % 4) : col + 1;
+  const indent = col;
+  const start = col + 1;
+  col = start;
+  for (const c of m[2]) col = c === "\t" ? col + 4 - (col % 4) : col + 1;
+  return { indent, content: col - start > 4 ? start + 1 : col };
+}
+
 /**
  * ONE reading of the `## Files` list: the heading's index (-1 when absent), the paths, their entries, and the
  * refusal (null, a second visible `## Files`, a raw HTML block in the section, or a line that splits the list).
@@ -349,13 +381,14 @@ function readPlanFiles(lines, nested) {
   let stop = -1; // the first line that ended the contiguous list (a path item after it refuses)
   let refusal = null;
   let lastItemIndent = -1;
+  let lastItemContent = 0; // the previous path item's text column (0 before the first item)
   let lastKind = null; // the last non-blank list line: "item" or "continuation"
   let lastIdx = -1;
   const out = [];
   const entries = [];
   let inPathItemBody = false;
   for (let i = 0; i < lines.length; i++) {
-    const { fenced, comment, text: line } = scanned[i];
+    const { fenced, comment, text: line, unclosed } = scanned[i];
     if (fenced || comment) {
       // Fenced code and comment blocks are never a heading, an item or a list break — but a blank fenced line still
       // closes an item's body, so the wrapped-continuation exemption never widens.
@@ -382,23 +415,34 @@ function readPlanFiles(lines, nested) {
       refusal = { kind: "html-block", lines: [i + 1, i + 1] };
       break;
     }
-    const isPathItem = /^\s*-\s+`[^`]+`/.test(line);
-    if (isPathItem) {
-      const indent = line.match(/^\s*/)[0].length;
+    // An inline `<!--` left open on its line: literal to this reader, but a renderer may hide what follows (fail loud).
+    if (unclosed) {
+      refusal = { kind: "unclosed-comment", lines: [i + 1, i + 1] };
+      break;
+    }
+    const cols = pathItemColumns(line);
+    if (cols) {
       if (stop !== -1) {
         refusal = { kind: "split-list", lines: [stop + 1, i + 1] };
         break;
       }
-      if (lastKind === "continuation" && indent > lastItemIndent) {
+      if (lastKind === "continuation" && cols.indent > lastItemIndent) {
         refusal = { kind: "split-list", lines: [lastIdx + 1, i + 1] }; // a nested item under a wrapped line
+        break;
+      }
+      // Four or more columns past the previous item's text (or at the margin, before the first item) is code or lazy
+      // paragraph text to a renderer, never a list item.
+      if (cols.indent >= lastItemContent + 4) {
+        refusal = { kind: "indented-item", lines: [i + 1, i + 1] };
         break;
       }
       seenItem = true;
       inPathItemBody = true;
-      lastItemIndent = indent;
+      lastItemIndent = cols.indent;
+      lastItemContent = cols.content;
       lastKind = "item";
       lastIdx = i;
-      const m = line.match(/^\s*-\s+`([^`]+)`/);
+      const m = line.match(/^[ \t]*-[ \t]+`([^`]+)`/);
       out.push(m[1].trim());
       const del = DELETE_MARKER_RE.test(line);
       entries.push({ path: m[1].trim(), line, delete: del, deleteNearMiss: !del && DELETE_NEAR_MISS_RE.test(line) });
@@ -409,7 +453,7 @@ function readPlanFiles(lines, nested) {
       continue;
     }
     // An indented line while a path item's body is still open (no blank line since the item) is its own wrapped text.
-    if (inPathItemBody && /^\s+\S/.test(line)) {
+    if (inPathItemBody && /^[ \t]+\S/.test(line)) {
       lastKind = "continuation";
       lastIdx = i;
       continue;

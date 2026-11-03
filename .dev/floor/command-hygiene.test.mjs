@@ -165,11 +165,12 @@ test("✧ the SKIP region is honored, and only inside its markers", () => {
 // Honest scope, and it is narrow: this pins that the command's Step 2b block INVOKES each member. It is
 // a VOCABULARY assertion like the FORBIDDEN rules above — it cannot prove a run executed the step (Step
 // 2b is ADVISORY orchestration, outside the PreToolUse gate), and a mistyped flag would satisfy it.
-// 7.3.0: each runs as `npx --no-install <tool>` (a missing local binary fails instead of being fetched), pinned below.
+// 7.3.0: each runs as `xargs -0 -r npx --no-install <tool> … --` (NUL-separated paths, nothing on an empty list, a
+// missing local binary fails instead of being fetched, and `--` ends the tool's options), pinned below.
 const STEP_2B_GATES = [
-  { tool: "prettier", re: /\|\s*xargs\s+npx\s+--no-install\s+prettier\b/ },
-  { tool: "markdownlint-cli2", re: /\|\s*xargs\s+npx\s+--no-install\s+markdownlint-cli2\b/ },
-  { tool: "eslint", re: /\|\s*xargs\s+npx\s+--no-install\s+eslint\b/ },
+  { tool: "prettier", re: /\|\s*xargs\s+-0\s+-r\s+npx\s+--no-install\s+prettier\b/ },
+  { tool: "markdownlint-cli2", re: /\|\s*xargs\s+-0\s+-r\s+npx\s+--no-install\s+markdownlint-cli2\b/ },
+  { tool: "eslint", re: /\|\s*xargs\s+-0\s+-r\s+npx\s+--no-install\s+eslint\b/ },
 ];
 
 function step2bBlock() {
@@ -224,15 +225,22 @@ test("✧ both formatters' ignore files list both memory-bank canon roots (Step 
   }
 });
 
-// The non-empty guard is what makes the path-less case unreachable on an empty list under GNU xargs,
-// so it is asserted for every SUBSET gate — the ones that filter the scope before piping it.
-for (const gate of STEP_2B_GATES.filter((g) => g.tool !== "prettier")) {
-  test(`✧ Step 2b guards its ${gate.tool} subset against the empty list (L16)`, () => {
-    assert.match(
-      step2bBlock(),
-      /\[\s-n\s+"\$\w+"\s\]\s+&&/,
-      `an empty subset must not reach ${gate.tool}: GNU xargs runs the command once with NO arguments`
-    );
+// The empty-list guard is what makes the path-less case unreachable under GNU xargs; since 7.3.0 it is `xargs -r`
+// (the list is NUL-separated, which a shell variable cannot hold). And every invocation is NUL-safe and ends its
+// options with `--` (review round 3: `- \`src/a.js --plugin=./evil.mjs\`` reached prettier as two arguments and
+// loaded the plugin) — prettier, markdownlint-cli2 and eslint each treat everything after `--` as a path (verified:
+// a `--plugin=…` after `--` is reported as a missing file, and the plugin does not run).
+for (const gate of STEP_2B_GATES) {
+  test(`✧ Step 2b's ${gate.tool} line is NUL-safe, guarded against the empty list, and ends options with -- (L16)`, () => {
+    const lines = step2bBlock()
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#") && gate.re.test(l));
+    assert.equal(lines.length, 1, `exactly one prescribed ${gate.tool} line`);
+    const [line] = lines;
+    assert.match(line, /require\('\.\/\$SCOPE'\)\.scope\b.*\.join\('\\0'\)\)/, `${gate.tool}: the paths are joined with NUL`);
+    assert.match(line, /\bprocess\.stdout\.write\(/, `${gate.tool}: no trailing newline after the last NUL (node -p adds one)`);
+    assert.match(line, /\s--$/, `${gate.tool}: \`--\` ends the tool's options, so no path is read as a flag`);
+    assert.doesNotMatch(line, /join\('\\n'\)/, `${gate.tool}: never newline-separated`);
   });
 }
 

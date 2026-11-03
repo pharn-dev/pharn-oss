@@ -98,9 +98,11 @@ script, …)".
 Add one bound at the end of the bullet:
 
 ```text
-  An entry that is absolute, climbs out of the project with `..`, or is led by `-` is refused in every project (7.3.0).
-  The `## Files` reader skips HTML comment blocks, refuses a raw HTML block, a second `## Files` heading and any line
-  between two path items (7.3.0); it is still not a CommonMark parser — `plan-files-core.mjs`'s header lists the cases
+  An entry holding a quote, a backslash or a control character, or one that — whole or in any space-separated part —
+  is absolute, climbs out of the project with `..`, or is led by `-`, is refused in every project (7.3.0).
+  The `## Files` reader skips HTML comment blocks, refuses a raw HTML block, an inline `<!--` left open, an item
+  indented four or more columns past the previous item's text, a second `## Files` heading and any line between two
+  path items (7.3.0); it is still not a CommonMark parser — `plan-files-core.mjs`'s header lists the cases
   where it hides more than a renderer shows, which only ever removes paths, and an intro before the first item is
   prose unless it uses an exclusion-cue word. The instruction-file refusal matches three basenames only (`CLAUDE.md`,
   `CLAUDE.local.md`, `AGENTS.md`); another agent's instruction file under another name is not refused. `.mcp.json` is

@@ -1044,17 +1044,18 @@ test("installed project: the neighbours of the class are NOT refused (controls)"
 });
 
 test("★ a core.hooksPath in the repository's own .git/config is reserved, in any letter case, quoted or commented", () => {
-  for (const [config, hooked] of [
+  for (const [config, hooked, refusal] of [
     ["[core]\n\thooksPath = tools/git-hooks\n", "tools/git-hooks/pre-commit"],
     ['[Core]\n  HOOKSPATH = "my hooks" # the team hooks\n', "my hooks/pre-push"],
     ["[core] hookspath=.config/hooks ; trailing\n", ".config/hooks/commit-msg"],
-    ['[core]\n\thooksPath = "a\\\\b"\n', "a\\b/pre-commit"],
+    // Since 7.3.0 a plan entry holding a backslash is refused before this class (not a plain project-relative path).
+    ['[core]\n\thooksPath = "a\\\\b"\n', "a\\b/pre-commit", /entries that are not plain project-relative paths/],
   ]) {
     const t = execTree();
     gitDirWithConfig(t.cwd, config);
     const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", hooked)]);
     assert.equal(r.status, 1, `${JSON.stringify(config)}: ${r.stderr}`);
-    assert.match(r.stderr, EXEC_REFUSAL);
+    assert.match(r.stderr, refusal || EXEC_REFUSAL);
     const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", "tools/other.sh")]);
     assert.equal(ok.status, 0, `control, ${JSON.stringify(config)}: ${ok.stderr}`);
   }
@@ -1690,6 +1691,15 @@ for (const posture of Object.keys(SEEDS)) {
       "C:/Windows/x.txt",
       "\\\\server\\share\\x.txt",
       "--plugin=evil.js",
+      // review round 3 (A): a whitespace-separated token, a quote, a backslash or a control character
+      "src/a.js --plugin=./pharn/features/probe/evil.mjs",
+      `src/a.md ${checkout}/.dev/memory-bank/lessons-learned.md`,
+      `"${checkout}/.dev/memory-bank/lessons-learned.md"`,
+      "'..'/x/.dev/memory-bank/lessons-learned.md",
+      "src\\a.ts",
+      "src/a\u0001.ts",
+      "src/a\u007f.ts",
+      "src/a\tb.ts",
     ];
     const flags = ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config", "--allow-instruction-files"];
     for (const p of spellings) {
@@ -1702,8 +1712,13 @@ for (const posture of Object.keys(SEEDS)) {
       }
     }
     // controls: in-project spellings that only LOOK unusual are judged by the class refusals, not this one
-    const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "src/../src/a.ts", "./src/b.ts", "a-b/c.ts", "src/-x.ts")]);
+    const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "src/../src/a.ts", "./src/b.ts", "a-b/c.ts", "src/-x.ts", "docs/my notes.md")]);
     assert.equal(ok.status, 0, ok.stderr);
+    assert.deepEqual(
+      scopeOf(t.cwd),
+      ["src/../src/a.ts", "./src/b.ts", "a-b/c.ts", "src/-x.ts", "docs/my notes.md"],
+      "a plain space is kept"
+    );
   });
 }
 
@@ -1714,8 +1729,8 @@ function namedFunctionSource(file, name) {
   return m[0].replace(/^export /, "");
 }
 const CORE = join(__dirname, "..", "..", "pharn", "floor", "plan-files-core.mjs");
-test("✧ 7.3.0 PIN: scanLines(), commentStart() and FENCE_LINE_RE are byte-equal to plan-files-core.mjs's", () => {
-  for (const name of ["scanLines", "commentStart"]) {
+test("✧ 7.3.0 PIN: scanLines(), commentStart(), pathItemColumns() and FENCE_LINE_RE are byte-equal to plan-files-core.mjs's", () => {
+  for (const name of ["scanLines", "commentStart", "pathItemColumns"]) {
     assert.equal(namedFunctionSource(SETTER, name), namedFunctionSource(CORE, name), `${name}() has drifted — update both copies (L31)`);
   }
   const fenceRe = (file) => {
