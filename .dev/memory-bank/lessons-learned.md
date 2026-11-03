@@ -2484,3 +2484,18 @@ type: floor · concepts: [test-fixtures, scratch-tree, copy-list, dependency-set
 - commit: `ea11383a65ce3901f4867ce34025ba1ffaac2530`
 - source: .dev/features/ac-tests-style-gate/REVIEW.md § Proposed lesson candidate; .dev/features/ac-tests-style-gate/PLAN.md § Notes — mid-run fast-forward and re-anchor
 - promoted: 2026-11-02 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L82 — L14's reason was Perl's `$`, not JavaScript's — the guard-first rule holds because validators trim before the anchored regex
+
+type: floor · concepts: [regex-anchoring, control-char-guard, lesson-correction, live-measurement]
+
+**Lesson.** In JavaScript, `$` without the `m` flag matches only at end of input: `/^P[0-7]$/.test("P2\n")` is false (measured, Node 24). L14 said it is true, and three floor comments repeated it. The hole L14 guards is real but sits elsewhere: a validator that `.trim()`s or line-splits before its anchored regex (`/^P[0-7]$/.test("P2\n".trim())` is true), which is exactly what L14's own `RULE_ID_OK` does. Keep the guard first; state that reason, and measure a regex claim before promoting it.
+
+**Why it matters.** This corrects the reason [[L14]] gives, not its rule: the control-char guard still runs first, and it is load-bearing exactly where a value is trimmed or split before the anchored regex. The false reason had spread into `lessons-index-core.mjs`, `mark-phase.mjs` and `merge-findings.mjs` comments (corrected in 7.3.0). Canon is append-only, so L14's bytes stay: read it together with this entry, as [[L35]] is read with [[L77]]. **Bound (P0):** discipline only; nothing checks a regex claim in canon against a measurement.
+
+**Provenance.**
+
+- feature: `lesson-heading-parser`
+- commit: `5a307fb7bcdef7e5ed20fdeb01cd9c7999802bb2`
+- source: .dev/features/lesson-heading-parser/REVIEW.md R6
+- promoted: 2026-11-03 by the maintainer's owner-run docs script for the 2026-11-03 audit batch (the candidate was validated with `.dev/floor/check-provenance.mjs`; not a `/pharn-dev-memory-promote` run).

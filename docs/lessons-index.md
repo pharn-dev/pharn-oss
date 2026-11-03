@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-81 lessons · 81 tagged · 0 malformed · 0 untagged · ~56802 tokens total
+82 lessons · 82 tagged · 0 malformed · 0 untagged · ~57214 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -105,4 +105,5 @@ L78 | process  | relocation,sweep-scope,dated-record,migration,false-record     
 L79 | contract | overclaim,run-state,mirrored-state,writes-scope                                                | A "cannot omit" claim over an output built from .pharn/ state must name the write tools, not only Bash | 2026-10-25 | ~477
 L80 | process  | test-blindspot,default-values,fixture-environment,lesson-recurrence,floor-escalation           | L41 recurs through a fixture's environment: when every fixture copies the dev repo's own configuration, an install's default posture is tested by nothing | 2026-11-02 | ~509
 L81 | floor    | test-fixtures,scratch-tree,copy-list,dependency-set,second-copy                                | A test that copies a hand-picked list of floor modules into a scratch tree holds a second copy of their imports — a new import breaks it with no edit to the test | 2026-11-02 | ~553
+L82 | floor    | regex-anchoring,control-char-guard,lesson-correction,live-measurement                          | L14's reason was Perl's `$`, not JavaScript's — the guard-first rule holds because validators trim before the anchored regex | 2026-11-03 | ~412
 ```

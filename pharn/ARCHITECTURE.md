@@ -115,8 +115,9 @@ Server-Actions-only check → Q3 → framework-specific. Every capability PHARN 
 ### 3.3 Hook — a separate, privileged, deterministic class
 
 Hooks are **not** Capabilities. No `model_tier`, not LLM-invoked. They are the floor (§2). They
-must stay a separate class precisely because they are the one layer prompt injection cannot reach
-— collapsing them into Capability would erase the most important line in the system.
+must stay a separate class precisely because they are the one layer a prompt cannot argue with — a `Bash` write
+can still edit a hook script (`pharn/CONSTITUTION.md`, "How this file is enforced"; `pharn/LIMITS.md §6`) —
+and collapsing them into Capability would erase the most important line in the system.
 
 ---
 
@@ -218,7 +219,7 @@ manifest exists** (conditional; specified, ships with the guarded surface).
 **Eval.** `{case, expected}`, one runner, deterministic-vs-judge per Capability. Evals are
 regression suite and spec (P1). `validate` enforces presence and the `rule_id` binding.
 
-**State.** Memory-bank = two canonical markdown files at the user's repo root
+**State.** Memory-bank = two canonical markdown files in the user's project, under `pharn/memory-bank/`
 (`pharn/memory-bank/lessons-learned.md`, `pharn/memory-bank/pattern-library.md`), git-committed. `/pharn-plan`
 is the read side (mandatory `applied_lessons`); `/pharn-memory-promote` is the write side.
 Promotion of a lesson/pattern to canon is a **gated** action with provenance per entry (which run /
@@ -325,7 +326,7 @@ Every finding from any Capability has this exact shape. The split between **floo
 ```yaml
 finding:
   # --- floor-verifiable (trusted: produced by enum-check / path-resolution) ---
-  type: "<enum>" # FINDING | CONSTITUTION_VIOLATION | ...
+  type: "<enum>" # FINDING | CONSTITUTION_VIOLATION
   rule_id: "<P0..P7 | checker ID>" # MUST exist in the roster AND have an eval (P1, P4)
   severity: blocking | important | minor # enum; advisory when LLM-assigned (see fix #3)
   file: "<path:line>" # resolves to a real location
