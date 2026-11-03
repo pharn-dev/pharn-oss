@@ -278,19 +278,31 @@ and it fails open. It does nothing unless your settings register it under `Stop`
 `settings.json` the installer preserved still needs that entry copied by hand — `pharn update` never
 edits it.
 
-Copy the wiring **as it ships**, anchored on the project-directory placeholder:
+Copy the wiring **as it ships**, anchored on the project-directory placeholder and set to block on failure:
 
 ```json
-"command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/protect-trusted-paths.cjs"
+{
+  "type": "command",
+  "command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/protect-trusted-paths.cjs",
+  "onFailure": "block"
+}
 ```
 
 Claude Code runs a hook in Claude's _current_ directory, so a relative `node .claude/hooks/…` stops
-starting after any `cd` into a subdirectory: node exits 1, which Claude Code treats as a non-blocking
-error, and **both guards are then silently off**. That was the shipped form until `6.1.0`, and it is
+starting after any `cd` into a subdirectory: node exits 1. Without `onFailure`, Claude Code treats that as a
+non-blocking error, and **both guards are then silently off**. That was the shipped form until `6.1.0`, and it is
 measured, not theorised. Upgrading an older install is ordered: run `pharn update` first, then change
 these two commands — the anchored wiring over pre-`6.1.0` hooks regresses both guards, so roll back in the
 reverse order. Each guard judges the git working tree that contains Claude's current directory;
 [`pharn/LIMITS.md` §7](./pharn/LIMITS.md) states the bounds that remain.
+
+Since `7.3.0` both guard entries also carry `"onFailure": "block"`. On Claude Code 2.1.295 or later, a write
+is then blocked when a guard cannot start (a wrong path, no `node`), exits with a code other than 0 or 2, or
+times out. Without the field, that write goes through. The `Stop` hook does not carry the field: it fails open
+by design, and the field has no effect on a `Stop` hook. The Claude Code docs do not say what a client older than
+2.1.295 does with the key. On 2.1.312, `claude doctor` reports nothing for an unknown hook-handler key, so an older
+client most likely ignores it and keeps the old fail-open behaviour. That has not been measured on an older client.
+An existing install whose `settings.json` the installer preserved needs the field added by hand.
 
 ---
 
@@ -330,7 +342,8 @@ judgment is **advisory**.
   scope; an approved spec is pinned, so later body drift is detectable; and the verify verdict is computed from a
   gate map the gate runner wrote, not one a model typed. [The full table](./docs/guarantees.md#guaranteed-vs-advisory)
   names the check behind each guarantee and its bounds.
-- **Detected, not prevented.** A write issued through `Bash` passes neither write guard. `/pharn-verify` detects a
+- **Detected, not prevented.** A write issued through `Bash`, or through an MCP server's tool (an
+  `mcp__<server>__<tool>` name, which is none of the four tools above), passes neither write guard. `/pharn-verify` detects a
   **non-adversarial** one that reached a path the active scope would have denied, with the exceptions
   [that guarantee](./docs/guarantees.md#guaranteed-vs-advisory) lists, and fails its verdict; it does not stop the
   write.
@@ -396,7 +409,7 @@ The architecture is specified in four documents:
 4. [`pharn/LIMITS.md`](./pharn/LIMITS.md) — what PHARN does **not** guarantee.
 
 These trusted docs are protected from edits through Claude Code's Write/Edit/MultiEdit/NotebookEdit tool
-surface. Bash writes are outside that protection (see [Current limitations](./docs/limitations.md#current-limitations)). All
+surface. Bash writes and writes through an MCP server's tools are outside that protection (see [Current limitations](./docs/limitations.md#current-limitations)). All
 four are copied into an install, under `pharn/` (before 7.0.0 the last two sat at the project root).
 
 ---
