@@ -167,6 +167,8 @@ human approval.
 - `pharn/floor/stage-regress.test.mjs` — two `other-run` tests re-opened the loop marker with a second `--open`; under D1 a re-open is `--close` then `--open` (found by `npm test` in the apply.py proof clone) — product floor tests
 - `pharn/floor/run-marker.test.mjs` — two WIRING tests execute the loop's `--open` line and must substitute `<mode>` (found by the build's first `npm test`) — product floor tests
 - `.dev/guides/floor-gates.md` — A1: the isolation CLI usage line — dev apparatus
+- `.claude/hooks/require-loop-record.cjs` — MAINTAINER-APPLIED (apply.py, owner, 2026-11-03), committed in `bc9c9bc8` before the re-anchor; listed after the fact so `/pharn-dev-regress`'s scope check reads the truth (the `hook-hardening-batch` precedent); no write tool can reach it — hook
+- `.claude/hooks/protect-trusted-paths.cjs` — MAINTAINER-APPLIED likewise (A2), same commit — hook
 - `README.md` — one sentence: the line that accepts host execution is not pre-approved — repo meta
 - `CHANGELOG.md` — `## [Unreleased]` entries — repo meta
 
