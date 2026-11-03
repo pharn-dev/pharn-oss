@@ -10,6 +10,21 @@ the Step 2b formatters rewrote canon through the absolute path), an unclosed inl
 heading (a regression of the first patch), raw HTML blocks, lone-CR line endings, and labels the colon rule missed.
 The colon rule was replaced by the one-contiguous-list rule, and the hook was re-patched from the same BEFORE pin.
 
+Round 3 (orchestrator, after a clone-tested re-review of round 2): (A) an entry with spaces or quotes reached Step
+2b's `xargs` as separate arguments — ``- `src/a.js --plugin=./pharn/features/probe/evil.mjs` `` made prettier load the
+plugin, ``- `src-a.md <abs canon>` `` rewrote canon (both reproduced in the round-2 clone). The setter now refuses
+quotes, back-ticks, backslashes and control characters, and tests every whitespace-separated token of an entry for the
+absolute / escaping / leading-`-` shapes (plain spaces are kept); Step 2b passes paths NUL-separated
+(`join('\0')` + `xargs -0 -r`) and ends each tool's options with `--` (prettier, markdownlint-cli2 and eslint all treat
+what follows as paths: a `--plugin=…` after `--` is reported as a missing file and the plugin does not run). Step 2b is
+the only shell consumer of `pharn/.run/writes-scope.json`; `loop-closeout.mjs` stages through `--pathspec-file-nul`
+with literal pathspecs. (B) a path item hidden as lazy paragraph text inside an inline comment
+(``- `a` <!--`` / ``      - `b` `` / `      -->`, or with a no-break space indent) was scoped: an item marker is now `-`
+plus spaces or tabs only, an item indented four or more columns past the previous item's text refuses, and an inline
+`<!--` left open on a line inside `## Files` refuses. (C) both plan commands now say "`## Files` lists only files this
+increment writes; put anything excluded under its own `###` heading after the list". (D) the corpus was re-measured
+through the full setter (below).
+
 ## What landed (Write/Edit tool, inside the plan's `## Files`)
 
 - `pharn/floor/plan-files-core.mjs` — `LINE_SPLIT_RE` (`\r\n|\r|\n`), `scanLines` / `commentStart` (CommonMark comment
@@ -33,12 +48,14 @@ The colon rule was replaced by the one-contiguous-list rule, and the hook was re
 
 ## Measurements
 
-- **Corpus** (all 342 committed `PLAN.md` / `AC-TESTS.md` at 7.2.1, the pre-batch reader vs the round-2 one): 0
-  carry two visible `## Files`; with code-span-aware comment handling every list reads as before (a naive stripper
-  broke `spec-template/PLAN.md`, whose `<!--` sits in a code span); 32 would be refused by the contiguous-list rule
-  (labels, exclusion intros, prose, lazy or post-blank continuations between items — the nested-under-a-wrapped-line
-  check adds one of them). The first patch's colon rule counted 22 (15 before `**Label:**` emphasis was counted); a
-  widened cue word list instead silently truncated 3 more plans.
+- **Corpus, round 3, full setter** (every committed `PLAN.md` / `AC-TESTS.md` at `dd0bb3d3`, 342, through the
+  pre-batch setter and the round-3 setter, `--from-plan`, a dev-posture temp tree with no marker; `scratchpad/g1/
+corpus3.mjs`): 293 identical; 44 newly refused — 27 split list, 14 CI workflow, 3 canon; 5 already refused by the
+  control-surface check and now refused first by the split-list rule; 0 silent changes; 0 newly accepted; 0 by the
+  HTML-block, unclosed-comment, indented-item, second-heading or project-relative refusals. (The reader-only count was
+  32 — the 27 plus the 5. The first patch's colon rule counted 22, 15 before `**Label:**` emphasis; a widened cue word
+  list instead silently truncated 3 more plans. With code-span-aware comment handling every list reads as before; a
+  naive stripper broke `spec-template/PLAN.md`, whose `<!--` sits in a code span.)
 - **markdown-it 15.0.3 oracle, round 2** (offline probe, `scratchpad/g1/mdit2.mjs`; the visible `<li>` code items
   under a visible `<h2>Files</h2>`): agreement on the comment-hidden heading, a comment block holding items, a one-line
   comment block, `<!-->`, `<!--->`, an unclosed comment block, `<!--` in a code span, a trailing inline comment, the
@@ -58,17 +75,20 @@ The colon rule was replaced by the one-contiguous-list rule, and the hook was re
 
 ## apply.py proof (L26 — a real clone with its own configs and `node_modules`)
 
-- Round 2 script `.dev/features/plan-scope-hardening/apply.py` (uncommitted), sha256
-  `eb65e01ed3f8d525a0c676a47b2648e9f00b523b4058415b198f5225e5cc4b53`, byte-identical (`cmp`) to the generated script
+- Round 3 script `.dev/features/plan-scope-hardening/apply.py` (uncommitted), sha256
+  `8144ec71d232b280dd0de5b9347e68de6f237c046a8e00faeb97dcc1d8bb0736`, byte-identical (`cmp`) to the generated script
   the clone ran (only `ROOT` differed there). Target `.claude/hooks/set-writes-scope.cjs`: BEFORE
   `a2fc1f0bac649f3558fc79c24c45bb50c7481a6f5d835b42fa35832a905a9d9b` (unchanged), AFTER
-  `faaf76e41c4676d5f1c22406578c7e6f246eecffbc428d5c628b3c9442059ad2`.
-- `git clone --branch fix/plan-scope-hardening` from origin at `5b18fdbf`, `npm ci`, the script run with `ROOT` at the
-  clone: `apply.py: all targets patched and verified`, exit 0; a second run exits 1 (BEFORE mismatch, nothing
-  written). `prettier --check` and `eslint` over the patched hook clean; every hook suite 601/601; with the patch
-  committed in the clone (as the owner will), `npm run check` exit 0 — every gate GREEN, `npm test` 6221 pass, 0 fail,
-  1 skipped of 6222 (2387 s).
-- Round 1 (superseded, never applied): sha256 `132b1eb7…`, AFTER `9ef2028b…`; its clone run is the first proof.
+  `ecd2812e66910f0e15f1169efb03de487fc70d8ef02ec93f1393bba7a6ffafa2`.
+- `git clone --branch fix/plan-scope-hardening` from origin at `56cdc0f1`, `npm ci`. BEFORE the patch (pre-batch
+  setter, round-3 Step 2b), the four round-3 entries pass the setter and Step 2b runs, but the plugin does not run and
+  canon is not rewritten (the NUL-safe `--` form alone holds). The script then: `apply.py: all targets patched and
+verified`, exit 0; a second run exits 1. AFTER the patch the setter refuses all four (exit 1) and Step 2b is never
+  reached. In the round-2 clone (round-2 setter, newline-separated Step 2b) the same probe had the plugin run and canon
+  rewritten. `prettier --check` and `eslint` over the patched hook clean; with the patch committed in the clone (as
+  the owner will), `npm run check` exit 0 — every gate GREEN, `npm test` 6222 pass, 0 fail, 1 skipped of 6223 (2662 s).
+- Round 2 (superseded, never applied): sha256 `eb65e01e…`, AFTER `faaf76e4…`, clone `npm run check` exit 0. Round 1
+  (superseded): sha256 `132b1eb7…`, AFTER `9ef2028b…`.
 - The Write tool turns the hook's backslash-u-FEFF escape into the BOM character; the generated script carries the
   character and restores the six characters with `chr(0xFEFF)` before hashing, so a transcription is checked by `cmp`
   and the payload by the AFTER hash.
