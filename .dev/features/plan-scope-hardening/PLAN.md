@@ -113,7 +113,7 @@ Layered after CONTROL_SURFACE, each writing nothing and exiting 1:
 | class                                                                                                       | posture                                                                                 | opt-in (BEFORE the mode)                |
 | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------- |
 | canon — `pharn/memory-bank/**`, `.dev/memory-bank/**` (`CANON_SUBTREES`, ✧ = protect's)                     | every                                                                                   | none — the promote command is the route |
-| exec config — `.github/workflows/**`, `.github/actions/**`, `.husky/**`, `core.hooksPath` dirs, `.mcp.json` | every                                                                                   | `--allow-exec-config`                   |
+| exec config — `.github/workflows/**`, `.github/actions/**`, `.husky/**`, `core.hooksPath` dirs, `.mcp.json` | every (`core.hooksPath` fail-closed when installed, best-effort otherwise)              | `--allow-exec-config`                   |
 | PHARN surface — `isReserved()` (unchanged)                                                                  | installed; dev/unsignalled while a `pharn-loop` or `pharn-ship` marker is open (< 24 h) | `--allow-pharn-surface`                 |
 | instruction files — basename `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, any depth, case-folded            | installed; dev/unsignalled while a `pharn-loop` or `pharn-ship` marker is open          | `--allow-instruction-files` (new)       |
 
@@ -141,11 +141,19 @@ binary fails instead of fetching from the registry). `.prettierignore` and `.mar
 `.dev/memory-bank/` and `pharn/memory-bank/`. Consequence, stated: canon leaves `format:check` / `lint:md`, and the two
 promote commands' advisory `--check` lines over canon become no-ops (G9 owns those commands).
 
-### Decisions taken (recommended; confirm or override at GATE 1)
+### Decisions (GATE 1 — decided by the batch orchestrator (a model) under the owner's delegation, 2026-11-03)
 
 1. **Colon rule = refuse, not silently end, not a wider word list.** P5 (a structural test, not wording), loud
    (L28), never opens scope. Cost measured: 15 of 342 historical plans would be refused at the next run of their
-   build; all 15 used the `:` as a group label, which the message's remedy fixes in one edit.
+   build; all 15 used the `:` as a group label (historical plans are not re-run, so none is edited). **GATE 1
+   conditions:** (a) the refusal surfaces at PLAN time — neither plan command reads `## Files` today, so each gains
+   one pinned line, `node .claude/hooks/set-writes-scope.cjs --check --from-plan <PLAN.md>` (a new setter
+   modifier: every parse and refusal, nothing written, placed BEFORE the mode like the opt-ins so a granted
+   line's `*` cannot carry it), and a non-zero exit means fix the PLAN before halting; `/pharn-loop`'s
+   `allowed-tools` gains the one matching grant (a line in a G2-owned file — flagged to the orchestrator); (b)
+   `pharn-plan.md` and `pharn-dev-plan.md` state the rule in one sentence. The orchestrator's wording suggested
+   "group with a blank line or sub-heading text"; a heading ENDS the list (Boundary 1), so the sentence says: group
+   with a blank line or a label line that does not end in `:`.
 2. **Instruction files at any depth**, not root only — Claude Code loads a nested `CLAUDE.md` when it reads files
    there; a membership test on the basename costs one line.
 3. **A new flag `--allow-instruction-files`** rather than folding the class into `--allow-pharn-surface` (whose name
@@ -157,11 +165,12 @@ promote commands' advisory `--check` lines over canon become no-ops (G9 owns tho
 5. **Marker-gated, not plan-path-gated**, for the dev-posture PHARN-surface refusal (the orchestrator's design): a
    rule keyed on "plan under `pharn/features/`" would also refuse the unsignalled temp trees several floor tests
    build, for no gain against a run that keeps its own marker.
-6. **`core.hooksPath` is read in every posture**, with the existing fail-closed rule (an unreadable git config
-   file refuses the plan). Consequence, stated: a dev checkout with an unreadable `/etc/gitconfig` or user config
-   can no longer scope ANY plan until it is fixed or the operator passes `--allow-exec-config`; the existing
-   control test that pinned the dev posture as unaffected by an unreadable config is rewritten. The alternative
-   (fixed dirs only in dev) keeps a custom hooks dir writable from a dev plan.
+6. **CHANGED at GATE 1: `core.hooksPath` is read fail-closed in the INSTALLED posture only.** In a dev or
+   unsignalled tree the fixed dirs (`.github/workflows`, `.github/actions`, `.husky`) and `.mcp.json` are refused,
+   plus every `core.hooksPath` the reader could read, best-effort: an unreadable git config file there is skipped,
+   never a refusal of the plan. The existing "dev unaffected by unreadable git config" control test is kept,
+   adjusted only for the fixed dirs. Reason (orchestrator): worktree / odd layouts in self-hosting must not halt
+   every build; dev has GATE 1 + reconcile.
 
 ## Files
 
@@ -180,7 +189,9 @@ promote commands' advisory `--check` lines over canon become no-ops (G9 owns tho
   controls rewritten for the every-posture classes.
 - `.claude/commands/pharn-dev-build.md` — `npx --no-install` on the three Step 2b tools; Step 0 refusal = STOP.
 - `.claude/commands/pharn-plan.md` — the `## Files` rules: comments are not read, one `## Files`, no `:` intro over
-  items, and the refused classes.
+  items, and the refused classes; the plan-time `--check` line (Step 4b).
+- `.claude/commands/pharn-dev-plan.md` — the plan-time `--check` line (Step 4) and the one-sentence rule.
+- `.claude/commands/pharn-loop.md` — one `allowed-tools` grant for the plan-time `--check` line.
 - `.dev/floor/command-hygiene.test.mjs` — Step 2b gate pins accept `--no-install`; ✧ both ignore files list both
   canon dirs.
 - `.prettierignore` — both canon dirs.
@@ -201,8 +212,8 @@ promote commands' advisory `--check` lines over canon become no-ops (G9 owns tho
 
 - `.github/workflows/release.yml` — its :34-36 comment ("a /pharn-dev-build plan may scope it") goes stale; group S
   edits that file, and this plan cannot name it once the patched setter is live.
-- `.claude/commands/pharn-loop.md`, `pharn-dev-memory-promote.md`, `pharn-memory-promote.md` — G2 / G9 own them;
-  the promote prose naming a `--from-plan` canon route is G9's overflow item.
+- `.claude/commands/pharn-dev-memory-promote.md`, `pharn-memory-promote.md` — G9 owns them; the promote prose
+  naming a `--from-plan` canon route is G9's overflow item. `pharn-loop.md` is touched by its one grant line only.
 - `pharn/floor/reconcile-ignore.json` — G7 (workflows into `always_reconciled`).
 - the four trusted docs — text goes to `DOCS-PROPOSAL.md`.
 
@@ -239,4 +250,4 @@ No capability (`role:`) is added or changed; the floor modules and the hook carr
 
 ## Open questions (HALT)
 
-- none — the six decisions above carry a recommendation each and are confirmed or overridden at GATE 1.
+- none — the six decisions were settled at GATE 1 (above).
