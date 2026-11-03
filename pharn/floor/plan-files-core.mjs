@@ -65,39 +65,43 @@
 // fence) — and REFUSES when the two lists differ. Measured over the 281 committed PLAN.md / AC-TESTS.md files
 // at 6.61.0: every one reads identically both ways, and identically to the pre-6.61.0 reader.
 // BOUND (P0): this is NOT a CommonMark parser. An indented code block (a 4+-space item line after a paragraph
-// and a blank line), an HTML block other than a comment (`<pre>`, `<div>`), a setext heading and a `*`/`+` bullet
-// are read as their lines look, not as a renderer shows them. The rule is held across the copy-pair by ★ PARITY
+// and a blank line) and a `*`/`+` bullet are read as their lines look, not as a renderer shows them; an HTML block
+// other than a comment is refused inside `## Files` (below). The rule is held across the copy-pair by ★ PARITY
 // fixtures, not by a differential test against a renderer. `scanLines` / `fenceStates` are exported so a second
 // reader of a PLAN section (render-ship-briefing.mjs) uses the same rule rather than its own toggle.
 //
-// ── HTML COMMENTS (7.3.0, plan-scope-hardening — review 2026-11-03) ──────────────────────────────────────────
-// Before 7.3.0 a `## Files` heading or item inside `<!-- … -->` was read like any other line: a comment-hidden list
-// above the visible one became the scope, and a comment-hidden item under it entered scope — both invisible to a
-// person reading the rendered PLAN. Now `scanLines` cuts every comment out of a line's `text` before any test reads
-// it: a comment opens at a `<!--` outside a back-tick code span on that line, closes at the first `-->` from the
-// opener's third character (so `<!-->` and `<!--->` close at once, as CommonMark has it), and an unclosed one runs on
-// across lines; a fence line inside an open comment is not a fence. The fixtures were checked against markdown-it
-// 15.0.3 offline (`.dev/features/plan-scope-hardening/BUILD.md`), not by a test that imports it.
-// BOUND (P0), probed the same way: code spans are recognised per line, so a code span wrapped across two lines that
-// holds `<!--` opens a comment here that a renderer does not show. That hides MORE than the renderer (fewer paths —
-// fail-closed for items), but it can also hide a visible exclusion cue whose items continue past the comment's
-// closer; the colon rule below still refuses a `:` intro, so the open case needs a cue line WITHOUT a colon. And an
-// inline `<!--` at the end of a list item, followed by a new `- ` item, hides that item here while a renderer starts
-// a new item and shows it (again fewer paths).
-//
-// ── ONE `## Files` (7.3.0) ───────────────────────────────────────────────────────────────────────────────────
-// A second visible `## Files` heading anywhere in the file — outside fences and comments — is refused, naming both
-// line numbers. The reader used to take the first; no committed PLAN or AC-TESTS file (342 at 7.2.1) has two.
-//
-// ── THE COLON RULE (7.3.0) ───────────────────────────────────────────────────────────────────────────────────
-// Boundary 2's cue is a fixed word list, so `Excluded:`, `NOT in scope:` or `Leave unchanged:` did not end the list
-// and the paths under them were scoped (fail-open against what the author wrote). Now a non-item, non-blockquote,
-// non-continuation line whose text ends in `:` — trailing `*` / `_` emphasis markup allowed, so `**Excluded:**` counts
-// (L18's own fail-open intro was that shape) — ALSO ends the list, and when a path item follows it before the next
-// heading the reader REFUSES — it cannot tell a group label from an exclusion intro, and it does not guess. A line
-// that matches the cue still ends the list silently, as before. Measured at 7.2.1: 22 of 342 committed plans carry
-// such a line, every one a group label; plans are not re-read once built, so none was edited. An intro that ends in
-// neither `:` nor a cue word (`Excluded.`) is still read as prose — the heading form stays the one that always holds.
+// ── 7.3.0 (plan-scope-hardening — review 2026-11-03, then an adversarial review of the first patch) ──────────────
+// LINE ENDINGS. Lines split on `\r\n`, `\r` or `\n` (CommonMark's three), so a lone CR cannot fold a `## Files` or a
+// `### …` heading into the line before it.
+// HTML COMMENTS. A comment that hides lines is a CommonMark HTML block: a line beginning (0–3 spaces) with `<!--`
+// starts it and the first line containing `-->` (that one included) ends it; those lines are never the heading, an
+// item, a cue or a list break. An inline `<!-- … -->` closed on the same line, outside a back-tick code span and not
+// backslash-escaped, is cut from the line's `text`. An unclosed `<!--` that does not start a line is literal text —
+// the first patch treated it as a comment running on, which hid a later visible `### Explicitly not touched` heading
+// and scoped the path under it (fail-open; reproduced). A fence line inside a comment block is not a fence.
+// RAW HTML BLOCKS. Inside `## Files`, a line beginning (0–3 spaces) with `<` and a tag name, `/`, `?`, `!` + letter or
+// `![CDATA[` starts an HTML block other than a comment (CommonMark types 1, 3–7) that can hide what follows from a
+// renderer (`<div>` + a comment, a fence inside a `<div>`), so the reader REFUSES with the line number instead of
+// guessing. Bound: an autolink at a line's start (`<https://…>`) is refused too.
+// ONE `## Files`. A second visible `## Files` heading anywhere in the file is refused, naming both line numbers. No
+// committed PLAN or AC-TESTS file (342 at 7.2.1) has two.
+// ONE CONTIGUOUS LIST. Inside `## Files` the path items form one list: prose is allowed before the first item and
+// after the last, and between two items only blank lines and the current item's own wrapped continuation (an
+// indented line with no blank line since the item). Any other non-blank line after the first item — prose, a label in
+// any spelling or markup (`Excluded:`, `**NOT in scope:**`, `<b>…</b>`, a full-width colon), a blockquote, a non-path
+// bullet, a setext underline, an indented paragraph after a blank line, a lazy unindented continuation — ends the
+// list, and a later path item makes the reader REFUSE, naming both line numbers. A nested path item right under a
+// wrapped continuation (`- a` / `  Excluded:` / `  - b`) refuses the same way. The exclusion cue (Boundary 2) still
+// ends the list where nothing follows; a cue line before the first item with items after it refuses too. This
+// replaces the first patch's colon rule, which a label without a trailing ASCII colon walked past. Measured at 7.2.1:
+// 32 of 342 committed plans would be refused (every one a label or exclusion intro, or prose, between items — the
+// exclusions among them were read correctly before and now refuse loudly); plans are not re-read once built.
+// Remaining bound: an intro BEFORE the first item is prose, so `Excluded:` there with the items under it is scoped
+// unless it uses one of the cue's words — the `### …` heading stays the form that always excludes.
+// The comment and HTML fixtures were checked against markdown-it 15.0.3 offline
+// (`.dev/features/plan-scope-hardening/BUILD.md`), not by a test that imports it. Probed bounds, all on the side of
+// FEWER paths: a comment block opened inside a list item hides until its `-->` even past the item's end, where a
+// renderer stops at the item's end.
 //
 // ── NO CROSS-TREE IMPORT (P3) ────────────────────────────────────────────────────────────────────────
 // Nothing here imports from `.dev/`. That tree is the build apparatus, excluded wholesale at packaging
@@ -173,15 +177,16 @@ export const DELETE_NEAR_MISS_RE = /^\s*-\s+`[^`]+`[ \t]*\(\s*delete[sd]?\s*\)/i
  *      scope" ended this list while the setter kept going. Found by the pharn-test-stage grill; a ★ PARITY
  *      case in check-build-complete.test.mjs now executes the setter against it.
  *
- * Since 7.3.0 a third: a non-item line ending in `:` ends the list, and `ok: false` comes back when a path item
- * follows it (THE COLON RULE); a second visible `## Files` is `ok: false` too (see the header for both).
+ * Since 7.3.0 the list must be ONE contiguous list: any other line between path items ends it, and `ok: false`
+ * comes back when a path item follows; a second visible `## Files` and a raw HTML block inside the section are
+ * `ok: false` too (see the header).
  *
  * Boundary 2 is deliberately fail-CLOSED: on an ambiguous line the list ENDS, which blocks a build
  * rather than silently under-protecting it. Narrowing the cue would trade today's false positive for a
  * fail-OPEN false negative on a real, unusually-worded exclusion — the failure mode L18 records.
  */
 export function pathsFromPlanFiles(text) {
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(LINE_SPLIT_RE);
   const top = readPlanFiles(lines, false);
   const nested = readPlanFiles(lines, true);
   // The comparison is the setter's own: the heading's index, the path list in order, and the refusal (7.3.0).
@@ -198,27 +203,38 @@ export const AMBIGUOUS_FENCE_REASON =
   "the `## Files` list reads differently depending on whether a code fence sits inside a list item (a fence line indented four or more columns, or a closing fence indented less than its opening one) — indent each fence's opening and closing lines alike, at most three spaces, in and before `## Files`";
 
 /**
- * The refusal reason for a reading's `refusal` (7.3.0 — see ONE `## Files` and THE COLON RULE in the header). Line
- * numbers only, never the line's text: the PLAN is untrusted (P2).
- * @param {{kind: "second-heading" | "colon-intro", lines: [number, number]}} refusal
+ * The refusal reason for a reading's `refusal` (7.3.0 — see the header). Line numbers only, never the line's text:
+ * the PLAN is untrusted (P2).
+ * @param {{kind: "second-heading" | "split-list" | "html-block", lines: [number, number]}} refusal
  */
 export function refusalReason({ kind, lines: [a, b] }) {
-  return kind === "second-heading"
-    ? `the PLAN has more than one \`## Files\` heading (lines ${a} and ${b}) — keep one \`## Files\` section, and give any other path list a different heading`
-    : `line ${a} under \`## Files\` ends with ':' and a path item follows it (line ${b}), so the reader cannot tell a group label from an exclusion intro — put excluded paths under a \`### …\` heading after the list, and drop the ':' from a group label (or make it a \`> …\` blockquote)`;
+  if (kind === "second-heading") {
+    return `the PLAN has more than one \`## Files\` heading (lines ${a} and ${b}) — keep one \`## Files\` section, and give any other path list a different heading`;
+  }
+  if (kind === "html-block") {
+    return `line ${a} under \`## Files\` starts a raw HTML block, which can hide lines from a rendered PLAN — remove it; write the list as plain markdown`;
+  }
+  return `line ${a} under \`## Files\` interrupts the path list and a path item follows it (line ${b}), so the reader cannot tell what that line says about the items after it — write ONE contiguous list with no labels or prose between items, and put excluded paths under a \`### …\` heading after the list`;
 }
 
 /** The `## Files` heading, as every reader of the section tests it (7.3.0: the briefing imports it — L69). */
 export const FILES_HEADING_RE = /^##\s+Files\b/;
 
+/** CommonMark's three line endings (7.3.0): a lone CR ends a line too. */
+export const LINE_SPLIT_RE = /\r\n|\r|\n/;
+
 /** A fence line: indentation, a run of 3+ backticks or tildes, the rest (see FENCED CODE in the header). */
 const FENCE_LINE_RE = /^([ \t]*)(`{3,}|~{3,})(.*)$/;
 
-// Index of the first `<!--` in `s` outside a back-tick code span on this line, else -1. A run of n back-ticks opens a
-// span only when a later run of exactly n back-ticks on the same line closes it (CommonMark); otherwise it is literal.
-// A byte-equal copy lives in set-writes-scope.cjs, pinned by a ✧ test.
+// Index of the first `<!--` in `s` outside a back-tick code span and not backslash-escaped, else -1. A run of n
+// back-ticks opens a span only when a later run of exactly n back-ticks on the same line closes it (CommonMark);
+// otherwise it is literal. A byte-equal copy lives in set-writes-scope.cjs, pinned by a ✧ test.
 function commentStart(s) {
   for (let i = 0; i < s.length;) {
+    if (s[i] === "\\") {
+      i += 2;
+      continue;
+    }
     if (s[i] === "`") {
       let n = 0;
       while (s[i + n] === "`") n++;
@@ -246,55 +262,59 @@ function commentStart(s) {
 }
 
 /**
- * Per line, `{ fenced, text }` under one of the two readings (see FENCED CODE and HTML COMMENTS in the header):
- * `fenced` — a fence line itself, or a line inside an open fence; `text` — the line with every HTML comment cut out
- * (outside fences only; a fenced line's `text` is the line). A byte-equal copy lives in set-writes-scope.cjs, pinned
- * by a ✧ test.
+ * Per line, `{ fenced, comment, text }` under one of the two readings (see FENCED CODE and 7.3.0 in the header):
+ * `fenced` — a fence line itself, or a line inside an open fence; `comment` — a line of an HTML comment block (from a
+ * line beginning `<!--` through the first line containing `-->`); `text` — the line with every inline comment closed
+ * on that line cut out (a fenced or comment line's `text` is the line). A byte-equal copy lives in
+ * set-writes-scope.cjs, pinned by a ✧ test.
  * @param {string[]} lines
  * @param {boolean} [nested]  false: a fence line counts only at 0–3 spaces; true: at any indentation, and a bare
  *   closer indented less than its opener ends that block and opens another
- * @returns {{fenced: boolean, text: string}[]}
+ * @returns {{fenced: boolean, comment: boolean, text: string}[]}
  */
 export function scanLines(lines, nested = false) {
   const out = [];
   let fence = null; // { char, len, indent } while a fenced block is open
-  let comment = false; // while an HTML comment is open
+  let block = false; // while an HTML comment block is open
   for (const line of lines) {
-    if (!comment) {
-      const f = line.match(FENCE_LINE_RE);
-      if (f && !(f[2][0] === "`" && f[3].includes("`")) && (nested || /^ {0,3}$/.test(f[1]))) {
-        const char = f[2][0];
-        const closes = fence !== null && char === fence.char && f[2].length >= fence.len && f[3].trim() === "";
-        if (fence === null) fence = { char, len: f[2].length, indent: f[1].length };
-        else if (closes && (!nested || f[1].length >= fence.indent)) fence = null;
-        else if (closes) fence = { char, len: f[2].length, indent: f[1].length }; // a list item ended; a new block opens
-        out.push({ fenced: true, text: line });
-        continue;
-      }
-      if (fence !== null) {
-        out.push({ fenced: true, text: line });
-        continue;
-      }
+    if (block) {
+      if (line.includes("-->")) block = false;
+      out.push({ fenced: false, comment: true, text: line });
+      continue;
+    }
+    const f = line.match(FENCE_LINE_RE);
+    if (f && !(f[2][0] === "`" && f[3].includes("`")) && (nested || /^ {0,3}$/.test(f[1]))) {
+      const char = f[2][0];
+      const closes = fence !== null && char === fence.char && f[2].length >= fence.len && f[3].trim() === "";
+      if (fence === null) fence = { char, len: f[2].length, indent: f[1].length };
+      else if (closes && (!nested || f[1].length >= fence.indent)) fence = null;
+      else if (closes) fence = { char, len: f[2].length, indent: f[1].length }; // a list item ended; a new block opens
+      out.push({ fenced: true, comment: false, text: line });
+      continue;
+    }
+    if (fence !== null) {
+      out.push({ fenced: true, comment: false, text: line });
+      continue;
+    }
+    if (/^ {0,3}<!--/.test(line)) {
+      // A comment block (CommonMark HTML block type 2) ends at the first line containing `-->`, this one included.
+      if (!line.includes("-->")) block = true;
+      out.push({ fenced: false, comment: true, text: line });
+      continue;
     }
     let text = "";
     let rest = line;
     for (;;) {
-      if (comment) {
-        const end = rest.indexOf("-->");
-        if (end === -1) break;
-        rest = rest.slice(end + 3);
-        comment = false;
-      }
-      const start = commentStart(rest);
-      if (start === -1) {
-        text += rest;
+      const s = commentStart(rest);
+      const e = s === -1 ? -1 : rest.indexOf("-->", s + 2); // from the opener's third character: `<!-->` closes at once
+      if (e === -1) {
+        text += rest; // no opener, or one left unclosed on this line: literal text
         break;
       }
-      text += rest.slice(0, start);
-      rest = rest.slice(start + 2); // the closer is searched from here, so `<!-->` and `<!--->` close at once
-      comment = true;
+      text += rest.slice(0, s);
+      rest = rest.slice(e + 3);
     }
-    out.push({ fenced: false, text });
+    out.push({ fenced: false, comment: false, text });
   }
   return out;
 }
@@ -314,72 +334,89 @@ export function fenceStates(lines, nested = false) {
 /** The head-less exclusion cue (Boundary 2), the setter's own regex. */
 const CUE_RE = /\bnot\W*(touch|writ|modif|edit|chang)|\bexplicitly\W*excluded|\bout\W*of\W*scope|\boff\W*limits/i;
 
+/** A line that starts a raw HTML block other than a comment (CommonMark types 1, 3–7) — see the header. */
+const HTML_BLOCK_RE = /^ {0,3}<(?:[A-Za-z]|\/|\?|![A-Za-z]|!\[CDATA\[)/;
+
 /**
  * ONE reading of the `## Files` list: the heading's index (-1 when absent), the paths, their entries, and the
- * refusal (null, a second visible `## Files`, or a `:`-ended intro line with a path item under it).
+ * refusal (null, a second visible `## Files`, a raw HTML block in the section, or a line that splits the list).
  */
 function readPlanFiles(lines, nested) {
   const scanned = scanLines(lines, nested);
   let start = -1;
-  let state = "collecting"; // then "held" (a `:` intro ended the list) or "ended" (a heading or the cue ended it)
-  let held = -1;
+  let inSection = false; // from the `## Files` heading to the next heading
+  let seenItem = false;
+  let stop = -1; // the first line that ended the contiguous list (a path item after it refuses)
   let refusal = null;
+  let lastItemIndent = -1;
+  let lastKind = null; // the last non-blank list line: "item" or "continuation"
+  let lastIdx = -1;
   const out = [];
   const entries = [];
   let inPathItemBody = false;
   for (let i = 0; i < lines.length; i++) {
-    const { fenced, text: line } = scanned[i];
-    if (fenced) {
-      // Fenced code is never a heading, an item or a cue — but a blank line still closes an item's body.
-      if (start !== -1 && !line.trim()) inPathItemBody = false;
+    const { fenced, comment, text: line } = scanned[i];
+    if (fenced || comment) {
+      // Fenced code and comment blocks are never a heading, an item or a list break — but a blank fenced line still
+      // closes an item's body, so the wrapped-continuation exemption never widens.
+      if (fenced && inSection && !line.trim()) inPathItemBody = false;
       continue;
     }
-    // ONE `## Files` (7.3.0): a second visible heading anywhere in the file refuses — the reader never picks one.
+    // ONE `## Files`: a second visible heading anywhere in the file refuses — the reader never picks one.
     if (FILES_HEADING_RE.test(line)) {
       if (start === -1) {
         start = i;
+        inSection = true;
         continue;
       }
       refusal = { kind: "second-heading", lines: [start + 1, i + 1] };
       break;
     }
-    if (start === -1 || state === "ended") continue;
-    // Boundary 1 — STRUCTURAL.
+    if (!inSection) continue;
+    // Boundary 1 — STRUCTURAL: a heading of any level ends the section.
     if (/^\s{0,3}#{1,6}\s/.test(line)) {
-      state = "ended";
+      inSection = false;
       continue;
+    }
+    if (HTML_BLOCK_RE.test(line)) {
+      refusal = { kind: "html-block", lines: [i + 1, i + 1] };
+      break;
     }
     const isPathItem = /^\s*-\s+`[^`]+`/.test(line);
-    if (state === "held") {
-      if (isPathItem) {
-        refusal = { kind: "colon-intro", lines: [held + 1, i + 1] };
+    if (isPathItem) {
+      const indent = line.match(/^\s*/)[0].length;
+      if (stop !== -1) {
+        refusal = { kind: "split-list", lines: [stop + 1, i + 1] };
         break;
       }
-      continue;
-    }
-    // Boundary 2 — CUE fallback, with the path-item, blockquote and wrapped-continuation exemptions (the
-    // setter's rule, set-writes-scope.cjs, byte for byte in behaviour). THE COLON RULE (7.3.0) shares them.
-    const isBlockquote = /^\s*>/.test(line);
-    const isWrappedContinuation = inPathItemBody && !isPathItem && /^\s+\S/.test(line);
-    if (isPathItem) inPathItemBody = true;
-    else if (!line.trim()) inPathItemBody = false;
-    if (!isPathItem && !isBlockquote && !isWrappedContinuation) {
-      if (CUE_RE.test(line)) {
-        state = "ended";
-        continue;
+      if (lastKind === "continuation" && indent > lastItemIndent) {
+        refusal = { kind: "split-list", lines: [lastIdx + 1, i + 1] }; // a nested item under a wrapped line
+        break;
       }
-      if (/:[\s*_]*$/.test(line)) {
-        state = "held";
-        held = i;
-        continue;
-      }
-    }
-    const m = line.match(/^\s*-\s+`([^`]+)`/);
-    if (m) {
+      seenItem = true;
+      inPathItemBody = true;
+      lastItemIndent = indent;
+      lastKind = "item";
+      lastIdx = i;
+      const m = line.match(/^\s*-\s+`([^`]+)`/);
       out.push(m[1].trim());
       const del = DELETE_MARKER_RE.test(line);
       entries.push({ path: m[1].trim(), line, delete: del, deleteNearMiss: !del && DELETE_NEAR_MISS_RE.test(line) });
+      continue;
     }
+    if (!line.trim()) {
+      inPathItemBody = false;
+      continue;
+    }
+    // An indented line while a path item's body is still open (no blank line since the item) is its own wrapped text.
+    if (inPathItemBody && /^\s+\S/.test(line)) {
+      lastKind = "continuation";
+      lastIdx = i;
+      continue;
+    }
+    // Any other line ends the list after the first item; before it, only the exclusion cue does (a blockquote is
+    // commentary there, never a cue).
+    if (stop === -1 && (seenItem || (!/^\s*>/.test(line) && CUE_RE.test(line)))) stop = i;
   }
   return { start, out, entries, refusal };
 }

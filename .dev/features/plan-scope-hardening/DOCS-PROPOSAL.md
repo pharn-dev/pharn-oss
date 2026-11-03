@@ -98,9 +98,13 @@ script, …)".
 Add one bound at the end of the bullet:
 
 ```text
-  The `## Files` reader skips HTML comments, refuses a second `## Files` heading and refuses a `:`-ended label line with
-  path items under it (7.3.0); it is still not a CommonMark parser — `plan-files-core.mjs`'s header lists the cases
-  where it hides more than a renderer shows, which only ever removes paths.
+  An entry that is absolute, climbs out of the project with `..`, or is led by `-` is refused in every project (7.3.0).
+  The `## Files` reader skips HTML comment blocks, refuses a raw HTML block, a second `## Files` heading and any line
+  between two path items (7.3.0); it is still not a CommonMark parser — `plan-files-core.mjs`'s header lists the cases
+  where it hides more than a renderer shows, which only ever removes paths, and an intro before the first item is
+  prose unless it uses an exclusion-cue word. The instruction-file refusal matches three basenames only (`CLAUDE.md`,
+  `CLAUDE.local.md`, `AGENTS.md`); another agent's instruction file under another name is not refused. `.mcp.json` is
+  refused at the project root only; a nested `sub/.mcp.json` is not.
 ```
 
 ## 4. `pharn/LIMITS.md:492-494` (§7, the installed permissive default)

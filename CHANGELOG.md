@@ -38,20 +38,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   no opt-in (a dev plan naming canon had `/pharn-dev-build`'s Bash formatter pass rewrite it; the promote command is
   the route); executable config in every posture, the class gaining `.github/actions/**` and `.mcp.json`
   (`core.hooksPath` stays fail-closed in an installed project and is read best-effort elsewhere); the instruction files
-  `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) in an installed project; and, in a dev or unsignalled tree
-  while a `/pharn-loop` or `/pharn-ship` marker is open, PHARN's own surface and the instruction files. With no product
+  `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) in an installed project; in a dev or unsignalled tree
+  while a `/pharn-loop` or `/pharn-ship` marker is open, PHARN's own surface and the instruction files; and in every
+  project an entry that is absolute, climbs out with `..`, or is led by `-` (each class refusal tests the relative
+  spelling, so an absolute path to canon passed them all — found by an adversarial review of the first patch). With no product
   run open, a dev build still scopes `pharn/floor/**` and `.claude/commands/**` (self-hosting) — so the review's
   BLOCKER is narrowed, not closed: a model-approved dev plan can still scope the floor, and what guards that is GATE 1
   and the GitHub review layer. The hook change was applied by the maintainer; the trusted-doc wording is proposed in
   `.dev/features/plan-scope-hardening/DOCS-PROPOSAL.md`.
-- 2026-11-03: **The `## Files` readers stop reading HTML comments, refuse a second `## Files`, and refuse a `:` label
-  over items** (review 2026-11-03, MEDIUMs). Both readers (`set-writes-scope.cjs` and `pharn/floor/plan-files-core.mjs`,
-  held together by byte-equal pins and parity fixtures checked against markdown-it): a `## Files` or an item inside
-  `<!-- … -->` is never the list (code-span aware; `<!-->` closes at once); a second visible `## Files` heading refuses
-  with both line numbers; a non-item line ending in `:` (emphasis allowed) ends the list and refuses when a path item
-  follows it, so `Excluded:` / `NOT in scope:` can no longer scope the paths under them. 22 of 342 committed plans used
-  a `:` group label; plans are not re-run, so none was edited — new plans group with a blank line or a label without
-  the colon. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
+- 2026-11-03: **The `## Files` readers stop reading HTML comments and raw HTML, refuse a second `## Files`, and
+  require one contiguous list** (review 2026-11-03, MEDIUMs; an adversarial review of the first patch). Both readers
+  (`set-writes-scope.cjs` and `pharn/floor/plan-files-core.mjs`, held together by byte-equal pins and parity fixtures
+  checked against markdown-it): lines split on `\r\n`, `\r` or `\n`; a comment block (a line beginning `<!--`, through
+  the first line holding `-->`) is never the list, an inline comment closed on its line is cut, and an unclosed inline
+  `<!--` is literal text; a raw HTML block inside `## Files` refuses; a second visible `## Files` heading refuses with
+  both line numbers; and any line between two path items other than a blank line or the item's own indented wrapped
+  text — a label in any spelling, a blockquote, a non-path bullet, a setext underline — refuses, so `Excluded:` /
+  `NOT in scope:` can no longer scope the paths under them. 32 of 342 committed plans would be refused; plans are not
+  re-run, so none was edited — new plans write one contiguous list. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
   reads "not found") and skips comment-hidden headings; `apply-plan-deletions.mjs` reports the reader's own refusal
   reason instead of a fixed "no `## Files` heading".
 

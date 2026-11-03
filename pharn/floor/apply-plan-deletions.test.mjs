@@ -204,8 +204,8 @@ test("★ every refusal code is reached by its fixture and not by its control; a
     assert.equal(twice.reason_code, "plan-files-unparseable");
     assert.match(twice.reason, /more than one `## Files` heading \(lines 1 and 5\)/);
     assert.doesNotMatch(twice.reason, /no `## Files` heading/);
-    writeFileSync(join(root, "pharn", "features", "demo", "PLAN.md"), "## Files\n\nExcluded:\n\n- `a.ts` (delete)\n");
-    assert.match(doc(run(root)).reason, /line 3 under `## Files` ends with ':' and a path item follows it \(line 5\)/);
+    writeFileSync(join(root, "pharn", "features", "demo", "PLAN.md"), "## Files\n\n- `b.ts`\n\nExcluded:\n\n- `a.ts` (delete)\n");
+    assert.match(doc(run(root)).reason, /line 5 under `## Files` interrupts the path list and a path item follows it \(line 7\)/);
   });
   withProject("- `a.ts` (delete)", [], (root) => {
     const real = join(root, "elsewhere");

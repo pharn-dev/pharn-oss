@@ -228,10 +228,16 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
     in an installed project. With no product marker open, `/pharn-dev-build` scopes `pharn/floor/**`,
     `.claude/commands/**` and root `CLAUDE.md` as before — self-hosting. **Not closed:** a model-approved DEV plan can
     still scope the floor; GATE 1 and the GitHub layer guard that.
-  - **the `## Files` reader** (both copies, ★ parity): HTML comments are cut out before any test (code-span aware;
-    `<!-->` closes at once); a second visible `## Files` refuses; a non-item line ending in `:` (emphasis allowed)
-    ends the list and refuses when a path item follows it. Measured: 22 of 342 committed plans used such a label;
-    plans are not re-run, so none was edited.
+  - **an entry that is not a plain project-relative path, in every posture, with no opt-in**: absolute (POSIX,
+    drive or UNC), climbing out of the project once `..` is collapsed, or led by `-`. Every class refusal tests the
+    relative spelling, so `<abs root>/.dev/memory-bank/…` passed them all and Step 2b's formatters rewrote canon
+    through it (adversarial review of the first patch).
+  - **the `## Files` reader** (both copies, ★ parity): lines split on `\r\n`, `\r` or `\n`; an HTML comment block (a
+    line beginning `<!--`, through the first line with `-->`) is never read, an inline comment closed on its line is
+    cut, an unclosed inline `<!--` is literal; a raw HTML block in the section refuses; a second visible `## Files`
+    refuses; the path items form ONE contiguous list — any line between two items other than a blank line or the
+    item's own indented wrapped text refuses, naming both lines. Measured: 32 of 342 committed plans would be
+    refused (labels, exclusion intros or prose between items); plans are not re-run, so none was edited.
   - **`--check`** (before the mode) runs every parse and refusal and writes nothing; `/pharn-plan` and
     `/pharn-dev-plan` run it on the PLAN they just wrote, so a refusal surfaces at plan time.
   - A refusal is a STOP for the human: an agent never adds an `--allow-*` flag itself (`/pharn-dev-build` Step 0). The

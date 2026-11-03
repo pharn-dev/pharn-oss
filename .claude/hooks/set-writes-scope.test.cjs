@@ -1605,10 +1605,12 @@ test("★ 7.3.0 --check exits 1 on every refusal a build's Step 0 would meet (re
     assert.equal(scopeOf(t.cwd), null);
   }
   const plan = join(t.cwd, "PLAN.md");
-  fs.writeFileSync(plan, "## Files\n\nProduct files:\n\n- `src/a.ts`\n");
-  const colon = setterIn(t, ["--check", "--from-plan", plan]);
-  assert.equal(colon.status, 1);
-  assert.match(colon.stderr, /line 3 under `## Files` .* ends with ':' and a path item follows it \(line 5\)/);
+  fs.writeFileSync(plan, "## Files\n\n- `src/a.ts`\n\nProduct files:\n\n- `src/b.ts`\n");
+  const split = setterIn(t, ["--check", "--from-plan", plan]);
+  assert.equal(split.status, 1);
+  assert.match(split.stderr, /line 5 under `## Files` .* interrupts the path list and a path item follows it \(line 7\)/);
+  fs.writeFileSync(plan, `## Files\n\n- \`${join(t.cwd, ".dev", "memory-bank", "lessons-learned.md")}\`\n`);
+  assert.equal(setterIn(t, ["--check", "--from-plan", plan]).status, 1, "an absolute entry refuses at plan time too");
   const clear = setterIn(t, ["--check", "--clear"]);
   assert.equal(clear.status, 1);
   assert.match(clear.stderr, /--clear takes no other arguments \(got: --check\)/);
@@ -1630,21 +1632,30 @@ test("★ 7.3.0 a second `## Files` heading refuses with both line numbers; one 
   assert.deepEqual(scopeOf(cwd), ["src/a.ts"]);
 });
 
-test("★ 7.3.0 the colon rule: `Excluded:` / `NOT in scope:` / `Leave unchanged:` over items refuse; the cue still ends silently", () => {
-  for (const intro of ["Excluded:", "NOT in scope:", "Leave unchanged:", "**Product files:**", "Written by `/build`:"]) {
+test("★ 7.3.0 one contiguous list: any line between two items refuses, in every spelling; prose around the list does not", () => {
+  for (const intro of [
+    "Excluded:",
+    "NOT in scope:",
+    "Leave unchanged:",
+    "**Product files:**",
+    "Excluded：",
+    "`Excluded:`",
+    "> Excluded:",
+  ]) {
     const cwd = tmp();
     const plan = join(cwd, "PLAN.md");
     fs.writeFileSync(plan, ["## Files", "", "- `src/a.ts`", "", intro, "", "- `pharn/floor/evil.mjs`", ""].join("\n"));
     const r = setter(cwd, "--from-plan", plan);
     assert.equal(r.status, 1, `${intro}: ${r.stdout}`);
-    assert.match(r.stderr, /line 5 under `## Files` .* ends with ':' and a path item follows it \(line 7\)/, intro);
-    assert.match(r.stderr, /put excluded paths under a `### …` heading/);
+    assert.match(r.stderr, /line 5 under `## Files` .* interrupts the path list and a path item follows it \(line 7\)/, intro);
+    assert.match(r.stderr, /write ONE contiguous list/);
     assert.ok(!r.stderr.includes(intro), `${intro}: the line's text is never echoed (P2)`);
     assert.equal(scopeOf(cwd), null);
   }
   for (const [lines, want] of [
-    [["## Files", "", "- `src/a.ts`", "", "Explicitly **not** touched:", "", "- `x.md`", ""], ["src/a.ts"]],
+    [["## Files", "", "- `src/a.ts`", "", "Explicitly **not** touched: nothing else.", ""], ["src/a.ts"]],
     [["## Files", "", "> Product files:", "", "- `src/a.ts`", ""], ["src/a.ts"]],
+    [["## Files", "", "Written by `/build`:", "", "- `src/a.ts`", ""], ["src/a.ts"]],
     [
       ["## Files", "", "- `src/a.ts` — shaped like:", "  the rest of it:", "- `src/b.ts`", ""],
       ["src/a.ts", "src/b.ts"],
@@ -1659,6 +1670,42 @@ test("★ 7.3.0 the colon rule: `Excluded:` / `NOT in scope:` / `Leave unchanged
     assert.deepEqual(scopeOf(cwd), want);
   }
 });
+
+// (g) review round 2, item 1: an absolute entry, or one that climbs out of the project, passed every prefix refusal
+// (each tests the relative spelling), and the Step 2b formatter pass then rewrote canon through the absolute path. An
+// entry led by `-` would be read as a flag by those tools. Each is refused in every posture, with no opt-in.
+for (const posture of Object.keys(SEEDS)) {
+  test(`★ 7.3.0 ${posture}: an absolute, root-escaping or dash-led entry is REFUSED and nothing is written`, () => {
+    const t = tree(posture);
+    const checkout = fs.realpathSync(t.cwd);
+    const base = checkout.split("/").pop();
+    const spellings = [
+      `${checkout}/.dev/memory-bank/lessons-learned.md`,
+      `../${base}/.dev/memory-bank/lessons-learned.md`,
+      `${checkout}/.github/workflows/ci.yml`,
+      "../x/.mcp.json",
+      `${checkout}/pharn/floor/x.mjs`,
+      "src/../../outside.ts",
+      "..",
+      "C:/Windows/x.txt",
+      "\\\\server\\share\\x.txt",
+      "--plugin=evil.js",
+    ];
+    const flags = ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config", "--allow-instruction-files"];
+    for (const p of spellings) {
+      for (const args of [["--from-plan"], [...flags, "--from-plan"]]) {
+        const r = setterIn(t, [...args, planWith(t.cwd, "src/a.ts", p)]);
+        assert.equal(r.status, 1, `${p}: ${r.stdout}${r.stderr}`);
+        assert.match(r.stderr, /entries that are not plain project-relative paths/, p);
+        assert.ok(r.stderr.includes(p), `${p}: the offending entry is named`);
+        assert.equal(scopeOf(t.cwd), null, p);
+      }
+    }
+    // controls: in-project spellings that only LOOK unusual are judged by the class refusals, not this one
+    const ok = setterIn(t, ["--from-plan", planWith(t.cwd, "src/../src/a.ts", "./src/b.ts", "a-b/c.ts", "src/-x.ts")]);
+    assert.equal(ok.status, 0, ok.stderr);
+  });
+}
 
 // ✧ PINS (L31) — the reader copies and the canon set.
 function namedFunctionSource(file, name) {

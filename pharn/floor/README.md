@@ -189,8 +189,10 @@ in every project, when it names memory-bank canon (no opt-in: the promote comman
 now also `.github/actions/**` and `.mcp.json`, and outside an install `core.hooksPath` is read best-effort; in an
 installed project when it names an instruction file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, at any depth;
 `--allow-instruction-files`); and in a dev or unsignalled tree while a `/pharn-loop` or `/pharn-ship` run marker is open,
-when it names PHARN's own surface or an instruction file. Its `## Files` reader skips HTML comments, refuses a second
-`## Files` heading and refuses a `:`-ended label line with path items under it; `--check` (before the mode) runs every
+when it names PHARN's own surface or an instruction file; and in every project an entry that is absolute, climbs out
+of the project with `..`, or is led by `-`. Its `## Files` reader skips HTML comment blocks, splits lines on all three
+line endings, and refuses a second `## Files` heading, a raw HTML block, and any line between two path items (one
+contiguous list); `--check` (before the mode) runs every
 parse and refusal and writes nothing, which both plan commands run on the PLAN they wrote. These early refusals are not runtime enforcement;
 **`enforce-writes-scope.cjs`** enforces whatever scope was emitted on every write. `.claude/commands/**`
 and the hooks' own `*.test.cjs` are deliberately in neither protected set nor the refusal set.

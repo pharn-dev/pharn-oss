@@ -351,8 +351,9 @@ test("setter --from-plan reads the leading back-tick path of each ## Files item,
       "",
       "## Files",
       "",
-      // A blockquote since 7.3.0: a bare group label ending in ':' with items under it is refused (the colon rule).
-      "> Written by `/build`:",
+      // Prose before the first item is allowed; since 7.3.0 a line BETWEEN items, or an exclusion intro with items
+      // under it, refuses (one contiguous list), so the exclusion below is the heading form.
+      "Written by `/build`:",
       "",
       // A `.claude/` path deliberately OUTSIDE the setter's CONTROL_SURFACE refusal (the hook's own test
       // file, not the hook): this test pins the ## Files BOUNDARY parsing, so its authorized entry must
@@ -361,7 +362,7 @@ test("setter --from-plan reads the leading back-tick path of each ## Files item,
       "- `.claude/hooks/enforce-writes-scope.test.cjs` — **NEW.** the hook suite",
       "- `CLAUDE.md` — **EDIT.** add a section",
       "",
-      "Explicitly **not** touched:",
+      "### Explicitly **not** touched",
       "",
       "- `floor/validate.mjs` — unchanged (must NOT enter scope)",
       "",
@@ -465,7 +466,9 @@ test("setter --from-plan: the live-corpus `### Explicitly **not** touched` headi
   assert.ok(!rec.scope.includes("floor/validate.mjs"), "excluded-section path must be ABSENT");
 });
 
-test("setter --from-plan: a head-less prose exclusion intro ('Files NOT written:') keeps its paths OUT", () => {
+test("setter --from-plan: a head-less prose exclusion intro ('Files NOT written:') with items under it REFUSES (7.3.0)", () => {
+  // Before 7.3.0 the cue ended the list silently; since 7.3.0 any line between path items refuses (one contiguous
+  // list), so the excluded path still never enters scope — nothing is written at all.
   const cwd = tmp();
   const plan = join(cwd, "PLAN.md");
   fs.writeFileSync(
@@ -484,10 +487,9 @@ test("setter --from-plan: a head-less prose exclusion intro ('Files NOT written:
     ].join("\n")
   );
   const r = setter(cwd, "--from-plan", plan);
-  assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["pharn-core/a.md"]);
-  assert.ok(!rec.scope.includes("floor/validate.mjs"), "excluded-section path must be ABSENT");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 7 under `## Files` .* interrupts the path list and a path item follows it \(line 9\)/);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "nothing written");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -551,9 +553,10 @@ test("setter --from-plan: the cue's OTHER alternatives are equally exempt on a w
   ]);
 });
 
-test("setter --from-plan: a BLANK line closes the item body — an INDENTED exclusion intro after one still excludes", () => {
+test("setter --from-plan: a BLANK line closes the item body — an INDENTED exclusion intro after one still REFUSES", () => {
   // The fail-OPEN case the naive "exempt every indented line" rule would have introduced. Kept as its
-  // own test because it is the reason the exemption is stateful rather than a one-line regex.
+  // own test because it is the reason the exemption is stateful rather than a one-line regex. Since 7.3.0 the
+  // indented intro ends the contiguous list and the item after it refuses: nothing is written.
   const cwd = tmp();
   const plan = join(cwd, "PLAN.md");
   fs.writeFileSync(
@@ -572,10 +575,9 @@ test("setter --from-plan: a BLANK line closes the item body — an INDENTED excl
     ].join("\n")
   );
   const r = setter(cwd, "--from-plan", plan);
-  assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["pharn-core/a.md"]);
-  assert.ok(!rec.scope.includes("floor/validate.mjs"), "an indented exclusion section must still exclude");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /interrupts the path list/);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "an indented exclusion section never enters scope");
 });
 
 test("setter --from-plan: a flat `## Files` with no exclusion captures ALL authorized paths (no early break)", () => {

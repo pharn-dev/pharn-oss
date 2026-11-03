@@ -251,11 +251,13 @@ test("★ PARITY: a WRAPPED path-item description containing the cue does NOT tr
     const wrapped = both();
     assert.deepEqual(wrapped.declared, wrapped.scope, "the two parsers disagreed about a wrapped description");
     assert.deepEqual(wrapped.scope, ["src/a.mjs", "src/b.mjs"], "a wrapped description truncated the list");
-    // Control: separated by a blank line, the same words are a head-less cue — both parsers stop.
+    // Control: separated by a blank line, the same words are no longer the item's own text — since 7.3.0 they end the
+    // contiguous list, and the item after them makes BOTH parsers refuse.
     write(["- `src/a.mjs` — the adapter", "", "  out of scope stays untouched", "- `src/b.mjs` — y"]);
-    const cue = both();
-    assert.deepEqual(cue.declared, cue.scope);
-    assert.deepEqual(cue.scope, ["src/a.mjs"]);
+    const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(s.status, 1, `the setter must refuse: ${s.stdout}`);
+    assert.match(s.stderr, /interrupts the path list/);
+    assert.match(json(run([plan, root])).reason, /interrupts the path list/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -272,18 +274,18 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
         "",
         "## Files",
         "",
+        // EXEMPTION 2 — a blockquote matches the cue (`not touch…`) and is explanatory commentary. Since 7.3.0 a
+        // blockquote BETWEEN items ends the contiguous list, so the commentary sits before the first item.
+        "> These notes are commentary; the vendored tree is not touched here.",
+        "",
         // EXEMPTION 1 — an authorized item's OWN description matches the cue regex (`not modif…`) and
         // must NOT end the list. Without the path-item exemption this line alone would drop everything.
         "- `keep/one.md` — the public API is not modified by this change",
-        // EXEMPTION 2 — a blockquote matches the cue (`not touch…`) and is explanatory commentary.
-        "> These notes are commentary; the vendored tree is not touched here.",
-        "",
         "- `keep/two.mjs` — y",
         "",
-        // THE CUE — a bare, non-path, non-blockquote prose line. This is the break under test.
-        "The paths below are explicitly excluded from the build.",
-        "",
-        "- `dropped/three.md` — after the cue, never authorized",
+        // THE CUE — a bare, non-path, non-blockquote prose line, with nothing after it (an item after it refuses
+        // since 7.3.0 — the second half of this test).
+        "The paths beside this plan are explicitly excluded from the build.",
         "",
       ].join("\n")
     );
@@ -303,7 +305,12 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
     // proved only "the cue truncates" would stay green if the exemptions silently stopped working.
     assert.ok(scope.includes("keep/one.md"), "the path-item exemption did not hold — its own description truncated the list");
     assert.ok(scope.includes("keep/two.mjs"), "the blockquote exemption did not hold — commentary truncated the list");
-    assert.ok(!scope.includes("dropped/three.md"), "the cue did not truncate — a path after it was authorized");
+    // 7.3.0: an item AFTER the cue makes both parsers refuse — the dropped path never enters scope, loudly.
+    writeFileSync(plan, readFileSync(plan, "utf8") + "- `dropped/three.md` — after the cue, never authorized\n");
+    const after = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(after.status, 1, `the setter must refuse: ${after.stdout}`);
+    assert.match(after.stderr, /interrupts the path list/);
+    assert.match(json(run([plan, root])).reason, /interrupts the path list/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -370,7 +377,8 @@ const FENCE_FIXTURES = [
   },
   {
     name: "an inline ```x``` line is code, not a fence",
-    plan: ["## Files", "- `src/a.ts`", "```x``` is inline code", "- `src/b.ts`", ""],
+    // Indented under its item since 7.3.0 (a prose line between items refuses — one contiguous list).
+    plan: ["## Files", "- `src/a.ts`", "  ```x``` is inline code", "- `src/b.ts`", ""],
     want: ["src/a.ts", "src/b.ts"],
   },
   {
@@ -431,16 +439,17 @@ test("★ PARITY: FENCE_FIXTURES — the setter's scope and the checker's `decla
   }
 });
 
-// ── 7.3.0 (plan-scope-hardening): HTML comments, ONE `## Files`, THE COLON RULE ────────────────────────────────────
+// ── 7.3.0 (plan-scope-hardening): line endings, HTML comments and blocks, ONE `## Files`, ONE CONTIGUOUS LIST ──────
 // Each list fixture's answer was checked against markdown-it 15.0.3 (what a rendered PLAN shows as a `## Files` item,
-// offline — `.dev/features/plan-scope-hardening/BUILD.md`); the two `bound` fixtures are the stated cases where this
-// reader hides MORE than the renderer (fewer paths). A refusal fixture names the setter's and the checker's wording.
+// offline — `.dev/features/plan-scope-hardening/BUILD.md`); a `bound` fixture is a stated case where this reader hides
+// MORE than the renderer (fewer paths). A refusal fixture names the setter's and the checker's wording. Round 2 adds
+// the adversarial review's cases of the first patch (2a–2d).
 const SECOND = {
   setter: /has more than one `## Files` heading \(lines 1 and 5\)/,
   core: /more than one `## Files` heading \(lines 1 and 5\)/,
 };
-const COLON = (a, b) => {
-  const re = new RegExp(`line ${a} under \`## Files\` .*ends with ':' and a path item follows it \\(line ${b}\\)`);
+const SPLIT = (a, b) => {
+  const re = new RegExp(`line ${a} under \`## Files\` .*interrupts the path list and a path item follows it \\(line ${b}\\)`);
   return { setter: re, core: re };
 };
 const READER_FIXTURES = [
@@ -487,13 +496,38 @@ const READER_FIXTURES = [
     want: ["src/a.ts", "src/b.ts"],
   },
   {
-    name: "bound: an inline `<!--` at an item's end hides the next item (the renderer shows it)",
-    plan: ["## Files", "", "- `src/a.ts` x <!--", "- `src/b.ts`", "-->", "- `src/c.ts`", ""],
-    want: ["src/a.ts", "src/c.ts"],
+    name: "an unclosed inline `<!--` mid-line is literal — it hides no later heading (review round 2, 2a)",
+    plan: ["## Files", "", "- `src/a.js` — a stray <!-- in prose", "", "### Explicitly not touched", "", "- `pharn/floor/x.mjs`", ""],
+    want: ["src/a.js"],
   },
   {
-    name: "bound: a code span wrapped across lines holding `<!--` hides more (the renderer shows b and c)",
-    plan: ["## Files", "", "- `src/a.ts` — see `a", "  <!--` here", "- `src/b.ts`", "- `src/c.ts` -->", ""],
+    name: "an escaped `\\<!--` is literal text (2a)",
+    plan: ["## Files", "", "- `src/a.js` — see \\<!-- here -->", "- `src/b.js`", ""],
+    want: ["src/a.js", "src/b.js"],
+  },
+  {
+    name: "a lone CR ends a line, so `\\r### …` is a heading (2c)",
+    plan: ["## Files", "", "- `src/a.ts`\r### Explicitly not touched\r- `pharn/floor/x.mjs`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a lone CR before `## Files` makes it the heading (2c)",
+    plan: ["# PLAN\r## Files\r\r- `src/a.ts`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a `<div>` holding a comment opener refuses (2b)",
+    plan: ["## Files", "", "- `src/a.ts`", "<div>", "<!--", "</div>", "- `pharn/floor/x.mjs`", "-->", ""],
+    want: { setter: /line 4 under `## Files` .*starts a raw HTML block/, core: /line 4 under `## Files` starts a raw HTML block/ },
+  },
+  {
+    name: "a fence inside a `<div>` refuses (2b)",
+    plan: ["## Files", "", "- `src/a.ts`", "<div>", "```", "</div>", "- `pharn/floor/x.mjs`", "```", ""],
+    want: { setter: /line 4 under `## Files` .*starts a raw HTML block/, core: /line 4 under `## Files` starts a raw HTML block/ },
+  },
+  {
+    name: "bound: a comment block opened inside an item hides past the item's end (the renderer shows b)",
+    plan: ["## Files", "", "- `src/a.ts`", "  <!--", "- `src/b.ts`", "-->", ""],
     want: ["src/a.ts"],
   },
   {
@@ -506,35 +540,75 @@ const READER_FIXTURES = [
     plan: ["## Files", "", "- `src/a.ts`", "", "```", "## Files", "```", "<!-- ## Files -->", ""],
     want: ["src/a.ts"],
   },
+  // ONE CONTIGUOUS LIST (2d) — every label spelling the adversarial review used, between two items, refuses.
+  ...[
+    "Excluded:",
+    "Excluded:\\",
+    "`Excluded:`",
+    "<b>Excluded:</b>",
+    "Excluded：",
+    "> Excluded:",
+    "**NOT in scope:**",
+    "- not a path item",
+    "Explicitly **not** touched:",
+  ].map((label) => ({
+    name: `a line between items (${label}) refuses`,
+    plan: ["## Files", "", "- `src/a.ts`", "", label, "", "- `pharn/floor/evil.mjs`", ""],
+    // `<b>…` at a line's start is also a raw HTML block start, which refuses first.
+    want: label.startsWith("<")
+      ? { setter: /line 5 under `## Files` .*starts a raw HTML block/, core: /line 5 under `## Files` starts a raw HTML block/ }
+      : SPLIT(5, 7),
+  })),
   {
-    name: "`Excluded:` over items refuses",
-    plan: ["## Files", "", "- `src/a.ts`", "", "Excluded:", "", "- `pharn/floor/evil.mjs`", ""],
-    want: COLON(5, 7),
+    name: "an indented label under an open item, then a nested item, refuses (2d)",
+    plan: ["## Files", "", "- `src/a.ts`", "  Excluded:", "  - `pharn/floor/evil.mjs`", ""],
+    want: SPLIT(4, 5),
   },
   {
-    name: "`**NOT in scope:**` (emphasis after the colon) over items refuses",
-    plan: ["## Files", "", "- `src/a.ts`", "", "**NOT in scope:**", "- `x.md`", ""],
-    want: COLON(5, 6),
+    name: "an indented paragraph after a blank line, then an item, refuses (2d)",
+    plan: ["## Files", "", "- `src/a.ts`", "", "  Excluded:", "", "- `pharn/floor/evil.mjs`", ""],
+    want: SPLIT(5, 7),
   },
   {
-    name: "a group label ending in ':' before the first item refuses",
-    plan: ["## Files", "", "Written by `/build`:", "", "- `src/a.ts`", ""],
-    want: COLON(3, 5),
+    name: "a setext underline between items refuses (2d)",
+    plan: ["## Files", "", "- `src/a.ts`", "", "Excluded", "---", "", "- `pharn/floor/evil.mjs`", ""],
+    want: SPLIT(5, 8),
   },
   {
-    name: "the cue still ends the list silently",
-    plan: ["## Files", "", "- `src/a.ts`", "", "Explicitly **not** touched:", "", "- `x.md`", ""],
-    want: ["src/a.ts"],
+    name: "a cue before the first item, with items after it, refuses",
+    plan: ["## Files", "", "Files NOT written:", "", "- `src/a.ts`", ""],
+    want: SPLIT(3, 5),
   },
   {
-    name: "a blockquote label and a wrapped `:` continuation are exempt",
-    plan: ["## Files", "", "> Product files:", "- `src/a.ts` — shaped like:", "  the rest of it:", "- `src/b.ts`", ""],
+    name: "prose before the first item and after the last is allowed; the cue at the end ends silently",
+    plan: [
+      "## Files",
+      "",
+      "Written by `/build`:",
+      "",
+      "- `src/a.ts` — shaped like:",
+      "  the rest of it:",
+      "- `src/b.ts`",
+      "",
+      "Explicitly **not** touched: the rest.",
+      "",
+    ],
     want: ["src/a.ts", "src/b.ts"],
   },
   {
-    name: "a `:` line with no item before the next heading does not refuse",
+    name: "a blockquote before the first item is commentary, never a cue",
+    plan: ["## Files", "", "> the vendored tree is not touched here", "", "- `src/a.ts`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a line after the list with no item before the next heading does not refuse",
     plan: ["## Files", "", "- `src/a.ts`", "", "Notes:", "", "### Next", "", "- `x.md`", ""],
     want: ["src/a.ts"],
+  },
+  {
+    name: "a nested item directly under its parent's own line is part of the list",
+    plan: ["## Files", "", "- `src/a.ts`", "  - `src/a.test.ts`", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/a.test.ts", "src/b.ts"],
   },
 ];
 

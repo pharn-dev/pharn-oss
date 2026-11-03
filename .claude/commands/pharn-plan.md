@@ -205,17 +205,17 @@ applied_lessons: none | [L1, L2] # MANDATORY — floor-checked (Step 4b); `none`
 > **leading token is a back-tick path** — ``- `path/to/file` — <what changes>``; (3) to **exclude** a
 > path, put it under the `### Explicitly not touched` **subsection** (the setter stops at that
 > heading) — **never** inline as ``- `path` — not touched`` (an inline-marked item still enters
-> scope). Fenced code and HTML comments are never read as the list, and a second `## Files` heading refuses. In an
+> scope). Fenced code and HTML comment blocks are never read as the list; a second `## Files` heading, a raw HTML block
+> in the section, and an absolute or `..`-escaping path refuse. In an
 > installed project the setter refuses a plan that names PHARN's own files (`pharn/**` but `pharn/features/**`,
 > `.claude/**`, `pharn.config.json`) or an instruction file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`), and in every
 > project memory-bank canon, a CI workflow or local action, a git hooks directory and `.mcp.json`, so never name them.
-> **No label line ending in `:` inside `## Files`:** the setter refuses one with a path item under it; group items with
-> a blank line or a label that does not end in `:` (a heading ends the list). **Caveat:** a bare, non-blockquote prose line under `## Files` that reads like an exclusion
-> (wording such as _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off
-> limits_) is treated by the setter as a head-less exclusion intro and **truncates the authorized list
-> right there** — every path after it silently falls out of scope. Keep narrative in a **blockquote**
-> (`> …`) or as a **path-item description** (``- `path` — note``), and use the `### Explicitly not
-touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **list items** whose
+> **One contiguous list; no labels between items:** any line between two path items other than a blank line or the
+> item's own indented wrapped text — a label, a blockquote, a non-path bullet, prose — makes the setter refuse; group
+> with a blank line only. **Caveat:** a bare, non-blockquote prose line that reads like an exclusion (wording such as
+> _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off limits_) ends the list, and refuses if a
+> path item follows it. Keep narrative before the list, after it, or as a **path-item description**
+> (``- `path` — note``), and use the `### Explicitly not touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **list items** whose
 > leading token is an angle-bracket path — ``- `<path>` `` (matching `pathsFromPlanFiles`) — so an
 > un-filled `## Files` **fails closed** at the setter (`isConcrete` rejects `<`/`>`); a bare
 > ``- `path` `` item is **unsafe** because it parses as a real scope path. The `## Steps` above is **advisory prose**,

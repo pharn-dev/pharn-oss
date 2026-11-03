@@ -244,9 +244,9 @@ node .claude/hooks/set-writes-scope.cjs --check --from-plan .dev/features/<name>
 
 - **exit 0** → proceed to the halt below. **Non-zero** → fix the PLAN's `## Files` (the message names the line or
   the entry) and re-run. Never add an `--allow-*` flag: a refused path (canon, a CI workflow, a guard) is the
-  human's to apply or to scope, and the halt below is where you say so. One rule the check enforces: **no label line
-  ending in `:` inside `## Files`** — group items with a blank line or a label that does not end in `:` (a heading
-  ends the list).
+  human's to apply or to scope, and the halt below is where you say so. One rule the check enforces: **one contiguous
+  list; no labels between items** — between two path items only blank lines and an item's own indented wrapped text;
+  put prose before or after the list, and excluded paths under a `### …` heading after it.
 
 > **Two clocks, honestly (P0).** The checker's **verdict** is FLOOR (enum/regex + heading membership +
 > body reference). This command's **act** of invoking it is **ADVISORY** orchestration — nothing on the
