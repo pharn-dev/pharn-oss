@@ -16,7 +16,8 @@
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────────────────
 // A green run means the committed strings and the checker's behaviour on these fixtures are as pinned. It does NOT
-// mean CI ran the step on a given PR (admin merges and direct pushes skip it), and the binding proves the constant
+// mean CI ran the step on a given PR (direct pushes skip it; an admin merge does not, since ruleset 25907495 holds
+// every account to the required `check` job it runs in), and the binding proves the constant
 // and CLAUDE.md AGREE — never that they name what an install really receives.
 
 import { test, after } from "node:test";

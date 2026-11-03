@@ -53,6 +53,8 @@ merges produce and records every resolution.
 - `pharn/floor/merge-findings.mjs` — G8 merge resolution
 - `.prettierignore` — G1 + G8 merge resolution
 - `.markdownlint-cli2.jsonc` — G1 + G8 merge resolution
+- `.dev/floor/instruction-growth-wiring.test.mjs` — Phase C: stale admin-merge comment
+- `.dev/floor/check-surface-bump.test.mjs` — Phase C: stale admin-merge comment
 
 ## Not in scope
 

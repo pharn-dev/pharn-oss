@@ -18,7 +18,8 @@
 // FLOOR (what a green run means): the committed script and step strings are as pinned, and the committed `node` line
 //   yields `within` / `over` on the two fixtures.
 // NOT guaranteed, and never claimed:
-//   - that CI ran the step on a given PR (an admin merge skips required checks; a direct push to main is not a PR);
+//   - that CI ran the step on a given PR (a direct push to main is not a PR; an admin merge skips only the review,
+//     since ruleset 25907495 holds every account to the required `check` job this step runs in);
 //   - the `git fetch` line: it needs GitHub's merge ref, so it is pinned as text and never run here;
 //   - the verdict's reach: `--growth` is a floor verdict over instruction-files-core.mjs's MODEL of the loader, with that
 //     header's known-so-far under-count routes (pharn/LIMITS.md §3e, L67), and a per-PR budget never bounds growth spread over
