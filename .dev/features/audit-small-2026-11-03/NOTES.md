@@ -101,4 +101,34 @@ in-repo write went through Edit/Write except `package-lock.json` (`npm audit fix
 
 ## Gates
 
-(recorded verbatim below once run)
+Run on the committed tree at `460a4772` (load average 13–120 on 8 cores during the run):
+
+```text
+$ node pharn/floor/validate.mjs .
+FLOOR: GREEN — 37 capabilities checked in "."
+
+$ npm run check            # EXIT=0
+CATALOG: GREEN — docs/capabilities/ and the README.md current-state block match their sources
+LESSONS-INDEX: GREEN — docs/lessons-index.md matches the index recomputed from canon
+SPECIFIED-MARKERS: GREEN — 25 annotation(s) across 8 specified primitive(s) (0 now live), ...
+VERSION-BADGE: GREEN — README.md badge "7.2.1" matches SKILLS_VERSION "7.2.1"
+SKILLS-VERSION-RECORDED: GREEN — CHANGELOG.md's newest section is "## [7.2.1] - 2026-11-02", matching SKILLS_VERSION "7.2.1"; 206 version section(s) in order; 11 dated [Unreleased] entr(ies)
+CONTRIBUTING-GATES: GREEN — all 10 gate(s) in package.json scripts.check are named in CONTRIBUTING.md (...)
+  "verdict": "NO_BASELINE",
+ℹ tests 6201
+ℹ pass 6200
+ℹ fail 0
+ℹ skipped 1
+ℹ duration_ms 1649060.03975
+
+$ node .dev/floor/check-changelog-entry.mjs --merge-base origin/main
+CHANGELOG-ENTRY: GREEN — 11 new entr(ies) against the base (--merge-base origin/main (dd0bb3d39449)); no merged entry or released heading changed
+
+$ node .dev/floor/check-surface-bump.mjs --merge-base origin/main     # exit 1, EXPECTED in this batch (no bump)
+SURFACE-BUMP: RED — 1 finding(s) ... [NOT_BUMPED] 15 product-surface path(s) changed but SKILLS_VERSION is still "7.2.1"
+```
+
+An earlier `npm run check` over the UNCOMMITTED tree went RED at `check:reconcile` (`NO_BASELINE` fallback, 17 paths
+"would have been DENIED (writes-scope (fail-closed default))"): with no baseline it judges uncommitted changes under the
+default, the documented L68 behaviour (commit first). No baseline was created or edited; the run above, after
+committing, is GREEN. Not re-run after this NOTES.md edit (`.dev/features/**`, in the default safe set).
