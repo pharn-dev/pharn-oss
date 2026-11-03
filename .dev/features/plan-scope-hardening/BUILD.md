@@ -19,7 +19,8 @@ absolute / escaping / leading-`-` shapes (plain spaces are kept); Step 2b passes
 what follows as paths: a `--plugin=…` after `--` is reported as a missing file and the plugin does not run). Step 2b is
 the only shell consumer of `pharn/.run/writes-scope.json`; `loop-closeout.mjs` stages through `--pathspec-file-nul`
 with literal pathspecs. (B) a path item hidden as lazy paragraph text inside an inline comment
-(``- `a` <!--`` / ``      - `b` `` / `      -->`, or with a no-break space indent) was scoped: an item marker is now `-`
+(an item ending in an unclosed `<!--`, then a six-space-indented item and the closer, or the same with a no-break
+space indent) was scoped: an item marker is now `-`
 plus spaces or tabs only, an item indented four or more columns past the previous item's text refuses, and an inline
 `<!--` left open on a line inside `## Files` refuses. (C) both plan commands now say "`## Files` lists only files this
 increment writes; put anything excluded under its own `###` heading after the list". (D) the corpus was re-measured
