@@ -89,6 +89,7 @@ import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { DEFAULT_CANON_ROOT, parseCanonRoot, takeCanonRoot } from "./canon-root.mjs";
+import { H2_ENTRY_RE, canonLines } from "./lessons-index-core.mjs";
 
 // Enums / shapes — every branch is a membership / regex / presence test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These are the enum-gated / floor-verifiable fields (never body).
@@ -243,9 +244,17 @@ function cleanScalar(v, maxLen) {
 }
 
 // The set of existing `## <id>` heading ids in the canon file — the first whitespace-delimited token after
-// "## " (so "## L1 — title" yields "L1"). A not-yet-created canon file is the legitimate first-promotion
+// "##" (so "## L1 — title" yields "L1"). A not-yet-created canon file is the legitimate first-promotion
 // case (and the normal state of a project that has never promoted anything): treat it as the empty set,
 // never an error.
+//
+// Read through lessons-index-core.mjs's canonLines() since 7.3.0 — the reader check-plan-lessons and the index share:
+// the BOM is stripped (a BOM before a first `## L1` used to hide L1 here, so a duplicate L1 passed), and a heading-
+// shaped line inside a column-0 fenced block, HTML comment or raw HTML block is NOT an entry (a quoted or commented-out
+// `## L9` used to block a real L9). The id token stays generic (H2_ENTRY_RE), not LESSON_HEADING_RE, because the target
+// may be pattern-library.md, whose id scheme is not `L<n>`; so this set is a deliberate SUPERSET of the lessons set
+// (`## L020` or `##\tL20` still blocks the token it shows) — fail-closed for a lesson candidate. A block that never
+// closes is a `canon` RED, whether or not it hides an entry yet: the entry being promoted would be appended inside it.
 function existingIds(canonPath) {
   if (!existsSync(canonPath)) return [];
   let text;
@@ -255,11 +264,23 @@ function existingIds(canonPath) {
     red("canon", `cannot read canon file (${canonPath}): ${e.message}`);
     return [];
   }
-  const ids = [];
-  for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/^##\s+(\S+)/);
-    if (m) ids.push(m[1]);
+  const read = canonLines(text);
+  // ANY block still open at the end of canon is refused, whether or not it already hides a heading: the entry being
+  // promoted is APPENDED, so it would land inside the block and be hidden (found at this increment's review).
+  if (read.unclosedOpener) {
+    const hides = read.unclosedH2 ? `, so it hides the entry heading at line ${read.unclosedH2} and everything after it` : "";
+    red(
+      "canon",
+      `the block opened at line ${read.unclosedOpener} of ${canonPath} never closes${hides} — a promoted entry would be ` +
+        `appended inside it; close the block in canon (a human edit) and re-run`
+    );
   }
+  const ids = [];
+  read.lines.forEach((line, i) => {
+    if (!read.visible[i]) return;
+    const m = line.match(H2_ENTRY_RE);
+    if (m) ids.push(m[1]);
+  });
   return ids;
 }
 

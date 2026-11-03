@@ -323,8 +323,9 @@ test("setter --from-frontmatter keeps concrete paths and resolves placeholders w
 // --- Regression (pipeline-integration-probe finding #2): the REAL /review declares ONLY its output ---
 // /review writes one artifact — pharn/features/<name>/REVIEW.md. Canon (pharn/memory-bank/**) is written solely by
 // /memory-promote (gated + check-provenance + human accept). A `pharn/memory-bank/**` entry in /review's
-// `writes:` would make the setter resolve a scope the pre-write hook then PERMITS — a direct, ungated
-// canon write. Pin the real command file's resolved scope to exactly its REVIEW.md path.
+// `writes:` would make the setter resolve a scope THIS hook then permits — the over-grant L7 records; since 3.1.1
+// protect-trusted-paths.cjs denies that canon write (origin is not a promote command; probed 7.3.0, exit 2). Pin the
+// real command file's resolved scope to exactly its REVIEW.md path.
 
 test("setter --from-frontmatter on the REAL pharn-dev-review.md resolves to ONLY .dev/features/<name>/REVIEW.md (no canon path)", () => {
   const cwd = tmp();

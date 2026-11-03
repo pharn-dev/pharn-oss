@@ -62,6 +62,11 @@
 //     templated SPEC at all (a required heading missing or hidden, no example criterion, no Out-of-scope label, no
 //     `spec_template:` line). It never proves a faithful fill will be GREEN: extra prose in the template's
 //     Acceptance Criteria section passes here and REDs rule 2 once filled.
+//
+// A SECOND CONSUMER OF THE BLOCK MODEL (7.3.0, lesson-heading-parser). blockSpans() is exported so the lessons grammar
+// (lessons-index-core.mjs canonLines) reads canon through this same column-0 model rather than a copy (L35). The
+// coupling is accepted and stated: a change to the block model made for SPEC sections also moves which `## L<n>`
+// lessons exist for check-plan-lessons, the lessons index and check-provenance — run their suites with any change here.
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -267,7 +272,19 @@ function cleanScalar(v, maxLen) {
 // it are raw HTML text, not rendered headings. Accepting it would un-hide headings a renderer hides (fail-open).
 // Pinned by a test. (A CodeQL `js/bad-tag-filter` alert on the earlier `/-->/` regex was that sanitizer rule
 // applied to a structural checker; the behaviour it asked for is the wrong one here.)
+//
+// blockSpans(lines) is that model with its end state: `inside` as above, and `unclosed` — the index of the line that
+// opened a block still open at the last line, else -1 (a block that never closes hides everything after it).
+// spanned() is its `inside` alone, byte-for-byte the pre-7.3.0 result.
 function spanned(lines) {
+  return blockSpans(lines).inside;
+}
+
+/**
+ * @param {string[]} lines
+ * @returns {{inside: number[], unclosed: number}}
+ */
+export function blockSpans(lines) {
   const inside = new Array(lines.length).fill(-1);
   let open = null;
   lines.forEach((text, i) => {
@@ -297,7 +314,7 @@ function spanned(lines) {
       }
     }
   });
-  return inside;
+  return { inside, unclosed: open ? open.line : -1 };
 }
 
 // The body as sections: each VISIBLE `##` heading with the lines under it up to the next one. A `##` line inside a

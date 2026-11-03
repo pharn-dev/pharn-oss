@@ -81,34 +81,20 @@ scans canon**, so the two fields are required of **NEW** candidates only. A `pha
 you hand-wrote before installing this command stays exactly as it is, and any consumer reading the tag line
 must tolerate untagged entries.
 
-## Step 0 — Resolve the target, then set the writes-scope (fix #7, fail-closed)
+## Step 0 — Resolve the target
 
-1. **Resolve the ONE target canon file by deterministic membership (P5)** from the invocation — never LLM
-   classification:
-   - promoting a **lesson** → `pharn/memory-bank/lessons-learned.md`;
-   - promoting a **pattern** → `pharn/memory-bank/pattern-library.md`.
-   - If the invocation does not say which (ambiguous) → **HALT and ask** the human (the terminal fallback is
-     a question, never a guess). `feature-catalog.md` / `architecture-context.md` are **out of scope** —
-     refuse if asked to write either.
-2. **Set the scope to that single file:**
+**Resolve the ONE target canon file by deterministic membership (P5)** from the invocation — never LLM
+classification:
 
-   ```bash
-   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-memory-promote.md --target <canon-file>
-   ```
+- promoting a **lesson** → `pharn/memory-bank/lessons-learned.md`;
+- promoting a **pattern** → `pharn/memory-bank/pattern-library.md`.
+- If the invocation does not say which (ambiguous) → **HALT and ask** the human (the terminal fallback is
+  a question, never a guess). `feature-catalog.md` / `architecture-context.md` are **out of scope** —
+  refuse if asked to write either.
 
-   **Read the setter's printed path count**: it must say `1 path(s)`. If a later write is blocked, the fix is to
-   **pass the correct `--target` and re-run this setter** — never bypass the hook.
-
-3. **Record this scope on the open reconciliation epoch — IMMEDIATELY after the setter above, never
-   before it:**
-
-   ```bash
-   node pharn/floor/reconcile-baseline.mjs --amend-scope
-   ```
-
-   It records this scope on an open epoch (`pharn/pharn-contracts/reconciliation-record.md`). Exit **2** with
-   _"no baseline"_ is **expected and harmless** when no epoch is open (a standalone promote run, or a
-   project that has never anchored); it is not a reason to stop.
+**No writes-scope is set here.** Steps 1–5 write only `pharn/.run/**` scratch, which every scope admits. The canon
+scope is set at the head of Step 6, after the accept (7.3.0): set here, it unlocked the canon file for the guarded
+write tools during the whole run, before any human had seen the entry.
 
 ## Step 1 — Discovery (P6, mandatory; never assert from memory)
 
@@ -258,9 +244,31 @@ the answer.**
   no "looks fine, proceeding."
 - On **deny**, discard the candidate (delete the scratch file) and end the turn. **Nothing is written.**
 
-## Step 6 — Write on accept, then halt
+## Step 6 — Set the writes-scope on accept, write, then halt
 
-On an explicit accept, **re-read `<canon-file>` immediately before writing** and verify it has not changed
+1. **Only after an explicit accept, set the scope to the single target file (fix #7, fail-closed):**
+
+   ```bash
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-memory-promote.md --target <canon-file>
+   ```
+
+   **Read the setter's printed path count**: it must say `1 path(s)`. A non-zero exit or any other count is a
+   **HALT with nothing written** — the accepted candidate stays in `pharn/.run/`; fix the cause and re-run from this
+   step. If a later write is blocked, the fix is to **pass the correct `--target` and re-run this setter** — never
+   bypass the hook.
+
+2. **Record this scope on the open reconciliation epoch — IMMEDIATELY after the setter above, never
+   before it:**
+
+   ```bash
+   node pharn/floor/reconcile-baseline.mjs --amend-scope
+   ```
+
+   It records this scope on an open epoch (`pharn/pharn-contracts/reconciliation-record.md`). Exit **2** with
+   _"no baseline"_ is **expected and harmless** when no epoch is open (a standalone promote run, or a
+   project that has never anchored); it is not a reason to stop.
+
+Then **re-read `<canon-file>` immediately before writing** and verify it has not changed
 since Step 1 (content-hash equality — primitive #2):
 
 ```bash
@@ -278,14 +286,14 @@ node pharn/floor/check-provenance.mjs pharn/.run/pharn-memory-promote/candidate.
 
 **Any RED → HALT. Do not write.** A newly appeared duplicate id or other shape failure must not reach canon.
 
-Only after both pass, **land the entry in `<canon-file>` through a hook-gated tool only** — Step 0 pinned
+Only after both pass, **land the entry in `<canon-file>` through a hook-gated tool only** — Step 6.1 pinned
 the scope to exactly this path.
 
 **Canon write channel (fix #7).** Every byte written to `<canon-file>` — bootstrap header, appended entry,
 or a hand fix after the advisory format check — MUST go through the platform's **`Write`**, **`Edit`**, or
 **`MultiEdit`** tool. Those are the only paths the pre-write hook sees; they compose with
 `protect-trusted-paths.cjs` (the four trusted docs + `CODEOWNERS` stay denied regardless of scope) and
-`enforce-writes-scope.cjs` (only Step 0's declared `<canon-file>` is permitted).
+`enforce-writes-scope.cjs` (only Step 6.1's declared `<canon-file>` is permitted).
 
 **Explicitly forbidden for canon writes:**
 
@@ -295,7 +303,7 @@ or a hand fix after the advisory format check — MUST go through the platform's
   bytes are fixed by hand through `Write`/`Edit`/`MultiEdit` only.
 
 **If a write is blocked:** the hook names the path and the active scope. Fix by ensuring `<canon-file>` is
-declared in this command's `writes:` and **re-running Step 0's scope-setter** — never bypass the hook, never
+declared in this command's `writes:` and **re-running Step 6.1's scope-setter** — never bypass the hook, never
 work around it with Bash. A deny from `protect-trusted-paths.cjs` is never scope-fixable; halt and ask a human.
 
 **Bootstrap (the file does not exist yet).** Use **`Write`** to create `<canon-file>` with the header first,
@@ -343,9 +351,9 @@ Immediately after writing it, and **before** ending the turn:
 [ -x vendor/bin/markdownlint-cli2 ] && NODE_ENV=production vendor/bin/markdownlint-cli2 --no-globs <canon-file>
 ```
 
-Scoped to **this stage's own artifact** — `<canon-file>` is the one path Step 0 pinned. **Check-only**
+Scoped to **this stage's own artifact** — `<canon-file>` is the one path Step 6.1 pinned. **Check-only**
 (never `--write` / `--fix`): on a failure, fix **by hand** only the lines Step 6 just appended — through
-the Write tool, which the fix #7 hook gates and Step 0 pinned to exactly this file — and re-run the check;
+the Write tool, which the fix #7 hook gates and Step 6.1 pinned to exactly this file — and re-run the check;
 **never** re-run with `--write`/`--fix` — canon is shared, historical and provenance-carrying. If either
 `vendor/bin/prettier` or `vendor/bin/markdownlint-cli2` is absent, skip that advisory check — it never
 blocks.
@@ -388,10 +396,12 @@ confines it to the declared file.
   a relative argument must EQUAL the target; an absolute one need only END with it at a segment boundary. It does
   **not** prove the declaration named the RIGHT member, and it does **not** prove the WRITE lands there.
 - **Floor:** the write lands only in the declared canon file — the fix #7 hook (`pharn/memory-bank/**` is fail-closed until
-  declared in Step 0). **Bounded, and important:** fix #7 gates `Write|Edit|MultiEdit` only, and `/pharn-build`
-  derives its scope from a PLAN's `## Files`, so a plan naming a canon path would grant an **ungated** canon write
-  that never passes this gate (follow-up `canon-write-denylist`). Do not read this as "canon can only be written
-  through this command."
+  declared in Step 6.1, after the accept). A plan cannot open that route: `protect-trusted-paths.cjs` denies a canon
+  write under any scope whose origin is not a promote command (3.1.1), and from 7.3.0 the setter refuses a plan that
+  names canon. **Bounded, and important:** fix #7 gates `Write|Edit|MultiEdit` only, so a Bash write still reaches
+  canon. Do not read this as "canon can only be written through this command."
+- **Advisory:** the scope opens only after the accept — command order, a Bash setter outside the gate, so nothing
+  forces it; what it buys is that before Step 6 no guarded write tool can reach canon.
 - **Advisory:** Step 6b's index refresh — a Bash write, outside the fix #7 scope; a skipped or failed refresh leaves
   a stale cache `/pharn-plan` reads as `STALE`, and "the promotion refreshed the index" is never a precondition of
   anything. The RENDERED entry's tag line conforming is a named residual (`lesson-tagline-render-check`): the floor

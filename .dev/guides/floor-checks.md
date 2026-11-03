@@ -81,6 +81,11 @@ node pharn/floor/check-structural.mjs <expected.json> <actual.json> [repoDir]
 # `none` followed by `[L9999]` was GREEN. The RED names counts and regions only, never a value. A line in the
 # body or inside a header fence is still not a declaration (L6). The LOOP.md / BRIEFING.md envelope readers
 # refuse ANY repeated key since 6.71.3 (frontmatter-core.mjs frontmatterEntries; see floor-orchestration.md).
+# ONE HEADING GRAMMAR (7.3.0, lesson-heading-parser): an id resolves only against a VISIBLE lesson heading, read through
+# lessons-index-core.mjs's LESSON_HEADING_RE + lessonHeadings() — the reader the index and check-provenance share. A
+# `## L<n>` inside a column-0 fenced block, HTML comment or <pre>/<script>/<style>/<textarea> block is not one (the
+# block model is spec-template-core.mjs blockSpans, with its stated bounds); a BOM is stripped; `## L20` and `## L20 `
+# are L20; `## L020` / `## L0` are no heading.
 node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 ```
 
@@ -269,6 +274,10 @@ node pharn/floor/feature-name.mjs [--fresh]
 # grammar) moves the two-file target enum under <dir>; `--strict-commit` refuses `unknown`. BOUND: the flag
 # relocates nothing else — the promote command's target stays pharn/memory-bank/. Exits 1 on any RED, 2 on an
 # invalid --canon-root.
+# EXISTING IDS (7.3.0): read through lessons-index-core.mjs canonLines() — BOM stripped, VISIBLE lines only (a `##`
+# inside a fence / HTML comment / raw block is no entry). The id is still the first token after `##` (pattern-library
+# ids are not L<n>), so the set is a deliberate SUPERSET of the lessons set. A block left open at the end of canon is
+# a `canon` RED naming line numbers, whether or not it hides a heading yet (the promoted entry would land inside it).
 node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <candidate.json> <canon-file.md>
 ```
 
@@ -291,6 +300,10 @@ node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <ca
 # <dir>/lessons-learned.md instead (output stays pharn/.run/; the header names the root and a regenerate hint
 # carrying the flag); invalid → exit 2, nothing on stdout. This repo dogfoods it with
 # `--canon-root .dev/memory-bank`. BOUND: the flag relocates nothing else in the product.
+# 7.3.0: lessons are the VISIBLE LESSON_HEADING_RE headings (the grammar check-plan-lessons and check-provenance share);
+# a section ends at the next visible `##`; a lesson heading hidden by a block that never closes is a refusal
+# (ENUM_ERROR) naming both lines — a human closes the block in canon. Both generators (this one and the dev wrapper)
+# print one `RED — <message>` line on an invalid canon, exit 1, never a stack trace.
 node pharn/floor/gen-lessons-index.mjs [target-dir] [--canon-root <dir>]
 node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict] [--canon-root <dir>]
 ```

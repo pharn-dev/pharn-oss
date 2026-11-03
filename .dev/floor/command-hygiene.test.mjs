@@ -169,7 +169,9 @@ test("✧ the SKIP region is honored, and only inside its markers", () => {
 // formatter reached another way (a global binary, a new npm script) passes untouched.
 const NPX_TOOL_RE = /\bnpx\s+(?:--\S+\s+)*(prettier|markdownlint-cli2|eslint)\b/;
 const NPX_NO_INSTALL_RE = /\bnpx\s+--no-install\s+(prettier|markdownlint-cli2|eslint)\b/;
-const NPX_PENDING = new Set(["pharn-dev-build.md", "pharn-dev-memory-promote.md", "pharn-dev-review.md", "pharn-dev-verify.md"]);
+// 7.3.0 lesson-heading-parser: pharn-dev-memory-promote.md left the set — its only npx lines (a canon `--check`) were
+// removed, since both canon dirs are in the formatters' ignore files.
+const NPX_PENDING = new Set(["pharn-dev-build.md", "pharn-dev-review.md", "pharn-dev-verify.md"]);
 const npxOffenders = (text) =>
   text.split(/\r?\n/).filter((l) => !l.trimStart().startsWith("#") && NPX_TOOL_RE.test(l) && !NPX_NO_INSTALL_RE.test(l));
 
@@ -304,7 +306,7 @@ for (const gate of STEP_2B_GATES.filter((g) => g.tool !== "prettier")) {
 const MARKDOWNLINT_SITES = [
   "pharn-dev-build.md",
   "pharn-dev-grill.md",
-  "pharn-dev-memory-promote.md",
+  // pharn-dev-memory-promote.md left in 7.3.0: its canon `--check` step was removed (canon is in the ignore files).
   "pharn-dev-plan.md",
   "pharn-dev-regress.md",
   "pharn-dev-review.md",
@@ -866,8 +868,9 @@ for (const site of LESSON_EXTRACT_WIRING.filter((s) => s.wired)) {
 
   // The L7 GUARD, and it is the load-bearing rule in this file for this increment. A stage that only
   // PROPOSES a lesson must not hold write-scope to canon: declaring the canon path in `writes:` would
-  // make set-writes-scope.cjs resolve a scope the pre-write hook then PERMITS, handing this command the
-  // ungated canon write that check-provenance + the human accept exist to withhold. That is L7's own
+  // make set-writes-scope.cjs resolve a scope enforce-writes-scope then permits (protect-trusted-paths' canon
+  // denylist refuses it since 3.1.1 — a second layer, not a licence), the over-grant of the canon write that
+  // check-provenance + the human accept exist to withhold. That is L7's own
   // recorded instance (it happened to /review) and it was available here. Scoped to the `writes:` LINE
   // so the path may still appear in `reads:` and in prose, which it must.
   test(`✧ ${site.file} does NOT declare memory-bank canon in writes: (L7)`, () => {
@@ -1107,6 +1110,43 @@ for (const site of PROMOTE_GATE_PARITY) {
     });
   }
 }
+
+// ── The canon scope opens AFTER the human gate (7.3.0, lesson-heading-parser; review 2026-11-03) ──────────────────
+// Both promote commands set the promote-origin canon scope at Step 0, so the guarded write tools could reach canon
+// for the whole run, before the Step-5 accept. The setter and its `--amend-scope` now open Step 6. This pins the
+// ORDER in each command's text: every setter / amend line sits below the accept/deny question. Honest scope (P0): a
+// text-order pin — it never proves a run waited for the answer before running the line.
+const PROMOTE_SET_LINE = /^[ \t]*node \.claude\/hooks\/set-writes-scope\.cjs --from-(?:frontmatter|plan)\b/;
+const PROMOTE_AMEND_LINE = /^[ \t]*node pharn\/floor\/reconcile-baseline\.mjs --amend-scope\b/;
+const PROMOTE_GATE_LINE = /\*\*"Promote this\b/; // the Step-5 accept/deny question, in both commands
+
+function scopeBeforeGate(body) {
+  const lines = body.split(/\r?\n/);
+  const gate = lines.findIndex((l) => PROMOTE_GATE_LINE.test(l));
+  if (gate === -1) return ["<no accept/deny question found>"];
+  const early = lines.flatMap((l, i) =>
+    (PROMOTE_SET_LINE.test(l) || PROMOTE_AMEND_LINE.test(l)) && i < gate ? [`${i + 1}: ${l.trim()}`] : []
+  );
+  const sets = lines.filter((l) => PROMOTE_SET_LINE.test(l)).length;
+  const amends = lines.filter((l) => PROMOTE_AMEND_LINE.test(l)).length;
+  return sets === 0 || amends === 0 ? [`<${sets} setter / ${amends} amend line(s)>`, ...early] : early;
+}
+
+for (const surface of PROMOTE_SURFACES) {
+  test(`✧ ${surface.file} sets the canon scope only AFTER the accept/deny question`, () => {
+    assert.deepEqual(scopeBeforeGate(commandBody(surface.file)), []);
+  });
+}
+
+test("✧ the scope-after-gate rule DISCRIMINATES (L4): the pre-7.3.0 Step-0 placement is flagged", () => {
+  for (const surface of PROMOTE_SURFACES) {
+    const body = commandBody(surface.file);
+    const setter = body.split(/\r?\n/).find((l) => PROMOTE_SET_LINE.test(l));
+    const mutant = body.replace("## Step 1 — Discovery", `${setter.trim()}\n\n## Step 1 — Discovery`);
+    assert.notEqual(mutant, body, `${surface.file}: the mutant anchor must exist`);
+    assert.equal(scopeBeforeGate(mutant).length, 1, `${surface.file}: a setter above the gate must be flagged`);
+  }
+});
 
 // The CROSS-SURFACE closure guard, and it is the load-bearing half (L27's "present in its own case AND
 // absent from the other", which L29 calls the part that is not decorative). The paste error this pair

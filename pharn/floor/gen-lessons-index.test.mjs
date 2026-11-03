@@ -201,3 +201,33 @@ test("CLI: an invalid --canon-root exits 2 and writes nothing", () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// 7.3.0 (review 2026-11-03): an invalid canon printed node's uncaught stack trace. Now one `RED —` line, same exit.
+test("CLI: an invalid canon prints one `RED —` line, exits 1, writes nothing, and prints no stack trace", () => {
+  for (const [canon, reason] of [
+    ["## L20 \n\nbody\n", /L20's title is empty/],
+    ["## L1 — a\n\n## L1 — b\n", /duplicate lesson id "L1"/],
+    ["## L1 — a\n\n```\n## L2 — b\n", /never closes/],
+  ]) {
+    const dir = tmpRepo(canon);
+    try {
+      const r = spawnSync(process.execPath, [GEN_CLI, dir], { encoding: "utf8" });
+      assert.equal(r.status, 1);
+      assert.match(r.stdout, /^RED — lessons-index: /);
+      assert.match(r.stdout, reason);
+      assert.equal(r.stdout.trim().split("\n").length, 1, "one line");
+      assert.doesNotMatch(r.stdout + r.stderr, /\n\s+at |Node\.js v/, "no stack trace");
+      assert.equal(existsSync(join(dir, OUT_PATH)), false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test("errorText is total (L62): a value whose String() throws still renders", async () => {
+  const { errorText } = await import("./gen-lessons-index.mjs");
+  const hostile = JSON.parse('{"toString":1}');
+  assert.throws(() => String(hostile), "control: String() really throws on it");
+  assert.equal(errorText(hostile), "[object Object]");
+  assert.equal(errorText(new Error("a\nb")), "a");
+});

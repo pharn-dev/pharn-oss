@@ -72,6 +72,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **One lesson-heading grammar: a `## L<n>` inside a fenced block or an HTML comment is no longer a lesson**
+  (review 2026-11-03, MEDIUM). `check-plan-lessons.mjs`, the lessons index (`lessons-index-core.mjs`, so both
+  `gen-lessons-index.mjs` and `check-lessons-index.mjs`) and `check-provenance.mjs` each scanned canon line by line
+  with their own regex, so a quoted example or a commented-out entry was a citable, indexed lesson that blocked a real
+  id, and the three disagreed on `## L20`, `## L20` and a BOM (a BOM before the first `## L1` dropped L1 from the
+  index and let a duplicate L1 past provenance). They now read canon through one exported `LESSON_HEADING_RE` and one
+  reader that strips the BOM and skips lines inside a column-0 fenced block, HTML comment or `<pre>`/`<script>`/
+  `<style>`/`<textarea>` block — `spec-template-core.mjs`'s existing block model, now exported as `blockSpans()`, so a
+  change to it moves both readers. `## L20` and `## L20` are L20 everywhere; `## L020` and `## L0` are no lesson
+  heading anywhere. A lesson heading hidden by a block that never closes is refused by the index (ENUM_ERROR), and
+  provenance refuses any block left open at the end of canon (`canon` RED — the promoted entry would be appended
+  inside it), both naming line numbers only. Both generators print one
+  `RED — <message>` line on an invalid canon instead of a stack trace (exit 1 as before). Bound: the block model is
+  not a CommonMark parser (an opener indented 1–3 columns and HTML blocks of types 6–7 are not modelled, fail-open as
+  before); provenance's id set stays a superset (the first token after any visible `##`, for pattern ids).
+- 2026-11-03: **`/pharn-memory-promote` sets the canon writes-scope only after the accept** (review 2026-11-03, LOW).
+  Step 0 set it, so the guarded write tools could reach the canon file for the whole run, before the human had seen
+  the entry. The setter and `--amend-scope` now open Step 6; a non-zero setter exit, or a count other than
+  `1 path(s)`, halts with nothing written. The command also stops saying a plan naming canon "would grant an ungated
+  canon write (follow-up `canon-write-denylist`)": `protect-trusted-paths.cjs` has denied that since 3.1.1, and from
+  7.3.0 the setter refuses such a plan; a Bash write still reaches canon. `/pharn-dev-memory-promote` gets the same
+  move and corrections, its retired `--from-plan` annotation route becomes a human hand-edit, and its canon
+  `--check` format step (bare `npx`) is removed, since canon is in both formatters' ignore files. A ✧ pin holds the
+  setter below the accept/deny question in both commands.
+- 2026-11-03: **Comments no longer repeat L14's false JavaScript fact** (review 2026-11-03). `lessons-index-core.mjs`
+  and `mark-phase.mjs` said `$` without the `m` flag matches before a trailing newline, so `/^[a-z0-9-]+$/` admits
+  `"enum-gate\n"`; measured on Node 24 it does not (the hole is a `.trim()` or a line-split before the regex). The
+  guards stay; their stated reason is corrected, and a dev test asserts the measured fact. Canon L14's own sentence is
+  proposed for the owner in `.dev/features/lesson-heading-parser/DOCS-PROPOSAL.md`.
 - 2026-11-03: **`/pharn-loop` no longer commits an edit the user made before the run** (audit 2026-11-03, MEDIUM).
   A file named in the plan's `## Files` that the user had already edited, and that the run then left alone, was
   committed on `pharn-loop/<name>` with the user's bytes. `loop-closeout.mjs` now asks the run's pre-run snapshot (the

@@ -19,7 +19,7 @@
 // Non-LLM, stdlib-only.
 
 import "../../pharn/floor/runtime-floor.mjs";
-import { generate as productGenerate } from "../../pharn/floor/gen-lessons-index.mjs";
+import { errorText, generate as productGenerate } from "../../pharn/floor/gen-lessons-index.mjs";
 import { STATUS_NO_CANON } from "../../pharn/floor/lessons-index-core.mjs";
 import { buildIndex, DEV_PROFILE, OUT_PATH, CANON_PATH } from "./lessons-index-core.mjs";
 
@@ -33,7 +33,15 @@ export function generate(targetDir) {
 
 function main() {
   const target = process.argv[2] || ".";
-  const { entries, updated } = generate(target);
+  let result;
+  try {
+    result = generate(target);
+  } catch (e) {
+    // A RED line, never a stack trace (7.3.0): same exit code (1), the core's own message.
+    process.stdout.write(`RED — ${errorText(e)}\n`);
+    process.exit(1);
+  }
+  const { entries, updated } = result;
   process.stdout.write(
     `lessons-index: ${entries.length} lesson(s) from ${CANON_PATH}; ${OUT_PATH} ${updated ? "updated" : "already current"}\n`
   );

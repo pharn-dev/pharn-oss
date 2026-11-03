@@ -4,7 +4,7 @@
 //
 // Floor primitive (ARCHITECTURE §2): #3 (enum / regex) — the `applied_lessons` field must be PRESENT in
 // the plan's structured header, must match a fixed grammar (`none` | a list of `L<n>` ids), and every
-// cited id must EXIST as a `## L<n> ` heading in the lessons file. It is the floor reduction of the §6
+// cited id must EXIST as a visible `## L<n>` heading in the lessons file. It is the floor reduction of the §6
 // plan-artifact row's `applied_lessons` key field: a plan either cites the lessons it applied or says
 // `none` — silent omission becomes deterministically impossible. Cited, not restated (P4).
 //
@@ -63,13 +63,14 @@
 // Usage:
 //   node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 //       exit 0 (GREEN) iff `applied_lessons` is present exactly once and well-formed AND (it is `none`, or every
-//       cited `L<n>` both has a `## L<n> ` heading in the lessons file AND is referenced in the plan
+//       cited `L<n>` both has a visible `## L<n>` heading in the lessons file AND is referenced in the plan
 //       body); exit 1 (RED) otherwise.
 //
 // Exit: 0 only when the declaration holds; 1 on every refusal (fail-closed).
 
 import { readFileSync } from "node:fs";
 import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
+import { lessonHeadings } from "./lessons-index-core.mjs";
 
 const FIELD = "applied_lessons";
 
@@ -79,8 +80,8 @@ const NONE_RE = /^none$/;
 const LIST_RE = /^\[\s*L\d+\s*(?:,\s*L\d+\s*)*\]$/;
 const EMPTY_LIST_RE = /^\[\s*\]$/;
 
-// A lesson heading: `## L<n> — <title>`. The trailing space is required so `## L1x` cannot match `L1`.
-const HEADING_RE = /^## L(\d+) /;
+// A lesson heading is lessons-index-core.mjs's LESSON_HEADING_RE, read through its lessonHeadings() — the one grammar
+// the index and check-provenance share (7.3.0; this file used to carry a private heading regex of its own).
 
 function red(msg) {
   console.log(`RED — ${msg}`);
@@ -166,14 +167,12 @@ function fromBulletHeader(text) {
   return { values, body: bodyStart === -1 ? "" : lines.slice(bodyStart).join("\n") };
 }
 
-// Collect the lesson ids that actually EXIST, as a membership set (P5 — a set test, not a substring scan).
+// Collect the lesson ids that actually EXIST, as a membership set (P5 — a set test, not a substring scan). The
+// headings come from lessons-index-core.mjs's one reader, so this set is the index's set by construction: a VISIBLE
+// `## L<n>` line, never one inside a fenced block, an HTML comment or a raw HTML block (7.3.0). A block that never
+// closes is not this checker's RED — its question is whether the cited id is a visible heading — the index refuses it.
 function declaredLessonIds(text) {
-  const ids = new Set();
-  for (const line of text.split(/\r?\n/)) {
-    const m = line.match(HEADING_RE);
-    if (m) ids.add(`L${m[1]}`);
-  }
-  return ids;
+  return new Set(lessonHeadings(text).map((h) => h.id));
 }
 
 function gate(planPath, lessonsPath) {
@@ -257,8 +256,9 @@ function gate(planPath, lessonsPath) {
   const missing = ids.filter((id) => !present.has(id));
   if (missing.length > 0) {
     return red(
-      `PLAN's \`${FIELD}\` cites ${missing.join(", ")} — no matching \`## <id> \` heading in ` +
-        `${lessonsPath} (it declares ${present.size} lesson(s)). Cite only promoted lessons.`
+      `PLAN's \`${FIELD}\` cites ${missing.join(", ")} — no matching \`## <id>\` lesson heading in ` +
+        `${lessonsPath} (it declares ${present.size} lesson(s); a heading inside a fenced block or an HTML comment is ` +
+        `not one). Cite only promoted lessons.`
     );
   }
 

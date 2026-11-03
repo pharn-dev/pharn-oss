@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, openSync, readSync, fstatSync, closeSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { generate } from "./gen-lessons-index.mjs";
 import { CANON_PATH, OUT_PATH } from "./lessons-index-core.mjs";
 
@@ -121,6 +122,21 @@ test("a duplicate id in canon aborts the generator and writes nothing", () => {
   const dir = fixture("## L1 — a\n\nx\n\n## L1 — b\n\ny");
   try {
     assert.throws(() => generate(dir), /duplicate lesson id/);
+    assert.equal(existsSync(join(dir, OUT_PATH)), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// 7.3.0: the CLI prints one `RED —` line on an invalid canon, never node's stack trace; the exit code stays 1.
+test("CLI: an invalid canon prints one `RED —` line, exits 1, and prints no stack trace", () => {
+  const dir = fixture("## L1 — a\n\nx\n\n## L1 — b\n\ny");
+  try {
+    const cli = new URL("./gen-lessons-index.mjs", import.meta.url).pathname;
+    const r = spawnSync(process.execPath, [cli, dir], { encoding: "utf8" });
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /^RED — lessons-index: duplicate lesson id "L1"/);
+    assert.doesNotMatch(r.stdout + r.stderr, /\n\s+at |Node\.js v/);
     assert.equal(existsSync(join(dir, OUT_PATH)), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
