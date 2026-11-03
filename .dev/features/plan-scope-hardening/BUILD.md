@@ -39,8 +39,26 @@ recommended (1 with two conditions: the `--check` plan-time line, and the one-se
 
 ## Floor
 
-- `node pharn/floor/validate.mjs .` — recorded below at the build's end.
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."` (exit 0).
+- `check:changelog-entry --merge-base origin/main` → GREEN, 4 new entries.
 
-## apply.py proof
+## apply.py proof (L26 — a real clone with its own configs and `node_modules`)
 
-Recorded below once run.
+- Script `.dev/features/plan-scope-hardening/apply.py` (uncommitted), sha256
+  `132b1eb7b90aafabf6a07a727a1f9f289ff85460c652a78342bec63540fd79dd`. Target `.claude/hooks/set-writes-scope.cjs`:
+  BEFORE `a2fc1f0bac649f3558fc79c24c45bb50c7481a6f5d835b42fa35832a905a9d9b`, AFTER
+  `9ef2028bee4f4e569eaf7feb7789a922fbe89e6811a9b8524053adbb406a3775`.
+- `git clone --branch fix/plan-scope-hardening` (from origin, commit `a5170d45`) into the scratchpad, `npm ci`, the
+  script run with `ROOT` pointed at the clone: `apply.py: all targets patched and verified`, exit 0. A second run
+  aborts with `BEFORE hash mismatch … nothing written`, exit 1.
+- In the clone: `prettier --check` and `eslint` over the patched file clean; the six hook suites 598/598; then (the
+  patch committed in the clone, as the owner will) `npm run check`: every gate GREEN through `check:reconcile`, and
+  `npm test` 6217 pass, 1 fail, 1 skipped of 6219 (2617 s, other agents loading the host). The one failure is the
+  known load-timing pair's first test, `entry-gates.test.mjs` "CLI: TAKEOVER — the runner killed mid-gate …"
+  (17.9 s under load); re-run alone: `✔ … (5252.618ms)`, and its twin `✔ OBSERVED: TAKEOVER … (4702.037292ms)`,
+  2/2 pass (review LOW-1).
+- Unpatched (this worktree), the new ★ setter cases fail as they must: the `READER_FIXTURES` parity test fails on its
+  first fixture ("setter scope").
+- One transcription defect found and fixed before hand-over: the Write tool turned the hook's literal `﻿` (in
+  `hooksPathValues`) into a BOM character; the script now restores the six characters with `chr(0xFEFF)` before
+  hashing, and its payload was re-verified to hash to AFTER.
