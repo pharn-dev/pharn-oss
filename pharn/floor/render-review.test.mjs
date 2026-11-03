@@ -503,6 +503,29 @@ test("★ notes: rendered when NEWER than assignments.json; NOT NEWER (equal or 
   assert.match(long, new RegExp(`Cut at ${NOTES_CAP} characters \\(5 more`));
 });
 
+test("★ notes with NO assignments.json cannot be dated against the run → not rendered, the run still renders", () => {
+  scratch((root) => {
+    const dir = lay(root, { notes: "## Lens agents\nskills: mode=none" });
+    rmSync(join(dir, "assignments.json")); // lay()'s default writes one; this run recorded none
+    const r = cli(["demo"], root);
+    assert.equal(r.status, 0, r.stderr);
+    const md = readFileSync(join(dir, "REVIEW.md"), "utf8");
+    assert.ok(!md.includes("skills: mode=none"), "undatable notes must not render");
+    assert.match(md, /is not newer than this run's `assignments.json` \(or cannot be dated\)/);
+  });
+});
+
+test("★ CLI: a REVIEW.md that cannot be written exits 1, names the path on stderr and prints no summary", () => {
+  scratch((root) => {
+    const dir = lay(root);
+    mkdirSync(join(dir, "REVIEW.md")); // a directory where the file goes: writeFileSync fails
+    const r = cli(["demo"], root);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /^render-review: cannot write pharn\/features\/demo\/REVIEW\.md: /);
+    assert.equal(r.stdout, "", "no `written` line for a write that did not happen");
+  });
+});
+
 test("★ the notes path is Write-tool territory: under pharn/.run/, never inside a CLI-owned run-state directory", () => {
   // The three run-state directories belong to run-marker.mjs / require-loop-record.cjs, and 7.3.0's guard denies the
   // Write tool there; the orchestrator writes the notes with the Write tool, so they must sit outside all three.

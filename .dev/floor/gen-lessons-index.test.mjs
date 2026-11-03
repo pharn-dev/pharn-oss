@@ -142,3 +142,19 @@ test("CLI: an invalid canon prints one `RED —` line, exits 1, and prints no st
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("CLI: a valid canon writes the index, prints one summary line and exits 0; a re-run reports `already current`", () => {
+  const dir = fixture(CANON);
+  try {
+    const cli = new URL("./gen-lessons-index.mjs", import.meta.url).pathname;
+    const first = spawnSync(process.execPath, [cli, dir], { encoding: "utf8" });
+    assert.equal(first.status, 0, first.stdout + first.stderr);
+    assert.equal(first.stdout, `lessons-index: 2 lesson(s) from ${CANON_PATH}; ${OUT_PATH} updated\n`);
+    assert.match(readFileSync(join(dir, OUT_PATH), "utf8"), /2 lessons/);
+    const again = spawnSync(process.execPath, [cli, dir], { encoding: "utf8" });
+    assert.equal(again.status, 0);
+    assert.equal(again.stdout, `lessons-index: 2 lesson(s) from ${CANON_PATH}; ${OUT_PATH} already current\n`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

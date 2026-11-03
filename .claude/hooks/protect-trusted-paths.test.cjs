@@ -1332,6 +1332,23 @@ test("✧ 7.3.0 the run-state rule judges the target a symlink reaches (both pas
   assert.match(r.stderr, /a delivery run's state/);
 });
 
+test("✧ 7.3.0 run state through a backslash-named link — found only by the filesystem's reading (PASS 2)", ONLY_POSIX, () => {
+  const sb = sandbox([]);
+  fs.mkdirSync(join(sb, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+  fs.symlinkSync(".", join(sb, "s\\x"));
+  assert.equal(
+    fs.statSync(join(sb, "s\\x", "pharn", ".run", "pharn-loop", "demo")).ino,
+    fs.statSync(join(sb, "pharn", ".run", "pharn-loop", "demo")).ino,
+    "premise: the same directory"
+  );
+  const r = writeIn(sb, "s\\x/pharn/.run/pharn-loop/demo/active.json");
+  assert.equal(r.status, 2, r.stdout);
+  assert.match(r.stderr, /a delivery run's state/);
+  assert.match(r.stderr, /s\\x\/pharn\/\.run\/pharn-loop\/demo\/active\.json -> .*pharn\/\.run\/pharn-loop\/demo\/active\.json/);
+  // CONTROL: the same link to a neighbouring pharn/.run/ path is not run state.
+  assert.equal(writeIn(sb, "s\\x/pharn/.run/pharn-test/x.json").status, 0);
+});
+
 for (const p of [
   "pharn/.run/pharn-loop", // the directory itself: a planted FILE there already fails closed (the run cannot open)
   "pharn/.run/pharn-loopx/demo/active.json",

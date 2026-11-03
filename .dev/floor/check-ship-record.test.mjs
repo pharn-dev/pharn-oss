@@ -36,6 +36,7 @@ import {
   STOP_STAGES,
   parseBlock,
   isGreen,
+  valueOk,
   main,
 } from "./check-ship-record.mjs";
 import { parseGateChain } from "./check-contributing-gates.mjs";
@@ -373,6 +374,32 @@ test("✧ main() runs in-process and writes through io.out", () => {
   let out = "";
   assert.equal(main(["--nope"], { out: (s) => (out += s) }), 2);
   assert.match(out, /\[BAD_USAGE\]/);
+});
+
+test("valueOk: a key outside BLOCK_KEYS has no grammar, so no value is in it", () => {
+  assert.equal(valueOk("verdict-review", "exit 0"), false);
+  assert.equal(valueOk("verdict-review", "PASS"), false);
+  assert.equal(valueOk("verdict-", "no-regressions"), false);
+  // CONTROL: the same values are accepted under the keys whose grammar names them.
+  assert.equal(valueOk("verdict-build", "exit 0"), true);
+  assert.equal(valueOk("verdict-regress", "no-regressions"), true);
+});
+
+test("G12: a target that does not exist, or a directory outside any git repository, is refused (exit 2)", () => {
+  const outside = mkdtempSync(join(tmpdir(), "pharn-ssr-nogit-"));
+  try {
+    const absent = run(["--base-ref", "main", join(outside, "no-such-dir")], outside);
+    assert.equal(absent.code, 2, absent.out);
+    assert.match(absent.out, /\[HEAD_UNREADABLE\]/);
+    assert.match(absent.out, /is not a directory/);
+    // Not a repository: `git rev-parse --show-prefix` fails, so no prefix is claimed and the base read refuses.
+    const notRepo = run(["--base-ref", "main", outside], outside);
+    assert.equal(notRepo.code, 2, notRepo.out);
+    assert.match(notRepo.out, /\[BASE_UNREADABLE\]/);
+    assert.doesNotMatch(notRepo.out, /GREEN/);
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
 });
 
 // ── W: wiring ────────────────────────────────────────────────────────────────────────────────────────────────────

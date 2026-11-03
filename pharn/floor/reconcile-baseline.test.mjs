@@ -800,6 +800,28 @@ test("★ an unreadable prior baseline cannot be attributed: ANY other feature's
   assert.equal(anchorCli(dir2).status, 0);
 });
 
+test("★ an unreadable prior baseline and a run-state directory that cannot be listed (a planted FILE) refuses, fail-closed", () => {
+  const dir = makeRepo();
+  runAAnchored(dir);
+  writeFileSync(join(dir, RECORD_PATH), "{ torn");
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+  writeFileSync(join(dir, "pharn", ".run", "pharn-loop"), "planted\n"); // a file where the state directory belongs
+  assert.deepEqual(epochOwnerOpen(dir, { set_by: "pharn/features/b/PLAN.md" }), {
+    refuse: true,
+    owner: null,
+    markers: [{ path: "pharn/.run/pharn-loop/", ageHours: null, unlisted: true }],
+  });
+  scopeFor(dir, "b");
+  const r = anchorCli(dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /cannot be read/);
+  assert.match(
+    r.stderr,
+    /a run marker under pharn\/\.run\/pharn-loop\/ \(its name is not a plain slug, or the directory cannot be listed\)/
+  );
+  assert.equal(readFileSync(join(dir, RECORD_PATH), "utf8"), "{ torn", "the torn record is left for a human");
+});
+
 test("★ a legacy record with a null scope_snapshot derives no feature and never refuses", () => {
   const dir = makeRepo();
   runAAnchored(dir);
