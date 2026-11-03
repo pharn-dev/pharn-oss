@@ -84,6 +84,9 @@ ordering, promote prose and L14; axis2 report "Memory poisoning"). Re-checked in
 - `parseLessons` reads headings and section ends from `canonLines` (a section ends at the next VISIBLE `##` line) and
   THROWS when `unclosed` is set: a block left open hides every later lesson from a reader, and a silent drop is the
   BOM defect again. Dev canon has no column-0 fence or comment opener today (grep), so the committed index does not move.
+  The refusal names the opener's line and the hidden heading's line; its remedy is a human edit that closes the block
+  in canon (never the agent — canon is human-only). In a user's project `/pharn-plan` reads `ENUM_ERROR` as "read
+  canon in full", so it degrades, never blocks.
 
 **Consumers.** `check-plan-lessons.mjs` `declaredLessonIds` = `lessonHeadings(text)` ids (a hidden lesson is not
 citable; an unclosed block is not its RED — the plan's question is whether the cited id is a visible heading).
@@ -99,7 +102,10 @@ wrapper's allowlist is `generate`, `main` — unchanged).
 `--amend-scope` line move, verbatim, to the head of Step 6 ("On an explicit accept, set the scope …"), before the
 TOCTOU re-read. Every "Step 0 pinned the scope" / "re-run Step 0's setter" reference is re-pointed to Step 6. The dev
 description's order sentence follows. `pharn-dev-ship.md` 2b.4's "It sets its own writes-scope, runs check-provenance,
-and halts" is re-ordered.
+and halts" is re-ordered. A non-zero setter exit at Step 6, or a printed count other than `1 path(s)`, is a HALT with
+nothing written (the accepted candidate stays in scratch; re-run from Step 6 once the cause is fixed).
+**Coupling, stated (GATE 1 decision 1):** both `spec-template-core.mjs`'s and `lessons-index-core.mjs`'s headers say
+that the lessons grammar reads the SPEC template's block model, so a change to that model moves which lessons exist.
 
 **Promote prose.** The three "would grant an ungated canon write … follow-up `canon-write-denylist`" passages become:
 closed — `protect-trusted-paths.cjs` denies a canon write under any scope whose origin is not a promote command
@@ -121,7 +127,6 @@ in a user's project, under the user's ignore files, which G1 does not change (de
 - `pharn/floor/check-plan-lessons.mjs` — `declaredLessonIds` via `lessonHeadings`; header grammar line.
 - `pharn/floor/check-provenance.mjs` — `existingIds` over visible lines, BOM stripped, unclosed-block RED.
 - `pharn/floor/gen-lessons-index.mjs` — `main()` prints `RED — <message>`, exit 1.
-- `pharn/floor/merge-findings.mjs` — L14 reason comment (`:200-204`), comment only.
 - `pharn/floor/mark-phase.mjs` — L14 reason comment (`:149-151`), comment only.
 - `pharn/floor/lessons-index-core.test.mjs` — shared fixtures: fenced / `~~~` / commented / `<pre>` / unclosed /
   BOM-first / `## L20` / `## L20` / `## L020`; ✧ closure (one grammar, three importers) + its discrimination control.
@@ -142,7 +147,10 @@ in a user's project, under the user's ignore files, which G1 does not change (de
 - `.claude/commands/pharn-dev-memory-promote.md` — the same move; `:104-116`, `:370-375`, `:535-540` prose; canon
   format block removed; description order.
 - `.claude/commands/pharn-dev-ship.md` — `writes:` comment's "hook then PERMITS" clause (`:20-25`); 2b.4 order line.
+- `.dev/guides/floor-checks.md` — the `check-plan-lessons.mjs`, product `check-provenance.mjs` and product lessons-index
+  sections: visible headings only, the grammar, BOM, the unclosed-block refusal, the generators' `RED —` line.
 - `CHANGELOG.md` — `[Unreleased]` `### Fixed` / `### Changed` entries.
+- `.dev/features/lesson-heading-parser/BUILD.md` — build note and the markdown-it probe record (L55/L56/L74).
 - `.dev/features/lesson-heading-parser/DOCS-PROPOSAL.md` — canon L14 correction (in-place sentence and a correction
   entry candidate), for the owner.
 
@@ -158,7 +166,8 @@ in a user's project, under the user's ignore files, which G1 does not change (de
   "PERMITTED" — still true (a past event). Trusted docs: none.
 - Referent "`--from-plan` annotation route": `pharn-dev-memory-promote.md:107-108` edited; no other hit.
 - L14's false reason (`trailing newline` / `before a … newline` / `is TRUE`): `lessons-index-core.mjs:177-181` edited;
-  `merge-findings.mjs:203` edited; `mark-phase.mjs:150-151` edited; `.dev/floor/check-provenance.test.mjs:16-17`,
+  `merge-findings.mjs:203` — NOT touched (GATE 1: G8 rewrites that code this release; the orchestrator relays the
+  correction to G8); `mark-phase.mjs:150-151` edited; `.dev/floor/check-provenance.test.mjs:16-17`,
   `:363-364` edited; `check-loop-record.mjs:145` — G2's (already corrected on `fix/loop-marker-integrity`, not
   touched); `check-provenance.mjs:216-222`, `.dev/floor/check-skills-version-recorded.mjs:209`,
   `.dev/floor/check-version-badge.mjs:84-86`, `pharn/floor/check-provenance.test.mjs:500` — already state the true
@@ -200,7 +209,7 @@ No capability (`role:`) is added or changed; every change is floor code or comma
 - "the canon scope is set only after the accept" → ADVISORY (command order; the setter is a Bash call, L19). What the
   floor adds is a ✧ text-order pin, never proof a run followed it. The window shrinks from the whole run to after the
   accept; the gate itself stays procedural (the floor cannot see a human said yes).
-- "the generator never prints a stack trace" → floor-adjacent: a tested catch; exit code unchanged (1).
+- "the generator never prints a stack trace" → advisory: CLI hygiene pinned by a test; the exit code (1) is unchanged.
 - Comment and prose corrections → advisory (nothing reads shipped prose; the ✧ pins are vocabulary pins).
 
 ## Trust audit (P2)
@@ -216,7 +225,11 @@ Every new branch is regex membership or a line-number comparison. `parseLessons`
 unsafe title, or unclosed-hiding block; provenance REDs on the same unclosed state; every terminal fallback is a RED
 that names the line, never a guess.
 
-## Decisions taken without a human (for GATE 1)
+## Decisions (GATE 1 — decided by the batch orchestrator, a model, under the owner's delegation; not a human approval)
+
+Approved as recommended: 1–5 and 7 (1: state the coupling in both headers). 6 approved EXCEPT
+`pharn/floor/merge-findings.mjs` (G8's; left alone); every other sweep edit stays on its cited lines. Grill F2–F5
+folded in above (guide added to `## Files`, unclosed-block remedy, Step-6 setter HALT, `advisory` label).
 
 1. Reuse `spec-template-core.mjs`'s column-0 block model (export `blockSpans`), not G1's new `plan-files-core.mjs`
    `scanLines` (not merged; a `## Files` list-item reader at any indent, a different question) and not a new copy.
@@ -225,11 +238,11 @@ that names the line, never a guess.
 3. An unclosed block hiding a lesson heading is refused by the index and provenance (new, fail-closed).
 4. Provenance keeps its generic first-token id set (pattern-library) — a superset — rather than `LESSON_HEADING_RE`.
 5. Product promote's `vendor/bin` `--check` lines kept (they run under a user's ignore files); dev canon block removed.
-6. L50 sweep hits outside the finding's lines are fixed here (two product floor comment-only files, four comment sites
+6. L50 sweep hits outside the finding's lines are fixed here (one product floor comment-only file, four comment sites
    in tests and one in `pharn-dev-ship.md`).
 7. Canon L14: DOCS-PROPOSAL carries (a) the in-place sentence replacement and (b) a correction-entry candidate,
    validated with `.dev/floor/check-provenance.mjs` at GATE 2 (its `source` needs this run's REVIEW.md).
 
 ## Open questions (HALT)
 
-- None blocking. The seven decisions above are recommendations for the orchestrator at GATE 1.
+- None — resolved at GATE 1 (above).
