@@ -12,8 +12,8 @@ recommended (1 with two conditions: the `--check` plan-time line, and the one-se
 - `pharn/floor/apply-plan-deletions.mjs` — the reader's own refusal reason.
 - Tests: `check-build-complete.test.mjs` (★ `READER_FIXTURES`, 20 fixtures), `render-ship-briefing.test.mjs`,
   `apply-plan-deletions.test.mjs`, `.claude/hooks/set-writes-scope.test.cjs` (7.3.0 block + ✧ pins),
-  `.claude/hooks/enforce-writes-scope.test.cjs` (one fixture's `Written by \`/build\`:` label → blockquote),
-  `.dev/floor/command-hygiene.test.mjs` (`--no-install` pins; ✧ canon in both ignore files).
+  `.claude/hooks/enforce-writes-scope.test.cjs` (one fixture's "Written by /build:" group label becomes a
+  blockquote), `.dev/floor/command-hygiene.test.mjs` (`--no-install` pins; ✧ canon in both ignore files).
 - Commands: `pharn-dev-build.md` (`npx --no-install`, Step 0 STOP sentence), `pharn-plan.md` and `pharn-dev-plan.md`
   (the `--check` line and the rule), `pharn-loop.md` (one grant for the `--check` line).
 - Config/docs: `.prettierignore`, `.markdownlint-cli2.jsonc`, `pharn/floor/README.md`, `pharn/pharn-contracts/ac-tests.md`,
@@ -32,7 +32,7 @@ recommended (1 with two conditions: the `--check` plan-time line, and the one-se
   visible `<h2>Files</h2>`): agreement on the comment-hidden heading, multi-line and one-line comment items, `<!-->`,
   `<!--->`, the unclosed comment, `<!--` in a code span, a trailing inline comment, a fence line inside a comment and
   a comment opener inside a fence. Two divergences, both the reader hiding MORE (stated as bounds in the core header
-  and pinned as `bound:` fixtures): an inline `<!--` at an item's end then a new `- ` item (markdown-it shows
+  and pinned as `bound:` fixtures): an inline `<!--` at an item's end then a new list item (markdown-it shows
   `src/b.ts`; the reader drops it), and a code span wrapped across lines holding `<!--` (markdown-it shows b and c).
 - **Formatter reach:** `prettier --file-info .dev/memory-bank/lessons-learned.md` → `ignored: true` (also
   `pharn/memory-bank/x.md`); `markdownlint-cli2 --no-globs .dev/memory-bank/lessons-learned.md` → `Linting: 0 files`.
