@@ -140,6 +140,7 @@ human approval.
 - `.dev/features/loop-marker-integrity/PLAN.md` — this plan — dev apparatus
 - `.dev/features/loop-marker-integrity/GRILL.md` — the grill log — dev apparatus
 - `.dev/features/loop-marker-integrity/BUILD-NOTES.md` — build notes (the human-patch sequence, measurements) — dev apparatus
+- `.dev/features/loop-marker-integrity/apply.py` — the owner-run hook patch (batch protocol); written here, NEVER committed — dev apparatus
 - `.dev/features/loop-marker-integrity/DOCS-PROPOSAL.md` — exact replacement text for LIMITS.md / THREAT-MODEL.md (human-applied by the orchestrator's script) — dev apparatus
 - `pharn/floor/loop-record-core.mjs` — export the frozen `BLOCKED_IDS` — product floor
 - `pharn/floor/check-loop-record.mjs` — A8 `blocked` membership (`BLOCKED_UNKNOWN`); L14 comment corrected — product floor
@@ -155,8 +156,26 @@ human approval.
 - `.claude/hooks/require-loop-record.test.cjs` — `--open` twice → exit 2, first bytes kept; `--mode quick|full` written, bad mode refused; atomic write (stubbed failing write leaves no `active.json`, no tmp); pinned line substitutes `<mode>` — hook tests (writable)
 - `.dev/floor/command-hygiene.test.mjs` — `LOOP_GUARD_OPEN` gains `--mode <mode>`; `SHELL_VALUES` `<mode>`; the one ungranted line + corpus test (no `allowed-tools` entry contains `--accept-host-execution`); `cannot end its turn` absent; `STUCK_POINTS` ids == `BLOCKED_IDS` — dev apparatus
 - `.dev/guides/floor-orchestration.md` — `require-loop-record.cjs` usage + refusal; `check-loop-record.mjs` / `check-loop-decision.mjs` new REDs — dev apparatus
+- `pharn/floor/check-run-isolation.mjs` — BUILD AMENDMENT A1: `--accept-host-execution` accepted only as the FIRST argument — product floor
+- `pharn/floor/check-run-isolation-core.mjs` — A1: the `usage` refusal text names the new order — product floor
+- `pharn/floor/check-run-isolation.test.mjs` — A1: a trailing flag is `usage`; the leading one is accepted — product floor tests
+- `pharn/floor/entry-gates.test.mjs` — A1: the WIRING pin's flagged line in its new order — product floor tests
+- `pharn/floor/run-marker.test.mjs` — two WIRING tests execute the loop's `--open` line and must substitute `<mode>` (found by the build's first `npm test`) — product floor tests
+- `.dev/guides/floor-gates.md` — A1: the isolation CLI usage line — dev apparatus
 - `README.md` — one sentence: the line that accepts host execution is not pre-approved — repo meta
 - `CHANGELOG.md` — `## [Unreleased]` entries — repo meta
+
+## Build amendment A1 (found at build, after GATE 1 — reported to the orchestrator)
+
+The new test "each LOOP_UNGRANTED_LINES line is … covered by NO grant" went RED on the first run: deleting the flagged
+grant was not enough, because the UNFLAGGED grant `Bash(node pharn/floor/check-run-isolation.mjs --feature * >
+pharn/.run/pharn-loop/*/isolation.json)` matches `--feature '<name>' --accept-host-execution > …` — the `*` absorbs the
+flag (a measured failure of D3 as planned, not a hypothetical). Fix: `check-run-isolation.mjs` accepts
+`--accept-host-execution` only as its FIRST argument (anywhere else is `usage`, exit 2 → S15), and the pinned flagged
+line becomes `node pharn/floor/check-run-isolation.mjs --accept-host-execution --feature '<name>' > …`. No granted
+pattern starts that way, and the granted pattern can no longer carry the flag to a CLI that honours it. Bound: this
+reasons over Claude Code's `*` as "any text", the reading `bashGrantRe` encodes; the harness's real matcher is not
+asserted here (ADVISORY).
 
 ## Human-applied patch (NOT in `## Files` — the setter refuses a hook script, and a human writes it)
 

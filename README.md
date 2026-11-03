@@ -174,8 +174,10 @@ what it skips and what still stops it.
 
 Run an unattended loop in a container that holds none of your credentials. At entry it checks a fixed list of
 container markers and credential files and env vars. When it finds no container marker, or finds a credential, it
-refuses to start unless you pass `--accept-host-execution`. When it cannot read your home directory or git config, it
-refuses even with that flag (7.1.0;
+refuses to start unless you pass `--accept-host-execution`. Since 7.3.0 the command does not pre-approve the line that
+accepts it, so Claude Code's permission settings decide: in the default mode it asks you at the start of the run; in
+auto mode or under an allow rule of yours it may run the line without asking, and nothing in PHARN can tell who chose.
+When it cannot read your home directory or git config, it refuses even with that flag (7.1.0;
 [Running /pharn-loop in a container](./docs/pipeline.md#running-pharn-loop-in-a-container)).
 
 Use the full `/pharn-loop` for a feature that spans several files, has acceptance tests, or is likely to need more

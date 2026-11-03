@@ -720,7 +720,8 @@ for (const { file, open, next, stopRow } of WIRING) {
       const cap = pinnedLine(file, CAPTURE_RE).replace("<name>", FEATURE);
       const refused = runShellLine(dir, cap);
       assert.equal(refused.status, 2, "the exit the STOP branch reads is non-zero when no run is open");
-      const o = runShellLine(dir, pinnedLine(file, open).replace("<name>", FEATURE).replace("<M>", "3"));
+      // 7.3.0: the loop's open line also takes `<mode>` (full here; the quick form passes quick).
+      const o = runShellLine(dir, pinnedLine(file, open).replace("<name>", FEATURE).replace("<M>", "3").replace("<mode>", "full"));
       assert.equal(o.status, 0, o.stderr);
       const r = runShellLine(dir, cap);
       assert.equal(r.status, 0, r.stderr);

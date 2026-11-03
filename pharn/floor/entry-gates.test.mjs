@@ -927,8 +927,9 @@ test("✧ the isolation opt-in is a leading operator flag, never read from the d
 test("★ WIRING: /pharn-loop's isolation lines sit between --open and --capture, each once, and stop as S15", () => {
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   const plain = "node pharn/floor/check-run-isolation.mjs --feature '<name>' > pharn/.run/pharn-loop/<name>/isolation.json";
+  // 7.3.0: the flag leads — check-run-isolation.mjs accepts it only first, so the granted `--feature *` cannot carry it.
   const flag =
-    "node pharn/floor/check-run-isolation.mjs --feature '<name>' --accept-host-execution > pharn/.run/pharn-loop/<name>/isolation.json";
+    "node pharn/floor/check-run-isolation.mjs --accept-host-execution --feature '<name>' > pharn/.run/pharn-loop/<name>/isolation.json";
   const lines = loop.split("\n").map((l) => l.trim());
   assert.equal(lines.filter((l) => l === plain).length, 1);
   assert.equal(lines.filter((l) => l === flag).length, 1);

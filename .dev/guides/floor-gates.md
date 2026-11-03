@@ -624,7 +624,9 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 # residual this stop does not touch. Exit: 0 admitted (record on stdout) · 2 refused (`check-run-isolation: refused
 # <reason> — …` on stderr; the record on stdout for not-isolated / credentials-present only) · node's 1 on a module that
 # cannot load.
-node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]
+# 7.3.0: the flag is accepted only FIRST (a trailing one is `usage`), because /pharn-loop pre-approves the unflagged
+# line with a `*` after --feature that a trailing flag would ride; the flagged line itself is in no grant.
+node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name>
 ```
 
 ## `entry-gates.mjs` — the entry gates

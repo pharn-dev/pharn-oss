@@ -5,7 +5,9 @@
 // CLI changes).
 //
 // ================================ THE CLI — one line, run at /pharn-loop's entry ================================
-//   node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]
+//   node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name>
+// The flag is accepted only FIRST (7.3.0): /pharn-loop pre-approves the unflagged line with a `*` after `--feature`,
+// which a trailing flag would ride; the flagged line itself is in no grant (`parseArgs`, below).
 // `/pharn-loop` Step 1a runs it right after `require-loop-record.cjs --open` and before `pre-run-snapshot.mjs --capture`,
 // with stdout redirected to `pharn/.run/pharn-loop/<name>/isolation.json` (the witness), and stops (S15,
 // `blocked: not-isolated`) on any non-zero exit. `/pharn-ship` does not run it: a person approves its SPEC and decides
@@ -214,14 +216,16 @@ export function buildProbe({ fsRoot = "/", env = process.env, cwd = process.cwd(
   };
 }
 
-/** `{feature, accept}` or null (usage). `--feature <name>` once, `--accept-host-execution` at most once, nothing else. */
+/** `{feature, accept}` or null (usage). `--feature <name>` once, `--accept-host-execution` at most once and ONLY as the
+ *  FIRST argument (7.3.0), nothing else. The position is load-bearing: /pharn-loop pre-approves
+ *  `node pharn/floor/check-run-isolation.mjs --feature * > …`, whose `*` would carry a trailing flag, so a flag after
+ *  `--feature` is `usage` — the flagged line is reachable only in a form no grant names. */
 export function parseArgs(argv) {
   let feature = null;
-  let accept = false;
-  for (let i = 0; i < argv.length; i++) {
+  const accept = argv[0] === "--accept-host-execution";
+  for (let i = accept ? 1 : 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--feature" && feature === null && i + 1 < argv.length) feature = argv[++i];
-    else if (a === "--accept-host-execution" && !accept) accept = true;
     else return null;
   }
   if (typeof feature !== "string" || !FEATURE_SLUG_RE.test(feature)) return null;

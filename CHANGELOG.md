@@ -23,6 +23,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Fixed
+
+- 2026-11-03: **An unattended `/pharn-loop` can no longer pick the quick table, re-open its own iteration cap, or
+  accept host execution for the operator without a prompt (review 2026-11-03, loop-marker-integrity).**
+  - The Stop-guard marker now records the run's mode. Step 1a's pinned line is
+    `require-loop-record.cjs --open '<name>' --cap <M> --mode <mode>`, with `quick` only for the quick form, and
+    `check-loop-decision.mjs` REDs `MODE_UNWITNESSED` when the record's mode differs. Before, a model-written
+    `spec_kind: quick` SPEC plus `mode: quick` in the record reached a regress-free green commit in a run nobody
+    invoked with `--quick`; the quick part's "writes no mode marker" sentence is struck.
+  - `--open` refuses (exit 2, nothing written) when anything already exists at the marker path, so the pre-approved
+    `--open * --cap *` line can no longer re-open the marker with a larger cap. It publishes the marker by a `wx` tmp
+    file and a rename, so a crash no longer leaves a torn marker that silently disarms the Stop guard. Residual,
+    stated: `--close`, `--open` and a pre-run re-capture are all pinned lines, so a run can still re-open itself in
+    three steps (agreement, never provenance). The hook change is a maintainer-applied patch.
+  - The `--accept-host-execution` isolation line is no longer in `/pharn-loop`'s `allowed-tools`, so Claude Code's
+    permission settings decide whether the person is asked (auto mode or an allow rule may still run it unasked).
+    Removing that grant was not enough on its own: the unflagged grant's `--feature *` also matched a trailing flag. So
+    `check-run-isolation.mjs` now accepts the flag only as its first argument, and the pinned line is
+    `check-run-isolation.mjs --accept-host-execution --feature '<name>' > …`. A corpus test holds that no `allowed-tools`
+    entry in any `pharn-*.md` carries the flag.
+  - `blocked:` is a closed set. The 18 stuck-point ids live in `loop-record-core.mjs` `BLOCKED_IDS`, rendered in
+    `pharn/pharn-contracts/loop-record.md`. `check-loop-record.mjs` REDs `BLOCKED_UNKNOWN`, and `check-loop-decision.mjs`
+    skips only a member; before, `blocked: <anything>` skipped the re-derivation, so a measured red could be recorded
+    as a blocked stop.
+  - `/pharn-loop` no longer says it "cannot end its turn": the Stop guard refuses at most three times, then lets the
+    turn end with a warning. `check-loop-record.mjs`'s comment claiming `/^\d+$/.test("2\n")` is true is corrected
+    (it is false in JavaScript).
+
 ## [7.2.1] - 2026-11-02
 
 ### Added

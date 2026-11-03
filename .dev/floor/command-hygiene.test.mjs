@@ -32,6 +32,7 @@ import { REGISTRY } from "../../pharn/floor/stage-exit-core.mjs";
 import { CANDIDATE_REL } from "../../pharn/floor/feature-name.mjs";
 import { commitGateArgs, loopSteps } from "../../pharn/floor/loop-closeout.mjs";
 import { shipSteps } from "../../pharn/floor/ship-closeout.mjs";
+import { BLOCKED_IDS } from "../../pharn/floor/loop-record-core.mjs";
 import {
   ROUTE_POLICY,
   AGENT,
@@ -1988,7 +1989,8 @@ test("✧ the freshness wiring rule DISCRIMINATES — each mutant of the real co
 // ── STOP-GUARD MARKER (L22/L45): the run is OPENED right after the pre-run snapshot and CLOSED after the
 // writes-scope release, each by ONE pinned line. Presence + order over committed prose — never proof a run
 // executed either (P0). The lines are EXECUTED by .claude/hooks/require-loop-record.test.cjs.
-const LOOP_GUARD_OPEN = /^[ \t]*node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M>\s*$/;
+// 7.3.0 (loop-marker-integrity): the open line also records the run's mode, the invocation's one floor-readable copy.
+const LOOP_GUARD_OPEN = /^[ \t]*node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M> --mode <mode>\s*$/;
 const LOOP_GUARD_CLOSE = /^[ \t]*node \.claude\/hooks\/require-loop-record\.cjs --close '<name>'\s*$/;
 const LOOP_SNAPSHOT = /pre-run-status\.txt\s*$/;
 const LOOP_RUN_START = /^[ \t]*node pharn\/floor\/mark-phase\.mjs --name '<name>' --kind run-start\s*$/;
@@ -2013,6 +2015,19 @@ function stopGuardWiringReason(body) {
 
 test("✧ /pharn-loop opens the Stop-guard marker after the snapshot and closes it in the Final step", () => {
   assert.equal(stopGuardWiringReason(commandBody(LOOP_FILE)), null);
+});
+
+test("✧ 7.3.0 — /pharn-loop never claims it CANNOT end its turn (the Stop guard fails open after three refusals)", () => {
+  // Review SPEC: the guard refuses a turn end at most three times per run, then allows it with a warning
+  // (require-loop-record.cjs DEFAULT_MAX), so "cannot end its turn" overstated it. Vocabulary pin over the family.
+  const family = commandFamilyText(COMMANDS_DIR, LOOP_FILE);
+  assert.doesNotMatch(family, /cannot end its turn/);
+  assert.match(family, /must not end its turn to wait: the `Stop` guard refuses a turn end up to\s+three times/);
+});
+
+test("✧ 7.3.0 (L35) — the stuck-point table's blocked ids EQUAL loop-record-core.mjs's BLOCKED_IDS, in order", () => {
+  const ids = STUCK_POINTS.map((s) => s.blocked).filter((b) => b !== null);
+  assert.deepEqual(ids, [...BLOCKED_IDS]);
 });
 
 test("✧ the Stop-guard marker rule DISCRIMINATES — dropping or misplacing either line fails (L4)", () => {
@@ -5197,6 +5212,8 @@ const SHELL_VALUES = Object.freeze({
   "<name>": "the feature slug — validated where it is born (NAME_ORIGINS), a FEATURE_SLUG_RE member from then on",
   "<N>": "the loop's own iteration counter",
   "<M>": "human argv: the --max-iter value the person typed",
+  "<mode>":
+    "a closed choice: full, or quick when /pharn-loop read --quick as the first argument token (7.3.0); require-loop-record.cjs refuses any other value",
   "<base sha>": "git's own rev-parse / merge-base output (hex), or the literal unknown — a producer grammar",
   "<canon-file>": "a closed choice: one of the two memory-bank files /pharn-memory-promote Step 0 names",
   "<id>": "a closed code token (project | pharn-default), cut from check-spec.mjs's printed line",
@@ -5809,6 +5826,14 @@ const loopRunLines = () =>
       .map((l) => ({ file, ...l }))
   );
 
+// 7.3.0 (loop-marker-integrity — review HIGH "--accept-host-execution is pre-approved in /pharn-loop's allowed-tools"):
+// the pinned lines the run executes WITHOUT a grant, a closed set. Pre-approving this one let the model lift the loop's
+// only start-time stop (S15) with no prompt while the record attributed it to the operator; ungranted, Claude Code's own
+// permission settings decide whether the person is asked (ADVISORY — harness behaviour; auto mode may not ask).
+const LOOP_UNGRANTED_LINES = Object.freeze([
+  "node pharn/floor/check-run-isolation.mjs --accept-host-execution --feature '<name>' > pharn/.run/pharn-loop/<name>/isolation.json",
+]);
+
 /** The exact grant set the pinned lines derive (see grantFor). */
 const derivedLoopGrants = (lines) => [...new Set(lines.flatMap((l) => subcommands(l.text).map(grantFor)))].sort();
 
@@ -5857,10 +5882,66 @@ test("✧ finish --budget-ms CLOSURE (6.74.0, L36/L27): every loop-family finish
   );
 });
 
+test("✧ 7.3.0 — each LOOP_UNGRANTED_LINES line is pinned exactly once in the loop's run, and NO grant covers it", () => {
+  const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
+  const res = grants.filter((g) => g.startsWith("Bash(")).map(bashGrantRe);
+  const pinned = loopRunLines().map((l) => l.text);
+  assert.ok(LOOP_UNGRANTED_LINES.length >= 1, "non-vacuous (L34)");
+  for (const line of LOOP_UNGRANTED_LINES) {
+    assert.equal(pinned.filter((t) => t === line).length, 1, `pinned once: ${line}`);
+    for (const sub of subcommands(line)) assert.ok(!res.some((re) => re.test(sub)), `no grant may cover: ${sub}`);
+  }
+  // Control (L60): the same line with a real slug really is uncovered, and its unflagged sibling really is covered. The
+  // first build of this fix kept the flag AFTER `--feature`, and the unflagged grant's `*` covered it — this test is what
+  // found that (the CLI now accepts the flag only first, check-run-isolation.test.mjs).
+  const real = (s) => s.replace(/'<name>'/g, "'demo'").replace(/<name>/g, "demo");
+  assert.ok(
+    res.some((re) =>
+      re.test(
+        real(
+          "node pharn/floor/check-run-isolation.mjs --feature '<name>' --accept-host-execution > pharn/.run/pharn-loop/<name>/isolation.json"
+        )
+      )
+    ),
+    "control: the trailing-flag spelling IS covered by the unflagged grant — which is why the CLI refuses it"
+  );
+  assert.ok(!res.some((re) => re.test(real(LOOP_UNGRANTED_LINES[0]))), "the flagged line, substituted, is not pre-approved");
+  assert.ok(
+    res.some((re) =>
+      re.test(real("node pharn/floor/check-run-isolation.mjs --feature '<name>' > pharn/.run/pharn-loop/<name>/isolation.json"))
+    ),
+    "control: the unflagged isolation line is"
+  );
+});
+
+test("✧ 7.3.0 — no allowed-tools entry in any .claude/commands/pharn-*.md contains --accept-host-execution", () => {
+  const files = readdirSync(COMMANDS_DIR).filter((f) => /^pharn-.*\.md$/.test(f));
+  assert.ok(files.includes("pharn-loop.md"), "non-vacuous: the loop is in the corpus");
+  const offenders = files.flatMap((f) =>
+    (allowedTools(readFileSync(join(COMMANDS_DIR, f), "utf8")) ?? [])
+      .filter((g) => g.includes("--accept-host-execution"))
+      .map((g) => `${f}: ${g}`)
+  );
+  assert.deepEqual(offenders, []);
+  // Control (L60): the reader really sees such an entry when one is restored to the loop's grant.
+  const loop = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
+  const restored = loop.replace(
+    /^allowed-tools:\s*\[\n/m,
+    (m) =>
+      `${m}    "Bash(node pharn/floor/check-run-isolation.mjs --feature * --accept-host-execution > pharn/.run/pharn-loop/*/isolation.json)",\n`
+  );
+  assert.notEqual(restored, loop, "precondition: the grant list was found");
+  assert.ok(
+    allowedTools(restored).some((g) => g.includes("--accept-host-execution")),
+    "a restored grant is detected"
+  );
+});
+
 test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line of its run, and no grant is unused", () => {
   const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
   assert.ok(Array.isArray(grants), "pharn-loop.md declares allowed-tools");
-  const lines = loopRunLines();
+  // 7.3.0: every pinned line but the closed LOOP_UNGRANTED_LINES set (asserted pinned and uncovered in its own test).
+  const lines = loopRunLines().filter((l) => !LOOP_UNGRANTED_LINES.includes(l.text));
   for (const f of [...LOOP_RUN_FILES, ...LOOP_INLINE_STAGE_FILES])
     assert.ok(
       lines.some((l) => l.file === f),
