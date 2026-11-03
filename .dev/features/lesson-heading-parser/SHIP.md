@@ -31,5 +31,12 @@ Other gates run at GATE 2 (not proceed/stop inputs): `format:check`, `lint`, `li
 `check:surface-bump` exit 1 (expected in this batch: product paths changed, no `SKILLS_VERSION` bump — the
 orchestrator bumps once to 7.3.0).
 
+## GATE 2 decision
+
+**Decided by the batch orchestrator (a model) under the owner's delegation; not a human approval:** MERGE into
+`batch/audit-2026-11-03` at integration. Canon L14: **Option B** (a new correction entry, as L77 corrected L31/L35;
+canon is not rewritten in place) — the integrator folds it into the owner's docs script and renumbers if needed.
+REVIEW R2 and R3 stay advisory.
+
 _Chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that
 is the human's call at the post-review gate._
