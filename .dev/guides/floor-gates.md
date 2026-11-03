@@ -588,7 +588,8 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 # tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
 # `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
 # `regress-base-pre-run-overlay`) and a pre-run-changed test file is not compared at regress; a green loop never commits
-# a subtracted path. pharn/LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
+# a subtracted path — and since 7.3.0 not a SCOPE path the snapshot holds unchanged either (loop-closeout.mjs
+# buildStageList asks preRunUnchanged; the document's `left_dirty` names them). pharn/LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 ```

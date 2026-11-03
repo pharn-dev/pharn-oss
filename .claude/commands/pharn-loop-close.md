@@ -171,7 +171,9 @@ step's own outcome:
 2. **The staging list** — regular files and tracked deletions only, git-ignored paths dropped, plus the feature's
    artifacts by name and every test the AC lock pins, NUL-separated in `pharn/.run/pharn-loop/<name>/stage.list`. A scope
    file not set from this plan, or a lock or pinned test that is not a regular, non-ignored file →
-   `not committed: stage failed`; an empty list → `not committed: nothing staged`.
+   `not committed: stage failed`; an empty list → `not committed: nothing staged`. Since 7.3.0 a scope path the run's
+   pre-run snapshot holds with unchanged bytes is left out (the user's edit, not the run's) and named in the
+   document's `left_dirty`; artifacts and pinned tests are always staged, and a snapshot miss leaves nothing out.
 3. **The branch** — the first absent of `pharn-loop/<name>`, `pharn-loop/<name>-2`, … → else
    `not committed: branch failed`.
 4. **Stage, then commit exactly the listed paths**, with `GIT_LITERAL_PATHSPECS=1` so a listed `app/[id]/page.tsx` is
@@ -244,7 +246,12 @@ Report, plainly and without asking anything:
 - where the checkout is (the document's `checkout`): on the new branch (naming `<original branch>` to return to), or
   unchanged — after a closeout crash, the `git status --short --branch` output and the sentence that a person must
   check the commit state;
-- any committed path that was already dirty in the pre-run snapshot (`pharn/.run/pharn-loop/<name>/pre-run-status.txt`);
+- **every path the closeout document's `left_dirty.paths` lists** (7.3.0): named by the plan, changed before the run,
+  unchanged by it, and therefore **not** committed — it is still dirty in the working tree. Quote `left_dirty.status`
+  when it is not `applied`: then nothing was left out (no open run marker, one older than 24 h, or no usable snapshot);
+  `null` means the staging list was never built;
+- any committed path that was already dirty in the pre-run snapshot (`pharn/.run/pharn-loop/<name>/pre-run-status.txt`)
+  and that the run changed further: the commit holds the user's earlier edit to it too;
 - every path `pre_run_snapshot.unchanged` lists (`regression-report.json`, or a quick run's scope-check output):
   changed before the run, present when the gates ran, and never in the commit;
 - the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, **revert failed**
@@ -372,8 +379,10 @@ last three feeds `check-loop.mjs`'s inputs.
   rests on a free-text field. **This command ENLARGES the residual** (`pharn/LIMITS.md §2`, `pharn/THREAT-MODEL.md §5`), and says
   so: untrusted prose reaches an Approved SPEC, a PLAN, a writes-scope and code with no person reading it; code built
   from it is EXECUTED — project gates, the suite, commit hooks — before any person sees it, bounded by nothing beyond
-  fix #7's write scope (pre-egress is not built); a plan that lists a tracked file the user had edited commits that
-  edit (the summary names such paths); an undeclared path changed before the run is not counted as an escape and not
+  fix #7's write scope (pre-egress is not built); a plan that lists a file the user had edited before the run leaves
+  it out of the commit when the run did not change it (7.3.0, `left_dirty` — content hashes against the pre-run
+  snapshot: agreement, never provenance, and a miss such as a marker older than 24 h stages it as before), but
+  commits the user's edit together with the run's when the run changed that file too (the summary names such paths); an undeclared path changed before the run is not counted as an escape and not
   committed, so the branch alone is not the tree the gates ran on (the summary names those too); a prior run's Handoff informs this run with no person reading it first; the
   slug's check prints only a `FEATURE_SLUG_RE` member (`pharn/floor/feature-name.mjs`, floor), while writing the
   candidate with the Write tool and re-typing only the printed value into later lines are advisory; the Stop

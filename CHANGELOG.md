@@ -72,6 +72,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **`/pharn-loop` no longer commits an edit the user made before the run** (audit 2026-11-03, MEDIUM).
+  A file named in the plan's `## Files` that the user had already edited, and that the run then left alone, was
+  committed on `pharn-loop/<name>` with the user's bytes. `loop-closeout.mjs` now asks the run's pre-run snapshot (the
+  reader `/pharn-regress` already uses) which scope paths still hold their pre-run bytes, and leaves those out of the
+  commit. The closing document gains `left_dirty` (`{status, paths}`) and the close part's summary names those paths.
+  Bounds: a file the run changed after the user's edit is still committed whole, edit included; the feature's own
+  artifacts and the tests its lock pins are always committed; when no snapshot applies (no open run marker, one older
+  than 24 h, no record) nothing is left out, as before, and `left_dirty.status` says why. The commit message's second
+  paragraph no longer cites `approved_by: model`, a SPEC field the closeout never reads.
+- 2026-11-03: **A report or SPEC that repeats a key is refused, not read last-wins** (audit 2026-11-03, LOW).
+  `check-loop.mjs` read `{"verdict":"FAIL",…,"verdict":"PASS"}` as PASS and stopped `STOP_GREEN`. It now stops
+  `INCONCLUSIVE` (exit 2) on any repeated top-level key in the verify or regression report, a `\u`-escaped spelling
+  included; a repeat inside a nested object is not refused. `check-spec.mjs` REDs a second `state` or `approved_by`
+  line (kind `repeated-key`) instead of keeping the last, so `check-spec-approved.mjs`, which runs it first, refuses
+  such a SPEC too. A repeated `spec_content_hash` or `spec_id` keeps 6.20.5's last-wins reading.
+- 2026-11-03: **`check-attestation.mjs` refuses a placeholder `by` and an impossible `at`; `check-spec.mjs` checks
+  `approved_by`** (audit 2026-11-03, LOW). `by: agent` with `at: 2026-13-45T99:99:99Z` read `attested`. `by` is now
+  `malformed` when it is one of 15 placeholder names (`agent`, `claude`, `model`, `human`, `unknown`, …, compared after
+  lower-casing). That list is a deny-list, not identity verification: a real-looking name typed by a model still
+  passes. `at` must be a real calendar instant (a leap second is refused). A SPEC's `approved_by`, when present, must
+  read `model` (RED `approved-by`), so a model can no longer label its own approval `human` there; a model-approved
+  SPEC with no `approved_by` key still passes.
 - 2026-11-03: **An unattended `/pharn-loop` can no longer pick the quick table, re-open its own iteration cap, or
   accept host execution for the operator without a prompt (review 2026-11-03, loop-marker-integrity).**
   - The Stop-guard marker now records the run's mode. Step 1a's pinned line is

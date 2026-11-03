@@ -52,6 +52,7 @@ import {
   undoBranch,
 } from "./loop-closeout.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
+import { captureSnapshot } from "./pre-run-snapshot.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -800,6 +801,115 @@ test("buildStageList — the lock's pinned tests are staged", () => {
   }
 });
 
+// ── ★ 7.3.0 (loop-record-honesty): a scope path the user had edited before the run is left out ─────────────────
+// The review's probe: `src/c.js` dirty BEFORE the run and named in `## Files` was committed on pharn-loop/<name> with
+// the user's bytes. These tests take a REAL snapshot (pre-run-snapshot.mjs captureSnapshot, bound to a written run
+// marker) in the fixture repository, exactly as /pharn-loop Step 1a does.
+
+const scopeRecord = (scope) => JSON.stringify({ set_by: `pharn/features/${FEATURE}/PLAN.md`, scope });
+const openMarker = () => writeFileSync(join("pharn", ".run", "pharn-loop", FEATURE, "active.json"), '{"session_id":"s","cap":3}\n');
+
+test("★ a tracked scope file edited BEFORE the run and unchanged by it is not committed, is named in left_dirty, and stays dirty", () => {
+  const fx = fixture();
+  try {
+    inDir(fx.dir, () => {
+      writeFileSync("README", "the user's own uncommitted edit\n"); // dirty before the run, named by the plan below
+      openMarker();
+      const cap = captureSnapshot(FEATURE);
+      assert.equal(cap.ok, true, JSON.stringify(cap));
+      writeFileSync(join("src", "a.js"), "export const a = 2;\n"); // the build's own write (src/a.js was pre-run too)
+    });
+    const { doc, out } = close(fx, { run: stub({ scope: ["src/a.js", "README"] }).run });
+    assert.equal(doc.exit, EXIT.COMMITTED, out);
+    assert.deepEqual(doc.left_dirty, { status: "applied", paths: ["README"] });
+    assert.match(
+      out,
+      /── left out of the commit \(changed before the run, unchanged by it; pre-run snapshot applied\): 1 path\(s\)\n {2}"README"\n/
+    );
+    const committed = sh(fx.dir, "show", "--name-only", "--format=", "HEAD").stdout.trim().split("\n");
+    assert.ok(!committed.includes("README"), committed.join(","));
+    assert.ok(committed.includes("src/a.js"), "a pre-run path the build changed further is staged (whole — the stated bound)");
+    // The feature's artifacts were on disk at capture and unchanged since; they are the run's own and still committed.
+    for (const f of ["SPEC.md", "PLAN.md", "LOOP.md"]) assert.ok(committed.includes(`pharn/features/${FEATURE}/${f}`), f);
+    assert.equal(readFileSync(join(fx.dir, "README"), "utf8"), "the user's own uncommitted edit\n");
+    assert.match(sh(fx.dir, "status", "--porcelain", "--", "README").stdout, /^ M README/);
+  } finally {
+    fx.done();
+  }
+});
+
+test("★ CONTROL — no open run marker: the snapshot misses, nothing is subtracted (the pre-7.3.0 list), and the status says why", () => {
+  const fx = fixture();
+  try {
+    inDir(fx.dir, () => {
+      writeFileSync("README", "the user's own uncommitted edit\n");
+      writeFileSync(join("pharn", ".run", "writes-scope.json"), scopeRecord(["src/a.js", "README"]));
+      const r = buildStageList(FEATURE, { base: fx.base });
+      assert.equal(r.code, 0);
+      assert.ok(r.paths.includes("README"), "a miss stages today's list");
+      assert.deepEqual(r.leftDirty, { status: "no-delivery-run", paths: [] });
+      // Without `base` the subtraction is not attempted at all.
+      assert.equal(buildStageList(FEATURE).leftDirty, null);
+    });
+  } finally {
+    fx.done();
+  }
+});
+
+test("the subtraction asks only about scope paths: artifacts and pinned tests are never offered, and a miss subtracts nothing", () => {
+  const fx = fixture();
+  try {
+    inDir(fx.dir, () => {
+      mkdirSync("test", { recursive: true });
+      writeFileSync(join("test", "ac.test.mjs"), "x\n");
+      writeFileSync(join("pharn", "features", FEATURE, "AC-TESTS.lock.json"), JSON.stringify({ files: [{ path: "test/ac.test.mjs" }] }));
+      // The plan's scope names a pinned test and an artifact too; both must stay out of `inside`.
+      writeFileSync(
+        join("pharn", ".run", "writes-scope.json"),
+        scopeRecord(["src/a.js", "README", "test/ac.test.mjs", `pharn/features/${FEATURE}/PLAN.md`])
+      );
+      let asked = null;
+      const everything = (i) => {
+        asked = i.inside;
+        return { status: "applied", unchanged: [...i.inside] };
+      };
+      const r = buildStageList(FEATURE, { base: fx.base, preRun: everything });
+      assert.deepEqual(asked, ["src/a.js", "README"]);
+      assert.deepEqual(r.leftDirty, { status: "applied", paths: ["src/a.js", "README"] });
+      assert.ok(r.paths.includes("test/ac.test.mjs") && r.paths.includes(`pharn/features/${FEATURE}/PLAN.md`));
+      assert.ok(!r.paths.includes("README"));
+      // A miss that (wrongly) carried paths subtracts nothing: only `applied` yields a subtraction.
+      const miss = buildStageList(FEATURE, { base: fx.base, preRun: () => ({ status: "base-changed", unchanged: ["README"] }) });
+      assert.ok(miss.paths.includes("README"));
+      assert.deepEqual(miss.leftDirty, { status: "base-changed", paths: [] });
+    });
+  } finally {
+    fx.done();
+  }
+});
+
+test("a pre-run reader that throws is not swallowed: the builder throws, so the close crashes before any branch exists", () => {
+  const fx = fixture();
+  try {
+    inDir(fx.dir, () => {
+      writeFileSync(join("pharn", ".run", "writes-scope.json"), scopeRecord(["src/a.js"]));
+      assert.throws(
+        () =>
+          buildStageList(FEATURE, {
+            base: fx.base,
+            preRun: () => {
+              throw new Error("reader broke");
+            },
+          }),
+        /reader broke/
+      );
+    });
+    assert.equal(fx.hasBranch("pharn-loop/demo"), false);
+  } finally {
+    fx.done();
+  }
+});
+
 test("STAGE_ARTIFACTS is the close part's former list, in its order", () => {
   assert.deepEqual(
     [...STAGE_ARTIFACTS],
@@ -837,7 +947,8 @@ test("the add, commit and undo argv equal the close part's former lines", () => 
     "-m",
     "pharn-loop(<name>): <decision> after <N> iteration(s)",
     "-m",
-    "The SPEC was approved by the model (approved_by: model), not by a person. Nothing was merged or pushed; review this branch before merging.",
+    // 7.3.0 (loop-record-honesty): no "(approved_by: model)" — the closeout never reads that SPEC field.
+    "The SPEC was approved by the model, not by a person. Nothing was merged or pushed; review this branch before merging.",
     // 7.1.0: the isolation paragraph is always there; with no witness record it says so.
     "-m",
     "isolation: not recorded (no usable pharn/.run/pharn-loop/<name>/isolation.json)",

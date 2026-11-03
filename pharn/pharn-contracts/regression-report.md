@@ -122,6 +122,11 @@ The agreement is worth stating rather than assuming: the verify-report's four se
 so "the two spine reports behave the same way here" is a fact about this artifact, not a symmetry a
 reader may take for granted.
 
+**A repeated top-level key (7.3.0).** `check-loop.mjs` refuses — `INCONCLUSIVE`, exit 2 — a regression report whose
+top-level object carries any key twice, exactly as it does a verify report (`pharn/pharn-contracts/verify-report.md`).
+A key repeated inside a nested object is not refused, and the other three consumers still read `JSON.parse`'s last
+copy.
+
 **A value outside the set is REFUSED, never defaulted.** One committed report exercises this live —
 `.dev/features/dev-product-boundary/regression-report.json` carries `verdict: "not-applicable"`, and both
 stop cores return `INCONCLUSIVE` exit 2 naming the value and the allowed set. A missing or unparseable

@@ -214,6 +214,49 @@ test("fail-closed: regress report missing .verdict → INCONCLUSIVE, exit 2", ()
   assert.equal(decide(PASS, { regressions: [] }, 1, 3).status, 2);
 });
 
+// ── ★ 7.3.0 (loop-record-honesty): a repeated top-level report key ──────────────────────────────────────────────
+// The review's fixture (h): `{"verdict":"FAIL",…,"verdict":"PASS"}` decided STOP_GREEN (JSON.parse keeps the last
+// copy) while a person reading top-down saw FAIL. Hand-written texts, since JSON.stringify cannot repeat a key.
+const FAIL_THEN_PASS = '{"feature":"x","verdict":"FAIL","gates":{"test":1},"failing_gates":["test"],"verdict":"PASS"}';
+const PASS_THEN_FAIL = '{"feature":"x","verdict":"PASS","gates":{"test":1},"failing_gates":["test"],"verdict":"FAIL"}';
+
+test("★ a verify report repeating `verdict` is INCONCLUSIVE (exit 2) in BOTH orders, naming the key, never a value", () => {
+  for (const text of [FAIL_THEN_PASS, PASS_THEN_FAIL]) {
+    const r = decide(text, CLEAN, 1, 3);
+    assert.equal(r.status, 2, `${text}: ${r.stdout}`);
+    assert.equal(json(r).decision, "INCONCLUSIVE");
+    assert.match(r.stdout, /repeats top-level key\(s\) \\"verdict\\"/);
+  }
+  // CONTROL (L60): the same document without the repeat decides normally — PASS → STOP_GREEN.
+  assert.equal(decide('{"feature":"x","verdict":"PASS","gates":{},"failing_gates":[]}', CLEAN, 1, 3).status, 0);
+});
+
+test("★ a `\\u`-escaped second `verdict` is the same key (JSON.parse's own comparison) → INCONCLUSIVE", () => {
+  const escaped = '{"verdict":"FAIL","gates":{},"failing_gates":[],"\\u0076erdict":"PASS"}';
+  assert.equal(JSON.parse(escaped).verdict, "PASS", "precondition: JSON.parse reads the escaped key as `verdict`");
+  assert.equal(decide(escaped, CLEAN, 1, 3).status, 2);
+});
+
+test("★ a repeated key in the REGRESSION report is INCONCLUSIVE too; any repeated top-level key counts", () => {
+  assert.equal(decide(PASS, '{"verdict":"regressions","regressions":["a"],"verdict":"no-regressions"}', 1, 3).status, 2);
+  assert.equal(decide('{"feature":"x","verdict":"PASS","gates":{},"failing_gates":[],"feature":"y"}', CLEAN, 1, 3).status, 2);
+});
+
+test("the stated bound: a key repeated only inside a NESTED object (or a string value holding key-like text) is not refused", () => {
+  const nested = '{"feature":"x","verdict":"PASS","gates":{"test":1,"test":0},"failing_gates":[],"note":"\\"verdict\\":\\"FAIL\\","}';
+  assert.equal(decide(nested, CLEAN, 1, 3).status, 0);
+});
+
+test("a hostile repeated key is quoted bounded (64 characters) and at most five are listed", () => {
+  const long = "k".repeat(5000);
+  const keys = [long, "a", "b", "c", "d", "e"];
+  const text = `{"verdict":"PASS","gates":{},"failing_gates":[],${keys.map((k) => `"${k}":1,"${k}":2`).join(",")}}`;
+  const r = decide(text, CLEAN, 1, 3);
+  assert.equal(r.status, 2);
+  assert.ok(!r.stdout.includes("k".repeat(65)), "the long key is truncated");
+  assert.match(r.stdout, /and 1 more/);
+});
+
 test("fail-closed: iter not a positive integer → INCONCLUSIVE, exit 2", () => {
   withReports(VFAIL, CLEAN, (vp, rp) => {
     assert.equal(run([vp, rp, "--iter", "0", "--cap", "3"]).status, 2); // zero

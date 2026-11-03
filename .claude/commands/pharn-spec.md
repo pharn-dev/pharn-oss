@@ -323,7 +323,10 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). The contract's
 - **Floor:** the `SPEC.md` has the required sections, `state ∈ {Draft, Approved}` and a `spec_id`, and — when
   `Approved` — `spec_content_hash` equals the pin (`sha256(body)`, with a `spec_kind:` line hashed in front when
   present), so later body drift is detectable — `check-spec.mjs` (presence, enum, content-hash; fix #4). A body whose
-  first line starts `spec_kind:` is a `kind-in-body` RED in every state.
+  first line starts `spec_kind:` is a `kind-in-body` RED in every state. Since 7.3.0, in every state too: a second
+  `state` or `approved_by` line is a `repeated-key` RED, and `approved_by` with any
+  value but `model` is an `approved-by` RED — so a model cannot label its own approval `human` there. Neither is a
+  `pin` RED, so Step 5 routes both back to Draft. **Advisory:** a model-approved SPEC with NO `approved_by` key passes.
 - **Floor:** a SPEC declaring `spec_template` has the template's shape — `check-spec.mjs` (presence / regex / count /
   id membership). **Bounded three ways:** the rules are **opt-in** by the key, so a SPEC without it bypasses them;
   the acceptance-criteria grammar proves each criterion is **phrased** testably, never that a test exists, runs, or

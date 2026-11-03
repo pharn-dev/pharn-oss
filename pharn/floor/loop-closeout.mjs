@@ -52,7 +52,9 @@
 //     order. ONE stated difference (L54): absence is an lstat ENOENT, never existsSync, so a dangling symlink at a
 //     listed path is skipped instead of being staged as a deletion, and a dangling-link lock refuses. Any refusal →
 //     `stage failed`; empty → `nothing staged`; both exit 4. Written NUL-separated to
-//     pharn/.run/pharn-loop/<name>/stage.list after a containmentWalk (lstat, no symlink component).
+//     pharn/.run/pharn-loop/<name>/stage.list after a containmentWalk (lstat, no symlink component). Since 7.3.0 a
+//     scope path the run's pre-run snapshot recorded and the run left unchanged is left OUT of the list and named in
+//     the document's `left_dirty` ({status, paths}; see `buildStageList`) — a user's uncommitted edit is not the run's.
 // 12. The first of pharn-loop/<name>, pharn-loop/<name>-2, … that `git show-ref --verify --quiet` reports absent,
 //     then `git switch -c`; non-zero → `branch failed`, exit 4.
 // 13. GIT_LITERAL_PATHSPECS=1 git add -A / git commit, both --pathspec-from-file=<list> --pathspec-file-nul; the
@@ -111,6 +113,7 @@ import { cleanScalar } from "./mark-phase.mjs";
 import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
 import { closingLine, echo, floorScript, indent, ledgerSteps, runLedgerTail, runStep, runStop, step } from "./closeout-core.mjs";
 import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
+import { preRunUnchanged } from "./pre-run-snapshot.mjs";
 
 export const SCHEMA = "pharn-loop-closeout/1";
 
@@ -153,9 +156,12 @@ export const STAGE_ARTIFACTS = Object.freeze([
   "RUN-REPORT.md",
 ]);
 
-/** The commit message's fixed second paragraph — unchanged from the close part's commit line. */
+/** The commit message's fixed second paragraph. 7.3.0 (loop-record-honesty) dropped the parenthetical
+ *  "(approved_by: model)": the closeout never reads the SPEC's `approved_by`, so the message cited a field value it
+ *  had not seen. What remains is true of every /pharn-loop run by construction — S2 makes the run create the feature
+ *  directory, and Step 3 approves its SPEC with --model-approve. */
 export const COMMIT_BODY =
-  "The SPEC was approved by the model (approved_by: model), not by a person. Nothing was merged or pushed; review this branch before merging.";
+  "The SPEC was approved by the model, not by a person. Nothing was merged or pushed; review this branch before merging.";
 
 /** The closing document's keys, closed both ways. */
 export const DOC_KEYS = Object.freeze([
@@ -175,6 +181,7 @@ export const DOC_KEYS = Object.freeze([
   "report",
   "freshness",
   "excluded_gates",
+  "left_dirty",
   "branch",
   "commit",
   "checkout",
@@ -454,8 +461,26 @@ function isAbsent(path) {
  * 4 the lock, or a test it pins, is not a regular non-ignored file · 1 the scope file or the lock is unreadable or
  * malformed (the inline builder's node crash). Every non-zero code is `stage failed`. Total over hostile JSON (L62):
  * a non-string path is refused by type, never stringified.
+ *
+ * THE PRE-RUN SUBTRACTION (7.3.0, loop-record-honesty — review finding "a user's pre-existing uncommitted edit to any
+ * path the plan names is swept into the loop's commit"). With `base` given, `preRun({feature, base, inside})` — by
+ * default pre-run-snapshot.mjs `preRunUnchanged`, the regress partition's own reader and digest rule, reused (L35):
+ * an open run marker, the git-dir snapshot bound to it, the same base, and `pathDigest`'s lstat-first digest (L54) —
+ * names which candidate paths still hold the bytes recorded when the run began. A path the plan's SCOPE names, that is
+ * neither one of the feature's artifacts nor a test the lock pins, and that is in that set, is LEFT OUT of the list and
+ * returned in `leftDirty: {status, paths}`: the run did not change it, so it is not the run's to commit. Artifacts and
+ * pinned tests are always staged — the feature directory is the run's own (S2), and a lock committed without a test it
+ * pins would break the branch. Every snapshot miss (`status` a PRE_RUN_STATUSES member other than `applied`: no open
+ * marker — including one older than the marker's 24 h age ceiling —, no record, a malformed one, another run's, another
+ * base) subtracts nothing, so the list is exactly the pre-7.3.0 one, and the status says which miss it was (GATE 1,
+ * Q1: reported, never a refusal). Without `base` the subtraction is skipped and `leftDirty` is null. A reader that
+ * THROWS is not caught here: closeLoop's top-level catch makes it a crash (exit 1) before the branch step, so nothing
+ * is committed — staging the user's edit on a reader failure would be the fail-open direction.
+ * BOUNDS (P0): a path the build changed AFTER a pre-run edit is staged whole, that edit included (git cannot split one
+ * file's bytes by author); a build that writes a pre-run path back to its recorded bytes reads as unchanged; the record
+ * is AGREEMENT, never provenance — a Bash writer can forge it (pre-run-snapshot-core.mjs header).
  */
-export function buildStageList(feature, { git = gitRun } = {}) {
+export function buildStageList(feature, { git = gitRun, base, preRun = preRunUnchanged } = {}) {
   const ignored = (p) => git(["check-ignore", "-q", "--", p]).status === 0;
   const trackedAtHead = (p) => git(["cat-file", "-e", `HEAD:${p}`], { literal: true }).status === 0;
   let rec;
@@ -489,15 +514,21 @@ export function buildStageList(feature, { git = gitRun } = {}) {
         return { code: 4, paths: [], detail: "a test the lock pins is not a regular, non-ignored file" };
     }
   }
-  const keep = [];
+  const candidates = [];
   for (const p of scope.concat(artifacts, pinned)) {
     const regular = isRegular(p);
     const deleted = !regular && isAbsent(p) && trackedAtHead(p);
     if (!regular && !deleted) continue;
     if (ignored(p)) continue;
-    if (!keep.includes(p)) keep.push(p);
+    if (!candidates.includes(p)) candidates.push(p);
   }
-  return { code: 0, paths: keep, detail: null };
+  if (base === undefined) return { code: 0, paths: candidates, detail: null, leftDirty: null };
+  const always = new Set(artifacts.concat(pinned));
+  const decision = preRun({ feature, base, inside: candidates.filter((p) => !always.has(p)) });
+  const unchanged = new Set(decision.status === "applied" ? decision.unchanged : []);
+  const keep = candidates.filter((p) => !unchanged.has(p));
+  const left = candidates.filter((p) => unchanged.has(p));
+  return { code: 0, paths: keep, detail: null, leftDirty: { status: decision.status, paths: left } };
 }
 
 /** Write the NUL-separated list after a containment walk. Returns null on success, else why. */
@@ -681,10 +712,18 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   echo(log, steps.amend, am);
 
   trace.phase = "stage-list";
-  const list = buildStageList(feature, { git });
+  const list = buildStageList(feature, { git, base });
   if (list.code !== 0) {
     log(`── staging list refused (builder code ${list.code}): ${list.detail}\n`);
     return owed("stage failed");
+  }
+  doc.left_dirty = list.leftDirty;
+  if (list.leftDirty !== null) {
+    const lines = list.leftDirty.paths.map((p) => `  ${JSON.stringify(p)}\n`).join("");
+    log(
+      `── left out of the commit (changed before the run, unchanged by it; pre-run snapshot ${list.leftDirty.status}): ` +
+        `${list.leftDirty.paths.length} path(s)\n${lines}`
+    );
   }
   if (list.paths.length === 0) {
     log("── staging list empty\n");

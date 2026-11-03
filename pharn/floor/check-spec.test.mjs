@@ -397,12 +397,60 @@ test("--state: prints the frontmatter state and exits 0", () => {
 });
 
 test("--state: LAST-wins across a DUPLICATE `state:` key (parseSpec's order, not a second opinion)", () => {
-  // The fail-open half of the defect, pinned at the source: whatever this prints IS the canonical state,
-  // and the gate now reports exactly this value.
+  // The print mode keeps readField's reading (frontmatter-core.test.mjs pins the parity). Since 7.3.0 validate REDs
+  // the repeat itself (`repeated-key`, below), and check-spec-approved validates before it reads this line.
   const spec = `---\nspec_id: my-feature\nstate: Approved\nstate: Draft\n---\n${BODY}`;
   const r = runWith(spec, { stateMode: true });
   assert.equal(r.status, 0);
   assert.equal(r.stdout.trim(), "Draft");
+});
+
+// --- 7.3.0 (loop-record-honesty): a repeated gated key, and `approved_by` ------------------------------------
+//
+// Review finding "a repeated `state:` reads last-wins": `state: Draft` then `state: Approved` validated as an Approved
+// SPEC (once pinned) while a person reading top-down saw a Draft. REPEAT_REFUSED is {state, approved_by}; each member
+// and both orders are covered (L52: the set is the deliverable).
+
+const fmSpec = (lines, body = BODY) => `---\n${lines.join("\n")}\n---\n${body}`;
+const PIN = bodyHash(BODY);
+
+test("RED repeated-key: `state` repeated in both orders, and `approved_by` repeated, name the key, never a value", () => {
+  const cases = [
+    ["state Draft→Approved", ["spec_id: my-feature", "state: Draft", "state: Approved", `spec_content_hash: ${PIN}`], "state"],
+    ["state Approved→Draft", ["spec_id: my-feature", "state: Approved", "state: Draft", `spec_content_hash: ${PIN}`], "state"],
+    ["approved_by", ["spec_id: my-feature", "state: Draft", "approved_by: model", "approved_by: model"], "approved_by"],
+  ];
+  for (const [label, lines, key] of cases) {
+    const r = runWith(fmSpec(lines));
+    assert.equal(r.status, 1, `${label}: ${r.stdout}`);
+    assert.match(r.stdout, new RegExp(`RED — repeated-key failed: \`${key}\` ×2`), label);
+    assert.doesNotMatch(r.stdout, /"(Draft|Approved|model)"/, `${label}: no value is echoed`);
+  }
+});
+
+test("GREEN controls: the unrepeated twin validates; a repeated pin or spec_id keeps 6.20.5's last-wins reading (the bound)", () => {
+  assert.equal(runWith(fmSpec(["spec_id: my-feature", "state: Approved", `spec_content_hash: ${PIN}`])).status, 0);
+  // A Draft's leftover `spec_content_hash: ""` above the real pin — the 6.20.5 re-approval shape ac-tests-lock pins.
+  assert.equal(runWith(fmSpec(["spec_id: my-feature", "state: Approved", 'spec_content_hash: ""', `spec_content_hash: ${PIN}`])).status, 0);
+  assert.equal(runWith(fmSpec(["spec_id: other", "spec_id: my-feature", "state: Draft"])).status, 0);
+  assert.equal(runWith(fmSpec(["spec_id: my-feature", "state: Draft", "tags: a", "tags: b"])).status, 0);
+});
+
+test("RED approved-by: any value but `model` (case-sensitive, empty included); GREEN for `model`, a commented `model`, or no key", () => {
+  for (const v of ["human", '""', "Model", "model-ish", "user"]) {
+    const r = runWith(fmSpec(["spec_id: my-feature", "state: Draft", `approved_by: ${v}`]));
+    assert.equal(r.status, 1, `${v}: ${r.stdout}`);
+    assert.match(r.stdout, /RED — approved-by failed: `approved_by` must read `model` when present/, v);
+    if (v !== '""') assert.ok(!r.stdout.includes(`"${v}"`), `${v}: the value is never echoed`);
+  }
+  for (const lines of [
+    ["spec_id: my-feature", "state: Approved", "approved_by: model", `spec_content_hash: ${PIN}`],
+    ["spec_id: my-feature", "state: Approved", "approved_by: model # by the loop", `spec_content_hash: ${PIN}`],
+    ["spec_id: my-feature", "state: Approved", `spec_content_hash: ${PIN}`],
+  ]) {
+    const r = runWith(fmSpec(lines));
+    assert.equal(r.status, 0, `${lines.join(" | ")}: ${r.stdout}`);
+  }
 });
 
 test("--state: strips the template's own trailing note ('Approved # ratified <date>')", () => {

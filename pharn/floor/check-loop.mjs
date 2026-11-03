@@ -207,23 +207,79 @@ function parseArgs(argv) {
 // --- read a report file and validate its `.verdict` is a member of `allowed`. A missing / unparseable
 //     file, a non-object, or a `.verdict` outside the enum is bad input → fail-closed (P5). The parsed
 //     object is returned so the verify report's `failing_gates` can be read on a FAIL. ---
+//     7.3.0 (loop-record-honesty): a report whose TOP-LEVEL object repeats a key is bad input too. JSON.parse keeps
+//     the LAST copy, so `{"verdict":"FAIL",…,"verdict":"PASS"}` decided STOP_GREEN while a person reading the file
+//     top-down saw FAIL (the review's fixture (h); check-loop-fresh's check E re-derives the floor fields from the
+//     stamp, so the gate itself was not forgeable this way — the document was). Only the top level is scanned: a key
+//     repeated inside a nested object is still read last-wins (the stated bound).
 function readVerdict(path, label, allowed) {
   if (!path) return { ok: false, reason: `${label} path not provided` };
   if (!existsSync(path)) return { ok: false, reason: `${label} not found: ${path}` };
   let parsed;
+  let text;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
+    text = readFileSync(path, "utf8");
+    parsed = JSON.parse(text);
   } catch (e) {
     return { ok: false, reason: `${label} is not valid JSON (${path}): ${e.message}` };
   }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     return { ok: false, reason: `${label} must be a JSON object (${path})` };
   }
+  const repeated = repeatedTopLevelKeys(text);
+  if (repeated.length > 0) {
+    const shown = repeated.slice(0, 5).map((k) => JSON.stringify(k.length > 64 ? `${k.slice(0, 64)}…` : k));
+    const more = repeated.length > 5 ? ` and ${repeated.length - 5} more` : "";
+    return {
+      ok: false,
+      reason: `${label} repeats top-level key(s) ${shown.join(", ")}${more} — a repeated key is never resolved to one copy (${path})`,
+    };
+  }
   const v = parsed.verdict;
   if (typeof v !== "string" || !allowed.has(v)) {
     return { ok: false, reason: `${label} .verdict ${JSON.stringify(v)} is not one of {${[...allowed].join(", ")}} (${path})` };
   }
   return { ok: true, verdict: v, report: parsed };
+}
+
+// --- 7.3.0: the keys a JSON text's top-level object carries more than once, each once, in the order they first
+//     repeat. Called only on a text JSON.parse already accepted as an object, so it is a plain depth / string walk:
+//     a string at depth 1 right after `{` or `,` is a key. Each key token is DECODED with JSON.parse, so `verdict` and
+//     a `\u`-escaped spelling of it are one key — the comparison JSON.parse itself makes. A Set, never an object keyed
+//     by file content (L15). Total over any string (L62): the decode cannot throw on a token of valid JSON, and a
+//     throw would fall back to the raw token. ---
+function repeatedTopLevelKeys(text) {
+  const seen = new Set();
+  const repeated = new Set();
+  let depth = 0;
+  let expectKey = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      if (depth === 1 && expectKey) {
+        let key;
+        try {
+          key = JSON.parse(text.slice(i, j + 1));
+        } catch {
+          key = text.slice(i + 1, j);
+        }
+        if (seen.has(key)) repeated.add(key);
+        else seen.add(key);
+        expectKey = false;
+      }
+      i = j;
+    } else if (c === "{" || c === "[") {
+      depth++;
+      if (depth === 1) expectKey = c === "{";
+    } else if (c === "}" || c === "]") {
+      depth--;
+    } else if (c === "," && depth === 1) {
+      expectKey = true;
+    }
+  }
+  return [...repeated];
 }
 
 // --- on a verify FAIL only: `.failing_gates` must be an array of strings. Anything else is bad input,

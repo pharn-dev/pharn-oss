@@ -27,6 +27,9 @@ come from the single code block this text was moved from, so the entry they name
 # refused); the reader is loaded with import() and a failure to load reads FULL, the stricter table (D3) — though a
 # /pharn-loop run meets check-loop-fresh.mjs first, which imports it statically and stops at S11 (checker-crashed).
 # The token is bound to the kind at the floor, both ways (tested). Output gains `mode` (null only on an argv refusal).
+# 7.3.0 (loop-record-honesty): a report whose TOP-LEVEL object repeats a key (JSON.parse keeps the last copy, so
+# {"verdict":"FAIL",…,"verdict":"PASS"} read STOP_GREEN) is INCONCLUSIVE, exit 2, naming the keys (≤ 5, each ≤ 64
+# characters), never a value; a `\u`-escaped spelling is the same key. A repeat inside a nested object is not refused.
 node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
 ```
 
@@ -195,6 +198,13 @@ node pharn/floor/check-loop-decision.mjs <LOOP.md>
 # as `commit failed`, exit 4 — the hook itself runs on, orphaned. Node children stay unbounded. FLOOR: tested code over floor
 # verdicts (the green-token enum, the two checkers' exits); ADVISORY: that a run invokes the line and runs no git of its
 # own. C2's audit bar was met by 1 of 3 real runs; adopted at the user's request (CHANGELOG [6.44.0]).
+# 7.3.0 (loop-record-honesty): the staging list asks the run's pre-run snapshot (pre-run-snapshot.mjs preRunUnchanged,
+# the regress partition's own reader) which scope paths still hold their pre-run bytes and leaves those out — the
+# user's uncommitted edit to a file the plan names is no longer committed; the document gains `left_dirty`
+# ({status, paths}; null before the list is built) and the log a `── left out of the commit` line. Artifacts and pinned
+# tests are always staged; a snapshot miss (no marker, one older than 24 h, no record, another base) leaves nothing out
+# and is reported, never refused (GATE 1, Q1); a reader that throws crashes the close before the branch step. The
+# commit's second paragraph no longer cites `approved_by: model`, a field the closeout never reads.
 node pharn/floor/loop-closeout.mjs --feature <name> --base <40-hex> [--after-repair]
 node pharn/floor/ship-closeout.mjs --feature <name>
 ```

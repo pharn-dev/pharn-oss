@@ -158,12 +158,14 @@ const DUP_KEY_SPEC = makeSpecRaw(["spec_id: my-feature", "state: Approved", "sta
 // member of the enum → a false RED on a legitimately approved, correctly pinned spec.
 const COMMENT_SPEC = makeSpecRaw(["spec_id: my-feature", "state: Approved # ratified 2026-08-18", `spec_content_hash: ${bodyHash(BODY)}`]);
 
-test("RED: a DUPLICATE `state:` key no longer fails OPEN — the effective state is Draft, so the gate refuses", () => {
+test("RED: a DUPLICATE `state:` key no longer fails OPEN — check-spec refuses the repeat, so the gate refuses", () => {
   const r = runWith(DUP_KEY_SPEC);
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stdout, /RED/);
-  // The gate must name the LAST-wins value, proving it reported check-spec's answer and not its own.
-  assert.match(r.stdout, /"Draft" is not "Approved"/);
+  // Since 7.3.0 check-spec's validate REDs a repeated `state:` (no copy is the state), and the gate surfaces that
+  // refusal verbatim — proving it reported check-spec's answer and not its own. Before, it named the LAST copy.
+  assert.match(r.stdout, /RED — repeated-key failed: `state` ×2/);
+  assert.match(r.stdout, /check-spec\.mjs rejected/);
 });
 
 test("GREEN: `state: Approved # <note>` no longer false-REDs — the comment is stripped by the one parser", () => {
