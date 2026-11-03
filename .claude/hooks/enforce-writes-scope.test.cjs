@@ -3112,6 +3112,40 @@ test("TST-12 fail-closed (dev): a scratchpad the payload does not name as THIS s
   assert.equal(hookSession(cwd, target, { session_id: SID, scratchpad_dir: t.own }, {}).status, 2, "not under a temp root");
 });
 
+// Review 2026-11-03 (MED, #389): the dev posture's scratchpad allow must not widen into the project. It cannot — the
+// allow is read only for a target OUTSIDE the root, through the same ownScratchpadDir() temp-root rule the install
+// posture uses — and these cases pin that: a payload naming a project directory as the scratchpad unlocks nothing in
+// it, under no scope and under a set scope, nor does a Claude-shaped scratchpad planted inside the project.
+for (const [posture, seed] of [
+  ["dev", seedDevRepo],
+  ["unsignalled", seedUnsignalled],
+]) {
+  test(`TST-12 (${posture}): a scratchpad_dir INSIDE the project grants nothing there — the scope still decides`, () => {
+    const cwd = fs.realpathSync(seed(tmp()));
+    const t = claudeTempLayout();
+    const planted = join(cwd, "claude-4242", "-proj-key", SID, "scratchpad");
+    for (const [dir, target] of [
+      [join(cwd, "pharn"), join(cwd, "pharn", "floor", "x.mjs")], // the finding's own case
+      [join(cwd, "src"), join(cwd, "src", "x.js")],
+      [planted, join(planted, "x.mjs")], // Claude Code's own shape, but below the project, not a temp root
+    ]) {
+      const fields = { session_id: SID, scratchpad_dir: dir };
+      assert.equal(hookSession(cwd, target, fields, TEMP_ROOT_ENV(t)).status, 2, `no scope: ${dir} -> ${target}`);
+      assert.equal(hookSession(cwd, target, fields, { TMPDIR: cwd }).status, 2, `TMPDIR = the project: ${dir} -> ${target}`);
+    }
+    const scoped = fs.realpathSync(seed(tmp()));
+    setScope(scoped, ["only/this.md"]);
+    const fields = { session_id: SID, scratchpad_dir: join(scoped, "pharn") };
+    assert.equal(hookSession(scoped, join(scoped, "pharn", "floor", "x.mjs"), fields, TEMP_ROOT_ENV(t)).status, 2, "scoped");
+    assert.equal(hookSession(scoped, join(scoped, "only", "this.md"), fields, TEMP_ROOT_ENV(t)).status, 0, "control: the scope");
+    assert.equal(
+      hookSession(scoped, join(t.own, "gates.sh"), { session_id: SID, scratchpad_dir: t.own }, TEMP_ROOT_ENV(t)).status,
+      0,
+      "control: the real scratchpad under a temp root is still allowed"
+    );
+  });
+}
+
 test("TST-12 (dev): the target the write REACHES is judged — a link in the scratchpad back into the repo or out of it", () => {
   const cwd = seedDevRepo(tmp());
   const t = claudeTempLayout();

@@ -67,6 +67,53 @@ test("✧ the Write|Edit|MultiEdit|NotebookEdit matcher wires EXACTLY the two an
   );
 });
 
+// 7.3.0 (guard-wiring, review 2026-11-03 HIGH): a guard that cannot START, or that times out, is a non-blocking error
+// to Claude Code, so the write went through. Claude Code 2.1.295 added a handler field that turns that failure into a
+// block (`"onFailure": "block"`, hooks.md "Block the action when a hook fails"), so both guard handlers carry it. Each
+// handler is pinned as a WHOLE object (L36): a missing field, `"continue"`, another spelling or an extra key fails.
+// The Stop guard must NOT carry it — it fails open by design, and the field has no effect on Stop (hooks.md) — which
+// assertStopWired() below already pins by whole-object equality.
+// BOUND (P0): this pins the committed bytes only. That Claude Code honours the field is its documented behaviour from
+// 2.1.295 on; what an older client does with the key is undocumented (.dev/features/guard-wiring/NOTES.md).
+const BLOCKING_GUARD_HANDLERS = GUARDS.map((g, i) => ({ type: "command", command: ANCHORED[i], onFailure: "block" }));
+
+function assertGuardsBlockOnFailure(settings) {
+  const groups = (settings && settings.hooks && settings.hooks.PreToolUse) || [];
+  const handlers = groups.filter((g) => g && g.matcher === MATCHER).flatMap((g) => (Array.isArray(g.hooks) ? g.hooks : []));
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(handlers)),
+    BLOCKING_GUARD_HANDLERS,
+    'both guard handlers must be exactly {type, command, onFailure: "block"}, in this order'
+  );
+}
+
+test('✧ both PreToolUse guard handlers carry `"onFailure": "block"`, as whole objects (7.3.0)', () => {
+  assertGuardsBlockOnFailure(JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8")));
+});
+
+test("✧ the onFailure check DISCRIMINATES: an absent, other or misspelled value, or an extra key, fails it (L40 negative control)", () => {
+  const settings = JSON.parse(fs.readFileSync(join(REPO, ".claude", "settings.json"), "utf8"));
+  const planted = (mutate) => {
+    const copy = JSON.parse(JSON.stringify(settings));
+    mutate(copy.hooks.PreToolUse.find((g) => g.matcher === MATCHER).hooks);
+    return copy;
+  };
+  for (const [label, mutate] of [
+    ["field removed from the first guard", (hs) => delete hs[0].onFailure],
+    ["field removed from the second guard", (hs) => delete hs[1].onFailure],
+    ['"continue"', (hs) => (hs[1].onFailure = "continue")],
+    ['"Block"', (hs) => (hs[0].onFailure = "Block")],
+    ["an extra key", (hs) => (hs[0].timeout = 600)],
+    ["the guards swapped", (hs) => hs.reverse()],
+  ]) {
+    assert.throws(() => assertGuardsBlockOnFailure(planted(mutate)), /onFailure: "block"/, `${label} must fail`);
+  }
+  assert.throws(() => assertGuardsBlockOnFailure({}), /onFailure: "block"/, "no hooks at all must fail");
+  const stopBlocking = JSON.parse(JSON.stringify(settings));
+  stopBlocking.hooks.Stop[0].hooks[0].onFailure = "block";
+  assert.throws(() => assertStopWired(stopBlocking), /exactly the staged one/, "onFailure on the Stop guard must fail");
+});
+
 // `disableAllHooks: true` in a settings file Claude Code loads turns off EVERY hook, both guards included, and leaves
 // the wiring above untouched — so the matcher test stays green while nothing runs (audit SEC-7, 6.64.3). The two
 // project files are checked: settings.json (committed) and settings.local.json (gitignored, checked when present).

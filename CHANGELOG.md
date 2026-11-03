@@ -56,6 +56,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **A write guard that cannot start, or that times out, now blocks the write on Claude Code 2.1.295 or
+  later.** `.claude/settings.json` adds `"onFailure": "block"` to both `PreToolUse` guard handlers
+  (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`). Before, a wrong path, a missing `node`, a crash before
+  the guard's own handler registered, or the 600 s timeout was a non-blocking error, so the write went through. The
+  `Stop` hook is unchanged: it fails open by design, and the field has no effect on `Stop`. What a client older than
+  2.1.295 does with the key is undocumented; on 2.1.312 `claude doctor` reports nothing for an unknown hook-handler
+  key, so an older client most likely keeps the old fail-open behaviour. `hook-wiring.test.cjs` pins both handlers as
+  whole objects, with a negative control. The README's wiring section shows the field. An install whose `settings.json` the installer
+  preserved needs the field added by hand (review 2026-11-03, HIGH).
+- 2026-11-03: **README and SECURITY now say that a write through an MCP server's tool is outside both write guards**,
+  as `pharn/LIMITS.md §6` already did. Neither hook judges an `mcp__*` tool. That is a decision, not an oversight: a
+  path in an MCP tool's input does not say whether the call reads or writes, and a list of write-sounding tool names
+  would be a heuristic. Verify-time reconciliation covers such a write as it covers a Bash write (review 2026-11-03,
+  MEDIUM, won't fix in the hooks).
+- 2026-11-03: **New `enforce-writes-scope.test.cjs` cases pin that the dev-posture scratchpad allow (6.73.1) cannot
+  reach into the project.** In the dev and unsignalled postures, a payload whose `scratchpad_dir` names a project
+  directory (`<root>/pharn`, `<root>/src`), or a Claude-shaped scratchpad inside the project, unlocks nothing there.
+  That holds with no scope and under a set scope, with `TMPDIR` at a temp base or at the project. The review asked for
+  a hook change. None was needed: both postures already share one rule (`ownScratchpadDir()`), which requires the
+  scratchpad to sit directly under `os.tmpdir()` or `/tmp`, and the allow applies only to a target outside the root
+  (review 2026-11-03, MEDIUM).
 - 2026-11-03: **The human-gate tool is named `AskUserQuestion`** in `/pharn-dev-plan`, `/pharn-dev-memory-promote`,
   `/pharn-spec`, `/pharn-memory-promote` and `/pharn-dev-ship` (ten lines named `AskQuestion`, which is not a Claude
   Code tool, so each gate worked by the model guessing the name). The command-hygiene pin that matched the old name now
