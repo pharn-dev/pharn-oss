@@ -25,6 +25,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- 2026-11-03: **`set-writes-scope.cjs --check` and a plan-time `## Files` check.** `--check` (placed before the mode)
+  runs every parse and every refusal of a `--from-plan` scope and writes nothing. `/pharn-plan` (Step 4b) and
+  `/pharn-dev-plan` (Step 4) run it on the PLAN they just wrote, so a refusal surfaces at plan time instead of at the
+  test or build stage; `/pharn-loop` pre-approves that one line. New opt-in `--allow-instruction-files` (see Fixed).
 - 2026-11-03: **A pull request that changes product files must carry a green `/pharn-dev-ship` record.** The new
   per-PR check `npm run check:ship-record` (`.dev/floor/check-ship-record.mjs`, a CI step on pull requests) REDs a PR
   that changes a bump-triggering product path unless a `.dev/features/<name>/SHIP.md` in it records a green run: the
@@ -46,6 +50,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-03: **Memory-bank canon leaves the formatters' reach, and `/pharn-dev-build` Step 2b runs `npx --no-install`.**
+  `.prettierignore` and `.markdownlint-cli2.jsonc` list `.dev/memory-bank/` and `pharn/memory-bank/`, so canon leaves
+  `format:check` / `lint:md` and the promote commands' advisory `--check` lines over canon no longer check anything.
+  Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, take
+  the scoped paths NUL-separated (`join('\0')` + `xargs -0 -r`, so no entry is split at a space or read as quoted),
+  and end each tool's options with `--` (all three treat what follows as paths); its Step 0 says a setter refusal is a
+  stop for the human — never an `--allow-*` flag the agent adds. It passes on only entries that are existing regular
+  files by their literal path (lstat, realpath inside the checkout) with no glob character, naming the rest: all three
+  tools read arguments as globs, so a scope entry `CLAUDE.m[d]` had reformatted `CLAUDE.md`. That block is the only shell consumer of
+  `pharn/.run/writes-scope.json` (`loop-closeout.mjs` already stages through `--pathspec-file-nul` with literal pathspecs).
 - 2026-11-03: **`/pharn-dev-verify` takes its gate map from the gate runner, and `/pharn-dev-ship` never proceeds past
   a red verdict.** `/pharn-dev-verify` now runs its gates through `pharn/floor/run-gates.mjs` and validates the stamp
   with `check-verify.mjs --stamp`, as `/pharn-verify` does. A hand-typed map, a dropped gate, or a gate re-measured in
@@ -91,6 +105,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **A plan can no longer scope canon, executable config, or — during a product run in a dev or unsignalled
+  tree — PHARN's own floor and commands** (review 2026-11-03: BLOCKER setter half, HIGH canon, MEDIUM `.mcp.json` /
+  `CLAUDE.md`). `set-writes-scope.cjs --from-plan` now refuses, writing nothing: memory-bank canon in every posture with
+  no opt-in (a dev plan naming canon had `/pharn-dev-build`'s Bash formatter pass rewrite it; the promote command is
+  the route); executable config in every posture, the class gaining `.github/actions/**` and `.mcp.json`
+  (`core.hooksPath` stays fail-closed in an installed project and is read best-effort elsewhere); the instruction files
+  `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) in an installed project; in a dev or unsignalled tree
+  while a `/pharn-loop` or `/pharn-ship` marker is open, PHARN's own surface and the instruction files; and in every
+  project an entry holding a quote, a back-tick, a backslash or a control character, or one that — whole or in any
+  space-separated part — is absolute, climbs out with `..`, or is led by `-` (each class refusal tests the relative
+  spelling, so an absolute path to canon passed them all, and `src/a.js --plugin=./evil.mjs` reached Step 2b's
+  formatter as two arguments and loaded the plugin — found by adversarial reviews of the first two patches). With no product
+  run open, a dev build still scopes `pharn/floor/**` and `.claude/commands/**` (self-hosting) — so the review's
+  BLOCKER is narrowed, not closed: a model-approved dev plan can still scope the floor, and what guards that is GATE 1
+  and the GitHub review layer. The hook change was applied by the maintainer; the trusted-doc wording is proposed in
+  `.dev/features/plan-scope-hardening/DOCS-PROPOSAL.md`.
+- 2026-11-03: **The `## Files` readers stop reading HTML comments and raw HTML, refuse a second `## Files`, and
+  require one contiguous list** (review 2026-11-03, MEDIUMs; an adversarial review of the first patch). Both readers
+  (`set-writes-scope.cjs` and `pharn/floor/plan-files-core.mjs`, held together by byte-equal pins and parity fixtures
+  checked against markdown-it): lines split on `\r\n`, `\r` or `\n`; a comment block (a line beginning `<!--`, through
+  the first line holding `-->`) is never the list, an inline comment closed on its line is cut, and an unclosed inline
+  `<!--` is literal text outside `## Files` and refuses inside it; a raw HTML block inside `## Files` refuses; a second
+  visible `## Files` heading refuses with both line numbers; an item marker is `-` plus spaces or tabs only (never a
+  no-break space), and an item indented four or more columns past the previous item's text refuses; and any line
+  between two path items other than a blank line or the item's own indented wrapped text — a label in any spelling, a
+  blockquote, a non-path bullet, a setext underline — refuses, so `Excluded:` / `NOT in scope:` can no longer scope
+  the paths under them. Over the 342 committed plans (pre-batch setter vs 7.3.0, dev posture): 293 identical, 44 newly
+  refused (27 split list, 14 CI workflow, 3 canon), 5 already refused and now refused first by the split-list rule, 0
+  silent changes; plans are not re-run, so none was edited — new plans write one contiguous list. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
+  reads "not found") and skips comment-hidden headings; `apply-plan-deletions.mjs` reports the reader's own refusal
+  reason instead of a fixed "no `## Files` heading".
 - 2026-11-03: **The gate runner no longer passes its own `PHARN_TEST_RESULTS` path down to a gate that has no
   results file, and `check-verify.mjs --stamp` refuses a results map wherever it stands.** `pharn/floor/run-gates.mjs`
   removes an inherited `PHARN_TEST_RESULTS` when it spawns a process with no results file; before, a suite run as a

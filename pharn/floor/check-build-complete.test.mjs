@@ -251,11 +251,13 @@ test("★ PARITY: a WRAPPED path-item description containing the cue does NOT tr
     const wrapped = both();
     assert.deepEqual(wrapped.declared, wrapped.scope, "the two parsers disagreed about a wrapped description");
     assert.deepEqual(wrapped.scope, ["src/a.mjs", "src/b.mjs"], "a wrapped description truncated the list");
-    // Control: separated by a blank line, the same words are a head-less cue — both parsers stop.
+    // Control: separated by a blank line, the same words are no longer the item's own text — since 7.3.0 they end the
+    // contiguous list, and the item after them makes BOTH parsers refuse.
     write(["- `src/a.mjs` — the adapter", "", "  out of scope stays untouched", "- `src/b.mjs` — y"]);
-    const cue = both();
-    assert.deepEqual(cue.declared, cue.scope);
-    assert.deepEqual(cue.scope, ["src/a.mjs"]);
+    const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(s.status, 1, `the setter must refuse: ${s.stdout}`);
+    assert.match(s.stderr, /interrupts the path list/);
+    assert.match(json(run([plan, root])).reason, /interrupts the path list/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -272,18 +274,18 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
         "",
         "## Files",
         "",
+        // EXEMPTION 2 — a blockquote matches the cue (`not touch…`) and is explanatory commentary. Since 7.3.0 a
+        // blockquote BETWEEN items ends the contiguous list, so the commentary sits before the first item.
+        "> These notes are commentary; the vendored tree is not touched here.",
+        "",
         // EXEMPTION 1 — an authorized item's OWN description matches the cue regex (`not modif…`) and
         // must NOT end the list. Without the path-item exemption this line alone would drop everything.
         "- `keep/one.md` — the public API is not modified by this change",
-        // EXEMPTION 2 — a blockquote matches the cue (`not touch…`) and is explanatory commentary.
-        "> These notes are commentary; the vendored tree is not touched here.",
-        "",
         "- `keep/two.mjs` — y",
         "",
-        // THE CUE — a bare, non-path, non-blockquote prose line. This is the break under test.
-        "The paths below are explicitly excluded from the build.",
-        "",
-        "- `dropped/three.md` — after the cue, never authorized",
+        // THE CUE — a bare, non-path, non-blockquote prose line, with nothing after it (an item after it refuses
+        // since 7.3.0 — the second half of this test).
+        "The paths beside this plan are explicitly excluded from the build.",
         "",
       ].join("\n")
     );
@@ -303,7 +305,12 @@ test("★ PARITY: a head-less exclusion CUE truncates both parsers, and its two 
     // proved only "the cue truncates" would stay green if the exemptions silently stopped working.
     assert.ok(scope.includes("keep/one.md"), "the path-item exemption did not hold — its own description truncated the list");
     assert.ok(scope.includes("keep/two.mjs"), "the blockquote exemption did not hold — commentary truncated the list");
-    assert.ok(!scope.includes("dropped/three.md"), "the cue did not truncate — a path after it was authorized");
+    // 7.3.0: an item AFTER the cue makes both parsers refuse — the dropped path never enters scope, loudly.
+    writeFileSync(plan, readFileSync(plan, "utf8") + "- `dropped/three.md` — after the cue, never authorized\n");
+    const after = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(after.status, 1, `the setter must refuse: ${after.stdout}`);
+    assert.match(after.stderr, /interrupts the path list/);
+    assert.match(json(run([plan, root])).reason, /interrupts the path list/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -370,7 +377,8 @@ const FENCE_FIXTURES = [
   },
   {
     name: "an inline ```x``` line is code, not a fence",
-    plan: ["## Files", "- `src/a.ts`", "```x``` is inline code", "- `src/b.ts`", ""],
+    // Indented under its item since 7.3.0 (a prose line between items refuses — one contiguous list).
+    plan: ["## Files", "- `src/a.ts`", "  ```x``` is inline code", "- `src/b.ts`", ""],
     want: ["src/a.ts", "src/b.ts"],
   },
   {
@@ -419,6 +427,262 @@ test("★ PARITY: FENCE_FIXTURES — the setter's scope and the checker's `decla
         assert.equal(c.status, 2, `${fx.name}: the checker must be INCONCLUSIVE`);
         assert.equal(json(c).verdict, "inconclusive", fx.name);
         assert.match(json(c).reason, /reads differently depending on whether a code fence sits inside a list item/, fx.name);
+      } else {
+        assert.equal(s.status, 0, `${fx.name}: setter failed: ${s.stderr}`);
+        const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
+        assert.deepEqual(scope, fx.want, `${fx.name}: setter scope`);
+        assert.deepEqual(json(c).declared, fx.want, `${fx.name}: checker declared`);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+// ── 7.3.0 (plan-scope-hardening): line endings, HTML comments and blocks, ONE `## Files`, ONE CONTIGUOUS LIST ──────
+// Each list fixture's answer was checked against markdown-it 15.0.3 (what a rendered PLAN shows as a `## Files` item,
+// offline — `.dev/features/plan-scope-hardening/BUILD.md`); a `bound` fixture is a stated case where this reader hides
+// MORE than the renderer (fewer paths). A refusal fixture names the setter's and the checker's wording. Round 2 adds
+// the adversarial review's cases of the first patch (2a–2d).
+const SECOND = {
+  setter: /has more than one `## Files` heading \(lines 1 and 5\)/,
+  core: /more than one `## Files` heading \(lines 1 and 5\)/,
+};
+const SPLIT = (a, b) => {
+  const re = new RegExp(`line ${a} under \`## Files\` .*interrupts the path list and a path item follows it \\(line ${b}\\)`);
+  return { setter: re, core: re };
+};
+const READER_FIXTURES = [
+  {
+    name: "a comment-hidden ## Files above the visible one is not the list",
+    plan: ["<!--", "## Files", "- `pharn/floor/validate.mjs`", "-->", "", "## Files", "", "- `src/a.js`", ""],
+    want: ["src/a.js"],
+  },
+  {
+    name: "items inside a multi-line comment are not scoped",
+    plan: ["## Files", "", "- `src/a.ts`", "<!--", "- `pharn/floor/evil.mjs`", "-->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a one-line comment holding an item is not scoped",
+    plan: ["## Files", "", "- `src/a.ts`", "<!-- - `pharn/floor/evil.mjs` -->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  { name: "`<!-->` closes at once (CommonMark)", plan: ["## Files", "", "<!-->", "- `src/a.ts`", ""], want: ["src/a.ts"] },
+  { name: "`<!--->` closes at once (CommonMark)", plan: ["## Files", "", "<!--->", "- `src/a.ts`", ""], want: ["src/a.ts"] },
+  {
+    name: "an unclosed comment hides the rest of the file",
+    plan: ["## Files", "", "- `src/a.ts`", "", "<!--", "- `pharn/floor/evil.mjs`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "`<!--` inside a code span is literal text",
+    plan: ["## Files", "", "- `src/a.ts` — matches `<!--` text", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a trailing inline comment leaves its item scoped",
+    plan: ["## Files", "", "- `src/a.ts` <!-- note -->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a fence line inside a comment is not a fence",
+    plan: ["## Files", "", "- `src/a.ts`", "<!--", "```", "-->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a comment opener inside a fence is literal",
+    plan: ["## Files", "", "- `src/a.ts`", "```", "<!--", "```", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    // Round 2 made it literal, so it no longer hides the later heading (2a); round 3 refuses it outright (B2), since a
+    // renderer may hide what follows it.
+    name: "an unclosed inline `<!--` mid-line inside `## Files` refuses (2a, B2)",
+    plan: ["## Files", "", "- `src/a.js` — a stray <!-- in prose", "", "### Explicitly not touched", "", "- `pharn/floor/x.mjs`", ""],
+    want: {
+      setter: /line 3 under `## Files` .*opens an HTML comment it does not close/,
+      core: /line 3 under `## Files` opens an HTML comment it does not close/,
+    },
+  },
+  {
+    name: "an unclosed inline `<!--` outside `## Files` is literal text and hides no heading (2a)",
+    plan: ["# PLAN", "", "Prose with a stray <!-- here.", "", "## Files", "", "- `src/a.js`", ""],
+    want: ["src/a.js"],
+  },
+  {
+    name: "an escaped `\\<!--` is literal text (2a)",
+    plan: ["## Files", "", "- `src/a.js` — see \\<!-- here -->", "- `src/b.js`", ""],
+    want: ["src/a.js", "src/b.js"],
+  },
+  {
+    name: "a lone CR ends a line, so `\\r### …` is a heading (2c)",
+    plan: ["## Files", "", "- `src/a.ts`\r### Explicitly not touched\r- `pharn/floor/x.mjs`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a lone CR before `## Files` makes it the heading (2c)",
+    plan: ["# PLAN\r## Files\r\r- `src/a.ts`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a `<div>` holding a comment opener refuses (2b)",
+    plan: ["## Files", "", "- `src/a.ts`", "<div>", "<!--", "</div>", "- `pharn/floor/x.mjs`", "-->", ""],
+    want: { setter: /line 4 under `## Files` .*starts a raw HTML block/, core: /line 4 under `## Files` starts a raw HTML block/ },
+  },
+  {
+    name: "a fence inside a `<div>` refuses (2b)",
+    plan: ["## Files", "", "- `src/a.ts`", "<div>", "```", "</div>", "- `pharn/floor/x.mjs`", "```", ""],
+    want: { setter: /line 4 under `## Files` .*starts a raw HTML block/, core: /line 4 under `## Files` starts a raw HTML block/ },
+  },
+  // review round 3 (B): an item hidden as lazy paragraph text inside an inline comment, by indentation or by NBSP.
+  {
+    name: "an inline `<!--` left open, then an indented item and the closer, refuses (B2)",
+    plan: ["## Files", "", "- `src/a.js` <!--", "      - `pharn/floor/validate.mjs`", "      -->", ""],
+    want: {
+      setter: /line 3 under `## Files` .*opens an HTML comment it does not close/,
+      core: /line 3 under `## Files` opens an HTML comment it does not close/,
+    },
+  },
+  {
+    name: "an inline `<!--` left open, then an item with the closer at column 0, refuses (B2)",
+    plan: ["## Files", "", "- `src/a.js` <!--", "- `pharn/floor/validate.mjs` -->", ""],
+    want: {
+      setter: /line 3 under `## Files` .*opens an HTML comment it does not close/,
+      core: /line 3 under `## Files` opens an HTML comment it does not close/,
+    },
+  },
+  {
+    name: "an item indented 4+ columns past the previous item's text refuses (B1)",
+    plan: ["## Files", "", "- `src/a.js`", "      - `pharn/floor/validate.mjs`", ""],
+    want: {
+      setter: /line 4 under `## Files` .*is a path item indented four or more columns/,
+      core: /line 4 under `## Files` is a path item indented four or more columns/,
+    },
+  },
+  {
+    name: "a first item indented 4+ columns refuses (B1)",
+    plan: ["## Files", "", "    - `pharn/floor/validate.mjs`", ""],
+    want: {
+      setter: /line 3 under `## Files` .*is a path item indented four or more columns/,
+      core: /line 3 under `## Files` is a path item indented four or more columns/,
+    },
+  },
+  {
+    name: "a no-break space is not an item marker's space, nor an indent: the line interrupts the list (B1)",
+    plan: ["## Files", "", "- `src/a.js`", "  - `pharn/floor/x.mjs`", "- `pharn/floor/y.mjs`", "- `src/b.js`", ""],
+    want: SPLIT(4, 6),
+  },
+  {
+    name: "a tab after the marker and a nested item at the parent's text column are list items",
+    plan: ["## Files", "", "-\t`src/a.ts`", "  - `src/a.test.ts`", "    - `src/a.fixture.ts`", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/a.test.ts", "src/a.fixture.ts", "src/b.ts"],
+  },
+  {
+    name: "bound: a comment block opened inside an item hides past the item's end (the renderer shows b)",
+    plan: ["## Files", "", "- `src/a.ts`", "  <!--", "- `src/b.ts`", "-->", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a second visible ## Files refuses",
+    plan: ["## Files", "", "- `src/a.ts`", "", "## Files", "", "- `pharn/floor/x.mjs`", ""],
+    want: SECOND,
+  },
+  {
+    name: "a fenced or commented second ## Files does not refuse",
+    plan: ["## Files", "", "- `src/a.ts`", "", "```", "## Files", "```", "<!-- ## Files -->", ""],
+    want: ["src/a.ts"],
+  },
+  // ONE CONTIGUOUS LIST (2d) — every label spelling the adversarial review used, between two items, refuses.
+  ...[
+    "Excluded:",
+    "Excluded:\\",
+    "`Excluded:`",
+    "<b>Excluded:</b>",
+    "Excluded：",
+    "> Excluded:",
+    "**NOT in scope:**",
+    "- not a path item",
+    "Explicitly **not** touched:",
+  ].map((label) => ({
+    name: `a line between items (${label}) refuses`,
+    plan: ["## Files", "", "- `src/a.ts`", "", label, "", "- `pharn/floor/evil.mjs`", ""],
+    // `<b>…` at a line's start is also a raw HTML block start, which refuses first.
+    want: label.startsWith("<")
+      ? { setter: /line 5 under `## Files` .*starts a raw HTML block/, core: /line 5 under `## Files` starts a raw HTML block/ }
+      : SPLIT(5, 7),
+  })),
+  {
+    name: "an indented label under an open item, then a nested item, refuses (2d)",
+    plan: ["## Files", "", "- `src/a.ts`", "  Excluded:", "  - `pharn/floor/evil.mjs`", ""],
+    want: SPLIT(4, 5),
+  },
+  {
+    name: "an indented paragraph after a blank line, then an item, refuses (2d)",
+    plan: ["## Files", "", "- `src/a.ts`", "", "  Excluded:", "", "- `pharn/floor/evil.mjs`", ""],
+    want: SPLIT(5, 7),
+  },
+  {
+    name: "a setext underline between items refuses (2d)",
+    plan: ["## Files", "", "- `src/a.ts`", "", "Excluded", "---", "", "- `pharn/floor/evil.mjs`", ""],
+    want: SPLIT(5, 8),
+  },
+  {
+    name: "a cue before the first item, with items after it, refuses",
+    plan: ["## Files", "", "Files NOT written:", "", "- `src/a.ts`", ""],
+    want: SPLIT(3, 5),
+  },
+  {
+    name: "prose before the first item and after the last is allowed; the cue at the end ends silently",
+    plan: [
+      "## Files",
+      "",
+      "Written by `/build`:",
+      "",
+      "- `src/a.ts` — shaped like:",
+      "  the rest of it:",
+      "- `src/b.ts`",
+      "",
+      "Explicitly **not** touched: the rest.",
+      "",
+    ],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a blockquote before the first item is commentary, never a cue",
+    plan: ["## Files", "", "> the vendored tree is not touched here", "", "- `src/a.ts`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a line after the list with no item before the next heading does not refuse",
+    plan: ["## Files", "", "- `src/a.ts`", "", "Notes:", "", "### Next", "", "- `x.md`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a nested item directly under its parent's own line is part of the list",
+    plan: ["## Files", "", "- `src/a.ts`", "  - `src/a.test.ts`", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/a.test.ts", "src/b.ts"],
+  },
+];
+
+test("★ PARITY: READER_FIXTURES (7.3.0) — the setter's scope and the checker's `declared` agree, refusals included", () => {
+  assert.ok(
+    READER_FIXTURES.some((f) => Array.isArray(f.want)) && READER_FIXTURES.some((f) => !Array.isArray(f.want)),
+    "non-vacuous: both outcomes"
+  );
+  for (const fx of READER_FIXTURES) {
+    const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+    try {
+      const plan = join(root, "PLAN.md");
+      writeFileSync(plan, fx.plan.join("\n"));
+      const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+      const c = run([plan, root]);
+      if (!Array.isArray(fx.want)) {
+        assert.equal(s.status, 1, `${fx.name}: the setter must refuse (${s.stdout})`);
+        assert.match(s.stderr, fx.want.setter, fx.name);
+        assert.equal(c.status, 2, `${fx.name}: the checker must be INCONCLUSIVE`);
+        assert.match(json(c).reason, fx.want.core, fx.name);
+        assert.equal(pathsFromPlanFiles(fx.plan.join("\n")).ok, false, fx.name);
       } else {
         assert.equal(s.status, 0, `${fx.name}: setter failed: ${s.stderr}`);
         const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;

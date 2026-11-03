@@ -172,8 +172,9 @@ const NPX_TOOL_RE = /\bnpx\s+(?:--\S+\s+)*(prettier|markdownlint-cli2|eslint)\b/
 const NPX_NO_INSTALL_RE = /\bnpx\s+--no-install\s+(prettier|markdownlint-cli2|eslint)\b/;
 // 7.3.0 lesson-heading-parser: pharn-dev-memory-promote.md left the set — its only npx lines (a canon `--check`) were
 // removed, since both canon dirs are in the formatters' ignore files. 7.3.0 dev-verdict-discipline: pharn-dev-review.md
-// and pharn-dev-verify.md left it — their formatter lines now carry --no-install.
-const NPX_PENDING = new Set(["pharn-dev-build.md"]);
+// and pharn-dev-verify.md left it — their formatter lines now carry --no-install. 7.3.0 plan-scope-hardening:
+// pharn-dev-build.md left it (Step 2b runs `npx --no-install`), so the set is empty and every dev command is held.
+const NPX_PENDING = new Set([]);
 const npxOffenders = (text) =>
   text.split(/\r?\n/).filter((l) => !l.trimStart().startsWith("#") && NPX_TOOL_RE.test(l) && !NPX_NO_INSTALL_RE.test(l));
 
@@ -226,10 +227,12 @@ test("✧ no command names the human-gate tool `AskQuestion` (it is `AskUserQues
 // Honest scope, and it is narrow: this pins that the command's Step 2b block INVOKES each member. It is
 // a VOCABULARY assertion like the FORBIDDEN rules above — it cannot prove a run executed the step (Step
 // 2b is ADVISORY orchestration, outside the PreToolUse gate), and a mistyped flag would satisfy it.
+// 7.3.0: each runs as `xargs -0 -r npx --no-install <tool> … --` (NUL-separated paths, nothing on an empty list, a
+// missing local binary fails instead of being fetched, and `--` ends the tool's options), pinned below.
 const STEP_2B_GATES = [
-  { tool: "prettier", re: /\|\s*xargs\s+npx\s+prettier\b/ },
-  { tool: "markdownlint-cli2", re: /\|\s*xargs\s+npx\s+markdownlint-cli2\b/ },
-  { tool: "eslint", re: /\|\s*xargs\s+npx\s+eslint\b/ },
+  { tool: "prettier", re: /\|\s*xargs\s+-0\s+-r\s+npx\s+--no-install\s+prettier\b/ },
+  { tool: "markdownlint-cli2", re: /\|\s*xargs\s+-0\s+-r\s+npx\s+--no-install\s+markdownlint-cli2\b/ },
+  { tool: "eslint", re: /\|\s*xargs\s+-0\s+-r\s+npx\s+--no-install\s+eslint\b/ },
 ];
 
 function step2bBlock() {
@@ -258,7 +261,7 @@ for (const gate of STEP_2B_GATES) {
     const invocations = step2bBlock()
       .split("\n")
       .filter((l) => !l.trimStart().startsWith("#"))
-      .filter((l) => new RegExp(`npx\\s+${gate.tool}\\b`).test(l));
+      .filter((l) => new RegExp(`npx\\s+(?:--no-install\\s+)?${gate.tool}\\b`).test(l));
     assert.ok(invocations.length > 0, `expected a prescribed ${gate.tool} invocation in Step 2b`);
     for (const line of invocations) {
       assert.match(line, /\bxargs\b/, `a path-less ${gate.tool} falls back to the whole repo: ${line.trim()}`);
@@ -266,17 +269,62 @@ for (const gate of STEP_2B_GATES) {
   });
 }
 
-// The non-empty guard is what makes the path-less case unreachable on an empty list under GNU xargs,
-// so it is asserted for every SUBSET gate — the ones that filter the scope before piping it.
-for (const gate of STEP_2B_GATES.filter((g) => g.tool !== "prettier")) {
-  test(`✧ Step 2b guards its ${gate.tool} subset against the empty list (L16)`, () => {
+// 7.3.0 (plan-scope-hardening): Step 2b's formatters must never rewrite memory-bank canon. The setter now refuses a
+// plan-sourced canon scope, and as the second layer both formatters' ignore files list both canon roots — prettier and
+// markdownlint-cli2 (under `--no-globs`) honour them for an explicitly named path. Review 2026-11-03 probe D: a plan
+// naming `.dev/memory-bank/lessons-learned.md` had Step 2b rewrite canon.
+test("✧ both formatters' ignore files list both memory-bank canon roots (Step 2b can never rewrite canon)", () => {
+  const root = join(COMMANDS_DIR, "..", "..");
+  const prettierIgnore = readFileSync(join(root, ".prettierignore"), "utf8").split(/\r?\n/);
+  const mdlIgnores = readFileSync(join(root, ".markdownlint-cli2.jsonc"), "utf8");
+  for (const dir of [".dev/memory-bank", "pharn/memory-bank"]) {
+    assert.ok(prettierIgnore.includes(`${dir}/`), `.prettierignore must list ${dir}/`);
     assert.match(
-      step2bBlock(),
-      /\[\s-n\s+"\$\w+"\s\]\s+&&/,
-      `an empty subset must not reach ${gate.tool}: GNU xargs runs the command once with NO arguments`
+      mdlIgnores,
+      new RegExp(`^\\s*"${dir.replace(/\./g, "\\.")}",`, "m"),
+      `.markdownlint-cli2.jsonc ignores must list "${dir}"`
     );
+  }
+});
+
+// The empty-list guard is what makes the path-less case unreachable under GNU xargs; since 7.3.0 it is `xargs -r`
+// (the list is NUL-separated, which a shell variable cannot hold). And every invocation is NUL-safe and ends its
+// options with `--` (review round 3: `- \`src/a.js --plugin=./evil.mjs\`` reached prettier as two arguments and
+// loaded the plugin) — prettier, markdownlint-cli2 and eslint each treat everything after `--` as a path (verified:
+// a `--plugin=…` after `--` is reported as a missing file, and the plugin does not run).
+for (const gate of STEP_2B_GATES) {
+  test(`✧ Step 2b's ${gate.tool} line is NUL-safe, guarded against the empty list, and ends options with -- (L16)`, () => {
+    const lines = step2bBlock()
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("#") && gate.re.test(l));
+    assert.equal(lines.length, 1, `exactly one prescribed ${gate.tool} line`);
+    const [line] = lines;
+    assert.match(line, /^\s*node -e "\$PICK" '[^']*' \| xargs -0 -r /, `${gate.tool}: the paths come from PICK, NUL-separated`);
+    assert.match(line, /\s--$/, `${gate.tool}: \`--\` ends the tool's options, so no path is read as a flag`);
+    assert.doesNotMatch(line, /join\('\\n'\)/, `${gate.tool}: never newline-separated`);
   });
 }
+
+// PICK — the one node step all three lines share (7.3.0, review round 3): it reads the scope record, keeps only
+// entries that are EXISTING REGULAR FILES by their literal path (lstat — a symlink or a directory is never a file —
+// and a realpath inside the checkout) and hold no glob character, names the rest on stderr, and writes the kept paths
+// NUL-separated with no trailing newline. Why the glob filter: all three tools read arguments as globs, and none treats
+// an existing literal `[…]` / `{…}` path as that file when the glob matches another (measured), so a scope entry such
+// as `CLAUDE.m[d]` reformatted CLAUDE.md. A VOCABULARY pin, like the others here: it cannot run the step.
+test("✧ Step 2b's PICK passes only existing regular files by literal path, never a glob-shaped entry, NUL-separated", () => {
+  const defs = step2bBlock()
+    .split("\n")
+    .filter((l) => /^\s*PICK='/.test(l));
+  assert.equal(defs.length, 1, "exactly one PICK definition in Step 2b");
+  const [pick] = defs;
+  assert.match(pick, /require\("\.\/pharn\/\.run\/writes-scope\.json"\)\.scope/, "PICK reads the setter's scope record");
+  assert.match(pick, /fs\.lstatSync\(p\)\.isFile\(\)/, "lstat + isFile: never a symlink, never a directory");
+  assert.match(pick, /realpathSync\(p\)/, "the realpath of each entry is taken");
+  assert.match(pick, /real\.startsWith\(root \+ path\.sep\)/, "and must lie inside the checkout");
+  assert.match(pick, /!\/\[\*\?\[\\\]\{\}\(\)!\]\/\.test\(p\)/, "a glob character (`*?[]{}()!`) drops the entry");
+  assert.match(pick, /process\.stdout\.write\(keep\.join\("\\0"\)\)/, "kept paths are written NUL-separated, no newline");
+  assert.match(pick, /process\.stderr\.write\(/, "dropped entries are named, never silently skipped");
+});
 
 // ── Every markdownlint-cli2 invocation lints ONLY the files it names (`--no-globs`) ──────────────────
 //
@@ -5238,7 +5286,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
   // ship-step2-part (6.70.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
   // rounded up to 512. R3–R5 do not apply to them (header).
-  "pharn-dev-build.md": 15360, // 13,771 B
+  "pharn-dev-build.md": 17920, // 15,867 B (7.3.0, plan-scope-hardening: Step 2b's NUL-safe PICK + its rationale)
   "pharn-dev-eval.md": 11264, // 9,907 B
   "pharn-dev-grill.md": 25600, // 22,836 B
   "pharn-dev-memory-promote.md": 50688, // 45,963 B

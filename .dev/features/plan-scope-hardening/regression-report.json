@@ -1,0 +1,75 @@
+{
+  "base": "dd0bb3d39449590ef5694cc93701c046f672e72c",
+  "inside": [
+    ".claude/commands/pharn-dev-build.md",
+    ".claude/commands/pharn-dev-plan.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-plan.md",
+    ".claude/hooks/enforce-writes-scope.test.cjs",
+    ".claude/hooks/set-writes-scope.cjs",
+    ".claude/hooks/set-writes-scope.test.cjs",
+    ".dev/features/plan-scope-hardening/BUILD.md",
+    ".dev/features/plan-scope-hardening/DOCS-PROPOSAL.md",
+    ".dev/features/plan-scope-hardening/GRILL.md",
+    ".dev/features/plan-scope-hardening/PLAN.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/guides/writes-scope.md",
+    ".markdownlint-cli2.jsonc",
+    ".prettierignore",
+    "CHANGELOG.md",
+    "pharn/floor/README.md",
+    "pharn/floor/apply-plan-deletions.mjs",
+    "pharn/floor/apply-plan-deletions.test.mjs",
+    "pharn/floor/check-build-complete.test.mjs",
+    "pharn/floor/plan-files-core.mjs",
+    "pharn/floor/render-ship-briefing.mjs",
+    "pharn/floor/render-ship-briefing.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5485,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5485,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
