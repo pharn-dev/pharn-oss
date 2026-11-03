@@ -519,6 +519,18 @@ test("a block that never closes and hides an entry is a `canon` RED naming line 
   assert.doesNotMatch(r.stdout, /IGNORE/);
 });
 
+test("a block left open at the END of canon is a `canon` RED even when it hides no heading yet (the append lands inside)", () => {
+  for (const tail of ["```text\nquoted example, never closed\n", "<!-- an unclosed note\n"]) {
+    const r = runWith(VALID, CANON + "\n" + tail);
+    assert.equal(r.status, 1, tail);
+    assert.match(
+      r.stdout,
+      /RED — canon failed: the block opened at line 11 .* never closes — a promoted entry would be appended inside it/
+    );
+  }
+  assert.equal(runWith(VALID, CANON + "\n```text\nclosed\n```\n").status, 0, "a closed block at the end is fine");
+});
+
 test("✦ a trailing-newline concept is REJECTED, and it is the GUARD that speaks", () => {
   // Honest about what this pins. CONCEPT_RE alone would ALSO reject "enum-gate\n" — JS `$` without the
   // `m` flag matches only at end-of-input, so there is no trailing-newline hole on this path and the

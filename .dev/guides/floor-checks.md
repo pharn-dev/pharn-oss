@@ -255,8 +255,8 @@ node pharn/floor/feature-name.mjs [--fresh]
 # invalid --canon-root.
 # EXISTING IDS (7.3.0): read through lessons-index-core.mjs canonLines() — BOM stripped, VISIBLE lines only (a `##`
 # inside a fence / HTML comment / raw block is no entry). The id is still the first token after `##` (pattern-library
-# ids are not L<n>), so the set is a deliberate SUPERSET of the lessons set. A block that never closes and hides an
-# entry heading is a `canon` RED naming line numbers (the promoted entry would land inside it).
+# ids are not L<n>), so the set is a deliberate SUPERSET of the lessons set. A block left open at the end of canon is
+# a `canon` RED naming line numbers, whether or not it hides a heading yet (the promoted entry would land inside it).
 node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <candidate.json> <canon-file.md>
 ```
 

@@ -254,7 +254,7 @@ function cleanScalar(v, maxLen) {
 // `## L9` used to block a real L9). The id token stays generic (H2_ENTRY_RE), not LESSON_HEADING_RE, because the target
 // may be pattern-library.md, whose id scheme is not `L<n>`; so this set is a deliberate SUPERSET of the lessons set
 // (`## L020` or `##\tL20` still blocks the token it shows) — fail-closed for a lesson candidate. A block that never
-// closes and hides an entry is a `canon` RED: the entry being promoted would be appended inside it.
+// closes is a `canon` RED, whether or not it hides an entry yet: the entry being promoted would be appended inside it.
 function existingIds(canonPath) {
   if (!existsSync(canonPath)) return [];
   let text;
@@ -265,12 +265,14 @@ function existingIds(canonPath) {
     return [];
   }
   const read = canonLines(text);
-  if (read.unclosedH2) {
+  // ANY block still open at the end of canon is refused, whether or not it already hides a heading: the entry being
+  // promoted is APPENDED, so it would land inside the block and be hidden (found at this increment's review).
+  if (read.unclosedOpener) {
+    const hides = read.unclosedH2 ? `, so it hides the entry heading at line ${read.unclosedH2} and everything after it` : "";
     red(
       "canon",
-      `the block opened at line ${read.unclosedOpener} of ${canonPath} never closes, so it hides the entry heading at line ` +
-        `${read.unclosedH2} and everything after it — a promoted entry would be appended inside it; close the block in ` +
-        `canon (a human edit) and re-run`
+      `the block opened at line ${read.unclosedOpener} of ${canonPath} never closes${hides} — a promoted entry would be ` +
+        `appended inside it; close the block in canon (a human edit) and re-run`
     );
   }
   const ids = [];

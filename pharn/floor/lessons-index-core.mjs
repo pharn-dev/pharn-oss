@@ -174,7 +174,7 @@ export const H2_ENTRY_RE = /^##\s+(\S+)/;
  * HTML block types 6–7 are not modelled, so a heading hidden only by those still counts, fail-open as before 7.3.0).
  * For a block that never closes, `unclosedOpener` is its opening line, `unclosedH2` the first `## ` line it hides and
  * `unclosedLesson` the first LESSON_HEADING_RE line it hides (all 1-based; 0 when none). Such a block hides every later
- * entry from a reader, so the index (a hidden lesson) and check-provenance (any hidden `##` entry) refuse it rather
+ * entry from a reader, so the index (a hidden lesson) and check-provenance (any open block: it appends) refuse it rather
  * than drop entries silently.
  *
  * @param {string} text

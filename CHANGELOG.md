@@ -65,8 +65,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reader that strips the BOM and skips lines inside a column-0 fenced block, HTML comment or `<pre>`/`<script>`/
   `<style>`/`<textarea>` block — `spec-template-core.mjs`'s existing block model, now exported as `blockSpans()`, so a
   change to it moves both readers. `## L20` and `## L20` are L20 everywhere; `## L020` and `## L0` are no lesson
-  heading anywhere. A lesson heading hidden by a block that never closes is refused by the index (ENUM_ERROR) and,
-  for any hidden entry, by provenance (`canon` RED), naming line numbers only. Both generators print one
+  heading anywhere. A lesson heading hidden by a block that never closes is refused by the index (ENUM_ERROR), and
+  provenance refuses any block left open at the end of canon (`canon` RED — the promoted entry would be appended
+  inside it), both naming line numbers only. Both generators print one
   `RED — <message>` line on an invalid canon instead of a stack trace (exit 1 as before). Bound: the block model is
   not a CommonMark parser (an opener indented 1–3 columns and HTML blocks of types 6–7 are not modelled, fail-open as
   before); provenance's id set stays a superset (the first token after any visible `##`, for pattern ids).
