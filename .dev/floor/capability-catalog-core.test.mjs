@@ -141,6 +141,26 @@ test("✧ ENF-3: a BOM'd capability enumerates exactly as its clean twin does", 
   assert.deepEqual(records[1], records[0]);
 });
 
+// 7.3.0 (family-grammar-crlf): the catalog's hand copy of validate.mjs's parse split lines on "\n" alone, so a CRLF
+// capability whose `role:` was not its last key was left out of the catalog as validate left it out of the count. Twin
+// pair (L60): `role:` is the SECOND of four keys, the position the old split lost.
+test("✧ a CRLF capability enumerates with the same frontmatter as its LF twin", () => {
+  const records = [];
+  for (const crlf of [false, true]) {
+    const root = makeRepo();
+    try {
+      cap(root, "pharn/pharn-review/aaa", "aaa", { name: "aaa", role: "lens", kind: "pharn-owned", version: "0.1.0" }, "# aaa — flags aaa");
+      const p = join(root, "pharn/pharn-review/aaa/aaa.md");
+      if (crlf) writeFileSync(p, readFileSync(p, "utf8").replace(/\n/g, "\r\n"));
+      records.push(enumerateCapabilities(root).map(({ srcRel, slug, role, fm }) => ({ srcRel, slug, role, fm })));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  assert.equal(records[0].length, 1, "precondition: the LF twin is enumerated");
+  assert.deepEqual(records[1], records[0]);
+});
+
 test("renderPage: full fields, GENERATED header names source, source link + install note", () => {
   const root = makeRepo();
   try {

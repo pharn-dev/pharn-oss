@@ -30,7 +30,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, relative, sep, basename, dirname } from "node:path";
 import { posix } from "node:path";
 import { frontmatterFields } from "./command-family.mjs";
-import { stripBom } from "../../pharn/floor/frontmatter-core.mjs";
+import { looseFrontmatter, looseValue, stripBom } from "../../pharn/floor/frontmatter-core.mjs";
 
 // The catalog output directory (repo-relative, POSIX). One page per capability + a README index.
 export const OUT_DIR = "docs/capabilities";
@@ -79,33 +79,15 @@ const EXCLUDE_SEGMENTS = [
   `${sep}docs${sep}`,
 ];
 
-// --- tiny dependency-free frontmatter parser (mirrors validate.mjs `parseFrontmatter`, including its leading-BOM
-// strip through the product core's `stripBom`, 6.65.2 — the catalog lists exactly what validate counts) ---
+// --- the frontmatter parser: the product core's `looseFrontmatter` + `looseValue`, the reader validate.mjs's
+// `parseFrontmatter` uses (7.3.0), so the catalog lists exactly what validate counts — a BOM'd (6.65.2), CRLF or
+// displaced capability included. The hand copy this replaced split lines on "\n" alone. ---
 function parseFrontmatter(rawText) {
-  const text = stripBom(rawText);
-  if (!text.startsWith("---")) return { fm: null, body: text };
-  const end = text.indexOf("\n---", 3);
-  if (end === -1) return { fm: null, body: text };
-  const raw = text.slice(3, end).trim();
-  const body = text.slice(end + 4);
+  const lf = looseFrontmatter(rawText);
+  if (!lf) return { fm: null, body: stripBom(rawText) };
   const fm = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (!m) continue;
-    const key = m[1];
-    let val = m[2].trim();
-    if (val.startsWith("[") && val.endsWith("]")) {
-      val = val
-        .slice(1, -1)
-        .split(",")
-        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
-    } else {
-      val = val.replace(/^["']|["']$/g, "");
-    }
-    fm[key] = val;
-  }
-  return { fm, body };
+  for (const { key, raw } of lf.entries) fm[key] = looseValue(raw);
+  return { fm, body: lf.body };
 }
 
 function walk(dir, acc = []) {

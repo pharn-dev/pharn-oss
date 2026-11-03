@@ -14,9 +14,12 @@ import { join } from "node:path";
 import { frontmatterFields, withoutFrontmatter } from "./command-family.mjs";
 
 const DEV_FLOOR = new URL(".", import.meta.url).pathname;
-const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|startsWith\("---"|\/\^---/;
-const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(/;
-const LINE_GRAMMAR_RE = /\^(?:-\[ \\t\]\+)?\(\[A-Za-z_\]/;
+// 7.3.0 (family-grammar-crlf): a call to the product core's `looseFrontmatter` (which strips the BOM itself) counts as
+// both a fence test and a strip, and the line-grammar predicate also catches validate.mjs's family class
+// `[A-Za-z0-9_]`, whose two dev copies (check-config, capability-catalog-core) now read through that core.
+const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|\blooseFrontmatter\(|startsWith\("---"|\/\^---/;
+const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(|\blooseFrontmatter\(/;
+const LINE_GRAMMAR_RE = /\^(?:-\[ \\t\]\+)?\(\[A-Za-z(?:0-9)?_\]/;
 
 function devFloorModules() {
   return readdirSync(DEV_FLOOR)
@@ -48,7 +51,21 @@ test("✧ .dev/floor: no module declares its own `key: value` line grammar (clos
     "read `key: value` lines with pharn/floor/frontmatter-core.mjs fieldEntries"
   );
   assert.match(String.raw`const kv = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);`, LINE_GRAMMAR_RE);
-  assert.doesNotMatch(String.raw`const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);`, LINE_GRAMMAR_RE);
+  assert.match(String.raw`const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);`, LINE_GRAMMAR_RE, "the family grammar too (7.3.0)");
+  assert.doesNotMatch("const lf = looseFrontmatter(text);", LINE_GRAMMAR_RE);
+});
+
+test('✧ .dev/floor: no module tests the loose `startsWith("---")` fence itself — read through looseFrontmatter (7.3.0)', () => {
+  assert.deepEqual(
+    devFloorModules()
+      .filter(([, src]) => /startsWith\("---"\)/.test(src))
+      .map(([n]) => n),
+    [],
+    "read a loose frontmatter block with pharn/floor/frontmatter-core.mjs looseFrontmatter"
+  );
+  for (const n of ["capability-catalog-core.mjs", "check-config.mjs"]) {
+    assert.match(Object.fromEntries(devFloorModules())[n], /\blooseFrontmatter\(/, `L34: ${n} reads through the core`);
+  }
 });
 
 test("✧ ENF-3: a BOM'd part reads and strips exactly as its clean twin (frontmatterFields, withoutFrontmatter)", () => {
