@@ -160,6 +160,7 @@ human approval.
 - `pharn/floor/check-run-isolation-core.mjs` — A1: the `usage` refusal text names the new order — product floor
 - `pharn/floor/check-run-isolation.test.mjs` — A1: a trailing flag is `usage`; the leading one is accepted — product floor tests
 - `pharn/floor/entry-gates.test.mjs` — A1: the WIRING pin's flagged line in its new order — product floor tests
+- `pharn/floor/stage-regress.test.mjs` — two `other-run` tests re-opened the loop marker with a second `--open`; under D1 a re-open is `--close` then `--open` (found by `npm test` in the apply.py proof clone) — product floor tests
 - `pharn/floor/run-marker.test.mjs` — two WIRING tests execute the loop's `--open` line and must substitute `<mode>` (found by the build's first `npm test`) — product floor tests
 - `.dev/guides/floor-gates.md` — A1: the isolation CLI usage line — dev apparatus
 - `README.md` — one sentence: the line that accepts host execution is not pre-approved — repo meta
