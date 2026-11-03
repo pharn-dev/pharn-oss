@@ -431,6 +431,143 @@ test("★ PARITY: FENCE_FIXTURES — the setter's scope and the checker's `decla
   }
 });
 
+// ── 7.3.0 (plan-scope-hardening): HTML comments, ONE `## Files`, THE COLON RULE ────────────────────────────────────
+// Each list fixture's answer was checked against markdown-it 15.0.3 (what a rendered PLAN shows as a `## Files` item,
+// offline — `.dev/features/plan-scope-hardening/BUILD.md`); the two `bound` fixtures are the stated cases where this
+// reader hides MORE than the renderer (fewer paths). A refusal fixture names the setter's and the checker's wording.
+const SECOND = {
+  setter: /has more than one `## Files` heading \(lines 1 and 5\)/,
+  core: /more than one `## Files` heading \(lines 1 and 5\)/,
+};
+const COLON = (a, b) => {
+  const re = new RegExp(`line ${a} under \`## Files\` .*ends with ':' and a path item follows it \\(line ${b}\\)`);
+  return { setter: re, core: re };
+};
+const READER_FIXTURES = [
+  {
+    name: "a comment-hidden ## Files above the visible one is not the list",
+    plan: ["<!--", "## Files", "- `pharn/floor/validate.mjs`", "-->", "", "## Files", "", "- `src/a.js`", ""],
+    want: ["src/a.js"],
+  },
+  {
+    name: "items inside a multi-line comment are not scoped",
+    plan: ["## Files", "", "- `src/a.ts`", "<!--", "- `pharn/floor/evil.mjs`", "-->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a one-line comment holding an item is not scoped",
+    plan: ["## Files", "", "- `src/a.ts`", "<!-- - `pharn/floor/evil.mjs` -->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  { name: "`<!-->` closes at once (CommonMark)", plan: ["## Files", "", "<!-->", "- `src/a.ts`", ""], want: ["src/a.ts"] },
+  { name: "`<!--->` closes at once (CommonMark)", plan: ["## Files", "", "<!--->", "- `src/a.ts`", ""], want: ["src/a.ts"] },
+  {
+    name: "an unclosed comment hides the rest of the file",
+    plan: ["## Files", "", "- `src/a.ts`", "", "<!--", "- `pharn/floor/evil.mjs`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "`<!--` inside a code span is literal text",
+    plan: ["## Files", "", "- `src/a.ts` — matches `<!--` text", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a trailing inline comment leaves its item scoped",
+    plan: ["## Files", "", "- `src/a.ts` <!-- note -->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a fence line inside a comment is not a fence",
+    plan: ["## Files", "", "- `src/a.ts`", "<!--", "```", "-->", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a comment opener inside a fence is literal",
+    plan: ["## Files", "", "- `src/a.ts`", "```", "<!--", "```", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "bound: an inline `<!--` at an item's end hides the next item (the renderer shows it)",
+    plan: ["## Files", "", "- `src/a.ts` x <!--", "- `src/b.ts`", "-->", "- `src/c.ts`", ""],
+    want: ["src/a.ts", "src/c.ts"],
+  },
+  {
+    name: "bound: a code span wrapped across lines holding `<!--` hides more (the renderer shows b and c)",
+    plan: ["## Files", "", "- `src/a.ts` — see `a", "  <!--` here", "- `src/b.ts`", "- `src/c.ts` -->", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a second visible ## Files refuses",
+    plan: ["## Files", "", "- `src/a.ts`", "", "## Files", "", "- `pharn/floor/x.mjs`", ""],
+    want: SECOND,
+  },
+  {
+    name: "a fenced or commented second ## Files does not refuse",
+    plan: ["## Files", "", "- `src/a.ts`", "", "```", "## Files", "```", "<!-- ## Files -->", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "`Excluded:` over items refuses",
+    plan: ["## Files", "", "- `src/a.ts`", "", "Excluded:", "", "- `pharn/floor/evil.mjs`", ""],
+    want: COLON(5, 7),
+  },
+  {
+    name: "`**NOT in scope:**` (emphasis after the colon) over items refuses",
+    plan: ["## Files", "", "- `src/a.ts`", "", "**NOT in scope:**", "- `x.md`", ""],
+    want: COLON(5, 6),
+  },
+  {
+    name: "a group label ending in ':' before the first item refuses",
+    plan: ["## Files", "", "Written by `/build`:", "", "- `src/a.ts`", ""],
+    want: COLON(3, 5),
+  },
+  {
+    name: "the cue still ends the list silently",
+    plan: ["## Files", "", "- `src/a.ts`", "", "Explicitly **not** touched:", "", "- `x.md`", ""],
+    want: ["src/a.ts"],
+  },
+  {
+    name: "a blockquote label and a wrapped `:` continuation are exempt",
+    plan: ["## Files", "", "> Product files:", "- `src/a.ts` — shaped like:", "  the rest of it:", "- `src/b.ts`", ""],
+    want: ["src/a.ts", "src/b.ts"],
+  },
+  {
+    name: "a `:` line with no item before the next heading does not refuse",
+    plan: ["## Files", "", "- `src/a.ts`", "", "Notes:", "", "### Next", "", "- `x.md`", ""],
+    want: ["src/a.ts"],
+  },
+];
+
+test("★ PARITY: READER_FIXTURES (7.3.0) — the setter's scope and the checker's `declared` agree, refusals included", () => {
+  assert.ok(
+    READER_FIXTURES.some((f) => Array.isArray(f.want)) && READER_FIXTURES.some((f) => !Array.isArray(f.want)),
+    "non-vacuous: both outcomes"
+  );
+  for (const fx of READER_FIXTURES) {
+    const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
+    try {
+      const plan = join(root, "PLAN.md");
+      writeFileSync(plan, fx.plan.join("\n"));
+      const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+      const c = run([plan, root]);
+      if (!Array.isArray(fx.want)) {
+        assert.equal(s.status, 1, `${fx.name}: the setter must refuse (${s.stdout})`);
+        assert.match(s.stderr, fx.want.setter, fx.name);
+        assert.equal(c.status, 2, `${fx.name}: the checker must be INCONCLUSIVE`);
+        assert.match(json(c).reason, fx.want.core, fx.name);
+        assert.equal(pathsFromPlanFiles(fx.plan.join("\n")).ok, false, fx.name);
+      } else {
+        assert.equal(s.status, 0, `${fx.name}: setter failed: ${s.stderr}`);
+        const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
+        assert.deepEqual(scope, fx.want, `${fx.name}: setter scope`);
+        assert.deepEqual(json(c).declared, fx.want, `${fx.name}: checker declared`);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 // ── PLAN-DECLARED DELETIONS (6.56.0, plan-declared-deletions) ─────────────────────────────────────────────
 // An item marked ``- `path` (delete)`` must be ABSENT after the build (lstat ENOENT — L54); unmarked items must
 // still exist. Every output keeps the capture shape stage-verify-core.mjs's checkCompleteness requires (GRILL G2).

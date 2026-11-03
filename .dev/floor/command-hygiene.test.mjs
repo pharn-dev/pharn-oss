@@ -165,10 +165,11 @@ test("✧ the SKIP region is honored, and only inside its markers", () => {
 // Honest scope, and it is narrow: this pins that the command's Step 2b block INVOKES each member. It is
 // a VOCABULARY assertion like the FORBIDDEN rules above — it cannot prove a run executed the step (Step
 // 2b is ADVISORY orchestration, outside the PreToolUse gate), and a mistyped flag would satisfy it.
+// 7.3.0: each runs as `npx --no-install <tool>` (a missing local binary fails instead of being fetched), pinned below.
 const STEP_2B_GATES = [
-  { tool: "prettier", re: /\|\s*xargs\s+npx\s+prettier\b/ },
-  { tool: "markdownlint-cli2", re: /\|\s*xargs\s+npx\s+markdownlint-cli2\b/ },
-  { tool: "eslint", re: /\|\s*xargs\s+npx\s+eslint\b/ },
+  { tool: "prettier", re: /\|\s*xargs\s+npx\s+--no-install\s+prettier\b/ },
+  { tool: "markdownlint-cli2", re: /\|\s*xargs\s+npx\s+--no-install\s+markdownlint-cli2\b/ },
+  { tool: "eslint", re: /\|\s*xargs\s+npx\s+--no-install\s+eslint\b/ },
 ];
 
 function step2bBlock() {
@@ -197,13 +198,31 @@ for (const gate of STEP_2B_GATES) {
     const invocations = step2bBlock()
       .split("\n")
       .filter((l) => !l.trimStart().startsWith("#"))
-      .filter((l) => new RegExp(`npx\\s+${gate.tool}\\b`).test(l));
+      .filter((l) => new RegExp(`npx\\s+(?:--no-install\\s+)?${gate.tool}\\b`).test(l));
     assert.ok(invocations.length > 0, `expected a prescribed ${gate.tool} invocation in Step 2b`);
     for (const line of invocations) {
       assert.match(line, /\bxargs\b/, `a path-less ${gate.tool} falls back to the whole repo: ${line.trim()}`);
     }
   });
 }
+
+// 7.3.0 (plan-scope-hardening): Step 2b's formatters must never rewrite memory-bank canon. The setter now refuses a
+// plan-sourced canon scope, and as the second layer both formatters' ignore files list both canon roots — prettier and
+// markdownlint-cli2 (under `--no-globs`) honour them for an explicitly named path. Review 2026-11-03 probe D: a plan
+// naming `.dev/memory-bank/lessons-learned.md` had Step 2b rewrite canon.
+test("✧ both formatters' ignore files list both memory-bank canon roots (Step 2b can never rewrite canon)", () => {
+  const root = join(COMMANDS_DIR, "..", "..");
+  const prettierIgnore = readFileSync(join(root, ".prettierignore"), "utf8").split(/\r?\n/);
+  const mdlIgnores = readFileSync(join(root, ".markdownlint-cli2.jsonc"), "utf8");
+  for (const dir of [".dev/memory-bank", "pharn/memory-bank"]) {
+    assert.ok(prettierIgnore.includes(`${dir}/`), `.prettierignore must list ${dir}/`);
+    assert.match(
+      mdlIgnores,
+      new RegExp(`^\\s*"${dir.replace(/\./g, "\\.")}",`, "m"),
+      `.markdownlint-cli2.jsonc ignores must list "${dir}"`
+    );
+  }
+});
 
 // The non-empty guard is what makes the path-less case unreachable on an empty list under GNU xargs,
 // so it is asserted for every SUBSET gate — the ones that filter the scope before piping it.

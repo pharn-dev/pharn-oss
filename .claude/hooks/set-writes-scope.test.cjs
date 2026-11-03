@@ -659,7 +659,7 @@ function seedInstalled(cwd, skillsVersion = "6.61.0") {
 
 // (1) OPERATOR FLAGS — every opt-in, after the mode: refused, nothing written. `--allow-exec-config` joined the set in
 // hook-hardening-batch, so its case is RED until that increment's apply.py has run.
-for (const flag of ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config"]) {
+for (const flag of ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config", "--allow-instruction-files", "--check"]) {
   test(`${flag} AFTER the mode is REFUSED and writes nothing (a granted line's trailing * cannot carry it)`, () => {
     const cwd = tmp();
     const r = setter(cwd, "--from-plan", planWith(cwd, "src/a.ts"), flag);
@@ -671,12 +671,12 @@ for (const flag of ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec
   });
 }
 
-test("the usage line advertises all three opt-ins, before the mode", () => {
+test("the usage line advertises --check and all four opt-ins, before the mode", () => {
   const r = setter(tmp());
   assert.notEqual(r.status, 0);
   assert.match(
     r.stderr,
-    /usage: set-writes-scope\.cjs \[--allow-claude-dir\] \[--allow-pharn-surface\] \[--allow-exec-config\] \(--from-frontmatter/
+    /usage: set-writes-scope\.cjs \[--check\] \[--allow-claude-dir\] \[--allow-pharn-surface\] \[--allow-exec-config\] \[--allow-instruction-files\] \(--from-frontmatter/
   );
 });
 
@@ -1290,13 +1290,20 @@ test("★ L27: each refusal names only remedies that work for it", () => {
   assert.doesNotMatch(surface.stderr, /--allow-exec-config/);
 });
 
-test("the dev checkout, an unsignalled tree and --from-frontmatter are UNCHANGED for the class, even with unreadable git config (controls)", () => {
+test("the dev checkout and an unsignalled tree are not halted by an unreadable git config, and --from-frontmatter is UNCHANGED for the class (controls)", () => {
+  // 7.3.0: the fixed class is refused in every posture, but outside an install `core.hooksPath` is read best-effort —
+  // an unreadable git config there is skipped, never a refusal of the plan.
   for (const seed of [(d) => seedDevRepo(d), (d) => d]) {
     const t = execTree({ installed: false, git: false });
     seed(t.cwd);
     fs.writeFileSync(join(t.cwd, ".git"), "nonsense\n");
-    const r = setterIn(t, ["--from-plan", planWith(t.cwd, ".github/workflows/ci.yml", ".husky/pre-commit")]);
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", "pharn/floor/x.mjs")]);
     assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(scopeOf(t.cwd), ["src/a.ts", "pharn/floor/x.mjs"]);
+    const fixed = setterIn(t, ["--from-plan", planWith(t.cwd, ".github/workflows/ci.yml", ".husky/pre-commit")]);
+    assert.equal(fixed.status, 1);
+    assert.match(fixed.stderr, EXEC_REFUSAL);
+    assert.doesNotMatch(fixed.stderr, /git configuration that says where git hooks run could not be read/);
   }
   const t = execTree();
   const cap = join(t.cwd, "cap.md");
@@ -1349,16 +1356,17 @@ test("★ 7.0.0 promotion origin: a symlink at EITHER segment of the scratch roo
 // 7.0.0 review (fix round): the installed-surface refusal judges each plan entry as written AND with `..` collapsed,
 // so neither raw-prefix exemption (`pharn/features/`, `pharn/.run/`) is a way past it.
 test("★ 7.0.0 an installed project's plan may not reach PHARN's own files through `pharn/.run/../` or `pharn/features/../`", () => {
-  for (const entry of [
-    "pharn/.run/../floor/check.mjs",
-    "pharn/features/../floor/check.mjs",
-    "pharn/.run/../memory-bank/lessons-learned.md",
+  for (const [entry, refusal] of [
+    ["pharn/.run/../floor/check.mjs", /refusing to scope PHARN's own installed files from a plan/],
+    ["pharn/features/../floor/check.mjs", /refusing to scope PHARN's own installed files from a plan/],
+    // 7.3.0: canon is refused before the PHARN-surface class, in every posture.
+    ["pharn/.run/../memory-bank/lessons-learned.md", /refusing to scope memory-bank canon from a plan/],
   ]) {
     const cwd = tmp();
     seedInstalled(cwd);
     const r = setter(cwd, "--from-plan", planWith(cwd, entry));
     assert.equal(r.status, 1, `${entry}: ${r.stdout}${r.stderr}`);
-    assert.match(r.stderr, /refusing to scope PHARN's own installed files from a plan/);
+    assert.match(r.stderr, refusal);
     assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "nothing written");
   }
   // controls: the two exemptions themselves are still scopable
@@ -1367,4 +1375,316 @@ test("★ 7.0.0 an installed project's plan may not reach PHARN's own files thro
     seedInstalled(cwd);
     assert.equal(setter(cwd, "--from-plan", planWith(cwd, entry)).status, 0, entry);
   }
+});
+
+// ============================== 7.3.0 — plan-scope-hardening (review of 2026-11-03) ===============================
+// The `--from-plan` refusals by class × posture × open product run, the new opt-in, `--check`, and the pins over the
+// copies this setter now carries. Every case runs in its own temp tree with its own HOME / git config (execTree), so
+// neither a developer's git config nor this repo's run markers reach it (L41).
+
+const SEEDS = {
+  dev: (d) => seedDevRepo(d),
+  unsignalled: (d) => d,
+  installed: (d) => seedInstalled(d),
+};
+function tree(posture) {
+  const t = execTree({ installed: false });
+  SEEDS[posture](t.cwd);
+  return t;
+}
+// A run marker, fresh unless `ageMs` says otherwise (enforce's 24 h ceiling).
+function openMarker(cwd, dir, name, ageMs = 0) {
+  const d = join(cwd, "pharn", ".run", dir, name);
+  fs.mkdirSync(d, { recursive: true });
+  const f = join(d, "active.json");
+  fs.writeFileSync(f, "{}\n");
+  if (ageMs) {
+    const t = (Date.now() - ageMs) / 1000;
+    fs.utimesSync(f, t, t);
+  }
+}
+const CANON_REFUSAL = /refusing to scope memory-bank canon from a plan/;
+const SURFACE_RUN_REFUSAL = /refusing to scope PHARN's own files from a plan while a \/pharn-loop or \/pharn-ship run is open/;
+const INSTR_REFUSAL = /refusing to scope instruction files from a plan/;
+
+// (a) CANON — every posture, no opt-in; re-spellings included.
+const CANON_MEMBERS = [
+  ".dev/memory-bank/lessons-learned.md",
+  "pharn/memory-bank/lessons-learned.md",
+  ".dev/memory-bank/pattern-library.md",
+  ".DEV/Memory-Bank/lessons-learned.md",
+  "./.dev/memory-bank/x.md",
+  "pharn/features/../memory-bank/x.md",
+  ".dev/memory-bank",
+];
+for (const posture of Object.keys(SEEDS)) {
+  test(`★ 7.3.0 ${posture}: --from-plan naming memory-bank canon is REFUSED, every spelling, and nothing is written`, () => {
+    for (const p of CANON_MEMBERS) {
+      const t = tree(posture);
+      const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", p)]);
+      assert.equal(r.status, 1, `${p}: ${r.stdout}${r.stderr}`);
+      assert.match(r.stderr, CANON_REFUSAL);
+      assert.ok(r.stderr.includes(p), `${p}: the offending entry is named`);
+      assert.equal(scopeOf(t.cwd), null, p);
+    }
+  });
+}
+
+test("★ 7.3.0 canon: no opt-in opens it, the remedy is the promote command, and its neighbours are not canon (controls)", () => {
+  const t = tree("dev");
+  const flags = ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config", "--allow-instruction-files"];
+  const r = setterIn(t, [...flags, "--from-plan", planWith(t.cwd, ".dev/memory-bank/lessons-learned.md")]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, CANON_REFUSAL);
+  assert.match(r.stderr, /run the promote command/);
+  assert.doesNotMatch(r.stderr, /--allow-|Bash/);
+  const ok = setterIn(t, ["--from-plan", planWith(t.cwd, ".dev/memory-banks/x.md", "docs/memory-bank/x.md", "memory-bank/x.md")]);
+  assert.equal(ok.status, 0, ok.stderr);
+  // --from-frontmatter is unchanged: the promote route sets its canon scope there.
+  const cap = join(t.cwd, "cap.md");
+  fs.writeFileSync(cap, ["---", 'writes: [".dev/memory-bank/lessons-learned.md"]', "---", ""].join("\n"));
+  assert.equal(setterIn(t, ["--from-frontmatter", cap]).status, 0);
+});
+
+// (b) EXECUTABLE CONFIG — every posture now; the class gained .github/actions/** and .mcp.json.
+for (const posture of ["dev", "unsignalled"]) {
+  test(`★ 7.3.0 ${posture}: --from-plan naming executable config is REFUSED; --allow-exec-config before the mode opts back in`, () => {
+    for (const p of [".github/workflows/ci.yml", ".github/actions/x/action.yml", ".husky/pre-commit", ".mcp.json", "./.MCP.json"]) {
+      const t = tree(posture);
+      const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", p)]);
+      assert.equal(r.status, 1, `${p}: ${r.stdout}`);
+      assert.match(r.stderr, EXEC_REFUSAL);
+      assert.doesNotMatch(r.stderr, /this is an installed PHARN project/, "the dev message makes no install claim");
+      assert.equal(scopeOf(t.cwd), null, p);
+      assert.equal(setterIn(t, ["--allow-exec-config", "--from-plan", planWith(t.cwd, p)]).status, 0, `${p}: opt-in`);
+    }
+    const t = tree(posture);
+    const ok = setterIn(t, ["--from-plan", planWith(t.cwd, ".github/CODEOWNERS.md", "docs/.mcp.json", ".github/dependabot.yml")]);
+    assert.equal(ok.status, 0, `neighbours are not exec config: ${ok.stderr}`);
+  });
+}
+
+test("★ 7.3.0 installed: .github/actions/** and .mcp.json join the refused class", () => {
+  for (const p of [".github/actions/x/action.yml", ".mcp.json"]) {
+    const t = execTree();
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, p)]);
+    assert.equal(r.status, 1, p);
+    assert.match(r.stderr, EXEC_REFUSAL);
+    assert.match(r.stderr, /this is an installed PHARN project/);
+  }
+});
+
+test("★ 7.3.0 dev: a core.hooksPath that CAN be read is reserved there too, best-effort", () => {
+  const t = tree("dev");
+  gitDirWithConfig(t.cwd, "[core]\n\thooksPath = tools/hooks\n");
+  const r = setterIn(t, ["--from-plan", planWith(t.cwd, "tools/hooks/pre-push")]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, EXEC_REFUSAL);
+});
+
+// (c) PHARN'S OWN SURFACE and (d) INSTRUCTION FILES in a dev / unsignalled tree — refused only while a product run is open.
+for (const posture of ["dev", "unsignalled"]) {
+  for (const dir of ["pharn-loop", "pharn-ship"]) {
+    test(`★ 7.3.0 ${posture} + an open ${dir} run: PHARN's own surface and the instruction files are REFUSED`, () => {
+      for (const [p, re] of [
+        ["pharn/floor/x.mjs", SURFACE_RUN_REFUSAL],
+        ["pharn/floor/check-loop.mjs", SURFACE_RUN_REFUSAL],
+        [".claude/commands/pharn-build.md", SURFACE_RUN_REFUSAL],
+        ["pharn.config.json", SURFACE_RUN_REFUSAL],
+        ["CLAUDE.md", INSTR_REFUSAL],
+        ["docs/AGENTS.md", INSTR_REFUSAL],
+        ["src/claude.local.md", INSTR_REFUSAL],
+      ]) {
+        const t = tree(posture);
+        openMarker(t.cwd, dir, "feat");
+        const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", p)]);
+        assert.equal(r.status, 1, `${p}: ${r.stdout}${r.stderr}`);
+        assert.match(r.stderr, re, p);
+        assert.ok(r.stderr.includes(`pharn/.run/${dir}/feat/active.json`), `${p}: the marker is named`);
+        assert.equal(scopeOf(t.cwd), null, p);
+      }
+    });
+  }
+
+  test(`★ 7.3.0 ${posture}: with no product run open (none, a stale one, or a /pharn-review one) the surface is scoped as before — self-hosting`, () => {
+    const entries = ["src/a.ts", "pharn/floor/x.mjs", ".claude/commands/x.md", "CLAUDE.md", "docs/AGENTS.md"];
+    for (const setup of [
+      () => {},
+      (cwd) => openMarker(cwd, "pharn-loop", "old", 25 * 60 * 60 * 1000),
+      (cwd) => openMarker(cwd, "pharn-review", "rev"),
+    ]) {
+      const t = tree(posture);
+      setup(t.cwd);
+      const r = setterIn(t, ["--from-plan", planWith(t.cwd, ...entries)]);
+      assert.equal(r.status, 0, r.stderr);
+      assert.deepEqual(scopeOf(t.cwd), entries);
+    }
+  });
+
+  test(`★ 7.3.0 ${posture} + an open run: each opt-in opens only its own class`, () => {
+    const t = tree(posture);
+    openMarker(t.cwd, "pharn-loop", "feat");
+    assert.equal(setterIn(t, ["--allow-pharn-surface", "--from-plan", planWith(t.cwd, "pharn/floor/x.mjs")]).status, 0);
+    assert.equal(setterIn(t, ["--allow-instruction-files", "--from-plan", planWith(t.cwd, "CLAUDE.md")]).status, 0);
+    const a = setterIn(t, ["--allow-pharn-surface", "--from-plan", planWith(t.cwd, "CLAUDE.md")]);
+    assert.equal(a.status, 1);
+    assert.match(a.stderr, INSTR_REFUSAL);
+    const b = setterIn(t, ["--allow-instruction-files", "--from-plan", planWith(t.cwd, "pharn/floor/x.mjs")]);
+    assert.equal(b.status, 1);
+    assert.match(b.stderr, SURFACE_RUN_REFUSAL);
+  });
+}
+
+test("★ 7.3.0 an unreadable product-run state dir counts as a run open (fail-closed), naming it", () => {
+  const t = tree("dev");
+  fs.mkdirSync(join(t.cwd, "pharn", ".run"), { recursive: true });
+  fs.writeFileSync(join(t.cwd, "pharn", ".run", "pharn-ship"), "planted\n");
+  const r = setterIn(t, ["--from-plan", planWith(t.cwd, "pharn/floor/x.mjs")]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, SURFACE_RUN_REFUSAL);
+  assert.match(r.stderr, /pharn\/\.run\/pharn-ship — not a readable run-state entry/);
+});
+
+test("★ 7.3.0 installed: the instruction files are REFUSED with no run open; --allow-instruction-files opts back in", () => {
+  for (const p of ["CLAUDE.md", "AGENTS.md", "CLAUDE.local.md", "docs/CLAUDE.md", "claude.md", "Agents.MD"]) {
+    const t = execTree();
+    const r = setterIn(t, ["--from-plan", planWith(t.cwd, "src/a.ts", p)]);
+    assert.equal(r.status, 1, p);
+    assert.match(r.stderr, INSTR_REFUSAL);
+    assert.match(r.stderr, /this is an installed PHARN project/);
+    assert.equal(scopeOf(t.cwd), null, p);
+    assert.equal(setterIn(t, ["--allow-instruction-files", "--from-plan", planWith(t.cwd, p)]).status, 0, `${p}: opt-in`);
+  }
+  const t = execTree();
+  assert.equal(setterIn(t, ["--from-plan", planWith(t.cwd, "docs/CLAUDE.md.bak", "src/agents.ts", "README.md")]).status, 0);
+});
+
+test("★ 7.3.0 L27: each new refusal names only remedies that work for it", () => {
+  const dev = tree("dev");
+  openMarker(dev.cwd, "pharn-ship", "feat");
+  const surface = setterIn(dev, ["--from-plan", planWith(dev.cwd, "pharn/floor/x.mjs")]);
+  assert.match(surface.stderr, /node pharn\/floor\/run-marker\.mjs --close pharn-ship feat/);
+  assert.match(surface.stderr, /--allow-pharn-surface placed BEFORE --from-plan/);
+  assert.match(surface.stderr, /NEVER close a run you are executing/);
+  assert.doesNotMatch(surface.stderr, /--allow-instruction-files|--allow-exec-config|pharn update|Bash/);
+  const instr = setterIn(dev, ["--from-plan", planWith(dev.cwd, "CLAUDE.md")]);
+  assert.match(instr.stderr, /--allow-instruction-files placed BEFORE --from-plan/);
+  assert.doesNotMatch(instr.stderr, /--allow-pharn-surface|--allow-exec-config|pharn update|Bash/);
+  const inst = execTree();
+  const instInstalled = setterIn(inst, ["--from-plan", planWith(inst.cwd, "CLAUDE.md")]);
+  assert.match(instInstalled.stderr, /edit it yourself, outside the agent/);
+  assert.doesNotMatch(instInstalled.stderr, /close the marker|--allow-pharn-surface|Bash/);
+  const execDev = setterIn(tree("dev"), ["--from-plan", planWith(dev.cwd, ".mcp.json")]);
+  assert.doesNotMatch(execDev.stderr, /close the marker|--allow-pharn-surface|--allow-instruction-files|Bash/);
+});
+
+// (e) --check — every parse and refusal, nothing written.
+test("★ 7.3.0 --check before the mode reports the count and writes NOTHING; a live scope record is left untouched", () => {
+  const t = tree("dev");
+  const set = setterIn(t, ["--from-plan", planWith(t.cwd, "src/live.ts")]);
+  assert.equal(set.status, 0, set.stderr);
+  const before = fs.readFileSync(join(t.cwd, SCOPE_REL), "utf8");
+  const r = setterIn(t, ["--check", "--from-plan", planWith(t.cwd, "src/a.ts", "src/b.ts")]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /writes-scope check: 2 path\(s\) from .*PLAN\.md — nothing written/);
+  assert.equal(fs.readFileSync(join(t.cwd, SCOPE_REL), "utf8"), before, "the live record is byte-identical");
+  const t2 = tree("dev");
+  assert.equal(setterIn(t2, ["--check", "--from-plan", planWith(t2.cwd, "src/a.ts")]).status, 0);
+  assert.equal(scopeOf(t2.cwd), null, "no record is created either");
+});
+
+test("★ 7.3.0 --check exits 1 on every refusal a build's Step 0 would meet (reader and class), and refuses with --clear", () => {
+  const t = tree("dev");
+  for (const plan of [
+    planWith(t.cwd, ".dev/memory-bank/lessons-learned.md"),
+    planWith(t.cwd, ".github/workflows/ci.yml"),
+    planWith(t.cwd, ".claude/settings.json"),
+  ]) {
+    const r = setterIn(t, ["--check", "--from-plan", plan]);
+    assert.equal(r.status, 1, r.stdout);
+    assert.equal(scopeOf(t.cwd), null);
+  }
+  const plan = join(t.cwd, "PLAN.md");
+  fs.writeFileSync(plan, "## Files\n\nProduct files:\n\n- `src/a.ts`\n");
+  const colon = setterIn(t, ["--check", "--from-plan", plan]);
+  assert.equal(colon.status, 1);
+  assert.match(colon.stderr, /line 3 under `## Files` .* ends with ':' and a path item follows it \(line 5\)/);
+  const clear = setterIn(t, ["--check", "--clear"]);
+  assert.equal(clear.status, 1);
+  assert.match(clear.stderr, /--clear takes no other arguments \(got: --check\)/);
+});
+
+// (f) the reader's new refusals, as the setter prints them (the ★ PARITY fixtures in check-build-complete.test.mjs hold
+// the setter and plan-files-core.mjs to the same answer).
+test("★ 7.3.0 a second `## Files` heading refuses with both line numbers; one hidden in an HTML comment does not", () => {
+  const cwd = tmp();
+  const plan = join(cwd, "PLAN.md");
+  fs.writeFileSync(plan, ["## Files", "", "- `src/a.ts`", "", "## Files", "", "- `pharn/floor/x.mjs`", ""].join("\n"));
+  const r = setter(cwd, "--from-plan", plan);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /has more than one `## Files` heading \(lines 1 and 5\)/);
+  assert.equal(scopeOf(cwd), null);
+  fs.writeFileSync(plan, ["<!--", "## Files", "- `pharn/floor/validate.mjs`", "-->", "", "## Files", "", "- `src/a.ts`", ""].join("\n"));
+  const ok = setter(cwd, "--from-plan", plan);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.deepEqual(scopeOf(cwd), ["src/a.ts"]);
+});
+
+test("★ 7.3.0 the colon rule: `Excluded:` / `NOT in scope:` / `Leave unchanged:` over items refuse; the cue still ends silently", () => {
+  for (const intro of ["Excluded:", "NOT in scope:", "Leave unchanged:", "**Product files:**", "Written by `/build`:"]) {
+    const cwd = tmp();
+    const plan = join(cwd, "PLAN.md");
+    fs.writeFileSync(plan, ["## Files", "", "- `src/a.ts`", "", intro, "", "- `pharn/floor/evil.mjs`", ""].join("\n"));
+    const r = setter(cwd, "--from-plan", plan);
+    assert.equal(r.status, 1, `${intro}: ${r.stdout}`);
+    assert.match(r.stderr, /line 5 under `## Files` .* ends with ':' and a path item follows it \(line 7\)/, intro);
+    assert.match(r.stderr, /put excluded paths under a `### …` heading/);
+    assert.ok(!r.stderr.includes(intro), `${intro}: the line's text is never echoed (P2)`);
+    assert.equal(scopeOf(cwd), null);
+  }
+  for (const [lines, want] of [
+    [["## Files", "", "- `src/a.ts`", "", "Explicitly **not** touched:", "", "- `x.md`", ""], ["src/a.ts"]],
+    [["## Files", "", "> Product files:", "", "- `src/a.ts`", ""], ["src/a.ts"]],
+    [
+      ["## Files", "", "- `src/a.ts` — shaped like:", "  the rest of it:", "- `src/b.ts`", ""],
+      ["src/a.ts", "src/b.ts"],
+    ],
+    [["## Files", "", "- `src/a.ts`", "", "Notes:", "", "### Next", "", "- `x.md`", ""], ["src/a.ts"]],
+  ]) {
+    const cwd = tmp();
+    const plan = join(cwd, "PLAN.md");
+    fs.writeFileSync(plan, lines.join("\n"));
+    const r = setter(cwd, "--from-plan", plan);
+    assert.equal(r.status, 0, `${lines.join(" / ")}: ${r.stderr}`);
+    assert.deepEqual(scopeOf(cwd), want);
+  }
+});
+
+// ✧ PINS (L31) — the reader copies and the canon set.
+function namedFunctionSource(file, name) {
+  const m = fs.readFileSync(file, "utf8").match(new RegExp(`^(?:export )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`, "m"));
+  assert.ok(m, `${file} must declare a top-level \`function ${name}(…) { … }\``);
+  return m[0].replace(/^export /, "");
+}
+const CORE = join(__dirname, "..", "..", "pharn", "floor", "plan-files-core.mjs");
+test("✧ 7.3.0 PIN: scanLines(), commentStart() and FENCE_LINE_RE are byte-equal to plan-files-core.mjs's", () => {
+  for (const name of ["scanLines", "commentStart"]) {
+    assert.equal(namedFunctionSource(SETTER, name), namedFunctionSource(CORE, name), `${name}() has drifted — update both copies (L31)`);
+  }
+  const fenceRe = (file) => {
+    const m = fs.readFileSync(file, "utf8").match(/^const FENCE_LINE_RE = .*$/m);
+    assert.ok(m, `${file} must declare FENCE_LINE_RE`);
+    return m[0];
+  };
+  assert.equal(fenceRe(SETTER), fenceRe(CORE));
+});
+test("✧ 7.3.0 PIN: the setter's CANON_SUBTREES equal protect-trusted-paths.cjs's PROTECTED_SUBTREES", () => {
+  const entries = (file, name) => {
+    const m = fs.readFileSync(file, "utf8").match(new RegExp(`^const ${name} = \\[([^\\]]*)\\];`, "m"));
+    assert.ok(m, `${file} must declare a one-line \`const ${name} = [ … ];\``);
+    return (m[1].match(/"([^"]*)"/g) || []).map((s) => s.slice(1, -1));
+  };
+  const mine = entries(SETTER, "CANON_SUBTREES");
+  assert.equal(mine.length, 2, "non-vacuous: both canon roots");
+  assert.deepEqual([...mine].sort(), [...entries(PROTECT_HOOK, "PROTECTED_SUBTREES")].sort());
 });

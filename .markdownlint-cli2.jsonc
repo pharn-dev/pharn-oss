@@ -41,6 +41,11 @@
     // rewrite committed bytes and make the drift checker see false drift. L11 sharpens it — these gates are
     // whole-repo, so one stale byte here would block EVERY later feature's /pharn-dev-verify.
     "docs/lessons-index.md",
+    // Memory-bank canon (7.3.0, plan-scope-hardening): changed only through the gated promotion, so a `--fix` pass must
+    // never rewrite its accepted bytes — a Step 2b run over a plan-sourced scope naming canon did (review 2026-11-03,
+    // probe D). The setter now refuses that scope; this is the second layer. The `.prettierignore` twin lists both.
+    ".dev/memory-bank",
+    "pharn/memory-bank",
     // The PRODUCT lessons index (byte-for-byte output of `node pharn/floor/gen-lessons-index.mjs .`,
     // guarded by pharn/floor/check-lessons-index.mjs). Load-bearing, and VERIFIED LIVE rather than
     // assumed: markdownlint-cli2 DOES descend into dot-directories, so `**/*.md` matches `pharn/.run/**`

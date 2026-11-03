@@ -351,7 +351,8 @@ test("setter --from-plan reads the leading back-tick path of each ## Files item,
       "",
       "## Files",
       "",
-      "Written by `/build`:",
+      // A blockquote since 7.3.0: a bare group label ending in ':' with items under it is refused (the colon rule).
+      "> Written by `/build`:",
       "",
       // A `.claude/` path deliberately OUTSIDE the setter's CONTROL_SURFACE refusal (the hook's own test
       // file, not the hook): this test pins the ## Files BOUNDARY parsing, so its authorized entry must

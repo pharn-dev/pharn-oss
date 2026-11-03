@@ -184,7 +184,14 @@ its `## Files` reader skips fenced code, refusing a list that reads differently 
 list item. Since 6.71.0 it also refuses, in an installed project, a `--from-plan` scope naming a CI workflow
 (`.github/workflows/**`) or a git hooks directory (`.husky/**`, or a `core.hooksPath` inside the project, read from
 the git config files its header names without running git) unless the operator passes `--allow-exec-config`, again
-only before the mode; a git config it cannot read refuses the plan. These early refusals are not runtime enforcement;
+only before the mode; a git config it cannot read refuses the plan. Since 7.3.0 a `--from-plan` scope is also refused,
+in every project, when it names memory-bank canon (no opt-in: the promote command is the route) or executable config —
+now also `.github/actions/**` and `.mcp.json`, and outside an install `core.hooksPath` is read best-effort; in an
+installed project when it names an instruction file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, at any depth;
+`--allow-instruction-files`); and in a dev or unsignalled tree while a `/pharn-loop` or `/pharn-ship` run marker is open,
+when it names PHARN's own surface or an instruction file. Its `## Files` reader skips HTML comments, refuses a second
+`## Files` heading and refuses a `:`-ended label line with path items under it; `--check` (before the mode) runs every
+parse and refusal and writes nothing, which both plan commands run on the PLAN they wrote. These early refusals are not runtime enforcement;
 **`enforce-writes-scope.cjs`** enforces whatever scope was emitted on every write. `.claude/commands/**`
 and the hooks' own `*.test.cjs` are deliberately in neither protected set nor the refusal set.
 **Bounded, and stated (P0):** the two `PreToolUse` hooks cover the `Write|Edit|MultiEdit|NotebookEdit` surface

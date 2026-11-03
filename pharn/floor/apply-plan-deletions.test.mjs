@@ -197,6 +197,15 @@ test("★ every refusal code is reached by its fixture and not by its control; a
     assert.equal(doc(r).reason_code, "no-plan");
     writeFileSync(join(root, "pharn", "features", "demo", "PLAN.md"), "# PLAN\n\nno files heading\n");
     assert.equal(doc(run(root)).reason_code, "plan-files-unparseable");
+    assert.match(doc(run(root)).reason, /no `## Files` heading/);
+    // 7.3.0: the reader's own reason, not a fixed "no heading" text, for each other refusal it makes.
+    writeFileSync(join(root, "pharn", "features", "demo", "PLAN.md"), "## Files\n\n- `a.ts` (delete)\n\n## Files\n\n- `b.ts`\n");
+    const twice = doc(run(root));
+    assert.equal(twice.reason_code, "plan-files-unparseable");
+    assert.match(twice.reason, /more than one `## Files` heading \(lines 1 and 5\)/);
+    assert.doesNotMatch(twice.reason, /no `## Files` heading/);
+    writeFileSync(join(root, "pharn", "features", "demo", "PLAN.md"), "## Files\n\nExcluded:\n\n- `a.ts` (delete)\n");
+    assert.match(doc(run(root)).reason, /line 3 under `## Files` ends with ':' and a path item follows it \(line 5\)/);
   });
   withProject("- `a.ts` (delete)", [], (root) => {
     const real = join(root, "elsewhere");

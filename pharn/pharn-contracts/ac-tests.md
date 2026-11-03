@@ -65,8 +65,9 @@ spec_content_hash: <the SPEC's pinned hash — the same value PLAN.md carries>
   export and signature for `unit`. A unit test written first needs that interface decided before the build, which
   is why the target is the plan's job. The floor checks the target only for presence.
 
-**Why a separate file:** the setter reads a file's first `## Files`, so the test files cannot live in PLAN.md
-without joining the build's scope, and a second extractor would mean editing a protected hook.
+**Why a separate file:** the setter reads a file's one `## Files` (since 7.3.0 a second visible one refuses), so the
+test files cannot live in PLAN.md without joining the build's scope, and a second extractor would mean editing a
+protected hook.
 
 ## The checker — `check-ac-tests.mjs <AC-TESTS.md> <SPEC.md> <PLAN.md> [--features-dir <dir>]`
 

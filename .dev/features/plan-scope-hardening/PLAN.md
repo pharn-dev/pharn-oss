@@ -184,6 +184,9 @@ promote commands' advisory `--check` lines over canon become no-ops (G9 owns tho
 - `pharn/floor/apply-plan-deletions.test.mjs` — the reason passes through for a non-heading refusal.
 - `pharn/floor/README.md` — the setter paragraph states the new refusals and postures.
 - `pharn/pharn-contracts/ac-tests.md` — "the setter reads a file's first `## Files`" becomes the refusal.
+- `.claude/hooks/enforce-writes-scope.test.cjs` — its setter fixture's "Written by `/build`:" group label (the
+  historical pattern the colon rule refuses) becomes a blockquote; added at build, after the first anchor — the
+  re-anchor after the human patch covers it.
 - `.claude/hooks/set-writes-scope.test.cjs` — the refusal matrix by posture and marker, the new flag, L27 remedy
   pins, ✧ pins (`scanLines` + `commentStart` byte-equal to the core's; `CANON_SUBTREES` == protect's), and the dev
   controls rewritten for the every-posture classes.

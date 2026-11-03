@@ -235,6 +235,19 @@ node pharn/floor/check-plan-lessons.mjs .dev/features/<name>/PLAN.md .dev/memory
   with no `##` heading at all has an empty body. Cite only what you will discuss. Never relax or skip the
   check.
 
+**Then read `## Files` exactly as `/pharn-dev-build`'s Step 0 will**, with every refusal it would meet — it writes
+nothing, and the live scope record is left as it is:
+
+```bash
+node .claude/hooks/set-writes-scope.cjs --check --from-plan .dev/features/<name>/PLAN.md
+```
+
+- **exit 0** → proceed to the halt below. **Non-zero** → fix the PLAN's `## Files` (the message names the line or
+  the entry) and re-run. Never add an `--allow-*` flag: a refused path (canon, a CI workflow, a guard) is the
+  human's to apply or to scope, and the halt below is where you say so. One rule the check enforces: **no label line
+  ending in `:` inside `## Files`** — group items with a blank line or a label that does not end in `:` (a heading
+  ends the list).
+
 > **Two clocks, honestly (P0).** The checker's **verdict** is FLOOR (enum/regex + heading membership +
 > body reference). This command's **act** of invoking it is **ADVISORY** orchestration — nothing on the
 > floor forces this prose to run it. And the checker verifies the **declaration**, never the

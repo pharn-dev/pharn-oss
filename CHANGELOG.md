@@ -23,6 +23,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-03: **`set-writes-scope.cjs --check` and a plan-time `## Files` check.** `--check` (placed before the mode)
+  runs every parse and every refusal of a `--from-plan` scope and writes nothing. `/pharn-plan` (Step 4b) and
+  `/pharn-dev-plan` (Step 4) run it on the PLAN they just wrote, so a refusal surfaces at plan time instead of at the
+  test or build stage; `/pharn-loop` pre-approves that one line. New opt-in `--allow-instruction-files` (see Fixed).
+
+### Fixed
+
+- 2026-11-03: **A plan can no longer scope canon, executable config, or — during a product run in a dev or unsignalled
+  tree — PHARN's own floor and commands** (review 2026-11-03: BLOCKER setter half, HIGH canon, MEDIUM `.mcp.json` /
+  `CLAUDE.md`). `set-writes-scope.cjs --from-plan` now refuses, writing nothing: memory-bank canon in every posture with
+  no opt-in (a dev plan naming canon had `/pharn-dev-build`'s Bash formatter pass rewrite it; the promote command is
+  the route); executable config in every posture, the class gaining `.github/actions/**` and `.mcp.json`
+  (`core.hooksPath` stays fail-closed in an installed project and is read best-effort elsewhere); the instruction files
+  `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) in an installed project; and, in a dev or unsignalled tree
+  while a `/pharn-loop` or `/pharn-ship` marker is open, PHARN's own surface and the instruction files. With no product
+  run open, a dev build still scopes `pharn/floor/**` and `.claude/commands/**` (self-hosting) — so the review's
+  BLOCKER is narrowed, not closed: a model-approved dev plan can still scope the floor, and what guards that is GATE 1
+  and the GitHub review layer. The hook change was applied by the maintainer; the trusted-doc wording is proposed in
+  `.dev/features/plan-scope-hardening/DOCS-PROPOSAL.md`.
+- 2026-11-03: **The `## Files` readers stop reading HTML comments, refuse a second `## Files`, and refuse a `:` label
+  over items** (review 2026-11-03, MEDIUMs). Both readers (`set-writes-scope.cjs` and `pharn/floor/plan-files-core.mjs`,
+  held together by byte-equal pins and parity fixtures checked against markdown-it): a `## Files` or an item inside
+  `<!-- … -->` is never the list (code-span aware; `<!-->` closes at once); a second visible `## Files` heading refuses
+  with both line numbers; a non-item line ending in `:` (emphasis allowed) ends the list and refuses when a path item
+  follows it, so `Excluded:` / `NOT in scope:` can no longer scope the paths under them. 22 of 342 committed plans used
+  a `:` group label; plans are not re-run, so none was edited — new plans group with a blank line or a label without
+  the colon. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
+  reads "not found") and skips comment-hidden headings; `apply-plan-deletions.mjs` reports the reader's own refusal
+  reason instead of a fixed "no `## Files` heading".
+
+### Changed
+
+- 2026-11-03: **Memory-bank canon leaves the formatters' reach, and `/pharn-dev-build` Step 2b runs `npx --no-install`.**
+  `.prettierignore` and `.markdownlint-cli2.jsonc` list `.dev/memory-bank/` and `pharn/memory-bank/`, so canon leaves
+  `format:check` / `lint:md` and the promote commands' advisory `--check` lines over canon no longer check anything.
+  Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, and
+  its Step 0 says a setter refusal is a stop for the human — never an `--allow-*` flag the agent adds.
+
 ## [7.2.1] - 2026-11-02
 
 ### Added

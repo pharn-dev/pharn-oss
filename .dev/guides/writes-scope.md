@@ -193,7 +193,8 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
     reader reads the plan twice (fence lines at 0–3 spaces only; or at any indent, a less-indented bare closer
     reopening) and refuses when the two lists differ. `pharn/floor/plan-files-core.mjs` holds the same rule
     (★ PARITY fixtures in `check-build-complete.test.mjs`). Not a CommonMark parser: indented code blocks, HTML
-    blocks/comments, setext headings and `*`/`+` bullets are read as their lines look.
+    blocks other than comments (comments are skipped since 7.3.0), setext headings and `*`/`+` bullets are read as
+    their lines look.
   - **Operator flags precede the mode.** `--allow-claude-dir` / `--allow-pharn-surface` / `--allow-exec-config` after
     `--from-plan` / `--from-frontmatter` is refused, so a pre-approved line ending in `*` cannot carry an opt-in.
     Pass them first: `node .claude/hooks/set-writes-scope.cjs --allow-claude-dir --from-plan <PLAN.md>`.
@@ -210,8 +211,32 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
   read, or a value continued onto the next line, refuses the plan. Hook managers configured elsewhere (`lefthook.yml`,
   `.pre-commit-config.yaml`) are not refused. Plan entries are matched lexically; a symlinked parent is left to
   enforce, which denies the target
-  a write reaches when it is not in the scope. The dev checkout is unaffected (no `skillsVersion`), so dev plans
-  still scope `.github/workflows/*.yml`.
+  a write reaches when it is not in the scope. ~~The dev checkout is unaffected~~ — superseded by 7.3.0, below.
+- **7.3.0 (plan-scope-hardening — review of 2026-11-03).** A `--from-plan` scope now refuses, writing nothing:
+  - **memory-bank canon in every posture, with no opt-in** (`pharn/memory-bank/**`, `.dev/memory-bank/**` — a set-equal
+    copy of protect's `PROTECTED_SUBTREES`). Probe D: a dev plan naming canon had Step 2b's Bash formatter rewrite it.
+    **Replacement route:** `/pharn-dev-memory-promote` (its `--from-frontmatter` canon scope, after its own gate).
+  - **executable config in every posture**, the class now also `.github/actions/**` and `.mcp.json`. In this checkout
+    the fixed dirs are refused and `core.hooksPath` is read best-effort (an unreadable git config is skipped, never a
+    refusal); an installed project keeps the fail-closed reading. **Replacement route for a dev increment that edits
+    CI:** the maintainer applies that file as a human patch (the `apply.py` protocol), or runs the setter themselves
+    with `--allow-exec-config` before the mode. Historical cost: 17 of 342 committed dev plans named a workflow.
+  - **instruction files** (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, basename at any depth) in an installed project,
+    unless `--allow-instruction-files` precedes the mode.
+  - **in a dev or unsignalled tree while a `/pharn-loop` or `/pharn-ship` run marker is open** (`openRuns()`, presence
+    and age, fail-closed on an unreadable state dir): PHARN's own surface (`isReserved`) and the instruction files, as
+    in an installed project. With no product marker open, `/pharn-dev-build` scopes `pharn/floor/**`,
+    `.claude/commands/**` and root `CLAUDE.md` as before — self-hosting. **Not closed:** a model-approved DEV plan can
+    still scope the floor; GATE 1 and the GitHub layer guard that.
+  - **the `## Files` reader** (both copies, ★ parity): HTML comments are cut out before any test (code-span aware;
+    `<!-->` closes at once); a second visible `## Files` refuses; a non-item line ending in `:` (emphasis allowed)
+    ends the list and refuses when a path item follows it. Measured: 22 of 342 committed plans used such a label;
+    plans are not re-run, so none was edited.
+  - **`--check`** (before the mode) runs every parse and refusal and writes nothing; `/pharn-plan` and
+    `/pharn-dev-plan` run it on the PLAN they just wrote, so a refusal surfaces at plan time.
+  - A refusal is a STOP for the human: an agent never adds an `--allow-*` flag itself (`/pharn-dev-build` Step 0). The
+    bound is unchanged: the setter is a Bash-run program, so an agent holding Bash can pass a flag, delete a marker or
+    write the record itself (`pharn/LIMITS.md §6`).
 
 ## What under `pharn/.run/` is load-bearing
 

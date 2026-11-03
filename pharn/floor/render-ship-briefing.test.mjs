@@ -439,6 +439,44 @@ test("no `## Files` / `## Contracts satisfied` sections -> honest placeholder te
   }
 });
 
+// 7.3.0 (plan-scope-hardening): the briefing reads the `## Files` heading with the scope reader's own test
+// (`FILES_HEADING_RE`) over comment-stripped text. Before, `## Files:` was scoped by the floor and reported here as
+// "No `## Files` section found", and a `## Files` hidden in an HTML comment above the visible one was the section shown.
+test("★ `## Files:` renders, and a `## Files` inside an HTML comment is not the section (the scope reader's rule)", () => {
+  const base = scratchDir();
+  try {
+    writeFeature(base, "colon", { "PLAN.md": ["# PLAN — colon", "", "## Files:", "", "- `src/a.ts` — real", ""].join("\n") });
+    const colon = renderBriefing("colon", { base });
+    assert.equal(colon.ok, true);
+    assert.match(colon.markdown, /src\/a\.ts/);
+    assert.doesNotMatch(colon.markdown, /No `## Files` section found/);
+    const hidden = [
+      "# PLAN — hidden",
+      "",
+      "<!--",
+      "## Files",
+      "- `pharn/floor/validate.mjs` — hidden",
+      "-->",
+      "",
+      "## Files",
+      "",
+      "- `src/visible.ts` — real",
+      "",
+      "## Contracts satisfied",
+      "",
+      "- none",
+      "",
+    ].join("\n");
+    writeFeature(base, "hidden", { "PLAN.md": hidden });
+    const r = renderBriefing("hidden", { base });
+    assert.equal(r.ok, true);
+    assert.match(r.markdown, /src\/visible\.ts/);
+    assert.doesNotMatch(r.markdown, /pharn\/floor\/validate\.mjs/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 // 6.61.0 (loop-scope-hardening): the section extractor uses plan-files-core.mjs's fence rule, the one the writes-scope
 // is parsed with. Under the old open/close toggle a ``` line inside a ~~~ block "closed" it, so the `## Example`
 // line after it ended the `## Files` section and the real item below the block was cut from the briefing while the

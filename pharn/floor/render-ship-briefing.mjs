@@ -61,7 +61,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { BULLET_FIELD_LINE_RE, FM_RE, fieldEntries, stripBom } from "./frontmatter-core.mjs";
-import { fenceStates } from "./plan-files-core.mjs";
+import { fenceStates, scanLines, FILES_HEADING_RE } from "./plan-files-core.mjs";
 
 // The sentinel line emitted in `## Why this design` when the heading-scan finds nothing. A caller may
 // replace this EXACT string with a generated paragraph; tests and `check-ship-briefing.mjs` both key off
@@ -145,22 +145,25 @@ function lastValue(entries, field) {
 // plan-files-core.mjs's `fenceStates` — the rule the writes-scope is parsed with, top-level reading — instead
 // of this file's own open/close toggle, so the `## Files` section the human reads here is fenced exactly where
 // the scope's is (a ``` line inside a ~~~ block no longer closes it). A plan whose two readings differ never
-// reaches this renderer with a scope: the setter refuses it at build Step 0.
+// reaches this renderer with a scope: the setter refuses it at build Step 0. Since 7.3.0 headings are tested on
+// `scanLines`' comment-stripped `text`, so a heading inside `<!-- … -->` neither starts nor ends a section — the
+// rule the scope's reader uses (the section's own lines are still emitted as written).
 function extractSection(body, headingTest) {
   const lines = body.split(/\r?\n/);
-  const fenced = fenceStates(lines);
+  const scanned = scanLines(lines);
   let collecting = false;
   const out = [];
   for (const [i, line] of lines.entries()) {
-    if (fenced[i]) {
+    const { fenced, text } = scanned[i];
+    if (fenced) {
       if (collecting) out.push(line);
       continue;
     }
     if (!collecting) {
-      if (headingTest(line)) collecting = true;
+      if (headingTest(text)) collecting = true;
       continue;
     }
-    if (HEADING_RE.test(line)) break;
+    if (HEADING_RE.test(text)) break;
     out.push(line);
   }
   return collecting ? out.join("\n").trim() : undefined;
@@ -173,7 +176,8 @@ function findDecisionSection(planBody) {
 }
 
 function filesSection(planBody) {
-  return extractSection(planBody, (line) => /^##[ \t]+Files\s*$/.test(line));
+  // The scope reader's own heading test (7.3.0): `## Files:` was scoped by the floor and "not found" here.
+  return extractSection(planBody, (line) => FILES_HEADING_RE.test(line));
 }
 
 function contractsSection(planBody) {
