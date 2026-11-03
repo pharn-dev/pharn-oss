@@ -133,6 +133,27 @@ itself hands every gate (measured: red with `PHARN_TEST_RESULTS` set, green with
 `env -u PHARN_TEST_RESULTS npm test::test`, pinned by `command-hygiene.test.mjs` with a mutant. `spawnGate` passing
 an inherited `PHARN_TEST_RESULTS` through when `resultsFile` is null is product code, so it is reported, not changed.
 
+### Round 2 — GATE 2 decision "fix" (the batch orchestrator, a model, under the owner's delegation)
+
+The orchestrator folded four follow-ups from `REVIEW.md` into this branch. Three touch product-surface bytes
+(`pharn/floor/*.mjs`), so the CHANGELOG gains a `### Fixed` entry under `[Unreleased]`; no bump in this batch. The six
+paths below joined `## Files` before any write, the plan was committed, and build Step 0 (setter, then `--anchor`) ran
+again on the clean tree, opening a new reconcile epoch:
+
+- E1 — `pharn/floor/run-gates.mjs` `gateEnv`: with `resultsFile` null, DELETE an inherited `PHARN_TEST_RESULTS` from
+  the gate's environment. `run-gates.test.mjs`'s "null means NO variable" test sets the variable in its own process
+  first, so it now proves the strip (it failed on the old `gateEnv` that way — measured at verify attempt 3). The
+  `env -u PHARN_TEST_RESULTS` wrapper in `/pharn-dev-verify`'s `test` token, and its hygiene pin, are then removed:
+  the runner owns the rule.
+- E2 — `pharn/floor/check-verify.mjs`: on the stamp path, refuse an operand that is not a flag or a flag's value
+  wherever it stands (before: only a FIRST operand was refused, a trailing one silently ignored), with tests. The
+  positional path is unchanged.
+- E3 — `pharn/floor/check-verify.test.mjs:522`: the stale "/pharn-dev-verify (which types the map)" comment.
+- E4 — `.claude/commands/pharn-dev-plan.md` Step 3: a plan's `## Files` never declares later-stage artifacts
+  (`VERIFY.md`, `verify-report.json`, `REVIEW.md`, `SHIP.md`).
+
+Then `/pharn-dev-regress` and `/pharn-dev-verify` re-run and `SHIP.md`'s verdict block is updated to the new result.
+
 ## Files
 
 - `.claude/commands/pharn-dev-verify.md` — Steps 1/3/4: runner + `check-verify --stamp`, INCOMPLETE, no substitution — dev command
@@ -148,7 +169,12 @@ an inherited `PHARN_TEST_RESULTS` through when `resultsFile` is null is product 
 - `.github/workflows/ci.yml` — PR-only "Dev-chain record check" step — CI
 - `CONTRIBUTING.md` — the third per-PR check — repo meta
 - `CLAUDE.md` — "Two per-PR gates" → three — repo meta
-- `CHANGELOG.md` — `[Unreleased]` entries (Changed / Added) — repo meta
+- `CHANGELOG.md` — `[Unreleased]` entries (Changed / Added / Fixed) — repo meta
+- `pharn/floor/run-gates.mjs` — E1: `gateEnv` strips an inherited `PHARN_TEST_RESULTS` when `resultsFile` is null — product floor
+- `pharn/floor/run-gates.test.mjs` — E1's test, with the inherited variable set — product floor test
+- `pharn/floor/check-verify.mjs` — E2: refuse a positional operand anywhere on the stamp path — product floor
+- `pharn/floor/check-verify.test.mjs` — E2's tests, E3's comment — product floor test
+- `.claude/commands/pharn-dev-plan.md` — E4: the `## Files` later-stage-artifact sentence — dev command
 - `.dev/features/dev-verdict-discipline/GRILL.md`
 - `.dev/features/dev-verdict-discipline/REGRESSION.md`
 - `.dev/features/dev-verdict-discipline/regression-report.json`
