@@ -47,7 +47,8 @@
 // holding both `rule_id:` and `problem:` unless it names the enum-gated / untrusted split; a quoted payload can carry
 // both markers, so PREAMBLE names both.
 //
-// LOAD GRAPH (pinned by render-review.test.mjs): quote-core.mjs (→ loop-record-core.mjs), gate-run-core.mjs (imports
+// LOAD GRAPH (pinned by render-review.test.mjs): runtime-floor.mjs FIRST (every gated floor CLI's Node-version refusal,
+// in the position entry-point-guard.test.mjs pins), quote-core.mjs (→ loop-record-core.mjs), gate-run-core.mjs (imports
 // nothing) for FEATURE_SLUG_RE, and merge-findings.mjs (→ runtime-floor.mjs) for the closed sets.
 //
 // Usage:  node pharn/floor/render-review.mjs <name> [--root <dir>]
@@ -61,6 +62,7 @@
 //
 // NON-LLM. No network, no child processes. Pure core `renderReview()`; the CLI does the I/O.
 
+import "./runtime-floor.mjs";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { quoteData, dataText } from "./quote-core.mjs";

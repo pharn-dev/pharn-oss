@@ -536,13 +536,16 @@ test("style probe (grill G1): a BENIGN render is markdownlint-clean under this r
 });
 
 // ── LOAD GRAPH (grill G4) ───────────────────────────────────────────────────────────────────────────────────────────
-test("★ LOAD GRAPH — the renderer imports quote-core, gate-run-core and merge-findings, and node builtins only", () => {
+test("★ LOAD GRAPH — runtime-floor first, then quote-core, gate-run-core and merge-findings, and node builtins only", () => {
   const src = readFileSync(CLI, "utf8");
-  const imports = [...src.matchAll(/^import\s+[\s\S]*?from\s+["']([^"']+)["'];?\s*$/gm)].map((m) => m[1]);
+  // A side-effect import has no `from`; a named one may span lines. Neither form can cross a `;`.
+  const imports = [...src.matchAll(/^import\s+(?:[^;"']*?\s*from\s*)?["']([^"']+)["'];/gm)].map((m) => m[1]);
+  assert.equal(imports[0], "./runtime-floor.mjs", "the Node-version refusal loads before anything else");
   assert.deepEqual(imports.filter((p) => !p.startsWith("node:")).sort(), [
     "./gate-run-core.mjs",
     "./merge-findings.mjs",
     "./quote-core.mjs",
+    "./runtime-floor.mjs",
   ]);
   const gate = readFileSync(join(HERE, "gate-run-core.mjs"), "utf8");
   assert.equal([...gate.matchAll(/^import\s/gm)].length, 0, "gate-run-core.mjs imports nothing");
