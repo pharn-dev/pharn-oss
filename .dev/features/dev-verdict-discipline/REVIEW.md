@@ -3,10 +3,30 @@
 **Floor first:** `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked`. Verify PASS on the stamp
 path (`verify-report.json`), regress `no-regressions` (`regression-report.json`).
 
-**Verdict: GREEN — 0 floor-gate findings, 7 advisory findings** (4 of them follow-ups outside this plan's `## Files`).
+**Verdict: GREEN — 0 floor-gate findings, 7 advisory findings.** After round 2 (below), four of the seven are
+fixed on this branch and three stand as advisory.
 
 The increment is under review as `trust: untrusted`. Nothing in the reviewed files read as an instruction to the
 reviewer.
+
+## Round 2 — the GATE 2 "fix" decision (the batch orchestrator, a model, under the owner's delegation)
+
+The orchestrator chose "fix" and folded four findings into this branch (`PLAN.md`, "Round 2"). Re-reviewed on the
+round-2 diff (9 paths), with validate GREEN, regress `no-regressions` and verify PASS re-run over it:
+
+| finding (below)                            | disposition                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pharn/floor/run-gates.mjs:965`            | **fixed (E1).** `gateEnv` deletes an inherited `PHARN_TEST_RESULTS` when `resultsFile` is null. The run-gates test now sets the variable first and has a control; with the `delete` line removed it fails (mutant run during the build). The `env -u` wrapper is gone, and verify's plain `npm test` gate passed. |
+| `pharn/floor/check-verify.mjs:255`         | **fixed (E2).** On the stamp path an operand that is neither a flag nor a flag's value is refused in any position; the test iterates five placements plus two controls (flag values are not operands; the positional path still reads only its leading operand).                                                  |
+| `pharn/floor/check-verify.test.mjs:522`    | **fixed (E3).** The comment no longer says `/pharn-dev-verify` types the map.                                                                                                                                                                                                                                     |
+| `.claude/commands/pharn-dev-verify.md:109` | **fixed (E4) at the source.** `/pharn-dev-plan` Step 3 says a plan's `## Files` never declares `VERIFY.md`, `verify-report.json`, `REVIEW.md` or `SHIP.md`, pinned by a hygiene test with a mutant.                                                                                                               |
+
+No new finding on the round-2 diff: E1 removes a variable only on the null-results branch. Every gate `run-gates.mjs`
+runs itself passes a non-null path, so no runner gate's environment changes; the two null callers
+(`stage-regress.mjs`'s base install step, `check-ac-style.mjs`'s style gates) now see no inherited variable, which is
+what spawnGate's "null means no PHARN_TEST_RESULTS" contract already said; E2's refusal reuses the existing usage-error emission
+and reason text, so the closed `reason_code` set is unchanged; E1 and E2 are product-surface bytes, recorded in the
+CHANGELOG under `[Unreleased]` `### Fixed` with no bump in this batch, as the orchestrator directed.
 
 ## Floor-gate findings
 

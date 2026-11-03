@@ -69,7 +69,7 @@ function mkStamp(exits = {}) {
     head: "0".repeat(40),
     source: "explicit",
     source_raw:
-      "env -u PHARN_TEST_RESULTS npm test::test,node pharn/floor/validate.mjs .::validate,npm run lint::lint,npm run format:check::format:check,npm run lint:md::lint:md",
+      "npm test::test,node pharn/floor/validate.mjs .::validate,npm run lint::lint,npm run format:check::format:check,npm run lint:md::lint:md",
     style_skipped: false,
     finalized: true,
     fingerprint: { algo: "worktree-fingerprint/2+sha256", init: A64, final: A64 },
@@ -142,14 +142,17 @@ test("★ each substitution shape is REFUSED (exit 2) with its own reason_code",
   }
 });
 
-test("★ a hand-assembled positional map passed BESIDE --stamp is refused", () => {
-  // Inserted as the FIRST operand: check-verify.mjs reads its positional map there (a trailing extra operand after
-  // `--feature <name>` is not read at all — recorded in this feature's REVIEW.md, outside this increment's scope).
-  const line = committedLine().replace("check-verify.mjs --stamp", "check-verify.mjs pharn/.run/pharn-dev-verify/results.json --stamp");
-  assert.notEqual(line, committedLine(), "the mutation must change the line (L34)");
-  const r = runLine(line, mkStamp(), { "pharn/.run/pharn-dev-verify/results.json": { test: 0 } });
-  assert.equal(r.code, 2, r.out);
-  assert.match(r.json.reason, /mutually exclusive/);
+test("★ a hand-assembled positional map passed BESIDE --stamp is refused, before the flags or after them", () => {
+  // Both placements: until 7.3.0 a TRAILING operand was silently not read (this feature's REVIEW.md); check-verify.mjs
+  // now refuses an operand anywhere on the stamp path.
+  const map = "pharn/.run/pharn-dev-verify/results.json";
+  const lines = [committedLine().replace("check-verify.mjs --stamp", `check-verify.mjs ${map} --stamp`), `${committedLine()} ${map}`];
+  for (const line of lines) {
+    assert.notEqual(line, committedLine(), "the mutation must change the line (L34)");
+    const r = runLine(line, mkStamp(), { [map]: { test: 0 } });
+    assert.equal(r.code, 2, `${line}: ${r.out}`);
+    assert.match(r.json.reason, /mutually exclusive/);
+  }
 });
 
 test("★ NEGATIVE CONTROL — the pre-7.3.0 positional line read PASS over the substituted map (the defect)", () => {

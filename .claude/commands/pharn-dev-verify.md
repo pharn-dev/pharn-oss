@@ -83,7 +83,7 @@ runner `/pharn-verify` uses, which records each gate's **exit code** (never its 
 Step 3 validates. Run these lines, **each as its own Bash call** (L44 — no shell variable crosses a call):
 
 ```bash
-node pharn/floor/run-gates.mjs init --stage verify --feature <name> --base .dev/features --out pharn/.run/pharn-dev-verify/gates --gates "env -u PHARN_TEST_RESULTS npm test::test,node pharn/floor/validate.mjs .::validate,npm run lint::lint,npm run format:check::format:check,npm run lint:md::lint:md"
+node pharn/floor/run-gates.mjs init --stage verify --feature <name> --base .dev/features --out pharn/.run/pharn-dev-verify/gates --gates "npm test::test,node pharn/floor/validate.mjs .::validate,npm run lint::lint,npm run format:check::format:check,npm run lint:md::lint:md"
 ```
 
 ```bash
@@ -109,12 +109,10 @@ node pharn/floor/run-gates.mjs run --next --out pharn/.run/pharn-dev-verify/gate
   `aux`, never into the gate map. So a plan's `## Files` names what the BUILD writes, never this stage's or a later
   stage's own artifact (`VERIFY.md`, `verify-report.json`, `REVIEW.md`, `SHIP.md`): those do not exist yet when this
   runs, and the verdict would read INCOMPLETE. Each is written under its own stage's scope anyway.
-- **Why `env -u PHARN_TEST_RESULTS` in front of `npm test`.** The runner hands every gate a `PHARN_TEST_RESULTS` path
-  for a per-test reporter (`.dev/guides/floor-gates.md`, per-test results). This repo's suite configures no such
-  reporter, but some of its own tests spawn children and assert the variable is ABSENT — so the inherited value turned
-  `run-gates.test.mjs`'s "resultsFile: null means NO PHARN_TEST_RESULTS variable" red on every run through the runner
-  (measured: red with the variable set, green without). Removing it from the suite's environment is what makes the
-  `test` gate measure the suite and not the runner's own variable.
+- **The suite runs under the runner's environment.** The runner hands every gate a `PHARN_TEST_RESULTS` path
+  (`.dev/guides/floor-gates.md`, per-test results), so this repo's `npm test` inherits one. Before 7.3.0 that turned
+  `run-gates.test.mjs`'s "resultsFile: null means NO PHARN_TEST_RESULTS variable" red on every run through the runner;
+  `run-gates.mjs` `gateEnv` now removes an inherited value when a spawn has no results file, so no wrapper is needed.
 - **A feature that ships an eval pair** (see below) adds one token per pair to the `--gates` string:
   `node pharn/floor/check-structural.mjs <expected.json> <actual.json> .::eval:<name>`. (`--extra` cannot express a dev
   pair: it derives `<capDir>/findings.json`, and the actual lives under `.dev/features/`.)

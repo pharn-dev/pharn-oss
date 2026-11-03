@@ -3421,10 +3421,8 @@ function devVerifyHandMapDefects(body) {
   if (ids === null) d.push("no pinned init line with a --gates string");
   else for (const id of DEV_VERIFY_GATE_IDS) if (!ids.includes(id)) d.push(`--gates drops ${id}`);
   if (!/`3` \*\*INCOMPLETE\*\*/.test(body)) d.push("Step 3 does not name exit 3 INCOMPLETE");
-  // The suite must not inherit the runner's per-gate results variable: some of its own tests assert it is absent
-  // (run-gates.test.mjs, measured red through the runner without this).
-  if (!/--gates "env -u PHARN_TEST_RESULTS npm test::test,/.test(devVerifyInitLine(body) ?? ""))
-    d.push("the test gate inherits PHARN_TEST_RESULTS");
+  // No PHARN_TEST_RESULTS wrapper: the runner strips an inherited value itself (run-gates.mjs gateEnv, 7.3.0 — its
+  // test sets the variable and fails on the old gateEnv). The env leak is the RUNNER's rule, never a command's patch.
   return d;
 }
 
@@ -3438,9 +3436,6 @@ test("✧ the /pharn-dev-verify rule DISCRIMINATES — the pre-7.3.0 lines and a
   assert.ok(devVerifyHandMapDefects(preFix).includes("names a results.json"), "the old positional line must be caught");
   const printf = `${body}\nprintf '{"test":%d}' "$t" > x\n`;
   assert.ok(devVerifyHandMapDefects(printf).includes("assembles a map with printf"), "a printf map must be caught");
-  const leaky = body.replace("env -u PHARN_TEST_RESULTS npm test::test", "npm test::test");
-  assert.notEqual(leaky, body, "the mutation must change the body (L34)");
-  assert.ok(devVerifyHandMapDefects(leaky).includes("the test gate inherits PHARN_TEST_RESULTS"), "a leaky test token must be caught");
   const dropped = body.replace(",npm run lint:md::lint:md", "");
   assert.notEqual(dropped, body, "the mutation must change the body (L34)");
   assert.ok(devVerifyHandMapDefects(dropped).includes("--gates drops lint:md"), "a dropped style gate must be caught (L9)");
@@ -3500,6 +3495,20 @@ test("✧ the verdict-block closure DISCRIMINATES — a variant spelling of a me
   assert.notEqual(mutant, body, "the mutation must change the body (L34)");
   const stray = blockSpellings(mutant).filter((f) => !BLOCK_TEMPLATES.includes(f));
   assert.deepEqual(stray, ["run-ended: STOP <stop>"]);
+});
+
+const PLAN_NO_LATER_ARTIFACTS_RE = /\*\*`## Files` names what `\/pharn-dev-build` writes — never a later stage's own artifact\.\*\*/;
+test("✧ /pharn-dev-plan says a plan never declares a later stage's artifacts in ## Files (each named), and the rule discriminates", () => {
+  const body = commandBody("pharn-dev-plan.md");
+  assert.match(body, PLAN_NO_LATER_ARTIFACTS_RE, "the ## Files later-stage-artifact rule is missing");
+  const at = body.search(PLAN_NO_LATER_ARTIFACTS_RE);
+  const para = body.slice(at, body.indexOf("\n\n", at));
+  for (const name of ["VERIFY.md", "verify-report.json", "REVIEW.md", "SHIP.md"]) {
+    assert.ok(para.includes(`\`${name}\``), `the rule must name ${name}`);
+  }
+  const mutant = body.replace(PLAN_NO_LATER_ARTIFACTS_RE, "**`## Files` names anything.**");
+  assert.notEqual(mutant, body, "the mutation must change the body (L34)");
+  assert.doesNotMatch(mutant, PLAN_NO_LATER_ARTIFACTS_RE);
 });
 
 const REVIEW_BLOCKS_RE = /These \*\*block\*\* the increment\./;
@@ -5129,7 +5138,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // integration; raised by the rule (+10%, up to a multiple of 512).
   "pharn-dev-ship.md": 52224,
   // dev-verdict-discipline (7.3.0): Step 1 pins the runner's two lines and their exits, Step 3 the --stamp line, its
-  // five exits and the no-substitution rule — 29,596 bytes measured, 1,948 over 27,648; raised by the rule (+10%, up to a
+  // five exits and the no-substitution rule — 29,381 bytes measured, 1,733 over 27,648; raised by the rule (+10%, up to a
   // multiple of 512).
   "pharn-dev-verify.md": 31232,
 });

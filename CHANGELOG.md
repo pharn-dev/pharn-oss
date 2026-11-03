@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Fixed
+
+- 2026-11-03: **The gate runner no longer passes its own `PHARN_TEST_RESULTS` path down to a gate that has no
+  results file, and `check-verify.mjs --stamp` refuses a results map wherever it stands.** `pharn/floor/run-gates.mjs`
+  removes an inherited `PHARN_TEST_RESULTS` when it spawns a process with no results file; before, a suite run as a
+  gate inside another run handed its children the outer run's path, which turned a run-gates test red the first time
+  `/pharn-dev-verify` ran this repo's suite through the runner. `pharn/floor/check-verify.mjs` on the stamp path now
+  refuses a positional results map in any position; before, only a leading one was refused and one placed after the
+  flags was silently not read (the stamp alone decided, so no verdict changed). `/pharn-dev-plan` now says a plan's
+  `## Files` never declares a later stage's own artifacts. Found by this batch's dev verify running on itself.
+
 ### Added
 
 - 2026-11-03: **A pull request that changes product files must carry a green `/pharn-dev-ship` record.** The new

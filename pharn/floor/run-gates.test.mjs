@@ -1063,22 +1063,30 @@ test("the regress PAIR end to end through a real git worktree: the base stamp la
 // variable", the shape `stage-regress.mjs`'s own base-commit INSTALL step needs (it is not a gate with a
 // per-test reporter).
 // ---------------------------------------------------------------------------------------------------
-test("spawnGate is exported, and resultsFile: null means NO PHARN_TEST_RESULTS variable is set", async () => {
+test("spawnGate is exported, and resultsFile: null means NO PHARN_TEST_RESULTS variable is set — an INHERITED one included", async () => {
+  // 7.3.0 (dev-verdict-discipline): the variable is SET in this process first, the way a runner that runs this suite as
+  // one of its gates hands it down. Before the fix gateEnv passed it through and this read PRESENT — measured when
+  // /pharn-dev-verify first ran this repo's suite through run-gates.mjs. So the test now proves the strip, not merely
+  // the absence of an add. The CONTROL below shows the variable really is inherited by an ordinary child here.
   const dir = mkdtempSync(join(tmpdir(), "rg-spawngate-"));
+  const saved = process.env[RESULTS_ENV];
+  process.env[RESULTS_ENV] = join(dir, "parent-results.json");
   try {
     const outFile = join(dir, "out.txt");
     const errFile = join(dir, "err.txt");
-    const r = await spawnGate(
-      { shell: `node -e "console.log(process.env.${RESULTS_ENV} === undefined ? 'ABSENT' : 'PRESENT')"`, argv: null, files: [] },
-      dir,
-      outFile,
-      errFile,
-      null,
-      10000
-    );
+    const probe = `node -e "console.log(process.env.${RESULTS_ENV} === undefined ? 'ABSENT' : 'PRESENT')"`;
+    const r = await spawnGate({ shell: probe, argv: null, files: [] }, dir, outFile, errFile, null, 10000);
     assert.equal(r.exit, 0);
-    assert.equal(readFileSync(outFile, "utf8").trim(), "ABSENT", "a null resultsFile must set no PHARN_TEST_RESULTS variable");
+    assert.equal(
+      readFileSync(outFile, "utf8").trim(),
+      "ABSENT",
+      "a null resultsFile must set no PHARN_TEST_RESULTS variable, inherited or not"
+    );
+    const control = spawnSync("sh", ["-c", probe], { encoding: "utf8" });
+    assert.equal(control.stdout.trim(), "PRESENT", "CONTROL: an ordinary child inherits the variable, so ABSENT above is the strip");
   } finally {
+    if (saved === undefined) delete process.env[RESULTS_ENV];
+    else process.env[RESULTS_ENV] = saved;
     rmSync(dir, { recursive: true, force: true });
   }
 });
