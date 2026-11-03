@@ -164,7 +164,7 @@ set), `idle` (the rest) and `unwritten`. Branch only on its exit code (P5):
 
 - `0` → Step 4 spawns one subagent per printed group.
 - `2` with a `lens-groups/v1` line → the map is unusable (`map_error` says why); the printed `groups` hold one lens
-  each. Spawn by them, and say so in `REVIEW.md`.
+  each. Spawn by them, and say so in the Step 6 notes.
 - `1`, `2` with no `lens-groups/v1` line (the Node runtime refusal), or any other exit → the record or the runtime is
   unusable, so no lens's files can be read. **STOP**: spawn nothing, report the helper's stderr line to the human, run
   Step 7, and end the turn.
@@ -256,7 +256,9 @@ node pharn/floor/merge-findings.mjs pharn/features/<name>/findings.json pharn/fe
 `merge-findings.mjs` drops any finding whose enum-gated fields are malformed, then **groups by the enum-gated key
 `(type, rule_id, file)`**, keeping every contributor's `{problem, evidence}` in `sources[]` as quoted DATA. It
 **assembles; it does not judge** — the merged `findings.json` is **advisory**. It also writes
-`pharn/features/<name>/merge-report.json`: every lens file it could not use (`unreadable[]`), every finding it
+`pharn/features/<name>/merge-report.json`: every lens file it could not use (`unreadable[]` — including, with a usable
+`assignments.json`, every file under a lens directory the record does not name, skipped unread as `unrecorded-lens`,
+so a planted `lenses/<dir>/findings.json` merges nothing), every finding it
 dropped (`dropped[]`), and every contributor whose `file` is outside the record's target (`outside_target`, named,
 never dropped — nothing resolves a lens's path). Branch only on its exit code (P5):
 
@@ -277,8 +279,9 @@ default) — semantics and bounds in `merge-findings.mjs`'s header (P4).
 ## Step 6 — Render `pharn/features/<name>/REVIEW.md` (human-facing) + an advisory verdict
 
 `REVIEW.md` is written by a floor renderer, not by you (7.3.0). **Do not read the merged `findings.json` to write it,
-and never edit `REVIEW.md` after the render** — every lens-supplied value in it is fenced by code, and an edit is
-outside that. Two steps:
+and never edit `REVIEW.md` after the render** — the renderer puts inline only its own prose, counts, the validated
+name, closed-set members after a membership test, a shape-checked `rule_id` and a clean lens id as a code span, and
+fences every other value a lens, a record or your notes supplied; an edit is outside that. Two steps:
 
 **First, write your own self-report** with the Write tool to `pharn/.run/pharn-review-notes/<name>.md` — never under
 `pharn/.run/pharn-review/`, which is the run marker's own state (`pharn/floor/render-review.mjs`, header). It holds
@@ -345,9 +348,12 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   `merge-report.json`, a dropped value only as one escaped, capped line, and exit `3` marks the merge incomplete. A
   lens file never passed to it, or a stale one, is `lens-groups.mjs`'s `unwritten`, not this report. `type` is a closed
   set; `file` is a `path:line` SHAPE, never resolved — a file outside the record's target is only named
-  (`outside_target`).
+  (`outside_target`). With a usable record, an input under a lens directory the record does not name is skipped
+  unread (`unrecorded-lens`). **NARROWED:** with no usable record every input merges, and a file planted under a
+  RECORDED lens's directory is that lens's file to the merge (`unwritten`'s `stale` is the only check on it).
 - **Floor:** `REVIEW.md`'s bytes, as `render-review.mjs` writes them — inline only renderer text, counts, the
-  validated name, closed-set members after a membership test and a `rule_id` that passes the merge's shape; every other
+  validated name, closed-set members after a membership test, a `rule_id` that passes the merge's shape and a clean lens
+  id as a code span; every other
   value a lens, a record or your notes supplied sits inside a fence one back-tick longer than any run in it, C0 control
   characters (other than TAB/LF) and DEL escaped, each value capped; a finding's lens text is budgeted across the
   document, the record's and report's lists are not. **NARROWED:** inert to a CommonMark parser, never

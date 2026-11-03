@@ -5016,7 +5016,11 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // review-lens-grouping (6.64.0): Step 3's grouping line and its three exit branches, Step 4's subagent type, fallback,
   // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes
   // measured, 3,473 over 24,064; raised by the rule (+10%, up to a multiple of 512).
-  "pharn-review.md": 30720,
+  // review-quoting (7.3.0, audit 2026-11-03): Step 6 runs the floor renderer instead of describing a hand render,
+  // Step 5 names `outside_target` and `unrecorded-lens`, Step 1b states the review set's missing aggregate bound, and
+  // the claims block gains the renderer's Floor bullet and its bounds — 30,877 bytes measured, 157 over 30,720; raised
+  // by the rule (+10%, up to a multiple of 512).
+  "pharn-review.md": 34304,
   // ship-step2-part (6.70.0): `## Running a stage`, Step 2 after GATE 1 and Step 2b moved into the stages part, and the
   // compaction rule and the stages pointer came in — 16,037 bytes measured (was 42,422); the row went DOWN by the rule.
   "pharn-ship.md": 17920,

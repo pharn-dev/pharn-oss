@@ -41,6 +41,22 @@ record/report lists were neither capped nor budgeted. Now every fenced value is 
 a finding's location joins the lens-text budget, the lists stay unbudgeted and say so, and both restatements name the
 inline exceptions. Two tests pin the new caps. Regress was re-run at head after this fix.
 
+**GATE 2 fixes** (the orchestrator's FIX decision, under the owner's delegation; no new path, so no re-anchor):
+
+1. Step 3's exit-2 branch now says "say so in the Step 6 notes". The `review-lens-agent.test.mjs` needle was updated,
+   with a control that the old `REVIEW.md` wording fails.
+2. Step 6 states the renderer's inline exceptions exactly.
+3. In `outside_target`, the lens id moved out of the DATA fence onto the renderer's line, as a code span longer than
+   any back-tick run in it (`lensSpan`; a multi-line id is not inlined), and the fence holds the file value alone.
+   This has a test, and the markdown-it probe treats code spans as inert.
+4. Planted lens directories are fixed in the merge (well under an hour). With a usable record, an input whose lens
+   directory the record does not name is skipped unread as `unrecorded-lens`, a new `UNREADABLE_REASONS` member, and
+   the merge exits 3. Tests cover it with two controls: no record means everything merges, and a recorded lens's file
+   merges. The bound is stated in the merge header, the contract, the claims bullet and the CHANGELOG. Two existing
+   tests needed their record to name the lens they feed.
+5. `pharn-review.md` came to 30,877 B, over its 30,720 ceiling. It was raised by the rule (+10%, up to the next
+   multiple of 512) to 34,304 in `COMMAND_BYTE_CEILINGS`, as a visible diff.
+
 Merge-report readers (GATE 1 condition): only `/pharn-review` Step 6 read the report's content, and that is now the
 renderer, which accepts v1 and v2. `check-regress.mjs`, `worktree-fingerprint.mjs`, `reconcile-ignore.json` and
 `check-regress.test.mjs` list the file name only.

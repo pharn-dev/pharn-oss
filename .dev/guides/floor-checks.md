@@ -458,7 +458,9 @@ node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [
 # finding whose enum-gated fields fail (`type` is a CLOSED set {FINDING, CONSTITUTION_VIOLATION} since 7.3.0) and names
 # it in merge-report.json (schema merge-report/v2 since 7.3.0: `unreadable`, `dropped`, and `outside_target`, every
 # contributor whose `file` is not in the assignment record's target — named, never dropped; null with no usable record).
-# A lens directory name is stored through reportSafe in sources[] too. Exit 0 complete · 3 INCOMPLETE · 1 usage/write.
+# A lens directory name is stored through reportSafe in sources[] too. With a usable assignment record, an input under
+# a lens directory the record does not name is skipped unread (unreadable reason `unrecorded-lens`, 7.3.0).
+# Exit 0 complete · 3 INCOMPLETE · 1 usage/write.
 # Ends `process.exitCode = main(process.argv)` (cli-stdout-flush.test.mjs FLUSH_CLIS).
 node pharn/floor/merge-findings.mjs <out.json> [<in.json> ...] [--lens-map <path>] [--assignments <path>]
 # /pharn-review Step 6: render pharn/features/<name>/REVIEW.md from findings.json, merge-report.json (v1 or v2),

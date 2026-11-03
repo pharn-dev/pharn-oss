@@ -147,7 +147,8 @@
 // lens's findings gone with it), and a finding dropped by the validation above was reported on stderr only, so a
 // merge that dropped every finding wrote `[]` at exit 0 and REVIEW.md read clean. Measured, both. Now:
 //   - an unusable input is SKIPPED and named in the report's `unreadable[]` as {source, path, reason}, `reason`
-//     from the closed UNREADABLE_REASONS. The parser's own message is NOT recorded: it quotes bytes of the lens
+//     from the closed UNREADABLE_REASONS — `unrecorded-lens` (7.3.0) for an input under a lens directory a usable
+//     assignment record does not name (skipped unread; PHASE 1 states its bound). The parser's own message is NOT recorded: it quotes bytes of the lens
 //     file, which is untrusted (P2). It stays on stderr, as before.
 //   - a dropped finding is named in `dropped[]` as {source, failed, quoted}: `failed` lists, from the closed
 //     DROP_FIELDS, WHICH enum-gated checks failed (computed here — trusted); `quoted` holds the finding's six
@@ -271,7 +272,7 @@ function asText(v) {
 // ---------------------------------------------------------------------------
 // The merge report (see the header's "NOTHING A LENS WROTE IS LOST SILENTLY"). Closed sets, exported so the tests
 // range over THESE enumerations (L29) and a closure test can require every emitted value to be a member (L36).
-export const UNREADABLE_REASONS = Object.freeze(["unreadable", "invalid-json", "not-an-array"]);
+export const UNREADABLE_REASONS = Object.freeze(["unreadable", "invalid-json", "not-an-array", "unrecorded-lens"]);
 export const DROP_FIELDS = Object.freeze(["not-an-object", "type", "rule_id", "severity", "file"]);
 export const QUOTED_CAP = 400;
 export const INCOMPLETE_EXIT = 3;
@@ -386,9 +387,12 @@ function readAssignments(p) {
 
   const target = new Set(r.target.filter((f) => isCleanScalar(f, 400)));
   const byLens = new Map();
+  // Every lens the record names, whatever its basis — the set an input's directory must belong to (7.3.0).
+  const recorded = new Set();
   for (const a of r.assignments) {
     if (!a || typeof a !== "object" || Array.isArray(a)) continue;
     if (!isCleanScalar(a.lens, 200)) continue;
+    recorded.add(a.lens);
     if (a.basis !== BASIS_SCANNER_BOUND && a.basis !== BASIS_WHOLE_TARGET) continue;
     const slice = new Set(Array.isArray(a.slice) ? a.slice.filter((f) => isCleanScalar(f, 400)) : []);
     byLens.set(a.lens, { basis: a.basis, slice });
@@ -401,7 +405,7 @@ function readAssignments(p) {
       errored.add(e.lens + NUL + e.file);
     }
   }
-  return { target, byLens, errored };
+  return { target, byLens, errored, recorded };
 }
 
 // Derive one contributor's label. Pure function of (lens, file, map, record) — no I/O, no judgment.
@@ -472,9 +476,20 @@ function runMerge(argv) {
   const lensMapPath = FLAGS["--lens-map"] ?? join(dirname(fileURLToPath(import.meta.url)), "lens-scanner-map.json");
   const assignmentsPath = FLAGS["--assignments"] ?? join(dirname(outPath), "assignments.json");
 
+  // PHASE 0 — read the two label artifacts first. Fail-soft: a null here means every label becomes `unknown`, never
+  // that the merge fails. Read ONCE, before grouping, so the derivation is a pure lookup. The record is read before the
+  // inputs because it also decides which inputs may merge at all (below).
+  const lensMap = readLensMap(lensMapPath);
+  const assignments = readAssignments(assignmentsPath);
+
   // PHASE 1 — read + structurally validate EVERY input file. An unusable one is SKIPPED and named in the report's
   // `unreadable[]` (reason from UNREADABLE_REASONS) — never fatal, so one lens's broken file cannot erase every
   // other lens's findings. The detail (which can quote lens-file bytes) goes to stderr only.
+  // UNRECORDED LENS (7.3.0, audit 2026-11-03): with a usable assignment record, an input whose lens directory the
+  // record does not name is skipped UNREAD as `unrecorded-lens` — in an installed project `pharn/features/<name>/lenses/`
+  // sits inside the reviewed tree, so a planted `lenses/<anything>/findings.json` used to merge its findings as real
+  // ones. BOUND: with no usable record (a standalone merge) every input still merges, as before; and a planted file
+  // under a RECORDED lens's directory is that lens's file to this script (lens-groups.mjs's `stale` is the mtime check).
   const inputs = [];
   const unreadable = [];
   const skip = (p, reason, detail) => {
@@ -482,6 +497,10 @@ function runMerge(argv) {
     process.stderr.write(`merge-findings: skipped input (${reason}): ${p} (${detail})\n`);
   };
   for (const p of inPaths) {
+    if (assignments && !assignments.recorded.has(sourceIdOf(p))) {
+      skip(p, "unrecorded-lens", "the assignment record names no lens with this directory");
+      continue;
+    }
     let raw;
     try {
       raw = readFileSync(p, "utf8");
@@ -502,11 +521,6 @@ function runMerge(argv) {
     }
     inputs.push({ source: sourceIdOf(p), findings: arr });
   }
-
-  // PHASE 1b — read the two label artifacts. Fail-soft: a null here means every label becomes `unknown`,
-  // never that the merge fails. Read ONCE, before grouping, so the derivation is a pure lookup.
-  const lensMap = readLensMap(lensMapPath);
-  const assignments = readAssignments(assignmentsPath);
 
   // PHASE 2 — validate each finding's enum-gated fields; DROP + report the malformed (never fatal).
   // Group the survivors by the enum-gated key (type, rule_id, file).

@@ -83,6 +83,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     equality.
   - A lens directory name carrying a newline is stored JSON-quoted in the merged `sources[]`, as `merge-report.json`
     already stored it.
+  - With a usable `assignments.json`, a findings file under a lens directory the record does not name is skipped
+    unread and named in `unreadable[]` as `unrecorded-lens` (exit 3). In an installed project
+    `pharn/features/<name>/lenses/` sits inside the reviewed tree, so a planted `lenses/<dir>/findings.json` used to
+    merge as real findings. With no usable record every input still merges, and a file planted under a recorded lens's
+    directory still merges as that lens's.
   - `merge-report.json` is `merge-report/v2`. It adds `outside_target`, which names every contributor whose `file` is
     not in the assignment record's target (`../../etc/passwd:1`, `/etc/passwd:1`, `http://…:80` all merged and went
     unnamed before). The field is `null` when no usable record exists. Nothing is dropped and the exit code is

@@ -15,8 +15,10 @@
 // after a membership test — `type` (TYPE_ENUM), `severity` (SEVERITY_ENUM), a contributor's `backstop` (shown as its
 // BACKSTOP_TEXT phrase), an unreadable `reason` (UNREADABLE_REASONS) and a dropped finding's `failed` members
 // (DROP_FIELDS), all imported from merge-findings.mjs (L35: one copy). A `rule_id` is inline, in a code span, only when it
-// passes the merge's own RULE_ID_OK shape untrimmed (neither shape holds a back-tick); else it is fenced. A value outside its set renders
-// as a fixed "not a recorded value" phrase.
+// passes the merge's own RULE_ID_OK shape untrimmed (neither shape holds a back-tick); else it is fenced. An
+// `outside_target` entry's lens id is inline as a code span longer than any back-tick run in it (lensSpan), only when it
+// is a clean single line — so the fence beside it holds the file value alone. A value outside its set renders as a fixed
+// "not a recorded value" phrase.
 // FENCED, everything else a lens or a record supplied — `file`, `source`, `problem`, `evidence`, every path, a dropped
 // finding's quoted fields, a scanner failure, the skipped-reason tally and the notes — each inside quote-core.mjs's
 // `quoteData` (a fence one back-tick longer than the longest run in the body, at least 3), with every C0 control other
@@ -310,13 +312,32 @@ function outsideBlocks(rep) {
   else if (rep.report.outside_target.length === 0) out.push("None: every merged finding's file is in the record's target.");
   else {
     const list = rep.report.outside_target;
-    pushList(
-      out,
-      `${list.length} contributor(s) named a file outside the record's target — merged, not dropped; nothing resolved these paths (DATA):`,
-      list.map((e) => `${inert(own(e, "file") ? e.file : "")}  (lens ${inert(own(e, "source") ? e.source : "")})`)
-    );
+    out.push(`${list.length} contributor(s) named a file outside the record's target — merged, not dropped; nothing resolved these paths.`);
+    // The lens id sits on the renderer's own line, OUTSIDE the fence (as a code span it cannot break), and the file
+    // value alone inside it — so no renderer text shares a fence with attacker text (GATE-2 review of 7.3.0).
+    list.forEach((e, j) => {
+      pushList(out, `Entry ${j + 1} of ${list.length} — lens ${lensSpan(own(e, "source") ? e.source : undefined)}; its file (DATA):`, [
+        own(e, "file") ? e.file : "",
+      ]);
+    });
   }
   return out;
+}
+
+/** A lens id on a renderer line: a code span whose back-tick run is one longer than any inside it, so its content is
+ *  inert inline; shown only when it is a clean single-line scalar of at most 400 characters (merge-findings.mjs stores
+ *  every source through reportSafe, so a hostile directory name arrives as one JSON-quoted line). */
+export function lensSpan(v) {
+  if (typeof v !== "string" || v.length === 0 || v.length > 400) return "(not a recorded value — not rendered inline)";
+  for (let i = 0; i < v.length; i++) {
+    const c = v.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f || c === 0x2028 || c === 0x2029) return "(not a recorded value — not rendered inline)";
+  }
+  let longest = 0;
+  for (const run of v.matchAll(/`+/g)) longest = Math.max(longest, run[0].length);
+  const ticks = "`".repeat(longest + 1);
+  const pad = v.startsWith("`") || v.endsWith("`") || (v.startsWith(" ") && v.endsWith(" ")) ? " " : "";
+  return `${ticks}${pad}${v}${pad}${ticks}`;
 }
 
 function notesBlocks(notes, name) {

@@ -173,10 +173,23 @@ test("★ L55: markdown-it (a reference parser) sees the same headings, and ever
     if (tokens[i].type === "heading_open") headings.push(`${tokens[i].markup} ${tokens[i + 1].content}`);
   }
   assert.deepEqual(headings, EXPECTED_HEADINGS(PAYLOADS.length));
+  // Text a reader sees as document text: every non-fence token's content, except that an inline token contributes only
+  // its non-code children — a code span (a lens id on its renderer line) is inert like a fence.
   const nonFence = tokens
     .filter((tk) => tk.type !== "fence")
-    .map((tk) => tk.content)
+    .map((tk) =>
+      tk.type === "inline" && Array.isArray(tk.children)
+        ? tk.children
+            .filter((c) => c.type !== "code_inline")
+            .map((c) => c.content)
+            .join("")
+        : tk.content
+    )
     .join("\n");
+  assert.ok(
+    tokens.some((tk) => tk.type === "inline" && tk.children.some((c) => c.type === "code_inline" && c.content.includes("four backticks"))),
+    "control: the p7 lens id IS rendered — inside a code span"
+  );
   for (const needle of ["IGNORE ALL PREVIOUS", "<script>", "four backticks", "Verdict: PASS"]) {
     assert.ok(!nonFence.includes(needle), `markdown-it found ${JSON.stringify(needle)} outside a fence token`);
   }
@@ -338,6 +351,32 @@ test("★ every contributor is rendered, never only sources[0]", () => {
   });
   for (const p of ["first", "second", "third"]) assert.ok(md.includes(p));
   assert.ok(md.includes("Contributor 3 of 3"));
+});
+
+test("★ outside_target: the lens id is on the renderer's line as a code span, the file alone inside the fence", () => {
+  const md = render({
+    report: REP({
+      outside_target: [
+        { source: "lensA", file: "/etc/passwd:1" },
+        { source: "a``b", file: "http://evil.example:80" },
+        { source: "x\n## V", file: "f:1" },
+      ],
+    }),
+  });
+  const lines = md.split("\n");
+  const e1 = lines.findIndex((l) => l.startsWith("Entry 1 of 3 — lens `lensA`; its file (DATA):"));
+  assert.ok(e1 >= 0, "entry 1's renderer line names the lens outside the fence");
+  assert.equal(lines[e1 + 2], "```text");
+  assert.equal(lines[e1 + 3], "/etc/passwd:1", "the fence holds the file value alone — no renderer text beside it");
+  assert.ok(
+    lines.some((l) => l.startsWith("Entry 2 of 3 — lens ```a``b```;")),
+    "a back-tick run gets a longer code span"
+  );
+  assert.ok(
+    lines.some((l) => l.startsWith("Entry 3 of 3 — lens (not a recorded value")),
+    "a multi-line id is not inlined"
+  );
+  assert.ok(!headingsOf(md).includes("## V"));
 });
 
 test("★ merge-report versions: v2 list / v2 null / v1 (not recorded) / unknown schema / absent", () => {

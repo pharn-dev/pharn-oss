@@ -139,7 +139,10 @@ v1 field. A reader accepts both: a `merge-report/v1` report has no `outside_targ
 recorded** — never as an empty list, which would claim every file was in the target. Any other `schema` value makes the
 report unusable to that reader. The one content reader is `pharn/floor/render-review.mjs`; the other floor files that
 name the file (`check-regress.mjs`, `worktree-fingerprint.mjs`, `reconcile-ignore.json`) list it as a pipeline
-artifact and never parse it.
+artifact and never parse it. Also since 7.3.0, `unreadable[]`'s `reason` may be `unrecorded-lens`: with a usable
+assignment record, a findings file under a lens directory the record does not name is skipped unread, so its findings
+never merge. A reader that predates the value treats an unknown `reason` as not a recorded value. **Bound:** with no
+usable record every input merges, and a file planted under a recorded lens's directory merges as that lens's.
 
 ## The rule of the contract (P0, P2)
 
