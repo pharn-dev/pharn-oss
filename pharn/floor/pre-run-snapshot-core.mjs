@@ -54,6 +54,9 @@
 //   pre-run-changed test file stays inside — not compared by /pharn-regress (/pharn-verify still runs it at HEAD).
 // • /pharn-loop's commit never holds a subtracted path (it stages plan scope ∪ this feature's artifacts ∪ pinned tests),
 //   so a green loop's branch is not the whole tree its gates ran on; and a committed REGRESSION.md names those paths.
+//   Since 7.3.0 the closeout asks this same decision about the plan's OWN scope too (loop-closeout.mjs `buildStageList`,
+//   through `preRunUnchanged`): a scope path the snapshot holds unchanged is left out of the commit and named in the
+//   closing document's `left_dirty`, so a user's uncommitted edit to a file the plan names is not committed either.
 //
 // TRUST (P2): every operand is deterministic-tool output (git paths, digests, marker bytes) or a record's JSON. A
 // record's paths are only compared — never opened; the execution half hashes only paths git printed. Values are

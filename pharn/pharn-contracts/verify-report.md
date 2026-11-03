@@ -118,6 +118,13 @@ papering over the divergence with a single invented enum. The per-consumer sets 
 business (P4: cited, not restated); what belongs to this contract is that they **differ**, and what that
 costs a reader.
 
+**A repeated top-level key (7.3.0).** `check-loop.mjs` also refuses — `INCONCLUSIVE`, exit 2 — a report whose
+top-level object carries any key twice (`{"verdict":"FAIL",…,"verdict":"PASS"}`), naming the keys, never a value.
+`JSON.parse` keeps the last copy, so before 7.3.0 that fixture stopped `STOP_GREEN` while a person reading the file
+top-down saw `FAIL`. A key repeated inside a nested object is not refused, and the other three consumers still read
+the last copy; `check-verify.mjs` emits the report through `JSON.stringify`, which never repeats a key, so only a hand-edited or
+forged report can carry one.
+
 ## Who reads this artifact — and the distinction that matters
 
 - **FLOOR consumers — exactly the four above. Three read `verdict` and nothing else; `check-loop.mjs`

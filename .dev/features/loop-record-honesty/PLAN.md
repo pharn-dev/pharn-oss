@@ -101,6 +101,8 @@ llm, model, none, null, pharn, system, unknown, user` — else `malformed` (exit
 - `pharn/floor/check-spec.mjs` — repeated gated key RED, `approved_by` ∈ {model}, `--state` empty on a repeat
 - `pharn/floor/check-spec.test.mjs` — the repeated-key and `approved_by` cases, with GREEN controls
 - `pharn/floor/check-spec-approved.test.mjs` — the duplicate-`state:` regression test now expects check-spec's refusal
+- `pharn/floor/check-plan-spec-agree.test.mjs` — added during build (see "Build deviations"): its chain test now expects
+  the `repeated-key` refusal
 - `pharn/floor/check-attestation.mjs` — `RESERVED_BY` and a calendar-valid `at`
 - `pharn/floor/check-attestation.test.mjs` — reserved handles (each member), impossible dates, leap-day control
 - `pharn/floor/loop-closeout.mjs` — `buildStageList` pre-run subtraction, `left_dirty`, `COMMIT_BODY`
@@ -188,17 +190,37 @@ No capability (`role:`) changes, so no eval fixture; every behaviour change gets
   (`pre-run-snapshot.mjs`) is checked against every test that copies it (none: its e2e fixture symlinks the whole
   `pharn/floor/`).
 
-## Open questions (HALT)
+## Build deviations (recorded after GATE 1)
 
-- **Q1 — should a snapshot MISS at the closeout refuse the commit?** A `/pharn-loop` run always captures a snapshot
-  (Step 1a STOPs otherwise), so a miss at close means the marker was re-opened or the record was removed. Recommended:
-  **no** — report the status in `left_dirty.status` and stage today's list (P7: no observed failure; a refusal adds a
-  new `not committed:` reason to a closed set).
-- **Q2 — the commit message.** Recommended: drop `(approved_by: model)` from `COMMIT_BODY` (one constant). Alternative:
-  read the SPEC's `approved_by` and print the parenthetical only when it reads `model` (a second SPEC read in the
-  closeout and a new `commitArgs` parameter).
-- **Q3 — `RESERVED_BY` membership.** Recommended the 15-name list above, exact match after lower-casing. A wider
-  pattern (`*-bot`, `claude-*`) is a heuristic the floor would then be asked to vouch for; not proposed.
+The first `npm run check` of the build was RED in four tests outside this plan. They showed that two choices in
+"Approach §1" went further than the finding, so the build narrowed both:
+
+- **`--state` keeps last-wins.** `frontmatter-core.test.mjs`'s ✧ PARITY pins `check-spec --state` equal to `readField`,
+  the single reading L35 asks for. Printing an empty line would have made a second reading. validate's `repeated-key`
+  RED already stops a repeated `state` at every gate, because `check-spec-approved` validates before it reads `--state`.
+- **`repeated-key` covers `state` and `approved_by` only (`REPEAT_REFUSED`), not `spec_content_hash` / `spec_id`.**
+  6.20.5 deliberately made every reader take the LAST pin, so that a re-approval appending a pin under a stale one, or
+  under a Draft's `spec_content_hash: ""`, reads the same everywhere (`ac-tests-lock.test.mjs` pins both). Refusing
+  that is outside this finding (P7).
+- **One file added to `## Files` after the anchor:** `check-plan-spec-agree.test.mjs`. Its chain test asserted the
+  old `"Draft" is not "Approved"` message, which `repeated-key` now precedes. Reconcile over the first window (anchor
+  at 12:55:15Z up to this change) was **CLEAN** (18 reconciled, 0 escapes). Build Step 0 was then re-run (setter,
+  then `--anchor`), so the epoch covers the widened plan. Every write in the first window went through the
+  hook-gated Write/Edit tools or a formatter over scoped paths.
+
+## GATE 1 — decided (the questions this plan raised, resolved)
+
+GATE 1 was decided by the batch orchestrator (a model) under the owner's delegation — not a human approval.
+Approved as written, with these answers:
+
+- **Q1 — should a snapshot MISS at the closeout refuse the commit?** No. The miss is reported in `left_dirty.status`
+  and today's list is staged (P7: no observed failure; a refusal would add a `not committed:` reason to a closed set).
+- **Q2 — the commit message.** Drop `(approved_by: model)` from `COMMIT_BODY`.
+- **Q3 — `RESERVED_BY` membership.** The exact 15-name list above, matched after lower-casing. The contract says
+  plainly that it is a placeholder deny-list, not identity verification: a real-looking name typed by a model passes.
+- **Grill items:** all five folded in (reader throw left uncaught → crash before the branch step; quoted keys bounded;
+  a log line naming the left-out paths; the leap-second rationale; the 24 h marker bound beside the miss rule).
+- **`loop-closeout.mjs`:** no edit to `BLOCKED_RE` (group G2's area).
 
 No trusted-doc change is needed: no sentence in the four trusted docs becomes false (`LIMITS §1d` already calls
 `approved_by: model` ungated; it stays true that a human approval is unverifiable). No DOCS-PROPOSAL.md.
