@@ -97,7 +97,7 @@
 // the methodology this repo edits every increment, and a guard that froze its own tests would be
 // unmaintainable.
 //
-// PROTECTED_SUBTREES is the ONE deliberate exception to exact matching, and it is NOT a return to the
+// PROTECTED_SUBTREES (and RUN_STATE_SUBTREES, below) are the deliberate exceptions to exact matching, and NOT a return to the
 // removed branches. A canon directory cannot be spelled as an exact path, so it is matched as a ROOTED
 // PREFIX — `<guarded root>/pharn/memory-bank/…` — which is still trust-by-LOCATION. The removed fragment
 // branch denied a user's docs/ARCHITECTURE.md ANYWHERE in the tree because it matched a path SEGMENT
@@ -105,6 +105,16 @@
 // a nested vendor copy at src/vendor/memory-bank/x.md is untouched. The honest over-block that remains
 // is a user's OWN unrelated pharn/memory-bank/ at the guarded root — structural, exactly as for the
 // pharn/THREAT-MODEL.md / pharn/LIMITS.md / CODEOWNERS entries.
+//
+// RUN_STATE_SUBTREES (7.3.0, loop-marker-integrity) is a second set of rooted prefixes, judged as a SEPARATE rule like
+// git metadata, never as DEFAULT_PROTECTED entries. pharn/.run/pharn-loop/**, pharn/.run/pharn-ship/** and
+// pharn/.run/pharn-review/** hold the delivery runs' markers and witnesses — the Stop guard's active.json (its cap and
+// mode), the isolation witness, a stage agent's result, the freshness ledger — and every file there is written by a
+// PHARN CLI: no product command or part writes one with the Write or Edit tool. enforce-writes-scope.cjs always allows
+// pharn/.run/**, so before 7.3.0 the Write tool could rewrite a marker's cap or mode prompt-free — the route around
+// require-loop-record.cjs's --open refusal that a review confirmed. Denied regardless of any scope, with no escape, in
+// both passes. The three directories themselves are not denied: a FILE planted at one already fails closed (the run
+// cannot open). BOUNDED, like every rule here: a Bash write reaches every one of these files.
 //
 // ── WHAT THIS FILE LEARNED FROM BEING ATTACKED ──────────────────────────────────────────────────────
 // The first repo-relative draft of this matcher was correct on every case its author thought of, and
@@ -413,6 +423,10 @@ const DEFAULT_PROTECTED = [
 // (lessons-learned L31). No trailing slash here — one is appended once, at fold time.
 const PROTECTED_SUBTREES = ["pharn/memory-bank", ".dev/memory-bank"];
 
+// The delivery runs' CLI-owned state (7.3.0 — header, RUN_STATE_SUBTREES): the three directory names
+// enforce-writes-scope.cjs's run scan reads. No trailing slash here — one is appended once, at fold time.
+const RUN_STATE_SUBTREES = ["pharn/.run/pharn-loop", "pharn/.run/pharn-ship", "pharn/.run/pharn-review"];
+
 // The four canon files the two promote commands' TARGET_ENUMs actually name. Used ONLY to collect
 // hard-link inodes (a bounded four stats, versus a recursive walk of the subtrees on every tool call).
 const CANON_FILES = [
@@ -463,6 +477,7 @@ const ROOT_PREFIXES = ROOTS.map((r) => {
 // `pharn/memory-bank`. The bare directory itself is not a write target, so requiring something after the
 // slash is correct as well as narrower.
 const PROTECTED_SUBTREE_KEYS = PROTECTED_SUBTREES.map((s) => toKey(s) + "/");
+const RUN_STATE_SUBTREE_KEYS = RUN_STATE_SUBTREES.map((s) => toKey(s) + "/");
 const PROMOTE_COMMAND_KEYS = new Set(PROMOTE_COMMANDS.map(toKey));
 
 // PHARN_PROTECTED keeps its ORIGINAL basename/path-fragment semantics, deliberately. Narrowing it to
@@ -747,6 +762,18 @@ function gitMetaRelKey(abs) {
   return null;
 }
 
+// A delivery run's CLI-owned state under a guarded root (header, RUN_STATE_SUBTREES): the root-relative folded key of a
+// path strictly INSIDE one of the three directories, else null. Like git metadata it carries no escape.
+function runStateRelKey(abs) {
+  const key = toKey(path.resolve(String(abs)));
+  for (const prefix of ROOT_PREFIXES) {
+    if (!key.startsWith(prefix)) continue;
+    const rel = key.slice(prefix.length);
+    for (const sub of RUN_STATE_SUBTREE_KEYS) if (rel.startsWith(sub) && rel.length > sub.length) return rel;
+  }
+  return null;
+}
+
 // Is this write authorized by the ORIGIN of the writes-scope record OF THE ROOT THE TARGET SITS UNDER? See
 // the header for what this does and does not buy. Every branch that is not an exact match returns false, so
 // the guard is fail-closed on an absent, unreadable, unparseable, non-object, wrong-origin, multi-entry or
@@ -795,7 +822,7 @@ function extractPaths(toolInput) {
 // The deny message is composed PER BRANCH, never as one shared string with per-case bullets appended.
 // enforce-writes-scope.cjs learned this the hard way (lessons-learned L27): a shared message prints
 // every remedy in every case, including the ones that cannot work, and a guard that prints an impossible
-// remedy trains the exact bypass it exists to prevent. The three branches are deliberately DISJOINT in
+// remedy trains the exact bypass it exists to prevent. The branches are deliberately DISJOINT in
 // their remedies — the trusted branch never mentions the promote commands, the canon branch never offers
 // "declare it in `writes:` and re-run the setter" (precisely the route it refuses), and the git-metadata
 // branch names the only route that does work there: the git command that owns the change.
@@ -804,6 +831,8 @@ const DENY_REASONS = {
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) a trusted file (CONSTITUTION P2 / fix #2). Trusted spec is human-only; the build agent may not write it. If a change is genuinely needed, a human edits it outside the agent loop.`,
   gitmeta: (shown) =>
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) git metadata — a \`.git\` entry under a guarded root. The write tools may not change repository metadata: a \`.git\` entry decides which working tree each write guard judges, so re-pointing one would move this guard off the tree it protects, and \`.git/hooks\` / \`.git/config\` run code on the next git command. FIX (pick one): • make the change with the git command that owns it (\`git worktree add\`, \`git config\`, …), which is the supported route; • or have a human edit it outside the agent loop. Declaring the path in \`writes:\` CANNOT authorize this write — that is the specific thing this guard refuses.`,
+  runstate: (shown) =>
+    `BLOCKED by PHARN floor: ${shown} is (or resolves to) a delivery run's state under pharn/.run/pharn-loop/, pharn/.run/pharn-ship/ or pharn/.run/pharn-review/ — markers and witnesses that only PHARN's own CLIs write (a run marker: require-loop-record.cjs --open / --close or run-marker.mjs --open / --close; the isolation witness: check-run-isolation.mjs; a stage result: stage-agent.mjs report; any other file there: the floor script that names it). The write tools may not change them: a rewritten marker or witness changes what the loop's checks compare against. FIX: run the pinned line that owns the file (a stale run is closed with its --close line), or have a human remove it outside the agent loop. Declaring the path in \`writes:\` CANNOT authorize this write.`,
   canon: (shown) =>
     `BLOCKED by PHARN floor: ${shown} is (or resolves to) memory-bank CANON (CONSTITUTION P2 / fix #2; pharn/THREAT-MODEL.md §2 #3 — memory poisoning is silent, cumulative, and has no rollback signal). Canon is written only through the gated promotion path. FIX (pick one): • run /pharn-memory-promote (or /pharn-dev-memory-promote), which after its human accept/deny gate sets a writes-scope whose ORIGIN authorizes exactly this one canon file; • or have a human edit canon by hand, outside the agent loop. Re-scoping a build from a PLAN's \`## Files\` CANNOT authorize this write — that is the specific thing this guard refuses, deliberately.`,
 };
@@ -863,6 +892,9 @@ if (isWrite) {
         // Git metadata (hook-cwd-anchoring), checked AFTER the trusted denylist and BEFORE the canon
         // branch: it carries no escape at all, so nothing below may re-classify it into one.
         hit = { rawPath, literal, real, kind: "gitmeta" };
+      } else if (runStateRelKey(literal) !== null || runStateRelKey(real) !== null) {
+        // A delivery run's CLI-owned state (7.3.0): no escape, so it is decided before the canon branch.
+        hit = { rawPath, literal, real, kind: "runstate" };
       } else {
         // ORDER MATTERS, and getting it wrong is not theoretical — the first draft of this branch
         // ANDed in `!aliased` and the probe caught it: a canon file that merely HAPPENS to carry a
@@ -904,6 +936,8 @@ if (isWrite) {
           hit = { rawPath, shown, kind: "trusted" };
         } else if (gitMetaRelKey(physical) !== null) {
           hit = { rawPath, shown, kind: "gitmeta" };
+        } else if (runStateRelKey(physical) !== null) {
+          hit = { rawPath, shown, kind: "runstate" };
         } else {
           const cm = canonMatch(physical);
           if (cm !== null) {
