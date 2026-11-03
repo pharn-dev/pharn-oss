@@ -160,6 +160,10 @@ human approval.
 - `pharn/floor/check-run-isolation-core.mjs` — A1: the `usage` refusal text names the new order — product floor
 - `pharn/floor/check-run-isolation.test.mjs` — A1: a trailing flag is `usage`; the leading one is accepted — product floor tests
 - `pharn/floor/entry-gates.test.mjs` — A1: the WIRING pin's flagged line in its new order — product floor tests
+- `.claude/hooks/protect-trusted-paths.test.cjs` — AMENDMENT A2: the Write tools are denied the three run-state subtrees, per path, both passes, with the runstate deny body — hook tests (writable)
+- `.claude/commands/pharn-loop-close.md` — A2: the witness sentence no longer says the Write tool reaches it — product command part
+- `pharn/floor/run-marker.mjs` — A2: its header no longer says the Write tool can plant a file at `pharn/.run/<command>/<name>` — product floor
+- `pharn/floor/regress-base-reuse-core.mjs` — A2 (review LOW): the marker-identity comment ("each `--open` rewrites it", "no reader reads a marker's fields") corrected — product floor
 - `pharn/floor/stage-regress.test.mjs` — two `other-run` tests re-opened the loop marker with a second `--open`; under D1 a re-open is `--close` then `--open` (found by `npm test` in the apply.py proof clone) — product floor tests
 - `pharn/floor/run-marker.test.mjs` — two WIRING tests execute the loop's `--open` line and must substitute `<mode>` (found by the build's first `npm test`) — product floor tests
 - `.dev/guides/floor-gates.md` — A1: the isolation CLI usage line — dev apparatus
@@ -177,6 +181,25 @@ line becomes `node pharn/floor/check-run-isolation.mjs --accept-host-execution -
 pattern starts that way, and the granted pattern can no longer carry the flag to a CLI that honours it. Bound: this
 reasons over Claude Code's `*` as "any text", the reading `bashGrantRe` encodes; the harness's real matcher is not
 asserted here (ADVISORY).
+
+## Amendment A2 (the orchestrator's independent review of apply.py, before hand-over)
+
+1. CONFIRMED HIGH: the Write tool could overwrite `pharn/.run/pharn-loop/<name>/active.json` (any cap, any mode)
+   prompt-free — `enforce-writes-scope.cjs` always allows `pharn/.run/**`, and `protect-trusted-paths.cjs` had no entry
+   for it — so the `--open` refusal closed only the CLI route. Measured this run: no product command or part
+   (`git grep` over `.claude/commands/pharn-*.md` and `.claude/agents/*.md`) writes ANY file under
+   `pharn/.run/pharn-loop/**`, `pharn/.run/pharn-ship/**` or `pharn/.run/pharn-review/**` with the Write or Edit tool;
+   every file there is written by a CLI (the markers — `require-loop-record.cjs`, `run-marker.mjs`; the isolation
+   witness — `check-run-isolation.mjs`'s redirect; a stage result — `stage-agent.mjs report`; freshness, closeout,
+   stage list, stamps — their floor scripts). So `protect-trusted-paths.cjs` gains a closed `RUN_STATE_SUBTREES` rule
+   over the three directories, judged like git metadata (literal, real and physical targets; no escape, regardless of
+   scope), with its own deny body naming the CLIs that own the files. A subtree, not a file list, because a list of
+   today's file names would leave tomorrow's out (L29/L36). The directory paths themselves stay writable (a planted
+   FILE there already fails closed). Remaining route, stated: a Bash write still reaches every one of these files.
+2. LOW: `--close` crashed (EISDIR) on a directory at the marker path. It now refuses a non-regular-file marker (exit 2,
+   "a human must remove it"), and `--open`'s refusal promises `--close` only for a regular-file marker.
+3. LOW: `regress-base-reuse-core.mjs:48-52` corrected.
+4. INFO: the `wx` failure path removes the tmp only when this process created it.
 
 ## Human-applied patch (NOT in `## Files` — the setter refuses a hook script, and a human writes it)
 

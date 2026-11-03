@@ -175,13 +175,17 @@ run stops at `iter <= cap`. Bound: agreement between two files the run can write
 `iterations` that is too low still passes; and a hand re-check after the run's Final step closed the marker is RED
 `CAP_UNWITNESSED`. `check-loop-record.mjs` is unchanged: `cap` stays optional to the shape.
 
-**The marker cannot be re-opened (7.3.0).** `require-loop-record.cjs --open` exits 2 and writes nothing when anything
-already exists at the marker path, so a run cannot re-open its own marker with a larger cap in one line; it publishes
-the marker by a temporary file and a rename, so a crash never leaves a torn one. Bound, stated: `--close` is a pinned
-line too (the Final step needs it), so `--close` then `--open` then `pre-run-snapshot.mjs --capture` still re-opens a
-run with a new cap — three pinned lines, the same agreement-not-provenance bound as above. A marker left by a run that
-crashed before its feature directory existed stops the next run of the same slug at S9 once; that stop's Final step
-closes it.
+**Re-opening the marker is narrowed, not closed (7.3.0).** `require-loop-record.cjs --open` exits 2 and writes nothing
+when anything already exists at the marker path, so its pinned line never rewrites an open marker's cap or mode; it
+publishes the marker by a temporary file and a rename, so a crash never leaves a torn one. The write tools are denied
+the marker too: `protect-trusted-paths.cjs` refuses every Write/Edit/MultiEdit/NotebookEdit below
+`pharn/.run/pharn-loop/`, `pharn/.run/pharn-ship/` and `pharn/.run/pharn-review/` (CLI-owned state no command writes with
+those tools), whatever the scope. **What still reaches it, stated:** a `Bash` write, which no hook sees; and `--close`,
+which is a pinned line too (the Final step needs it), so `--close` then `--open` with a new cap then
+`pre-run-snapshot.mjs --capture` re-opens a run in three pinned lines. Every comparison with the marker is the same
+agreement-not-provenance bound as above. A marker left by a run that crashed before its feature directory existed
+stops the next run of the same slug at S9 once; that stop's Final step closes it (a marker path holding something
+other than a regular file is refused by both `--open` and `--close`, and a person removes it).
 
 **The sixth, optional field: `mode` (6.28.0, `/pharn-loop --quick`).** `mode ∈ {full, quick}` (the vocabulary is
 `pharn/floor/loop-mode-core.mjs`'s `LOOP_MODES`); **absent means `full`**, so every record written before 6.28.0
@@ -306,8 +310,8 @@ unreadable; and `ISOLATION_MISMATCH` when the witness line is not byte-equal to 
 - The record check does **not** gate the commit: after one `--after-repair` the closeout goes on, as for every record
   RED.
 - Agreement between two files the run can write, never provenance (lessons-learned L43). The witness is git-ignored
-  `pharn/.run/` state: the Write tool reaches `pharn/.run/**` in every posture, a `Bash` write reaches it too, and reconcile
-  never sees it. So a run can rewrite the witness and the record together, and every line built from the witness then
+  `pharn/.run/` state: since 7.3.0 the write tools are denied it (`protect-trusted-paths.cjs`), but a `Bash` write reaches
+  it, and reconcile never sees it. So a run can rewrite the witness and the record together, and every line built from the witness then
   repeats the rewrite. **Struck:** "a record and a commit cannot leave out that the flag was used".
 - **ADVISORY, struck as a guarantee: "the environment was isolated" and "no credential was reachable."** Every probe
   input comes from the environment. The operator can set `PHARN_ISOLATED=1`, plant `/.dockerenv` or empty `HOME`, and

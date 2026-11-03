@@ -49,12 +49,14 @@ New:
   reading of its own argv is what lifts the stop. The verdict over its probe
 ```
 
-## 3. `pharn/LIMITS.md:419` (§6) — the same bullet's argv sentence
+## 3. `pharn/LIMITS.md:419-421` (§6) — the same bullet: who chose, and who can rewrite the witness
 
-Old (`pharn/LIMITS.md:419`, first sentence of the bullet only):
+Old (`pharn/LIMITS.md:419-421`):
 
 ```text
   - **The floor sees argv, never who typed the flag, and the record of it is run-writable.** The record, the run report
+    and the commit message repeat the witness file `pharn/.run/pharn-loop/<name>/isolation.json`. That file is
+    git-ignored `pharn/.run/` state that the Write tool reaches in every posture and that a `Bash` write reaches too,
 ```
 
 New:
@@ -63,6 +65,9 @@ New:
   - **The floor sees argv, never who typed the flag, and the record of it is run-writable.** Not pre-approving the
     flagged line (7.3.0) moves the choice to Claude Code's permission prompt, which a person answers in the default
     mode and nobody answers in auto mode; PHARN sees neither. The record, the run report
+    and the commit message repeat the witness file `pharn/.run/pharn-loop/<name>/isolation.json`. That file is
+    git-ignored `pharn/.run/` state. Since 7.3.0 the write tools are denied it (`protect-trusted-paths.cjs` refuses every
+    Write/Edit/MultiEdit/NotebookEdit below `pharn/.run/pharn-loop/`), but a `Bash` write reaches it,
 ```
 
 ## 4. `pharn/LIMITS.md:564-569` (§7) — the Stop guard's marker: re-open refusal and its residual
@@ -81,12 +86,14 @@ New:
   and is satisfied by any non-empty file. A hook that cannot start, times out, or crashes lets the turn
   end, which is the safe direction for a guard that ends turns. Its wiring is exec form, so the
   quote-character bound above does not apply to it. Since 7.3.0 its `--open` refuses to overwrite an open marker and
-  publishes the marker whole (a tmp file and a rename), so the cap and mode the run opened with cannot be rewritten by
-  one pre-approved line and a crash cannot leave a torn marker. **Residual, stated:** `--close` is pre-approved too,
-  because the Final step needs it, so `--close`, then `--open` with a new cap, then `pre-run-snapshot.mjs --capture`
-  re-opens a run in three pre-approved lines, and every check that compares the record's cap with the marker's then
-  agrees. That is agreement between files the run can write, never provenance; a Bash write to the marker reaches it
-  as well.
+  publishes the marker whole (a tmp file and a rename), and `protect-trusted-paths.cjs` denies the write tools every
+  file below `pharn/.run/pharn-loop/`, `pharn/.run/pharn-ship/` and `pharn/.run/pharn-review/` (the runs' markers and
+  witnesses, which only PHARN's CLIs write), so neither the marker's own pinned line nor the Write tool can rewrite the
+  cap and mode the run opened with, and a crash cannot leave a torn marker. **What still reaches the marker, stated:** a
+  `Bash` write, which no hook sees; and `--close`, which is pre-approved too because the Final step needs it, so
+  `--close`, then `--open` with a new cap, then `pre-run-snapshot.mjs --capture` re-opens a run in three pre-approved
+  lines, and every check that compares the record's cap or mode with the marker's then agrees. That is agreement
+  between files the run can write, never provenance.
 ```
 
 ## 5. `pharn/THREAT-MODEL.md:177-178` (8c) — the override is not pre-approved

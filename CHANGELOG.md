@@ -34,9 +34,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     invoked with `--quick`; the quick part's "writes no mode marker" sentence is struck.
   - `--open` refuses (exit 2, nothing written) when anything already exists at the marker path, so the pre-approved
     `--open * --cap *` line can no longer re-open the marker with a larger cap. It publishes the marker by a `wx` tmp
-    file and a rename, so a crash no longer leaves a torn marker that silently disarms the Stop guard. Residual,
-    stated: `--close`, `--open` and a pre-run re-capture are all pinned lines, so a run can still re-open itself in
-    three steps (agreement, never provenance). The hook change is a maintainer-applied patch.
+    file and a rename, so a crash no longer leaves a torn marker that silently disarms the Stop guard; `--close`
+    refuses a marker path holding a non-regular file instead of crashing.
+  - The write tools can no longer rewrite a run's state either: `protect-trusted-paths.cjs` denies every
+    Write/Edit/MultiEdit/NotebookEdit below `pharn/.run/pharn-loop/`, `pharn/.run/pharn-ship/` and
+    `pharn/.run/pharn-review/`, whatever the scope. Before, the Write tool could set a marker's cap or mode prompt-free,
+    because `pharn/.run/**` is always writable. No command writes those files with the Write tool; their CLIs own them.
+    Residual, stated: a Bash write still reaches them, and `--close`, `--open` and a pre-run re-capture are all pinned
+    lines, so a run can still re-open itself in three steps (agreement, never provenance). Both hook changes are a
+    maintainer-applied patch.
   - The `--accept-host-execution` isolation line is no longer in `/pharn-loop`'s `allowed-tools`, so Claude Code's
     permission settings decide whether the person is asked (auto mode or an allow rule may still run it unasked).
     Removing that grant was not enough on its own: the unflagged grant's `--feature *` also matched a trailing flag. So

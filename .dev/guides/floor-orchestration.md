@@ -113,9 +113,13 @@ node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <
 # full), which check-loop-decision.mjs compares with the record (MODE_UNWITNESSED); `--open` REFUSES, exit 2 and nothing
 # written, when anything already sits at the marker path, so a run cannot re-open its marker with a larger cap in one
 # pinned line; and the marker is published by a `wx` tmp file and a rename, every write failure exit 2 with no marker.
-# RESIDUAL, stated plainly: `--close` is pinned too (the Final step needs it), so `--close` → `--open` with a new cap →
-# `pre-run-snapshot.mjs --capture` re-opens a run in three pinned lines — agreement between run-writable files, never
-# provenance (L43). Two concurrent opens of one name race between the lstat and the rename.
+# The WRITE TOOLS cannot rewrite the marker either: protect-trusted-paths.cjs (7.3.0, RUN_STATE_SUBTREES) denies every
+# Write/Edit/MultiEdit/NotebookEdit below pharn/.run/pharn-loop/, pharn-ship/ and pharn-review/, whatever the scope —
+# CLI-owned state no command writes with those tools. `--close` refuses a marker path holding a non-regular file.
+# RESIDUAL, stated plainly: a Bash write reaches the marker, and `--close` is pinned too (the Final step needs it), so
+# `--close` → `--open` with a new cap → `pre-run-snapshot.mjs --capture` re-opens a run in three pinned lines —
+# agreement between run-writable files, never provenance (L43). Two concurrent opens of one name race between the
+# lstat and the rename.
 node .claude/hooks/require-loop-record.cjs --open <name> --cap <M> --mode <full|quick>   # /pharn-loop Step 1a
 node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loop Final step
 ```

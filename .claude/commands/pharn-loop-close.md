@@ -311,8 +311,8 @@ last three feeds `check-loop.mjs`'s inputs.
   `check-run-isolation.mjs` (closed lists, string equality, set membership); obeying it is **ADVISORY**. The record's
   `isolation` is the witness's line (`check-loop-record.mjs`: shape, an admitted run's, byte-equal — agreement, never
   provenance, and it does not gate the commit), and the commit message and `RUN-REPORT.md` print the outcome from the
-  witness, marking one no admitted run could write. The witness is git-ignored `pharn/.run/` state the Write tool and Bash
-  both reach, so these lines are faithful only while nobody rewrites it. **Struck:** "a record and a commit cannot
+  witness, marking one no admitted run could write. The witness is git-ignored `pharn/.run/` state a Bash write reaches
+  (the write tools are denied it since 7.3.0), so these lines are faithful only while nobody rewrites it. **Struck:** "a record and a commit cannot
   leave out that the flag was used", "the environment was isolated" and "no credential was reachable" — every probe input is
   environment-supplied, the operator and a project's own `.claude/settings.json` `env` block can set them, the lists
   are partial, and the agent's own model credential is always present. The floor sees argv, never who typed

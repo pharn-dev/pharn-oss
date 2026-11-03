@@ -46,8 +46,19 @@ worktree): clean.
 `run-marker.test.mjs`'s two loop WIRING tests (all execute the pinned `--open … --mode full` line, which the unpatched
 hook refuses as usage). The run-marker pair also lacked the `<mode>` substitution; fixed above.
 
+## Amendment A2 (the orchestrator's adversarial review of apply.py, before hand-over)
+
+See PLAN.md, "Amendment A2". apply.py now patches two files: `require-loop-record.cjs` (plus `--close` refusing a
+non-regular-file marker, `--open`'s message for that case, the tmp removed only when created) and
+`protect-trusted-paths.cjs` (the `RUN_STATE_SUBTREES` rule and its `runstate` deny body). Prose corrected where it said
+the Write tool reaches the loop's state: `pharn-loop.md` (twice), `pharn-loop-close.md`, `loop-record.md` (twice),
+`run-marker.mjs`, `regress-base-reuse-core.mjs`, `check-loop-decision.mjs`, both floor guides, DOCS-PROPOSAL blocks 3
+and 4. The new protect test that scans the commands for a Write-tool write into those directories found one real drift
+(`pharn-loop.md`'s Step 1a said the Write tool can plant a file at `pharn/.run/pharn-loop/<name>`). Not edited, to keep
+group S's merge mechanical: `pharn/floor/check-run-isolation.mjs:47` still says the Write tool reaches the witness.
+
 ## The human patch (`apply.py`, not committed)
 
-Target `.claude/hooks/require-loop-record.cjs` only. The tests that need it are written and RED until it lands:
-`require-loop-record.test.cjs` (the 7.3.0 block), and the two `check-loop-decision.test.mjs` tests that call the real
-hook with `--mode` / read `MODES`.
+Targets `.claude/hooks/require-loop-record.cjs` and (A2) `.claude/hooks/protect-trusted-paths.cjs`. The tests that need
+it are written and RED until it lands: the 7.3.0 blocks of `require-loop-record.test.cjs` and
+`protect-trusted-paths.test.cjs`, and every test that executes the pinned `--open … --mode` line.

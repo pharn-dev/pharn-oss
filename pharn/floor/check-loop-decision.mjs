@@ -97,7 +97,8 @@
 // BOUND (L43): agreement between two files in the writable tree, never provenance — a run that rewrites the marker
 // through Bash together with the record passes, `iterations` is still model-typed, so an under-count passes, and
 // `<mode>` is typed by the model from its own reading of its argv. Since 7.3.0 `--open` refuses a marker that already
-// exists, so re-opening needs `--close` first (and then a re-capture of the pre-run snapshot) — three pinned lines,
+// exists and protect-trusted-paths.cjs denies the write tools everything below pharn/.run/pharn-loop/, so a marker is
+// rewritten only by Bash or by `--close` then `--open` (then a re-capture of the pre-run snapshot) — three pinned lines,
 // stated, not closed.
 //
 // NON-LLM. Node stdlib only (fs, child_process, url, path). No network, no eval, no deps.

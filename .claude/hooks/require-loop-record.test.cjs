@@ -407,14 +407,40 @@ test("★ 7.3.0 --open twice for one name: the second exits 2, writes nothing, a
 test("7.3.0 --open refuses ANY entry at the marker path — a directory or a dangling link counts as open", () => {
   withFixture({ marker: false }, (root) => {
     fs.mkdirSync(markerFile(root), { recursive: true });
-    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 2);
+    const errs = [];
+    const stderr = { write: (s) => errs.push(String(s)) };
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr }), 2);
     assert.ok(fs.lstatSync(markerFile(root)).isDirectory(), "left as it was");
+    // L27: --close cannot remove a directory, so the refusal must not offer it — it says a human must remove it.
+    assert.ok(errs.join("").includes("a human must remove it"), errs.join(""));
+    assert.ok(!errs.join("").includes("--close"), "no unreachable --close remedy");
+    // and --close itself refuses that case with exit 2, never a crash
+    errs.length = 0;
+    assert.equal(markerMode(["--close", NAME], { root, stderr }), 2);
+    assert.ok(errs.join("").includes("a human must remove it"), errs.join(""));
+    assert.ok(fs.lstatSync(markerFile(root)).isDirectory(), "still left as it was");
+    const cli = spawnSync(process.execPath, [HOOK, "--close", NAME], { cwd: root, encoding: "utf8" });
+    assert.equal(cli.status, 2, cli.stderr);
+    assert.doesNotMatch(cli.stderr, /\n\s+at /, "no stack trace");
   });
   withFixture({ marker: false }, (root) => {
     fs.mkdirSync(path.dirname(markerFile(root)), { recursive: true });
     fs.symlinkSync(path.join(root, "nowhere.json"), markerFile(root));
     assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 2);
     assert.ok(!fs.existsSync(path.join(root, "nowhere.json")), "nothing written through the dangling link");
+  });
+});
+
+test("7.3.0 a planted entry at the tmp name refuses the open, and is LEFT ALONE — this process removes only what it created", () => {
+  withFixture({ marker: false }, (root) => {
+    fs.mkdirSync(path.dirname(markerFile(root)), { recursive: true });
+    const tmp = `${markerFile(root)}.tmp-${process.pid}`; // in-process, the hook's pid is this one
+    const target = path.join(root, "elsewhere.json");
+    fs.symlinkSync(target, tmp);
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 2);
+    assert.ok(fs.lstatSync(tmp).isSymbolicLink(), "the planted link is not deleted");
+    assert.ok(!fs.existsSync(target), "and nothing was written through it (wx)");
+    assert.ok(!fs.existsSync(markerFile(root)), "no marker");
   });
 });
 

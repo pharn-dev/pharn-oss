@@ -618,7 +618,8 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 # is environment-supplied — the operator AND a project's own .claude/settings.json `env` can fake it (hook-wiring.test.cjs
 # pins this repo's files only); the lists are partial (a project .env, a keychain, cloud metadata unseen); an unlisted
 # container on cgroup v2 needs PHARN_ISOLATED=1; the floor sees argv, never who typed the flag; the record agrees with a
-# run-writable witness, never provenance (L43) — git-ignored `pharn/.run/` state the Write tool and Bash both reach and
+# run-writable witness, never provenance (L43) — git-ignored `pharn/.run/` state a Bash write reaches (the write tools are
+# denied it since 7.3.0, protect-trusted-paths.cjs RUN_STATE_SUBTREES) and
 # reconcile never sees, so every line built from it (record, report, commit) repeats a rewrite; a witness no admitted
 # run can write is marked NOT ADMITTED; the agent's own model credential is always present — the exfiltration
 # residual this stop does not touch. Exit: 0 admitted (record on stdout) · 2 refused (`check-run-isolation: refused
