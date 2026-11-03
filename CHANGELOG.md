@@ -76,8 +76,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   2026-11-03). A tree holds one baseline. When a second run's `/pharn-build` anchored, it replaced the first run's
   baseline, and the first run's `/pharn-verify` then judged only the writes made after that anchor. Now
   `reconcile-baseline.mjs --anchor` refuses (exit 2, nothing written) when the baseline on disk opened another feature's
-  epoch and that feature's `/pharn-loop` or `/pharn-ship` marker is still open. The marker test is the write guards'
-  own: present, within 24 h, and an `lstat` error counts as open. A baseline that cannot be read refuses on any other
+  epoch and that feature's `/pharn-loop` or `/pharn-ship` marker is still open. The marker test re-implements the write
+  guards' 24 h open-run rule (present, within 24 h, and an `lstat` error counts as open); it is pinned by value, not
+  against the hook sources, so a later hook change is not inherited. A baseline that cannot be read refuses on any other
   feature's open marker. The command line, the loop's grant and the record's shape are unchanged, and in the loop a
   refused anchor is the build's Step-0 stop (S9). **Bounds:** markers are presence-only, and the loop's own
   `require-loop-record.cjs --close *` grant can close one. Runs that open no marker and two runs of one feature are not

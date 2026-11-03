@@ -65,10 +65,11 @@
 // the audit's probe: two loops in one tree). `--anchor` now reads the baseline already on disk first. When that
 // record opened the epoch of feature <A> (`activeFeatureSlug` of its `scope_snapshot`, the checker's own notion of
 // the active feature), the anchor about to be written is for a different feature (or none), and <A>'s
-// `/pharn-loop` or `/pharn-ship` run marker is still open, it exits 2 and writes nothing. "Open" is the write guard's
-// own test (`enforce-writes-scope.cjs` scanRuns, `set-writes-scope.cjs`): the marker is PRESENT (`lstat`, never
-// followed, never parsed) with an mtime within RUN_AGE_CEILING_MS of now in either direction, the hooks' 24 h
-// ceiling; any `lstat` error other than ENOENT/ENOTDIR counts as open (fail-closed). A prior record that cannot be
+// `/pharn-loop` or `/pharn-ship` run marker is still open, it exits 2 and writes nothing. "Open" RE-IMPLEMENTS the
+// write guards' 24 h open-run rule (`enforce-writes-scope.cjs` scanRuns, `set-writes-scope.cjs`) — it does not execute
+// the hooks, so a later change there is not inherited: the marker is PRESENT (`lstat`, never followed, never parsed)
+// with an mtime within RUN_AGE_CEILING_MS of now in either direction (24 h, pinned by value in this module's test, NOT
+// against the hook sources); any `lstat` error other than ENOENT/ENOTDIR counts as open (fail-closed). A prior record that cannot be
 // read or parsed cannot be attributed, so then ANY other feature's open loop/ship marker refuses. `pharn-review`
 // markers are not read: a review never anchors. A legacy record with a null `scope_snapshot` derives no feature and
 // never refuses. No new argv and no new record field: both shipped anchor lines (and `/pharn-loop`'s grant) are

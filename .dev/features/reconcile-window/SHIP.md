@@ -25,5 +25,12 @@ Other recorded results, not proceed/stop inputs:
 - The other `npm run check` sub-gates were each 0: `docs:check`, `check:markers`, `check:badge`, `check:changelog`,
   `check:contributing` and `check:reconcile`. `test`, `lint`, `format:check` and `lint:md` ran inside verify.
 
+**GATE 2** was decided by the batch orchestrator (a model) under the owner's delegation, not by a human. Decision:
+merge into the batch branch at integration. G1 lands in the same release, so the `--allow-exec-config` sentence stays.
+One prose fix was required first and was made after GATE 2: the review's three minor P0 findings ("the write guards'
+own test" in contract §1, the CHANGELOG entry and the `reconcile-baseline.mjs` header). Each now says the anchor
+re-implements the 24 h open-run rule, pinned by value and not against the hook sources. The post-fix checks were
+re-run: format:check, lint:md, docs:check and check:changelog-entry.
+
 Chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.

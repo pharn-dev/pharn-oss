@@ -82,7 +82,8 @@ all three hold:
 - the anchor about to be written is for a different feature, or for none;
 - `pharn/.run/pharn-loop/<A>/active.json` or `pharn/.run/pharn-ship/<A>/active.json` is open.
 
-"Open" is the write guards' own test: the marker is present (`lstat`, never followed, never parsed) with an mtime within
+"Open" re-implements the write guards' 24 h open-run rule; it does not execute the hooks, and its ceiling is pinned by
+value, not against the hook sources. The marker is present (`lstat`, never followed, never parsed) with an mtime within
 24 h of now in either direction, and any `lstat` error other than `ENOENT`/`ENOTDIR` counts as open. A record that cannot
 be read cannot be attributed, so then any other feature's open loop/ship marker refuses. A legacy record with a `null`
 snapshot derives no feature and never refuses. `/pharn-review` markers are not read, since a review never anchors. The
