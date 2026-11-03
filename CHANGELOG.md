@@ -128,6 +128,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **`CONTRIBUTING.md` no longer says an admin merge bypasses required checks** (audit 2026-11-03,
+  integration). Since 2026-10-26 ruleset 25907495 holds every account to `main`'s required checks, so the per-PR
+  CHANGELOG and instruction-growth steps, which run in the required `check` job, bind an admin merge too; the owner's
+  bypass skips the review and classic protection's `gitleaks` requirement only. Repo-meta, no product bytes.
 - 2026-11-03: **`merge-findings.mjs`: `type` is a closed set, the lens directory name is quoted, and `file`s outside
   the target are named** (audit 2026-11-03).
   - `type` must be `FINDING` or `CONSTITUTION_VIOLATION`, the two values `finding-shape.md` now lists without a
@@ -195,11 +199,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (review 2026-11-03, MEDIUM). `check-plan-lessons.mjs`, the lessons index (`lessons-index-core.mjs`, so both
   `gen-lessons-index.mjs` and `check-lessons-index.mjs`) and `check-provenance.mjs` each scanned canon line by line
   with their own regex, so a quoted example or a commented-out entry was a citable, indexed lesson that blocked a real
-  id, and the three disagreed on `## L20`, `## L20` and a BOM (a BOM before the first `## L1` dropped L1 from the
+  id, and the three disagreed on `## L20` with and without a trailing space and on a BOM (a BOM before the first `## L1` dropped L1 from the
   index and let a duplicate L1 past provenance). They now read canon through one exported `LESSON_HEADING_RE` and one
   reader that strips the BOM and skips lines inside a column-0 fenced block, HTML comment or `<pre>`/`<script>`/
   `<style>`/`<textarea>` block — `spec-template-core.mjs`'s existing block model, now exported as `blockSpans()`, so a
-  change to it moves both readers. `## L20` and `## L20` are L20 everywhere; `## L020` and `## L0` are no lesson
+  change to it moves both readers. `## L20`, with or without a trailing space, is L20 everywhere; `## L020` and `## L0` are no lesson
   heading anywhere. A lesson heading hidden by a block that never closes is refused by the index (ENUM_ERROR), and
   provenance refuses any block left open at the end of canon (`canon` RED — the promoted entry would be appended
   inside it), both naming line numbers only. Both generators print one

@@ -76,7 +76,7 @@ Locally, `npm run check:instruction-growth` runs the same check with `--base-rul
 The verdict is over the checker's model of what Claude Code loads, not over the loader itself ([`pharn/LIMITS.md`](./pharn/LIMITS.md) §3e). A per-PR budget does not bound growth spread over many PRs. The CI step has the same four bounds as the per-PR CHANGELOG check below:
 
 - it does not see direct pushes to `main`;
-- an admin merge bypasses required checks;
+- an admin merge skips the review, but not this step: it runs in the `check` job, which ruleset 25907495 requires of every account (no bypass) since 2026-10-26;
 - it judges GitHub's test merge commit as of the PR's last CI run, and `main` can move before the merge without a re-run;
 - a pull request runs its own copy of the checker and of `ci.yml`.
 
@@ -89,7 +89,7 @@ A merge that bumps [`SKILLS_VERSION`](./SKILLS_VERSION) becomes a release once i
 - **An `[Unreleased]` merge is not a release.** Its version's tag already points at an earlier commit, so the job fails with `TAG_ELSEWHERE` (a tag is never moved) and creates nothing. That red run is expected; do not re-run it.
 - **A failed release job is fixed and re-run** from the Actions tab with **Run workflow** on `main` (`workflow_dispatch`). It tags the tip of `main` at that time. Never move, delete or re-create a tag by hand.
 - **The check list in `release.yml` is a copy of what `main` requires**: ruleset 25907495's required checks plus `gitleaks`, which `main`'s classic branch protection requires. It leaves out `Socket Security: Pull Request Alerts`, which runs on pull requests only. Change them together. A check added to either and not to `release.yml` is not waited for.
-- **What it does not cover.** An admin merge still lands on `main`, and `pharn-cli`'s `main` channel installs it ([`pharn/LIMITS.md §11`](./pharn/LIMITS.md) says which installs are on it). New installs default to releases. The release job only keeps such a commit from becoming a tag.
+- **What it does not cover.** An admin merge skips the review and classic protection's `gitleaks` requirement (ruleset 25907495 still holds every account to its required checks), so a commit whose secret scan failed can still land on `main`, and `pharn-cli`'s `main` channel installs it ([`pharn/LIMITS.md §11`](./pharn/LIMITS.md) says which installs are on it). New installs default to releases. The release job, which waits for `gitleaks`, only keeps such a commit from becoming a tag.
 
 The job's guards are pinned, and its `run:` blocks executed against a stub `gh`, by [`.dev/floor/release-workflow.test.mjs`](./.dev/floor/release-workflow.test.mjs).
 
@@ -157,7 +157,7 @@ Two checks hold these rules. Both read the file through one shared grammar, [`.d
 What the checks do **not** prove: that an entry describes its change, that a date is when anything merged (it is the date you wrote), or that a bump was needed or the right size. The per-PR checks are also bounded in four ways:
 
 - It does not see direct pushes to `main`.
-- An admin merge bypasses required checks.
+- An admin merge skips the review, but not these checks: they run in the `check` job, which ruleset 25907495 requires of every account (no bypass) since 2026-10-26.
 - It judges GitHub's test merge commit as of the PR's last CI run. Branch protection does not require branches to be up to date, so `main` can move before the merge without a re-run.
 - A pull request runs its own copy of the checker and of `ci.yml`, so review of changes to `.dev/floor/**` and `.github/workflows/**` is the backstop.
 
