@@ -152,6 +152,17 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # setter's own writes-scope.json is Write-tool-denied. Cost: a Bash write to writes-scope.json is unreported, as it
 # already was wherever pharn/.run/ is ignored (the checker reads the baseline's snapshot, never the live file).
 # Every reconcile fixture's default .gitignore ignores pharn/.run/ (L41) — a state-root test must pass its own.
+# 7.3.0 (audit 2026-11-03) answered the "reconcile writes-scope.json again" finding with a PIN, not a change: it is the
+# setter's designed rewrite (an escape on every run, unattributable), and a forged widening is caught through the write it
+# widens, judged against the snapshot.
+# EPOCH OWNER (7.3.0, contract §1): `--anchor` refuses (exit 2, nothing written) to replace a baseline whose feature
+# (activeFeatureSlug of its scope_snapshot; PIPELINE_RE + activeFeatureSlug now live in reconcile-baseline.mjs, the checker
+# re-exports) differs from the new anchor's and whose pharn-loop / pharn-ship marker is open (run-marker.mjs markerPath;
+# lstat presence + the hooks' symmetric 24h ceiling; any lstat error but ENOENT/ENOTDIR = open). An unreadable prior record
+# refuses on ANY other feature's open marker; a legacy null snapshot never refuses. Bounds: presence-only markers (the
+# loop's own --close grant reaches them), no-marker runs and same-feature runs are not told apart.
+# EXEC CONFIG (7.3.0, contract §4b): `.github/workflows/` and `.github/actions/` are always-reconciled prefixes. Cost: an
+# uncommitted edit there REDs with no baseline (commit first, L68), and apply-plan-deletions refuses a plan's (delete) there.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
@@ -201,7 +212,9 @@ node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
 # `require-loop-record.cjs --open` line exits non-zero — that writer is a human-only hook and still crashes
 # with exit 1 on a planted file (re-review R2); run-marker.test.mjs executes those two lines too. No new contract
 # (P7): the guard reads only a path and an age, and this script's own header is its spec, the
-# require-loop-record.cjs precedent. Exit: 0 ok · 2 refusal on ANY failure, never a crash; no marker written.
+# require-loop-record.cjs precedent. Since 7.3.0 `reconcile-baseline.mjs --anchor` is a second presence+age reader of the
+# pharn-ship (and pharn-loop) markers, through this module's markerPath (contract reconciliation-record.md §1).
+# Exit: 0 ok · 2 refusal on ANY failure, never a crash; no marker written.
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
 node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 ```

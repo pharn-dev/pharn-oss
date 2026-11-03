@@ -197,11 +197,13 @@ file's baseline entry gets a silent `CLEAN`. This is an **accounting tool agains
 its scope** — a formatter, a generator, a script, a mistake — **not a control against an attacker**. Only
 the always-reconciled control surface resists that actor, because only it is anchored in committed blob
 ids rather than in the baseline. Since 6.53.0 that surface includes the four trusted docs, `CODEOWNERS`,
-`pharn/spec-template.md` and memory-bank canon, and an added untracked file there. So a maintainer's
+`pharn/spec-template.md` and memory-bank canon, since 7.3.0 the CI exec-config `.github/workflows/` and
+`.github/actions/`, and an added untracked file there. So a maintainer's
 **uncommitted** trusted-doc edit REDs `npm run check`: commit it first (L68). The only true prevention is OS-level sandboxing, harness-layer and not
 implemented; an authenticated baseline store outside the worktree is the same category and equally
 absent. Further bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are
-outside the reconciled set; the window is anchor→verify; one worktree per session; **no attribution** (it
+outside the reconciled set; the window is anchor→verify; one worktree per session (a second run's anchor would
+replace the first's epoch: since 7.3.0 `--anchor` refuses while that run's loop/ship marker is open); **no attribution** (it
 reports _what_, never _who_); the checker runs from the worktree, so it cannot vouch for its own
 integrity; and the anchor is a Bash step (L19), so a run that SKIPS it silently reuses an earlier epoch
 instead of failing — only a tree that has never anchored yields `INCONCLUSIVE`. **No shell command string

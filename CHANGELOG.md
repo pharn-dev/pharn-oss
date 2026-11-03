@@ -36,6 +36,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-03: **Reconcile always checks `.github/workflows/` and `.github/actions/`** (audit 2026-11-03, BLOCKER fix 3).
+  They join `always_reconciled.prefixes` in `pharn/floor/reconcile-ignore.json`, so in every project a change there is
+  compared against HEAD's committed blobs, with or without a baseline. That covers an added file too, and a forged
+  baseline entry no longer hides a Bash edit. It is visibility, not a deny: an edit a recorded scope covers stays clean.
+  A plan reaches these paths only with an operator's `--allow-exec-config`. **Costs:** an uncommitted edit of a
+  workflow or action now reds `check-bash-reconcile.mjs` with no baseline (a local `npm run check`) until it is
+  committed, and so does a file already dirty when a build anchors, at that build's verify. `apply-plan-deletions.mjs`
+  reads the same set, so a plan's `(delete)` of a file there is refused (`control-path`) with no opt-in. CI checkouts
+  and repositories without these directories are unaffected (`reconciliation-record.md` §4b).
+- 2026-11-03: **`pharn/.run/writes-scope.json` stays outside reconcile, and the reason is now stated and pinned**
+  (audit 2026-11-03). The review proposed reconciling it again after 7.2.0. It is the setter's own designed Bash write,
+  and both guards deny it to the Write tool, so that would be an escape on every correct run in a project that does not
+  ignore `pharn/.run/`. Reconcile cannot tell that write from a hand-edit. A new test pins what a forged scope can buy:
+  the write it widens is still judged against the anchored snapshot and reported. `reconcile-ignore.json` and the
+  contract no longer call the file "gitignored runtime state": it is under the state root, which is out whether or not
+  it is ignored.
 - 2026-11-03: **`npm audit fix`, lockfile only** (audit 2026-11-03). `eslint` 10.13.0 → 10.14.0,
   `@eslint-community/eslint-utils` 4.9.1 → 4.10.1, `brace-expansion` 5.0.6 → 5.0.12, `minimatch` → 10.2.6:
   `npm audit` went from 12 advisories (2 low, 6 moderate, 4 high) to 11 (2 low, 6 moderate, 3 high). The rest have no
@@ -56,6 +72,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **A second run's build anchor no longer silently erases a first run's reconcile window** (audit
+  2026-11-03). A tree holds one baseline. When a second run's `/pharn-build` anchored, it replaced the first run's
+  baseline, and the first run's `/pharn-verify` then judged only the writes made after that anchor. Now
+  `reconcile-baseline.mjs --anchor` refuses (exit 2, nothing written) when the baseline on disk opened another feature's
+  epoch and that feature's `/pharn-loop` or `/pharn-ship` marker is still open. The marker test re-implements the write
+  guards' 24 h open-run rule (present, within 24 h, and an `lstat` error counts as open); it is pinned by value, not
+  against the hook sources, so a later hook change is not inherited. A baseline that cannot be read refuses on any other
+  feature's open marker. The command line, the loop's grant and the record's shape are unchanged, and in the loop a
+  refused anchor is the build's Step-0 stop (S9). **Bounds:** markers are presence-only, and the loop's own
+  `require-loop-record.cjs --close *` grant can close one. Runs that open no marker and two runs of one feature are not
+  told apart. The remedy is still one worktree per run.
+- 2026-11-03: **The cost-ledger's pre-build exception is back to the shape the contract defines** (audit 2026-11-03).
+  7.2.0 stopped `check-cost-ledger.mjs` from warning "no stage-start marker carries iteration(s) 1" on a blocked
+  `/pharn-loop` stop before the first build (#411 A). The exception also silenced two records it should not have: a
+  non-blocked record at `iterations: 1` whose build marker was lost, and a build `stage-start` written without an
+  iteration. It now needs `outcome.blocked` and no `stage-start` naming `pharn-build`, `pharn-regress` or
+  `pharn-verify`, and both of those records warn again. It is still a WARN; no verdict moves.
 - 2026-11-03: **A capability saved with CRLF line endings, or with anything before its opening `---`, is no longer
   silently "not a capability" (2026-11-03 review, HIGH).** Seven hand copies of validate.mjs's frontmatter parser
   (validate, count-lenses, count-grillers, count-verifiers, check-model-config, and in `.dev` check-config and the

@@ -693,6 +693,83 @@ test("✧ isAlwaysReconciled covers the prefixes as well as the exact members", 
   assert.ok(!isAlwaysReconciled("pharn/features/x/PLAN.md", data));
 });
 
+// ------------------------------------------------------- the CI exec-config prefixes (7.3.0, audit 2026-11-03)
+//
+// `.github/workflows/` and `.github/actions/` are the code a repository's CI runs on its next push. Each case below
+// iterates BOTH prefixes (L29): an always-reconciled path is compared against HEAD with or without a baseline.
+
+const EXEC_CONFIG = [".github/workflows/ci.yml", ".github/actions/setup/action.yml"];
+
+function makeExecConfigRepo() {
+  const dir = makeRepo();
+  for (const p of EXEC_CONFIG) {
+    mkdirSync(join(dir, dirname(p)), { recursive: true });
+    writeFileSync(join(dir, p), "on: push\n");
+  }
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "ci");
+  return dir;
+}
+
+test("✧ isAlwaysReconciled covers .github/workflows/ and .github/actions/, literally", () => {
+  const data = loadIgnoreData(IGNORE_JSON);
+  for (const p of [...EXEC_CONFIG, ".github/workflows/sub/x.yaml", ".github/actions/a.yml"]) {
+    assert.ok(isAlwaysReconciled(p, data), p);
+  }
+  for (const p of [".github/workflowsx/a.yml", ".github/dependabot.yml", ".github/actionsx/a.yml", "docs/.github/workflows/x.yml"]) {
+    assert.ok(!isAlwaysReconciled(p, data), p);
+  }
+});
+
+for (const p of EXEC_CONFIG) {
+  test(`★ ${p}: an uncommitted edit is an ESCAPE even with NO baseline (HEAD comparison)`, () => {
+    const dir = makeExecConfigRepo();
+    writeFileSync(join(dir, p), "on: push\njobs: { evil: {} }\n");
+    const r = check(dir);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      [p]
+    );
+  });
+
+  test(`★ ${p}: a forged baseline entry does not hide the edit; a scope naming it stays CLEAN`, () => {
+    const dir = makeExecConfigRepo();
+    setScope(dir, ["pharn/features/keep.md"]);
+    assert.equal(anchor(dir).status, 0);
+    writeFileSync(join(dir, p), "on: push\njobs: { evil: {} }\n");
+    const abs = join(dir, RECORD_PATH);
+    const rec = JSON.parse(readFileSync(abs, "utf8"));
+    rec.entries[p] = hashFile(join(dir, p)); // the forger rewrites the entry to the edited bytes
+    writeFileSync(abs, JSON.stringify(rec));
+    const r = check(dir, ["--require-baseline"]);
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      [p]
+    );
+    // Falsifier: the same edit under a scope that names it (an operator's opted-in plan) is accounted for.
+    const ok = makeExecConfigRepo();
+    setScope(ok, [p]);
+    assert.equal(anchor(ok).status, 0);
+    writeFileSync(join(ok, p), "on: push\njobs: { legit: {} }\n");
+    const c = check(ok, ["--require-baseline"]);
+    assert.equal(c.status, 0, c.stdout + c.stderr);
+    assert.equal(c.json.verdict, "CLEAN");
+  });
+}
+
+test("★ an ADDED untracked workflow or action is a candidate with no baseline", () => {
+  const dir = makeExecConfigRepo();
+  for (const p of [".github/workflows/new.yml", ".github/actions/new/action.yml"]) {
+    mkdirSync(join(dir, dirname(p)), { recursive: true });
+    writeFileSync(join(dir, p), "on: push\n");
+  }
+  const r = check(dir);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(r.json.escapes.map((e) => e.file).sort(), [".github/actions/new/action.yml", ".github/workflows/new.yml"]);
+});
+
 // --------------------------------------------------------------------------------- ✧ WIRING PINS
 
 test("✧ WIRING: package.json runs the checker, and it is in the `check` chain", () => {
@@ -2026,6 +2103,25 @@ test("★ #408 NON-VACUITY (L34): the same tree still reports an ordinary out-of
     r.json.escapes.map((e) => e.file),
     ["SNEAKY.txt"]
   );
+});
+
+test("★ 7.3.0 pin: a Bash rewrite of writes-scope.json that WIDENS the scope buys nothing at verify — the widened write is still an escape", () => {
+  // The audit proposed reconciling pharn/.run/writes-scope.json again. It is the setter's own designed Bash write, so
+  // that would red every correct run here (pipelineStateRootWrites rewrites it, as every later stage's setter does).
+  // What a forged scope can buy is a Write-tool write the live guard then allows; reconcile judges that write against
+  // the ANCHORED snapshot, never the live file. Fixture: pharn/.run/ NOT ignored (L80).
+  const dir = makeUnignoredStateRootRepo();
+  pipelineStateRootWrites(dir);
+  setScopeBy(dir, ["pharn/features/t/VERIFY.md", "WIDENED.txt"], ".claude/commands/pharn-verify.md"); // the forgery
+  writeFileSync(join(dir, "WIDENED.txt"), "a write the forged live scope authorizes\n");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    ["WIDENED.txt"],
+    "the widened write is the escape; the scope file itself is never a candidate"
+  );
+  assert.equal(r.json.escapes[0].denied_by, "writes-scope (snapshot)");
 });
 
 test("★ #408 boundary: a look-alike of the state root is still reconciled (literal prefix, fail-closed)", () => {

@@ -1,0 +1,57 @@
+{
+  "base": "fb997e4b",
+  "inside": [
+    ".claude/commands/pharn-build.md",
+    ".dev/features/reconcile-window/DOCS-PROPOSAL.md",
+    ".dev/features/reconcile-window/GRILL.md",
+    ".dev/features/reconcile-window/PLAN.md",
+    ".dev/guides/floor-checks.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "docs/limitations.md",
+    "pharn/floor/apply-plan-deletions.test.mjs",
+    "pharn/floor/check-bash-reconcile.mjs",
+    "pharn/floor/check-bash-reconcile.test.mjs",
+    "pharn/floor/check-cost-ledger.mjs",
+    "pharn/floor/check-cost-ledger.test.mjs",
+    "pharn/floor/reconcile-baseline.mjs",
+    "pharn/floor/reconcile-baseline.test.mjs",
+    "pharn/floor/reconcile-ignore.json",
+    "pharn/pharn-contracts/cost-ledger.md",
+    "pharn/pharn-contracts/reconciliation-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5967,
+      "failed": 0,
+      "skipped": 6,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5972,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

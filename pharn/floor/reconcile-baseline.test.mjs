@@ -15,6 +15,7 @@ import {
   unlinkSync,
   chmodSync,
   lstatSync,
+  utimesSync,
 } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -32,6 +33,11 @@ import {
   SCOPE_PATH,
   STATE_ROOT_SEGMENT,
   isStateRootPath,
+  EPOCH_RUN_DIRS,
+  RUN_AGE_CEILING_MS,
+  openMarker,
+  epochOwnerOpen,
+  activeFeatureSlug,
 } from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -669,4 +675,147 @@ test("✧ isStateRootPath: the root itself and paths under it, literally and cas
     assert.equal(isStateRootPath(p), false, String(p));
   }
   assert.equal(STATE_ROOT_SEGMENT, "pharn/.run/");
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// 7.3.0 (audit 2026-11-03) — --anchor REFUSES to replace another open run's epoch. Every case runs the CLI exactly as
+// the shipped lines do (`--anchor --by pharn-build`, no other argv — L41), and each refusal asserts its own three
+// properties (exit 2, the prior record byte-identical, the marker named) beside a falsifier that anchors (L60).
+
+function scopeFor(dir, feature) {
+  mkdirSync(join(dir, "pharn", ".run"), { recursive: true });
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: ["tracked.md"], set_by: `pharn/features/${feature}/PLAN.md`, set_at: "T" }));
+}
+const anchorCli = (dir) => spawnSync(process.execPath, [ANCHOR, "--anchor", "--base", dir, "--by", "pharn-build"], { encoding: "utf8" });
+function plantMarker(dir, runDir, name, ageMs = 0) {
+  const p = join(dir, "pharn", ".run", runDir, name, "active.json");
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, "{}\n");
+  if (ageMs) {
+    const t = new Date(Date.now() - ageMs);
+    utimesSync(p, t, t);
+  }
+  return `pharn/.run/${runDir}/${name}/active.json`;
+}
+// Run A anchored and its marker is open; the caller then sets run B's scope and anchors.
+function runAAnchored(dir) {
+  scopeFor(dir, "a");
+  const r = anchorCli(dir);
+  assert.equal(r.status, 0, `precondition: run A anchors: ${r.stderr}`);
+  return readFileSync(join(dir, RECORD_PATH));
+}
+
+for (const runDir of EPOCH_RUN_DIRS) {
+  test(`★ anchor by feature B while feature A's ${runDir} marker is open exits 2 and leaves A's record`, () => {
+    const dir = makeRepo();
+    const before = runAAnchored(dir);
+    const marker = plantMarker(dir, runDir, "a");
+    scopeFor(dir, "b");
+    const r = anchorCli(dir);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.deepEqual(readFileSync(join(dir, RECORD_PATH)), before, "A's record is byte-identical");
+    assert.ok(r.stderr.includes(marker), `the refusal names ${marker}: ${r.stderr}`);
+    assert.match(r.stderr, /feature "a"/);
+    assert.match(r.stderr, /Never delete or edit the baseline/);
+  });
+}
+
+test("✧ EPOCH_RUN_DIRS is exactly the two commands that build then verify over one epoch", () => {
+  assert.deepEqual([...EPOCH_RUN_DIRS], ["pharn-loop", "pharn-ship"]);
+  assert.equal(RUN_AGE_CEILING_MS, 24 * 60 * 60 * 1000, "the write guards' ceiling");
+});
+
+test("falsifier: the SAME feature re-anchors over its own open marker (a loop iteration, a ship retry)", () => {
+  const dir = makeRepo();
+  runAAnchored(dir);
+  plantMarker(dir, "pharn-loop", "a");
+  scopeFor(dir, "a");
+  assert.equal(anchorCli(dir).status, 0);
+});
+
+test("falsifier: a closed (absent), a stale (25 h) or a pharn-review marker does not hold the epoch", () => {
+  for (const setup of [
+    () => {},
+    (dir) => plantMarker(dir, "pharn-loop", "a", 25 * 60 * 60 * 1000),
+    (dir) => plantMarker(dir, "pharn-ship", "a", -25 * 60 * 60 * 1000), // future-dated past the ceiling: symmetric
+    (dir) => plantMarker(dir, "pharn-review", "a"),
+  ]) {
+    const dir = makeRepo();
+    runAAnchored(dir);
+    setup(dir);
+    scopeFor(dir, "b");
+    const r = anchorCli(dir);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8")).scope_snapshot.set_by, "pharn/features/b/PLAN.md");
+  }
+});
+
+test("★ a new scope that is not a feature plan, while A's marker is open, is refused too", () => {
+  const dir = makeRepo();
+  const before = runAAnchored(dir);
+  plantMarker(dir, "pharn-loop", "a");
+  writeFileSync(join(dir, SCOPE_PATH), JSON.stringify({ scope: [], set_by: ".claude/commands/pharn-verify.md", set_at: "T" }));
+  assert.equal(anchorCli(dir).status, 2);
+  assert.deepEqual(readFileSync(join(dir, RECORD_PATH)), before);
+});
+
+test("★ fail-closed: a marker lstat failing with anything but ENOENT/ENOTDIR counts as open", (t) => {
+  if (process.getuid?.() === 0) {
+    t.skip("root ignores directory permissions");
+    return;
+  }
+  const dir = makeRepo();
+  runAAnchored(dir);
+  plantMarker(dir, "pharn-loop", "a");
+  const runDir = join(dir, "pharn", ".run", "pharn-loop");
+  chmodSync(runDir, 0o000); // lstat of <runDir>/a/active.json now fails EACCES
+  try {
+    const m = openMarker(dir, "pharn-loop", "a");
+    assert.deepEqual(m, { path: "pharn/.run/pharn-loop/a/active.json", ageHours: null });
+    scopeFor(dir, "b");
+    const r = anchorCli(dir);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /age unknown/);
+  } finally {
+    chmodSync(runDir, 0o755);
+  }
+});
+
+test("★ an unreadable prior baseline cannot be attributed: ANY other feature's open marker refuses", () => {
+  const dir = makeRepo();
+  runAAnchored(dir);
+  writeFileSync(join(dir, RECORD_PATH), "{ torn");
+  plantMarker(dir, "pharn-ship", "a");
+  scopeFor(dir, "b");
+  const r = anchorCli(dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /cannot be read/);
+  assert.equal(readFileSync(join(dir, RECORD_PATH), "utf8"), "{ torn", "the torn record is left for a human");
+  // Falsifier: only the anchoring feature's own marker is open → it anchors.
+  const dir2 = makeRepo();
+  runAAnchored(dir2);
+  writeFileSync(join(dir2, RECORD_PATH), "{ torn");
+  plantMarker(dir2, "pharn-ship", "b");
+  scopeFor(dir2, "b");
+  assert.equal(anchorCli(dir2).status, 0);
+});
+
+test("★ a legacy record with a null scope_snapshot derives no feature and never refuses", () => {
+  const dir = makeRepo();
+  runAAnchored(dir);
+  const abs = join(dir, RECORD_PATH);
+  const rec = JSON.parse(readFileSync(abs, "utf8"));
+  rec.scope_snapshot = null; // the pre-6.24.0 shape
+  writeFileSync(abs, JSON.stringify(rec));
+  plantMarker(dir, "pharn-loop", "a");
+  scopeFor(dir, "b");
+  assert.equal(anchorCli(dir).status, 0);
+  assert.equal(epochOwnerOpen(dir, { set_by: "pharn/features/c/PLAN.md" }).refuse, false);
+});
+
+test("✧ activeFeatureSlug is owned here and re-exported by the checker as the same function", async () => {
+  const checker = await import("./check-bash-reconcile.mjs");
+  assert.equal(checker.activeFeatureSlug, activeFeatureSlug);
+  assert.equal(activeFeatureSlug({ set_by: ".dev/features/x/PLAN.md" }), "x");
+  assert.equal(activeFeatureSlug({ set_by: "pharn/features/../PLAN.md" }), null);
 });
