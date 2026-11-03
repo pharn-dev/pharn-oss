@@ -235,7 +235,7 @@ re-decide it — P0.)
 ## Step 4 — Render + HALT for explicit human approval (the thesis — non-negotiable)
 
 Show the human the **full Draft SPEC.md exactly as written**, plus your Step-2 interrogation notes. Then ask,
-via an **interactive form** (`AskQuestion`), one explicit question: **"Approve this SPEC for `<name>` (Draft →
+via an **interactive form** (`AskUserQuestion`), one explicit question: **"Approve this SPEC for `<name>` (Draft →
 Approved)?"** with selectable options (e.g. _Approve & pin_ / _Keep as Draft_ / _Revise_). **Wait for the
 answer.**
 

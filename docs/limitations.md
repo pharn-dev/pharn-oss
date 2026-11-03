@@ -1,7 +1,7 @@
 # PHARN limitations
 
 What PHARN does not do today, and the bounds of what it does. This text moved here unchanged from the root
-[`README.md`](../README.md) in 6.65.3, apart from re-based links and the two phrases that pointed at the README's own
+[`README.md`](../README.md) in 6.68.1, apart from re-based links and the two phrases that pointed at the README's own
 layout; the full set of bounds is in [`pharn/LIMITS.md`](../pharn/LIMITS.md), and the guarantees these bounds qualify are in
 [`guarantees.md`](guarantees.md).
 

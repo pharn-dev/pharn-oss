@@ -152,6 +152,62 @@ test("✧ the SKIP region is honored, and only inside its markers", () => {
   assert.ok(/\bnpm run format(?![:\w])/.test(unmarked.replace(SKIP_RE, "")), "the same string outside the markers must still be caught");
 });
 
+// ── A dev command's npx never fetches a package (7.3.0, audit 2026-11-03) ───────────────────────────────
+//
+// THE FAILURE. A bare `npx prettier` resolves the local binary when node_modules holds it, and otherwise
+// DOWNLOADS the package from the registry and runs it, so a missing or broken install turned a formatter
+// step into code fetched at run time. The product parts already run the project's own binary or skip
+// (pharn-ship-close.md, 6.49.3). `npx --no-install` refuses instead of fetching.
+//
+// THE RULE: every prescribed `npx prettier|markdownlint-cli2|eslint` line in a `pharn-dev-*.md` command carries
+// `--no-install` straight after `npx`. Shell comment lines are prose, not prescriptions. PENDING names the files
+// another batch group owns; each must still hold an offending line, so an entry left behind after its file is
+// converted fails here (L36: the exception list is closed, not a permanent pass).
+//
+// Honest scope (P0): a VOCABULARY pin, like FORBIDDEN above. It cannot prove a run used the line, and a
+// formatter reached another way (a global binary, a new npm script) passes untouched.
+const NPX_TOOL_RE = /\bnpx\s+(?:--\S+\s+)*(prettier|markdownlint-cli2|eslint)\b/;
+const NPX_NO_INSTALL_RE = /\bnpx\s+--no-install\s+(prettier|markdownlint-cli2|eslint)\b/;
+const NPX_PENDING = new Set(["pharn-dev-build.md", "pharn-dev-memory-promote.md", "pharn-dev-review.md", "pharn-dev-verify.md"]);
+const npxOffenders = (text) =>
+  text.split(/\r?\n/).filter((l) => !l.trimStart().startsWith("#") && NPX_TOOL_RE.test(l) && !NPX_NO_INSTALL_RE.test(l));
+
+test("✧ every dev command's npx formatter/linter line carries --no-install", () => {
+  const offenders = [];
+  for (const file of commandAndPartFiles().filter((f) => f.startsWith("pharn-dev-"))) {
+    const bad = npxOffenders(readFileSync(join(COMMANDS_DIR, file), "utf8").replace(SKIP_RE, ""));
+    if (NPX_PENDING.has(file)) {
+      assert.ok(bad.length > 0, `${file} has no bare npx line left: remove it from NPX_PENDING`);
+      continue;
+    }
+    for (const l of bad) offenders.push(`${file}: ${l.trim()}`);
+  }
+  assert.deepEqual(offenders, [], `npx without --no-install:\n    ${offenders.join("\n    ")}`);
+});
+
+test("✧ the --no-install rule DISCRIMINATES (L4)", () => {
+  assert.equal(npxOffenders("npx prettier --ignore-unknown --write a.md").length, 1);
+  assert.equal(npxOffenders("  | xargs npx markdownlint-cli2 --no-globs --fix").length, 1);
+  assert.equal(npxOffenders("npx --yes eslint a.mjs").length, 1, "another flag is not --no-install");
+  assert.equal(npxOffenders("npx --no-install prettier --ignore-unknown --write a.md").length, 0);
+  assert.equal(npxOffenders("  # a path-less `npx eslint` takes ~1.1s").length, 0, "a shell comment is prose");
+});
+
+// The human-gate tool is `AskUserQuestion` (Claude Code's tools reference). Ten lines in five commands named it
+// `AskQuestion`, a tool that does not exist, so each gate worked by the model guessing the name (audit 2026-11-03).
+test("✧ no command names the human-gate tool `AskQuestion` (it is `AskUserQuestion`)", () => {
+  const hits = [];
+  for (const file of commandAndPartFiles()) {
+    readFileSync(join(COMMANDS_DIR, file), "utf8")
+      .split(/\r?\n/)
+      .forEach((l, i) => {
+        if (/\bAskQuestion\b/.test(l)) hits.push(`${file}:${i + 1}`);
+      });
+  }
+  assert.deepEqual(hits, []);
+  assert.ok(!/\bAskQuestion\b/.test("`AskUserQuestion`"), "the right name must not match the wrong one");
+});
+
 // ── Step 2b's gate set: the ENUMERATION is the deliverable (L29) ─────────────────────────────────────
 //
 // L12 created `/pharn-dev-build` Step 2b to make an increment's own style conformance a BUILD step.
@@ -1007,8 +1063,8 @@ const PROMOTE_GATE_PARITY = [
   {
     obligation: "gate-before-askquestion", // 2.2.8
     role: "blocks the human gate until the Step-3 floor check is GREEN",
-    dev: /Do not call `AskQuestion`/,
-    prod: /Do not call `AskQuestion`/,
+    dev: /Do not call `AskUserQuestion`/,
+    prod: /Do not call `AskUserQuestion`/,
   },
 ];
 

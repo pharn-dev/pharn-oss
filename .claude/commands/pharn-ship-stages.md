@@ -137,8 +137,8 @@ verdict, and send every STOP through `## Closing the run` (all in `/pharn-ship`'
 node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md
 ```
 
-Branch **only** on the exit code (P5): `0` → the human approved and pinned the intent → proceed to
-`/pharn-plan`. Non-zero → the intent is **not** Approved (still Draft, or drifted) → **STOP** (the human
+Branch **only** on the exit code (P5): `0` → the SPEC reads `state: Approved` and its pin matches (the checker
+reads the state and the pin, never who set them) → proceed to `/pharn-plan`. Non-zero → the intent is **not** Approved (still Draft, or drifted) → **STOP** (the human
 has not approved / must re-approve via `/pharn-spec`). This is a backstop, not the gate: the gate is the
 human halt at Step 2 item 1.
 

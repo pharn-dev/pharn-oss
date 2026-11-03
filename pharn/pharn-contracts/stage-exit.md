@@ -17,7 +17,7 @@ purpose: "Single source of truth for the stage-exit protocol a stage SCRIPT (pha
 and into a tested script, `pharn/floor/stage-regress.mjs`. A script that can pause and resume, ask a
 structured question, or refuse needs **one** way to say so — otherwise each new stage script would invent
 its own shape, and a thin command reading it would re-derive a protocol from prose again, which is the
-exact class of defect `pharn/floor/gate-run-record.md` closed for the gate-run stamp (P7, cited not
+exact class of defect `pharn/pharn-contracts/gate-run-record.md` closed for the gate-run stamp (P7, cited not
 restated). This contract is that one shape, **keyed by stage**: each stage script adds its own registry entry,
 not a new file — `stage-verify-script` (6.26.0) added `verify` that way. The mechanics both scripts share (the
 argv rules, the containment walk, the budget tracker, the drain) live once, in `pharn/floor/stage-runtime.mjs`.

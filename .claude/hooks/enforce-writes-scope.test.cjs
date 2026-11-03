@@ -1463,10 +1463,10 @@ test("deny message: the extractor ignores PATH segments, so the tests above are 
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // 6.24.0 — THE THREE-POSTURE RELAXATION (D1–D9). Every test below runs against the SHIPPED hook path
-// (`HOOK`, above) — the still-unpatched `.claude/hooks/enforce-writes-scope.cjs` this file always tests.
-// That means EVERY test in this section is EXPECTED TO FAIL until the human applies
-// `.dev/features/writes-scope-run-only/proposed/human-only.patch`, and to PASS once they do — exactly the
-// same shape as every pre-existing test in this file, which is why no new HOOK constant was introduced.
+// (`HOOK`, above) — the `.claude/hooks/enforce-writes-scope.cjs` this file always tests. They were written before
+// the human applied `.dev/features/writes-scope-run-only/proposed/human-only.patch` (6.24.0) and pass against the
+// patched hook — the same shape as every pre-existing test in this file, which is why no new HOOK constant was
+// introduced.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 function seedUnsignalled(cwd) {
@@ -1951,8 +1951,8 @@ test("★ crafted marker names from the review (a newline + imperative text, she
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // GATE-2 FIXES (REVIEW.md at a154214, and the maintainer's D2 decision of 2026-09-26). Every case below is
 // one of the review's own repros, a D2 case, or a regression found while verifying the fixes, run against
-// the SHIPPED hook path — so, like the section above, each is EXPECTED TO FAIL until the human applies
-// `proposed/human-only.patch`, and to PASS once they do.
+// the SHIPPED hook path. Like the section above, they were written before the human applied
+// `proposed/human-only.patch` (6.24.0) and pass against the patched hook.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 // The hook with an explicit environment: `null` removes a variable, anything else sets it. `nodeArgs` go
@@ -2465,9 +2465,8 @@ test("★ L27 per branch: each 6.24.0 remedy is PRESENT in its own case and ABSE
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // write-guard-narrowing (M7) — outside a run, with no scope, the install posture allows an out-of-project path
 // only in THIS project's auto-memory folder, THIS session's own scratchpad, and an ordinary temp path. Every case
-// runs the SHIPPED hook path, so, like the 6.24.0 sections above, each case asserting the narrowed rule is
-// EXPECTED TO FAIL until the human applies `.dev/features/write-guard-narrowing/proposed/human-only.patch`, and
-// to PASS once they do.
+// runs the SHIPPED hook path; the human applied `.dev/features/write-guard-narrowing/proposed/human-only.patch` in
+// 6.31.1, so every case asserting the narrowed rule passes.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const CLAUDE_STATE_CUE = /and it is Claude Code's own state outside this project/;
@@ -2967,7 +2966,7 @@ test("✧ a 100k-segment payload path is judged in linear time and still denied 
 
 // --- NO INPUT (audit TST-4, 2026-10-12; hook-hardening-batch). Before the human-applied patch, readStdin() turned a read
 // error into "" and the caller parsed `readStdin() || "{}"`, so an empty or unreadable stdin became `{}` — not a write —
-// and the hook exited 0. The ★ tests are RED until .dev/features/hook-hardening-batch/apply.py has run, GREEN after.
+// and the hook exited 0. .dev/features/hook-hardening-batch/apply.py was applied in 6.71.0, so the ★ tests pass.
 test("★ TST-4: an EMPTY stdin denies (exit 2) with the fixed 'empty input' detail, never exit 0", () => {
   const r = spawnSync(process.execPath, [HOOK], { input: "", cwd: tmp(), encoding: "utf8" });
   assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
@@ -3045,9 +3044,8 @@ test("scoped mode: a write through a symlinked parent into .github/workflows/ is
 // TST-12 (audit 2026-10-12, LOW): the dev and unsignalled postures denied every out-of-project Write, the session's
 // own harness scratchpad included, and the out-of-root body sent scratch writes to Bash. The patch
 // (.dev/features/audit-low-human-patch/HUMAN-PATCH.md) admits THIS session's own scratchpad there, by the install
-// posture's rule (2) unchanged (ownScratchpadDir()), in every mode, and nothing else outside the project. The cases
-// that expect an allow, and the new bullet, are EXPECTED TO FAIL until the maintainer runs that patch's apply.py, and
-// to PASS after; every deny case passes on both sides.
+// posture's rule (2) unchanged (ownScratchpadDir()), in every mode, and nothing else outside the project. It was
+// applied in 6.73.1, so the allow cases, the new bullet and every deny case pass.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const DEV_SCRATCHPAD_BULLET_CUE = /put it inside this session's own scratchpad, which the Write tool reaches in this posture/;

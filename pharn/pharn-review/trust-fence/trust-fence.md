@@ -79,7 +79,7 @@ Alongside the human-facing `REVIEW.md`, the lens serializes its findings as a si
 `pharn/features/trust-fence/findings.json` — the JSON array defined by `pharn/pharn-contracts/finding-shape.md`
 §Emission (the enum-gated / free-text split as real JSON field boundaries; cited, not restated — P4),
 with that path declared in this lens's `writes:` (fix #7). On the emitted array the no-laundering
-trip-wire is the floor form checked by `floor/check-structural.mjs`
+trip-wire is the floor form checked by `pharn/floor/check-structural.mjs`
 (`needle_absent_from_enum_gated`: no needle from the untrusted input reaches an enum-gated field).
 That the lens **emits** it at all, and emits it clean under injection, stays **advisory** — the named
 residual (`finding-shape.md` §Emission-enforcement-audit; `pharn/LIMITS.md §2`).

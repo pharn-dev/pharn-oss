@@ -197,7 +197,7 @@ run and **why it would recur**. Free text from the artifacts appears here as quo
 
 ### 2b.3 — ALWAYS ask; never assume (the gate)
 
-Ask, via an **interactive form** (`AskQuestion`), one explicit question: **"Take this lesson candidate to
+Ask, via an **interactive form** (`AskUserQuestion`), one explicit question: **"Take this lesson candidate to
 `/pharn-dev-memory-promote`?"** with selectable options (e.g. _Promote_ / _Skip_ / _Edit, then promote_).
 **Wait for the answer.**
 
@@ -361,8 +361,8 @@ Write **`.dev/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
 Immediately after writing it, and **before** ending the turn:
 
 ```bash
-npx prettier --ignore-unknown --write .dev/features/<name>/SHIP.md
-npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/SHIP.md
+npx --no-install prettier --ignore-unknown --write .dev/features/<name>/SHIP.md
+npx --no-install markdownlint-cli2 --no-globs --fix .dev/features/<name>/SHIP.md
 ```
 
 Scoped to **this stage's own artifact** — never a repo-wide formatter, whose writes escape the fix #7

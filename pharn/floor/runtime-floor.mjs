@@ -5,7 +5,8 @@
 // `undefined`, the gated block never runs, and the process exits 0 having printed nothing. Reproduced on Node 20.13.1
 // and 22.16.0: `check-regress.mjs verdict` over a real regression, `check-bash-reconcile.mjs --require-baseline` with no
 // baseline, `check-test-stage.mjs` with no SPEC, `check-loop-fresh.mjs`, `run-gates.mjs init` and `stage-verify.mjs` all
-// exited 0 with empty output, while Node 22.18 and 24 gave the correct non-zero verdicts. The installer admits Node 20.
+// exited 0 with empty output, while Node 22.18 and 24 gave the correct non-zero verdicts. The installer admitted Node 20
+// then; since @pharn-dev/pharn 0.8.0 (`engines.node >=24.2.0`, checked by `init`/`update` themselves) it refuses older.
 //
 // WHAT IT DOES. Imported for its side effect as the FIRST import of every gated CLI under both floors, it writes one line
 // to stderr and exits 2 when the runtime is below the floor: `import.meta.main` is not a boolean, OR `process.versions.node`

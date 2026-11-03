@@ -44,7 +44,8 @@
 //     `growth` reports a submodule whose commit differs from the base's as unmeasured (the caller refuses:
 //     `submodule-changed`).
 // EXCLUDED, stated: subdirectory CLAUDE.md files (loaded on demand), directories above the root, `~/.claude/**`,
-// managed policy files, auto memory, git-ignored files (the caller's tree is `tracked ∪ untracked-not-ignored`), and
+// managed policy files, auto memory, git-ignored files (the caller's tree is `tracked ∪ untracked-not-ignored`, the
+// list `enumerate()` returns — it keeps `pharn/.run/`, which reconcile's set has dropped since 7.2.0), and
 // `CLAUDE.local.md` (personal: `--report` lists it, `--growth` never counts it). NOT MODELLED, each an over-count:
 // block-level HTML comments (stripped before injection), the 4 MiB per-file skip, frontmatter removal, and
 // `claudeMdExcludes`. UNDER-COUNT routes KNOWN SO FAR — never a complete list (lessons-learned L67): a catch-all

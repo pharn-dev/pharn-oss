@@ -389,7 +389,8 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   bounded (no proceed/stop reads it) and not zeroed. `BRIEFING.md`'s frontmatter is computed from JSON and
   frontmatter source fields only, never from PLAN.md's body (P2).
 - **Not a claim:** "`/pharn-ship` ensures a good feature" / "reaching the end means the feature is correct or wise" —
-  reaching GATE 2 means **the deterministic gates passed and the human approved the intent**; "`/pharn-ship` ensures
+  reaching GATE 2 means **the deterministic gates passed and the SPEC reads `state: Approved` with a matching pin**
+  (the human's approval at Step 2 is what should have set it; nothing on the floor records who did); "`/pharn-ship` ensures
   the chain ran"; "the retry finishes the build"; "`/pharn-ship` opened the PR"; "the cost ledger gates something";
   "the change is small" (nothing measures it; a human chose the flag and the kind).
   It never auto-merges, ships, commits or applies the `PHARN ✓ reviewed` seal, and has no `--yolo`, no

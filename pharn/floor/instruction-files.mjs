@@ -5,7 +5,9 @@
 //
 // THE TWO TREES:
 //   • HEAD — the working tree as `reconcile-baseline.mjs`'s `enumerate()` lists it: `tracked ∪ untracked-not-ignored`
-//     (the reconciled set, one owner — L35). A git-ignored file is outside it; a deleted tracked file reads as absent.
+//     (one owner — L35). That list is the reconciled set's source, not the set itself: since 7.2.0 reconcile also
+//     drops PHARN's state root `pharn/.run/` whether or not it is ignored, while this tree keeps whatever `enumerate()`
+//     lists there. A git-ignored file is outside it; a deleted tracked file reads as absent.
 //     Every entry is lstat'ed and read through O_NOFOLLOW (L54, L59): a link is followed only by the core's resolver,
 //     inside the root.
 //   • BASE — the base commit's own objects (`git ls-tree -r -z`, `git cat-file blob`), read with

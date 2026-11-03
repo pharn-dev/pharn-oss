@@ -261,8 +261,8 @@ pharn/.lock*
 pharn/.backup/
 ```
 
-Reconcile exempts runtime scratch only through git-ignore. Without the first line, every `/pharn-verify` reports
-`pharn/.run/**` as changed paths. Before 7.0.0 the scratch lived at `.pharn/`, and `memory-bank/`, the SPEC template
+Reconcile leaves `pharn/.run/` out of its set whether or not you ignore it (7.2.0); the three lines keep run state,
+the lock and backups out of your commits. Before 7.0.0 the scratch lived at `.pharn/`, and `memory-bank/`, the SPEC template
 and two of the trusted docs sat at the project root (migration: CHANGELOG [7.0.0]).
 
 The hooks enforce only after they are registered in Claude Code's settings — `.claude/settings.json`, or
@@ -328,7 +328,8 @@ judgment is **advisory**.
 - **Guaranteed — narrow claims, each backed by a named checker.** For example: once the hooks are wired, Claude
   Code's Write/Edit/MultiEdit/NotebookEdit tools cannot edit the four trusted docs and are held to the active write
   scope; an approved spec is pinned, so later body drift is detectable; and the verify verdict is computed from a
-  gate map the gate runner wrote, not one a model typed. [The full table](./docs/guarantees.md#guaranteed-vs-advisory)
+  gate map written by the gate runner and validated for internal consistency, not one a model typed (a
+  self-consistent fabricated stamp still passes — see the table's bounds). [The full table](./docs/guarantees.md#guaranteed-vs-advisory)
   names the check behind each guarantee and its bounds.
 - **Detected, not prevented.** A write issued through `Bash` passes neither write guard. `/pharn-verify` detects a
   **non-adversarial** one that reached a path the active scope would have denied, with the exceptions

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// floor/check-variance.mjs — the deterministic VARIANCE RUNNER for PHARN evals (increment 3c).
+// .dev/floor/check-variance.mjs — the deterministic VARIANCE RUNNER for PHARN evals (increment 3c).
 //
 // Floor/eval infrastructure — NOT a Capability (no `role:`; the floor capability count stays 1). It
 // COUNTS, across N runs of a capability, how many emitted a findings.json that passes the eval's
 // structural[] assertions, and classifies the eval as consistent-pass / flaky / consistent-fail. The
-// COUNTING is deterministic (ARCHITECTURE §2, floor primitive #3): it reuses floor/check-structural.mjs
+// COUNTING is deterministic (ARCHITECTURE §2, floor primitive #3): it reuses pharn/floor/check-structural.mjs
 // BY INVOCATION (child_process — stdlib) and reads its EXIT CODE per run. ZERO LLM here.
 //
 // THE VERDICT RULE (CONSTITUTION P0; the structural/semantic split of pharn/pharn-contracts/eval-format.md):
@@ -32,7 +32,7 @@
 // executed, spawned, or sent anywhere. The only child process spawned is `node check-structural.mjs` over
 // FIXED, repo-internal arguments (never content). No guaranteed decision rests on a free-text field.
 //
-// Usage:  node floor/check-variance.mjs <expected.json> <runs-dir> [repoDir]
+// Usage:  node .dev/floor/check-variance.mjs <expected.json> <runs-dir> [repoDir]
 //   expected.json : { skill_kind, assertions: { structural[], semantic?[] } }  (eval-format.md)
 //   runs-dir      : a directory of run subdirs, each with findings.json (+ optional semantic.json)
 //   repoDir       : root for check-structural's file_resolves (default ".")
@@ -68,7 +68,7 @@ function main() {
   const repoDir = process.argv[4] || ".";
 
   if (!expectedPath || !runsDir) {
-    die("INCONCLUSIVE — usage: node floor/check-variance.mjs <expected.json> <runs-dir> [repoDir]", 2);
+    die("INCONCLUSIVE — usage: node .dev/floor/check-variance.mjs <expected.json> <runs-dir> [repoDir]", 2);
   }
   if (!existsSync(expectedPath)) die(`INCONCLUSIVE — expected.json not found: ${expectedPath}`, 2);
   if (!existsSync(runsDir)) die(`INCONCLUSIVE — runs-dir not found: ${runsDir}`, 2);

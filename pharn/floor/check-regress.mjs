@@ -4,7 +4,8 @@
 // Floor/eval infrastructure — NOT a Capability (no `role:`; the floor capability count stays 1, exactly
 // like .dev/floor/check-variance.mjs and pharn/floor/check-structural.mjs, which live in this floor-ignored dir).
 // It owns the WHOLE deterministic verdict of /regress so the maximum surface is in tested Node, not in
-// the command's Bash. The command (.claude/commands/regress.md) owns only the I/O side-effects (git,
+// the command's Bash. The commands (.claude/commands/pharn-regress.md, through pharn/floor/stage-regress.mjs, and
+// .claude/commands/pharn-dev-regress.md) own only the I/O side-effects (git,
 // worktree, running the suite, writing artifacts); this helper does the set math and the comparison.
 //
 // One cohesive axis — "the regress verdict" — exposed as two subcommands (ARCHITECTURE §2, floor

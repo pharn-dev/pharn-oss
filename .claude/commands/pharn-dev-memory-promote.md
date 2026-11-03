@@ -54,7 +54,7 @@ Load the trusted prefix and obey it for the whole run:
   **unwise** entry is caught only here, by the human — never by the floor.
 
 > **The honest claim (two clocks — P0).** This command **requires** Step 3's `check-provenance.mjs` (and
-> Step 6's re-run) to return GREEN **before** `AskQuestion` and before any canon write — but **nothing on
+> Step 6's re-run) to return GREEN **before** `AskUserQuestion` and before any canon write — but **nothing on
 > the floor forces the command to run** (`pharn/LIMITS.md §1d`). The **unconditional** floor claims are therefore
 > narrow: _when `check-provenance.mjs` runs_, malformed provenance cannot pass; _when a canon byte goes
 > through `Write|Edit|MultiEdit`_, fix #7 confines it to the declared file. It does **NOT** guarantee the
@@ -307,12 +307,12 @@ not re-decide it — P0.)
 ## Step 5 — Render + HALT for explicit accept/deny (the human gate)
 
 **Prerequisite — enforced by this command, advisory on the floor:** Step 3 returned GREEN (title shape
-check + `check-provenance.mjs`). **Do not call `AskQuestion` or render for accept/deny until then** — a
+check + `check-provenance.mjs`). **Do not call `AskUserQuestion` or render for accept/deny until then** — a
 candidate that has not passed the floor gate must not reach the human.
 
 Show the human the **full candidate exactly as it would be written** — the rendered entry (**validated**
 `title` only — already shape-checked at Step 3; do not re-type or alter it for display), tag line, body,
-provenance block — and any Step-4 contradiction flag. Then ask, via an **interactive form** (`AskQuestion`),
+provenance block — and any Step-4 contradiction flag. Then ask, via an **interactive form** (`AskUserQuestion`),
 one explicit question: **"Promote this entry to `<canon-file>`?"** with selectable options (e.g. _Accept &
 write_ / _Deny — discard_). **Wait for the answer.**
 

@@ -1013,8 +1013,8 @@ test("✧ MUTANT: dropping the trailing dot/space strip lets the Windows spellin
 // write-guard-narrowing (M4) — the target the filesystem reaches is judged too. On a `/` system a backslash is
 // part of a file NAME, while both older readings read it as a separator, so a symlink named `s\x` → `.` carried a
 // write to a trusted doc — or to canon under a plan-origin scope — past this hook (a security review, reproduced).
-// Every case runs the SHIPPED hook, so each case asserting the new reading is EXPECTED TO FAIL until the human
-// applies `.dev/features/write-guard-narrowing/proposed/human-only.patch`, and to PASS once they do.
+// Every case runs the SHIPPED hook. The human-only patch (`.dev/features/write-guard-narrowing/proposed/`) was
+// applied in 6.31.1, so every case here passes against it.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const ONLY_POSIX = { skip: require("node:path").sep !== "/" && "a backslash is a separator on this system" };
@@ -1152,8 +1152,8 @@ test("✧ a 100k-segment payload path is judged in linear time, with the same ve
 // --- NO INPUT, AND A CRASH (audit TST-4 / TST-11, 2026-10-12; hook-hardening-batch). Before the human-applied patch,
 // readStdin() turned a read error into "" and the caller parsed `raw || "{}"`, so an empty or unreadable stdin became
 // `{}` — not a write — and the hook exited 0. And this hook had no uncaughtException handler, so a throw outside its
-// per-path try exited 1, which Claude Code treats as non-blocking. The ★ tests below are RED until
-// .dev/features/hook-hardening-batch/apply.py has run, GREEN after; the controls are GREEN on both sides.
+// per-path try exited 1, which Claude Code treats as non-blocking. The patch
+// (.dev/features/hook-hardening-batch/apply.py) was applied in 6.71.0, so the ★ tests and the controls all pass.
 test("★ TST-4: an EMPTY stdin denies (exit 2) with the fixed 'empty input' detail, never exit 0", () => {
   const r = spawnSync(process.execPath, [HOOK], { input: "", encoding: "utf8" });
   assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
@@ -1196,8 +1196,8 @@ test("TST-11 control (L60): the same throw placed BEFORE the handler's registrat
 // SEC-11 (audit 2026-10-12, LOW): a payload path holding a NUL byte. No file has such a name — Node's `fs` refuses
 // one — so both passes used to judge a name that is no file a write can reach: `pharn/LIMITS.md\u0000x` matched no
 // trusted path and exited 0. The patch (.dev/features/audit-low-human-patch/HUMAN-PATCH.md) denies any such path
-// through the malformed-input deny, before either pass. The deny cases are EXPECTED TO FAIL until the maintainer
-// runs that patch's apply.py, and to PASS after; the controls pass on both sides.
+// through the malformed-input deny, before either pass. It was applied in 6.73.1, so the deny cases and the controls
+// all pass.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const NUL_PATHS = [

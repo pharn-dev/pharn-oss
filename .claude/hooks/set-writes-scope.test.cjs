@@ -555,9 +555,8 @@ test("--clear removes a present scope and reports it", () => {
 
 // 6.24.0 (D4 in the plan): the --clear message no longer claims a SINGLE posture — the default it returns
 // control to is fail-closed everywhere EXCEPT an installed project outside an open PHARN run, where it is
-// the newer permissive one. Pinned against the SHIPPED hook path (not a handoff/ copy), so this test is
-// expected to be RED until the human applies the pending hook patch, and GREEN after — exactly like the
-// enforce-writes-scope.test.cjs golden dev-posture pins.
+// the newer permissive one. Pinned against the SHIPPED hook path (not a handoff/ copy), exactly like the
+// enforce-writes-scope.test.cjs golden dev-posture pins; the hook patch it waited for was applied in 6.24.0.
 test("★ 6.24.0: the --clear message no longer claims a single fail-closed posture, either way", () => {
   const cwd = tmp();
   seedScope(cwd, { scope: [".dev/features/demo/SHIP.md"], set_by: "x.md", set_at: "t" });
@@ -658,7 +657,7 @@ function seedInstalled(cwd, skillsVersion = "6.61.0") {
 }
 
 // (1) OPERATOR FLAGS — every opt-in, after the mode: refused, nothing written. `--allow-exec-config` joined the set in
-// hook-hardening-batch, so its case is RED until that increment's apply.py has run.
+// hook-hardening-batch, whose apply.py was applied in 6.71.0.
 for (const flag of ["--allow-claude-dir", "--allow-pharn-surface", "--allow-exec-config"]) {
   test(`${flag} AFTER the mode is REFUSED and writes nothing (a granted line's trailing * cannot carry it)`, () => {
     const cwd = tmp();
@@ -972,9 +971,9 @@ test("✧ PIN: the setter's PROMOTE_COMMANDS equal protect-trusted-paths.cjs's (
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
 // hook-hardening-batch (review finding SEC-5 of 2026-10-12): in an INSTALLED project a `--from-plan` scope may not
 // name a CI workflow or a git hooks directory — `.github/workflows/**`, `.husky/**`, and every `core.hooksPath` inside
-// the project — unless the operator passes --allow-exec-config before the mode. Every ★ test below is RED until
-// .dev/features/hook-hardening-batch/apply.py has run (before it, the setter scopes all of these), GREEN after; the
-// controls are GREEN on both sides. Each run gets its own HOME, XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL, and each tree
+// the project — unless the operator passes --allow-exec-config before the mode. Before
+// .dev/features/hook-hardening-batch/apply.py was applied (6.71.0) the setter scoped all of these; the ★ tests and
+// the controls now pass. Each run gets its own HOME, XDG_CONFIG_HOME and GIT_CONFIG_GLOBAL, and each tree
 // its own repository (`.git/HEAD` and an empty `.git/config`), so neither a developer's git config nor a repository
 // above os.tmpdir() reaches a case that did not ask for it (L41).
 // ─────────────────────────────────────────────────────────────────────────────────────────────────

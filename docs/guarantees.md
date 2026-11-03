@@ -1,7 +1,7 @@
 # PHARN guarantees
 
 What PHARN guarantees, the check behind each guarantee, and what stays advisory. This text moved here unchanged from
-the root [`README.md`](../README.md) in 6.65.3, apart from re-based links; what PHARN does not do is in
+the root [`README.md`](../README.md) in 6.68.1, apart from re-based links; what PHARN does not do is in
 [`limitations.md`](limitations.md).
 
 ## Guaranteed vs advisory

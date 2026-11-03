@@ -49,7 +49,7 @@ docs) from **the apparatus used to build it** (under `.dev/`):
   four trusted docs live here too (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`); the other two
   (`pharn/THREAT-MODEL.md`, `pharn/LIMITS.md`) too since 7.0.0; `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`,
   `SKILLS_VERSION` and `MIN_CLI` sit at the root; the **product-pipeline** artifacts (`SPEC.md`, …) live under
-  `pharn/features/`, which is where they MOVED in 5.0.0 — a root `features/` collided with a project's own
+  `pharn/features/`, which is where they MOVED in 5.1.2 — a root `features/` collided with a project's own
   (Cucumber's default glob; feature-sliced architectures). This is what a user clones.
 - **Build apparatus (`.dev/`):** `.dev/floor/` (dev-only checkers — `check-provenance`, `check-variance`,
   `check-config` — with their tests; the `scan-plan-*` grill-scanners **moved to `pharn/floor/` in 2.4.0**,
@@ -106,10 +106,10 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    and will deny any Write/Edit/MultiEdit/NotebookEdit to them (exit 2). Do not try to edit them or work around the
    hook — if a change is genuinely needed, say so and let a human edit them outside the agent loop.
    The same hook also protects `CODEOWNERS` (the GitHub-layer write-guard itself — "guarding the
-   guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks, but it binds
-   other contributors only: the owner's account is the ruleset's bypass actor and `enforce_admins` is off, so any
-   merge made with the owner's credentials skips both — including an agent running `gh pr merge --admin` with the
-   owner's token. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
+   guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks. The owner's account
+   is the review ruleset's bypass actor and `enforce_admins` is off, so a merge made with the owner's credentials —
+   an agent running `gh pr merge --admin` with the owner's token included — skips the review and classic protection's
+   `gitleaks`; since 2026-10-26 ruleset 25907495 binds every account to the other required checks. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
    commit, so pharn-cli's `--ref latest` (the default for new installs since 0.15.0) does not receive a red tree through
    the workflow; its `main` channel still can (`pharn/LIMITS.md §11`).
    **It also protects the two guards' own

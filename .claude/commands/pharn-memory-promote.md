@@ -244,13 +244,13 @@ owns this verdict; you do not re-decide it — P0.)
 
 **Prerequisite — enforced by this command, advisory on the floor:** Step 3 returned GREEN (title shape check
 
-- `check-provenance.mjs`). **Do not call `AskQuestion` or render for accept/deny until then** — a candidate
+- `check-provenance.mjs`). **Do not call `AskUserQuestion` or render for accept/deny until then** — a candidate
   that has not passed the floor gate must not reach the human.
 
 Show the human the **full candidate exactly as it would be written** — the rendered entry (**validated**
 `title` only — already shape-checked at Step 3; do not re-type or alter it for display), tag line, body,
 provenance block), the target path, whether that file will be **created** or **appended to**, and any
-Step-4 flag. Then ask, via an **interactive form** (`AskQuestion`), one explicit question: **"Promote this
+Step-4 flag. Then ask, via an **interactive form** (`AskUserQuestion`), one explicit question: **"Promote this
 entry to `<canon-file>`?"** with selectable options (e.g. _Accept & write_ / _Deny — discard_). **Wait for
 the answer.**
 
