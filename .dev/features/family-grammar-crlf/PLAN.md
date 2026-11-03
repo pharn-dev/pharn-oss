@@ -105,28 +105,28 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
 
 ## Files
 
-- pharn/floor/frontmatter-core.mjs — LOOSE_FIELD_LINE_RE, looseFrontmatter, looseScalar, looseValue; header — product floor
-- pharn/floor/validate.mjs — shared reader, P6/frontmatter-offset, P6/symlinked-dir, lstat in canonDirs/walkExts, CHECK 8 read, zero-capability INCONCLUSIVE, sentinel exits — product floor
-- pharn/floor/count-lenses.mjs — frontmatterRole through looseFrontmatter; refuse a linked dir under pharn/ — product floor
-- pharn/floor/count-grillers.mjs — same — product floor
-- pharn/floor/count-verifiers.mjs — same — product floor
-- pharn/floor/check-model-config.mjs — frontmatterModelEffort through looseFrontmatter (displaced = none) — product floor
-- pharn/floor/capability-files-core.mjs — lstat walk, linkedDirs, a linked pharn root, header bound — product floor
-- .dev/floor/check-config.mjs — frontmatterModelEffort through the product core — dev floor
-- .dev/floor/capability-catalog-core.mjs — parseFrontmatter through the product core — dev floor
-- pharn/floor/frontmatter-core.test.mjs — loose reader units, LOOSE_FAMILY_CLIS twins, widened closures — test
-- pharn/floor/validate.test.mjs — offset RED, symlinked-dir RED, zero-capability INCONCLUSIVE, CHECK 8 EACCES — test
-- pharn/floor/capability-files-core.test.mjs — PATH_KINDS walk test, linkedDirs, linked pharn root, counters refuse — test
-- pharn/floor/cli-stdout-flush.test.mjs — validate.mjs row, form sentinel-uncaught, >64 KiB round-trip — test
-- pharn/floor/check-model-config.test.mjs — CRLF twin; a displaced command reads as no model — test
-- .dev/floor/check-config.test.mjs — CRLF twin — test
-- .dev/floor/capability-catalog-core.test.mjs — CRLF twin — test
-- .dev/floor/frontmatter-readers.test.mjs — dev closures accept looseFrontmatter, catch the family grammar — test
-- .dev/guides/floor-checks.md — validate's exit and walk lines — apparatus doc
-- CHANGELOG.md — `## [Unreleased]` `### Fixed` entries — repo meta
-- .dev/features/family-grammar-crlf/PLAN.md — this plan
-- .dev/features/family-grammar-crlf/GRILL.md — grill log
-- .dev/features/family-grammar-crlf/SHIP.md — ship roll-up
+- `pharn/floor/frontmatter-core.mjs` — LOOSE_FIELD_LINE_RE, looseFrontmatter, looseScalar, looseValue; header — product floor
+- `pharn/floor/validate.mjs` — shared reader, P6/frontmatter-offset, P6/symlinked-dir, lstat in canonDirs/walkExts, CHECK 8 read, zero-capability INCONCLUSIVE, sentinel exits — product floor
+- `pharn/floor/count-lenses.mjs` — frontmatterRole through looseFrontmatter; refuse a linked dir below pharn/ — product floor
+- `pharn/floor/count-grillers.mjs` — same — product floor
+- `pharn/floor/count-verifiers.mjs` — same — product floor
+- `pharn/floor/check-model-config.mjs` — frontmatterModelEffort through looseFrontmatter (displaced = none) — product floor
+- `pharn/floor/capability-files-core.mjs` — lstat walk, linkedDirs, the linked pharn root followed, header bound — product floor
+- `.dev/floor/check-config.mjs` — frontmatterModelEffort through the product core — dev floor
+- `.dev/floor/capability-catalog-core.mjs` — parseFrontmatter through the product core — dev floor
+- `pharn/floor/frontmatter-core.test.mjs` — loose reader units, LOOSE_FAMILY_CLIS twins, widened closures — test
+- `pharn/floor/validate.test.mjs` — offset RED, symlinked-dir RED, zero-capability INCONCLUSIVE, CHECK 8 EACCES — test
+- `pharn/floor/capability-files-core.test.mjs` — PATH_KINDS walk test, linkedDirs, linked pharn root, counters refuse — test
+- `pharn/floor/cli-stdout-flush.test.mjs` — validate.mjs row, form sentinel-uncaught, over-64-KiB round-trip — test
+- `pharn/floor/check-model-config.test.mjs` — CRLF twin; a displaced command reads as no model — test
+- `.dev/floor/check-config.test.mjs` — CRLF twin — test
+- `.dev/floor/capability-catalog-core.test.mjs` — CRLF twin — test
+- `.dev/floor/frontmatter-readers.test.mjs` — dev closures accept looseFrontmatter, catch the family grammar — test
+- `.dev/guides/floor-checks.md` — validate's exit and walk lines — apparatus doc
+- `CHANGELOG.md` — Unreleased / Fixed entries — repo meta
+- `.dev/features/family-grammar-crlf/PLAN.md` — this plan
+- `.dev/features/family-grammar-crlf/GRILL.md` — grill log
+- `.dev/features/family-grammar-crlf/SHIP.md` — ship roll-up
 
 ## Contracts satisfied
 
