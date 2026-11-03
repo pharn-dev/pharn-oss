@@ -169,6 +169,8 @@ human approval.
 - `.dev/guides/floor-gates.md` — A1: the isolation CLI usage line — dev apparatus
 - `.claude/hooks/require-loop-record.cjs` — MAINTAINER-APPLIED (apply.py, owner, 2026-11-03), committed in `bc9c9bc8` before the re-anchor; listed after the fact so `/pharn-dev-regress`'s scope check reads the truth (the `hook-hardening-batch` precedent); no write tool can reach it — hook
 - `.claude/hooks/protect-trusted-paths.cjs` — MAINTAINER-APPLIED likewise (A2), same commit — hook
+- `CLAUDE.md` — GATE 2 follow-up: one sentence in hard constraint 1 naming the run-state deny — repo meta
+- `.dev/guides/writes-scope.md` — GATE 2 follow-up: one sentence naming the run-state deny — dev apparatus
 - `README.md` — one sentence: the line that accepts host execution is not pre-approved — repo meta
 - `CHANGELOG.md` — `## [Unreleased]` entries — repo meta
 
