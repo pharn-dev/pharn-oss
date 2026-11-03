@@ -212,6 +212,7 @@ secrets is not isolated for this purpose; one hit means credentialed):
 | `cred:ssh-agent`                 | `SSH_AUTH_SOCK` names a path that exists (a forwarded agent signs with host keys) |
 | `cred:gh-hosts`                  | `$HOME/.config/gh/hosts.yml` exists                                               |
 | `cred:env:GH_TOKEN`              | `GH_TOKEN` is set                                                                 |
+| `cred:env:GITHUB_TOKEN`          | `GITHUB_TOKEN` is set and `GITHUB_ACTIONS` is not `true` (7.3.0)                  |
 | `cred:git-credentials`           | `$HOME/.git-credentials` exists                                                   |
 | `cred:credential-helper`         | git config names a credential helper, plain or URL-scoped                         |
 | `cred:netrc`                     | `$HOME/.netrc` exists (git's HTTPS credentials)                                   |
@@ -228,11 +229,12 @@ secrets is not isolated for this purpose; one hit means credentialed):
 <!-- CREDENTIAL-CODES:END -->
 
 **The selection rule:** a file or env var whose presence alone gives a process write, push or deploy access to a
-remote system (git hosting, a package registry, a cloud account, a deploy platform). **Not on the list, by design:**
+remote system (git hosting, a package registry, a cloud account, a deploy platform). **`GITHUB_TOKEN` counts
+everywhere except GitHub Actions (7.3.0).** In Actions it is ephemeral, scoped by the workflow's `permissions:`, and
+present in every run, so counting it there would make `env:GITHUB_ACTIONS` useless. Elsewhere it is usually a personal
+access token: before 7.3.0 a dev container, a Gitpod workspace or a `PHARN_ISOLATED=1` shell that exported one read
+`ISOLATED`. **Not on the list, by design:**
 
-- `GITHUB_TOKEN`. In GitHub Actions it is ephemeral, scoped by the workflow's `permissions:`, and present in every
-  run, so listing it would make `env:GITHUB_ACTIONS` useless. In a codespace it is long-lived, but the codespace's
-  credential helper is already a signal, so a codespace reads `ISOLATED_WITH_CREDENTIALS` either way.
 - `ANTHROPIC_API_KEY` and `~/.claude/`. These are the agent's own model credential, always present. That credential
   is the exfiltration residual this stop does not touch.
 - `~/.docker/config.json` and `~/.kube/config`. Either can hold only non-secret settings, and no failure has named

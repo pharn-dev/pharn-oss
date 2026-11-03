@@ -11,7 +11,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   ENTRY_PATHS,
   EXIT,
@@ -430,6 +430,27 @@ function wait(dir, budget = WAIT_BUDGET_MS) {
   assert.equal(r.status, EXIT[doc.status], "the exit is the status's");
   return { status: r.status, doc };
 }
+// THE TAKEOVER CLOCK (7.3.0, audit 2026-11-03 LOW-1). A takeover gets its free first slow step only when the wait call
+// reached it within POLL_MS (250 ms) of starting, and after that step it may start another only while elapsed + gate
+// timeout <= budget — false at once when the two are equal (5 min each, above). On an idle machine every wait call
+// reaches the takeover in time, runs one gate, and the pinned retry loop finishes the drain. Under parallel agent load a
+// call can spend more than 250 ms before the takeover and run nothing, so six calls ended on exit 5 (`expected 4,
+// actual 5`). The virtual-clock preload (load-flake-regress, 6.72.0) FREEZES `Date.now()` in the --wait process — its
+// `git` match never fires — so the budget arithmetic reads 0 elapsed at any load and the takeover drains every gate in
+// one call. Only that process's clock is frozen: the runner, run-gates.mjs and the gates keep the real one. The two
+// TAKEOVER tests keep their retry loops, so the assertions are unchanged.
+const FROZEN_CLOCK = `${pathToFileURL(join(HERE, "test-fixtures", "virtual-clock", "preload.mjs")).href}?git=__entry-gates-takeover-never__&ms=1`;
+function frozenWait(dir, env = undefined) {
+  const r = spawnSync(process.execPath, ["--import", FROZEN_CLOCK, CLI, "--wait", "--feature", FEATURE, "--budget-ms", WAIT_BUDGET_MS], {
+    cwd: dir,
+    encoding: "utf8",
+    ...(env ? { env } : {}),
+  });
+  const doc = JSON.parse(r.stdout);
+  assert.equal(documentDefect(doc), null, `every printed document is well-formed: ${r.stdout}`);
+  assert.equal(r.status, EXIT[doc.status], "the exit is the status's");
+  return { status: r.status, doc, stdout: r.stdout, stderr: r.stderr };
+}
 const abort = (dir) => cli(dir, "--abort", "--feature", FEATURE);
 function cleanup(dir) {
   abort(dir);
@@ -704,9 +725,9 @@ test("CLI: TAKEOVER — the runner killed mid-gate (as a harness that kills a Ba
       "the gate finished before the kill is in progress.json"
     );
     // A takeover starts a slow step only within the budget (the 6.23.0 rule), so the pinned line is simply run again on
-    // exit 5 — exactly what the commands say.
-    let r = wait(dir);
-    for (let i = 0; i < 5 && r.status === 5; i++) r = wait(dir);
+    // exit 5 — exactly what the commands say. The wait runs on the frozen clock (THE TAKEOVER CLOCK, above).
+    let r = frozenWait(dir);
+    for (let i = 0; i < 5 && r.status === 5; i++) r = frozenWait(dir);
     const { status, doc } = r;
     assert.equal(status, 4, JSON.stringify(doc));
     assert.deepEqual(
@@ -1044,8 +1065,8 @@ test("OBSERVED: TAKEOVER — the killed runner's segment stays incomplete; each 
     waitForFile(pidFile);
     const runner = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.runner), "utf8"));
     process.kill(-runner.pid, "SIGKILL");
-    let r = owait(dir);
-    for (let i = 0; i < 5 && r.status === 5; i++) r = owait(dir);
+    let r = frozenWait(dir, OBS_ENV); // the frozen clock: THE TAKEOVER CLOCK, above
+    for (let i = 0; i < 5 && r.status === 5; i++) r = frozenWait(dir, OBS_ENV);
     assert.equal(r.status, 4);
     const led = ledgerOf(dir);
     assert.deepEqual(checkLedger(led).reds, []);

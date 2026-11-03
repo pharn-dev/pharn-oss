@@ -403,6 +403,31 @@ test("G8: SKILLS_VERSION's trailing newline alone is not a bump", () => {
   }
 });
 
+test("G9 (7.3.0): a version that differs only by whitespace, or is not a bare X.Y.Z, is not a bump", () => {
+  const paths = ["pharn/LIMITS.md"];
+  for (const head of ["1.0.0 ", " 1.0.0", "1.0.0\n", "1.0.0\t", "v1.0.1", "1.0", "1.0.1-rc.1", ""]) {
+    const res = judge({ paths, baseVersion: "1.0.0", headVersion: head });
+    assert.equal(res.ok, false, `${JSON.stringify(head)} must not count as a bump`);
+    assert.match(res.findings[0].problem, /is not a bare X\.Y\.Z version/);
+  }
+  assert.equal(judge({ paths, baseVersion: "1.0.0", headVersion: "1.0.1" }).ok, true, "a real bump still passes (L4 control)");
+  assert.equal(
+    judge({ paths: ["README.md"], baseVersion: "1.0.0", headVersion: "1.0.0 " }).ok,
+    true,
+    "no surface path, no verdict on the version"
+  );
+  const { root, cleanup } = repo();
+  try {
+    put(root, "pharn/LIMITS.md", "limits\n");
+    put(root, "SKILLS_VERSION", "1.0.0 \n");
+    const r = run(["--base-ref", "HEAD", "."], root);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /NOT_BUMPED/);
+  } finally {
+    cleanup();
+  }
+});
+
 test("✧ R (L29): every REFUSAL_STATES member is reached, with its own FIX and the exit its class promises", () => {
   assert.deepEqual(Object.keys(FIX).sort(), [...REFUSAL_STATES].sort(), "one FIX per state, no extras");
   assert.ok(INPUT_STATES.every((s) => REFUSAL_STATES.includes(s)));

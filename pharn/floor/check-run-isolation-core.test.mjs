@@ -9,6 +9,7 @@ import {
   ACCEPTED_SUFFIX,
   CREDENTIAL_CODES,
   CREDENTIAL_ENV,
+  CREDENTIAL_ENV_OFF_ACTIONS,
   ISOLATION_CODES,
   ISOLATION_ENV,
   OUTCOMES,
@@ -68,14 +69,38 @@ function probeWith(code, base = blank()) {
 
 test("✧ L34 — both frozen lists are non-empty, of their stated length, and disjoint (no test below can pass vacuously)", () => {
   assert.equal(ISOLATION_CODES.length, 8);
-  assert.equal(CREDENTIAL_CODES.length, 16);
+  assert.equal(CREDENTIAL_CODES.length, 17);
   assert.ok(Object.isFrozen(ISOLATION_CODES) && Object.isFrozen(CREDENTIAL_CODES));
-  assert.equal(new Set([...ISOLATION_CODES, ...CREDENTIAL_CODES]).size, 24);
+  assert.ok(Object.isFrozen(CREDENTIAL_ENV_OFF_ACTIONS));
+  assert.equal(new Set([...ISOLATION_CODES, ...CREDENTIAL_CODES]).size, 25);
   assert.deepEqual(
-    CREDENTIAL_ENV.map((n) => `cred:env:${n}`),
-    CREDENTIAL_CODES.filter((c) => c.startsWith("cred:env:")),
-    "every credential env var has its code, in list order"
+    [...CREDENTIAL_ENV, ...CREDENTIAL_ENV_OFF_ACTIONS].map((n) => `cred:env:${n}`).sort(),
+    CREDENTIAL_CODES.filter((c) => c.startsWith("cred:env:")).sort(),
+    "every credential env var has its code, and every env code its var"
   );
+  assert.equal(new Set([...CREDENTIAL_ENV, ...CREDENTIAL_ENV_OFF_ACTIONS]).size, CREDENTIAL_ENV.length + CREDENTIAL_ENV_OFF_ACTIONS.length);
+});
+
+test("★ GITHUB_TOKEN counts everywhere except GitHub Actions (7.3.0)", () => {
+  const withToken = (iso) => {
+    const p = probeWith(iso);
+    p.env.GITHUB_TOKEN = "ghp_secret-value-do-not-print";
+    return evaluate(p);
+  };
+  for (const iso of ["fs:dockerenv", "env:REMOTE_CONTAINERS", "env:GITPOD_WORKSPACE_ID", "operator:PHARN_ISOLATED"]) {
+    const r = withToken(iso);
+    assert.equal(r.record.outcome, "ISOLATED_WITH_CREDENTIALS", iso);
+    assert.deepEqual(r.record.evidence, [iso, "cred:env:GITHUB_TOKEN"]);
+    assert.equal(r.reason, "credentials-present");
+  }
+  const actions = withToken("env:GITHUB_ACTIONS");
+  assert.deepEqual(actions.record, { outcome: "ISOLATED", evidence: ["env:GITHUB_ACTIONS"], accepted_host_execution: false });
+  const notActions = blank();
+  notActions.env = { GITHUB_ACTIONS: "1", GITHUB_TOKEN: "t", PHARN_ISOLATED: "1" };
+  assert.deepEqual(evidenceOf(notActions), ["operator:PHARN_ISOLATED", "cred:env:GITHUB_TOKEN"], "only exactly `true` is Actions");
+  const empty = blank();
+  empty.env = { GITHUB_TOKEN: "", PHARN_ISOLATED: "1" };
+  assert.deepEqual(evidenceOf(empty), ["operator:PHARN_ISOLATED"], "an empty value is not a credential");
 });
 
 test("★ a probe with no evidence is HOST, refused not-isolated", () => {
@@ -186,7 +211,10 @@ test("★ evidence is emitted in frozen order, without repeats, whatever the pro
   let p = blank();
   for (const c of [...CREDENTIAL_CODES].reverse()) p = probeWith(c, p);
   for (const c of [...ISOLATION_CODES].reverse()) p = probeWith(c, p);
-  assert.deepEqual(evidenceOf(p), [...ISOLATION_CODES, ...CREDENTIAL_CODES]);
+  // env:GITHUB_ACTIONS is among the isolation codes, and under Actions GITHUB_TOKEN does not count (7.3.0).
+  assert.deepEqual(evidenceOf(p), [...ISOLATION_CODES, ...CREDENTIAL_CODES.filter((c) => c !== "cred:env:GITHUB_TOKEN")]);
+  delete p.env.GITHUB_ACTIONS;
+  assert.deepEqual(evidenceOf(p), [...ISOLATION_CODES.filter((c) => c !== "env:GITHUB_ACTIONS"), ...CREDENTIAL_CODES]);
 });
 
 test("★ classify follows the three-row rule", () => {

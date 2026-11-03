@@ -33,7 +33,7 @@
 //     the literal `_authToken` (also `<project root>/.npmrc`); SSH_AUTH_SOCK naming a path that is there; and
 //     `git config --get-regexp ^credential\..*helper$` (every scope git reads, with HOME as probed) printing a
 //     non-empty value — exit 1 is "none", any other exit, a spawn error or the GIT_TIMEOUT_MS bound is `probe-failed`.
-//   The env codes are the core's ISOLATION_ENV / CREDENTIAL_ENV, read from process.env.
+//   The env codes are the core's ISOLATION_ENV / CREDENTIAL_ENV / CREDENTIAL_ENV_OFF_ACTIONS, read from process.env.
 // A file's CONTENT is searched for one literal and dropped; nothing is echoed, logged or stored.
 //
 // ================================ BOUNDS (P0), each also in the contract and pharn/LIMITS.md §6 ================================
@@ -54,7 +54,15 @@ import { lstatSync, statSync, readdirSync, openSync, readSync, fstatSync, closeS
 import { spawnSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
-import { CREDENTIAL_ENV, ISOLATION_ENV, PROBE_ENV, evaluate, refusalLine, renderIsolationLine } from "./check-run-isolation-core.mjs";
+import {
+  CREDENTIAL_ENV,
+  CREDENTIAL_ENV_OFF_ACTIONS,
+  ISOLATION_ENV,
+  PROBE_ENV,
+  evaluate,
+  refusalLine,
+  renderIsolationLine,
+} from "./check-run-isolation-core.mjs";
 
 /** The most bytes read from any one file. */
 export const READ_CAP = 64 * 1024;
@@ -174,7 +182,7 @@ export function credentialHelper(env, home, cwd) {
 /** Only the env names the core reads, copied as strings. */
 function pickEnv(env) {
   const out = {};
-  for (const name of [...ISOLATION_ENV.map((e) => e.name), ...CREDENTIAL_ENV, ...PROBE_ENV]) {
+  for (const name of [...ISOLATION_ENV.map((e) => e.name), ...CREDENTIAL_ENV, ...CREDENTIAL_ENV_OFF_ACTIONS, ...PROBE_ENV]) {
     if (typeof env[name] === "string") out[name] = env[name];
   }
   return out;

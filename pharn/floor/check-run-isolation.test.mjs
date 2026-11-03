@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildProbe, credentialHelper, parseArgs, run } from "./check-run-isolation.mjs";
-import { CREDENTIAL_ENV, ISOLATION_ENV, evaluate } from "./check-run-isolation-core.mjs";
+import { CREDENTIAL_CODES, CREDENTIAL_ENV, CREDENTIAL_ENV_OFF_ACTIONS, ISOLATION_ENV, evaluate } from "./check-run-isolation-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "check-run-isolation.mjs");
@@ -202,10 +202,14 @@ test("★ every credential env var is a hit by name, and its value never prints 
   const sb = sandbox();
   try {
     const env = { PHARN_ISOLATED: "1" };
-    for (const n of CREDENTIAL_ENV) env[n] = `${SECRET}-${n}`;
+    for (const n of [...CREDENTIAL_ENV, ...CREDENTIAL_ENV_OFF_ACTIONS]) env[n] = `${SECRET}-${n}`;
     const r = cli(sb, undefined, env);
     assert.equal(r.status, 2);
-    assert.deepEqual(JSON.parse(r.stdout).evidence, ["operator:PHARN_ISOLATED", ...CREDENTIAL_ENV.map((n) => `cred:env:${n}`)]);
+    assert.deepEqual(
+      JSON.parse(r.stdout).evidence,
+      ["operator:PHARN_ISOLATED", ...CREDENTIAL_CODES.filter((c) => c.startsWith("cred:env:"))],
+      "the CLI reads every credential env var, GITHUB_TOKEN included off Actions (7.3.0)"
+    );
     assert.ok(!(r.stdout + r.stderr).includes(SECRET), "an env value leaked");
   } finally {
     sb.done();
