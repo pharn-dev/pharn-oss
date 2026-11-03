@@ -67,6 +67,16 @@ jobs:
         run: |
           git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
           node .dev/floor/check-surface-bump.mjs --base-ref HEAD^1
+      # Pull requests only, on the same base (HEAD^1 of GitHub's test merge commit): a PR that changes a bump-triggering
+      # product path (the four human-only trusted docs aside) must carry a /pharn-dev-ship record of a GREEN run — a
+      # .dev/features/<name>/SHIP.md verdict block plus the verify and regression reports beside it — and no record in it
+      # may show a run that stopped on a red floor verdict (.dev/floor/check-ship-record.mjs; presence and agreement,
+      # never coverage or provenance — its header). No Dependabot exemption: such a PR touches no product path.
+      - name: Dev-chain record check
+        if: ${{ always() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}
+        run: |
+          git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
+          node .dev/floor/check-ship-record.mjs --base-ref HEAD^1
       # Pull requests only, on the same base as the step above (HEAD^1 of GitHub's test merge commit): the bytes this PR
       # adds to the always-loaded instruction set (CLAUDE.md here) against pharn.config.json's budget AT THE BASE (default
       # 2048). A floor verdict over instruction-files-core.mjs's model of the loader, never the loader (pharn/LIMITS.md §3e).

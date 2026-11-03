@@ -113,6 +113,26 @@ one diff rule (L35).
 the verify gates), and that check's own verdict is what stops `/pharn-dev-ship`; `REVIEW.md` itself is read by no checker
 — the human (or a delegated GATE 2) reads it, and a blocking finding means the GATE 2 decision is "fix", not "merge".
 
+**Correction after GATE 1, found by dogfooding A at verify (recorded, not hidden).** The approved `## Files` also named
+this feature's `VERIFY.md`, `verify-report.json`, `REVIEW.md` and `SHIP.md`. Under A, verify's completeness capture
+requires every concrete `## Files` path to exist, and those four are written by verify itself and the stages after it,
+so the new verdict read INCOMPLETE before verify had run (`check-build-complete.mjs`: `missing` = exactly those four).
+They were removed from `## Files`: each is written under its own stage's `--from-frontmatter` scope and is a reconcile
+`pipeline_artifacts` member, so the build never needed them. 35 of 343 committed dev plans declare such artifacts; the
+command now says not to (pharn-dev-verify.md Step 1), and the GATE 2 report names a `/pharn-dev-plan` follow-up.
+
+**Second correction, same source.** The pinned `--timeout-ms 570000` (a foreground call under the Bash tool's 600 s
+cap) cannot hold this repo's `npm test`: CI's `Test` step took 586 s (run 41514424884) and two dev verify attempts here
+timed out at 570 s (`gate-not-measured`) with the host's load average at 50–140. The `run --next` line now runs with
+the Bash tool's `run_in_background: true` and `--timeout-ms 3600000`; the GATE_RUN_WIRING timeout pin allows that for
+a member marked `background` and requires the command to say so.
+
+**Third correction, same source.** The third verify attempt measured `test` red (exit 1, not timed out): one test,
+`run-gates.test.mjs` "resultsFile: null means NO PHARN_TEST_RESULTS variable", which reads the variable the runner
+itself hands every gate (measured: red with `PHARN_TEST_RESULTS` set, green without). The `test` token is now
+`env -u PHARN_TEST_RESULTS npm test::test`, pinned by `command-hygiene.test.mjs` with a mutant. `spawnGate` passing
+an inherited `PHARN_TEST_RESULTS` through when `resultsFile` is null is product code, so it is reported, not changed.
+
 ## Files
 
 - `.claude/commands/pharn-dev-verify.md` — Steps 1/3/4: runner + `check-verify --stamp`, INCOMPLETE, no substitution — dev command
@@ -132,10 +152,6 @@ the verify gates), and that check's own verdict is what stops `/pharn-dev-ship`;
 - `.dev/features/dev-verdict-discipline/GRILL.md`
 - `.dev/features/dev-verdict-discipline/REGRESSION.md`
 - `.dev/features/dev-verdict-discipline/regression-report.json`
-- `.dev/features/dev-verdict-discipline/VERIFY.md`
-- `.dev/features/dev-verdict-discipline/verify-report.json`
-- `.dev/features/dev-verdict-discipline/REVIEW.md`
-- `.dev/features/dev-verdict-discipline/SHIP.md`
 
 ## Contracts satisfied
 

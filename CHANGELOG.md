@@ -23,6 +23,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-03: **A pull request that changes product files must carry a green `/pharn-dev-ship` record.** The new
+  per-PR check `npm run check:ship-record` (`.dev/floor/check-ship-record.mjs`, a CI step on pull requests) REDs a PR
+  that changes a bump-triggering product path unless a `.dev/features/<name>/SHIP.md` in it records a green run: the
+  new five-line verdict block, ending `run-ended: GATE 2`, beside a `verify-report.json` that reads `PASS` from the
+  stamp path and a `regression-report.json` that reads `no-regressions`. It also REDs any record in the PR that shows a
+  run which stopped on a red verdict. The four trusted docs are exempt, because only a human edits them. It checks
+  presence, not coverage: one green record satisfies a PR, so a PR can still carry product changes no record covers,
+  and a record agreeing with its reports is not proof the stages ran. Found by the 2026-11-03 review: #377, #385, #391
+  and #392 merged past a red verify, a hand-substituted map, or no stage run at all. Dev apparatus only, so no
+  `SKILLS_VERSION` bump.
+
+### Changed
+
+- 2026-11-03: **`/pharn-dev-verify` takes its gate map from the gate runner, and `/pharn-dev-ship` never proceeds past
+  a red verdict.** `/pharn-dev-verify` now runs its gates through `pharn/floor/run-gates.mjs` and validates the stamp
+  with `check-verify.mjs --stamp`, as `/pharn-verify` does. A hand-typed map, a dropped gate, or a gate re-measured in
+  another tree is refused, and the verdict gains INCOMPLETE (a declared file is missing) and "gate not measured" (a
+  timed-out gate). Its gate calls run in the background with a one-hour timeout per gate, because this repo's own
+  `npm test` takes longer than a foreground call allows (586 s on CI). `/pharn-dev-ship` says that delegation covers GATE 1 and GATE 2 only, never a red floor verdict. It
+  also writes the verdict block into `SHIP.md`. `/pharn-dev-review` no longer says a finding "blocks" the increment:
+  no checker reads `REVIEW.md`. The dev verify and review commands run their formatters with `npx --no-install`. Dev
+  apparatus only, so no `SKILLS_VERSION` bump.
+
 ## [7.2.1] - 2026-11-02
 
 ### Added

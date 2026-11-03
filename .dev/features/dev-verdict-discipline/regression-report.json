@@ -1,0 +1,55 @@
+{
+  "base": "0f06ebcabe54c667dea6f707d77a39554af3b394",
+  "inside": [
+    ".claude/commands/pharn-dev-review.md",
+    ".claude/commands/pharn-dev-ship.md",
+    ".claude/commands/pharn-dev-verify.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/floor-gates.md",
+    ".github/workflows/ci.yml",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "package.json",
+    ".dev/floor/check-ship-record.mjs",
+    ".dev/floor/check-ship-record.test.mjs",
+    ".dev/floor/dev-verify-stamp.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5875,
+      "failed": 1,
+      "skipped": 4,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5879,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
