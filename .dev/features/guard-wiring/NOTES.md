@@ -94,3 +94,16 @@ pointed at the clone:
   after a local commit in the clone → `escapes: []`, exit 0 — so the maintainer commits the patch before running gates
   (L68).
 - `validate.mjs` → GREEN 37.
+
+After the owner ran apply.py (worktree; `apply.py` deleted, never committed):
+
+- `shasum -a 256 .claude/settings.json` → `d218f551515df41482b8a18885b76ee8a770aac2243a9ff1d6aa7d38f6083e05` (the AFTER
+  pin); committed alone as `63bde991` "guard-wiring: maintainer-applied human patch".
+- `node --test` over `hook-wiring`, `enforce-writes-scope`, `protect-trusted-paths` → `# tests 390 # pass 390 # fail 0`
+  (the onFailure pin now green).
+- `npm run check` (full chain, host load average ~250) → exit 0; `ℹ tests 6193`, `ℹ pass 6192`, `ℹ fail 0`,
+  `ℹ skipped 1`.
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."`
+- `check-changelog-entry --merge-base origin/main` → GREEN (3 new entries).
+- `check-surface-bump --merge-base origin/main` → `RED — [NOT_BUMPED] … ".claude/settings.json"`: expected in this
+  batch, the orchestrator bumps to 7.3.0 once.
