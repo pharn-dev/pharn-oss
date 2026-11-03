@@ -703,15 +703,43 @@ test("★ a symlinked griller file is refused, even when its target is inside th
   }
 });
 
-test("★ a griller reached through a symlinked DIRECTORY that resolves outside the repo is refused", () => {
-  const outside = repoWith({ "x/x.md": FM + PRE });
+// 7.3.0 (family-grammar-crlf): count-grillers no longer descends a symlinked DIRECTORY (capability-files-core.mjs), so
+// the outside-resolution refusal below is reached through the one link it still follows — a `pharn` root that is itself
+// a link (the operator's choice, GATE 1 of that increment). The twin after it pins that a link to a directory never
+// brings an outside griller into the extract at all: elsewhere it is not listed, below pharn/ count-grillers refuses.
+test("★ a griller reached through a linked `pharn` root that resolves outside the repo is refused", () => {
+  const outside = repoWith({ "pharn-pipeline/grillers/x/x.md": FM + PRE });
   const dir = repoWith({ "README.md": "# r\n" });
   try {
-    symlinkSync(join(outside, "x"), join(dir, "linked"));
-    assert.ok(statSync(join(dir, "linked", "x.md")).isFile(), "fixture sanity: count-grillers follows the link");
-    assertRefused(run([dir]), /griller "linked\/x\.md" resolves outside the repo/);
+    symlinkSync(outside, join(dir, "pharn"));
+    assert.ok(statSync(join(dir, "pharn", "pharn-pipeline", "grillers", "x", "x.md")).isFile(), "fixture sanity: the root link resolves");
+    assertRefused(run([dir]), /griller "pharn\/pharn-pipeline\/grillers\/x\/x\.md" resolves outside the repo/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("★ an outside griller behind a symlinked DIRECTORY never reaches the extract (not listed, or count-grillers refuses)", () => {
+  const outside = repoWith({ "x/x.md": FM + PRE });
+  try {
+    const elsewhere = repoWith({ "README.md": "# r\n" });
+    try {
+      symlinkSync(join(outside, "x"), join(elsewhere, "linked"));
+      const r = run([elsewhere]);
+      assert.doesNotMatch(r.stdout, /linked\/x\.md/, "a link outside pharn/ is not descended");
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+    const below = repoWith({ "README.md": "# r\n" });
+    try {
+      mkdirSync(join(below, "pharn", "pharn-pipeline", "grillers"), { recursive: true });
+      symlinkSync(join(outside, "x"), join(below, "pharn", "pharn-pipeline", "grillers", "linked"));
+      assertRefused(run([below]), /count-grillers\.mjs exited 1/);
+    } finally {
+      rmSync(below, { recursive: true, force: true });
+    }
+  } finally {
     rmSync(outside, { recursive: true, force: true });
   }
 });
