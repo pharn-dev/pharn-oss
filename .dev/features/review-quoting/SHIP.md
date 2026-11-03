@@ -27,6 +27,9 @@ Branch `fix/review-quoting`, cut from `origin/batch/audit-2026-11-03` @ `fb997e4
 10. `/pharn-dev-verify` (second run, at `e43e9061`): `.verdict` **`PASS`**. All seven gates exited 0; reconcile
     `CLEAN`.
 11. `/pharn-dev-review`: re-reviewed the fix delta. No new finding; four advisory findings fixed, two left by decision.
+12. **GATE 2 (final)**: **MERGE at integration**, decided by the batch orchestrator (a model) under the owner's
+    delegation, not a human decision. The orchestrator merges this branch into `batch/audit-2026-11-03`; this run makes
+    no merge, push to `batch/*` or PR itself.
 
 Mid-run coordination by the orchestrator, recorded:
 
