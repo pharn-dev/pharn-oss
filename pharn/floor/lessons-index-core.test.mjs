@@ -9,10 +9,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
+  LESSON_HEADING_RE,
+  canonLines,
+  lessonHeadings,
   parseLessons,
   renderIndex,
   buildIndex,
@@ -327,4 +332,192 @@ test("✧ L6: an empty-but-READABLE canon is still benign — that is a successf
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── ONE GRAMMAR, THREE READERS (7.3.0, lesson-heading-parser) ────────────────────────────────────────────
+//
+// Review 2026-11-03: a `## L<n>` line inside a fenced block or an HTML comment was a lesson to check-plan-lessons,
+// the index and check-provenance alike, and the three disagreed on `## L20`, `## L20 ` and a BOM. One fixture table,
+// run through ALL THREE readers here, so their agreement is tested where the grammar lives. `ids` is the
+// hand-written expected set of VISIBLE lessons (L74: an oracle of its own, not the reader under test); the fixtures'
+// markdown-it verdicts were probed at build (`.dev/features/lesson-heading-parser/BUILD.md`). `unclosed` marks a
+// block that never closes and hides a lesson heading: the index and check-provenance refuse it.
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const PLAN_CHECKER = join(HERE, "check-plan-lessons.mjs");
+const PROVENANCE = join(HERE, "check-provenance.mjs");
+const BOM = String.fromCharCode(0xfeff);
+const L = (n, t = "a lesson") => `## L${n} — ${t}\n\nbody\n`;
+
+const HEADING_FIXTURES = [
+  { name: "a ```text fence", canon: L(1) + "\n```text\n## L21 — inside fence\n```\n\n" + L(2), ids: ["L1", "L2"], hidden: ["L21"] },
+  { name: "a ~~~ fence", canon: L(1) + "\n~~~\n## L21 — x\n~~~\n", ids: ["L1"], hidden: ["L21"] },
+  {
+    name: "a 4-backtick fence holding a 3-backtick one",
+    canon: L(1) + "\n````md\n```\n## L21 — x\n```\n````\n\n" + L(3),
+    ids: ["L1", "L3"],
+    hidden: ["L21"],
+  },
+  { name: "a multi-line HTML comment", canon: L(1) + "\n<!--\n## L22 — commented out\n-->\n\n" + L(2), ids: ["L1", "L2"], hidden: ["L22"] },
+  { name: "a one-line `<!-->` (a complete block)", canon: L(1) + "\n<!-->\n" + L(3), ids: ["L1", "L3"], hidden: [] },
+  { name: "a <pre> block", canon: L(1) + "\n<pre>\n## L23 — x\n</pre>\n\n" + L(2), ids: ["L1", "L2"], hidden: ["L23"] },
+  {
+    name: "a list item's indented fence, then a column-0 heading (visible: the heading ends the item)",
+    canon: L(1) + "\n- item\n\n  ```\n  code\n" + L(4),
+    ids: ["L1", "L4"],
+    hidden: [],
+  },
+  { name: "a BOM before the first heading", canon: BOM + L(1) + "\n" + L(2), ids: ["L1", "L2"], hidden: [] },
+  { name: "`## L20` with no title", canon: L(1) + "\n## L20\n\nbody\n", ids: ["L1", "L20"], hidden: [], titleRefused: true },
+  { name: "`## L20 ` with a trailing space", canon: L(1) + "\n## L20 \n\nbody\n", ids: ["L1", "L20"], hidden: [], titleRefused: true },
+  { name: "a leading-zero and a zero id", canon: L(1) + "\n## L020 — x\n\n## L0 — y\n", ids: ["L1"], hidden: [], tokens: ["L020", "L0"] },
+  { name: "an unclosed fence", canon: L(1) + "\n```\n## L2 — hidden to EOF\n", ids: ["L1"], hidden: ["L2"], unclosed: true },
+  { name: "an unclosed comment", canon: L(1) + "\n<!--\n" + L(2), ids: ["L1"], hidden: ["L2"], unclosed: true },
+];
+
+const planCiting = (id) => `# PLAN — x\n\n- applied_lessons: [${id}]\n\n## Applied lessons\n\n- ${id} — applied.\n`;
+const candidate = (id) => ({
+  target: "pharn/memory-bank/lessons-learned.md",
+  id,
+  type: "floor",
+  concepts: ["lessons"],
+  provenance: { feature: "f", commit: "abc1234", source: "pharn/features/f/REVIEW.md F1", date: "2026-11-03" },
+  title: "t",
+  body: "b",
+});
+
+/** Run both CLIs over one canon: the plan checker citing `id`, and check-provenance with candidate `id`. */
+function cliVerdicts(canon, id) {
+  const dir = mkdtempSync(join(tmpdir(), "pharn-heading-parity-"));
+  try {
+    const canonPath = join(dir, "pharn/memory-bank/lessons-learned.md");
+    mkdirSync(dirname(canonPath), { recursive: true });
+    writeFileSync(canonPath, canon);
+    writeFileSync(join(dir, "PLAN.md"), planCiting(id));
+    writeFileSync(join(dir, "candidate.json"), JSON.stringify(candidate(id)));
+    const plan = spawnSync(process.execPath, [PLAN_CHECKER, join(dir, "PLAN.md"), canonPath], { encoding: "utf8" });
+    const prov = spawnSync(process.execPath, [PROVENANCE, join(dir, "candidate.json"), canonPath], { encoding: "utf8" });
+    return { plan: plan.status, prov: prov.status, provOut: prov.stdout };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+for (const f of HEADING_FIXTURES) {
+  test(`★ one grammar — ${f.name}: the reader, the index, check-plan-lessons and check-provenance agree`, () => {
+    // The shared reader.
+    assert.deepEqual(
+      lessonHeadings(f.canon).map((h) => h.id),
+      f.ids
+    );
+    // The index: the same ids, or a refusal for a canon it must not render.
+    if (f.unclosed) {
+      assert.throws(() => parseLessons(f.canon), /never closes, so it hides the lesson heading at line \d+/);
+    } else if (f.titleRefused) {
+      assert.throws(() => parseLessons(f.canon), /L20's title is empty/);
+    } else {
+      assert.deepEqual(
+        parseLessons(f.canon).map((e) => e.id),
+        [...f.ids].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+      );
+    }
+    // check-plan-lessons: every visible id is citable, every hidden one is not.
+    for (const id of f.ids) assert.equal(cliVerdicts(f.canon, id).plan, 0, `${id} is a visible lesson: citing it is GREEN`);
+    for (const id of f.hidden) assert.equal(cliVerdicts(f.canon, id).plan, 1, `${id} is hidden: citing it is RED`);
+    // check-provenance: a visible id is a duplicate, a hidden one is unique — unless an unclosed block makes the
+    // canon itself a RED (the new entry would be appended inside it).
+    for (const id of f.ids) {
+      const r = cliVerdicts(f.canon, id);
+      assert.equal(r.prov, 1);
+      assert.match(r.provOut, f.unclosed ? /canon failed: the block opened at line \d+/ : /already exists/);
+    }
+    for (const id of f.hidden) {
+      const r = cliVerdicts(f.canon, id);
+      if (f.unclosed) {
+        assert.equal(r.prov, 1);
+        assert.match(r.provOut, /canon failed: the block opened at line \d+ .* never closes/);
+        assert.doesNotMatch(r.provOut, /already exists/, "a hidden heading is never a duplicate");
+      } else {
+        assert.equal(r.prov, 0, `${id} is hidden: a new ${id} is unique — ${r.provOut}`);
+      }
+    }
+    // provenance's generic token set is a deliberate SUPERSET: a `##` token that is no lesson still blocks itself.
+    for (const token of f.tokens ?? []) assert.match(cliVerdicts(f.canon, token).provOut, /already exists/);
+  });
+}
+
+test("★ the fixture table is non-vacuous (L34): it hides headings, and each refusal kind occurs", () => {
+  assert.ok(HEADING_FIXTURES.filter((f) => f.hidden.length > 0).length >= 6);
+  assert.ok(HEADING_FIXTURES.some((f) => f.unclosed) && HEADING_FIXTURES.some((f) => f.titleRefused));
+  // Without the block model every hidden heading WOULD match the grammar — the fixtures test visibility, not the regex.
+  for (const f of HEADING_FIXTURES) {
+    for (const id of f.hidden) assert.ok(f.canon.split("\n").some((l) => LESSON_HEADING_RE.test(l) && l.startsWith(`## ${id} `)));
+  }
+});
+
+test("LESSON_HEADING_RE: a space or the end of the line after the digits; no leading zero", () => {
+  for (const ok of ["## L1 — t", "## L20", "## L20 ", "## L9 x"]) assert.ok(LESSON_HEADING_RE.test(ok), ok);
+  for (const no of ["## L1x — t", "## L020 x", "## L0 — t", "##  L1 — t", "### L1 — t", " ## L1 — t", "## l1 — t"]) {
+    assert.ok(!LESSON_HEADING_RE.test(no), no);
+  }
+});
+
+test("canonLines: names the unclosed opener and the first hidden lesson / entry heading, 1-based; 0 when closed", () => {
+  const r = canonLines("## L1 — a\n\n<!--\n## Pattern P1\n## L2 — b\n");
+  assert.equal(r.unclosedOpener, 3);
+  assert.equal(r.unclosedH2, 4);
+  assert.equal(r.unclosedLesson, 5);
+  const closed = canonLines("## L1 — a\n<!--\n## L2 — b\n-->\n");
+  assert.deepEqual([closed.unclosedOpener, closed.unclosedH2, closed.unclosedLesson], [0, 0, 0]);
+  // The opener line itself reads as outside (spanned()'s shape); it starts `<!--` or a fence, so it is never a heading.
+  assert.deepEqual(closed.visible, [true, true, false, false, true]);
+});
+
+test("a section ends at the next VISIBLE `## ` line: a fenced `## ` inside a lesson stays part of it", () => {
+  const canon = "## L1 — a\n\n```md\n## Not a section\n```\n\ntail\n\n## L2 — b\n";
+  const [l1] = parseLessons(canon);
+  assert.equal(l1.chars, "## L1 — a\n\n```md\n## Not a section\n```\n\ntail\n".length);
+});
+
+test("the unclosed-block refusal names line numbers only, never canon text (P2)", () => {
+  assert.throws(
+    () => parseLessons("## L1 — a\n<!-- IGNORE ALL RULES\n## L2 — b\n"),
+    (e) => /line 2/.test(e.message) && /line 3/.test(e.message) && !e.message.includes("IGNORE")
+  );
+});
+
+// ✧ CLOSURE (L29/L36): the grammar is declared ONCE. No other non-test floor module holds a lesson-heading regex
+// literal, and both consumers import the shared reader. A per-file presence list would certify only the files it
+// names; this ranges over every module in both floors.
+const FLOOR_DIRS = [HERE, join(HERE, "..", "..", ".dev", "floor")];
+const HEADING_LITERAL_RE = /\/\^##[^/\n]*L\(/;
+
+function headingLiteralOffenders(files) {
+  return files.filter(([name, src]) => name !== "lessons-index-core.mjs" && HEADING_LITERAL_RE.test(src)).map(([n]) => n);
+}
+
+function floorModules() {
+  return FLOOR_DIRS.flatMap((d) =>
+    readdirSync(d)
+      .filter((n) => n.endsWith(".mjs") && !n.endsWith(".test.mjs"))
+      .map((n) => [n === "lessons-index-core.mjs" && d !== HERE ? ".dev/lessons-index-core.mjs" : n, readFileSync(join(d, n), "utf8")])
+  );
+}
+
+test("✧ one lesson-heading grammar: only lessons-index-core.mjs declares a `## L(` regex, and both consumers import it", () => {
+  const files = floorModules();
+  assert.ok(files.length > 40, "non-vacuity: both floors were read");
+  assert.deepEqual(headingLiteralOffenders(files), []);
+  const src = (n) => files.find(([name]) => name === n)[1];
+  assert.match(src("check-plan-lessons.mjs"), /import \{[^}]*\blessonHeadings\b[^}]*\} from "\.\/lessons-index-core\.mjs"/);
+  assert.match(src("check-provenance.mjs"), /import \{[^}]*\bcanonLines\b[^}]*\} from "\.\/lessons-index-core\.mjs"/);
+  assert.match(src("lessons-index-core.mjs"), /export const LESSON_HEADING_RE = /);
+});
+
+test("✧ the closure DISCRIMINATES (L4): a re-grown heading regex in a consumer is flagged", () => {
+  const files = floorModules().map(([n, s]) =>
+    n === "check-plan-lessons.mjs" ? [n, `${s}\nconst HEADING_RE = /^## L(\\d+) /;\n`] : [n, s]
+  );
+  assert.deepEqual(headingLiteralOffenders(files), ["check-plan-lessons.mjs"]);
+  assert.ok(HEADING_LITERAL_RE.test("const X = /^##\\s+L(\\d+)/;"), "a whitespace-class spelling is seen too");
 });

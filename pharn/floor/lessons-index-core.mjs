@@ -39,16 +39,25 @@
 //     keyed on this index is ADVISORY-grade context selection, never a guarantee.
 //   - "The index was consulted" NEVER means "the relevant lessons were read".
 //
-// Deterministic (P5): enumeration = `^## L(\d+) ` heading membership; ordering = numeric id ascending (a
+// THE ONE LESSON-HEADING GRAMMAR (7.3.0, lesson-heading-parser). LESSON_HEADING_RE and canonLines()/lessonHeadings()
+// below are what check-plan-lessons.mjs and check-provenance.mjs read canon through too; before, the three files held
+// three regexes and plain line scans, so a `## L<n>` inside a fenced block or an HTML comment was a lesson to all of
+// them and `## L20` (no title) or a BOM split them (review 2026-11-03). "Which line is a heading" is spec-template-core.mjs's
+// column-0 block model (blockSpans), reused rather than copied (L35) — so a change made THERE for SPEC sections also
+// moves which lessons exist HERE. That coupling is accepted and stated in both headers.
+//
+// Deterministic (P5): enumeration = VISIBLE LESSON_HEADING_RE membership; ordering = numeric id ascending (a
 // total order, independent of file order); rendering = a pure function of the parsed entries; NO timestamps
-// anywhere → running twice yields byte-identical output. A duplicate id is a thrown Error (fail-closed),
-// never a silent overwrite.
+// anywhere → running twice yields byte-identical output. A duplicate id, or a lesson heading hidden by a block
+// that never closes, is a thrown Error (fail-closed), never a silent overwrite or a silent drop.
 //
 // Non-LLM, stdlib-only.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_CANON_ROOT, CANON_ROOT_FLAG, parseCanonRoot } from "./canon-root.mjs";
+import { stripBom } from "./frontmatter-core.mjs";
+import { blockSpans } from "./spec-template-core.mjs";
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // THE PROFILE — what a surface supplies; everything else in this file is shared code
@@ -141,14 +150,73 @@ export const OUT_PATH = PRODUCT_PROFILE.outPath;
 // SECTION 1 — the canon ENTRY contract (parsing). Changes when the entry shape changes.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-// A lesson heading: `## L<n> — <title>`. The trailing space is required so `## L1x` cannot match `L1` —
-// the SAME discipline as pharn/floor/check-plan-lessons.mjs, re-implemented in-file (no sibling import,
-// P3; that file carries the identical note).
-const HEADING_RE = /^## L(\d+) (.*)$/;
+// A lesson heading: `## L<n> — <title>`, THE one definition (check-plan-lessons.mjs and check-provenance.mjs import it
+// or the readers below). After the digits comes a space or the end of the line, so `## L1x` is not L1. The id has no
+// leading zero, so `## L020` (which one reader called L020 and another L20) and `## L0` are no lesson heading to anyone.
+// The title is optional here so `## L20` and `## L20 ` are both L20 to every reader; the index then refuses the empty
+// title (assertSafeTitle), and check-provenance refuses a new L20 as a duplicate.
+export const LESSON_HEADING_RE = /^## L([1-9][0-9]*)(?: (.*))?$/;
 
 // Any `## `-level heading — the section boundary. A lesson's SPAN runs from its own heading to the next
-// one (or EOF).
+// VISIBLE one (or EOF).
 const ANY_H2_RE = /^## /;
+
+// A canon ENTRY heading of any id scheme: `##`, whitespace, a token — check-provenance.mjs's id grammar (the first
+// token is the id), exported so its reader and the unclosed-block scan below are one pattern.
+export const H2_ENTRY_RE = /^##\s+(\S+)/;
+
+/**
+ * Canon read the way a renderer reads its `## ` level — the ONE reader under all three lessons tools.
+ *
+ * Exactly one leading BOM is stripped (frontmatter-core.mjs stripBom), lines split on `\r?\n`, and a line is VISIBLE
+ * unless it sits inside a column-0 fenced block, HTML comment or <pre>/<script>/<style>/<textarea> block
+ * (spec-template-core.mjs blockSpans — its stated bounds apply here: an opener indented 1–3 columns at the top level and
+ * HTML block types 6–7 are not modelled, so a heading hidden only by those still counts, fail-open as before 7.3.0).
+ * For a block that never closes, `unclosedOpener` is its opening line, `unclosedH2` the first `## ` line it hides and
+ * `unclosedLesson` the first LESSON_HEADING_RE line it hides (all 1-based; 0 when none). Such a block hides every later
+ * entry from a reader, so the index (a hidden lesson) and check-provenance (any hidden `##` entry) refuse it rather
+ * than drop entries silently.
+ *
+ * @param {string} text
+ * @returns {{lines: string[], visible: boolean[], unclosedOpener: number, unclosedH2: number, unclosedLesson: number}}
+ */
+export function canonLines(text) {
+  const lines = stripBom(String(text)).split(/\r?\n/);
+  const { inside, unclosed: opener } = blockSpans(lines);
+  const visible = inside.map((v) => v === -1);
+  let unclosedH2 = 0;
+  let unclosedLesson = 0;
+  if (opener !== -1) {
+    for (let i = opener + 1; i < lines.length; i++) {
+      if (!unclosedH2 && H2_ENTRY_RE.test(lines[i])) unclosedH2 = i + 1;
+      if (LESSON_HEADING_RE.test(lines[i])) {
+        unclosedLesson = i + 1;
+        break;
+      }
+    }
+  }
+  return { lines, visible, unclosedOpener: opener === -1 ? 0 : opener + 1, unclosedH2, unclosedLesson };
+}
+
+/**
+ * The VISIBLE lesson headings of canon, in file order: `[{ index, num, id, rest }]` (`index` 0-based, `rest` the text
+ * after `## L<n> `, "" when absent). A heading-shaped line inside a fence, a comment or a raw block is DATA, not a
+ * lesson (L6).
+ * @param {string} text
+ */
+export function lessonHeadings(text) {
+  return headingsOf(canonLines(text));
+}
+
+function headingsOf({ lines, visible }) {
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!visible[i]) continue;
+    const m = lines[i].match(LESSON_HEADING_RE);
+    if (m) out.push({ index: i, num: Number(m[1]), id: `L${m[1]}`, rest: m[2] ?? "" });
+  }
+  return out;
+}
 
 // The lesson-entry tag line (`.claude/commands/pharn-memory-promote.md`, "The lesson-entry tag line" —
 // cited, never restated, P4). Position: the FIRST NON-EMPTY line after the heading. Grammar:
@@ -176,9 +244,11 @@ const CONCEPT_RE = /^[a-z0-9-]+$/;
 
 // A string with no control characters and a bounded length. This is the PRECONDITION that must run BEFORE
 // any anchored shape regex, never as a replacement for one (lessons-learned.md L14 — cited, not restated,
-// P4): JavaScript `$` without the `m` flag matches at end-of-string OR just before a single trailing
-// newline, so `CONCEPT_RE.test("enum-gate\n")` is TRUE. A shape regex used ALONE would therefore re-admit
-// exactly the trailing-newline control-char vector this guard exists to reject. Compose, don't replace.
+// P4). Corrected in 7.3.0: in JavaScript, `$` without the `m` flag matches ONLY at the end of the input —
+// `CONCEPT_RE.test("enum-gate\n")` is FALSE (measured, Node 24), unlike Perl's or Python's `$`. So on this path
+// the anchored regex alone already refuses a trailing newline; the hole L14 guards is a `.trim()` or a line-split
+// BEFORE an anchored regex. The guard is kept for its length bound and string-type check, and so a future
+// refactor that trims cannot silently reopen that hole. Compose, don't replace.
 // Implemented as a char-code scan rather than a control-char REGEX on purpose — the same choice
 // check-provenance.mjs makes, for the same stated reason: a regex holding literal control characters is
 // neither readable in a diff nor safe against a copy-paste that silently drops them.
@@ -245,18 +315,23 @@ function assertSafeTitle(id, title) {
 /**
  * Parse canon into entries, sorted by numeric id ascending.
  * Returns [{ id, num, type, concepts, title, date, chars, tokens }].
- * Throws (fail-closed) on a duplicate id or an unsafe title. Never invents a field: an absent one renders
- * ABSENT, a defective one renders MALFORMED — never a guess.
+ * Throws (fail-closed) on a duplicate id, an unsafe title, or a lesson heading hidden by a block that never closes.
+ * Never invents a field: an absent one renders ABSENT, a defective one renders MALFORMED — never a guess.
  */
 export function parseLessons(canonText) {
-  const lines = canonText.split(/\r?\n/);
-
-  // Pass 1 — heading membership + section spans.
-  const starts = [];
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(HEADING_RE);
-    if (m) starts.push({ i, num: Number(m[1]), rest: m[2] });
+  const read = canonLines(canonText);
+  const { lines, visible } = read;
+  if (read.unclosedLesson) {
+    // Names line numbers only, never canon text (P2). The remedy is a human edit that closes the block in canon.
+    throw new Error(
+      `lessons-index: the block opened at line ${read.unclosedOpener} never closes, so it hides the lesson heading at ` +
+        `line ${read.unclosedLesson} and every entry after it — refusing to index a canon a reader cannot see; close ` +
+        `the block in canon (a human edit)`
+    );
   }
+
+  // Pass 1 — VISIBLE heading membership + section spans.
+  const starts = headingsOf(read).map((h) => ({ i: h.index, num: h.num, rest: h.rest }));
 
   const entries = [];
   const seen = new Map(); // L15: a Map, never a plain object indexed by an arbitrary key.
@@ -267,12 +342,12 @@ export function parseLessons(canonText) {
     }
     seen.set(id, i);
 
-    // SPAN: the FULL SECTION — from this `## L<n>` heading through the line before the next `## ` heading,
-    // or EOF. That is what a reader actually pays to read, which is the only thing the ~tokens column is
-    // for. Named here so the comparison guard cannot freeze an unstated choice.
+    // SPAN: the FULL SECTION — from this `## L<n>` heading through the line before the next VISIBLE `## `
+    // heading, or EOF. That is what a reader actually pays to read, which is the only thing the ~tokens column
+    // is for. Named here so the comparison guard cannot freeze an unstated choice.
     let end = lines.length;
     for (let j = i + 1; j < lines.length; j++) {
-      if (ANY_H2_RE.test(lines[j])) {
+      if (visible[j] && ANY_H2_RE.test(lines[j])) {
         end = j;
         break;
       }

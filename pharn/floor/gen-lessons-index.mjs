@@ -70,6 +70,16 @@ export function generate(targetDir, profile = PRODUCT_PROFILE) {
   return { status, entries, updated };
 }
 
+/** A thrown value as one line of text, through a path that cannot itself throw (L62). Exported for the dev wrapper. */
+export function errorText(e) {
+  try {
+    const msg = e instanceof Error ? e.message : String(e);
+    return msg.split(/\r?\n/)[0];
+  } catch {
+    return Object.prototype.toString.call(e);
+  }
+}
+
 function main() {
   const taken = takeCanonRoot(process.argv.slice(2));
   if (!taken.ok) {
@@ -79,7 +89,16 @@ function main() {
   const profile = productProfile(taken.root);
   const { canonPath: CANON_PATH, outPath: OUT_PATH } = profile;
   const target = taken.rest[0] || ".";
-  const { status, entries, updated } = generate(target, profile);
+  let result;
+  try {
+    result = generate(target, profile);
+  } catch (e) {
+    // An invalid canon (a duplicate id, an unsafe title, an unclosed block) or a read failure is a RED line, never a
+    // stack trace (7.3.0, review 2026-11-03): the exit code is unchanged (1), and the message is the core's own.
+    process.stdout.write(`RED — ${errorText(e)}\n`);
+    process.exit(1);
+  }
+  const { status, entries, updated } = result;
   if (status === STATUS_NO_CANON) {
     process.stdout.write(
       `lessons-index: no canon at ${CANON_PATH} (absent, or no lessons yet) — nothing to index; ${OUT_PATH} not written\n`

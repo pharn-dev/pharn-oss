@@ -13,9 +13,10 @@
 // verdict ranges only over the enum-gated fields (target / provenance / id / type / concepts), never the body.
 //
 // The ✦ test (trailing-newline concept) is the L14 witness: it proves the control-char guard runs BEFORE the
-// anchored shape regex rather than instead of it. `CONCEPT_RE.test("enum-gate\n")` is TRUE on its own — JS
-// `$` without the `m` flag matches before a single trailing newline — so a shape-regex-only check would
-// admit it. If this test ever goes green with the guard removed, the tightening silently reopened the hole.
+// anchored shape regex rather than instead of it. Corrected in 7.3.0: `CONCEPT_RE.test("enum-gate\n")` is FALSE on
+// its own — JS `$` without the `m` flag matches ONLY at the end of the input (measured, asserted in the ✦ test) — so
+// the shape regex alone would also refuse it; the test pins the ORDER (the guard speaks first), so a refactor that
+// trims before the regex, where the hole is real, cannot silently drop the guard.
 //
 // The ✧ test (enum agreement) is the P4 drift guard: TYPE_ENUM lives in check-provenance.mjs and is restated
 // once, for humans, in the /pharn-dev-memory-promote doc. Neither copy is asserted from a literal in THIS
@@ -360,8 +361,10 @@ test("RED: a concept with an illegal character exits 1, naming the value", () =>
 });
 
 test("✦ L14 WITNESS: a trailing-newline concept is REJECTED by the guard, not admitted by the shape regex", () => {
-  // /^[a-z0-9-]+$/.test("enum-gate\n") === true — the guard is the only thing standing between this
-  // candidate and canon. If this test goes green after a refactor, the guard was replaced, not composed.
+  // Corrected in 7.3.0: the shape regex alone ALSO refuses this value (JS `$` without `m` is end-of-input only), so
+  // what this pins is that the GUARD speaks first; the hole L14 guards opens only where a value is trimmed first.
+  assert.equal(/^[a-z0-9-]+$/.test("enum-gate\n"), false, "measured: JS `$` does not admit a trailing newline");
+  assert.equal(/^[a-z0-9-]+$/.test("enum-gate\n".trim()), true, "the real vector: a trim before the regex");
   const r = runWith({ ...VALID, concepts: ["enum-gate\n"] });
   assert.equal(r.status, 1);
   assert.match(r.stdout, /RED — concepts failed/);
@@ -610,14 +613,14 @@ test("✧ 6.49.3: BOTH promote commands HALT and ask on a failed `git rev-parse 
 test("✧ L7: no command outside the two *memory-promote ones declares a memory-bank path in `writes:`", () => {
   // L7's own prescribed remedy, applied at the moment a canon path first becomes reachable from the
   // PRODUCT surface: pin the declaration so a future re-widening fails closed. Over-declaring a canon
-  // path in some other stage's `writes:` would hand that stage a direct, ungated canon write — exactly
-  // the power the accept/deny gate exists to withhold.
+  // path in some other stage's `writes:` is the over-grant L7 records; since 3.1.1 protect-trusted-paths.cjs
+  // denies a canon write under any scope whose origin is not a promote command, so it would no longer land.
   //
-  // HONEST BOUND, and it is a big one: this pins a DECLARATION, not a behavior. `/pharn-build` derives
-  // its scope from a PLAN's `## Files` via `set-writes-scope.cjs --from-plan` and never reads a `writes:`
-  // declaration at all, so a plan naming a canon path bypasses this guard entirely. Recorded follow-up:
-  // `canon-write-denylist` (a deny that does not depend on any declaration being honest). Do not read a
-  // green run here as "canon is unreachable" — it is not.
+  // HONEST BOUND: this pins a DECLARATION, not a behavior. `/pharn-build` derives its scope from a PLAN's
+  // `## Files` via `set-writes-scope.cjs --from-plan` and never reads a `writes:` declaration, so this guard
+  // never sees a plan; that route is closed by the hook's canon denylist (3.1.1) and, from 7.3.0, by the setter
+  // refusing a plan that names canon. A Bash write still reaches canon (L19), so do not read a green run here as
+  // "canon is unreachable".
   const offenders = [];
   for (const file of readdirSync(COMMANDS_DIR)
     .filter((f) => f.endsWith(".md"))

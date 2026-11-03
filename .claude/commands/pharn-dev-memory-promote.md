@@ -1,5 +1,5 @@
 ---
-description: "Prepare and GATE the promotion of ONE lesson/pattern to the canonical memory-bank. It automates the MECHANICS — assemble the entry (target, id, provenance{feature,commit,source,date}, a closed-enum `type`, a 1–6 item `concepts[]` tag list, plus free-text title/body), capture provenance deterministically, validate shape + detect duplicate ids (.dev/floor/check-provenance.mjs), set the fix #7 writes-scope to the ONE target canon file — then HALTS for explicit human accept/deny before any write. It does NOT decide what is canon; the model NEVER self-promotes. FLOOR (a TESTED checker — .dev/floor/check-provenance.mjs, whose behavior check-provenance.test.mjs pins): no CANDIDATE reaches the human gate without valid, well-shaped provenance, a unique id, a target in the canon enum, and well-SHAPED `type`/`concepts` — on the candidate only, shape, not the rendered canon tag line. FLOOR (a HOOK — fix #7): the write lands only in the declared canon file. FLOOR, STRONGER than the product twin and deliberately so: `commit` admits NO `unknown` here, so the terminal fallback on a failed `git rev-parse HEAD` is HALT-and-ask, never a placeholder. FLOOR BY KIND, UNTESTED BY IMPLEMENTATION — stated separately because collapsing it into the line above would make this summary read stronger than the body it summarizes: the Step-3 `title` shape check (primitive #3) and the Step-6 canon content-hash re-verification (primitive #2) are the RIGHT KIND of operation, but each is an inline `node -e` one-liner with NO test file, so nothing pins that its character class or its hash comparison is written correctly; read them as 'a deterministic gate that runs when its step runs', never as 'a verified floor checker'. And EVERY floor claim above is subject to the two clocks: nothing on the floor forces this command, or any step of it, to run. ADVISORY/HUMAN: whether the lesson is true, general, or worth canonizing, whether the type/concepts VALUES actually describe it, whether the RENDERED entry's tag line conforms (the floor checks the candidate at Step 3; the entry is rendered at Step 6, after the gate; Step 6 copy-through narrows the gap but does NOT establish a floor guarantee) — and the accept/deny halt itself (the floor cannot verify a human said yes). 'memory-promote promoted it' NEVER means 'the lesson is sound', and 'typed floor' NEVER means 'about the floor' (P0)."
+description: "Prepare and GATE the promotion of ONE lesson/pattern to the canonical memory-bank. It automates the MECHANICS — assemble the entry (target, id, provenance{feature,commit,source,date}, a closed-enum `type`, a 1–6 item `concepts[]` tag list, plus free-text title/body), capture provenance deterministically, validate shape + detect duplicate ids (.dev/floor/check-provenance.mjs) — then HALTS for explicit human accept/deny; only on an accept does it set the fix #7 writes-scope to the ONE target canon file and write. It does NOT decide what is canon; the model NEVER self-promotes. FLOOR (a TESTED checker — .dev/floor/check-provenance.mjs, whose behavior check-provenance.test.mjs pins): no CANDIDATE reaches the human gate without valid, well-shaped provenance, a unique id, a target in the canon enum, and well-SHAPED `type`/`concepts` — on the candidate only, shape, not the rendered canon tag line. FLOOR (a HOOK — fix #7): the write lands only in the declared canon file. FLOOR, STRONGER than the product twin and deliberately so: `commit` admits NO `unknown` here, so the terminal fallback on a failed `git rev-parse HEAD` is HALT-and-ask, never a placeholder. FLOOR BY KIND, UNTESTED BY IMPLEMENTATION — stated separately because collapsing it into the line above would make this summary read stronger than the body it summarizes: the Step-3 `title` shape check (primitive #3) and the Step-6 canon content-hash re-verification (primitive #2) are the RIGHT KIND of operation, but each is an inline `node -e` one-liner with NO test file, so nothing pins that its character class or its hash comparison is written correctly; read them as 'a deterministic gate that runs when its step runs', never as 'a verified floor checker'. And EVERY floor claim above is subject to the two clocks: nothing on the floor forces this command, or any step of it, to run. ADVISORY/HUMAN: whether the lesson is true, general, or worth canonizing, whether the type/concepts VALUES actually describe it, whether the RENDERED entry's tag line conforms (the floor checks the candidate at Step 3; the entry is rendered at Step 6, after the gate; Step 6 copy-through narrows the gap but does NOT establish a floor guarantee) — and the accept/deny halt itself (the floor cannot verify a human said yes). 'memory-promote promoted it' NEVER means 'the lesson is sound', and 'typed floor' NEVER means 'about the floor' (P0)."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -104,60 +104,33 @@ instance); a proposed `injection` member was dropped at zero instances (P7).
 
 **Legacy entries HAVE been retrofitted — but not by this command.** `check-provenance.mjs` keys on
 `candidate.json` and **never scans canon**, so the two fields are required of **NEW** candidates only. The
-legacy L1–L17 were retro-tagged by a separate increment travelling the **ordinary gated build path** —
-declared in its PLAN's `## Files`, scoped by `set-writes-scope.cjs --from-plan`, approved by a human at the
-plan gate — because this command structurally **cannot** do it: its duplicate-id check is a deterministic
-RED on an id that already exists, and Step 6 **appends** a whole entry rather than annotating one.
+legacy L1–L17 were retro-tagged by a separate increment through a build plan's `## Files` — a route that has
+been **closed** since: `protect-trusted-paths.cjs` denies a canon write under any scope whose origin is not a
+promote command (3.1.1), and from 7.3.0 the setter refuses a plan that names canon. This command structurally
+**cannot** retag either: its duplicate-id check is a deterministic RED on an id that already exists, and Step 6
+**appends** a whole entry rather than annotating one.
 
-**The standing division, so it need not be re-derived:** _annotating_ an existing entry travels the
-ordinary gated build path; _promoting_ a new entry travels **this** command, which remains the sole path
-for an entry that ENTERS canon with provenance. A retag creates no entry and no `provenance`, so
+**The standing division, so it need not be re-derived:** _annotating_ an existing entry is a **human hand-edit**
+outside the agent loop (the hook's canon deny message names it); _promoting_ a new entry travels **this**
+command, which remains the sole agent path for an entry that ENTERS canon with provenance. A retag creates no entry and no `provenance`, so
 `pharn/ARCHITECTURE.md §5`'s provenance-per-entry clause is not triggered by one — which is why a retag
 does **not** retro-fill provenance. Any consumer reading the tag line must still **tolerate untagged
 entries**: the checker never scans canon, so nothing here guarantees canon is uniformly tagged.
 
-## Step 0 — Resolve the target, then set the writes-scope (fix #7, fail-closed)
+## Step 0 — Resolve the target
 
-1. **Resolve the ONE target canon file by deterministic membership (P5)** from the invocation — never LLM
-   classification:
-   - promoting a **lesson** → `.dev/memory-bank/lessons-learned.md`;
-   - promoting a **pattern** → `.dev/memory-bank/pattern-library.md`.
-   - If the invocation does not say which (ambiguous) → **HALT and ask** the human (the terminal fallback is
-     a question, never a guess). `feature-catalog.md` / `architecture-context.md` are **out of scope** — this
-     command targets only the two prescription files (refuse if asked to write them).
-2. **Set the scope to that single file** (the deliberate act of declaring a `.dev/memory-bank/**` path **is** part
-   of the P2 gate — by design, fix #7):
+**Resolve the ONE target canon file by deterministic membership (P5)** from the invocation — never LLM
+classification:
 
-   ```bash
-   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-dev-memory-promote.md --target <canon-file>
-   ```
+- promoting a **lesson** → `.dev/memory-bank/lessons-learned.md`;
+- promoting a **pattern** → `.dev/memory-bank/pattern-library.md`.
+- If the invocation does not say which (ambiguous) → **HALT and ask** the human (the terminal fallback is
+  a question, never a guess). `feature-catalog.md` / `architecture-context.md` are **out of scope** — this
+  command targets only the two prescription files (refuse if asked to write them).
 
-   Deterministic floor step (P0/P5): `writes:` is the placeholder `.dev/memory-bank/<canon-file>`; the setter
-   narrows it to the one `--target` path, so the emitted scope is **exactly that one file** — not all of
-   `.dev/memory-bank/`. If a later write is blocked, the fix is to **pass the correct `--target` and re-run this
-   setter** — never bypass the hook (CLAUDE.md, "Writes-scope").
-
-3. **Record this scope on the open reconciliation epoch — IMMEDIATELY after the setter above, never
-   before it:**
-
-   ```bash
-   node pharn/floor/reconcile-baseline.mjs --amend-scope
-   ```
-
-   **Why.** This command runs **inside** a `/pharn-dev-ship` epoch anchored back at `/pharn-dev-build`
-   Step 0, and that epoch holds **one** opening `scope_snapshot` — the build's, which per **L7** may
-   never name canon. Without this line the canon write below is hook-approved, human-accepted, and still
-   reported by `check-bash-reconcile.mjs` as _"a write reached it outside the guarded tool surface"_, so
-   every promoting ship run ends `npm run check` RED. Measured as
-   `.dev/features/product-features-relocation/REVIEW.md` **F3**; **L17** is the same failure mode. The
-   ordering mirrors `--anchor`'s own (**L38**): amend **after** the setter, or it records the previous
-   stage's scope.
-
-   **ADVISORY** (P0), with the anchor's own bounds: this is a Bash call outside the `PreToolUse` gate
-   (**L19**), so nothing forces it — a skipped amendment costs a **false escape**, never a missed one. It
-   **accounts for** the write; it does not exempt the path, and it cannot authorize anything the guards
-   would still refuse. Exit **2** with _"no baseline"_ is **expected and harmless** on a standalone
-   promote run (no epoch is open); it is not a reason to stop.
+**No writes-scope is set here.** Steps 1–5 write only `pharn/.run/**` scratch, which every scope admits. The canon
+scope is set at the head of Step 6, after the accept (7.3.0): set here, it unlocked the canon file for the guarded
+write tools during the whole run, before any human had seen the entry.
 
 ## Step 1 — Discovery (P6, mandatory; never assert from memory)
 
@@ -320,9 +293,45 @@ write_ / _Deny — discard_). **Wait for the answer.**
   no "looks fine, proceeding."
 - On **deny**, discard the candidate (delete the scratch file) and end the turn. Nothing is written.
 
-## Step 6 — Write on accept, then halt
+## Step 6 — Set the writes-scope on accept, write, then halt
 
-On an explicit accept, **re-read `<canon-file>` immediately before writing** and verify it has not changed
+1. **Only after an explicit accept, set the scope to the single target file** (the deliberate act of declaring a
+   `.dev/memory-bank/**` path **is** part of the P2 gate — by design, fix #7):
+
+   ```bash
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-dev-memory-promote.md --target <canon-file>
+   ```
+
+   Deterministic floor step (P0/P5): `writes:` is the placeholder `.dev/memory-bank/<canon-file>`; the setter
+   narrows it to the one `--target` path, so the emitted scope is **exactly that one file** — not all of
+   `.dev/memory-bank/`. It must print `1 path(s)`: a non-zero exit or any other count is a **HALT with nothing
+   written** (the accepted candidate stays in `pharn/.run/`; fix the cause and re-run from this step). If a later
+   write is blocked, the fix is to **pass the correct `--target` and re-run this setter** — never bypass the hook
+   (CLAUDE.md, "Writes-scope").
+
+2. **Record this scope on the open reconciliation epoch — IMMEDIATELY after the setter above, never
+   before it:**
+
+   ```bash
+   node pharn/floor/reconcile-baseline.mjs --amend-scope
+   ```
+
+   **Why.** This command runs **inside** a `/pharn-dev-ship` epoch anchored back at `/pharn-dev-build`
+   Step 0, and that epoch holds **one** opening `scope_snapshot` — the build's, which per **L7** may
+   never name canon. Without this line the canon write below is hook-approved, human-accepted, and still
+   reported by `check-bash-reconcile.mjs` as _"a write reached it outside the guarded tool surface"_, so
+   every promoting ship run ends `npm run check` RED. Measured as
+   `.dev/features/product-features-relocation/REVIEW.md` **F3**; **L17** is the same failure mode. The
+   ordering mirrors `--anchor`'s own (**L38**): amend **after** the setter, or it records the previous
+   stage's scope.
+
+   **ADVISORY** (P0), with the anchor's own bounds: this is a Bash call outside the `PreToolUse` gate
+   (**L19**), so nothing forces it — a skipped amendment costs a **false escape**, never a missed one. It
+   **accounts for** the write; it does not exempt the path, and it cannot authorize anything the guards
+   would still refuse. Exit **2** with _"no baseline"_ is **expected and harmless** on a standalone
+   promote run (no epoch is open); it is not a reason to stop.
+
+Then **re-read `<canon-file>` immediately before writing** and verify it has not changed
 since Step 1 (content-hash equality — primitive #2):
 
 ```bash
@@ -343,35 +352,34 @@ node .dev/floor/check-provenance.mjs pharn/.run/pharn-dev-memory-promote/candida
 
 **Any RED → HALT. Do not write.** A newly appeared duplicate id or other shape failure must not reach canon.
 
-Only after both pass, **land the entry in `<canon-file>` through a hook-gated tool only** — Step 0 pinned
+Only after both pass, **land the entry in `<canon-file>` through a hook-gated tool only** — Step 6.1 pinned
 the scope to exactly this path.
 
 **Canon write channel (fix #7).** Every byte written to `<canon-file>` — bootstrap header, appended entry,
-or a hand fix after the advisory format check — MUST go through the platform's **`Write`**, **`Edit`**, or
+or a hand fix — MUST go through the platform's **`Write`**, **`Edit`**, or
 **`MultiEdit`** tool. Those are the only paths the pre-write hook sees; they compose with
-`protect-trusted-paths.cjs` and `enforce-writes-scope.cjs` (only Step 0's declared `<canon-file>` is
+`protect-trusted-paths.cjs` and `enforce-writes-scope.cjs` (only Step 6.1's declared `<canon-file>` is
 permitted).
 
 **Explicitly forbidden for canon writes:**
 
 - shell redirection or here-docs (`>>`, `>`, `tee`, `cat <<… >> …`);
 - Node filesystem write APIs (`fs.writeFile*`, `fs.appendFile*`, or any `-e` one-liner that mutates `<canon-file>`);
-- formatter **auto-fixes** (`--write`, `--fix`) — check-only Bash is allowed in the advisory step below; canon
-  bytes are fixed by hand through `Write`/`Edit`/`MultiEdit` only.
+- formatter **auto-fixes** (`--write`, `--fix`) — canon bytes are fixed by hand through `Write`/`Edit`/`MultiEdit`
+  only.
 
 **Scoped to `<canon-file>`, deliberately.** This mandate governs the **canon** write and nothing else —
 Step 6b's `node .dev/floor/gen-lessons-index.mjs .` is a Bash write to a **different** file
 (`docs/lessons-index.md`) and stays permitted, declared there as the **L19** escape it is.
 
 **If a write is blocked:** the hook names the path and the active scope. Fix by ensuring `<canon-file>` is
-declared in this command's `writes:` and **re-running Step 0's scope-setter** — never bypass the hook, never
+declared in this command's `writes:` and **re-running Step 6.1's scope-setter** — never bypass the hook, never
 work around it with Bash. A deny from `protect-trusted-paths.cjs` is never scope-fixable; halt and ask a human.
 
 > **What this mandate does NOT buy, carried across from the product twin rather than quietly dropped.**
-> fix #7 gates `Write|Edit|MultiEdit` only, and it does **not** make canon unreachable in general:
-> `/pharn-dev-build` derives its scope from a PLAN's `## Files` via `--from-plan` and never reads a
-> `writes:` declaration, so a plan naming `.dev/memory-bank/…` would grant an **ungated** canon write that
-> never passes this gate (recorded follow-up: `canon-write-denylist`). Do not read this section as "canon
+> A plan cannot open canon: `protect-trusted-paths.cjs` denies a canon write under any scope whose origin is
+> not a promote command (3.1.1), and from 7.3.0 the setter refuses a plan that names canon. But fix #7 gates
+> `Write|Edit|MultiEdit` only, so a Bash write still reaches canon (L19). Do not read this section as "canon
 > can only be written through this command."
 
 **Bootstrap (the file does not exist yet).** `.dev/memory-bank/pattern-library.md` is admitted by the target
@@ -412,25 +420,10 @@ either freshly.** Step 3 checked `title`, `type`, and `concepts` on the CANDIDAT
 rendered lines, so re-typing them by hand here would drop the entry outside everything that was verified.
 Copy the values through verbatim.
 
-### Format this stage's own artifact (ADVISORY — `.dev/memory-bank/lessons-learned.md` L13)
-
-Immediately after writing it, and **before** ending the turn:
-
-```bash
-npx prettier --ignore-unknown --check <canon-file>
-npx markdownlint-cli2 --no-globs <canon-file>
-```
-
-Scoped to **this stage's own artifact** — `<canon-file>` is the one path Step 0 pinned. **Check-only**
-(never `--write` / `--fix`): on a failure, fix **by hand** only the lines Step 6 just appended — through
-the Write tool, which the fix #7 hook gates and Step 0 pinned to exactly this file — and re-run the check;
-**never** re-run with `--write`/`--fix`. Every other stage's L13 step targets a **fresh per-feature file**;
-promote's target is the **shared, historical, provenance-carrying canon** — an auto-fixer invoked through
-Bash over it is the `.dev/memory-bank/lessons-learned.md` **L19** class aimed at the fail-closed zone,
-with a within-file blast radius on entries this run never touched (cited, not restated — P4).
-`--ignore-unknown` keeps a non-prettier path from erroring the step. **ADVISORY** (P0): running a
-formatter check is orchestration, not a floor op; it never blocks, and the deterministic style gate remains
-`/pharn-dev-verify`'s `check-verify.mjs` gate map (L9).
+**No format step over canon (7.3.0).** Every other stage's L13 step formats a fresh per-feature file; this
+command's target is shared, historical, provenance-carrying canon, which both formatters' ignore files now exclude
+(`.prettierignore`, `.markdownlint-cli2.jsonc`), so a check over it would check nothing. Match the house format by
+hand, through the Write tool, as rendered above.
 
 ### Step 6b — Regenerate the lessons index (ADVISORY; only when the target was `lessons-learned.md`)
 
@@ -450,7 +443,7 @@ node .dev/floor/gen-lessons-index.mjs .
   `lessons-learned.md` only, so there is nothing to regenerate.
 - **This write ESCAPES the fix #7 writes-scope — declared, not pretended** (**L19**, whose canon entry
   names _this exact case_). The pre-write hook gates `Write|Edit|MultiEdit`; this runs through **Bash**
-  as a subprocess, so Step 0's scope does not cover it. That is also why `docs/lessons-index.md` is
+  as a subprocess, so Step 6.1's scope does not cover it. That is also why `docs/lessons-index.md` is
   **not** in this command's `writes:` — declaring it there would falsely imply the hook covers it, and
   would over-declare a scope the Write tool never uses (**L7**).
 - **What skipping it actually costs, stated correctly.** `check-lessons-index.mjs` compares the
@@ -532,11 +525,14 @@ It does not chain to another stage.
   **"The promotion regenerated the index" is never a precondition of anything** — but the skip is loud,
   which is the safe direction.
 - **"The write lands only in the declared canon file"** → **FLOOR** (the fix #7 pre-write hook;
-  `.dev/memory-bank/**` is fail-closed until explicitly declared in Step 0). **Bounded, and important:**
-  fix #7 gates `Write|Edit|MultiEdit` only. It does **not** make canon unreachable in general —
-  `/pharn-dev-build` derives its scope from a PLAN's `## Files`, so a plan naming a canon path would grant
-  an **ungated** canon write that never passes this gate (recorded follow-up: `canon-write-denylist`). Do
-  not read this guarantee as "canon can only be written through this command."
+  `.dev/memory-bank/**` is fail-closed until explicitly declared in Step 6.1, after the accept). A plan cannot
+  open canon: `protect-trusted-paths.cjs` denies a canon write under any scope whose origin is not a promote
+  command (3.1.1), and from 7.3.0 the setter refuses a plan that names canon. **Bounded, and important:**
+  fix #7 gates `Write|Edit|MultiEdit` only, so a Bash write still reaches canon (L19). Do not read this
+  guarantee as "canon can only be written through this command."
+- **"The canon scope opens only after the accept"** → **ADVISORY.** Command order; the setter is a Bash call
+  outside the `PreToolUse` gate, so nothing forces it. What it buys: before Step 6 no guarded write tool can
+  reach canon, where before 7.3.0 the Step-0 scope unlocked it for the whole run.
 - **"A human approved THIS specific entry"** → **ADVISORY / procedural.** The floor cannot verify a human
   said yes; the accept/deny halt is an instruction you follow, backstopped by the floor ops above (a
   self-promoted entry would still need valid provenance and still land only in the declared file — but an
@@ -600,7 +596,7 @@ practice` passes every check above. The gate closed the **malformed**-title wind
      `.dev/features/<name>/…` path → **HALT and ask.** Never guess a feature name (Step 1.2).
   3. **`source` does not map to a finding id traceable in the artifact just read** → **HALT and ask.**
      Never fabricate ids (Step 1.2).
-  4. **The lesson-vs-pattern target is unstated** → **HALT and ask** (Step 0.1).
+  4. **The lesson-vs-pattern target is unstated** → **HALT and ask** (Step 0).
   5. **No `type` enum member fits** → say so and **ask**, rather than forcing the nearest one (Step 2).
   6. **"Is this lesson worth canon?"** → **ask the human** (the Step-5 accept/deny halt), never a model
      guess. Semantic contradiction is surfaced advisory → the human resolves it; never auto-merged.

@@ -39,8 +39,23 @@ import {
   knownTemplateIds,
   isShippedTemplate,
   kindLineOpensBody,
+  blockSpans,
+  visibleH2Names,
 } from "./spec-template-core.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
+
+// 7.3.0 (lesson-heading-parser): the block model is exported as blockSpans() for the lessons grammar. `inside` is the
+// pre-7.3.0 spanned() result (what visibleH2Names reads); `unclosed` is the opener of a block still open at the end.
+test("blockSpans: `inside` per line as before, and `unclosed` names a block still open at the last line", () => {
+  const closed = blockSpans(["## A", "```", "## B", "```", "## C"]);
+  assert.deepEqual(closed.inside, [-1, -1, 1, 1, -1]);
+  assert.equal(closed.unclosed, -1);
+  assert.equal(blockSpans(["## A", "<!--", "## B"]).unclosed, 1);
+  assert.equal(blockSpans(["## A", "<!-->", "## B"]).unclosed, -1, "a one-line `<!-->` is a complete block");
+  assert.equal(blockSpans(["<pre>", "## B"]).unclosed, 0);
+  assert.equal(blockSpans(["## A", "```", "x", "```"]).unclosed, -1, "a closer on the last line closes");
+  assert.deepEqual(visibleH2Names("## A\n```\n## B\n```\n## C"), ["a", "c"], "the SPEC reader is unchanged");
+});
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(here, "check-spec.mjs");

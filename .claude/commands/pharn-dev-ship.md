@@ -18,9 +18,9 @@ reads:
   ]
 # writes: DELIBERATELY UNCHANGED by the lesson-extract increment, and that is load-bearing (L7).
 # Step 2b PROPOSES a lesson; it never writes canon. Declaring `.dev/memory-bank/lessons-learned.md`
-# here would make the fix #7 setter resolve a two-path scope the pre-write hook then PERMITS —
-# silently granting /pharn-dev-ship the direct, ungated canon write that check-provenance + the human
-# accept exist to withhold. That is L7's own instance (it happened to /review) reproduced exactly.
+# here would make the fix #7 setter resolve a two-path scope enforce-writes-scope then permits — the
+# over-grant of the canon write that check-provenance + the human accept exist to withhold (protect-trusted-
+# paths' canon denylist refuses it since 3.1.1; a second layer, not a licence). That is L7's own instance.
 # The canon path is reachable ONLY by invoking /pharn-dev-memory-promote, which declares it itself.
 writes: [".dev/features/<name>/SHIP.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
@@ -222,8 +222,8 @@ written for whichever member was in front of the author):
 | `lesson: not-reached (<stage>)` | the chain STOPped on a RED verdict before GATE 2             |
 | `lesson: error <reason>`        | Step 2b itself failed                                        |
 
-- On **Promote** → **invoke `/pharn-dev-memory-promote`**. It sets its own writes-scope, runs
-  `.dev/floor/check-provenance.mjs`, and halts for its **own** explicit accept/deny. **Never write
+- On **Promote** → **invoke `/pharn-dev-memory-promote`**. It runs `.dev/floor/check-provenance.mjs`, halts for
+  its **own** explicit accept/deny, and sets its own writes-scope only after an accept. **Never write
   `.dev/memory-bank/lessons-learned.md` from `/pharn-dev-ship`** — this command holds no scope to it
   (L7), and the deny would be a floor deny, not a style violation. The two halts are not redundant: 2b.3
   decides whether a candidate is worth taking to promotion; that gate decides whether it enters canon.
