@@ -105,7 +105,10 @@ Load the trusted prefix and obey it for the whole run:
      refuses (6.61.0: in an installed project, PHARN's own files). **REFUSE:** relay that reason; the plan must be
      re-planned.
      A non-zero exit from the **anchor** (`--anchor`) means it found no usable scope to snapshot (D6, 6.24.0)
-     — the same refuse applies, since the setter's own write did not leave a usable record for it to read. Do
+     — the same refuse applies, since the setter's own write did not leave a usable record for it to read — or,
+     since 7.3.0, that the baseline on disk holds another feature's epoch whose `/pharn-loop` or `/pharn-ship` run
+     is still open (`reconciliation-record.md` §1). Relay its message; never close another run's marker, delete
+     the baseline or re-run to get past it. Do
      **not** proceed in either case — a leftover `pharn/.run/writes-scope.json` from an earlier command must never
      become this build's scope by accident.
    - A later in-build block (`writes-scope guard`) means **declare the path in the plan's `## Files` and

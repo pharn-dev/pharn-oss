@@ -80,7 +80,11 @@
 //     reconcile-baseline.mjs, is applied to the enumeration and to a legacy baseline's keys below): the guards
 //     allow every write there except `pharn/.run/writes-scope.json`, which the setter writes through Bash by
 //     design and which this checker never judges against (it reads the baseline's snapshot). A Bash write to
-//     that file is therefore unreported, as it already was wherever `pharn/.run/` is ignored. A symlink is reconciled as
+//     that file is therefore unreported, as it already was wherever `pharn/.run/` is ignored. Reconciling it would
+//     not restore a signal (audit 2026-11-03, answered in 7.3.0): every stage's setter rewrites it by design and both
+//     guards deny it, so it would be an ESCAPE on every correct run, and with no attribution a hand-edit reads the
+//     same. What a forged scope can buy — a widened Write-tool write — is still judged against the snapshot, and a
+//     test pins that. A symlink is reconciled as
 //     the LINK (its text, since 6.20.8), never as its target: a write through it lands on the target's own
 //     path, and a target outside the set (outside the repo, or ignored) is not seen through the link. A DELETION is
 //     a change (6.57.0): a path the anchor hashed that is gone from disk is judged like a write, whether git still
@@ -91,6 +95,10 @@
 //  3. ONE WORKTREE. Two agent sessions sharing a tree share `pharn/.run/`, so a second session's writes can
 //     surface as this one's escape. That is lessons-learned L38 exactly; this checker inherits the
 //     hazard and cannot fix it. Named as a bound in pharn/LIMITS.md; the structural remedy is L38's own.
+//     The ERASE direction too: the tree holds one baseline, so a second run's anchor replaces the first run's epoch
+//     and this checker then judges only the writes since that anchor. Since 7.3.0 `--anchor` refuses (exit 2) to
+//     replace an epoch whose feature's `/pharn-loop` or `/pharn-ship` marker is open (reconcile-baseline.mjs header);
+//     runs without a marker, and two runs of one feature, still erase each other's window.
 //  4. NO ATTRIBUTION. It answers "this path changed and the guards would have denied it", never "who".
 //  5. DELETING OR FORGING THIS CHECKER'S STATE is possible through the very channel it monitors — but it
 //     is LOUD, not silent. Two independent reasons: with `--require-baseline` (what /verify passes) an
@@ -150,7 +158,15 @@ import { resolve, join, basename } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
-import { enumerate, hashFile, RECORD_VERSION, RECORD_PATH, isStateRootPath } from "./reconcile-baseline.mjs";
+import {
+  enumerate,
+  hashFile,
+  RECORD_VERSION,
+  RECORD_PATH,
+  isStateRootPath,
+  PIPELINE_RE,
+  activeFeatureSlug,
+} from "./reconcile-baseline.mjs";
 import { openRun } from "./run-marker.mjs";
 import { WIDENED_REASON, ESCAPE_REASONS } from "./reconcile-detail-core.mjs";
 import { IGNORE_DATA_PATH, loadIgnoreData, isHumanOnly, isAlwaysReconciled } from "./reconcile-ignore-core.mjs";
@@ -191,20 +207,16 @@ export function matchesAny(rel, globs) {
 // --- dir, so a stray file there is still reported. <slug> is shape-gated so a crafted `..` cannot build
 // --- a traversing prefix (the same refusal check-regress.mjs's FEATURE_SLUG_RE makes, for the same
 // --- reason: the previous shape "yields a prefix that matches no path" was nearly true, not true).
-const PIPELINE_RE = /^(?:\.dev\/|pharn\/)features\/(?!\.\.?\/)([A-Za-z0-9._-]+)\/(.+)$/;
-
-// The ACTIVE feature slug, derived from the scope record's own `set_by` (a PLAN path). Narrowing the
+// PIPELINE_RE lives in reconcile-baseline.mjs since 7.3.0 (the anchor reads it too — one copy, L35).
+//
+// The ACTIVE feature slug, derived from the scope record's own `set_by` (a PLAN path) by `activeFeatureSlug`
+// (also owned by reconcile-baseline.mjs since 7.3.0, re-exported here). Narrowing the
 // exemption to that one feature matters: exempting a pipeline filename under ANY slug lets a write to
 // `pharn/features/<anything>/SHIP.md` pass unexamined, and an exemption set wide enough to swallow the rule is
 // the failure this whole increment was weighed against. When no slug is derivable (no snapshot, or a
 // `set_by` that is not a feature path) the exemption stays slug-agnostic — that is strictly no wider
 // than before, and it is the honest fallback rather than a guess.
-export function activeFeatureSlug(scopeSnapshot) {
-  const setBy = scopeSnapshot?.set_by;
-  if (typeof setBy !== "string") return null;
-  const m = PIPELINE_RE.exec(setBy.replace(/\\/g, "/"));
-  return m ? m[1] : null;
-}
+export { activeFeatureSlug };
 
 export function isPipelineArtifact(rel, data, activeSlug = null) {
   const m = PIPELINE_RE.exec(rel);

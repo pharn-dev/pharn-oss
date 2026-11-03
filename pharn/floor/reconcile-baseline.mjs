@@ -59,12 +59,32 @@
 // call, so this only refuses a caller that anchors out of order or against a plan with no parseable
 // `## Files` — exactly the caller that would otherwise anchor a baseline no scope could ever clear.
 //
+// --ANCHOR REFUSES TO REPLACE ANOTHER OPEN RUN'S EPOCH (7.3.0, audit 2026-11-03). The tree holds ONE baseline
+// (RECORD_PATH), so a second run's build anchor used to overwrite the first run's, and the first run's verify then
+// judged only the writes made after that second anchor: its earlier Bash escapes were erased, silently (measured by
+// the audit's probe: two loops in one tree). `--anchor` now reads the baseline already on disk first. When that
+// record opened the epoch of feature <A> (`activeFeatureSlug` of its `scope_snapshot`, the checker's own notion of
+// the active feature), the anchor about to be written is for a different feature (or none), and <A>'s
+// `/pharn-loop` or `/pharn-ship` run marker is still open, it exits 2 and writes nothing. "Open" is the write guard's
+// own test (`enforce-writes-scope.cjs` scanRuns, `set-writes-scope.cjs`): the marker is PRESENT (`lstat`, never
+// followed, never parsed) with an mtime within RUN_AGE_CEILING_MS of now in either direction, the hooks' 24 h
+// ceiling; any `lstat` error other than ENOENT/ENOTDIR counts as open (fail-closed). A prior record that cannot be
+// read or parsed cannot be attributed, so then ANY other feature's open loop/ship marker refuses. `pharn-review`
+// markers are not read: a review never anchors. A legacy record with a null `scope_snapshot` derives no feature and
+// never refuses. No new argv and no new record field: both shipped anchor lines (and `/pharn-loop`'s grant) are
+// unchanged, and a refusal is the build's Step-0 HALT.
+// BOUNDS, stated (P0): markers are Bash-writable and presence-only, so a marker closed early (by a human, or by a
+// model holding `/pharn-loop`'s pre-approved `require-loop-record.cjs --close *`) or aged past the ceiling lets the
+// overwrite through; runs that open no marker (dev builds, a standalone `/pharn-build`) and two runs of the SAME
+// feature are not told apart. This makes one erase LOUD for tooling; it does not make two runs in one tree safe —
+// the structural remedy is still one worktree per run (lessons-learned L38).
+//
 // Usage:
 //   node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 //   node pharn/floor/reconcile-baseline.mjs --show   [--base <dir>]
 //
-// Exit: 0 ok · 2 unusable input / git unavailable / no usable scope to snapshot (D6) / write failed —
-// FAIL-CLOSED (P5). Never a silent pass.
+// Exit: 0 ok · 2 unusable input / git unavailable / no usable scope to snapshot (D6) / another open run's epoch on
+// disk (7.3.0) / write failed — FAIL-CLOSED (P5). Never a silent pass.
 
 import "./runtime-floor.mjs";
 import {
@@ -79,11 +99,15 @@ import {
   fstatSync,
   closeSync,
   readlinkSync,
+  lstatSync,
+  readdirSync,
   constants as fsConstants,
 } from "node:fs";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { markerPath } from "./run-marker.mjs";
+import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 
 export const RECORD_VERSION = 1;
 export const RECORD_PATH = "pharn/.run/reconcile/baseline.json";
@@ -94,6 +118,127 @@ export const SCOPE_PATH = "pharn/.run/writes-scope.json";
 export const STATE_ROOT_SEGMENT = "pharn/.run/";
 export function isStateRootPath(rel) {
   return typeof rel === "string" && (rel === "pharn/.run" || rel.startsWith(STATE_ROOT_SEGMENT));
+}
+
+// A feature's own pipeline path, `pharn/features/<slug>/<rest>` or the same under `.dev/`. <slug> is shape-gated so a
+// crafted `..` cannot build a traversing prefix. OWNED HERE since 7.3.0 because two readers need it: the anchor (which
+// feature opened the epoch on disk) and check-bash-reconcile.mjs (its pipeline-artifact exemption), which imports both
+// names from this module as it already imported RECORD_PATH and isStateRootPath — one copy, not two (L35).
+export const PIPELINE_RE = /^(?:\.dev\/|pharn\/)features\/(?!\.\.?\/)([A-Za-z0-9._-]+)\/(.+)$/;
+
+// The ACTIVE feature slug, derived from a scope record's own `set_by` (a PLAN path), or null when it is not a feature
+// path. See check-bash-reconcile.mjs for why its exemption narrows to this one feature.
+export function activeFeatureSlug(scopeSnapshot) {
+  const setBy = scopeSnapshot?.set_by;
+  if (typeof setBy !== "string") return null;
+  const m = PIPELINE_RE.exec(setBy.replace(/\\/g, "/"));
+  return m ? m[1] : null;
+}
+
+// The run-state directories whose markers hold an epoch open (see "--ANCHOR REFUSES TO REPLACE ANOTHER OPEN RUN'S
+// EPOCH" above): the two commands that run a build and then a verify over one epoch. Closed set, iterated by the tests.
+export const EPOCH_RUN_DIRS = Object.freeze(["pharn-loop", "pharn-ship"]);
+// The write guards' marker ceiling (`RUN_AGE_CEILING_MS` in enforce-writes-scope.cjs and set-writes-scope.cjs):
+// symmetric, so a future-dated marker ages out the same way.
+export const RUN_AGE_CEILING_MS = 24 * 60 * 60 * 1000;
+
+// One marker's state: null when no run is open there, else `{ path, ageHours }` (`ageHours` null when the `lstat`
+// failed with something other than ENOENT/ENOTDIR — counted as open, fail-closed). Presence and age only.
+export function openMarker(root, dir, name, now = Date.now()) {
+  const abs = markerPath(root, dir, name);
+  const rel = `pharn/.run/${dir}/${name}/active.json`;
+  let st;
+  try {
+    st = lstatSync(abs);
+  } catch (e) {
+    if (e && (e.code === "ENOENT" || e.code === "ENOTDIR")) return null;
+    return { path: rel, ageHours: null };
+  }
+  const age = Math.abs(now - st.mtimeMs);
+  return age <= RUN_AGE_CEILING_MS ? { path: rel, ageHours: Math.floor(age / 3_600_000) } : null;
+}
+
+// Every open loop/ship marker whose feature is not `except`, for a prior record that cannot be attributed. A state
+// directory that is present but cannot be listed refuses too (fail-closed), named without a marker.
+function otherOpenMarkers(root, except, now) {
+  const found = [];
+  for (const dir of EPOCH_RUN_DIRS) {
+    const stateDir = join(root, "pharn", ".run", dir);
+    let names;
+    try {
+      if (!lstatSync(stateDir).isDirectory()) throw new Error("not a directory");
+      names = readdirSync(stateDir);
+    } catch (e) {
+      if (e && e.code === "ENOENT") continue;
+      found.push({ path: `pharn/.run/${dir}/`, ageHours: null, unlisted: true });
+      continue;
+    }
+    for (const name of names) {
+      if (name === except) continue;
+      const m = openMarker(root, dir, name, now);
+      if (m)
+        found.push(FEATURE_SLUG_RE.test(name) ? { ...m, name, dir } : { path: `pharn/.run/${dir}/`, ageHours: m.ageHours, unlisted: true });
+    }
+  }
+  return found;
+}
+
+// Would this anchor replace another open run's epoch? `{ refuse: false }`, or `{ refuse: true, owner, markers }` where
+// `owner` is the prior record's feature (null when the record could not be read) and `markers` the open ones found.
+export function epochOwnerOpen(root, liveScope, now = Date.now()) {
+  let text;
+  try {
+    text = readFileSync(resolve(root, RECORD_PATH), "utf8");
+  } catch (e) {
+    if (e && e.code === "ENOENT") return { refuse: false }; // no epoch on disk: nothing to replace
+    text = null;
+  }
+  const newName = activeFeatureSlug(liveScope);
+  let prior = null;
+  if (text !== null) {
+    try {
+      prior = JSON.parse(text);
+    } catch {
+      prior = null;
+    }
+  }
+  if (!prior || typeof prior !== "object" || Array.isArray(prior) || !prior.entries) {
+    const markers = otherOpenMarkers(root, newName, now);
+    return markers.length ? { refuse: true, owner: null, markers } : { refuse: false };
+  }
+  const owner = activeFeatureSlug(prior.scope_snapshot ?? null);
+  // A legacy null snapshot, a non-feature origin, the same feature, or a name no marker writer accepts: nothing to keep.
+  if (owner === null || owner === newName || !FEATURE_SLUG_RE.test(owner)) return { refuse: false };
+  const markers = [];
+  for (const dir of EPOCH_RUN_DIRS) {
+    const m = openMarker(root, dir, owner, now);
+    if (m) markers.push({ ...m, name: owner, dir });
+  }
+  return markers.length ? { refuse: true, owner, markers } : { refuse: false };
+}
+
+const CLOSE_CMD = {
+  "pharn-loop": (n) => `node .claude/hooks/require-loop-record.cjs --close ${n}`,
+  "pharn-ship": (n) => `node pharn/floor/run-marker.mjs --close pharn-ship ${n}`,
+};
+
+// The refusal text. Every interpolated name passed FEATURE_SLUG_RE; every path is built from fixed segments.
+export function epochRefusalMessage(res) {
+  const lines = res.markers.map((m) => {
+    if (m.unlisted) return `  • a run marker under ${m.path} (its name is not a plain slug, or the directory cannot be listed)`;
+    const age = m.ageHours === null ? "age unknown: lstat failed" : `age ~${m.ageHours}h`;
+    return `  • ${m.path} (${age}) — a human closes it with \`${CLOSE_CMD[m.dir](m.name)}\``;
+  });
+  const head =
+    res.owner === null
+      ? `refusing to anchor: the baseline at ${RECORD_PATH} cannot be read, so the epoch it holds cannot be attributed, and another feature's run is open:`
+      : `refusing to anchor: the baseline at ${RECORD_PATH} holds the reconciliation epoch of feature "${res.owner}", whose run is still open:`;
+  return [
+    head,
+    ...lines,
+    "Anchoring now would replace that epoch: that run's verify would then judge only the writes made after this anchor, and its earlier Bash escapes would be erased (pharn/LIMITS.md §6 — one worktree per run).",
+    "Run this build in its own worktree, or let that run finish. Only when a human has established that the run is no longer active does a human close its marker and re-run this step. Never delete or edit the baseline to get past this.",
+  ].join("\n");
 }
 
 function die(reason, code = 2) {
@@ -451,6 +596,9 @@ function main(argv) {
   if (built.record.scope_snapshot === null) {
     die("no usable writes-scope at pharn/.run/writes-scope.json — run the stage's scope-setter first");
   }
+  // 7.3.0: never replace another open run's epoch (see the header). Judged against the scope this anchor snapshots.
+  const owner = epochOwnerOpen(root, built.record.scope_snapshot);
+  if (owner.refuse) die(epochRefusalMessage(owner));
   const abs = resolve(root, RECORD_PATH);
   try {
     mkdirSync(dirname(abs), { recursive: true });

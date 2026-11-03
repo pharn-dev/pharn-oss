@@ -392,6 +392,38 @@ test("a stop before the first build (iterations 1, no iterated stage started) pr
   assert.ok(checkLedger(led).warns.some((w) => /marker completeness/.test(w) && /1, 2/.test(w)));
 });
 
+test("★ 7.3.0: the pre-build exception is only the BLOCKED record with no iterated stage started — others warn again", () => {
+  const frontOnly = () => {
+    const led = cleanLedger();
+    led.markers = led.markers.filter((m) => m.kind !== "stage-start" || m.iteration === undefined || m.iteration === null);
+    return led;
+  };
+  // Control: the contract's blocked pre-build record stays silent.
+  const blocked = frontOnly();
+  blocked.outcome = { decision: "INCONCLUSIVE", iterations: 1, source: "LOOP.md", blocked: "no-test-runner" };
+  assert.ok(!checkLedger(blocked).warns.some((w) => /marker completeness: outcome\.iterations/.test(w)), "control: silent");
+  // (1) not blocked: a green stop at 1 means a build ran — its lost boundary is reported again.
+  const green = frontOnly();
+  green.outcome = { decision: "STOP_GREEN", iterations: 1, source: "LOOP.md" };
+  assert.ok(
+    checkLedger(green).warns.some((w) => /marker completeness/.test(w) && /iteration\(s\) 1/.test(w)),
+    `expected the WARN: ${checkLedger(green).warns.join(" | ")}`
+  );
+  // (2) blocked, but a build stage-start that carries no iteration: an orchestration lapse, reported.
+  // (The fixture's own build stage-start, its iteration dropped; other rules may RED on the edited marker — this
+  // case asserts only the WARN block, which runs regardless.)
+  const lapse = cleanLedger();
+  const build = lapse.markers.find((m) => m.kind === "stage-start" && m.stage === "pharn-build");
+  assert.ok(build, "fixture: a pharn-build stage-start exists");
+  build.iteration = null;
+  lapse.outcome = { decision: "INCONCLUSIVE", iterations: 1, source: "LOOP.md", blocked: "ac-evidence-invalid" };
+  const r = checkLedger(lapse);
+  assert.ok(
+    r.warns.some((w) => /marker completeness/.test(w) && /iteration\(s\) 1/.test(w)),
+    `expected the WARN: ${r.warns.join(" | ")}`
+  );
+});
+
 test("a complete marker set produces no completeness WARN", () => {
   const led = cleanLedger();
   led.outcome = { decision: "STOP_GREEN", iterations: 1, source: "LOOP.md" };

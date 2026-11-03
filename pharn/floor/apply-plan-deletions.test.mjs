@@ -160,6 +160,10 @@ const REFUSAL_CASES = Object.freeze([
   ["control-path", "- `.claude/hooks/enforce-writes-scope.cjs` (delete) — a guard", "- `.claude/notes.md` (delete) — ordinary"],
   ["control-path", "- `pharn/memory-bank/lessons-learned.md` (delete) — canon", "- `memory-banks/x.md` (delete) — ordinary"],
   ["control-path", "- `pharn/spec-template.md` (delete) — the SPEC template", "- `pharn.spec.md` (delete) — ordinary"],
+  // 7.3.0 (audit 2026-11-03): the CI exec-config prefixes joined the always-reconciled set, so a plan cannot delete
+  // a workflow or a composite action either — with no opt-in; a human deletes it.
+  ["control-path", "- `.github/workflows/old.yml` (delete) — a CI workflow", "- `.github/workflowsx/old.yml` (delete) — ordinary"],
+  ["control-path", "- `.github/actions/x/action.yml` (delete) — a composite action", "- `.github/dependabot.yml` (delete) — ordinary"],
   // 6.56.0 GATE-2 review (F2/F3): the reserved prefixes and the control set in another ASCII letter case.
   [
     "bad-path",

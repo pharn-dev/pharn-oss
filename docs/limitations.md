@@ -24,7 +24,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   is detected and fails the stage" — never "Bash writes are prevented."** Four bounds, all in
   [`reconciliation-record.md`](../pharn/pharn-contracts/reconciliation-record.md): git-ignored paths, and
   PHARN's own run state under `pharn/.run/` whether or not your project ignores it, are outside the reconciled
-  set; the window is anchor→verify; the model is one worktree per session; and
+  set; the window is anchor→verify; the model is one worktree per session (one tree holds one baseline, so a second
+  run's build anchor would replace the first run's window; since 7.3.0 the anchor refuses while that other feature's
+  `/pharn-loop` or `/pharn-ship` run is open, but runs that open no marker still erase each other's window); and
   there is no attribution — it reports _what_, never _who_. A clean verdict means **no escape was
   detected**, not that none occurred. **And this is accounting, not security.** The baseline is
   unauthenticated state inside the writable tree, so a writer who edits a denied file **and** rewrites
@@ -32,8 +34,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   escape — a formatter, a generator, a script, a mistake, which is the whole population of failures it
   was built for. **Deleting** its state is loud (a missing baseline is `INCONCLUSIVE` at verify) and the
   always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
-  `.dev/floor/*`, the four trusted docs, `CODEOWNERS`, `pharn/spec-template.md` and memory-bank canon,
-  including a file added there) is anchored in committed blob ids rather than the baseline, so that half
+  `.dev/floor/*`, the four trusted docs, `CODEOWNERS`, `pharn/spec-template.md`, memory-bank canon and, since 7.3.0,
+  your CI's `.github/workflows/*` and `.github/actions/*`, including a file added there) is anchored in committed blob ids rather than the baseline, so that half
   resists a determined writer — but **forging** an ordinary path's entry does not. The cost: an uncommitted
   human edit of a trusted doc reads as an escape too, so commit it before running the gates. Two further bounds, stated
   rather than solved: the checker runs from the worktree, so it cannot vouch for its own integrity; and
