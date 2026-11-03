@@ -223,7 +223,9 @@ CLIs write), whatever the scope; Bash still reaches them.
     the fixed dirs are refused and `core.hooksPath` is read best-effort (an unreadable git config is skipped, never a
     refusal); an installed project keeps the fail-closed reading. **Replacement route for a dev increment that edits
     CI:** the maintainer applies that file as a human patch (the `apply.py` protocol), or runs the setter themselves
-    with `--allow-exec-config` before the mode. Historical cost: 17 of 342 committed dev plans named a workflow.
+    with `--allow-exec-config` before the mode. Historical cost, measured at integration over the 342 committed
+    plans at `dd0bb3d3`: the pre-batch setter's scope named a `.github/workflows/` path for 16 of them; 7.3.0 refuses
+    14 of those for this rule and 2 first for a split list (the "14 CI workflow" below counts refusals by first rule).
   - **instruction files** (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, basename at any depth) in an installed project,
     unless `--allow-instruction-files` precedes the mode.
   - **in a dev or unsignalled tree while a `/pharn-loop` or `/pharn-ship` run marker is open** (`openRuns()`, presence
@@ -247,7 +249,9 @@ CLIs write), whatever the scope; Bash still reaches them.
     now refused first by the split-list rule, 0 silent changes; plans are not re-run, so none was edited.
   - **Glob characters stay legal in a scope entry** (`app/[slug]/page.tsx` is a real path), so the setter does not
     refuse them. Its one shell consumer, `/pharn-dev-build` Step 2b, passes its formatters only entries that are
-    existing regular files by their literal path (lstat, not a symlink, realpath inside the checkout) and hold no glob
+    existing regular files by their literal path (lstat, not a symlink; realpath inside the checkout and equal to the
+    literal path, so a symlinked parent directory is refused too — integration probe: `gp/mb/x.md` with
+    `gp/mb -> ../.dev/memory-bank` had canon reformatted before that check) and hold no glob
     character (`*?[]{}()!`), NUL-separated, with `--` before the paths; the rest are named on stderr and left to
     `/pharn-dev-verify`'s whole-repo gates. Measured: prettier, markdownlint-cli2 and eslint all read arguments as
     globs and none treats an existing literal `[…]` / `{…}` path as that file when the glob matches another, so

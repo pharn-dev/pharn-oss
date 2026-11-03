@@ -45,20 +45,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   or running another command fails). `.dev/floor/test-globs.test.mjs` binds `test:coverage`'s globs equal to `test`'s,
   so a pattern added to one cannot be missing from the CI job whose lcov the coverage gate reads.
   `.dev/floor/command-hygiene.test.mjs` pins that no command names `AskQuestion` and that every dev command's `npx`
-  formatter/linter line carries `--no-install` (four files owned by other work in this batch are listed as pending and
-  must each still hold such a line). Apparatus only.
+  formatter/linter line carries `--no-install` (every dev command, now that the four converted elsewhere in this
+  release have landed; the pending list is empty). Apparatus only.
 
 ### Changed
 
 - 2026-11-03: **Memory-bank canon leaves the formatters' reach, and `/pharn-dev-build` Step 2b runs `npx --no-install`.**
   `.prettierignore` and `.markdownlint-cli2.jsonc` list `.dev/memory-bank/` and `pharn/memory-bank/`, so canon leaves
-  `format:check` / `lint:md` and the promote commands' advisory `--check` lines over canon no longer check anything.
+  `format:check` / `lint:md`. Of the two promote commands, only `/pharn-dev-memory-promote`'s advisory canon `--check`
+  line became a no-op, and 7.3.0 removes it (see Fixed); `/pharn-memory-promote`'s `vendor/bin/prettier --check` line
+  reads an installed project's canon, which these ignore files do not cover.
   Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, take
   the scoped paths NUL-separated (`join('\0')` + `xargs -0 -r`, so no entry is split at a space or read as quoted),
   and end each tool's options with `--` (all three treat what follows as paths); its Step 0 says a setter refusal is a
   stop for the human — never an `--allow-*` flag the agent adds. It passes on only entries that are existing regular
-  files by their literal path (lstat, realpath inside the checkout) with no glob character, naming the rest: all three
-  tools read arguments as globs, so a scope entry `CLAUDE.m[d]` had reformatted `CLAUDE.md`. That block is the only shell consumer of
+  files by their literal path (lstat; realpath inside the checkout and equal to the literal path, so an entry under a
+  symlinked directory — `gp/mb/x.md` with `gp/mb -> ../.dev/memory-bank` had canon reformatted — is refused too) with
+  no glob character, naming the rest: all three tools read arguments as globs, so a scope entry `CLAUDE.m[d]` had
+  reformatted `CLAUDE.md`. That block is the only shell consumer of
   `pharn/.run/writes-scope.json` (`loop-closeout.mjs` already stages through `--pathspec-file-nul` with literal pathspecs).
 - 2026-11-03: **`/pharn-dev-verify` takes its gate map from the gate runner, and `/pharn-dev-ship` never proceeds past
   a red verdict.** `/pharn-dev-verify` now runs its gates through `pharn/floor/run-gates.mjs` and validates the stamp
@@ -97,8 +101,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 2026-11-03: **Dev commands no longer let `npx` fetch a formatter** (audit 2026-11-03). `/pharn-dev-plan`,
   `/pharn-dev-grill`, `/pharn-dev-regress` and `/pharn-dev-ship` run `npx --no-install prettier` /
   `npx --no-install markdownlint-cli2` on their one artifact, so a missing install refuses instead of downloading the
-  package. `/pharn-dev-build`, `/pharn-dev-verify`, `/pharn-dev-review` and `/pharn-dev-memory-promote` are converted by
-  their own work items in this batch.
+  package. `/pharn-dev-build`, `/pharn-dev-verify` and `/pharn-dev-review` are converted by their own entries in this
+  release, and `/pharn-dev-memory-promote`'s only such line was removed.
 - 2026-11-03: **`.dev/guides/versioning.md` states the publish-first rule for `MIN_CLI`.** The CLI reads `MIN_CLI` from
   the tree it fetches, so a raised `MIN_CLI` binds every `init` and `update` from the moment it merges; publish the
   matching `@pharn-dev/pharn` to npm first. Advisory: nothing in this repo checks it.
@@ -132,7 +136,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   between two path items other than a blank line or the item's own indented wrapped text — a label in any spelling, a
   blockquote, a non-path bullet, a setext underline — refuses, so `Excluded:` / `NOT in scope:` can no longer scope
   the paths under them. Over the 342 committed plans (pre-batch setter vs 7.3.0, dev posture): 293 identical, 44 newly
-  refused (27 split list, 14 CI workflow, 3 canon), 5 already refused and now refused first by the split-list rule, 0
+  refused (each counted under the first rule that refuses it: 27 split list, 14 CI workflow, 3 canon), 5 already refused and now refused first by the split-list rule, 0
   silent changes; plans are not re-run, so none was edited — new plans write one contiguous list. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
   reads "not found") and skips comment-hidden headings; `apply-plan-deletions.mjs` reports the reader's own refusal
   reason instead of a fixed "no `## Files` heading".

@@ -111,12 +111,14 @@ else
   # quote, and `--` ends each tool's options, so no path is read as a flag (the setter also refuses such entries);
   # `-r` runs nothing on an empty list (BSD and GNU xargs both accept it).
   # PICK passes on only entries that are EXISTING REGULAR FILES by their literal path (lstat: never a symlink, never a
-  # directory; realpath inside this checkout) and hold no glob character. All three tools read their arguments as
+  # directory; realpath equal to the literal path under this checkout, so no PARENT directory is a symlink either —
+  # measured: `gp/mb/x.md` with `gp/mb -> ../.dev/memory-bank` passed lstat and reformatted canon before 7.3.0) and
+  # hold no glob character. All three tools read their arguments as
   # globs, and none reliably treats an existing literal path holding `[`, `{` or `(` as that file — measured: with
   # `app/[s].md` and `app/s.md` both present, prettier, markdownlint-cli2 and eslint each processed `app/s.md`, and
   # each brace-expanded an existing `b/{x,y}.md` — so a glob-shaped entry (`CLAUDE.m[d]`, `.husk{y,x}/pre-commit`,
   # `!src/a.md`) is NOT formatted here and is named on stderr; `/pharn-dev-verify`'s whole-repo gates still check it.
-  PICK='const fs = require("fs"), path = require("path"); const want = new RegExp(process.argv[1]); const root = fs.realpathSync("."); const keep = [], skip = []; for (const p of require("./pharn/.run/writes-scope.json").scope) { if (!want.test(p)) continue; let ok = !/[*?[\]{}()!]/.test(p); try { const real = fs.realpathSync(p); ok = ok && fs.lstatSync(p).isFile() && real.startsWith(root + path.sep); } catch { ok = false; } (ok ? keep : skip).push(p); } if (skip.length) process.stderr.write("Step 2b: not formatted here (not an existing regular file by its literal path, or glob-shaped): " + skip.join(", ") + "\n"); process.stdout.write(keep.join("\0"));'
+  PICK='const fs = require("fs"), path = require("path"); const want = new RegExp(process.argv[1]); const root = fs.realpathSync("."); const keep = [], skip = []; for (const p of require("./pharn/.run/writes-scope.json").scope) { if (!want.test(p)) continue; let ok = !/[*?[\]{}()!]/.test(p); try { const real = fs.realpathSync(p); ok = ok && fs.lstatSync(p).isFile() && real.startsWith(root + path.sep) && real === path.join(root, p); } catch { ok = false; } (ok ? keep : skip).push(p); } if (skip.length) process.stderr.write("Step 2b: not formatted here (not an existing regular file by its literal path, or glob-shaped): " + skip.join(", ") + "\n"); process.stdout.write(keep.join("\0"));'
   node -e "$PICK" '' | xargs -0 -r npx --no-install prettier --ignore-unknown --write --
   # The .md SUBSET -> markdownlint. `--no-globs` is LOAD-BEARING: markdownlint-cli2 ADDS its config's
   # `globs` (`**/*.md`) to the paths on argv rather than replacing them, so without the flag this line

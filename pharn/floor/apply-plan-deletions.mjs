@@ -132,7 +132,8 @@ function controlIdentities(rootReal, data) {
 export function planDeletions(planText, root, data) {
   const parsed = pathsFromPlanFiles(planText);
   // The reader's own reason (7.3.0): it refuses for more than a missing heading — an ambiguous fence, a second
-  // `## Files`, a `:` intro over items — and a fixed "no heading" text named the wrong cause for each.
+  // `## Files`, a line that interrupts the one contiguous path list — and a fixed "no heading" text named the wrong
+  // cause for each.
   if (!parsed.ok)
     return { ok: false, refusal: new Refusal("plan-files-unparseable", null, `the PLAN's \`## Files\` is unreadable: ${parsed.reason}`) };
   const near = parsed.entries.find((e) => e.deleteNearMiss);

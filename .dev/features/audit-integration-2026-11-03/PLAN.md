@@ -48,6 +48,11 @@ merges produce and records every resolution.
 - `pharn/floor/check-run-isolation.mjs` — S + G2 merge
 - `pharn/floor/validate.mjs` — conflict resolution
 - `pharn/floor/cli-stdout-flush.test.mjs` — conflict resolution
+- `.claude/commands/pharn-dev-build.md` — integration fix (a): Step 2b PICK refuses a symlinked parent
+- `pharn/floor/apply-plan-deletions.mjs` — integration fix (b): stale reader-rule comment
+- `pharn/floor/merge-findings.mjs` — G8 merge resolution
+- `.prettierignore` — G1 + G8 merge resolution
+- `.markdownlint-cli2.jsonc` — G1 + G8 merge resolution
 
 ## Not in scope
 

@@ -307,7 +307,9 @@ for (const gate of STEP_2B_GATES) {
 
 // PICK — the one node step all three lines share (7.3.0, review round 3): it reads the scope record, keeps only
 // entries that are EXISTING REGULAR FILES by their literal path (lstat — a symlink or a directory is never a file —
-// and a realpath inside the checkout) and hold no glob character, names the rest on stderr, and writes the kept paths
+// and a realpath inside the checkout that EQUALS the literal path, so a symlinked parent directory is refused too:
+// measured at integration, `gp/mb/x.md` with `gp/mb -> ../.dev/memory-bank` passed lstat and had canon reformatted)
+// and hold no glob character, names the rest on stderr, and writes the kept paths
 // NUL-separated with no trailing newline. Why the glob filter: all three tools read arguments as globs, and none treats
 // an existing literal `[…]` / `{…}` path as that file when the glob matches another (measured), so a scope entry such
 // as `CLAUDE.m[d]` reformatted CLAUDE.md. A VOCABULARY pin, like the others here: it cannot run the step.
@@ -321,6 +323,7 @@ test("✧ Step 2b's PICK passes only existing regular files by literal path, nev
   assert.match(pick, /fs\.lstatSync\(p\)\.isFile\(\)/, "lstat + isFile: never a symlink, never a directory");
   assert.match(pick, /realpathSync\(p\)/, "the realpath of each entry is taken");
   assert.match(pick, /real\.startsWith\(root \+ path\.sep\)/, "and must lie inside the checkout");
+  assert.match(pick, /real === path\.join\(root, p\)/, "and equal the literal path: no parent directory is a symlink");
   assert.match(pick, /!\/\[\*\?\[\\\]\{\}\(\)!\]\/\.test\(p\)/, "a glob character (`*?[]{}()!`) drops the entry");
   assert.match(pick, /process\.stdout\.write\(keep\.join\("\\0"\)\)/, "kept paths are written NUL-separated, no newline");
   assert.match(pick, /process\.stderr\.write\(/, "dropped entries are named, never silently skipped");
