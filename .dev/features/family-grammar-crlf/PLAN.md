@@ -119,6 +119,7 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
 - `pharn/floor/capability-files-core.test.mjs` — PATH_KINDS walk test, linkedDirs, linked pharn root, counters refuse — test
 - `pharn/floor/cli-stdout-flush.test.mjs` — validate.mjs row, form sentinel-uncaught, over-64-KiB round-trip — test
 - `pharn/floor/check-model-config.test.mjs` — CRLF twin; a displaced command reads as no model — test
+- `pharn/floor/griller-extract.test.mjs` — the outside-griller refusal reached through a linked `pharn` root, since a linked directory is no longer descended (added during build, see below) — test
 - `.dev/floor/check-config.test.mjs` — CRLF twin — test
 - `.dev/floor/capability-catalog-core.test.mjs` — CRLF twin — test
 - `.dev/floor/frontmatter-readers.test.mjs` — dev closures accept looseFrontmatter, catch the family grammar — test
@@ -127,6 +128,16 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
 - `.dev/features/family-grammar-crlf/PLAN.md` — this plan
 - `.dev/features/family-grammar-crlf/GRILL.md` — grill log
 - `.dev/features/family-grammar-crlf/SHIP.md` — ship roll-up
+
+### Added during build (2026-11-03)
+
+The first full `npm test` after the build REDed `griller-extract.test.mjs` "a griller reached through a symlinked
+DIRECTORY that resolves outside the repo is refused": its fixture reached the outside griller through a link to a
+directory, which count-grillers no longer descends, so the refusal it pins was no longer reachable that way. The same
+refusal is still reachable through a linked `pharn` root (followed, GATE 1 Q3), so the test is moved to that route and
+a twin pins that a link to a directory never reaches the extract at all. The build work up to here was committed
+(`73a2bfc7`) and Step 0 (setter, then `--anchor`) re-run after this widening, so the new path is declared before the
+epoch that writes it opens.
 
 ## Contracts satisfied
 
