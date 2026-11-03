@@ -75,6 +75,13 @@ pharn/features/*/REGRESSION.md
 # gate-clean output is not achievable by construction, and the conflict would land on `/pharn-verify` itself.
 pharn/features/*/VERIFY.md
 
+# REVIEW.md — the SAME reasoning as VERIFY.md above (7.3.0, audit 2026-11-03): `pharn/floor/render-review.mjs` renders
+# it deterministically for /pharn-review Step 6, and it quotes lens text, paths and the orchestrator's self-report
+# verbatim inside fences — content the renderer does not control — so gate-clean output is not achievable by
+# construction. A BENIGN render is still markdownlint-clean under this repo's config (render-review.test.mjs probes it).
+# `.dev/features/*/REVIEW.md` (the dev review, model-written) is NOT listed and stays formatted.
+pharn/features/*/REVIEW.md
+
 # The other machine-written JSON pipeline artifacts, on the SAME reasoning (L23): each is one floor module's
 # `JSON.stringify(…, null, 2)` output, and that layout expands a short array of strings over several lines where
 # prettier wants it inline. AC-TESTS.lock.json (ac-tests-lock.mjs) is written by /pharn-test BEFORE the build and

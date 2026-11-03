@@ -50,6 +50,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-03: **`/pharn-review`'s `REVIEW.md` is written by a floor renderer, not by the model** (audit 2026-11-03).
+  New `pharn/floor/render-review.mjs` renders it from `findings.json`, `merge-report.json` (`v1` or `v2`),
+  `assignments.json` and the orchestrator's own notes (`pharn/.run/pharn-review-notes/<name>.md`, fenced as
+  self-report, and only when newer than the record). Inline text is only renderer prose, counts, the validated name,
+  closed-set values shown after a membership test, and a `rule_id` that passes the merge's own shape check. Every other
+  value a lens, a record or the notes supplied is inside a fence one back-tick longer than any run in it, with C0
+  controls other than TAB/LF, and DEL, shown as `\uXXXX`. Each fenced value is capped at 2,000 characters (the notes
+  at 20,000); a finding's lens text is budgeted at 200,000 characters across the document, while the record's and
+  report's lists are rendered in full. Step 6 now writes the notes and runs the renderer, says not to
+  edit `REVIEW.md` afterwards, and Step 6b re-renders on a RED. Before, Step 6 told the model to render the text "as
+  quoted DATA", and the claims block stated it without a Floor/Advisory label. The audit merged ten injected payloads
+  verbatim, among them a 100 KB string and four-back-tick runs. The renderer makes REVIEW.md's bytes inert to a
+  CommonMark parser; it does not prevent forgery, and an edit after the render is outside it. The five backstop
+  phrases moved from Step 6's table into the module. `pharn/features/*/REVIEW.md` joins `.prettierignore` and
+  `.markdownlint-cli2.jsonc`; a benign render is still lint-clean under this repo's config. Step 4 now tags the skill
+  catalogue's names and descriptions `trust: untrusted`, as it already tagged the `SKILL.md` bodies. Step 1b states
+  that the review set has no size bound as a whole. The claims block says why the lens subagent keeps `Bash` and
+  `Write`: the scanners and the catalogue line need `Bash`, `findings.json` is written with `Write`, and by Claude
+  Code's documentation a `tools:` entry cannot narrow `Bash` to one command. The agent definition's bytes are unchanged.
 - 2026-11-03: **Memory-bank canon leaves the formatters' reach, and `/pharn-dev-build` Step 2b runs `npx --no-install`.**
   `.prettierignore` and `.markdownlint-cli2.jsonc` list `.dev/memory-bank/` and `pharn/memory-bank/`, so canon leaves
   `format:check` / `lint:md`. Of the two promote commands, only `/pharn-dev-memory-promote`'s advisory canon `--check`
@@ -109,6 +128,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **`merge-findings.mjs`: `type` is a closed set, the lens directory name is quoted, and `file`s outside
+  the target are named** (audit 2026-11-03).
+  - `type` must be `FINDING` or `CONSTITUTION_VIOLATION`, the two values `finding-shape.md` now lists without a
+    trailing `...`. `type: "APPROVED"`, which the old open shape `^[A-Z][A-Z0-9_]*$` merged, is dropped and named
+    (exit 3). Every shipped capability emits `FINDING`, and a test binds the contract's list to the code by set
+    equality.
+  - A lens directory name carrying a newline is stored JSON-quoted in the merged `sources[]`, as `merge-report.json`
+    already stored it.
+  - With a usable `assignments.json`, a findings file under a lens directory the record does not name is skipped
+    unread and named in `unreadable[]` as `unrecorded-lens` (exit 3). In an installed project
+    `pharn/features/<name>/lenses/` sits inside the reviewed tree, so a planted `lenses/<dir>/findings.json` used to
+    merge as real findings. With no usable record every input still merges, and a file planted under a recorded lens's
+    directory still merges as that lens's.
+  - `merge-report.json` is `merge-report/v2`. It adds `outside_target`, which names every contributor whose `file` is
+    not in the assignment record's target (`../../etc/passwd:1`, `/etc/passwd:1`, `http://…:80` all merged and went
+    unnamed before). The field is `null` when no usable record exists. Nothing is dropped and the exit code is
+    unchanged. A reader treats a `v1` report's missing field as not recorded (`finding-shape.md`, "The merge report").
+  - The merge ends `process.exitCode = main(process.argv)` instead of `process.exit()` right after its stdout write,
+    and it is in `cli-stdout-flush.test.mjs`'s set.
+  - `finding-shape.md` says what `type` and `file` buy today: `file` is a `path:line` shape, resolved only at eval
+    time. Its closing summary called declaring the `findings.json` path "guaranteed today"; it now says advisory, as
+    its own first bullet does.
+  - The `isCleanScalar` comment no longer claims JavaScript's `$` matches before a trailing newline; measured false on
+    Node 24.
 - 2026-11-03: **A plan can no longer scope canon, executable config, or — during a product run in a dev or unsignalled
   tree — PHARN's own floor and commands** (review 2026-11-03: BLOCKER setter half, HIGH canon, MEDIUM `.mcp.json` /
   `CLAUDE.md`). `set-writes-scope.cjs --from-plan` now refuses, writing nothing: memory-bank canon in every posture with

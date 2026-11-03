@@ -1,0 +1,75 @@
+{
+  "base": "fb997e4bd192ed57dd9ca3240d9866c4c54d9408",
+  "inside": [
+    ".claude/commands/pharn-review.md",
+    ".dev/features/review-quoting/BUILD.md",
+    ".dev/features/review-quoting/DOCS-PROPOSAL.md",
+    ".dev/features/review-quoting/GRILL.md",
+    ".dev/features/review-quoting/PLAN.md",
+    ".dev/features/review-quoting/REGRESSION.md",
+    ".dev/features/review-quoting/REVIEW.md",
+    ".dev/features/review-quoting/SHIP.md",
+    ".dev/features/review-quoting/VERIFY.md",
+    ".dev/features/review-quoting/regression-report.json",
+    ".dev/features/review-quoting/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/review-lens-agent.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".markdownlint-cli2.jsonc",
+    ".prettierignore",
+    "CHANGELOG.md",
+    "README.md",
+    "pharn/floor/cli-stdout-flush.test.mjs",
+    "pharn/floor/merge-findings.mjs",
+    "pharn/floor/merge-findings.test.mjs",
+    "pharn/floor/render-review.mjs",
+    "pharn/floor/render-review.test.mjs",
+    "pharn/pharn-contracts/finding-shape.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6098,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6098,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

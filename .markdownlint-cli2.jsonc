@@ -71,6 +71,11 @@
     // PLAN-derived paths and a checker's own message VERBATIM, so no MD rule can be satisfied by construction
     // over content the renderer does not control.
     "pharn/features/*/VERIFY.md",
+    // REVIEW.md — the SAME reasoning (7.3.0, audit 2026-11-03): rendered by pharn/floor/render-review.mjs for
+    // /pharn-review Step 6, quoting lens text, paths and the orchestrator's self-report verbatim inside fences. A
+    // BENIGN render is still clean under this config (render-review.test.mjs probes it); `.dev/features/*/REVIEW.md`
+    // is model-written and stays linted.
+    "pharn/features/*/REVIEW.md",
     // Zone note, kept where the next editor of this list will need it: `pharn/.run/` is excluded ENTRY BY
     // ENTRY, never as a blanket `pharn/.run/`. The reason is structural rather than situational — the
     // directory holds the fix #7 writes-scope file and the product-index cache above alongside
