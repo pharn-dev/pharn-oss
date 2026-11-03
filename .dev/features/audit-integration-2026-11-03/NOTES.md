@@ -54,3 +54,59 @@ No `apply.py` is tracked on any merged branch. DOCS-PROPOSAL.md files now on the
 - `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."`.
 - `npm run check` at `e4c1da77` → exit 0. Every pre-test gate green as in round 1 (reconcile `NO_BASELINE`);
   `node --test`: tests 6327, pass 6326, fail 0, cancelled 0, skipped 1, duration 1 583 s.
+
+## Phase A, rounds 3–5 (2026-11-03)
+
+- `fix/lesson-heading-parser` (G9) @`0fdc39c3` → `5e8cb595`. Conflict: `CHANGELOG.md` only (three `### Fixed`
+  entries to the group's top). Auto-merged and kept: `command-hygiene.test.mjs` (G9's removal of
+  `pharn-dev-memory-promote.md` from `NPX_PENDING` and `MARKDOWNLINT_SITES`), the `enforce-writes-scope.test.cjs:326`
+  comment, `pharn-dev-ship.md`'s header and 2b.4 comments. `npm run check` exit 0: tests 6359, pass 6358, fail 0,
+  skipped 1. Pushed.
+- `fix/dev-verdict-discipline` (G5) @`74122688` → `f469d5e2`. Conflict: `CHANGELOG.md` (G5's Added, Changed and Fixed
+  entries each to its group's top). `pharn-dev-ship.md` auto-merged (G5's STOP rules + verdict block, G9's header
+  comments, S's `npx --no-install` lines all present). INT edit: `pharn-dev-review.md` and `pharn-dev-verify.md` left
+  `NPX_PENDING`. Ceilings re-measured: `pharn-dev-ship.md` 47 157 B ≤ 52 224, `pharn-dev-verify.md` 29 381 B ≤ 31 232
+  (no change). `npm run check:ship-record` (`--merge-base origin/main`): GREEN, 56 product paths, green record
+  `.dev/features/dev-verdict-discipline/SHIP.md`. `npm run check` exit 0: tests 6400, pass 6399, fail 0, skipped 1.
+  Pushed.
+- `fix/plan-scope-hardening` (G1) @`968441ed` → `8e58309b`. Conflicts: `CHANGELOG.md` (Added, Changed, Fixed to each
+  group's top) and `.claude/hooks/set-writes-scope.test.cjs` (G1's widened flag list kept under S's corrected comment;
+  G1's side still said "RED until that increment's apply.py has run"). The owner-applied `set-writes-scope.cjs`
+  arrived through the merge and equals G1's head; `pharn-loop.md` carries G1's `--check` grant beside G2's grants.
+  INT edit: `pharn-dev-build.md` left `NPX_PENDING`, which is now empty.
+- Integration fixes for G1, `017ff1d5` (the plan's `## Files` widened first, setter re-run, 25 paths):
+  - (a) `/pharn-dev-build` Step 2b PICK adds `&& real === path.join(root, p)`. Probe
+    (`scratchpad/g1/probe-symparent.mjs`, run in a throwaway clone): G1's PICK → `canon via symlinked parent:
+REFORMATTED`; with the check → `untouched`, `gp/mb/zz-probe.md` named on stderr, the plain control still
+    reformatted. Pinned by a new `command-hygiene.test.mjs` assertion (mutant control: the regex fails on the PICK line
+    with the clause removed); the build comment, the test comment, `.dev/guides/writes-scope.md` and G1's CHANGELOG
+    entry say so.
+  - (b) `apply-plan-deletions.mjs`'s reader-reason comment names the contiguous-list rule, not round 1's `:` rule.
+  - (c) Re-measured (`scratchpad/int-tools/wf-count.mjs`, the dd0bb3d3 setter vs G1's, dev posture): of 342 committed
+    plans the pre-batch scope named a `.github/workflows/` path for 16 (28 mention it in text); 7.3.0 refuses 14 of them
+    first for exec config and 2 first for a split list. The guide's "17 of 342" became that statement; the CHANGELOG's
+    "14 CI workflow" now says it counts by first refusing rule.
+  - (d) G1's CHANGELOG line: only `/pharn-dev-memory-promote`'s canon `--check` line was a no-op, and G9 removed it;
+    `/pharn-memory-promote`'s `vendor/bin/prettier --check` line reads an installed project's canon. S's two entries
+    no longer call four dev commands pending.
+  - `npm run check` exit 0: tests 6435, pass 6434, fail 0, skipped 1. Pushed.
+- `fix/review-quoting` (G8) @`790c0f72` → `9d4c08b9`. Conflicts: `CHANGELOG.md` (Changed and Fixed to each group's top),
+  `pharn/floor/cli-stdout-flush.test.mjs` (`FLUSH_CLIS` keeps G4's `validate.mjs` row and G8's `merge-findings.mjs`
+  row), `.dev/guides/floor-checks.md` (G5's `check-ship-record` section, with its code fence closed, then G8's
+  merge/render section). Auto-merged: `.prettierignore` and `.markdownlint-cli2.jsonc` (G1's two canon dirs and G8's
+  `pharn/features/*/REVIEW.md`), `command-hygiene.test.mjs` (`pharn-review.md` 30 877 B ≤ 34 304 beside G5's
+  ceilings), `merge-findings.mjs` (G8 only). G8 tracks no file under `pharn/.run/`.
+
+### Gates after round 5 (head `9d4c08b9`)
+
+- `npm run check` exit 0: every pre-test gate green, reconcile `NO_BASELINE`; tests 6467, pass 6466, fail 0,
+  cancelled 0, skipped 1, duration 600 s. No `entry-gates.test.mjs` TAKEOVER failure in any of the six runs.
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."`.
+- `npm run check:ship-record` → `SHIP-RECORD: GREEN — 66 product-surface path(s) changed; green record(s):
+".dev/features/dev-verdict-discipline/SHIP.md"` (`--merge-base origin/main`, `dd0bb3d3`). Every other SHIP.md carries
+  no verdict block (legacy: neither green nor red).
+- `npm run check:changelog-entry` → `CHANGELOG-ENTRY: GREEN — 39 new entr(ies) … no merged entry or released heading
+changed`.
+- `npm run check:surface-bump` → RED `NOT_BUMPED`, expected until Phase C's 7.3.0 bump.
+- CHANGELOG `[Unreleased]`: one heading per type, 39 entries, no duplicate; every branch's added line present except
+  the four G1 lines rewritten by fixes (a), (c) and (d).
