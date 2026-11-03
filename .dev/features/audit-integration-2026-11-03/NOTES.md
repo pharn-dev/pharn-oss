@@ -131,3 +131,32 @@ changed`.
   `npm run docs:generate` (lessons index: 82 lessons); committed; `npm run check` exit 0 (all pre-test gates GREEN incl.
   `check:markers` and `docs:check`, reconcile `NO_BASELINE`, tests 6467 / pass 6466 / fail 0 / skipped 1);
   `validate.mjs` GREEN.
+
+## Phase C — applied docs and the 7.3.0 release (2026-11-03)
+
+- Orchestrator decisions done before the apply: `CONTRIBUTING.md:79, 92, 160` no longer say an admin merge bypasses
+  required checks (ruleset 25907495 has no bypass actor; the per-PR steps run in the required `check` job), with a
+  CHANGELOG entry; G9's entry says "`## L20` with and without a trailing space" (`b6cc3840`). The same stale claim in
+  two test comments (`instruction-growth-wiring.test.mjs:21`, `check-surface-bump.test.mjs:19`) is corrected
+  (`b9e6ce2f`).
+- The owner ran `apply-docs.py`. AFTER hashes verified on disk, all five equal the pins (LIMITS `5fa849f6…`,
+  THREAT-MODEL `73a6a524…`, CONSTITUTION `8f0c7cad…`, ARCHITECTURE `ab4dbd92…`, lessons-learned `8d7e7fd3…`).
+  `origin/main` had not moved (`dd0bb3d3`), so no merge.
+- `84153e16` "audit-integration: maintainer-applied docs patch": the five files, the `specified-primitives.json` marker
+  edit (Edit; byte-equal to the clone-proven file) and the regenerated `docs/lessons-index.md` (byte-equal to the
+  clone's), committed before any gate ran (L68). Both scratchpad scripts (`apply-docs.py`, `apply-docs.lab.py`) were
+  then deleted.
+- `151ce894` "release: 7.3.0": `SKILLS_VERSION` 7.3.0, README badge, `## [7.3.0] - 2026-11-03` opened directly above
+  `[7.2.1]` with every `[Unreleased]` entry moved into it (the `[Unreleased]` heading and its guidance comment stay,
+  empty), plus one entry for the trusted-doc and canon patch. `MIN_CLI` unchanged (no installed path moved).
+
+### Gates at `151ce894`
+
+- `npm run check` exit 0: Prettier clean, markdownlint 0 issues, CATALOG / LESSONS-INDEX / SPECIFIED-MARKERS /
+  VERSION-BADGE (7.3.0) / SKILLS-VERSION-RECORDED (`[7.3.0]` newest, 0 `[Unreleased]` entries) / CONTRIBUTING-GATES
+  GREEN, reconcile `NO_BASELINE`; tests 6467, pass 6466, fail 0, cancelled 0, skipped 1.
+- `node pharn/floor/validate.mjs .` → `FLOOR: GREEN — 37 capabilities checked in "."`.
+- `npm run check:changelog-entry` → GREEN, 41 new entries, opens `## [7.3.0] - 2026-11-03`.
+- `npm run check:surface-bump` → GREEN, 70 product paths, `7.2.1` → `7.3.0`.
+- `npm run check:ship-record` → GREEN, green record `.dev/features/dev-verdict-discipline/SHIP.md`.
+- `npm run check:instruction-growth` → `within`.
