@@ -23,6 +23,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-03: **New ✧ pins for CI wiring and command vocabulary** (audit 2026-11-03). `.dev/floor/ci-steps.test.mjs`
+  pins that `ci.yml` runs `node pharn/floor/validate.mjs .` and `npm run check:markers` under the install-gated `if:`
+  and that `floor.yml` runs the validator unconditionally, with a negative control (a step set to `if: false`, deleted,
+  or running another command fails). `.dev/floor/test-globs.test.mjs` binds `test:coverage`'s globs equal to `test`'s,
+  so a pattern added to one cannot be missing from the CI job whose lcov the coverage gate reads.
+  `.dev/floor/command-hygiene.test.mjs` pins that no command names `AskQuestion` and that every dev command's `npx`
+  formatter/linter line carries `--no-install` (four files owned by other work in this batch are listed as pending and
+  must each still hold such a line). Apparatus only.
+
+### Changed
+
+- 2026-11-03: **`npm audit fix`, lockfile only** (audit 2026-11-03). `eslint` 10.13.0 → 10.14.0,
+  `@eslint-community/eslint-utils` 4.9.1 → 4.10.1, `brace-expansion` 5.0.6 → 5.0.12, `minimatch` → 10.2.6:
+  `npm audit` went from 12 advisories (2 low, 6 moderate, 4 high) to 11 (2 low, 6 moderate, 3 high). The rest have no
+  non-breaking fix: `re2js` (high) arrives through `markdownlint-cli2` ≥ 0.24.0 and only a downgrade removes it, and the
+  `eslint` family's moderates resolve only to an older major. All are devDependencies; `npm audit --omit=dev` is 0.
+- 2026-11-03: **Prompt hygiene in two commands** (audit 2026-11-03). `/pharn-dev-plan` now says the lessons file it
+  reads in full is `trust: untrusted` DATA, as `/pharn-plan` already did. `/pharn-build`'s trusted prefix now treats
+  the project's existing source it reads as DATA the same way it treats `PLAN.md`: instruction-looking text in it is
+  code to work with, never a directive.
+- 2026-11-03: **Dev commands no longer let `npx` fetch a formatter** (audit 2026-11-03). `/pharn-dev-plan`,
+  `/pharn-dev-grill`, `/pharn-dev-regress` and `/pharn-dev-ship` run `npx --no-install prettier` /
+  `npx --no-install markdownlint-cli2` on their one artifact, so a missing install refuses instead of downloading the
+  package. `/pharn-dev-build`, `/pharn-dev-verify`, `/pharn-dev-review` and `/pharn-dev-memory-promote` are converted by
+  their own work items in this batch.
+- 2026-11-03: **`.dev/guides/versioning.md` states the publish-first rule for `MIN_CLI`.** The CLI reads `MIN_CLI` from
+  the tree it fetches, so a raised `MIN_CLI` binds every `init` and `update` from the moment it merges; publish the
+  matching `@pharn-dev/pharn` to npm first. Advisory: nothing in this repo checks it.
+
+### Fixed
+
+- 2026-11-03: **The human-gate tool is named `AskUserQuestion`** in `/pharn-dev-plan`, `/pharn-dev-memory-promote`,
+  `/pharn-spec`, `/pharn-memory-promote` and `/pharn-dev-ship` (ten lines named `AskQuestion`, which is not a Claude
+  Code tool, so each gate worked by the model guessing the name). The command-hygiene pin that matched the old name now
+  matches the new one.
+- 2026-11-03: **`/pharn-loop`'s entry isolation check counts `GITHUB_TOKEN` outside GitHub Actions** (audit 2026-11-03).
+  It was excluded on every host because in Actions it is ephemeral and always present. Elsewhere it is usually a
+  personal access token, so a dev container, a Gitpod workspace or a `PHARN_ISOLATED=1` shell that exported one read
+  `ISOLATED`. It now reads `ISOLATED_WITH_CREDENTIALS` there (`cred:env:GITHUB_TOKEN`, a new code in
+  `check-run-isolation-core.mjs` and the contract's table, `pharn/pharn-contracts/loop-record.md`); under
+  `GITHUB_ACTIONS=true` nothing changes. A witness written before this change still parses.
+- 2026-11-03: **`check:surface-bump` no longer counts a whitespace-only version change as a bump** (audit 2026-11-03).
+  `7.2.1` followed by a space differed from `7.2.1` and passed, while `release.yml`'s `TAG_RE` refuses it, so `main`
+  would ship new product bytes under the old number. A version that is not a bare `X.Y.Z` is now `NOT_BUMPED`, with
+  its own wording. Apparatus only.
+- 2026-11-03: **`release.yml` waits for `gitleaks`** (audit 2026-11-03). `main`'s classic branch protection requires it,
+  and the job ignored it, so a push whose gitleaks run failed was still tagged. The comment now cites ruleset 25907495
+  (the one that holds the required checks; 18045407 no longer does), says a non-bump merge fails `TAG_ELSEWHERE` rather
+  than "stopping" (2 of the last 6 runs), gives the measured 11–15 minutes for `check`, and says the setter refuses
+  this file from a plan since 7.3.0. `CONTRIBUTING.md`'s "Releases" says the same. Apparatus only.
+- 2026-11-03: **Stale names, versions and headers corrected against live state** (audit 2026-11-03).
+  `docs/{guarantees,limitations,pipeline}.md` cite 6.68.1 for the README move (6.65.3 never shipped); `CLAUDE.md`,
+  `CONTRIBUTING.md` and `pharn/features/README.md` cite 5.1.2 for the `pharn/features/` move (5.0.0 never reached
+  `main`). `SECURITY.md` says `/pharn-loop`'s marker is opened by `require-loop-record.cjs` (`run-marker.mjs` refuses
+  `pharn-loop`). `pharn/floor/runtime-floor.mjs` says the installer refuses Node below 24.2.0 since pharn-cli 0.8.0.
+  `/pharn-ship`'s stages and close-out, and `check-spec-approved.mjs`'s refusal text, say what the floor checks
+  (`state: Approved` and the pin), not that "the human approved". Headers naming moved files are corrected in
+  `check-regress.mjs`, `.dev/floor/check-variance.mjs` (its usage line too), `trust-fence.md` and `stage-exit.md`;
+  `instruction-files.mjs` and `instruction-files-core.mjs` no longer call `enumerate()`'s list the reconciled set
+  (since 7.2.0 that set also drops `pharn/.run/`). README: reconcile leaves `pharn/.run/` out whether or not it is
+  ignored, and the verify-verdict guarantee carries its bound (a self-consistent fabricated stamp passes). `CLAUDE.md`
+  hard constraint 1: ruleset 25907495 binds every account to the required checks; the owner's bypass skips the review
+  and classic protection's `gitleaks`. Eleven hook-test comments that said "EXPECTED TO FAIL until apply.py" for cases
+  that pass now say when the patch was applied.
+- 2026-11-03: **The two TAKEOVER tests in `entry-gates.test.mjs` no longer fail under load** (audit 2026-11-03 LOW-1).
+  Their `--wait` calls run on the virtual-clock preload from 6.72.0 with `Date.now()` frozen, so the takeover's budget
+  arithmetic reads 0 elapsed at any load and drains every gate in one call; before, a call that took over 250 ms to
+  reach the takeover ran nothing and six calls ended on exit 5. Measured green alone and at load average 84 on 8 cores.
+  Test-only.
+
 ## [7.2.1] - 2026-11-02
 
 ### Added
