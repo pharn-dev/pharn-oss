@@ -206,11 +206,14 @@ promote commands' advisory `--check` lines over canon become no-ops (G9 owns tho
 - `.dev/features/plan-scope-hardening/apply.py` (delete) — the human patch for `set-writes-scope.cjs`; never
   committed, and deleted once the owner ran it (round 3, AFTER pin verified).
 - `.dev/features/plan-scope-hardening/BUILD.md` — build note, markdown-it probe results, clone proof.
+- `.claude/hooks/set-writes-scope.cjs` — written only by the owner running `apply.py` (CONTROL_SURFACE; never a
+  Write-tool target), committed as its own commit (`df3f5620`) before build Step 0 was re-run (L68). Listed here
+  after that re-run, so `/pharn-dev-regress`'s declared set names every path this increment changed; the setter
+  therefore now refuses this plan without the operator's `--allow-claude-dir`, which no later stage needs.
 
-### Human-applied, outside the build's scope
+### Human-applied
 
-- `.claude/hooks/set-writes-scope.cjs` — written only by the owner running `apply.py` (CONTROL_SURFACE); committed
-  as its own commit, then build Step 0 is re-run (L68).
+- The hook entry above is the one human-applied file; the trusted-doc text is in `DOCS-PROPOSAL.md`.
 
 ### Explicitly not touched
 
