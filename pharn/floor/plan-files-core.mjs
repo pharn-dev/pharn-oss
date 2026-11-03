@@ -81,6 +81,9 @@
 // and scoped the path under it (fail-open; reproduced) — and inside `## Files` it REFUSES with its line number (third
 // review: renderers hide the indented or lazy lines after it, so `- a <!--` / `      - b` / `      -->` scoped a hidden
 // `b`). Outside `## Files` it stays literal. A fence line inside a comment block is not a fence.
+// GLOB CHARACTERS. An entry may hold `[`, `{` or `(` (`app/[slug]/page.tsx` is a real path); this reader and the
+// setter keep it. A consumer that hands entries to a glob-reading tool must not pass them as patterns —
+// `/pharn-dev-build` Step 2b passes only existing regular files by literal path, with no glob character.
 // ITEM MARKERS. A path item is `-` followed by spaces or tabs only — a no-break space or other Unicode space is not a
 // marker's space, and is not an indent — then a back-tick path. An item indented four or more columns past the
 // previous item's text column (or at the margin, before the first item) is code or lazy paragraph text to a renderer,

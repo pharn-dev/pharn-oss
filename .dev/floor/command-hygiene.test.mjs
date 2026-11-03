@@ -237,12 +237,32 @@ for (const gate of STEP_2B_GATES) {
       .filter((l) => !l.trimStart().startsWith("#") && gate.re.test(l));
     assert.equal(lines.length, 1, `exactly one prescribed ${gate.tool} line`);
     const [line] = lines;
-    assert.match(line, /require\('\.\/\$SCOPE'\)\.scope\b.*\.join\('\\0'\)\)/, `${gate.tool}: the paths are joined with NUL`);
-    assert.match(line, /\bprocess\.stdout\.write\(/, `${gate.tool}: no trailing newline after the last NUL (node -p adds one)`);
+    assert.match(line, /^\s*node -e "\$PICK" '[^']*' \| xargs -0 -r /, `${gate.tool}: the paths come from PICK, NUL-separated`);
     assert.match(line, /\s--$/, `${gate.tool}: \`--\` ends the tool's options, so no path is read as a flag`);
     assert.doesNotMatch(line, /join\('\\n'\)/, `${gate.tool}: never newline-separated`);
   });
 }
+
+// PICK — the one node step all three lines share (7.3.0, review round 3): it reads the scope record, keeps only
+// entries that are EXISTING REGULAR FILES by their literal path (lstat — a symlink or a directory is never a file —
+// and a realpath inside the checkout) and hold no glob character, names the rest on stderr, and writes the kept paths
+// NUL-separated with no trailing newline. Why the glob filter: all three tools read arguments as globs, and none treats
+// an existing literal `[…]` / `{…}` path as that file when the glob matches another (measured), so a scope entry such
+// as `CLAUDE.m[d]` reformatted CLAUDE.md. A VOCABULARY pin, like the others here: it cannot run the step.
+test("✧ Step 2b's PICK passes only existing regular files by literal path, never a glob-shaped entry, NUL-separated", () => {
+  const defs = step2bBlock()
+    .split("\n")
+    .filter((l) => /^\s*PICK='/.test(l));
+  assert.equal(defs.length, 1, "exactly one PICK definition in Step 2b");
+  const [pick] = defs;
+  assert.match(pick, /require\("\.\/pharn\/\.run\/writes-scope\.json"\)\.scope/, "PICK reads the setter's scope record");
+  assert.match(pick, /fs\.lstatSync\(p\)\.isFile\(\)/, "lstat + isFile: never a symlink, never a directory");
+  assert.match(pick, /realpathSync\(p\)/, "the realpath of each entry is taken");
+  assert.match(pick, /real\.startsWith\(root \+ path\.sep\)/, "and must lie inside the checkout");
+  assert.match(pick, /!\/\[\*\?\[\\\]\{\}\(\)!\]\/\.test\(p\)/, "a glob character (`*?[]{}()!`) drops the entry");
+  assert.match(pick, /process\.stdout\.write\(keep\.join\("\\0"\)\)/, "kept paths are written NUL-separated, no newline");
+  assert.match(pick, /process\.stderr\.write\(/, "dropped entries are named, never silently skipped");
+});
 
 // ── Every markdownlint-cli2 invocation lints ONLY the files it names (`--no-globs`) ──────────────────
 //
@@ -4999,7 +5019,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
   // ship-step2-part (6.70.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
   // rounded up to 512. R3–R5 do not apply to them (header).
-  "pharn-dev-build.md": 15360, // 13,771 B
+  "pharn-dev-build.md": 17920, // 15,867 B (7.3.0, plan-scope-hardening: Step 2b's NUL-safe PICK + its rationale)
   "pharn-dev-eval.md": 11264, // 9,907 B
   "pharn-dev-grill.md": 25600, // 22,836 B
   "pharn-dev-memory-promote.md": 50688, // 45,963 B

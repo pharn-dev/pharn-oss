@@ -72,7 +72,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, take
   the scoped paths NUL-separated (`join('\0')` + `xargs -0 -r`, so no entry is split at a space or read as quoted),
   and end each tool's options with `--` (all three treat what follows as paths); its Step 0 says a setter refusal is a
-  stop for the human — never an `--allow-*` flag the agent adds. That block is the only shell consumer of
+  stop for the human — never an `--allow-*` flag the agent adds. It passes on only entries that are existing regular
+  files by their literal path (lstat, realpath inside the checkout) with no glob character, naming the rest: all three
+  tools read arguments as globs, so a scope entry `CLAUDE.m[d]` had reformatted `CLAUDE.md`. That block is the only shell consumer of
   `pharn/.run/writes-scope.json` (`loop-closeout.mjs` already stages through `--pathspec-file-nul` with literal pathspecs).
 
 ## [7.2.1] - 2026-11-02

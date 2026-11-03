@@ -242,6 +242,13 @@ one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch sta
     the previous item's text refuses. Measured over the 342 committed plans (pre-batch setter vs 7.3.0, dev posture):
     293 identical, 44 newly refused (27 split list, 14 CI workflow, 3 canon), 5 already refused (control surface) and
     now refused first by the split-list rule, 0 silent changes; plans are not re-run, so none was edited.
+  - **Glob characters stay legal in a scope entry** (`app/[slug]/page.tsx` is a real path), so the setter does not
+    refuse them. Its one shell consumer, `/pharn-dev-build` Step 2b, passes its formatters only entries that are
+    existing regular files by their literal path (lstat, not a symlink, realpath inside the checkout) and hold no glob
+    character (`*?[]{}()!`), NUL-separated, with `--` before the paths; the rest are named on stderr and left to
+    `/pharn-dev-verify`'s whole-repo gates. Measured: prettier, markdownlint-cli2 and eslint all read arguments as
+    globs and none treats an existing literal `[…]` / `{…}` path as that file when the glob matches another, so
+    `CLAUDE.m[d]` in a scope reformatted `CLAUDE.md` before this (third review).
   - **`--check`** (before the mode) runs every parse and refusal and writes nothing; `/pharn-plan` and
     `/pharn-dev-plan` run it on the PLAN they just wrote, so a refusal surfaces at plan time.
   - A refusal is a STOP for the human: an agent never adds an `--allow-*` flag itself (`/pharn-dev-build` Step 0). The

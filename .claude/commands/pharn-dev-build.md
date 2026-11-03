@@ -107,10 +107,17 @@ else
   # exits 1 on an extension-less path (e.g. a plan that declares `SKILLS_VERSION`). `.prettierignore`
   # IS honored for explicitly-named paths, so generated artifacts stay protected.
   # 7.3.0: `npx --no-install` — a missing local binary fails here instead of being fetched from the registry; the
-  # paths travel NUL-separated (`join('\0')` + `xargs -0`), so xargs never splits an entry at a space or reads a
+  # paths travel NUL-separated (`join("\0")` + `xargs -0`), so xargs never splits an entry at a space or reads a
   # quote, and `--` ends each tool's options, so no path is read as a flag (the setter also refuses such entries);
   # `-r` runs nothing on an empty list (BSD and GNU xargs both accept it).
-  node -e "process.stdout.write(require('./$SCOPE').scope.join('\0'))" | xargs -0 -r npx --no-install prettier --ignore-unknown --write --
+  # PICK passes on only entries that are EXISTING REGULAR FILES by their literal path (lstat: never a symlink, never a
+  # directory; realpath inside this checkout) and hold no glob character. All three tools read their arguments as
+  # globs, and none reliably treats an existing literal path holding `[`, `{` or `(` as that file — measured: with
+  # `app/[s].md` and `app/s.md` both present, prettier, markdownlint-cli2 and eslint each processed `app/s.md`, and
+  # each brace-expanded an existing `b/{x,y}.md` — so a glob-shaped entry (`CLAUDE.m[d]`, `.husk{y,x}/pre-commit`,
+  # `!src/a.md`) is NOT formatted here and is named on stderr; `/pharn-dev-verify`'s whole-repo gates still check it.
+  PICK='const fs = require("fs"), path = require("path"); const want = new RegExp(process.argv[1]); const root = fs.realpathSync("."); const keep = [], skip = []; for (const p of require("./pharn/.run/writes-scope.json").scope) { if (!want.test(p)) continue; let ok = !/[*?[\]{}()!]/.test(p); try { const real = fs.realpathSync(p); ok = ok && fs.lstatSync(p).isFile() && real.startsWith(root + path.sep); } catch { ok = false; } (ok ? keep : skip).push(p); } if (skip.length) process.stderr.write("Step 2b: not formatted here (not an existing regular file by its literal path, or glob-shaped): " + skip.join(", ") + "\n"); process.stdout.write(keep.join("\0"));'
+  node -e "$PICK" '' | xargs -0 -r npx --no-install prettier --ignore-unknown --write --
   # The .md SUBSET -> markdownlint. `--no-globs` is LOAD-BEARING: markdownlint-cli2 ADDS its config's
   # `globs` (`**/*.md`) to the paths on argv rather than replacing them, so without the flag this line
   # lints and FIXES every markdown file the globs reach — measured `Linting: 1340 files` for ONE named
@@ -120,7 +127,7 @@ else
   # NO ARGUMENTS, and BSD xargs does not run it. Since 7.3.0 the guard is `xargs -r` (a shell variable cannot
   # hold the NUL-separated list). Under `--no-globs` a path-less run lints 0 files (measured), so here the
   # guard is defense in depth; it stays load-bearing for eslint below.
-  node -e "process.stdout.write(require('./$SCOPE').scope.filter(p=>p.endsWith('.md')).join('\0'))" | xargs -0 -r npx --no-install markdownlint-cli2 --no-globs --fix --
+  node -e "$PICK" '\.md$' | xargs -0 -r npx --no-install markdownlint-cli2 --no-globs --fix --
   # The JS SUBSET -> eslint, READ-ONLY (no `--fix`: the finding that forced this line,
   # `no-useless-assignment`, has no autofix, and mechanizing a fixer is a different axis). The same
   # non-empty test is LOAD-BEARING for the same reason (L16), and MEASURED for this linter rather than
@@ -129,7 +136,7 @@ else
   # unrelated pre-existing error as this increment's (L11). This line is PINNED rather than described,
   # because the prose it replaces ("Confirm `npm run lint` is clean") left the invocation open and the
   # open choice was the one that got skipped (L22).
-  node -e "process.stdout.write(require('./$SCOPE').scope.filter(p=>/\.(mjs|cjs|js)$/.test(p)).join('\0'))" | xargs -0 -r npx --no-install eslint --
+  node -e "$PICK" '\.(mjs|cjs|js)$' | xargs -0 -r npx --no-install eslint --
 fi
 ```
 

@@ -203,7 +203,8 @@ promote commands' advisory `--check` lines over canon become no-ops (G9 owns tho
 - `CHANGELOG.md` — `[Unreleased]` entries (Fixed, Changed).
 - `.dev/features/plan-scope-hardening/DOCS-PROPOSAL.md` — trusted-doc text for the owner (THREAT-MODEL §2 item 10,
   LIMITS §3f, §6 setter bullet, §7 permissive-default bullet).
-- `.dev/features/plan-scope-hardening/apply.py` — the human patch for `set-writes-scope.cjs`; never committed.
+- `.dev/features/plan-scope-hardening/apply.py` (delete) — the human patch for `set-writes-scope.cjs`; never
+  committed, and deleted once the owner ran it (round 3, AFTER pin verified).
 - `.dev/features/plan-scope-hardening/BUILD.md` — build note, markdown-it probe results, clone proof.
 
 ### Human-applied, outside the build's scope
