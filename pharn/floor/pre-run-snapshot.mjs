@@ -16,8 +16,9 @@
 //   4. digests each path with `pathDigest` (below), the ONE function the check also uses;
 //   5. refuses `already-captured` when a valid record is already bound to the run open now (WRITE-ONCE PER RUN: a second
 //      capture would record the build's own writes as pre-run state — a re-run of the pinned line, by a confused agent
-//      or after a compaction, cannot do that; a re-run of the --open line before it starts another run, which is the
-//      core header's re-run bound);
+//      or after a compaction, cannot do that; a re-opened run before it is another run, which is the core header's
+//      re-run bound — `/pharn-ship`'s `--open` re-opens by rewriting, and since 7.3.0 `/pharn-loop`'s refuses an open
+//      marker, so a loop run is re-opened only through `--close` first);
 //   6. writes `<git rev-parse --absolute-git-dir>/pharn-pre-run-snapshot.json` (tmp + rename in that directory).
 // Exit: 0 recorded (one line on stdout) · 2 refused (`pre-run-snapshot: refused <reason_code> — …` on stderr, the
 // closed REASON_CODES; a throw caught here is `crashed`). A module that fails to load is node's own exit 1 — no claim

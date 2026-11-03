@@ -264,7 +264,7 @@ export const REFUSAL_TEXT = Object.freeze({
   "probe-failed":
     "`git config` could not be read to look for a credential helper, so the evidence is incomplete. Fix git, then " +
     "re-run; --accept-host-execution does not accept unknown evidence (pharn/LIMITS.md §6).",
-  usage: "usage: node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]",
+  usage: "usage: node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name> (the flag only first)",
   crashed: "the check failed internally, so no verdict exists. Treat it as a refusal (pharn/LIMITS.md §6).",
 });
 

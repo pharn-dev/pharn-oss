@@ -398,7 +398,8 @@ test("✧ WIRING: no command OTHER than pharn-ship.md / pharn-review.md invokes 
 test("✧ WIRING: pharn-loop.md's existing --open/--close lines still work unchanged (the loop's marker writer is untouched)", () => {
   const openLine = pinnedLine("pharn-loop.md", /node \.claude\/hooks\/require-loop-record\.cjs --open '<name>' --cap <M>/)
     .replace("<name>", "demo-run")
-    .replace("<M>", "3");
+    .replace("<M>", "3")
+    .replace("<mode>", "full"); // 7.3.0: the loop's open line also records the run's mode
   const closeLine = pinnedLine("pharn-loop.md", /node \.claude\/hooks\/require-loop-record\.cjs --close '<name>'/).replace(
     "<name>",
     "demo-run"
@@ -523,8 +524,9 @@ for (const { file, command, next } of [
 
 // ------------------------------------------------------------------------------------------- ✧ WIRING: /pharn-loop's run-state lines STOP on a planted file — EXECUTED (re-review R2)
 
-// The loop's marker writer is require-loop-record.cjs, a human-only hook left unchanged: a FILE planted at
-// pharn/.run/pharn-loop/<name> makes it exit 1 with a stack trace. So the command STOPs (S9) on ANY non-zero exit
+// The loop's marker writer is require-loop-record.cjs, a human-only hook: a FILE planted at
+// pharn/.run/pharn-loop/<name> makes it exit non-zero (exit 2 since 7.3.0, which catches the write; a stack trace and
+// exit 1 before). So the command STOPs (S9) on ANY non-zero exit
 // of its Step 1a snapshot line and of its --open line. Both lines are EXECUTED here, whole, in a git sandbox —
 // a control run with nothing planted must succeed, so a failure below is the plant's — against a FILE at each
 // of the three places the Write tool can put one. Neither proves a run obeyed the branch (P0).
@@ -548,7 +550,9 @@ function gitSandbox() {
 function loopLines() {
   return {
     snap: pinnedLine("pharn-loop.md", LOOP_SNAPSHOT_RE).replaceAll("<name>", "demo-run"),
-    open: pinnedLine("pharn-loop.md", LOOP_OPEN_RE).replace("<name>", "demo-run").replace("<M>", "3"),
+    // 7.3.0: `<mode>` too — left in, the shell would read `<mode` as a redirection and every plant test would pass for
+    // the wrong reason.
+    open: pinnedLine("pharn-loop.md", LOOP_OPEN_RE).replace("<name>", "demo-run").replace("<M>", "3").replace("<mode>", "full"),
   };
 }
 

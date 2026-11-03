@@ -109,7 +109,18 @@ node pharn/floor/check-loop-fresh.mjs --feature <name> --base <40-hex> (--iter <
 # `stop-guard-live-probe` checks it once wired. Inert-path cost: ~0.03 ms in-process; a spawn is node's
 # own startup (~70 ms). Exits for a person: `--close <name>`, interrupt, or unwire — a model reaches the
 # first and third through Bash too (pharn/LIMITS.md §6).
-node .claude/hooks/require-loop-record.cjs --open <name> --cap <M>   # /pharn-loop Step 1a
+# 7.3.0 (loop-marker-integrity): `--mode full|quick` writes the run's invocation into the marker (absent → read as
+# full), which check-loop-decision.mjs compares with the record (MODE_UNWITNESSED); `--open` REFUSES, exit 2 and nothing
+# written, when anything already sits at the marker path, so a run cannot re-open its marker with a larger cap in one
+# pinned line; and the marker is published by a `wx` tmp file and a rename, every write failure exit 2 with no marker.
+# The WRITE TOOLS cannot rewrite the marker either: protect-trusted-paths.cjs (7.3.0, RUN_STATE_SUBTREES) denies every
+# Write/Edit/MultiEdit/NotebookEdit below pharn/.run/pharn-loop/, pharn-ship/ and pharn-review/, whatever the scope —
+# CLI-owned state no command writes with those tools. `--close` refuses a marker path holding a non-regular file.
+# RESIDUAL, stated plainly: a Bash write reaches the marker, and `--close` is pinned too (the Final step needs it), so
+# `--close` → `--open` with a new cap → `pre-run-snapshot.mjs --capture` re-opens a run in three pinned lines —
+# agreement between run-writable files, never provenance (L43). Two concurrent opens of one name race between the
+# lstat and the rename.
+node .claude/hooks/require-loop-record.cjs --open <name> --cap <M> --mode <full|quick>   # /pharn-loop Step 1a
 node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loop Final step
 ```
 
@@ -124,7 +135,8 @@ node .claude/hooks/require-loop-record.cjs --close <name>           # /pharn-loo
 # STOP_GREEN_QUICK requires mode: quick, STOP_GREEN forbids it) plus an unambiguous `## Handoff` —
 # exactly `### investigated`, `### learned`, `### next_steps`, in that order, no extras/duplicates, each with
 # a non-blank body. Since 6.71.3 every frontmatter key appears at most once — a repeat, an extra key's included, is
-# RED (keys and counts named, never a value). ADVISORY (never checked BY THIS CHECKER): whether the Handoff is TRUE, whether `decision`
+# RED (keys and counts named, never a value). Since 7.3.0 a present `blocked` must be a stuck-point id
+# (loop-record-core.mjs BLOCKED_IDS), else RED BLOCKED_UNKNOWN. ADVISORY (never checked BY THIS CHECKER): whether the Handoff is TRUE, whether `decision`
 # AGREES with what check-loop.mjs emitted (check-loop-decision.mjs, below, is the one that asks), or whether
 # any run reads it. NOT an input to check-loop.mjs — the record can never influence the stop. Exits non-zero
 # on RED.
@@ -150,6 +162,9 @@ node pharn/floor/check-loop-record.mjs <LOOP.md>
 # symlink is never followed and the file cannot be swapped between check and read — and REDs CAP_MISMATCH
 # (record cap ≠ marker cap), CAP_UNWITNESSED (no usable marker: fail-closed; the closeout runs it before its --close,
 # and a blocked record is skipped first) and ITER_OVER_CAP (iterations > cap). Agreement, never provenance.
+# Since 7.3.0 it also REDs MODE_UNWITNESSED (the record's mode ≠ the mode the marker was opened with — the
+# invocation's one copy written before any SPEC) and skips only a blocked record whose id is in BLOCKED_IDS; any
+# other id is RED BLOCKED_UNKNOWN, never SKIPPED.
 # Runs strictly AFTER a stop exists and gates only /pharn-loop's Step 6c commit, never the stop: a green stop whose
 # re-derivation is RED is not committed ("not committed: decision unverifiable"). BOUND, and the point: it proves the
 # decision is RE-DERIVABLE from the cited reports, NOT that the reports are honest — a self-consistent forged pair

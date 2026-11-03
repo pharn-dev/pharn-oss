@@ -1718,6 +1718,14 @@ function openRun(dir, command = "pharn-loop", feature = FEATURE) {
   return join(dir, "pharn", ".run", command, feature, "active.json");
 }
 
+/** Re-open a /pharn-loop run, the only way there is since 7.3.0: `require-loop-record.cjs --open` refuses an open marker,
+ *  so a re-opened run is `--close` then `--open` — new marker bytes, so another run to the snapshot and base reuse. */
+function reopenLoopRun(dir, feature = FEATURE) {
+  const c = spawnSync(process.execPath, [LOOP_RECORD, "--close", feature], { cwd: dir, encoding: "utf8", env: CLEAN_ENV });
+  assert.equal(c.status, 0, `--close refused: ${c.stdout}${c.stderr}`);
+  return openRun(dir, "pharn-loop", feature);
+}
+
 function recordFile(dir) {
   return join(execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8" }).trim(), RECORD_BASENAME);
 }
@@ -2097,7 +2105,7 @@ const E2E_MISSES = [
     opts: { extraPlanLines: ["- `tsconfig.json` — root config"] },
     between: (fx) => writeFileSync(join(fx.dir, "tsconfig.json"), "{}\n"),
   },
-  { miss: "other-run", why: "the delivery run was re-opened (a new run)", between: (fx) => openRun(fx.dir) },
+  { miss: "other-run", why: "the delivery run was re-opened (a new run)", between: (fx) => reopenLoopRun(fx.dir) },
   {
     miss: "no-delivery-run",
     why: "a second delivery command's marker is open for the feature",
@@ -2697,7 +2705,7 @@ test("PRE-RUN — no open run, no snapshot, or another run: every undeclared cha
     assert.match(readFileSync(join(dir, r.json.render), "utf8"), /not applied \(no-snapshot\)/);
 
     captureSnapshotCli(dir); // records the build's own write too — then the run is re-opened, which is another run
-    openRun(dir, "pharn-loop");
+    reopenLoopRun(dir);
     r = cli(dir, freshArgs(base));
     assert.equal(r.code, 3, r.raw);
     assert.equal(JSON.parse(readFileSync(join(dir, REGRESS_PATHS.scopeJson), "utf8")).pre_run_snapshot.status, "other-run");

@@ -17,7 +17,10 @@ because this hook already case-folds, strips Windows trailing dot/space, and res
 segment-wise, which closes the case-variant and dangling-alias vectors together;
 `enforce-writes-scope.cjs` keeps its own compare as defense in depth, and `set-writes-scope.cjs` is
 unaffected because it writes via `fs.writeFileSync`, which `PreToolUse` never sees. Deliberately the
-one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch stages legitimately write.
+one file, **not** `pharn/.run/**` — the rest is disposable runtime scratch stages legitimately write. One exception
+since 7.3.0: `protect-trusted-paths.cjs` also denies every Write/Edit/MultiEdit/NotebookEdit below
+`pharn/.run/pharn-{loop,ship,review}/**` (its `RUN_STATE_SUBTREES` — the runs' markers and witnesses, which only PHARN's
+CLIs write), whatever the scope; Bash still reaches them.
 
 ## Fail-closed — every posture (dev, unsignalled, installed)
 

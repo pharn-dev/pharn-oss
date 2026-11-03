@@ -373,6 +373,129 @@ test("--open refuses to write through a symlinked state directory", () => {
 });
 
 // ---------------------------------------------------------------------------------------------------
+// 7.3.0 (loop-marker-integrity) — the marker records the MODE, is never re-opened over, and is never torn
+// ---------------------------------------------------------------------------------------------------
+
+const markerFile = (root, name = NAME) => path.join(root, "pharn", ".run", "pharn-loop", name, "active.json");
+
+test("★ 7.3.0 --open twice for one name: the second exits 2, writes nothing, and leaves the first marker's bytes", () => {
+  withFixture({ marker: false }, (root) => {
+    const errs = [];
+    const stderr = { write: (s) => errs.push(String(s)) };
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr }), 0);
+    const first = fs.readFileSync(markerFile(root));
+    for (const again of [
+      ["--open", NAME, "--cap", "5"],
+      ["--open", NAME, "--cap", "3"],
+      ["--open", NAME, "--cap", "3", "--mode", "quick"],
+    ]) {
+      assert.equal(markerMode(again, { root, env: { CLAUDE_CODE_SESSION_ID: OTHER }, stderr }), 2, again.join(" "));
+      assert.ok(fs.readFileSync(markerFile(root)).equals(first), `${again.join(" ")}: the first marker is untouched`);
+    }
+    // L27: the refusal names the one remedy that reaches it.
+    assert.ok(
+      errs.some((e) => e.includes("already open") && e.includes(`--close ${NAME}`)),
+      errs.join("")
+    );
+    // the remedy works: after --close, --open writes again
+    assert.equal(markerMode(["--close", NAME], { root, stderr: quiet }), 0);
+    assert.equal(markerMode(["--open", NAME, "--cap", "5"], { root, env: {}, stderr: quiet }), 0);
+    assert.equal(JSON.parse(fs.readFileSync(markerFile(root), "utf8")).cap, 5);
+  });
+});
+
+test("7.3.0 --open refuses ANY entry at the marker path — a directory or a dangling link counts as open", () => {
+  withFixture({ marker: false }, (root) => {
+    fs.mkdirSync(markerFile(root), { recursive: true });
+    const errs = [];
+    const stderr = { write: (s) => errs.push(String(s)) };
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr }), 2);
+    assert.ok(fs.lstatSync(markerFile(root)).isDirectory(), "left as it was");
+    // L27: --close cannot remove a directory, so the refusal must not offer it — it says a human must remove it.
+    assert.ok(errs.join("").includes("a human must remove it"), errs.join(""));
+    assert.ok(!errs.join("").includes("--close"), "no unreachable --close remedy");
+    // and --close itself refuses that case with exit 2, never a crash
+    errs.length = 0;
+    assert.equal(markerMode(["--close", NAME], { root, stderr }), 2);
+    assert.ok(errs.join("").includes("a human must remove it"), errs.join(""));
+    assert.ok(fs.lstatSync(markerFile(root)).isDirectory(), "still left as it was");
+    const cli = spawnSync(process.execPath, [HOOK, "--close", NAME], { cwd: root, encoding: "utf8" });
+    assert.equal(cli.status, 2, cli.stderr);
+    assert.doesNotMatch(cli.stderr, /\n\s+at /, "no stack trace");
+  });
+  withFixture({ marker: false }, (root) => {
+    fs.mkdirSync(path.dirname(markerFile(root)), { recursive: true });
+    fs.symlinkSync(path.join(root, "nowhere.json"), markerFile(root));
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 2);
+    assert.ok(!fs.existsSync(path.join(root, "nowhere.json")), "nothing written through the dangling link");
+  });
+});
+
+test("7.3.0 a planted entry at the tmp name refuses the open, and is LEFT ALONE — this process removes only what it created", () => {
+  withFixture({ marker: false }, (root) => {
+    fs.mkdirSync(path.dirname(markerFile(root)), { recursive: true });
+    const tmp = `${markerFile(root)}.tmp-${process.pid}`; // in-process, the hook's pid is this one
+    const target = path.join(root, "elsewhere.json");
+    fs.symlinkSync(target, tmp);
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 2);
+    assert.ok(fs.lstatSync(tmp).isSymbolicLink(), "the planted link is not deleted");
+    assert.ok(!fs.existsSync(target), "and nothing was written through it (wx)");
+    assert.ok(!fs.existsSync(markerFile(root)), "no marker");
+  });
+});
+
+test("★ 7.3.0 --mode full|quick is written into the marker; any other mode, or a bare --mode, is refused with nothing written", () => {
+  for (const mode of ["full", "quick"]) {
+    withFixture({ marker: false }, (root) => {
+      assert.equal(
+        markerMode(["--open", NAME, "--cap", "3", "--mode", mode], { root, env: { CLAUDE_CODE_SESSION_ID: SID }, stderr: quiet }),
+        0
+      );
+      const m = JSON.parse(fs.readFileSync(markerFile(root), "utf8"));
+      assert.deepEqual(Object.keys(m).sort(), ["cap", "mode", "name", "schema", "session_id", "started_at"]);
+      assert.equal(m.mode, mode);
+      assert.equal(m.schema, SCHEMA, "the schema is unchanged (an additive key)");
+      assert.ok(isBlock(stopGuard(payload(), { root, env: {} })), "the guard honours a marker carrying a mode");
+    });
+  }
+  withFixture({ marker: false }, (root) => {
+    for (const bad of [
+      ["--open", NAME, "--cap", "3", "--mode"],
+      ["--open", NAME, "--cap", "3", "--mode", "fast"],
+      ["--open", NAME, "--cap", "3", "--mode", "QUICK"],
+      ["--open", NAME, "--cap", "3", "--mode", "quick", "--mode", "full"],
+      ["--open", NAME, "--cap", "3", "--quick"],
+      ["--open", NAME, "--mode", "quick", "--cap", "3"],
+    ]) {
+      assert.equal(markerMode(bad, { root, env: {}, stderr: quiet }), 2, bad.join(" "));
+      assert.ok(!fs.existsSync(markerFile(root)), `${bad.join(" ")}: nothing written`);
+    }
+  });
+});
+
+test("★ 7.3.0 the marker is published whole: a write that fails half-way leaves no active.json and no tmp", () => {
+  withFixture({ marker: false }, (root) => {
+    const real = fs.writeFileSync;
+    fs.writeFileSync = (file, data, ...rest) => {
+      real(file, String(data).slice(0, 10), ...rest); // half the bytes reach the disk …
+      throw Object.assign(new Error("ENOSPC: no space left on device"), { code: "ENOSPC" }); // … then the write fails
+    };
+    let code;
+    try {
+      code = markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet });
+    } finally {
+      fs.writeFileSync = real;
+    }
+    assert.equal(code, 2, "a failed write is a refusal, never a crash and never success");
+    assert.ok(!fs.existsSync(markerFile(root)), "no active.json — never a torn marker");
+    assert.deepEqual(fs.readdirSync(path.dirname(markerFile(root))), [], "and the tmp file was removed");
+    // control: the same open, unstubbed, writes the marker
+    assert.equal(markerMode(["--open", NAME, "--cap", "3"], { root, env: {}, stderr: quiet }), 0);
+    assert.ok(fs.existsSync(markerFile(root)));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
 // The CLI — spawned the way Claude Code runs it (payload on stdin, cwd = Claude's directory)
 // ---------------------------------------------------------------------------------------------------
 
@@ -444,7 +567,8 @@ test("★ WIRING — /pharn-loop's pinned --open line guards the run, and its pi
     fs.mkdirSync(path.join(root, ".claude", "hooks"), { recursive: true });
     fs.copyFileSync(HOOK, path.join(root, ".claude", "hooks", "require-loop-record.cjs"));
     const sub = (line) => {
-      const out = line.replaceAll("'<name>'", `'${NAME}'`).replaceAll("<M>", "3");
+      // 7.3.0: the open line also takes `<mode>`; the quick form passes `quick`, which the --mode test below covers.
+      const out = line.replaceAll("'<name>'", `'${NAME}'`).replaceAll("<M>", "3").replaceAll("<mode>", "full");
       assert.doesNotMatch(out, /<[a-z][^>]*>/, `an unsubstituted placeholder remains in: ${out}`);
       return out;
     };

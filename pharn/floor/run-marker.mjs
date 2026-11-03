@@ -65,8 +65,9 @@
 // Exit 0 ok (nothing printed to stdout beyond a one-line confirmation) · 2 refusal, no marker written.
 //
 // EVERY FAILURE IS EXIT 2, NEVER A CRASH (GATE-2 review, S1). A FILE planted where a directory belongs
-// (`pharn/.run`, `pharn/.run/<command>`, `pharn/.run/<command>/<name>` — the Write tool can plant one, since `pharn/.run/**`
-// is always writable) made `mkdirSync` throw, and the CLI exited 1 with a raw stack trace while this header
+// (`pharn/.run`, `pharn/.run/<command>` — the Write tool can plant one there, since enforce-writes-scope.cjs always allows
+// `pharn/.run/**`; `pharn/.run/<command>/<name>` — a Bash write can, the Write tool no longer since 7.3.0, which
+// protect-trusted-paths.cjs denies below `pharn/.run/<command>/` for these three commands) made `mkdirSync` throw, and the CLI exited 1 with a raw stack trace while this header
 // promised "0 ok · 2 refusal". openRun()/closeRun() now return every filesystem error as
 // `{ ok: false, reason }`, naming the operation, the marker's relative path and the error CODE only (never
 // the raw message), and main() turns any other throw into exit 2 as well. What a refusal leaves behind: a

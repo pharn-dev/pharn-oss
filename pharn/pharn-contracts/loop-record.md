@@ -88,6 +88,7 @@ The next concrete step, stated as one — free text, untrusted DATA. Informs; ne
 | `cap`        | `^\d+$` **and** `>= 1` — **OPTIONAL**, not one of the four mandatory                        | **value** shape-gated when present; see "The fifth, optional field" below         |
 | `mode`       | exact membership in `{full, quick}` — **OPTIONAL**, absent means `full` (6.28.0)            | **value** shape-gated when present; see "The sixth, optional field" below         |
 | `isolation`  | one JSON line in the witness grammar — **MANDATORY** on a record written by 7.1.0 or later  | shape-gated, re-derived, and witness-bound; see "The isolation field" below       |
+| `blocked`    | exact membership in the stuck-point ids — **OPTIONAL**, a blocked stop's key (7.3.0)        | **value** set-gated when present; see "The one exception: a blocked stop" below   |
 
 Every anchored regex above is applied **only after** a control-char + length guard on the raw value —
 composed, never replaced (PHARN's own build-loop lesson **L14**, cited not restated — P4). The
@@ -105,8 +106,39 @@ which `check-loop.mjs` also emits — is deliberately **outside** this enum: a r
 **The one exception: a blocked stop.** When `/pharn-loop` stops on one of its stuck-point rules (a
 sub-stage needed a decision the run may not guess), it does **not** consult `check-loop.mjs`, whose inputs
 could be a previous iteration's stale reports. The record then carries `decision: INCONCLUSIVE` (an enum
-member) plus the extra frontmatter key `blocked: <id>`. Extra keys are ignored by the checker (below), so
-`blocked:` gates nothing; it exists so a reader can tell a blocked stop from a malformed-report stop. **S13**
+member) plus the extra frontmatter key `blocked: <id>`, which exists so a reader can tell a blocked stop from a
+malformed-report stop. **Since 7.3.0 `<id>` is a closed set** — before, any value passed, and any value made
+`check-loop-decision.mjs` skip its re-derivation, so a measured red could be recorded as a blocked stop under an
+invented id. The set is the ids of `/pharn-loop`'s stuck-point rows S1–S15, owned in code by
+`pharn/floor/loop-record-core.mjs` `BLOCKED_IDS` and rendered here; tests hold this list, that constant and the
+command's stuck-point table equal both ways:
+
+<!-- LOOP-BLOCKED-IDS:BEGIN -->
+
+- `no-slug`
+- `no-git-base`
+- `no-gates`
+- `seam-config`
+- `thin-intent`
+- `needs-clarification`
+- `not-quick`
+- `plan-ambiguity`
+- `seam-unresolved`
+- `stage-refused`
+- `stage-outlived-wait`
+- `unlisted-ask`
+- `stale-evidence`
+- `no-test-runner`
+- `ac-evidence-invalid`
+- `gates-red-at-entry`
+- `gates-unmeasured-at-entry`
+- `not-isolated`
+
+<!-- LOOP-BLOCKED-IDS:END -->
+
+`check-loop-record.mjs` REDs `BLOCKED_UNKNOWN` when a present `blocked` value is not a member (after the control-char
+guard), and `check-loop-decision.mjs` skips only a member — any other value is RED there too, never re-derived. That
+the id names the stop's TRUE reason stays advisory. **S13**
 (`blocked: ac-evidence-invalid`, 6.20.0) is reached two ways — `check-loop-fresh.mjs` refusing the test stage's
 evidence (`reason_code` `ac-evidence-invalid`) or `check-loop.mjs` stopping with `terminal_cause: ac-evidence` —
 and is recorded the same way on both: as a blocked stop, `decision: INCONCLUSIVE` plus the key. One row, one shape. For
@@ -143,6 +175,18 @@ run stops at `iter <= cap`. Bound: agreement between two files the run can write
 `iterations` that is too low still passes; and a hand re-check after the run's Final step closed the marker is RED
 `CAP_UNWITNESSED`. `check-loop-record.mjs` is unchanged: `cap` stays optional to the shape.
 
+**Re-opening the marker is narrowed, not closed (7.3.0).** `require-loop-record.cjs --open` exits 2 and writes nothing
+when anything already exists at the marker path, so its pinned line never rewrites an open marker's cap or mode; it
+publishes the marker by a temporary file and a rename, so a crash never leaves a torn one. The write tools are denied
+the marker too: `protect-trusted-paths.cjs` refuses every Write/Edit/MultiEdit/NotebookEdit below
+`pharn/.run/pharn-loop/`, `pharn/.run/pharn-ship/` and `pharn/.run/pharn-review/` (CLI-owned state no command writes with
+those tools), whatever the scope. **What still reaches it, stated:** a `Bash` write, which no hook sees; and `--close`,
+which is a pinned line too (the Final step needs it), so `--close` then `--open` with a new cap then
+`pre-run-snapshot.mjs --capture` re-opens a run in three pinned lines. Every comparison with the marker is the same
+agreement-not-provenance bound as above. A marker left by a run that crashed before its feature directory existed
+stops the next run of the same slug at S9 once; that stop's Final step closes it (a marker path holding something
+other than a regular file is refused by both `--open` and `--close`, and a person removes it).
+
 **The sixth, optional field: `mode` (6.28.0, `/pharn-loop --quick`).** `mode ∈ {full, quick}` (the vocabulary is
 `pharn/floor/loop-mode-core.mjs`'s `LOOP_MODES`); **absent means `full`**, so every record written before 6.28.0
 keeps its meaning, and a full run may omit it. **What it records, one meaning for every record class: the run's
@@ -161,6 +205,14 @@ on every record, blocked ones included. The checkers' rules:
   reported beside any decision mismatch. **Agreement between files, never provenance** (lessons-learned L43): it
   certifies that the record's invocation and the SPEC's kind agree, never who chose either. The re-run reads the kind
   line in any state, so Step 6a's revert of the SPEC to `Draft` (which never touches that line) does not move it.
+- `check-loop-decision.mjs` (the invocation's witness, 7.3.0): the record's mode must also equal the mode the run's
+  marker was opened with — Step 1a's `require-loop-record.cjs --open <name> --cap <M> --mode <mode>` writes it into
+  `pharn/.run/pharn-loop/<name>/active.json` before any SPEC exists (a marker with no `mode` key reads `full`) — else
+  RED `MODE_UNWITNESSED`. With `MODE_MISMATCH` this chains the SPEC's kind to a value fixed at entry, so a run opened
+  `full` over a quick SPEC the model wrote later is not committed, and editing the record's `mode` no longer repairs
+  it. Bound: the model types `<mode>` from its own reading of its argv, so this is agreement between files the run can
+  write, never proof of what the person typed; and a quick run in flight across an upgrade, whose marker an older hook
+  wrote without `mode`, is RED here and not committed.
 - A blocked record's `mode` is shape-checked by `check-loop-record.mjs` and otherwise advisory.
 
 **The directions that do not read back, stated:** an install rolled back below 6.28.0 REDs a `LOOP.md` carrying
@@ -260,8 +312,8 @@ unreadable; and `ISOLATION_MISMATCH` when the witness line is not byte-equal to 
 - The record check does **not** gate the commit: after one `--after-repair` the closeout goes on, as for every record
   RED.
 - Agreement between two files the run can write, never provenance (lessons-learned L43). The witness is git-ignored
-  `pharn/.run/` state: the Write tool reaches `pharn/.run/**` in every posture, a `Bash` write reaches it too, and reconcile
-  never sees it. So a run can rewrite the witness and the record together, and every line built from the witness then
+  `pharn/.run/` state: since 7.3.0 the write tools are denied it (`protect-trusted-paths.cjs`), but a `Bash` write reaches
+  it, and reconcile never sees it. So a run can rewrite the witness and the record together, and every line built from the witness then
   repeats the rewrite. **Struck:** "a record and a commit cannot leave out that the flag was used".
 - **ADVISORY, struck as a guarantee: "the environment was isolated" and "no credential was reachable."** Every probe
   input comes from the environment. The operator can set `PHARN_ISOLATED=1`, plant `/.dockerenv` or empty `HOME`, and
@@ -377,10 +429,15 @@ cross-field rule with `decision`. But the **separate** `check-loop-decision.mjs`
 on the result. That gate belongs to the OTHER checker, over the OTHER command step (Step 6c) — this contract's own
 guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field's presence or absence.
 
+**`blocked` is the third (7.3.0).** It decides whether `check-loop-decision.mjs` re-derives a record at all, so an
+open vocabulary let any value skip that gate. Its value is therefore no longer ignored: when present it must be one of
+the stuck-point ids listed in "The one exception: a blocked stop" — RED `BLOCKED_UNKNOWN` in both checkers otherwise.
+
 ## The rule of the contract (P0)
 
 - **FLOOR (deterministic, `pharn/floor/check-loop-record.mjs`):** given a record, the envelope's four
-  mandatory fields and its optional `cap` and `mode` are shape-valid, no frontmatter key repeats, `decision` and
+  mandatory fields and its optional `cap` and `mode` are shape-valid, a present `blocked` is a stuck-point id (7.3.0),
+  no frontmatter key repeats, `decision` and
   `mode` are a consistent pair, the mandatory `isolation` line is in the witness grammar, is an admitted run's, and
   equals the run's witness file (7.1.0, "The isolation field"),
   and the Handoff's structure is exactly as specified — enum membership, anchored regexes over control-char-guarded
@@ -393,7 +450,8 @@ guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field
   for a non-blocked record, its `decision` **is re-derivable** — a live re-run of `check-loop.mjs` against
   the record's `verify-report.json` / `regression-report.json` siblings (the verify report alone in the quick
   table), using the record's own `iterations` and `cap`, reproduces the recorded token verbatim — and, since 6.28.0,
-  the record's `mode` equals the mode that re-run reports. This is the ONE place "decision agrees
+  the record's `mode` equals the mode that re-run reports and, since 7.3.0, the mode the run's marker was opened with
+  (`MODE_UNWITNESSED`); a blocked record is skipped only when its id is a stuck-point id. This is the ONE place "decision agrees
   with what `check-loop.mjs` actually emitted" stops being purely advisory — narrowed, not general: it
   proves re-derivability from the CITED reports, never that those reports are themselves honest (a
   self-consistent forged pair still passes — named, not solved). `/pharn-loop`'s Step 6c gates its

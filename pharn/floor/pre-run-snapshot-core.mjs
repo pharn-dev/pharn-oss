@@ -34,8 +34,9 @@
 //   no-snapshot         no record in the git dir, or a git dir git cannot name;
 //   snapshot-malformed  the record is not a regular file (a link, a FIFO, a directory, unreadable, over
 //                       `SNAPSHOT_MAX_BYTES`) of the closed `pharn-pre-run-snapshot/1` shape;
-//   other-run           the record names another feature, command or marker digest (every `--open` rewrites the
-//                       marker, so a re-opened run is another run);
+//   other-run           the record names another feature, command or marker digest (a re-opened run writes new
+//                       marker bytes — `run-marker.mjs --open` rewrites its marker, and a loop marker, whose `--open`
+//                       refuses an open one since 7.3.0, is re-opened only after `--close` — so it is another run);
 //   base-changed        the record's base is not the partition's base (HEAD moved after the capture, or a regress was
 //                       given another `--base`).
 // `applied` names an `inside` path when the record holds it with a hash or `absent` and the live digest is EQUAL.

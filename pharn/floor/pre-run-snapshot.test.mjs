@@ -605,10 +605,13 @@ test("★ HOOK — the write tools never reach the record: protect-trusted-paths
     const main = hookMatrix(dir, recordFile(dir));
     assert.equal(main.length, 18, "L34: the cell set is counted, not merely iterated");
     for (const [label, p] of main) assert.equal(p, 2, `main checkout, ${label}: protect-trusted-paths denies the .git segment`);
-    // Control (non-vacuity): the guards do not deny everything — a pharn/.run/ path is writable, the reason the record is not kept there.
-    const marker = join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json");
-    assert.equal(hookExit(PROTECT, dir, marker), 0);
-    assert.equal(hookExit(ENFORCE, dir, marker), 0, "`pharn/.run/**` is always writable");
+    // Control (non-vacuity): the guards do not deny everything — a pharn/.run/ path is writable, the reason the record is
+    // not kept there. (7.3.0: not the loop marker any more — protect-trusted-paths denies the write tools everything below
+    // pharn/.run/pharn-loop/, so the control is another stage's scratch.)
+    const scratch = join(dir, "pharn", ".run", "pharn-regress", "scratch.json");
+    assert.equal(hookExit(PROTECT, dir, scratch), 0);
+    assert.equal(hookExit(ENFORCE, dir, scratch), 0, "`pharn/.run/**` is always writable");
+    assert.equal(hookExit(PROTECT, dir, join(dir, "pharn", ".run", "pharn-loop", FEATURE, "active.json")), 2, "7.3.0: the marker is not");
 
     for (const [layout, wt] of [
       ["beside", beside],
@@ -720,7 +723,8 @@ for (const { file, open, next, stopRow } of WIRING) {
       const cap = pinnedLine(file, CAPTURE_RE).replace("<name>", FEATURE);
       const refused = runShellLine(dir, cap);
       assert.equal(refused.status, 2, "the exit the STOP branch reads is non-zero when no run is open");
-      const o = runShellLine(dir, pinnedLine(file, open).replace("<name>", FEATURE).replace("<M>", "3"));
+      // 7.3.0: the loop's open line also takes `<mode>` (full here; the quick form passes quick).
+      const o = runShellLine(dir, pinnedLine(file, open).replace("<name>", FEATURE).replace("<M>", "3").replace("<mode>", "full"));
       assert.equal(o.status, 0, o.stderr);
       const r = runShellLine(dir, cap);
       assert.equal(r.status, 0, r.stderr);
