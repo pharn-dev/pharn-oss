@@ -137,7 +137,7 @@ of the `MUST` above is a blanket floor guarantee that the artifact exists.
 owns its fields). Its `schema` is `merge-report/v2` since 7.3.0, which added `outside_target` (above) and changed no
 v1 field. A reader accepts both: a `merge-report/v1` report has no `outside_target`, and the reader treats it as **not
 recorded** — never as an empty list, which would claim every file was in the target. Any other `schema` value makes the
-report unusable to that reader. The one content reader is `pharn/floor/render-review.mjs`; the other floor modules that
+report unusable to that reader. The one content reader is `pharn/floor/render-review.mjs`; the other floor files that
 name the file (`check-regress.mjs`, `worktree-fingerprint.mjs`, `reconcile-ignore.json`) list it as a pipeline
 artifact and never parse it.
 

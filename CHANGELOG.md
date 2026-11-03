@@ -39,10 +39,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - 2026-11-03: **`/pharn-review`'s `REVIEW.md` is written by a floor renderer, not by the model** (audit 2026-11-03).
   New `pharn/floor/render-review.mjs` renders it from `findings.json`, `merge-report.json` (`v1` or `v2`),
   `assignments.json` and the orchestrator's own notes (`pharn/.run/pharn-review-notes/<name>.md`, fenced as
-  self-report, and only when newer than the record). Every value a lens, a record or the notes supplied is inside a
-  fence one back-tick longer than any run in it, with C0 controls other than TAB/LF, and DEL, shown as `\uXXXX`; each
-  field is capped at 2,000 characters and the document's lens text at 200,000. Inline text is renderer prose, counts
-  and closed-set values shown after a membership test. Step 6 now writes the notes and runs the renderer, says not to
+  self-report, and only when newer than the record). Inline text is only renderer prose, counts, the validated name,
+  closed-set values shown after a membership test, and a `rule_id` that passes the merge's own shape check. Every other
+  value a lens, a record or the notes supplied is inside a fence one back-tick longer than any run in it, with C0
+  controls other than TAB/LF, and DEL, shown as `\uXXXX`. Each fenced value is capped at 2,000 characters (the notes
+  at 20,000); a finding's lens text is budgeted at 200,000 characters across the document, while the record's and
+  report's lists are rendered in full. Step 6 now writes the notes and runs the renderer, says not to
   edit `REVIEW.md` afterwards, and Step 6b re-renders on a RED. Before, Step 6 told the model to render the text "as
   quoted DATA", and the claims block stated it without a Floor/Advisory label. The audit merged ten injected payloads
   verbatim, among them a 100 KB string and four-back-tick runs. The renderer makes REVIEW.md's bytes inert to a
@@ -51,8 +53,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `.markdownlint-cli2.jsonc`; a benign render is still lint-clean under this repo's config. Step 4 now tags the skill
   catalogue's names and descriptions `trust: untrusted`, as it already tagged the `SKILL.md` bodies. Step 1b states
   that the review set has no size bound as a whole. The claims block says why the lens subagent keeps `Bash` and
-  `Write`: the scanners and the catalogue line need `Bash`, `findings.json` is written with `Write`, and a `tools:`
-  entry cannot narrow `Bash` to one command. The agent definition's bytes are unchanged.
+  `Write`: the scanners and the catalogue line need `Bash`, `findings.json` is written with `Write`, and by Claude
+  Code's documentation a `tools:` entry cannot narrow `Bash` to one command. The agent definition's bytes are unchanged.
 - 2026-11-03: **`npm audit fix`, lockfile only** (audit 2026-11-03). `eslint` 10.13.0 → 10.14.0,
   `@eslint-community/eslint-utils` 4.9.1 → 4.10.1, `brace-expansion` 5.0.6 → 5.0.12, `minimatch` → 10.2.6:
   `npm audit` went from 12 advisories (2 low, 6 moderate, 4 high) to 11 (2 low, 6 moderate, 3 high). The rest have no

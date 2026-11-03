@@ -35,6 +35,12 @@ What landed:
 CLI under pharn/floor carries the runtime floor in the pinned position" went red at head only — the new CLI lacked
 `import "./runtime-floor.mjs";` as its first import. Added; the load-graph test now pins it first.
 
+**Fix from a pre-verify self-review (L64 probe of each restated bound):** the claims bullet and the CHANGELOG said
+"every value a lens supplied is fenced" and "each field capped", while a shape-valid `rule_id` renders inline and the
+record/report lists were neither capped nor budgeted. Now every fenced value is capped (with a fixed note per list),
+a finding's location joins the lens-text budget, the lists stay unbudgeted and say so, and both restatements name the
+inline exceptions. Two tests pin the new caps. Regress was re-run at head after this fix.
+
 Merge-report readers (GATE 1 condition): only `/pharn-review` Step 6 read the report's content, and that is now the
 renderer, which accepts v1 and v2. `check-regress.mjs`, `worktree-fingerprint.mjs`, `reconcile-ignore.json` and
 `check-regress.test.mjs` list the file name only.

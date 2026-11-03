@@ -25,9 +25,11 @@
 // bytes this module writes; an edit to REVIEW.md after the render is outside it, which is why Step 6 forbids one.
 //
 // ================================ CAPS ================================
-// FIELD_CAP characters per fenced value (a fixed line after the fence says how many more are in findings.json);
-// TEXT_BUDGET characters of fenced lens text over the whole document, after which a contributor's text renders as a
-// fixed "not rendered" line (counted in the stdout summary); NOTES_CAP for the notes. Characters are UTF-16 code units
+// FIELD_CAP characters per fenced value, every fence (a fixed line after the fence says what was cut); TEXT_BUDGET
+// characters of a finding's lens text — its location and its contributors' source/problem/evidence — over the whole
+// document, after which that text renders as a fixed "not rendered" line (counted in the stdout summary); NOTES_CAP for
+// the notes. The record's and report's LISTS (skipped reasons, scanner failures, unassigned paths, unreadable and dropped
+// entries, outside_target) are rendered in full, each value capped, never budgeted: a reader sees every name they hold. Characters are UTF-16 code units
 // (String#length), cut on a code-unit boundary — a cut can split a surrogate pair, which renders as one replacement
 // character and changes nothing structural.
 //
@@ -140,6 +142,28 @@ function cap(text, limit) {
   return text.length <= limit ? { text, cut: 0 } : { text: text.slice(0, limit), cut: text.length - limit };
 }
 
+/** A record's or report's values, one per line, each made inert and capped at FIELD_CAP. Returns the fence body and a
+ *  fixed note naming how many values were cut (null when none). These lists are rendered IN FULL — not budgeted — so a
+ *  reader sees every name the record or report holds; each value is bounded, the list's length is the record's. */
+function cappedLines(values) {
+  let cut = 0;
+  const text = values
+    .map((v) => {
+      const c = cap(inert(v), FIELD_CAP);
+      if (c.cut) cut++;
+      return c.text;
+    })
+    .join("\n");
+  return { text, note: cut ? `_${cut} value(s) above were cut at ${FIELD_CAP} characters; the full values are in the JSON file._` : null };
+}
+
+/** Push one fenced list (cappedLines) and its cut note. */
+function pushList(out, label, values) {
+  const { text, note } = cappedLines(values);
+  out.push(quoteData(label, text));
+  if (note) out.push(note);
+}
+
 function cutLine(cuts) {
   const parts = cuts.filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n} more character${n === 1 ? "" : "s"}`);
   return parts.length ? `_Cut at ${FIELD_CAP} characters per field (${parts.join("; ")}); the full text is in findings.json._` : null;
@@ -156,9 +180,24 @@ function findingBlocks(f, i, n, budget) {
       `${k} contributor${k === 1 ? "" : "s"}.`,
   ];
   const loc = cap(inert(f.file), FIELD_CAP);
-  const ruleFence = rule === "rule fenced below" ? `\nrule_id: ${cap(inert(f.rule_id), FIELD_CAP).text}` : "";
-  out.push(quoteData("Location as the lens wrote it — a `path:line` shape, not resolved (DATA):", `file: ${loc.text}${ruleFence}`));
-  if (loc.cut) budget.capped++;
+  const ruleCap = rule === "rule fenced below" ? cap(inert(f.rule_id), FIELD_CAP) : null;
+  const locSize = loc.text.length + (ruleCap ? ruleCap.text.length : 0);
+  if (budget.used + locSize > TEXT_BUDGET) {
+    budget.notRendered++;
+    out.push(`Location not rendered: this file's ${TEXT_BUDGET}-character budget for lens text is spent; it is in findings.json.`);
+  } else {
+    budget.used += locSize;
+    const body = `file: ${loc.text}${ruleCap ? `\nrule_id: ${ruleCap.text}` : ""}`;
+    out.push(quoteData("Location as the lens wrote it — a `path:line` shape, not resolved (DATA):", body));
+    const line = cutLine([
+      ["file", loc.cut],
+      ["rule_id", ruleCap ? ruleCap.cut : 0],
+    ]);
+    if (line) {
+      budget.capped++;
+      out.push(line);
+    }
+  }
   f.sources.forEach((s, j) => {
     const label = `Contributor ${j + 1} of ${k} — severity ${shownSeverity(own(s, "severity") ? s.severity : undefined)}; ${shownBackstop(own(s, "backstop") ? s.backstop : undefined)}.`;
     if (!isObject(s)) {
@@ -199,30 +238,30 @@ function assignmentBlocks(a) {
   );
   const skipped = Array.isArray(a.skipped) ? a.skipped : [];
   const tally = new Map();
+  let reasonsCut = 0;
   for (const s of skipped) {
-    const r = inert(own(s, "reason") ? s.reason : "(no reason recorded)");
-    tally.set(r, (tally.get(r) || 0) + 1);
+    const c = cap(inert(own(s, "reason") ? s.reason : "(no reason recorded)"), FIELD_CAP);
+    if (c.cut) reasonsCut++;
+    tally.set(c.text, (tally.get(c.text) || 0) + 1);
   }
   const tallyText = [...tally.entries()]
     .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0))
     .map(([r, c]) => `${r}: ${c}`)
     .join("\n");
   out.push(skipped.length ? quoteData(`Skipped: ${skipped.length} path(s), by recorded reason (DATA):`, tallyText) : "Skipped: none.");
+  if (reasonsCut)
+    out.push(`_${reasonsCut} reason value(s) above were cut at ${FIELD_CAP} characters; the full values are in the JSON file._`);
   const failures = Array.isArray(a.scanner_failures) ? a.scanner_failures : [];
-  out.push(
-    failures.length
-      ? quoteData(`Scanner failures: ${failures.length} — their files went to the lens for review (DATA):`, failures.map(inert).join("\n"))
-      : "Scanner failures: none."
-  );
+  if (failures.length) pushList(out, `Scanner failures: ${failures.length} — their files went to the lens for review (DATA):`, failures);
+  else out.push("Scanner failures: none.");
   const unassigned = Array.isArray(a.unassigned_scanner_bound) ? a.unassigned_scanner_bound : [];
-  out.push(
-    unassigned.length
-      ? quoteData(
-          `Files no scanner-bound lens was assigned (\`unassigned_scanner_bound\`), in full: ${unassigned.length} (DATA):`,
-          unassigned.map(inert).join("\n")
-        )
-      : "Files no scanner-bound lens was assigned: none."
-  );
+  if (unassigned.length) {
+    pushList(
+      out,
+      `Files no scanner-bound lens was assigned (\`unassigned_scanner_bound\`), in full: ${unassigned.length} (DATA):`,
+      unassigned
+    );
+  } else out.push("Files no scanner-bound lens was assigned: none.");
   return out;
 }
 
@@ -245,24 +284,19 @@ function incompleteBlocks(rep) {
   const { unreadable, dropped } = rep.report;
   unreadable.forEach((u, j) => {
     const reason = own(u, "reason") && inSet(REASON_SET, u.reason) ? u.reason : NOT_RECORDED;
-    out.push(
-      quoteData(
-        `Lens file ${j + 1} of ${unreadable.length} did not merge — reason: ${reason} (DATA):`,
-        `source: ${inert(own(u, "source") ? u.source : "")}\npath: ${inert(own(u, "path") ? u.path : "")}`
-      )
-    );
+    pushList(out, `Lens file ${j + 1} of ${unreadable.length} did not merge — reason: ${reason} (DATA):`, [
+      `source: ${inert(own(u, "source") ? u.source : "")}`,
+      `path: ${inert(own(u, "path") ? u.path : "")}`,
+    ]);
   });
   dropped.forEach((d, j) => {
     const failed =
       own(d, "failed") && Array.isArray(d.failed) ? d.failed.map((x) => (inSet(DROP_SET, x) ? x : NOT_RECORDED)).join(", ") : NOT_RECORDED;
     const q = own(d, "quoted") && isObject(d.quoted) ? d.quoted : {};
-    const body = [
+    pushList(out, `Dropped finding ${j + 1} of ${dropped.length} — failed: ${failed}. Its fields, each one JSON-quoted line (DATA):`, [
       `source: ${inert(own(d, "source") ? d.source : "")}`,
       ...["type", "rule_id", "severity", "file", "problem", "evidence"].map((k) => `${k}: ${inert(own(q, k) ? q[k] : "")}`),
-    ].join("\n");
-    out.push(
-      quoteData(`Dropped finding ${j + 1} of ${dropped.length} — failed: ${failed}. Its fields, each one JSON-quoted line (DATA):`, body)
-    );
+    ]);
   });
   return out;
 }
@@ -276,11 +310,10 @@ function outsideBlocks(rep) {
   else if (rep.report.outside_target.length === 0) out.push("None: every merged finding's file is in the record's target.");
   else {
     const list = rep.report.outside_target;
-    out.push(
-      quoteData(
-        `${list.length} contributor(s) named a file outside the record's target — merged, not dropped; nothing resolved these paths (DATA):`,
-        list.map((e) => `${inert(own(e, "file") ? e.file : "")}  (lens ${inert(own(e, "source") ? e.source : "")})`).join("\n")
-      )
+    pushList(
+      out,
+      `${list.length} contributor(s) named a file outside the record's target — merged, not dropped; nothing resolved these paths (DATA):`,
+      list.map((e) => `${inert(own(e, "file") ? e.file : "")}  (lens ${inert(own(e, "source") ? e.source : "")})`)
     );
   }
   return out;

@@ -226,6 +226,39 @@ test("★ TEXT_BUDGET: past the document budget a contributor's text is replaced
   assert.ok(fenced <= TEXT_BUDGET, `${fenced} characters of lens text rendered`);
 });
 
+test("★ FIELD_CAP holds in EVERY fence: record lists, report entries and the location, each with its fixed note", () => {
+  const big = "w".repeat(FIELD_CAP + 7);
+  const md = render({
+    findings: [FIND({ file: big + ":1" })],
+    report: REP({
+      complete: false,
+      unreadable: [{ source: big, path: "p", reason: "unreadable" }],
+      dropped: [{ source: "s", failed: ["type"], quoted: { problem: big } }],
+      outside_target: [{ source: "lensA", file: big }],
+    }),
+    assignments: ASG({ unassigned_scanner_bound: [big], scanner_failures: [big], skipped: [{ path: "x", reason: big }] }),
+  });
+  assert.ok(!md.includes("w".repeat(FIELD_CAP + 1)), "no fenced value exceeds FIELD_CAP");
+  assert.ok(md.includes("w".repeat(FIELD_CAP - 20)), "control: the long values are rendered, cut");
+  const notes = md.match(/value\(s\) above were cut at/g) || [];
+  assert.equal(
+    notes.length,
+    6,
+    "one note per list holding a cut value (skipped reasons, failures, unassigned, unreadable, dropped, outside)"
+  );
+  assert.match(md, /Cut at 2000 characters per field \(file: 9 more characters\)/);
+});
+
+test("★ TEXT_BUDGET covers locations too: past the budget a finding's location is a fixed line", () => {
+  const n = Math.ceil(TEXT_BUDGET / FIELD_CAP) + 3;
+  const findings = Array.from({ length: n }, (_, i) =>
+    FIND({ file: `${"f".repeat(FIELD_CAP - 10)}${String(i).padStart(4, "0")}:1` }, [SRC()])
+  );
+  const { text, summary } = renderReview({ name: "demo", findings, report: REP(), assignments: ASG() });
+  assert.ok(summary.not_rendered > 0);
+  assert.match(text, /Location not rendered: this file's 200000-character budget/);
+});
+
 test("★ C0 controls other than TAB/LF, and DEL, are shown as \\uXXXX — never raw", () => {
   const raw =
     "a" + String.fromCharCode(0) + "b" + String.fromCharCode(27) + "[31m" + String.fromCharCode(13) + String.fromCharCode(127) + "\tz\n";

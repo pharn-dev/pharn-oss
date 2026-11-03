@@ -346,11 +346,12 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   lens file never passed to it, or a stale one, is `lens-groups.mjs`'s `unwritten`, not this report. `type` is a closed
   set; `file` is a `path:line` SHAPE, never resolved — a file outside the record's target is only named
   (`outside_target`).
-- **Floor:** `REVIEW.md`'s bytes, as `render-review.mjs` writes them — every value a lens, a record or your notes
-  supplied sits inside a fence one back-tick longer than any run in it, control characters escaped, each field capped
-  and the document's lens text budgeted; inline values are renderer text, counts and closed-set members. **NARROWED:**
-  inert to a CommonMark parser, never forgery-proofing; an edit after the render is outside it; that you ran it, and
-  that your notes are true, is advisory.
+- **Floor:** `REVIEW.md`'s bytes, as `render-review.mjs` writes them — inline only renderer text, counts, the
+  validated name, closed-set members after a membership test and a `rule_id` that passes the merge's shape; every other
+  value a lens, a record or your notes supplied sits inside a fence one back-tick longer than any run in it, C0 control
+  characters (other than TAB/LF) and DEL escaped, each value capped; a finding's lens text is budgeted across the
+  document, the record's and report's lists are not. **NARROWED:** inert to a CommonMark parser, never
+  forgery-proofing; an edit after the render is outside it; that you ran it, and that your notes are true, is advisory.
 - **Floor:** the lens→scanner map is consistent with disk — `lens-scanner-map.test.mjs`. **NARROWED:** it certifies
   the mapped scanner **file exists on disk** — never that it runs, matches, or works.
 - **Floor:** the family map holds every registered lens exactly once, `trust-fence` alone, the six security lenses
@@ -388,8 +389,8 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   the human noticing the label (nothing reads `REVIEW.md`).
 - **Advisory:** the container. Claude Code applies `pharn-review-lens`'s five tools and its omitted `CLAUDE.md`, and
   no floor primitive observes it. `Bash` is among them because each scanner-bound lens runs its `scan-code-*.mjs` and
-  Step 4 runs the catalogue line, and `Write` because each lens writes its `findings.json` with it; a `tools:` entry
-  cannot narrow `Bash` to one command, so a lens's shell call, which no write hook sees, meets only Claude Code's own
+  Step 4 runs the catalogue line, and `Write` because each lens writes its `findings.json` with it; by Claude Code's documentation (not
+  probed), a `tools:` entry cannot narrow `Bash` to one command, so a lens's shell call, which no write hook sees, meets only Claude Code's own
   permission settings. By its documentation (not probed), a subagent type is its frontmatter `name:`, so any
   `.claude/agents/*.md` named `pharn-review-lens` — in the reviewed tree or at user scope — sets the container every
   group runs in, and in an install without the project file (pharn-cli does not copy `.claude/agents/` yet) a
