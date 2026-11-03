@@ -75,7 +75,7 @@
 - `pharn/floor/reconcile-baseline.test.mjs` — refusal / falsifier / closure tests — layer product floor (tests)
 - `pharn/floor/check-bash-reconcile.mjs` — import the moved helpers (re-export `activeFeatureSlug`); bounds 1 and 3 restated — layer product floor
 - `pharn/floor/check-bash-reconcile.test.mjs` — workflows-prefix tests; the writes-scope.json pin — layer product floor (tests)
-- `pharn/floor/reconcile-ignore.json` — `.github/workflows/` in `prefixes`; `not_a_deny` / `parity` / `bound` text — layer product floor data
+- `pharn/floor/reconcile-ignore.json` — `.github/workflows/` and `.github/actions/` in `prefixes`; `not_a_deny` / `parity` / `bound` text — layer product floor data
 - `pharn/floor/apply-plan-deletions.test.mjs` — a `(delete)` of a workflow file is refused `control-path` — layer product floor (tests)
 - `pharn/floor/check-cost-ledger.mjs` — narrowed pre-build exception — layer product floor
 - `pharn/floor/check-cost-ledger.test.mjs` — narrowed-exception tests — layer product floor (tests)
@@ -138,11 +138,15 @@
 - Every branch is a membership test, a regex match, an `lstat` error-code membership or an integer compare; the
   terminal remedy named in the refusal is a human action.
 
-## Decisions taken (GATE 1 may overturn)
+## Decisions (GATE 1 — decided by the batch orchestrator, a model, under the owner's delegation; not a human approval)
 
-- D1 `.github/actions/` is NOT added (the finding names workflows only; this repo has no `.github/actions/`; P7).
-  Recommend: leave for a later finding.
-- D2 writes-scope.json: won't-fix + pin + wording correction, for the reason in finding 2.
+- D1 FLIPPED at GATE 1: `.github/actions/` is added alongside `.github/workflows/`. Reason given: this is the product
+  floor, so it runs in users' repos, where composite actions execute in CI exactly like workflows, and G1's setter
+  refuses both from plans in the same release, so the two control lists name the same exec-config set. No cost where
+  the directory is absent. Tested like workflows. Every "workflows" statement above applies to both prefixes.
+- D2 writes-scope.json: won't-fix + pin + wording correction, for the reason in finding 2 (approved; the contract
+  and DOCS-PROPOSAL say why in one or two sentences).
+- Grill: all seven GRILL.md recommendations are folded into the build (approved).
 - D3 the anchor keys on the feature slug derived from `set_by` (no new argv, no new record field), and treats an
   unreadable prior baseline conservatively.
 - D4 cost-ledger: narrow rather than downgrade to a NOTE (a NOTE on every blocked pre-build stop is the noise #411 A
