@@ -127,6 +127,9 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    path, whether or not the file exists: its guidance comments are instructions `/pharn-spec` follows, so the
    path is fixed rather than configurable and a human edits the file directly (contract:
    `pharn/pharn-contracts/spec-template.md`, "The project template"). Bash reaches it, as for the trusted docs.
+   **Since 7.3.0 it also denies the delivery runs' state** — every Write/Edit/MultiEdit/NotebookEdit below
+   `pharn/.run/pharn-{loop,ship,review}/**` (markers, witnesses, stage results: only PHARN's CLIs write them), whatever
+   the scope; Bash still reaches them.
    **Since 6.1.0 the same hook also denies GIT METADATA** — any `.git` path segment under a guarded root
    (never `.github/**` or `.gitignore`). A `.git` entry decides which working tree each guard judges, and
    `.git/hooks` / `.git/config` run code on the next git command, so the write tools may not touch them;

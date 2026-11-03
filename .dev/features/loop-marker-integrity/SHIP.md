@@ -19,6 +19,13 @@ recorded here as such, never as a human approval.
 
 Where the run ended: **GATE 2** (handed to the batch orchestrator).
 
+GATE 2 decision: **MERGE** into `batch/audit-2026-11-03` at integration — **decided by the batch orchestrator (a model)
+under the owner's delegation**, not a human approval. Follow-ups it asked for, done after the decision: one sentence
+each in CLAUDE.md hard constraint 1 and `.dev/guides/writes-scope.md` naming the run-state deny (both declared in
+`## Files` first; the scope set with `--allow-claude-dir`, because `## Files` now lists the two maintainer-applied
+hooks and the setter refuses them otherwise — `protect-trusted-paths.cjs` still denies the write tools both files);
+`check-run-isolation.mjs:47` is left for integration; the lesson candidate stays in REVIEW.md, unpromoted.
+
 ## Structural verdicts, verbatim
 
 - `/pharn-dev-build` → `node pharn/floor/validate.mjs .` exit `0`
