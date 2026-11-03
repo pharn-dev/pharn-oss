@@ -155,6 +155,9 @@
 //     is an escape, never a line break, and capped at QUOTED_CAP. The quoting is done HERE, not by whoever renders
 //     REVIEW.md, so "a dropped value cannot end its `>` block and forge report structure" is a property of this
 //     function (validate.mjs's showPath, same reason) rather than of a model's care.
+//   - `outside_target` (schema v2, 7.3.0) names every merged contributor {source, file} whose file is not in the
+//     assignment record's `target`, or is `null` when no record is usable. It names; it does not drop, and it does
+//     not affect `complete` or the exit code.
 //   - the report is ALWAYS written — `complete: true` with both lists empty on a complete merge — so a stale
 //     report from an earlier run is overwritten, and asserted silence is distinguishable from no report (L34).
 // Exit codes (a consumer branches on these; /pharn-review Step 5 is the only caller):
@@ -182,9 +185,13 @@ export const SEVERITY_ENUM = new Set(Object.keys(SEVERITY_RANK));
 // enum-gated field forbids all control chars (below), so NUL can never occur inside one → no key collision.
 const NUL = String.fromCharCode(0);
 
+// A usage or write failure: name it on stderr, then UNWIND to main(), which returns 1. Never process.exit() — the flush
+// rule (cli-stdout-flush.test.mjs) is that no floor CLI in its set ends through an immediate exit. Only this sentinel
+// is caught; any other throw stays a crash (node's exit 1 with its stack).
+const USAGE_EXIT = Symbol("merge-findings usage exit");
 function die(msg) {
   process.stderr.write("merge-findings: " + msg + "\n");
-  process.exit(1);
+  throw USAGE_EXIT;
 }
 
 // True iff s contains any C0 control char or DEL (charcode < 32 or === 127) — the newline/control-char
@@ -200,13 +207,24 @@ function hasControlChar(s) {
 // A scalar enum-gated value is CLEAN iff it is a non-empty, bounded, single-line string with no control
 // characters. It admits spaces (so "security.md SEC-1" passes) but forbids the newline/control-char
 // laundering vector. isCleanScalar is the FLOOR under every enum-gated check and MUST run BEFORE any shape
-// regex: JS `$` matches before a trailing newline, so a shape regex alone would re-admit a "P2\n" trailing-
-// control-char vector — isCleanScalar rejects it first (see RULE_ID_OK).
+// regex or set test. Corrected in 7.3.0: an earlier version of this comment (and canon L14) said JS `$` matches before
+// a trailing newline; measured on Node 24, `/^P[0-7]$/.test("P2\n")` is false and only the `m` flag makes it true. The
+// guard-first order is kept because it does not depend on how any one regex is written (an `m` flag, a `\s` class or a
+// `.trim()` before the test would each re-admit the vector), not because a bare `$` admits it (see RULE_ID_OK).
 function isCleanScalar(v, max = 200) {
   return typeof v === "string" && v.length >= 1 && v.length <= max && !hasControlChar(v);
 }
 
-export const TYPE_OK = (v) => isCleanScalar(v, 64) && /^[A-Z][A-Z0-9_]*$/.test(v); // FINDING | CONSTITUTION_VIOLATION | ...
+// `type` is a CLOSED set since 7.3.0 (audit 2026-11-03): before, TYPE_OK was the open shape ^[A-Z][A-Z0-9_]*$, so
+// `type: "APPROVED"` merged while finding-shape.md called the field "set membership over the type enum". Measured
+// before closing: every shipped lens, griller, core skill, committed findings.json, floor test and command emits
+// `FINDING` (174 occurrences, no other value); `CONSTITUTION_VIOLATION` is the only other value any document defines
+// (pharn/CONSTITUTION.md, "Violation finding shape"). finding-shape.md lists exactly these two, and the ✧ ARCH-9 test
+// binds the two lists by set equality. A non-member is DROPPED and named in merge-report.json (exit 3), never lost.
+// Membership runs AFTER isCleanScalar, which stays the precondition (L14).
+export const TYPE_ENUM = Object.freeze(["FINDING", "CONSTITUTION_VIOLATION"]);
+const TYPE_SET = new Set(TYPE_ENUM);
+export const TYPE_OK = (v) => isCleanScalar(v, 64) && TYPE_SET.has(v);
 
 // FIX 1 (harden-merge-keying, Option A — structural regex-tighten; approved at a human gate to REVERSE the
 // prior "don't whitelist rule shapes" note). A rule_id is valid iff it is a clean scalar AND, after
@@ -218,9 +236,12 @@ export const TYPE_OK = (v) => isCleanScalar(v, 64) && /^[A-Z][A-Z0-9_]*$/.test(v
 // case-insensitive so "SEC-1"/"sec-1" both validate, then collapse via the case-folded key below.
 const RULE_ID_PRINCIPLE = /^P[0-7]$/i;
 const RULE_ID_QUALIFIED = /^[\w./-]+\.md [A-Za-z0-9]+-\d+$/;
-const RULE_ID_OK = (v) => isCleanScalar(v, 120) && (RULE_ID_PRINCIPLE.test(v.trim()) || RULE_ID_QUALIFIED.test(v.trim()));
+export const RULE_ID_OK = (v) => isCleanScalar(v, 120) && (RULE_ID_PRINCIPLE.test(v.trim()) || RULE_ID_QUALIFIED.test(v.trim()));
 
-const FILE_OK = (v) => isCleanScalar(v, 400) && /:\d+$/.test(v) && v.indexOf(":") > 0; // path:line, a real anchor
+// path:line by SHAPE only. It admits `../../etc/passwd:1`, `/etc/passwd:1` and `http://evil.example:80`: nothing at
+// review time resolves the path. What 7.3.0 adds is NAMING, not dropping: with a usable assignment record, every merged
+// contributor whose file is not in the record's `target` is listed in merge-report.json's `outside_target` (below).
+const FILE_OK = (v) => isCleanScalar(v, 400) && /:\d+$/.test(v) && v.indexOf(":") > 0;
 
 // FIX 2 (harden-merge-keying): canonicalize a validated `file` so lens FORMAT DRIFT collapses to one key.
 // Strip a single leading "./" and a trailing ":col" (a second :\d+ after the line), so "src/app.ts:10",
@@ -254,7 +275,9 @@ export const UNREADABLE_REASONS = Object.freeze(["unreadable", "invalid-json", "
 export const DROP_FIELDS = Object.freeze(["not-an-object", "type", "rule_id", "severity", "file"]);
 export const QUOTED_CAP = 400;
 export const INCOMPLETE_EXIT = 3;
-export const REPORT_SCHEMA = "merge-report/v1";
+// v2 (7.3.0) adds `outside_target`; every v1 field is unchanged. A reader that meets v1 treats `outside_target` as
+// not recorded (finding-shape.md, "The merge report"); render-review.mjs is the one content reader.
+export const REPORT_SCHEMA = "merge-report/v2";
 export const REPORT_NAME = "merge-report.json";
 
 // One untrusted value → ONE line of quoted DATA. JSON.stringify escapes every C0 control character (so "\n## x"
@@ -415,9 +438,16 @@ function deriveBackstop(lens, file, map, rec) {
 // Run as CLI only when invoked directly, so a test may import BACKSTOP_ENUM without executing the
 // merge. `import.meta.main` — NOT a `file://` + argv[1] compare, which silently no-ops on spaced,
 // non-ASCII or symlinked paths and once disarmed ten sibling checkers (L25).
-if (import.meta.main) {
-  const argv = process.argv.slice(2);
+function main(fullArgv) {
+  try {
+    return runMerge(fullArgv.slice(2));
+  } catch (e) {
+    if (e === USAGE_EXIT) return 1;
+    throw e;
+  }
+}
 
+function runMerge(argv) {
   // Extract the two NAMED flags, leaving the positional signature <out> [<in>...] intact. A single
   // left-to-right scan: a recognized flag consumes its VALUE, so an input file literally named
   // "--lens-map" cannot be silently eaten as a flag name without its value also being swallowed — and a
@@ -515,8 +545,11 @@ if (import.meta.main) {
       // outside the quoted block. Derived from `cfile` (already canonicalized) so the join sees the same
       // string the key does. It adds no new sort key: the label is a function of (source, file) and `file`
       // is constant within a group, so the sources[] sort below is byte-for-byte unchanged (P5).
+      // `source` is the lens DIRECTORY name, and in an installed project that directory sits inside the reviewed
+      // tree, so it can carry a newline. Stored through reportSafe (7.3.0), exactly as merge-report.json already
+      // stored it; the backstop lookup below keeps the raw id, which a quoted string can never equal as a map key.
       g.sources.push({
-        source,
+        source: reportSafe(source),
         severity: f.severity,
         backstop: deriveBackstop(source, cfile, lensMap, assignments),
         problem: asText(f.problem),
@@ -553,13 +586,29 @@ if (import.meta.main) {
   droppedReport.sort((a, b) => cmp(a.source, b.source) || cmp(a.key, b.key) || cmp(a.failed.join(","), b.failed.join(",")));
   const dropped = droppedReport.map(({ source, failed, quoted }) => ({ source, failed, quoted }));
   const complete = unreadable.length === 0 && dropped.length === 0;
+  // Every merged contributor whose `file` is not in the record's `target` (7.3.0). NAMED, never dropped, and it does
+  // not touch `complete` or the exit code: such a contributor's backstop is already `unknown`. `null` = no usable
+  // record, so nothing can be said — distinct from `[]`, "every file was in the target" (L34). Membership is over
+  // barePath(file), the same join deriveBackstop uses, so the two can never disagree about one file.
+  let outsideTarget = null;
+  if (assignments) {
+    outsideTarget = [];
+    for (const f of merged) {
+      if (assignments.target.has(barePath(f.file))) continue;
+      for (const s of f.sources) outsideTarget.push({ source: s.source, file: f.file });
+    }
+    outsideTarget.sort((a, b) => cmp(a.file, b.file) || cmp(a.source, b.source));
+  }
   const reportPath = join(dirname(outPath), REPORT_NAME);
 
   // PHASE 4 — write (deterministic bytes) + report. out.json FIRST, so a report on disk never describes a merge
   // whose out.json failed to write (a failed report write is still exit 1).
   try {
     writeFileSync(outPath, JSON.stringify(merged, null, 2) + "\n");
-    writeFileSync(reportPath, JSON.stringify({ schema: REPORT_SCHEMA, complete, unreadable, dropped }, null, 2) + "\n");
+    writeFileSync(
+      reportPath,
+      JSON.stringify({ schema: REPORT_SCHEMA, complete, unreadable, dropped, outside_target: outsideTarget }, null, 2) + "\n"
+    );
   } catch (e) {
     die(`cannot write output ${outPath} / ${reportPath}: ${e.message}`);
   }
@@ -593,5 +642,9 @@ if (import.meta.main) {
       backstop: backstopCounts,
     }) + "\n"
   );
-  process.exit(complete ? 0 : INCOMPLETE_EXIT);
+  return complete ? 0 : INCOMPLETE_EXIT;
 }
+
+// exitCode, never process.exit() right after a stdout write (the 6.20.4 flush rule; cli-stdout-flush.test.mjs pins
+// it): an immediate exit drops queued stdout where a piped stdout is asynchronous.
+if (import.meta.main) process.exitCode = main(process.argv);

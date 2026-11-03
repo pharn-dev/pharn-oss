@@ -20,7 +20,7 @@ what stops an injected code comment from flipping a guaranteed decision.
 ```yaml
 finding:
   # --- enum-gated / floor-verifiable (TRUSTED: produced by enum-check / path-resolution) ---
-  type: "<enum>" # FINDING | CONSTITUTION_VIOLATION | ...
+  type: "<enum>" # FINDING | CONSTITUTION_VIOLATION
   rule_id: "<file.md ID | P0..P7>" # MUST exist in the roster (specified; ships with the guarded surface) AND be eval-bound (P1, P4)
   severity: blocking | important | minor # enum; the LLM's *assignment* is advisory (fix #3)
   file: "<path:line>" # resolves to a real location
@@ -33,10 +33,10 @@ finding:
 
 | field      | class      | how its value is produced                                                               | trust                                                 |
 | ---------- | ---------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `type`     | enum-gated | set membership over the type enum                                                       | trusted                                               |
+| `type`     | enum-gated | membership in `{FINDING, CONSTITUTION_VIOLATION}`                                       | trusted                                               |
 | `rule_id`  | enum-gated | membership in the rule / principle roster _(specified; ships with the guarded surface)_ | trusted                                               |
 | `severity` | enum-gated | membership in `{blocking, important, minor}`                                            | trusted _value_; the _assignment_ is advisory (fix#3) |
-| `file`     | enum-gated | path resolves to a real `path:line`                                                     | trusted                                               |
+| `file`     | enum-gated | a `path:line` shape; resolved to a real location only at eval time (below)              | trusted _shape_; the location is the emitter's claim  |
 | `problem`  | free-text  | derived from the (possibly untrusted) input                                             | **inherits input trust**                              |
 | `evidence` | free-text  | quoted snippet from the input                                                           | **inherits input trust**                              |
 
@@ -51,6 +51,21 @@ principle-id pattern, and says so in its own words — _"This is a SHAPE guarant
 and passes**. Read the row as "the field is enum-gated **in shape**"; the membership half is specified,
 not live. This bound is stated here, in the contract, rather than only in the plan that introduced it —
 a contract's honesty has to travel with the artifact, and it may cite only a floor op that is live.
+
+### What `type` and `file` buy today (P0, 7.3.0)
+
+- **`type` is a closed set.** `pharn/floor/merge-findings.mjs` admits exactly the two values the object block lists
+  (`TYPE_ENUM`, membership after its control-character check); any other value — `APPROVED`, a lower-case `finding` — is
+  dropped and named in `merge-report.json`. Until 7.3.0 the list ended `| ...` and the merge checked only the shape
+  `^[A-Z][A-Z0-9_]*$`. Every shipped capability emits `FINDING`; `CONSTITUTION_VIOLATION` is
+  `pharn/CONSTITUTION.md`'s violation shape. A new value is a change to this list and to `TYPE_ENUM` together (a test
+  binds the two by set equality).
+- **`file` is a shape at review time, never a resolved location.** The merge requires a clean `path:line`; it does not
+  resolve the path, so `../../etc/passwd:1`, `/etc/passwd:1` and `http://host:80` are shape-valid. What it adds is
+  naming: with a usable assignment record, every merged contributor whose `file` is not in the record's `target` is
+  listed in `merge-report.json`'s `outside_target`, and the record is itself not bound to its producer
+  (`/pharn-review`'s claims block). Path RESOLUTION is `check-structural.mjs`'s `file_resolves`, at eval time only
+  (below).
 
 ## Emission — findings.json (the machine-readable array)
 
@@ -110,10 +125,21 @@ for "therefore guaranteed." The `MUST` above is a **three-way split**, not one b
   those stages run — nothing checks at write time, so this facet is eval-time enforcement, never an
   always-on guarantee.
 
-So: **declaring** the path is guaranteed _today_ (fix #7, live); **shape/laundering** is floor-checked
+So: **declaring** the path is **advisory** today (the first bullet — a Capability's `writes:` is parsed by nothing; the
+floor-enforced scope is the invoking command's); **shape/laundering** is floor-checked
 **at eval time, when a verify/eval stage runs** (`check-structural.mjs` and its invokers exist;
 nothing checks at write time); **emitting at all** is an advisory conformance requirement. No reading
 of the `MUST` above is a blanket floor guarantee that the artifact exists.
+
+### The merge report (`merge-report.json`) — versions and readers
+
+`/pharn-review`'s merge writes `merge-report.json` beside the merged `findings.json` (`merge-findings.mjs`'s header
+owns its fields). Its `schema` is `merge-report/v2` since 7.3.0, which added `outside_target` (above) and changed no
+v1 field. A reader accepts both: a `merge-report/v1` report has no `outside_target`, and the reader treats it as **not
+recorded** — never as an empty list, which would claim every file was in the target. Any other `schema` value makes the
+report unusable to that reader. The one content reader is `pharn/floor/render-review.mjs`; the other floor modules that
+name the file (`check-regress.mjs`, `worktree-fingerprint.mjs`, `reconcile-ignore.json`) list it as a pipeline
+artifact and never parse it.
 
 ## The rule of the contract (P0, P2)
 

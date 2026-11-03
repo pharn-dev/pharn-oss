@@ -27,6 +27,7 @@ import {
   BACKSTOP_ENUM,
   SEVERITY_ENUM,
   TYPE_OK,
+  TYPE_ENUM,
   UNREADABLE_REASONS,
   DROP_FIELDS,
   QUOTED_CAP,
@@ -35,6 +36,7 @@ import {
   REPORT_NAME,
 } from "./merge-findings.mjs";
 import { BASIS_ENUM } from "./render-review-assignments.mjs";
+import { BACKSTOP_TEXT } from "./render-review.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const MF = join(here, "merge-findings.mjs");
@@ -725,38 +727,37 @@ test("★ stdout reports per-member counts in BACKSTOP_ENUM order, so an all-`un
 // exactly L36's shape, and it is filed here because the FIRST draft of this increment shipped the
 // emission half alone while its own plan had promised both (surfaced by this increment's REVIEW.md).
 //
-// Checked BIDIRECTIONALLY over the command's own bytes: no rendered key outside the enumeration, and no
-// enumeration member missing from the render. A one-directional presence sweep is what let the gap open.
+// Checked BIDIRECTIONALLY: no rendered key outside the enumeration, and no enumeration member missing from the render.
+// A one-directional presence sweep is what let the gap open. Since 7.3.0 the render surface is render-review.mjs's
+// exported BACKSTOP_TEXT (the label phrases moved out of the Step 6 table, so REVIEW.md is written by code), and the
+// command must no longer hold a table of them — a second copy (L35).
 const REVIEW_CMD = join(here, "..", "..", ".claude", "commands", "pharn-review.md");
+const BACKSTOP_ROW = /^\|\s*`([a-z][a-z-]*)`\s*\|\s*`([^`]+)`\s*\|\s*$/;
 
-function renderedBackstopKeys() {
-  const text = readFileSync(REVIEW_CMD, "utf8");
-  // The render table's rows are `| \`<member>\` | \`<text>\` |`. Collect the FIRST back-ticked cell of
-  // every row whose first cell is a bare kebab token — a structured read of the table, not a prose grep
-  // for member names (L6: read the structured location).
-  const keys = new Set();
-  for (const line of text.split("\n")) {
-    const m = /^\|\s*`([a-z][a-z-]*)`\s*\|\s*`[^`]+`\s*\|\s*$/.exec(line);
-    if (m) keys.add(m[1]);
-  }
-  return keys;
-}
+const closureOffenders = (map) => {
+  const keys = Object.keys(map);
+  const out = [];
+  if (keys.length === 0) out.push("no phrases (L34: the rule would certify nothing)");
+  for (const m of BACKSTOP_ENUM) if (!keys.includes(m)) out.push(`member ${m} has no phrase`);
+  for (const k of keys) if (!BACKSTOP_ENUM.includes(k)) out.push(`phrase for non-member ${k} (a variant spelling?)`);
+  return out;
+};
 
-test("✧ L36 render closure — the Step-6 render table covers EXACTLY the BACKSTOP_ENUM members", () => {
-  const rendered = renderedBackstopKeys();
-  assert.ok(
-    rendered.size > 0,
-    `no render-table rows found in ${REVIEW_CMD} — the table moved or its shape changed, so this rule ` +
-      "would certify nothing (L34: it must not pass vacuously)"
-  );
-  const missing = BACKSTOP_ENUM.filter((m) => !rendered.has(m));
-  assert.deepEqual(missing, [], `BACKSTOP_ENUM member(s) absent from /pharn-review Step 6's render table: ${missing.join(", ")}`);
-  const extra = [...rendered].filter((k) => !BACKSTOP_ENUM.includes(k));
-  assert.deepEqual(
-    extra,
-    [],
-    `the render table names backstop value(s) that are not enumeration members (a variant spelling?): ${extra.join(", ")}`
-  );
+test("✧ L36 render closure — render-review.mjs's BACKSTOP_TEXT covers EXACTLY the BACKSTOP_ENUM members", () => {
+  assert.deepEqual(closureOffenders(BACKSTOP_TEXT), []);
+  // CONTROLS (L60): a dropped member and a variant spelling each fail.
+  const { "slice-miss": _drop, ...dropped } = BACKSTOP_TEXT;
+  void _drop;
+  assert.ok(closureOffenders(dropped).some((o) => o.includes("slice-miss")));
+  assert.ok(closureOffenders({ ...BACKSTOP_TEXT, "scanner-assignd": "x" }).some((o) => o.includes("non-member")));
+});
+
+test("✧ the command holds no second copy of the label table (L35) — the phrases live in render-review.mjs only", () => {
+  const rows = readFileSync(REVIEW_CMD, "utf8")
+    .split("\n")
+    .filter((l) => BACKSTOP_ROW.test(l) && BACKSTOP_ENUM.includes(BACKSTOP_ROW.exec(l)[1]));
+  assert.deepEqual(rows, [], "pharn-review.md carries a backstop render-table row again");
+  assert.ok(BACKSTOP_ROW.test("| `unknown` | `nothing is claimed about what backs this lens` |"), "control: the row shape is matched");
 });
 
 test("✧ the banned vocabulary appears in no member name and in no rendered backstop string", () => {
@@ -764,13 +765,10 @@ test("✧ the banned vocabulary appears in no member name and in no rendered bac
   // while the label is a property of the CONTRIBUTOR. Enforced over both surfaces, not just intended.
   const BANNED = /verified|confirmed|corroborat|confidence/i;
   for (const m of BACKSTOP_ENUM) assert.ok(!BANNED.test(m), `enumeration member "${m}" carries banned vocabulary`);
-  const text = readFileSync(REVIEW_CMD, "utf8");
-  for (const line of text.split("\n")) {
-    const m = /^\|\s*`([a-z][a-z-]*)`\s*\|\s*`([^`]+)`\s*\|\s*$/.exec(line);
-    if (m && BACKSTOP_ENUM.includes(m[1])) {
-      assert.ok(!BANNED.test(m[2]), `the rendered string for \`${m[1]}\` carries banned vocabulary: "${m[2]}"`);
-    }
+  for (const [m, phrase] of Object.entries(BACKSTOP_TEXT)) {
+    assert.ok(!BANNED.test(phrase), `the rendered string for \`${m}\` carries banned vocabulary: "${phrase}"`);
   }
+  assert.ok(BANNED.test("a verified scanner hit"), "control: the pattern catches the banned word");
 });
 
 test("a sources[] entry carries backstop with the TRUSTED scalars, before the free-text pair", () => {
@@ -785,11 +783,10 @@ test("a sources[] entry carries backstop with the TRUSTED scalars, before the fr
 });
 
 // ── ✧ CONTRACT BINDING (audit 2026-10-12 ARCH-9) — finding-shape.md's enums against the sets this checker uses ─────────
-// The contract states the severity enum twice (the YAML object and the field-trust table) and lists the `type` values
-// as an OPEN list ("FINDING | CONSTITUTION_VIOLATION | ..."). merge-findings.mjs restates the severity set and checks
-// `type` by SHAPE (TYPE_OK), not membership. These tests parse the contract text and compare: set EQUALITY for severity
-// (both directions, L36), and for type the honest binding a shape regex allows — every listed value passes TYPE_OK and
-// the list is still open. Each parser throws when its anchor is missing, so a reworded line cannot parse to an empty
+// The contract states the severity enum twice (the YAML object and the field-trust table) and, since 7.3.0, lists the
+// `type` values as a CLOSED list ("FINDING | CONSTITUTION_VIOLATION"; it was open before). merge-findings.mjs restates
+// both sets. These tests parse the contract text and compare: set EQUALITY for each (both directions, L36), and for type
+// also that the list stays closed. Each parser throws when its anchor is missing, so a reworded line cannot parse to an empty
 // set and pass (L60). BOUND (L43): this certifies that the contract and the code AGREE, never that the enum is right.
 const FINDING_SHAPE = join(here, "..", "pharn-contracts", "finding-shape.md");
 
@@ -826,23 +823,54 @@ test("✧ ARCH-9 negative controls — a severity added to or removed from the c
   assert.throws(() => contractSeverities(text.replace(/^\| `severity` .*$/m, "")), /table was not found/);
 });
 
-test("✧ ARCH-9 — every `type` the contract lists passes merge-findings TYPE_OK, and the contract's list is still OPEN", () => {
-  const { listed, open } = contractTypes(readFileSync(FINDING_SHAPE, "utf8"));
-  assert.ok(listed.length >= 1);
-  for (const t of listed) assert.ok(TYPE_OK(t), `contract type "${t}" fails merge-findings.mjs TYPE_OK — it would be dropped`);
-  assert.ok(
-    open,
-    "finding-shape.md now lists `type` as a CLOSED enum (no trailing `...`): merge-findings.mjs TYPE_OK is only a shape " +
-      "regex, so export a type set there and bind it here with set equality"
-  );
+// 7.3.0 (audit 2026-11-03) CLOSED the type list on both sides, as the previous version of this test asked: the contract
+// lists exactly two values with no trailing `...`, and merge-findings.mjs checks membership in TYPE_ENUM. So the binding
+// is now set EQUALITY plus "the list is closed".
+const typeBindingOffenders = (text) => {
+  const { listed, open } = contractTypes(text);
+  const out = [];
+  if (open) out.push("the contract's `type` list is OPEN (a trailing `...`), but TYPE_ENUM is a closed set");
+  if (JSON.stringify([...listed].sort()) !== JSON.stringify([...TYPE_ENUM].sort())) {
+    out.push(`contract types ${JSON.stringify(listed)} are not TYPE_ENUM ${JSON.stringify(TYPE_ENUM)}`);
+  }
+  for (const t of listed) if (!TYPE_OK(t)) out.push(`contract type "${t}" fails TYPE_OK — it would be dropped`);
+  return out;
+};
+
+test("✧ ARCH-9 — finding-shape.md's `type` list is CLOSED and set-equal to merge-findings TYPE_ENUM", () => {
+  assert.deepEqual(typeBindingOffenders(readFileSync(FINDING_SHAPE, "utf8")), []);
+  assert.ok(Object.isFrozen(TYPE_ENUM) && TYPE_ENUM.length === 2);
 });
 
-test("✧ ARCH-9 negative controls — a listed type TYPE_OK refuses, a closed list, and a missing anchor each fail", () => {
+test("✧ ARCH-9 negative controls — an added type, a removed one, a re-opened list and a missing anchor each fail", () => {
   const text = readFileSync(FINDING_SHAPE, "utf8");
-  const bad = contractTypes(text.replace("# FINDING | CONSTITUTION_VIOLATION | ...", "# FINDING | lens-note | ..."));
-  assert.ok(!bad.listed.every((t) => TYPE_OK(t)), "a lower-case type must fail the shape check");
-  assert.equal(contractTypes(text.replace("CONSTITUTION_VIOLATION | ...", "CONSTITUTION_VIOLATION")).open, false);
+  const LINE = "# FINDING | CONSTITUTION_VIOLATION";
+  assert.ok(text.includes(LINE + "\n"), "anchor: the closed type line is present (L60)");
+  assert.ok(typeBindingOffenders(text.replace(LINE, LINE + " | APPROVED")).some((o) => o.includes("not TYPE_ENUM")));
+  assert.ok(typeBindingOffenders(text.replace(LINE, "# FINDING")).some((o) => o.includes("not TYPE_ENUM")));
+  assert.ok(typeBindingOffenders(text.replace(LINE, LINE + " | ...")).some((o) => o.includes("OPEN")));
+  assert.ok(typeBindingOffenders(text.replace(LINE, "# FINDING | lens-note")).some((o) => o.includes("fails TYPE_OK")));
   assert.throws(() => contractTypes(text.replace(/^\s*type: "<enum>".*$/m, "")), /was not found/);
+});
+
+test("★ type is MEMBERSHIP (7.3.0): APPROVED, a lower-case FINDING and a trailing-newline FINDING are dropped and named", () => {
+  // L14: membership runs after isCleanScalar, which stays the precondition, so "FINDING\n" fails. (Measured while
+  // building this: node's `$` WITHOUT the m flag does NOT match before a trailing newline — /^P[0-7]$/.test("P2\n") is
+  // false — so L14's stated mechanism is not JavaScript's; the composition is kept as defence in depth, and the case is
+  // pinned for the value, not for the mechanism.) "APPROVED" passed the old open shape; it is the value the audit merged.
+  assert.equal(/^[A-Z][A-Z0-9_]*$/.test("APPROVED"), true, "control: the old open shape admitted it");
+  for (const t of TYPE_ENUM) assert.equal(TYPE_OK(t), true, `${t} is a member`);
+  withInputs(
+    { a: [F({ file: "src/ok.js:1" }), F({ type: "APPROVED" }), F({ type: "finding" }), F({ type: "FINDING\n" })] },
+    (root, out, paths) => {
+      assert.equal(run([out, ...paths]).status, INCOMPLETE_EXIT);
+      const rep = report(root);
+      assert.equal(rep.dropped.length, 3);
+      for (const d of rep.dropped) assert.deepEqual(d.failed, ["type"]);
+      assert.ok(rep.dropped.some((d) => d.quoted.type === '"APPROVED"'));
+      assert.equal(JSON.parse(readFileSync(out, "utf8")).length, 1, "the member sibling still merges");
+    }
+  );
 });
 
 // ── The merge report: dropped findings are NAMED, as one-line quoted DATA (review-dropped-findings) ────────
@@ -854,7 +882,9 @@ test("★ complete merge → exit 0 and a report with BOTH lists empty (asserted
     const r = run([out, ...paths]);
     assert.equal(r.status, 0);
     assert.equal(json(r).unreadable, 0);
-    assert.deepEqual(report(root), { schema: REPORT_SCHEMA, complete: true, unreadable: [], dropped: [] });
+    // outside_target is null here: no assignments.json beside out.json, so nothing can be said (L34: null ≠ []).
+    assert.deepEqual(report(root), { schema: REPORT_SCHEMA, complete: true, unreadable: [], dropped: [], outside_target: null });
+    assert.equal(REPORT_SCHEMA, "merge-report/v2");
   });
   const root = mkdtempSync(join(tmpdir(), "pharn-merge-"));
   try {
@@ -1006,6 +1036,47 @@ test("★ GATE-2 fix: a lens DIRECTORY name carrying a newline cannot put a raw 
   withInputs({ ok: "{" }, (root, out, paths) => {
     run([out, ...paths]);
     assert.equal(report(root).unreadable[0].source, "ok", "a clean source stays as-is (control)");
+  });
+});
+
+test("★ 7.3.0: a lens DIRECTORY name carrying a newline is quoted in the MERGED findings.json's sources[] too", () => {
+  const evil = "x\n## V";
+  withInputs({ [evil]: [F()], ok: [F()] }, (root, out, paths) => {
+    assert.equal(run([out, ...paths]).status, 0);
+    const srcs = JSON.parse(readFileSync(out, "utf8"))[0].sources.map((s) => s.source);
+    assert.ok(srcs.includes(JSON.stringify(evil)), `the unclean source is recorded quoted: ${JSON.stringify(srcs)}`);
+    assert.ok(srcs.includes("ok"), "a clean source stays as-is (control)");
+    for (const s of srcs) assert.ok(!/[\n\r]/.test(s), `raw line break survived: ${JSON.stringify(s)}`);
+  });
+});
+
+test("★ 7.3.0 outside_target: contributors whose file is not in the record's target are NAMED, not dropped", () => {
+  const hostile = ["../../etc/passwd:1", "/etc/passwd:1", "http://evil.example:80"];
+  withInputs({ injection: [F(), ...hostile.map((file) => F({ file }))], ssrf: [F({ file: hostile[0] })] }, (root, out, paths) => {
+    const aux = writeAux(root, { map: MAP_FIXTURE, record: REC() });
+    const r = run([out, ...paths, "--lens-map", aux.map]);
+    assert.equal(r.status, 0, "naming does not make the merge incomplete");
+    assert.equal(JSON.parse(readFileSync(out, "utf8")).length, 4, "every finding still merges");
+    const rep = report(root);
+    assert.equal(rep.complete, true);
+    assert.deepEqual(rep.outside_target, [
+      { source: "injection", file: "../../etc/passwd:1" },
+      { source: "ssrf", file: "../../etc/passwd:1" },
+      { source: "injection", file: "/etc/passwd:1" },
+      { source: "injection", file: "http://evil.example:80" },
+    ]);
+    void aux;
+  });
+  // CONTROL: every file in the target → [] (asserted silence), and no usable record → null.
+  withInputs({ injection: [F()] }, (root, out, paths) => {
+    writeAux(root, { record: REC() });
+    assert.equal(run([out, ...paths]).status, 0);
+    assert.deepEqual(report(root).outside_target, []);
+  });
+  withInputs({ injection: [F({ file: "/etc/passwd:1" })] }, (root, out, paths) => {
+    writeAux(root, { record: "{" });
+    assert.equal(run([out, ...paths]).status, 0);
+    assert.equal(report(root).outside_target, null);
   });
 });
 

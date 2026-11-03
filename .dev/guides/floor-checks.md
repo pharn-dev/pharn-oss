@@ -451,6 +451,24 @@ node .dev/floor/check-version-badge.mjs [target-dir]
 node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
 ```
 
+## `merge-findings.mjs` / `render-review.mjs` — /pharn-review's merge and REVIEW.md
+
+```bash
+# /pharn-review Step 5: merge the per-lens findings.json files into one, deduped on (type, rule_id, file). Drops a
+# finding whose enum-gated fields fail (`type` is a CLOSED set {FINDING, CONSTITUTION_VIOLATION} since 7.3.0) and names
+# it in merge-report.json (schema merge-report/v2 since 7.3.0: `unreadable`, `dropped`, and `outside_target`, every
+# contributor whose `file` is not in the assignment record's target — named, never dropped; null with no usable record).
+# A lens directory name is stored through reportSafe in sources[] too. Exit 0 complete · 3 INCOMPLETE · 1 usage/write.
+# Ends `process.exitCode = main(process.argv)` (cli-stdout-flush.test.mjs FLUSH_CLIS).
+node pharn/floor/merge-findings.mjs <out.json> [<in.json> ...] [--lens-map <path>] [--assignments <path>]
+# /pharn-review Step 6: render pharn/features/<name>/REVIEW.md from findings.json, merge-report.json (v1 or v2),
+# assignments.json and the orchestrator's pharn/.run/pharn-review/<name>/notes.md (rendered only when newer than the
+# record). Every lens-supplied value is fenced (quote-core.mjs quoteData), C0 controls escaped, FIELD_CAP per field and
+# TEXT_BUDGET per document. Exit 0 written · 1 usage, an unusable findings.json (nothing written) or a failed write.
+# REVIEW.md under pharn/features/ is in .prettierignore and .markdownlint-cli2.jsonc; a benign render is lint-clean.
+node pharn/floor/render-review.mjs <name> [--root <dir>]
+```
+
 ## `check-contributing-gates.mjs` — CONTRIBUTING gate list
 
 ```bash

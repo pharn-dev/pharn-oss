@@ -94,6 +94,10 @@ const FLUSH_CLIS = [
   // `resolve` is the parsed path, and it prints with process.stdout.write (validate and agreement print with
   // console.log, which no floor caller parses).
   { file: "check-model-config.mjs", form: "main", print: "write", crashArgs: ["resolve", "plan", "--config", MODEL_CONFIG_FIXTURE] },
+  // 7.3.0 (audit 2026-11-03): merge-findings ended `process.exit()` right after its stdout write. Its document is a
+  // bounded count line read by /pharn-review's model, not a floor parser, so it has no >64 KiB round-trip below; the
+  // static pin and the crash row hold it to the rule. Zero inputs is legal, so `<out>` alone reaches its print.
+  { file: "merge-findings.mjs", form: "argv", print: "write", crashArgs: [join(SCAN_FIXTURE_DIR, "merge-out.json")] },
   ...PLAN_SCANNERS.map((file) => ({ file, form: "main", print: "write", crashArgs: [SCAN_FIXTURE] })),
   ...SCANNERS.map((file) => ({ file, form: "scanner", print: "write", crashArgs: [SCAN_FIXTURE] })),
 ];
