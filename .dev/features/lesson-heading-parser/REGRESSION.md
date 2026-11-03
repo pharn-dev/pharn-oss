@@ -3,8 +3,8 @@
 - **Base:** `fb997e4bd192ed57dd9ca3240d9866c4c54d9408` (`origin/batch/audit-2026-11-03`, the branch's fork point,
   passed as `--base`: the batch branch, not `origin/main`, is what this branch forks from, so the merge-base with
   `main` would have counted group S's already-integrated changes as this feature's).
-- **Inside:** 25 paths (the feature's `## Files` plus its own `PLAN.md` / `GRILL.md`); `escaped: []`;
-  `escape_exempt`: `PLAN.md`, `GRILL.md`.
+- **Run 2** (after the review fix `6cb9abd8`, which supersedes run 1 at `61de722e`; both identical in every gate and
+  per-test count). **Inside:** 29 paths (the feature's `## Files` plus its own stage artifacts); `escaped: []`.
 - **Outside gates:** 171 outside test files (per-test reporter), `validate`, and the trust-fence structural pair.
 
 | gate                                                                                       | base | head |
