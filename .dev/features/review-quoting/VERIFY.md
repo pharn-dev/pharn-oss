@@ -18,7 +18,7 @@ verdict by `pharn/floor/check-verify.mjs` (exit 0).
 Verifiers: no verifiers registered — floor gates only (`count-verifiers.mjs`: `registered: 0`).
 
 The reconcile epoch was anchored at build Step 0 (before any build write). Every write since was a Write-tool write
-to a path in the plan's `## Files` (re-scoped with `--from-plan` for the two mid-run fixes), a stage artifact under
+to a path in the plan's `## Files` (re-scoped with `--from-plan` for the three post-build fixes: the notes path, the runtime-floor import, the caps), a stage artifact under
 `.dev/features/review-quoting/`, `README.md`'s generated region (`npm run docs:generate`, declared), or scratch under
 `pharn/.run/`.
 
