@@ -58,18 +58,21 @@ Probe: a copy of this worktree's `pharn/` in a non-git scratch dir, one lens mut
    making them read it would assert an agreement the platform may not see) — unchanged behaviour there.
 3. **Symlinks (L59).** `walkMarkdown` classifies each entry with `lstatSync`: a link to a directory is not descended
    and is recorded; a link to a file is still listed (the header's stated bound); a dangling link is skipped as
-   before. `listMarkdownFiles` returns `linkedDirs`: the linked directories the walks did not descend that sit at or
-   under `<target>/pharn/` (sorted; git mode's own listing never descends a link, and a link elsewhere is skipped
-   silently, as git mode always did), and a `pharn` root that is itself a link is recorded instead of walked.
+   before. `listMarkdownFiles` returns `linkedDirs`: the linked directories the walks did not descend that sit
+   strictly below `<target>/pharn/` (sorted; git mode's own listing never descends a link, and a link elsewhere is
+   skipped silently, as git mode always did). A `pharn` root that is itself a link is FOLLOWED as today, in both
+   modes (GATE 1, Q3): the walk fallback walks it as the git-mode union walk already does.
    validate.mjs REDs each one outside its EXCLUDE_SEGMENTS — `P6/symlinked-dir`, blocking — and the three count-\*
    walkers refuse (exit 1, nothing on stdout, the link named on stderr), so a lens behind a link is never silently
    dropped from the registry (added at grill, G2).
    `canonDirs()` and `walkExts()` use `lstatSync` and skip a link to a directory. The header's bound is rewritten
    to what the walk now does (L37: probed by the new tests, not read off the code).
-4. **Zero capabilities (L34).** When `CANON_DIRS` is non-empty, no capability was found and nothing blocking was
-   found, validate prints `FLOOR: INCONCLUSIVE — 0 capabilities found under pharn/pharn-* in "<target>"` and exits 2.
-   A target with no `pharn/pharn-*` (the fixtures that build `pharn-review/` at the root) keeps `GREEN — 0`; a RED
-   stays RED.
+4. **Zero capabilities (L34), narrowed at GATE 1.** When at least one capability root — `pharn/pharn-review`,
+   `pharn/pharn-pipeline/grillers`, `pharn/pharn-core` — holds at least one `.md` file on the capability list, no
+   capability was found and nothing blocking was found, validate prints
+   `FLOOR: INCONCLUSIVE — 0 capabilities among the markdown under pharn/pharn-review, pharn/pharn-pipeline/grillers or pharn/pharn-core in "<target>"`
+   and exits 2. A tree with only `pharn/pharn-contracts`, or no `pharn/pharn-*` at all (the fixtures that build
+   `pharn-review/` at the root), keeps `GREEN — 0`; a RED stays RED. Both sides tested.
 5. **CHECK 8's read.** The `try { readFileSync } catch { continue }` goes: an unreadable file under the canon
    scope throws, which the TST-10 handler turns into `INCONCLUSIVE — crashed (…)`, exit 2 — the same posture as the
    capability loop.
@@ -141,8 +144,9 @@ No capability is added or changed; the floor's own tests are the evals.
   last is counted as its LF twin; a displaced one is counted and validate REDs `P6/frontmatter-offset` (mutant: the
   pre-fix code gives 0 and GREEN).
 - validate → a link to an outside dir under `pharn/pharn-review/` → count unchanged, RED `P6/symlinked-dir`; a
-  garbage-only `pharn/pharn-review/` → exit 2 INCONCLUSIVE; the root-level `pharn-review/` fixtures → GREEN — 0
-  unchanged; an unreadable `.json` under `pharn/pharn-review/` → exit 2 crashed.
+  link as the `pharn` root itself → followed, no RED; a garbage-only `pharn/pharn-review/` → exit 2 INCONCLUSIVE; a
+  contracts-only tree and the root-level `pharn-review/` fixtures → GREEN — 0 unchanged; an unreadable `.json`
+  under `pharn/pharn-review/` → exit 2 crashed.
 - capability-files-core → PATH_KINDS (file, link→file, link→dir, dangling, loop) in walk and git modes.
 - check-model-config / check-config → CRLF commands agree as their LF twins; catalog → a CRLF capability enumerates
   as its LF twin.
@@ -157,10 +161,11 @@ No capability is added or changed; the floor's own tests are the evals.
   `[\s\p{Cf}]` count as displacement; any other leading byte (a letter, an HTML comment) still makes the file "not a
   capability", silently, as before.
 - "a symlinked directory is never descended by the capability walks" → floor: lstat type test. Bound: a link to an
-  `.md` file is still read through the link; a `pharn/` RED covers only links at or under the target's `pharn/`;
-  elsewhere a link is skipped silently (git mode already did); TARGET itself is followed (it is the operand).
-- "validate never prints GREEN over an empty pharn/pharn-\* scope" → floor: integer test. Bound: a non-empty scope
-  holding one valid capability next to garbage is still GREEN over the one.
+  `.md` file is still read through the link; the RED covers only links strictly below the target's `pharn/`;
+  elsewhere a link is skipped silently (git mode already did); TARGET and a linked `pharn` root are followed.
+- "validate never prints GREEN over zero capabilities when a capability root holds markdown" → floor: integer +
+  membership test. Bound: a root holding one valid capability next to garbage is still GREEN over the one; a root
+  whose only entries are non-`.md` (a directory, a dangling link) stays GREEN — 0.
 - "validate's report reaches a pipe whole" → floor-adjacent: the static pin is a proxy; the round-trip
   discriminates only where pipes are asynchronous (darwin), as the test file's header states.
 - The trusted docs: no sentence in the four names the walk's symlink handling, the zero-capability GREEN or the
@@ -176,14 +181,19 @@ No capability is added or changed; the floor's own tests are the evals.
 - Every branch is a membership/regex/type test (`startsWith`, the displaced-lead regex, `isSymbolicLink()`,
   `capabilities.length === 0`); the fallback for an unreadable file is the existing INCONCLUSIVE, never a guess.
 
-## Open questions (HALT)
+## Open questions — resolved at GATE 1
 
-- Q1 (recommendation: as planned). A displaced fence: count it and RED (planned), or leave it uncounted and RED?
-  Counting keeps validate's count equal to the registry's and runs every other check on the file.
-- Q2 (recommendation: as planned). Symlinked directories outside `pharn/` in walk mode (no git): skip silently
-  (planned — git mode already never descended them), or RED them too (a pnpm-style tree would RED)?
-- Q3 (recommendation: as planned). A `pharn/` root that is itself a link: record and RED (planned, consistent
-  "never descended"), or keep following it in git mode as today?
-- Q4 (recommendation: as planned). The count-\* walkers on a linked directory under `pharn/`: refuse (planned —
-  their callers already fail closed on a non-zero exit, so `/pharn-review` / `/pharn-grill` / verify stop instead of
-  silently running without the linked lens), or register what they can and leave the RED to validate alone?
+GATE 1 was decided by the batch orchestrator (a model) under the owner's delegation, not by a human. Approved with
+two changes, both folded into the Approach above:
+
+- Q1 — a displaced fence is counted and REDs: **as planned**.
+- Q2 — symlinked directories outside `pharn/` in a no-git walk are skipped silently: **as planned**.
+- Q3 — **CHANGED.** A `pharn/` root that is itself a link is followed as today, in both modes, with no RED. Only
+  links to directories strictly below `pharn/` are recorded, RED in validate and refused by the counters. Reason
+  given: the finding is about an in-tree link importing out-of-tree bytes; a linked root is the operator's explicit
+  choice, and turning a working install RED with no known failure is the wrong trade (P7).
+- Q4 — the counters refuse on a linked directory below `pharn/`: **as planned**.
+- Grill concern 1 — **CHANGED.** The zero-capability INCONCLUSIVE fires only when a capability root
+  (`pharn/pharn-review`, `pharn/pharn-pipeline/grillers`, `pharn/pharn-core`) holds at least one `.md` file and zero
+  capabilities were found; a contracts-only tree or one with no `pharn/pharn-*` stays GREEN — 0. Both tested.
+- merge-findings.mjs:596 belongs to group G8; griller-extract.mjs stays unchanged: agreed.
