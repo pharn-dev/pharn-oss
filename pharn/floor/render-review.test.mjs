@@ -22,7 +22,19 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderReview, inert, main, BACKSTOP_TEXT, FIELD_CAP, TEXT_BUDGET, NOTES_CAP, PREAMBLE, REPORT_SCHEMAS } from "./render-review.mjs";
+import {
+  renderReview,
+  inert,
+  main,
+  notesRel,
+  BACKSTOP_TEXT,
+  FIELD_CAP,
+  TEXT_BUDGET,
+  NOTES_CAP,
+  NOTES_DIR,
+  PREAMBLE,
+  REPORT_SCHEMAS,
+} from "./render-review.mjs";
 import { BACKSTOP_ENUM, REPORT_SCHEMA } from "./merge-findings.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -343,9 +355,8 @@ function lay(root, { findings = [FIND()], report = REP(), assignments = ASG(), n
   if (report !== undefined) writeFileSync(join(dir, "merge-report.json"), JSON.stringify(report));
   if (assignments !== undefined) writeFileSync(join(dir, "assignments.json"), JSON.stringify(assignments));
   if (notes !== undefined) {
-    const nd = join(root, "pharn", ".run", "pharn-review", "demo");
-    mkdirSync(nd, { recursive: true });
-    writeFileSync(join(nd, "notes.md"), notes);
+    mkdirSync(join(root, NOTES_DIR), { recursive: true });
+    writeFileSync(join(root, notesRel("demo")), notes);
   }
   return dir;
 }
@@ -389,7 +400,8 @@ test("★ CLI refusals: a bad name, an extra argument, and an unusable findings.
 test("★ notes: rendered when NEWER than assignments.json; NOT NEWER (equal or older) → not rendered; absent → a line", () => {
   scratch((root) => {
     const dir = lay(root, { notes: "## Lens agents\nwhole-target: pharn-review-lens\nskills: mode=none" });
-    const notes = join(root, "pharn", ".run", "pharn-review", "demo", "notes.md");
+    const notes = join(root, "pharn", ".run", "pharn-review-notes", "demo.md");
+    assert.equal(join(root, notesRel("demo")), notes, "the default notes path (L41: spelled out once, not derived)");
     const asg = join(dir, "assignments.json");
     const at = (p, s) => utimesSync(p, s, s);
     at(asg, 1000);
@@ -417,6 +429,17 @@ test("★ notes: rendered when NEWER than assignments.json; NOT NEWER (equal or 
     notes: { text: "n".repeat(NOTES_CAP + 5), fresh: true },
   }).text;
   assert.match(long, new RegExp(`Cut at ${NOTES_CAP} characters \\(5 more`));
+});
+
+test("★ the notes path is Write-tool territory: under pharn/.run/, never inside a CLI-owned run-state directory", () => {
+  // The three run-state directories belong to run-marker.mjs / require-loop-record.cjs, and 7.3.0's guard denies the
+  // Write tool there; the orchestrator writes the notes with the Write tool, so they must sit outside all three.
+  const rel = notesRel("demo");
+  assert.ok(rel.startsWith("pharn/.run/"), rel);
+  for (const owned of ["pharn/.run/pharn-loop/", "pharn/.run/pharn-ship/", "pharn/.run/pharn-review/"]) {
+    assert.ok(!rel.startsWith(owned), `${rel} is inside ${owned}`);
+  }
+  assert.ok(!rel.endsWith("writes-scope.json"));
 });
 
 test("determinism: one input, one byte sequence", () => {

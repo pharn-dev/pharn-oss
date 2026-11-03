@@ -73,7 +73,7 @@ Each item is a finding of the 2026-11-03 principal review, re-read live here (P6
 - L36: the closure test binds that map's keys to `BACKSTOP_ENUM` both ways, and `TYPE_ENUM` to the contract's list by
   set equality (the ARCH-9 test flips from "still OPEN" to "set-equal").
 - L41: the renderer's default paths (findings/merge-report/assignments beside `<base>/<name>`, the notes file under
-  `pharn/.run/pharn-review/<name>/`) live in one place and one CLI test runs with no path flag in a scratch cwd.
+  `pharn/.run/pharn-review-notes/<name>.md`, moved at the orchestrator's direction — see below) live in one place and one CLI test runs with no path flag in a scratch cwd.
 - L55: the structure test does not rest on the author's fence model alone: besides a fence-walk (always run), it
   parses a hostile render with `markdown-it` (in `node_modules` as a transitive dependency of the lint toolchain;
   the test self-skips when it cannot be loaded, and says so) and asserts the parser sees exactly the headings the
@@ -135,7 +135,8 @@ added.
 - **CLI:** `node pharn/floor/render-review.mjs <name>`; `<name>` must be a `FEATURE_SLUG_RE` member (gate-run-core.mjs)
   or exit 1. Reads `pharn/features/<name>/findings.json` (required: absent, not JSON or not an array → exit 1, nothing
   written), `merge-report.json` and `assignments.json` (each fail-soft: unusable → a fixed "not available" line),
-  and `pharn/.run/pharn-review/<name>/notes.md` (optional; rendered only when newer than `assignments.json`, else a
+  and `pharn/.run/pharn-review-notes/<name>.md` (optional; moved during build out of `pharn/.run/pharn-review/`,
+  which batch group G2 makes CLI-only — the Write tool is denied there in 7.3.0; rendered only when newer than `assignments.json`, else a
   fixed "stale, not rendered" line — the `lens-groups.mjs` mtime precedent). Writes REVIEW.md, prints one JSON line,
   ends `process.exitCode = …`. `--root <dir>` (default cwd) is the only flag (tests).
 - **Pure core** `renderReview({ name, findings, report, assignments, notes })` → string; no I/O.

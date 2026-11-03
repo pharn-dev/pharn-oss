@@ -7,7 +7,11 @@ under the owner's delegation). Scope set from the plan's `## Files` (18 paths), 
 What landed:
 
 - `pharn/floor/render-review.mjs` (new) and its suite (22 tests): REVIEW.md from findings.json, merge-report.json (v1 or
-  v2), assignments.json and the orchestrator's notes. Lens-supplied values fenced through `quoteData`, C0 controls
+  v2), assignments.json and the orchestrator's notes at `pharn/.run/pharn-review-notes/<name>.md` (moved mid-build,
+  at the orchestrator's direction, out of `pharn/.run/pharn-review/<name>/`: group G2's guard patch denies the Write
+  tool in the three CLI-owned run-state directories; under `pharn/.run/` the notes stay gitignored scratch the
+  default admits, outside the reconciled set and validate's surface, so no artifact list needed a new member; a test
+  pins that the path is in none of the three). Lens-supplied values fenced through `quoteData`, C0 controls
   escaped, FIELD_CAP 2,000, TEXT_BUDGET 200,000, NOTES_CAP 20,000; inline only renderer prose, counts and closed-set
   members; the five backstop phrases moved here as `BACKSTOP_TEXT`. The suite carries a fence-walk with its control, a
   markdown-it reference probe (L55), CHECK 5 through the real validate.mjs, the REVIEW.md site enumeration, a style

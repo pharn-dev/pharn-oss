@@ -462,7 +462,7 @@ node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [
 # Ends `process.exitCode = main(process.argv)` (cli-stdout-flush.test.mjs FLUSH_CLIS).
 node pharn/floor/merge-findings.mjs <out.json> [<in.json> ...] [--lens-map <path>] [--assignments <path>]
 # /pharn-review Step 6: render pharn/features/<name>/REVIEW.md from findings.json, merge-report.json (v1 or v2),
-# assignments.json and the orchestrator's pharn/.run/pharn-review/<name>/notes.md (rendered only when newer than the
+# assignments.json and the orchestrator's pharn/.run/pharn-review-notes/<name>.md (rendered only when newer than the
 # record). Every lens-supplied value is fenced (quote-core.mjs quoteData), C0 controls escaped, FIELD_CAP per field and
 # TEXT_BUDGET per document. Exit 0 written · 1 usage, an unusable findings.json (nothing written) or a failed write.
 # REVIEW.md under pharn/features/ is in .prettierignore and .markdownlint-cli2.jsonc; a benign render is lint-clean.

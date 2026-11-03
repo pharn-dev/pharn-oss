@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - 2026-11-03: **`/pharn-review`'s `REVIEW.md` is written by a floor renderer, not by the model** (audit 2026-11-03).
   New `pharn/floor/render-review.mjs` renders it from `findings.json`, `merge-report.json` (`v1` or `v2`),
-  `assignments.json` and the orchestrator's own notes (`pharn/.run/pharn-review/<name>/notes.md`, fenced as
+  `assignments.json` and the orchestrator's own notes (`pharn/.run/pharn-review-notes/<name>.md`, fenced as
   self-report, and only when newer than the record). Every value a lens, a record or the notes supplied is inside a
   fence one back-tick longer than any run in it, with C0 controls other than TAB/LF, and DEL, shown as `\uXXXX`; each
   field is capped at 2,000 characters and the document's lens text at 200,000. Inline text is renderer prose, counts

@@ -280,8 +280,9 @@ default) — semantics and bounds in `merge-findings.mjs`'s header (P4).
 and never edit `REVIEW.md` after the render** — every lens-supplied value in it is fenced by code, and an edit is
 outside that. Two steps:
 
-**First, write your own self-report** with the Write tool to `pharn/.run/pharn-review/<name>/notes.md` (inside the
-run's state directory, so the guard's default admits it). It holds exactly what only you know, as plain markdown:
+**First, write your own self-report** with the Write tool to `pharn/.run/pharn-review-notes/<name>.md` — never under
+`pharn/.run/pharn-review/`, which is the run marker's own state (`pharn/floor/render-review.mjs`, header). It holds
+exactly what only you know, as plain markdown:
 
 - **Also render a `## Lens agents` block** (orchestrator self-report): one line per spawned group naming its family,
   its lenses and its agent type (`pharn-review-lens`, or `general-purpose (fallback)`); whether Step 3's helper exited

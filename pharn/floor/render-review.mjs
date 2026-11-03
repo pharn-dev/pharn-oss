@@ -33,7 +33,7 @@
 //
 // ================================ THE NOTES (self-report) ================================
 // The orchestrator writes its own blocks — the `## Lens agents` block, each lens's `skills:` line and any Step 6b RED
-// line — to NOTES_REL with the Write tool before running this. They are rendered fenced, labelled self-report, and only
+// line — to notesRel(<name>) with the Write tool before running this. They are rendered fenced, labelled self-report, and only
 // when the file's modification time is NEWER than assignments.json's (the lens-groups.mjs rule: a file not newer than the
 // run's record is from an earlier run). A modification time is a fact any writer can set: this detects a stale file,
 // never a forged one.
@@ -53,7 +53,7 @@
 // Usage:  node pharn/floor/render-review.mjs <name> [--root <dir>]
 //   <name>  a FEATURE_SLUG_RE member, else exit 1. --root (default: the current directory) is for tests.
 //   Reads <root>/pharn/features/<name>/{findings.json, merge-report.json, assignments.json} and
-//   <root>/pharn/.run/pharn-review/<name>/notes.md. findings.json is REQUIRED (absent, not JSON, or not an array →
+//   <root>/pharn/.run/pharn-review-notes/<name>.md. findings.json is REQUIRED (absent, not JSON, or not an array →
 //   exit 1, nothing written); the other three are fail-soft (a fixed "not available" line).
 // Output: writes <root>/pharn/features/<name>/REVIEW.md; prints one JSON line
 //   {"written":<path>,"findings":<int>,"contributors":<int>,"capped":<int>,"not_rendered":<int>,"incomplete":<bool>};
@@ -71,8 +71,13 @@ export const FIELD_CAP = 2000;
 export const TEXT_BUDGET = 200000;
 export const NOTES_CAP = 20000;
 export const FEATURES_BASE = "pharn/features";
-export const NOTES_DIR = "pharn/.run/pharn-review";
-export const NOTES_NAME = "notes.md";
+// The notes live OUTSIDE pharn/.run/pharn-review/ on purpose: that directory is CLI-owned run state (run-marker.mjs),
+// which protect-trusted-paths.cjs denies to the Write tool in 7.3.0 (batch group G2), and the notes are written by the
+// model with the Write tool. Under pharn/.run/ the guard's default admits them, they stay gitignored scratch outside
+// the reconciled set and outside validate's scanned surface, and nothing else in PHARN reads this directory.
+export const NOTES_DIR = "pharn/.run/pharn-review-notes";
+/** The notes file for one review, relative to the project root. */
+export const notesRel = (name) => `${NOTES_DIR}/${name}.md`;
 export const REVIEW_NAME = "REVIEW.md";
 export const REPORT_SCHEMAS = Object.freeze(["merge-report/v1", "merge-report/v2"]);
 
@@ -281,7 +286,7 @@ function outsideBlocks(rep) {
 
 function notesBlocks(notes, name) {
   const out = ["## Orchestrator self-report"];
-  const where = `\`${NOTES_DIR}/${name}/${NOTES_NAME}\``;
+  const where = `\`${notesRel(name)}\``;
   if (!notes) out.push(`No notes file was found at ${where}: the orchestrator recorded no lens-agent or installed-skills report.`);
   else if (!notes.fresh)
     out.push(
@@ -373,7 +378,7 @@ export function main(argv, { stdout = process.stdout, stderr = process.stderr } 
   }
   const rep = readJson(join(dir, "merge-report.json"));
   const asg = readJson(join(dir, "assignments.json"));
-  const notesPath = join(root, NOTES_DIR, name, NOTES_NAME);
+  const notesPath = join(root, notesRel(name));
   let notes = null;
   let notesText;
   try {
