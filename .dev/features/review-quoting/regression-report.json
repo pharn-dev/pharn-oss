@@ -6,6 +6,8 @@
     ".dev/features/review-quoting/DOCS-PROPOSAL.md",
     ".dev/features/review-quoting/GRILL.md",
     ".dev/features/review-quoting/PLAN.md",
+    ".dev/features/review-quoting/REGRESSION.md",
+    ".dev/features/review-quoting/regression-report.json",
     ".dev/guides/floor-checks.md",
     ".markdownlint-cli2.jsonc",
     ".prettierignore",

@@ -2,7 +2,7 @@
 
 - base: `fb997e4bd192ed57dd9ca3240d9866c4c54d9408` (the batch branch tip this branch was cut from, passed as
   `--base`: `merge-base HEAD origin/main` would have put group S's commits inside the feature)
-- head: the working tree at `7ee5b396`
+- head: the working tree at `7ee5b396` (runs 1–2) and `97c1bea5` (run 3, the verdict `regression-report.json` holds)
 - inside (16 paths, all declared or a feature artifact; `escaped: []`, `escape_exempt: [GRILL.md]`): the plan's
   `## Files` minus the three untouched test files, plus `GRILL.md`
 - outside: 178 test files, `validate`, one structural eval pair, and the three style gates (run because
@@ -37,8 +37,14 @@ commit; run 1 above is the restarted run.
 | format:check                                                                             | 0 → 0       |
 | lint:md                                                                                  | 0 → 0       |
 
-`regressions: []`, `pre_existing: []`, `per_test.new_failures: []` (`check-regress.mjs verdict` exit 0;
-`regression-report.json` is its output verbatim).
+`regressions: []`, `pre_existing: []`, `per_test.new_failures: []` (`check-regress.mjs verdict` exit 0).
+
+## Run 3 — after the pre-verify self-review fix (`97c1bea5`)
+
+The renderer's caps, the claims bullet and the CHANGELOG changed after run 2, so head was run again with the same gate
+set (the inside list now also holds `REGRESSION.md` and `regression-report.json`). Every gate 0 → 0; per test,
+6,098 passed / 0 failed / 1 skipped on both sides; `regressions: []`, `new_failures: []`, `check-regress.mjs verdict`
+exit 0. `regression-report.json` is this run's output verbatim.
 
 **REGRESSIONS: none — no deterministically-detectable breakage outside the feature.** This catches what the outside
 suite catches, nothing more; host load averaged 150–230 during the runs.
