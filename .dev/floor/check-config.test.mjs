@@ -193,6 +193,33 @@ test("✧ ENF-3: BOM'd dev commands are read as their clean twins (agreement GRE
   }
 });
 
+// 7.3.0 (family-grammar-crlf): the hand copy split lines on "\n" alone, so a CRLF command kept only its last key
+// (`effort:`) and its `model:` read as absent. Twin of the GREEN case with every command CRLF; the mismatch control
+// proves `model:` is really read (L60). A displaced fence reads as no frontmatter, as in check-model-config.mjs.
+test("✧ CRLF dev commands are read as their LF twins; a displaced fence reads as no model", () => {
+  const crlf = (s) => s.replace(/\n/g, "\r\n");
+  for (const [planModel, fn, status, mustMatch] of [
+    ["opus", crlf, 0, /GREEN — config valid; 3\/3 wired stage/],
+    ["sonnet", crlf, 1, /"sonnet"/],
+    ["opus", (s) => "\n" + s, 1, /model/],
+  ]) {
+    const { dir, configPath } = withConfig(VALID);
+    try {
+      const cmdDir = writeCommands(dir, {
+        plan: { model: planModel, effort: "high" },
+        build: { model: "sonnet", effort: "high" },
+        review: { model: "opus", effort: "high" },
+      });
+      for (const f of readdirSync(cmdDir)) writeFileSync(join(cmdDir, f), fn(readFileSync(join(cmdDir, f), "utf8")));
+      const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+      assert.equal(r.status, status, r.stdout + r.stderr);
+      assert.match(r.stdout, mustMatch);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("agreement RED: a command whose model differs from the config exits 1", () => {
   const { dir, configPath } = withConfig(VALID);
   try {

@@ -34,7 +34,15 @@ come from the single code block this text was moved from, so the entry they name
 # dev-ref); it is GREEN when the target has no pharn/floor at all; and its scope is silently empty when
 # the target has no pharn/ at all.
 # Exit: 0 GREEN (or GREEN-with-warnings) · 1 RED · 2 INCONCLUSIVE — an uncaught throw prints one
-# `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line).
+# `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line), and
+# since 7.3.0 zero capabilities among the markdown under pharn/pharn-review, pharn/pharn-pipeline/grillers or
+# pharn/pharn-core is INCONCLUSIVE too (a contracts-only tree, or one with no pharn/pharn-*, stays GREEN over 0).
+# 7.3.0 (family-grammar-crlf): frontmatter is read through frontmatter-core.mjs `looseFrontmatter` (CRLF-tolerant; a
+# fence after a blank line or an invisible character is counted and REDs `P6/frontmatter-offset`); a symlinked
+# directory strictly below pharn/ is not descended and REDs `P6/symlinked-dir` (a linked `pharn` root is followed); an
+# unreadable file in CHECK 8's scope is a crash (INCONCLUSIVE), no longer skipped; every exit goes through
+# `process.exitCode` (pharn/floor/cli-stdout-flush.test.mjs). count-lenses / -grillers / -verifiers refuse (exit 1) on
+# the same symlinked directory.
 # THE CAPABILITY LIST (7.2.0, issue #407): validate.mjs and count-lenses / count-grillers / count-verifiers take their
 # markdown list from pharn/floor/capability-files-core.mjs — inside a git work tree, git's tracked + untracked-not-ignored
 # files plus the target's own pharn/; otherwise, or when git cannot answer, the old readdirSync walk. A git-ignored copy

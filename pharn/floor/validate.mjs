@@ -17,21 +17,24 @@
 //   8. the capability canon names a relocated floor checker at its LIVE path (P6, enum/regex)
 //
 // Usage:  node pharn/floor/validate.mjs [targetDir]      (default: cwd)
+// Exit:   0 GREEN (or GREEN-with-warnings) · 1 RED · 2 INCONCLUSIVE — a crash (6.72.1), or (7.3.0) zero capabilities
+//         among the markdown under pharn/pharn-review, pharn/pharn-pipeline/grillers or pharn/pharn-core.
 // The targetDir must EXIST and be a DIRECTORY: an absent or non-directory target is a RED (see the
 // guard below), never a GREEN over zero capabilities. Two things it does NOT establish, both of which
 // still report GREEN over zero capabilities: that the target is the RIGHT directory (a valid-but-wrong
 // one walks to nothing), and that the target is READABLE (`statSync` needs search permission on the
-// PARENT, not read permission on the target, so a chmod-000 directory passes the guard and `walk()`'s
-// per-directory swallow does the rest).
+// PARENT, not read permission on the target, so a chmod-000 directory passes the guard and the walk's
+// per-directory swallow does the rest — though since 7.3.0 a listing that finds markdown under a capability root and no
+// capability is INCONCLUSIVE, see the report section).
 // Honest scope: checks 5 and 6 are BEST-EFFORT — markdown has no import statement to lint, so they
 // reduce a class of mistakes, they do not eliminate it (see ARCHITECTURE §4 caveat, LIMITS).
 //
 // It deliberately does NOT validate this repo's own tooling (.claude/commands, .dev/) — those
 // are advisory orchestration, not built PHARN capabilities. Point this at the PHARN repo.
 
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, lstatSync, existsSync } from "node:fs";
 import { join, relative, sep } from "node:path";
-import { stripBom } from "./frontmatter-core.mjs";
+import { looseFrontmatter, looseValue, stripBom } from "./frontmatter-core.mjs";
 import { listMarkdownFiles } from "./capability-files-core.mjs";
 
 // A CRASH IS INCONCLUSIVE, NEVER RED (6.72.1, audit TST-10 — lessons-learned L62's shape). An uncaught throw used to
@@ -41,17 +44,32 @@ import { listMarkdownFiles } from "./capability-files-core.mjs";
 // and only a string `message` is quoted (anything else renders as its `Object.prototype.toString` tag), so rendering
 // it cannot throw a second time. Bound: it covers a throw after this line; a failure while loading the static import
 // above still exits 1 with node's own trace.
+//
+// THE FLUSH RULE (7.3.0; pharn/floor/cli-stdout-flush.test.mjs, form "sentinel-uncaught"). Every verdict ends through
+// `emit(code)`: it SETS the exit code and throws EMITTED, which unwinds the top-level module code to this handler, which
+// returns on the sentinel, so the process ends naturally after Node has drained stdout. `process.exit()` right after a
+// print dropped queued writes past a pipe's 64 KiB buffer on darwin (the 6.20.4 rule), and a long RED report crosses
+// it. The crash line is written with process.stdout.write, not console.log, so a broken console cannot turn the crash
+// verdict into a second throw.
+const EMITTED = Symbol("validate-emitted");
 process.on("uncaughtException", (e) => {
+  if (e === EMITTED) return;
   const message = typeof e?.message === "string" ? e.message : Object.prototype.toString.call(e);
-  console.log(`FLOOR: INCONCLUSIVE — crashed (${JSON.stringify(message)})`);
-  process.exit(2);
+  process.stdout.write(`FLOOR: INCONCLUSIVE — crashed (${JSON.stringify(message)})\n`);
+  process.exitCode = 2;
 });
+
+/** End the run with `code`: set, then unwind to the handler above (never `process.exit`, the flush rule). */
+function emit(code) {
+  process.exitCode = code;
+  throw EMITTED;
+}
 
 const TARGET = process.argv[2] || ".";
 
 // The target is INPUT, and an unusable input is a RED — never a GREEN over zero files. A path that
 // does not exist (a typo, a wrong cwd, a moved checkout) or that is not a directory makes the
-// capability walk VACUOUS: `walk()` below swallows the readdirSync failure by design, so the run
+// capability walk VACUOUS: the walk below swallows the readdirSync failure by design, so the run
 // printed `GREEN — 0 capabilities checked in /no/such/dir` and exited 0 — a fabricated pass, and
 // invisible to a CI step that reads only the exit code. A checker must REJECT a wrongly-shaped input
 // rather than trust its caller (PHARN's own build-loop lesson L21 — cited, not restated, P4).
@@ -65,7 +83,7 @@ const TARGET = process.argv[2] || ".";
 // prove the RIGHT directory was passed: a valid-but-wrong one (a sibling repo, a parent dir) still
 // walks to zero capabilities and still reports GREEN. It does NOT prove the target is READABLE
 // either: `statSync` resolves through search permission on the PARENT, so a directory whose contents
-// cannot be listed passes here, and `walk()`'s swallow then yields the same GREEN over zero. Both
+// cannot be listed passes here, and the walk's swallow then yields the same GREEN over zero. Both
 // residuals are live, and the second is one permission bit from the case this guard removes — so the
 // class closed here is the bad PATH, not the fabricated GREEN in general. `GREEN` never meant "the
 // right target", and does not mean it now.
@@ -83,7 +101,7 @@ function refuseTarget(problem) {
   console.log(`FLOOR: RED — 1 finding(s), target not validated\n`);
   console.log(`- [blocking] P6/bad-target  ${showPath(TARGET)}`);
   console.log(`    ${problem}`);
-  process.exit(1);
+  emit(1);
 }
 if (!existsSync(TARGET)) {
   refuseTarget("the target path does not exist, so nothing could be checked; walking it would report GREEN over zero capabilities");
@@ -169,40 +187,21 @@ function finding(severity, rule_id, file, problem) {
 // still swallows an unreadable directory, so every "GREEN over zero" residual named above stands). Before it, a
 // git-ignored copy of pharn/ (a build cache) was validated as product surface: 90 capabilities reported, 60 of them
 // the copies, GREEN.
-function walk(dir) {
-  return listMarkdownFiles(dir).files;
-}
+// Since 7.3.0 the listing also carries `linkedDirs`: the symlinked directories strictly below the target's pharn/ that
+// the walk did not descend (capability-files-core.mjs's header). They are reported below as P6/symlinked-dir.
+const LISTING = listMarkdownFiles(TARGET);
 
-// --- tiny dependency-free frontmatter parser (handles the subset PHARN uses) ---
-// One leading UTF-8 BOM is stripped FIRST (frontmatter-core.mjs `stripBom`, 6.65.2 — audit ENF-3): before it, a BOM
-// defeated the `startsWith("---")` fence and a capability with blocking findings was "not a capability", GREEN.
-// Everything after the strip is the loose fence it always was (a `----` opening still parses); the count-* readers
-// mirror this function, so they strip first too.
+// --- the frontmatter parser: frontmatter-core.mjs `looseFrontmatter` (7.3.0, family-grammar-crlf) ---
+// One leading BOM stripped (6.65.2, audit ENF-3), the loose fence it always was (a `----` opening still parses), lines
+// split on CRLF or LF — the seven hand copies of this function split on "\n" alone, so a CRLF capability kept only its
+// last key and was "not a capability", GREEN. `displaced` is a fence after a whitespace/format-character lead (a blank
+// line, a space, U+200B, a second BOM): it is read, counted, and REDs below when the block declares `role:`.
 function parseFrontmatter(rawText) {
-  const text = stripBom(rawText);
-  if (!text.startsWith("---")) return { fm: null, body: text };
-  const end = text.indexOf("\n---", 3);
-  if (end === -1) return { fm: null, body: text };
-  const raw = text.slice(3, end).trim();
-  const body = text.slice(end + 4);
+  const lf = looseFrontmatter(rawText);
+  if (!lf) return { fm: null, body: stripBom(rawText), displaced: false };
   const fm = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (!m) continue;
-    const key = m[1];
-    let val = m[2].trim();
-    if (val.startsWith("[") && val.endsWith("]")) {
-      val = val
-        .slice(1, -1)
-        .split(",")
-        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
-    } else {
-      val = val.replace(/^["']|["']$/g, "");
-    }
-    fm[key] = val;
-  }
-  return { fm, body };
+  for (const { key, raw } of lf.entries) fm[key] = looseValue(raw);
+  return { fm, body: lf.body, displaced: lf.displaced };
 }
 
 function isExcluded(file) {
@@ -295,17 +294,42 @@ function summarizeProduced(produced) {
 
 // ---------------------------------------------------------------------------
 
-const allMd = walk(TARGET);
+const allMd = LISTING.files;
 const capabilities = [];
+
+// A symlinked directory strictly below pharn/ is not descended (capability-files-core.mjs), so whatever it points at is
+// neither counted nor checked. Before 7.3.0 the walk followed it: a link to a directory outside the tree imported that
+// directory's capabilities into this verdict (measured: `RED — 3 finding(s), 38 capabilities`, the findings citing the
+// out-of-tree file). Skipping it silently would hide a lens instead, so it is a blocking finding. A `pharn` root that is
+// itself a link is the operator's choice and is followed (GATE 1 of family-grammar-crlf).
+for (const dir of LISTING.linkedDirs) {
+  if (isExcluded(join(dir, "x"))) continue;
+  finding(
+    "blocking",
+    "P6/symlinked-dir",
+    relative(TARGET, dir),
+    "a symlinked directory inside pharn/ is not descended, so the capabilities it points at are neither counted nor checked — replace the link with the directory itself, or remove it"
+  );
+}
 
 for (const file of allMd) {
   if (isExcluded(file)) continue;
   const text = readFileSync(file, "utf8");
-  const { fm, body } = parseFrontmatter(text);
+  const { fm, body, displaced } = parseFrontmatter(text);
 
   // a "capability" = a role-bearing markdown file (ARCHITECTURE §3.1)
   if (fm && fm.role) {
     capabilities.push({ file, fm, body });
+    // A fence after a whitespace/format-character lead is counted (so this count agrees with count-lenses and its
+    // siblings), and REDs: before 7.3.0 it made the file silently "not a capability", GREEN one capability short.
+    if (displaced) {
+      finding(
+        "blocking",
+        "P6/frontmatter-offset",
+        relative(TARGET, file),
+        "the frontmatter fence is not at the start of the file (whitespace or an invisible character precedes the opening ---); move it to offset 0"
+      );
+    }
   }
 
   // CHECK 5 (best-effort): finding-template files must show the enum-gated / free-text split (fix #1)
@@ -581,7 +605,9 @@ if (existsSync(archManifest)) {
 // pharn/ at all — both correct, both fail-open paths, named.
 
 // Discovered, not fixed. Mirrors walkExts's two guards below: a missing <TARGET>/pharn and a per-entry
-// stat failure (a broken symlink) each degrade to a skip, never a crash of the validator. .sort() is
+// stat failure (a broken symlink) each degrade to a skip, never a crash of the validator. Both classify an entry with
+// lstatSync (7.3.0, L59): a symlink to a directory is never descended, so an in-tree link cannot import out-of-tree
+// files into this scope — the capability walk reports such a link as P6/symlinked-dir. .sort() is
 // load-bearing, not cosmetic — findings are emitted in loop order and readdirSync's order is
 // filesystem-dependent, so an unsorted scope would make one tree report in different orders on
 // different machines. Sorted, it is byte-identical in behavior to the four-name list it replaces.
@@ -597,7 +623,7 @@ function canonDirs() {
     if (!/^pharn-/.test(name)) continue;
     let st;
     try {
-      st = statSync(join(TARGET, "pharn", name));
+      st = lstatSync(join(TARGET, "pharn", name));
     } catch {
       continue;
     }
@@ -620,7 +646,13 @@ function walkExts(dir, exts, acc = []) {
     const p = join(dir, name);
     let st;
     try {
-      st = statSync(p);
+      st = lstatSync(p);
+      // A link is classified by its target, except that a link to a directory is never descended (L59); a link to a
+      // file is read through the link, as the capability walk reads one. A dangling link throws here and is skipped.
+      if (st.isSymbolicLink()) {
+        st = statSync(p);
+        if (st.isDirectory()) continue;
+      }
     } catch {
       continue;
     }
@@ -635,12 +667,11 @@ for (const d of CANON_DIRS) {
     if (isExcluded(file)) continue;
     const rel = relative(TARGET, file);
     const seen = new Set(); // one finding per stale checker per file, not one per occurrence
-    let text;
-    try {
-      text = readFileSync(file, "utf8");
-    } catch {
-      continue;
-    }
+    // Unguarded on purpose (7.3.0): this read used to `catch { continue }`, so an unreadable file in the canon scope (an
+    // EACCES eval judge, say) was skipped and the run could still print GREEN. A throw here reaches the crash handler
+    // at the top of the file — `FLOOR: INCONCLUSIVE — crashed (…)`, exit 2 — exactly as an unreadable capability does
+    // in the capability loop.
+    const text = readFileSync(file, "utf8");
     for (const m of text.matchAll(FLOOR_REF_RE)) {
       const base = m[1];
       if (seen.has(base)) continue;
@@ -661,9 +692,30 @@ for (const d of CANON_DIRS) {
 // ---------------------------------------------------------------------------
 // Report — findings in the canonical shape (ARCHITECTURE §8)
 const blocking = findings.filter((f) => f.severity === "blocking");
+
+// ZERO CAPABILITIES OVER MARKDOWN IS NOT A PASS (7.3.0, L34). When a capability root holds at least one listed `.md`
+// file and none of them declares a capability, "GREEN — 0 capabilities" certified a broken install (every lens file
+// empty, binary, or frontmatter-less) exactly as it certified a clean one. That case is INCONCLUSIVE, exit 2. The
+// "I expect nothing" case stays expressible: a tree with no capability root holding markdown — no pharn/ at all, or
+// only pharn/pharn-contracts (schemas, which carry no role) — is still GREEN over 0, and a RED stays a RED.
+// BOUND (P0): a root holding one valid capability beside garbage is GREEN over the one; a root whose only entries are
+// not `.md` files (a directory, a dangling link) lists no markdown and stays GREEN — 0.
+const CAPABILITY_ROOTS = ["pharn/pharn-review/", "pharn/pharn-pipeline/grillers/", "pharn/pharn-core/"];
+const markdownUnderRoots = allMd.some((file) => {
+  if (isExcluded(file)) return false;
+  const rel = relative(TARGET, file).split(sep).join("/");
+  return CAPABILITY_ROOTS.some((root) => rel.startsWith(root));
+});
+if (capabilities.length === 0 && blocking.length === 0 && markdownUnderRoots) {
+  console.log(
+    `FLOOR: INCONCLUSIVE — 0 capabilities among the markdown under pharn/pharn-review, pharn/pharn-pipeline/grillers or pharn/pharn-core in ${showPath(TARGET)}`
+  );
+  emit(2);
+}
+
 if (findings.length === 0) {
   console.log(`FLOOR: GREEN — ${capabilities.length} capabilities checked in ${showPath(TARGET)}`);
-  process.exit(0);
+  emit(0);
 }
 console.log(
   `FLOOR: ${blocking.length ? "RED" : "GREEN-with-warnings"} — ${findings.length} finding(s), ${capabilities.length} capabilities checked\n`
@@ -672,4 +724,4 @@ for (const f of findings) {
   console.log(`- [${f.severity}] ${f.rule_id}  ${f.file}`);
   console.log(`    ${f.problem}`);
 }
-process.exit(blocking.length ? 1 : 0);
+emit(blocking.length ? 1 : 0);

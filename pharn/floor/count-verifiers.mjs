@@ -11,9 +11,10 @@
 // — "monotonically unstable," not merely imprecise.
 //
 // Non-LLM, stdlib-only, fail-closed. It MIRRORS pharn/floor/validate.mjs (does not import — validate.mjs exports
-// nothing, it runs on load): the same file list + EXCLUDE_SEGMENTS capability surface AND the same
-// `parseFrontmatter` fence/line algorithm for reading `role` — so it counts EXACTLY the files validate.mjs
-// treats as role-bearing capabilities, byte-for-byte on all inputs (this is what closes
+// nothing, it runs on load): the same file list + EXCLUDE_SEGMENTS capability surface AND, since 7.3.0, the same
+// frontmatter reader (frontmatter-core.mjs `looseFrontmatter`) for reading `role` — so it counts the files validate.mjs
+// treats as role-bearing capabilities (the hand-mirrored copy before it claimed byte-for-byte agreement and lost every
+// CRLF key but the last, in both files alike; agreeing on the fence is what closes
 // verifier-membership-frontmatter REVIEW.md F1; see frontmatterRole below). Cite, don't restate (P4); a
 // separate file with its own single axis (P3): validate.mjs owns the structural floor verdict, this owns
 // the verifier-membership count.
@@ -21,11 +22,12 @@
 // Usage:  node pharn/floor/count-verifiers.mjs [targetDir]      (default: cwd)
 // Output: {"registered":<int>,"verifiers":[<repo-rel path>,...]} on stdout; exit 0 on success.
 //         Exits non-zero (writing NOTHING to stdout) if targetDir is missing / not a directory — never a
-//         silent 0 from looking in the wrong place (P5, fail-closed).
+//         silent 0 from looking in the wrong place (P5, fail-closed) — or (7.3.0) if a symlinked directory sits
+//         below pharn/, which the shared list does not descend.
 
 import { readFileSync, statSync, existsSync } from "node:fs";
-import { relative, sep } from "node:path";
-import { stripBom } from "./frontmatter-core.mjs";
+import { join, relative, sep } from "node:path";
+import { looseFrontmatter, looseScalar } from "./frontmatter-core.mjs";
 // The markdown list is the shared one (issue #407): git's tracked + untracked-not-ignored files, plus the target's
 // own pharn/, with the old walk as the fallback — capability-files-core.mjs's header holds the rule and its bounds.
 import { listMarkdownFiles } from "./capability-files-core.mjs";
@@ -60,28 +62,18 @@ function isExcluded(file) {
   return EXCLUDE_SEGMENTS.some((seg) => norm.includes(seg));
 }
 
-// The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none.
-// MIRRORS pharn/floor/validate.mjs `parseFrontmatter` EXACTLY (restricted to the `role` key): the same leading-BOM
-// strip (frontmatter-core.mjs `stripBom`, 6.65.2), then the same opening fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`), the same `slice(3, end).trim()`
-// block, the same `^([A-Za-z0-9_]+):\s*(.*)$` line parse, and the same `^["']|["']$` quote-strip. That
-// byte-for-byte sameness is what makes membership agree with the AUTHORITY on EVERY input — closing
-// REVIEW.md F1, where the prior strict `^---\r?\n` regex diverged from validate's loose opening fence on
-// >=4-dash openings. A `role:` line in the body (prose / code block) stays outside the parsed block, so it
-// is structurally unreachable (the enum-gated / free-text split is preserved). `role` is a scalar enum, so
-// validate's array branch (list-valued keys only) never applies to it; the last `role:` line wins, exactly
-// as validate's `fm[key] = val` overwrite does. Not an import of validate.mjs — it exports nothing (P4: cite); the
-// BOM strip is the shared core's.
+// The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none. Read through
+// frontmatter-core.mjs `looseFrontmatter` (7.3.0) — the ONE reader validate.mjs's `parseFrontmatter` also uses, so
+// membership agrees with the AUTHORITY on every input by construction (closing REVIEW.md F1's class for good: the
+// mirrored copy this replaced matched validate's >=4-dash fence but split lines on "\n" alone, losing every CRLF key but
+// the last). A displaced fence is read too, as validate counts it. A `role:` line in the body (prose / code block)
+// stays outside the parsed block, so it is structurally unreachable (the enum-gated / free-text split is preserved).
+// The last `role:` line wins, exactly as validate's `fm[key] = val` overwrite does.
 function frontmatterRole(rawText) {
-  const text = stripBom(rawText);
-  if (!text.startsWith("---")) return null;
-  const end = text.indexOf("\n---", 3);
-  if (end === -1) return null;
-  const raw = text.slice(3, end).trim();
+  const lf = looseFrontmatter(rawText);
+  if (!lf) return null;
   let role = null;
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (m && m[1] === "role") role = m[2].trim().replace(/^["']|["']$/g, "");
-  }
+  for (const { key, raw } of lf.entries) if (key === "role") role = looseScalar(raw);
   return role;
 }
 
@@ -91,8 +83,19 @@ function main() {
     return fail(`target dir not found (or not a directory): ${TARGET}`);
   }
 
+  // A symlinked directory below pharn/ is not descended (capability-files-core.mjs), so a verifier behind it would drop
+  // out of this registry with exit 0 while validate.mjs REDs it (P6/symlinked-dir). Refuse instead (7.3.0):
+  // stage-verify.mjs already treats a non-zero exit as "verifier membership was not read".
+  const listing = listMarkdownFiles(TARGET);
+  const linked = listing.linkedDirs.filter((d) => !isExcluded(join(d, "x")));
+  if (linked.length > 0) {
+    return fail(
+      `symlinked director${linked.length === 1 ? "y" : "ies"} below pharn/ not descended: ${linked.map((d) => JSON.stringify(relative(TARGET, d))).join(", ")} — replace each link with the directory itself, or remove it`
+    );
+  }
+
   const verifiers = [];
-  for (const file of listMarkdownFiles(TARGET).files) {
+  for (const file of listing.files) {
     if (isExcluded(file)) continue;
     let text;
     try {

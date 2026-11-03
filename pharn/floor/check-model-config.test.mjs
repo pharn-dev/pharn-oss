@@ -287,6 +287,38 @@ test("✧ ENF-3: BOM'd product commands are read as their clean twins (agreement
   }
 });
 
+// 7.3.0 (family-grammar-crlf): the hand copy split lines on "\n" alone, so in a CRLF command only the LAST key before
+// the closing fence survived — here `effort:`; `model:` sits above it and was lost, an agreeing command read as having
+// no model. Twin of the GREEN case with every command CRLF; the mismatch control proves `model:` is really read. A
+// DISPLACED fence (a blank line first) is read as no frontmatter, deliberately: Claude Code may not read it either.
+test("✧ CRLF product commands are read as their LF twins; a displaced fence reads as no frontmatter", () => {
+  const rewriteAll = (cmdDir, fn) => {
+    for (const f of readdirSync(cmdDir)) writeFileSync(join(cmdDir, f), fn(readFileSync(join(cmdDir, f), "utf8")));
+  };
+  const crlf = (s) => s.replace(/\n/g, "\r\n");
+  for (const [overrides, fn, status, mustMatch] of [
+    [{}, crlf, 0, /GREEN — config valid; 11\/11/],
+    [
+      { [PRODUCT_STAGES[0]]: { model: "haiku", effort: expected(VALID, PRODUCT_STAGES[0]).effort } },
+      crlf,
+      1,
+      /model "haiku" != config "opus"/,
+    ],
+    [{}, (s) => "\n" + s, 1, /has no `model:`/],
+  ]) {
+    const { dir, configPath } = withConfig(VALID);
+    try {
+      const cmdDir = writeCommands(dir, VALID, overrides);
+      rewriteAll(cmdDir, fn);
+      const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
+      assert.equal(r.status, status, r.stdout + r.stderr);
+      assert.match(r.stdout, mustMatch);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("agreement RED: EACH product stage, one at a time, with a mismatched model (the whole enumeration)", () => {
   // Per L29/L36 the deliverable is the enumeration: a single-stage assertion would read as discharged
   // while nine other map entries went unexercised.

@@ -9,8 +9,8 @@
 // at the grill stage, exactly as verifiers are to /verify.
 //
 // It MIRRORS pharn/floor/count-verifiers.mjs (the established membership-counter precedent,
-// verifier-membership-frontmatter) — the same file list + EXCLUDE_SEGMENTS capability surface AND the same
-// `frontmatterRole` fence/line algorithm (itself mirroring validate.mjs `parseFrontmatter`) — so it
+// verifier-membership-frontmatter) — the same file list + EXCLUDE_SEGMENTS capability surface AND, since 7.3.0,
+// the same frontmatter reader as validate.mjs (frontmatter-core.mjs `looseFrontmatter`) — so it
 // counts EXACTLY the files validate.mjs treats as role-bearing capabilities, differing ONLY in the enum
 // it tests (`griller`, not `verifier`). Cite, don't restate (P4); a separate file with its own single
 // axis (P3): count-verifiers.mjs owns verifier membership, this owns griller membership.
@@ -25,11 +25,12 @@
 // Usage:  node pharn/floor/count-grillers.mjs [targetDir]      (default: cwd)
 // Output: {"registered":<int>,"grillers":[<repo-rel path>,...]} on stdout; exit 0 on success.
 //         Exits non-zero (writing NOTHING to stdout) if targetDir is missing / not a directory — never a
-//         silent 0 from looking in the wrong place (P5, fail-closed).
+//         silent 0 from looking in the wrong place (P5, fail-closed) — or (7.3.0) if a symlinked directory sits
+//         below pharn/, which the shared list does not descend.
 
 import { readFileSync, statSync, existsSync } from "node:fs";
-import { relative, sep } from "node:path";
-import { stripBom } from "./frontmatter-core.mjs";
+import { join, relative, sep } from "node:path";
+import { looseFrontmatter, looseScalar } from "./frontmatter-core.mjs";
 // The markdown list is the shared one (issue #407): git's tracked + untracked-not-ignored files, plus the target's
 // own pharn/, with the old walk as the fallback — capability-files-core.mjs's header holds the rule and its bounds.
 import { listMarkdownFiles } from "./capability-files-core.mjs";
@@ -64,27 +65,17 @@ function isExcluded(file) {
   return EXCLUDE_SEGMENTS.some((seg) => norm.includes(seg));
 }
 
-// The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none.
-// MIRRORS pharn/floor/count-verifiers.mjs `frontmatterRole` EXACTLY (which mirrors validate.mjs
-// `parseFrontmatter`): the same leading-BOM strip (frontmatter-core.mjs `stripBom`, 6.65.2), then the same
-// opening fence (`startsWith("---")`), the same close (`indexOf("\n---", 3)`),
-// the same `slice(3, end).trim()` block, the same `^([A-Za-z0-9_]+):\s*(.*)$` line parse, and the same
-// `^["']|["']$` quote-strip. That byte-for-byte sameness is what makes membership agree with validate.mjs
-// on EVERY input. A `role:` line in the body (prose / code block) stays outside the parsed block, so it is
-// structurally unreachable. The ONLY behavioural difference in this whole file from count-verifiers.mjs is
-// the enum tested below (`griller`). Not an import of validate.mjs / count-verifiers.mjs — they export nothing (P4:
-// cite); the BOM strip is the shared core's.
+// The `role:` value declared INSIDE a file's `---`-fenced YAML frontmatter, or null if there is none. Read through
+// frontmatter-core.mjs `looseFrontmatter` (7.3.0) — the ONE reader validate.mjs and count-verifiers.mjs use, so
+// membership agrees with validate.mjs on every input by construction (the mirrored copy this replaced split lines on
+// "\n" alone and lost every CRLF key but the last). A displaced fence is read too, as validate counts it. A `role:`
+// line in the body (prose / code block) stays outside the parsed block, so it is structurally unreachable. The ONLY
+// behavioural difference in this whole file from count-verifiers.mjs is the enum tested below (`griller`).
 function frontmatterRole(rawText) {
-  const text = stripBom(rawText);
-  if (!text.startsWith("---")) return null;
-  const end = text.indexOf("\n---", 3);
-  if (end === -1) return null;
-  const raw = text.slice(3, end).trim();
+  const lf = looseFrontmatter(rawText);
+  if (!lf) return null;
   let role = null;
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (m && m[1] === "role") role = m[2].trim().replace(/^["']|["']$/g, "");
-  }
+  for (const { key, raw } of lf.entries) if (key === "role") role = looseScalar(raw);
   return role;
 }
 
@@ -94,8 +85,19 @@ function main() {
     return fail(`target dir not found (or not a directory): ${TARGET}`);
   }
 
+  // A symlinked directory below pharn/ is not descended (capability-files-core.mjs), so a griller behind it would drop
+  // out of this registry with exit 0 while validate.mjs REDs it (P6/symlinked-dir). Refuse instead (7.3.0):
+  // griller-extract.mjs already treats a non-zero exit as a refusal.
+  const listing = listMarkdownFiles(TARGET);
+  const linked = listing.linkedDirs.filter((d) => !isExcluded(join(d, "x")));
+  if (linked.length > 0) {
+    return fail(
+      `symlinked director${linked.length === 1 ? "y" : "ies"} below pharn/ not descended: ${linked.map((d) => JSON.stringify(relative(TARGET, d))).join(", ")} — replace each link with the directory itself, or remove it`
+    );
+  }
+
   const grillers = [];
-  for (const file of listMarkdownFiles(TARGET).files) {
+  for (const file of listing.files) {
     if (isExcluded(file)) continue;
     let text;
     try {

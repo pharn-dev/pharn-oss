@@ -56,6 +56,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **A capability saved with CRLF line endings, or with anything before its opening `---`, is no longer
+  silently "not a capability" (2026-11-03 review, HIGH).** Seven hand copies of validate.mjs's frontmatter parser
+  (validate, count-lenses, count-grillers, count-verifiers, check-model-config, and in `.dev` check-config and the
+  capability catalog) split lines on `\n` alone, so in a CRLF file every key but the last kept a `\r` and was lost.
+  Measured on a copy of this repo: `trust-fence.md` in CRLF gave `FLOOR: GREEN — 36 capabilities` (37 before) and
+  count-lenses 21 (22), both exit 0, so the lens left `/pharn-review`'s registry with every floor line green. A blank
+  line, a space, U+200B or a second BOM before `---` did the same. All seven now read through one reader,
+  `pharn/floor/frontmatter-core.mjs` `looseFrontmatter` (CRLF-tolerant). A fence after whitespace or an invisible
+  character is counted by validate and the three counters, and validate REDs it as `P6/frontmatter-offset`.
+  check-model-config and check-config still read such a fence as no frontmatter, because their subject is what Claude
+  Code reads from a command file. The existing "CRLF frontmatter registers" tests passed only because their fixtures
+  put `role:` on the last line; the new twins put it first. Closure tests now refuse an eighth copy of the fence or
+  of the line grammar. `griller-extract.mjs` keeps its own `kind:` reader, which already handled CRLF.
+- 2026-11-03: **validate.mjs no longer follows a symlinked directory out of the tree (review, MEDIUM).** A link
+  below `pharn/` to an outside directory used to be walked, adding that directory's capabilities to the count
+  (measured `RED — 3 finding(s), 38 capabilities`, the findings citing the outside file).
+  `pharn/floor/capability-files-core.mjs` now skips a link to a directory in both of its rules and reports the ones
+  strictly below `pharn/`. validate REDs each as `P6/symlinked-dir`, and count-lenses, count-grillers and
+  count-verifiers refuse with exit 1, so a lens behind a link no longer drops out of the registry. CHECK 8's walk
+  skips such links too. A `pharn` directory that is itself a link is still followed. A link to an `.md` file is still
+  read through the link. The module header claimed this bound before the code had it; it now states what the walk
+  does.
+- 2026-11-03: **validate.mjs no longer prints GREEN over zero capabilities when there was markdown to check (review,
+  overflow).** If `pharn/pharn-review`, `pharn/pharn-pipeline/grillers` or `pharn/pharn-core` holds markdown and none
+  of it declares a capability, validate prints `FLOOR: INCONCLUSIVE — 0 capabilities …` and exits 2. A tree with only
+  `pharn/pharn-contracts`, or no `pharn/pharn-*` at all, stays `GREEN — 0`. Three CHECK 8 tests that expected GREEN
+  from a role-less canon doc now use a real capability; what they assert is unchanged.
+- 2026-11-03: **An unreadable file in validate's CHECK 8 scope is INCONCLUSIVE instead of skipped (review,
+  overflow).** That read used to `catch { continue }`. Now it ends `FLOOR: INCONCLUSIVE — crashed (…)`, exit 2, as an
+  unreadable capability already did. The report also said an unreadable capability was skipped silently. It was not:
+  the capability loop already crashed to INCONCLUSIVE (TST-10).
+- 2026-11-03: **validate.mjs ends through `process.exitCode`, not `process.exit()` after printing (review,
+  overflow).** It joins `pharn/floor/cli-stdout-flush.test.mjs`'s set with a new form, `sentinel-uncaught`, and a
+  pipe test now shows a RED report over 64 KiB arriving whole. The crash line is written with
+  `process.stdout.write`, so a broken console cannot turn the INCONCLUSIVE verdict into a second throw.
 - 2026-11-03: **A write guard that cannot start, or that times out, now blocks the write on Claude Code 2.1.295 or
   later.** `.claude/settings.json` adds `"onFailure": "block"` to both `PreToolUse` guard handlers
   (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`). Before, a wrong path, a missing `node`, a crash before

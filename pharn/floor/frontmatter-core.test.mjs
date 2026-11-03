@@ -10,7 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -19,9 +19,13 @@ import { tmpdir } from "node:os";
 import {
   BULLET_FIELD_LINE_RE,
   FM_RE,
+  LOOSE_FIELD_LINE_RE,
   describeRepeats,
   fieldEntries,
   frontmatterEntries,
+  looseFrontmatter,
+  looseScalar,
+  looseValue,
   stripBom,
   matchFrontmatter,
   readField,
@@ -62,15 +66,24 @@ const CONSUMERS = [
 
 // A module that tests the frontmatter fence, by any of the spellings the floor uses: the shared anchor, the matcher,
 // the loose `startsWith("---")` of the validate.mjs family, or a private regex literal anchored on `^---`.
-// Since 6.71.3 a call to frontmatterEntries counts too: it reads through matchFrontmatter.
-const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|\bfrontmatterEntries\(|startsWith\("---"|\/\^---/;
-// A module that strips the BOM before that test: it calls stripBom, or reads through matchFrontmatter (which does) or
-// frontmatterEntries (which calls matchFrontmatter).
-const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(|\bfrontmatterEntries\(/;
-// The `key: value` line grammar as a regex literal: `^(` or `^-[ \t]+(` followed by the `[A-Za-z_]` key class. It
-// matches FIELD_LINE_RE, BULLET_FIELD_LINE_RE and the key-class variants the retired copies used; it deliberately does
-// not match validate.mjs's family grammar `^([A-Za-z0-9_]+):`, a separate, mirrored model (see the core's header).
-const LINE_GRAMMAR_RE = /\^(?:-\[ \\t\]\+)?\(\[A-Za-z_\]/;
+// Since 6.71.3 a call to frontmatterEntries counts too: it reads through matchFrontmatter. Since 7.3.0 a call to
+// looseFrontmatter counts too: it is the loose family's one reader.
+const ANCHOR_IDIOM_RE = /\bFM_RE\b|\bmatchFrontmatter\(|\bfrontmatterEntries\(|\blooseFrontmatter\(|startsWith\("---"|\/\^---/;
+// A module that strips the BOM before that test: it calls stripBom, or reads through matchFrontmatter (which does),
+// frontmatterEntries (which calls matchFrontmatter) or looseFrontmatter (which calls stripBom).
+const APPLIES_STRIP_RE = /\bstripBom\(|\bmatchFrontmatter\(|\bfrontmatterEntries\(|\blooseFrontmatter\(/;
+// The `key: value` line grammar as a regex literal: `^(` or `^-[ \t]+(` followed by the `[A-Za-z_]` key class — or,
+// since 7.3.0, validate.mjs's family class `[A-Za-z0-9_]`, whose seven hand copies now live in the core as
+// LOOSE_FIELD_LINE_RE. Until then this predicate deliberately missed the family grammar, and the copies it let stand
+// were the ones that split CRLF wrongly.
+const LINE_GRAMMAR_RE = /\^(?:-\[ \\t\]\+)?\(\[A-Za-z(?:0-9)?_\]/;
+// The loose family's fence test. Since 7.3.0 only the core (excluded from nonTestFloorModules) and the one allowlisted
+// module below may spell it; every other loose reader calls looseFrontmatter.
+const LOOSE_FENCE_RE = /startsWith\("---"\)/;
+// griller-extract.mjs's `frontmatterKind` reads ONE key with its own rule (it refuses a repeated `kind:`, which
+// fieldEntries leaves to the caller) and is already CRLF-tolerant (`[ \t\r]*$`); a displaced fence reads `kind-missing`
+// there, which loads the griller with fewer sections omitted — the fail-safe side. Kept, and named here.
+const LOOSE_FENCE_ALLOWLIST = ["griller-extract.mjs"];
 // The one module allowed its own line grammar, and why. instruction-files-core.mjs walks a NESTED YAML block mapping
 // (`paths:` with indented items) in a Claude Code rule file — TOP_KEY_RE and NESTED_KEY_RE — which the flat
 // `fieldEntries` does not model; it reads flat lines with the core's FIELD_LINE_RE.
@@ -198,15 +211,33 @@ test("✧ CLOSURE (6.65.2): no non-test floor module but the core declares the `
   assert.match(readFileSync(join(HERE, "frontmatter-core.mjs"), "utf8"), LINE_GRAMMAR_RE, "non-vacuity: the pattern finds the core's own");
 });
 
-test("✧ the line-grammar predicate DISCRIMINATES (L60): every retired spelling is caught; validate's family grammar is not", () => {
+test("✧ the line-grammar predicate DISCRIMINATES (L60): every retired spelling is caught, the family grammar too (7.3.0)", () => {
   const retired = [
     String.raw`const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);`,
     String.raw`const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);`,
     String.raw`const kv = line.match(/^([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/);`,
     String.raw`const kv = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);`,
+    String.raw`const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);`,
   ];
   for (const src of retired) assert.match(src, LINE_GRAMMAR_RE, src);
-  assert.doesNotMatch(String.raw`const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);`, LINE_GRAMMAR_RE);
+  assert.doesNotMatch(
+    String.raw`const m = line.match(/^kind:[ \t]*(.*?)[ \t\r]*$/);`,
+    LINE_GRAMMAR_RE,
+    "a single-key reader is not a grammar"
+  );
+});
+
+test("✧ CLOSURE (7.3.0): no non-test floor module but the core tests the loose fence (one allowlisted)", () => {
+  const holders = nonTestFloorModules().filter((f) => LOOSE_FENCE_RE.test(readFileSync(join(HERE, f), "utf8")));
+  assert.deepEqual(
+    holders.filter((f) => !LOOSE_FENCE_ALLOWLIST.includes(f)),
+    [],
+    "read a loose frontmatter block with frontmatter-core.mjs looseFrontmatter, never a hand copy of the fence"
+  );
+  for (const f of LOOSE_FENCE_ALLOWLIST) assert.ok(holders.includes(f), `${f} is allowlisted but no longer tests the fence`);
+  assert.match(readFileSync(join(HERE, "frontmatter-core.mjs"), "utf8"), LOOSE_FENCE_RE, "non-vacuity: the core's own");
+  assert.match('if (!text.startsWith("---")) return null;', LOOSE_FENCE_RE);
+  assert.doesNotMatch("const lf = looseFrontmatter(text);", LOOSE_FENCE_RE);
 });
 
 test("✧ the consumer list is not empty and names only files that exist", () => {
@@ -424,4 +455,109 @@ test("✧ CLOSURE: no other non-test floor module declares its own frontmatter v
     /export function readValue\(/,
     "non-vacuity: the pattern finds the core's own"
   );
+});
+
+// ── The LOOSE family's one reader (7.3.0, family-grammar-crlf): looseFrontmatter / looseScalar / looseValue ──────────
+// The defect: seven hand copies split lines on "\n" alone, so in a CRLF file every key but the LAST kept a "\r" that
+// `(.*)$` could not pass, and a capability whose `role:` was not its last key was "not a capability". The fixtures below
+// therefore put `role:` FIRST (L60: a fixture with `role:` last is the one alphabet the defect cannot fail).
+
+const LOOSE = '---\nrole: lens\nname: x\napplies: [universal, "spa"]\n---\n\n# Body\n';
+const crlfOf = (s) => s.replace(/\n/g, "\r\n");
+const DISPLACED_LEADS = { "a blank line": "\n", "a space": " ", "U+200B": "​", "a second BOM": BOM + BOM };
+
+test("✧ looseFrontmatter: a CRLF block reads every key as its LF twin does (role first, not last)", () => {
+  const lf = looseFrontmatter(LOOSE);
+  assert.deepEqual(
+    lf.entries.map((e) => e.key),
+    ["role", "name", "applies"]
+  );
+  assert.equal(lf.displaced, false);
+  const crlf = looseFrontmatter(crlfOf(LOOSE));
+  assert.deepEqual(
+    crlf.entries.map((e) => [e.key, looseScalar(e.raw)]),
+    lf.entries.map((e) => [e.key, looseScalar(e.raw)])
+  );
+  assert.deepEqual(looseFrontmatter(BOM + crlfOf(LOOSE)).entries, crlf.entries, "BOM + CRLF, the same editor class");
+  // The mutant: the retired split. Only the last key survives it, which is the defect this reader removes.
+  const raw = crlfOf(LOOSE).slice(3, crlfOf(LOOSE).indexOf("\n---", 3)).trim();
+  const old = raw
+    .split("\n")
+    .map((l) => l.match(/^([A-Za-z0-9_]+):\s*(.*)$/))
+    .filter(Boolean)
+    .map((m) => m[1]);
+  assert.deepEqual(old, ["applies"], "control: the retired split loses every CRLF key but the last");
+});
+
+test("✧ looseFrontmatter: a fence after whitespace or an invisible character is read and flagged displaced", () => {
+  for (const [name, lead] of Object.entries(DISPLACED_LEADS)) {
+    const r = looseFrontmatter(lead + LOOSE);
+    assert.ok(r, `${name}: the displaced block must be read`);
+    assert.equal(r.displaced, true, name);
+    assert.deepEqual(r.entries, looseFrontmatter(LOOSE).entries, name);
+  }
+  assert.equal(looseFrontmatter(BOM + LOOSE).displaced, false, "ONE leading BOM is an encoding mark, not displacement");
+});
+
+test("looseFrontmatter: the loose model otherwise unchanged — `----` opens, no fence or no close is null, non-string null", () => {
+  assert.deepEqual(
+    looseFrontmatter("----\nrole: lens\n---\n").entries.map((e) => e.key),
+    ["role"]
+  );
+  assert.equal(looseFrontmatter("# no frontmatter\n\nrole: lens\n"), null);
+  assert.equal(looseFrontmatter("x---\nrole: lens\n---\n"), null, "a letter before the fence is not displacement");
+  assert.equal(looseFrontmatter("---\nrole: lens\n"), null, "an unterminated fence");
+  assert.equal(looseFrontmatter(null), null);
+  assert.equal(looseFrontmatter("---\nrole: lens\n---\nBODY").body, "\nBODY");
+});
+
+test("looseScalar / looseValue: validate.mjs's value rules, and the grammar is the family's", () => {
+  assert.equal(looseScalar('  "lens" '), "lens");
+  assert.deepEqual(looseValue('[universal, "spa", ]'), ["universal", "spa"]);
+  assert.equal(looseValue("'x'"), "x");
+  assert.match("2fa: on", LOOSE_FIELD_LINE_RE, "a leading digit is a key in this family");
+  assert.doesNotMatch("a-b: x", LOOSE_FIELD_LINE_RE, "a `-` is not");
+});
+
+// THE FAMILY, EXECUTED (L29): every CLI that counts capabilities through the loose reader, each over the same variants.
+// validate.mjs must count each variant as its LF twin and RED the displaced ones; the counters must register them all,
+// so membership and validate's count stay equal.
+const LOOSE_FAMILY_CLIS = [
+  { file: "count-lenses.mjs", role: "lens", key: "lenses" },
+  { file: "count-grillers.mjs", role: "griller", key: "grillers" },
+  { file: "count-verifiers.mjs", role: "verifier", key: "verifiers" },
+];
+
+test("✧ the loose family (validate + the three counters): CRLF counts as LF; a displaced fence counts and REDs validate", () => {
+  const capOf = (role) => `---\nrole: ${role}\nname: sample\nkind: pharn-owned\napplies: ["universal"]\nversion: 0.1.0\n---\n\n# Sample\n`;
+  const variants = {
+    lf: (s) => s,
+    crlf: crlfOf,
+    ...Object.fromEntries(Object.entries(DISPLACED_LEADS).map(([n, l]) => [n, (s) => l + s])),
+  };
+  for (const { file, role, key } of LOOSE_FAMILY_CLIS) {
+    for (const [name, mutate] of Object.entries(variants)) {
+      const dir = mkdtempSync(join(tmpdir(), "fm-family-"));
+      try {
+        mkdirSync(join(dir, "caps/sample/evals/cases"), { recursive: true });
+        mkdirSync(join(dir, "caps/sample/evals/expected"), { recursive: true });
+        writeFileSync(join(dir, "caps/sample/sample.md"), mutate(capOf(role)));
+        writeFileSync(join(dir, "caps/sample/evals/cases/c.md"), "# case\n");
+        writeFileSync(join(dir, "caps/sample/evals/expected/e.md"), "# expected\n");
+        const c = spawnSync(process.execPath, [join(HERE, file), dir], { encoding: "utf8" });
+        assert.equal(c.status, 0, `${file} ${name}: ${c.stderr}`);
+        assert.deepEqual(JSON.parse(c.stdout)[key], ["caps/sample/sample.md"], `${file} ${name}: registered`);
+        const v = spawnSync(process.execPath, [join(HERE, "validate.mjs"), dir], { encoding: "utf8" });
+        assert.match(v.stdout, /\b1 capabilities checked/, `validate ${role} ${name}: counted\n${v.stdout}`);
+        if (name === "lf" || name === "crlf") {
+          assert.equal(v.status, 0, `validate ${role} ${name}: GREEN\n${v.stdout}`);
+        } else {
+          assert.equal(v.status, 1, `validate ${role} ${name}: RED\n${v.stdout}`);
+          assert.match(v.stdout, /- \[blocking\] P6\/frontmatter-offset {2}caps\/sample\/sample\.md/, `${role} ${name}`);
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  }
 });

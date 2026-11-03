@@ -53,7 +53,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { stripBom } from "../../pharn/floor/frontmatter-core.mjs";
+import { looseFrontmatter, looseScalar } from "../../pharn/floor/frontmatter-core.mjs";
 
 // Enums — every branch is a presence / enum / equality membership test (P5); the terminal fallback on any
 // non-member is a loud RED, never a guess. These mirror the Claude Code model/effort surface (sub-agents +
@@ -151,22 +151,18 @@ function resolveStage(stages, stage) {
   return { model: entry.model, effort: entry.effort };
 }
 
-// Parse a command file's frontmatter `model:`/`effort:` — mirrors count-grillers.mjs `frontmatterRole`
-// (the same `---` fence + `^([A-Za-z0-9_]+):\s*(.*)$` line parse + quote-strip), so `model_tier:` (a
-// different key) is never mistaken for `model:`. Not an import — those files export nothing (P4: cite). One leading
-// BOM is stripped first through the product core's `stripBom` (6.65.2), as count-grillers.mjs now does.
+// Parse a command file's frontmatter `model:`/`effort:` through the product core's `looseFrontmatter` (7.3.0) — the
+// one loose reader count-grillers.mjs and pharn/floor/check-model-config.mjs share — so `model_tier:` (a different key)
+// is never mistaken for `model:`, one leading BOM is stripped (6.65.2) and CRLF lines are read (the hand copy this
+// replaced split on "\n" alone). A DISPLACED fence reads as no frontmatter, as in check-model-config.mjs: the subject is
+// what Claude Code reads from the command file.
 function frontmatterModelEffort(rawText) {
-  const text = stripBom(rawText);
-  if (!text.startsWith("---")) return {};
-  const end = text.indexOf("\n---", 3);
-  if (end === -1) return {};
-  const raw = text.slice(3, end).trim();
+  const lf = looseFrontmatter(rawText);
+  if (!lf || lf.displaced) return {};
   const out = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (!m) continue;
-    if (m[1] === "model") out.model = m[2].trim().replace(/^["']|["']$/g, "");
-    else if (m[1] === "effort") out.effort = m[2].trim().replace(/^["']|["']$/g, "");
+  for (const { key, raw } of lf.entries) {
+    if (key === "model") out.model = looseScalar(raw);
+    else if (key === "effort") out.effort = looseScalar(raw);
   }
   return out;
 }
