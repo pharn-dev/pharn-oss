@@ -25,6 +25,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- 2026-11-03: **A pull request that changes product files must carry a green `/pharn-dev-ship` record.** The new
+  per-PR check `npm run check:ship-record` (`.dev/floor/check-ship-record.mjs`, a CI step on pull requests) REDs a PR
+  that changes a bump-triggering product path unless a `.dev/features/<name>/SHIP.md` in it records a green run: the
+  new five-line verdict block, ending `run-ended: GATE 2`, beside a `verify-report.json` that reads `PASS` from the
+  stamp path and a `regression-report.json` that reads `no-regressions`. It also REDs any record in the PR that shows a
+  run which stopped on a red verdict. The four trusted docs are exempt, because only a human edits them. It checks
+  presence, not coverage: one green record satisfies a PR, so a PR can still carry product changes no record covers,
+  and a record agreeing with its reports is not proof the stages ran. Found by the 2026-11-03 review: #377, #385, #391
+  and #392 merged past a red verify, a hand-substituted map, or no stage run at all. Dev apparatus only, so no
+  `SKILLS_VERSION` bump.
 - 2026-11-03: **New ✧ pins for CI wiring and command vocabulary** (audit 2026-11-03). `.dev/floor/ci-steps.test.mjs`
   pins that `ci.yml` runs `node pharn/floor/validate.mjs .` and `npm run check:markers` under the install-gated `if:`
   and that `floor.yml` runs the validator unconditionally, with a negative control (a step set to `if: false`, deleted,
@@ -36,6 +46,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-03: **`/pharn-dev-verify` takes its gate map from the gate runner, and `/pharn-dev-ship` never proceeds past
+  a red verdict.** `/pharn-dev-verify` now runs its gates through `pharn/floor/run-gates.mjs` and validates the stamp
+  with `check-verify.mjs --stamp`, as `/pharn-verify` does. A hand-typed map, a dropped gate, or a gate re-measured in
+  another tree is refused, and the verdict gains INCOMPLETE (a declared file is missing) and "gate not measured" (a
+  timed-out gate). Its gate calls run in the background with a one-hour timeout per gate, because this repo's own
+  `npm test` takes longer than a foreground call allows (586 s on CI). `/pharn-dev-ship` says that delegation covers GATE 1 and GATE 2 only, never a red floor verdict. It
+  also writes the verdict block into `SHIP.md`. `/pharn-dev-review` no longer says a finding "blocks" the increment:
+  no checker reads `REVIEW.md`. The dev verify and review commands run their formatters with `npx --no-install`. Dev
+  apparatus only, so no `SKILLS_VERSION` bump.
 - 2026-11-03: **Reconcile always checks `.github/workflows/` and `.github/actions/`** (audit 2026-11-03, BLOCKER fix 3).
   They join `always_reconciled.prefixes` in `pharn/floor/reconcile-ignore.json`, so in every project a change there is
   compared against HEAD's committed blobs, with or without a baseline. That covers an added file too, and a forged
@@ -72,6 +91,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- 2026-11-03: **The gate runner no longer passes its own `PHARN_TEST_RESULTS` path down to a gate that has no
+  results file, and `check-verify.mjs --stamp` refuses a results map wherever it stands.** `pharn/floor/run-gates.mjs`
+  removes an inherited `PHARN_TEST_RESULTS` when it spawns a process with no results file; before, a suite run as a
+  gate inside another run handed its children the outer run's path, which turned a run-gates test red the first time
+  `/pharn-dev-verify` ran this repo's suite through the runner. `pharn/floor/check-verify.mjs` on the stamp path now
+  refuses a positional results map in any position; before, only a leading one was refused and one placed after the
+  flags was silently not read (the stamp alone decided, so no verdict changed). `/pharn-dev-plan` now says a plan's
+  `## Files` never declares a later stage's own artifacts. Found by this batch's dev verify running on itself.
 - 2026-11-03: **One lesson-heading grammar: a `## L<n>` inside a fenced block or an HTML comment is no longer a lesson**
   (review 2026-11-03, MEDIUM). `check-plan-lessons.mjs`, the lessons index (`lessons-index-core.mjs`, so both
   `gen-lessons-index.mjs` and `check-lessons-index.mjs`) and `check-provenance.mjs` each scanned canon line by line

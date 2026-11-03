@@ -164,11 +164,12 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live
-  (`npm test`), never assert it from this doc (P6). Two per-PR gates are deliberately **outside** the
+  (`npm test`), never assert it from this doc (P6). Three per-PR gates are deliberately **outside** the
   chain because each needs a base to compare against: `npm run check:changelog-entry`
-  (`.dev/floor/check-changelog-entry.mjs`, the CHANGELOG diff) and `npm run check:surface-bump`
-  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`). CI runs both on pull requests
-  only, against the merge commit's first parent.
+  (`.dev/floor/check-changelog-entry.mjs`, the CHANGELOG diff), `npm run check:surface-bump`
+  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`) and `npm run check:ship-record`
+  (`.dev/floor/check-ship-record.mjs`, product paths vs a green `/pharn-dev-ship` record). CI runs all three on pull
+  requests only, against the merge commit's first parent.
 - `node pharn/floor/validate.mjs .` reports `GREEN` over the product surface — the `pharn/pharn-review/*`
   code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and the `pharn/pharn-core/` skills
   (`seam-resolver/`, `installed-skill-selection/`), over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.

@@ -145,6 +145,15 @@ Two checks hold these rules. Both read the file through one shared grammar, [`.d
 
   It checks only that `SKILLS_VERSION` moved. The new version's CHANGELOG section is checked by the two checks above, and the size of the bump is not checked at all.
 
+- **`check:ship-record`** — **not** in `npm run check`, for the same reason. It REDs a PR that changes the same product paths (the four trusted docs aside, which only a human edits) unless a `.dev/features/<name>/SHIP.md` in the PR records a green `/pharn-dev-ship` run: the verdict block `/pharn-dev-ship` Step 3 writes, ending `run-ended: GATE 2`, beside a `verify-report.json` that reads `PASS` and a `regression-report.json` that reads `no-regressions`. It also REDs any `SHIP.md` in the PR that records a run which stopped on a red verdict. A product change has no light mode. Run it the same way, after fetching:
+
+  ```bash
+  git fetch --no-tags origin main
+  npm run check:ship-record
+  ```
+
+  It checks presence, not coverage: one green record satisfies the PR, even if the PR also carries product changes that record does not cover. A green record that agrees with its reports is not proof the stages ran.
+
 What the checks do **not** prove: that an entry describes its change, that a date is when anything merged (it is the date you wrote), or that a bump was needed or the right size. The per-PR checks are also bounded in four ways:
 
 - It does not see direct pushes to `main`.

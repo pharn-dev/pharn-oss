@@ -485,6 +485,29 @@ node .dev/floor/check-version-badge.mjs [target-dir]
 node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
 ```
 
+## `check-ship-record.mjs` — a green dev-chain record for product paths, per PR
+
+```bash
+# RED when a PR changes a bump-triggering product path (check-surface-bump.mjs's readBase + isProductSurface, imported,
+# minus the four human-only trusted docs) and no .dev/features/<name>/SHIP.md in the diff records a GREEN /pharn-dev-ship
+# run, or when any SHIP.md in it records a STOP or a non-green verdict (7.3.0, dev-verdict-discipline; review
+# 2026-11-03: #377, #385, #391 and #392 merged past a red verdict, a hand-substituted map or no stage run at all).
+# FLOOR (enum/regex, primitive #3): a record's verdict block is its column-0 `verdict-grill` / `verdict-build` /
+# `verdict-regress` / `verdict-verify` / `run-ended` lines outside code fences, one closed grammar (BLOCK_KEYS,
+# BLOCK_TEMPLATES — /pharn-dev-ship Step 3 spells it, command-hygiene.test.mjs binds the spelling); a green block must
+# match its directory's verify-report.json (PASS, this feature, a gate_run.stamp_sha256) and regression-report.json
+# (no-regressions). A SHIP.md with no block (every record before 7.3.0) is legacy: neither green nor red.
+# Closed refusal set: BAD_USAGE | BASE_UNREADABLE | HEAD_UNREADABLE (exit 2), NO_SHIP_RECORD | RECORD_MALFORMED |
+# RECORD_NOT_GREEN | REPORT_MISMATCH (exit 1).
+# BOUNDS, stated plainly (GATE 1 asked for the first): PRESENCE, NOT COVERAGE — one green record satisfies a PR, so a PR
+# can carry product changes no record covers (a batch PR passes on one feature's record; a legacy record rides along).
+# AGREEMENT, NOT PROVENANCE (L43) — committed records against committed reports; stamp_sha256 is a SHAPE check (the
+# stamp is gitignored, absent in CI). A PR runs its own copy of this checker and of ci.yml; admin merges and direct
+# pushes bypass it. Wired as `check:ship-record` (NOT in `npm run check` — it needs a base) and as the ci.yml step
+# "Dev-chain record check"; both pinned, and the CI run block executed, by its test. Apparatus: no SKILLS_VERSION bump.
+node .dev/floor/check-ship-record.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
+```
+
 ## `check-contributing-gates.mjs` — CONTRIBUTING gate list
 
 ```bash

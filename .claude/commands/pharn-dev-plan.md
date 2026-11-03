@@ -218,6 +218,12 @@ that single file (`.dev/features/<name>/PLAN.md`), so this path is writable:
 - <question>
 ```
 
+**`## Files` names what `/pharn-dev-build` writes — never a later stage's own artifact.** Do not declare this
+feature's `VERIFY.md`, `verify-report.json`, `REVIEW.md` or `SHIP.md` there. `/pharn-dev-verify` requires every
+concrete `## Files` path to exist when it runs (its completeness capture), and those four are written by verify itself
+and the stages after it, so declaring them makes verify read INCOMPLETE. Each is written under its own stage's scope
+and is a reconcile pipeline artifact, so the build never needs them (7.3.0, dev-verdict-discipline).
+
 ## Step 4 — Check the lessons declaration (FLOOR), then halt (P6)
 
 **First, self-check the declaration you just wrote** and branch **only** on its exit code (a membership

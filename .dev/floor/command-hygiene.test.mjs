@@ -49,6 +49,7 @@ import {
 } from "../../pharn/floor/stage-agent-core.mjs";
 import { DIRECT_STAGES, setterArgv } from "../../pharn/floor/stage-direct-core.mjs";
 import { allParts, commandFamilyText } from "./command-family.mjs";
+import { BLOCK_TEMPLATES } from "./check-ship-record.mjs";
 
 const COMMANDS_DIR = new URL("../../.claude/commands/", import.meta.url).pathname;
 
@@ -170,8 +171,9 @@ test("✧ the SKIP region is honored, and only inside its markers", () => {
 const NPX_TOOL_RE = /\bnpx\s+(?:--\S+\s+)*(prettier|markdownlint-cli2|eslint)\b/;
 const NPX_NO_INSTALL_RE = /\bnpx\s+--no-install\s+(prettier|markdownlint-cli2|eslint)\b/;
 // 7.3.0 lesson-heading-parser: pharn-dev-memory-promote.md left the set — its only npx lines (a canon `--check`) were
-// removed, since both canon dirs are in the formatters' ignore files.
-const NPX_PENDING = new Set(["pharn-dev-build.md", "pharn-dev-review.md", "pharn-dev-verify.md"]);
+// removed, since both canon dirs are in the formatters' ignore files. 7.3.0 dev-verdict-discipline: pharn-dev-review.md
+// and pharn-dev-verify.md left it — their formatter lines now carry --no-install.
+const NPX_PENDING = new Set(["pharn-dev-build.md"]);
 const npxOffenders = (text) =>
   text.split(/\r?\n/).filter((l) => !l.trimStart().startsWith("#") && NPX_TOOL_RE.test(l) && !NPX_NO_INSTALL_RE.test(l));
 
@@ -3380,11 +3382,17 @@ test("★ LOOP QUICK: the committed scope line STOPs on a changed file outside t
 const GATE_RUN_WIRING = [
   // 6.18.0: /pharn-test's red run. Its pinned lines are also EXECUTED by pharn/floor/check-red-run.test.mjs (L45).
   { file: "pharn-test.md", stage: "ac-test", out: "pharn/.run/pharn-test/gates" },
+  // 7.3.0 (dev-verdict-discipline, review 2026-11-03): the dev verify twin joined — its hand-typed map is what a
+  // substituted gate value passed through. Its verdict line is EXECUTED by .dev/floor/dev-verify-stamp.test.mjs (L45).
+  // `background: true` — its `run --next` calls run with the Bash tool's `run_in_background`, so the 600 s foreground
+  // cap does not bound --timeout-ms (this repo's `npm test` measured 586 s on CI and 2,580 s on a loaded host); the
+  // rule below then requires the command to SAY so and holds the timeout to one hour instead.
+  { file: "pharn-dev-verify.md", stage: "verify", out: "pharn/.run/pharn-dev-verify/gates", background: true },
 ];
 
 test("✧ L34 — the gate-run wiring set is NON-EMPTY (every rule below would otherwise be vacuous)", () => {
   assert.ok(GATE_RUN_WIRING.length > 0, "GATE_RUN_WIRING is empty");
-  assert.equal(GATE_RUN_WIRING.length, 1, "non-vacuity: the wired set is counted, not merely iterated");
+  assert.equal(GATE_RUN_WIRING.length, 2, "non-vacuity: the wired set is counted, not merely iterated");
 });
 
 test("✧ no fenced block in a gate-run-wired command CAPTURES an exit code by hand (`<var>=$?`)", () => {
@@ -3424,7 +3432,7 @@ test("✧ the `=$?` rule DISCRIMINATES — it fires on the REAL pre-fix text", (
 });
 
 test("✧ every gate-run-wired command INVOKES the runner — init AND the run --next drain", () => {
-  for (const { file, stage, out } of GATE_RUN_WIRING) {
+  for (const { file, stage, out, background } of GATE_RUN_WIRING) {
     const body = commandBody(file);
     assert.match(
       body,
@@ -3441,7 +3449,14 @@ test("✧ every gate-run-wired command INVOKES the runner — init AND the run -
     const m = body.match(/run-gates\.mjs run --next[^\n]*--timeout-ms (\d+)/);
     assert.ok(m, `${file} has no pinned --timeout-ms`);
     const ms = Number(m[1]);
-    assert.ok(ms > 0 && ms < 600000, `${file} pins --timeout-ms ${ms}, which must sit UNDER Claude Code's 600000 ms Bash maximum`);
+    if (background) {
+      // A background call has no Bash cap; the command must say it runs the drain in the background, and the runner's
+      // own timeout is held to one hour so a hung gate is still killed.
+      assert.match(body, /`run_in_background: true`/, `${file} must tell the reader to run run --next in the background`);
+      assert.ok(ms > 0 && ms <= 3600000, `${file} pins --timeout-ms ${ms}, over the one-hour bound for a background drain`);
+    } else {
+      assert.ok(ms > 0 && ms < 600000, `${file} pins --timeout-ms ${ms}, which must sit UNDER Claude Code's 600000 ms Bash maximum`);
+    }
   }
 });
 
@@ -3476,15 +3491,155 @@ test("✧ CLOSURE — a command that invokes run-gates.mjs but is NOT in GATE_RU
   assert.deepEqual(strays, [], `these commands invoke run-gates.mjs but are not in GATE_RUN_WIRING: ${strays.join(", ")}`);
 });
 
-test("✧ the dev twins stay FLAG-LESS — no dev command invokes the runner or the stamp flags", () => {
-  // Stated as a test because "out of scope" in a plan is not a property of the shipped tree.
+test("✧ the OTHER dev twins stay FLAG-LESS — only a GATE_RUN_WIRING member invokes the runner or the stamp flags", () => {
+  // Stated as a test because "out of scope" in a plan is not a property of the shipped tree. Until 7.3.0 this held
+  // for every dev command; /pharn-dev-verify then joined GATE_RUN_WIRING (the stamp refuses a hand-typed map), and
+  // /pharn-dev-regress stays positional by decision (dev-verdict-discipline GATE 1, decision 4).
+  const listed = new Set(GATE_RUN_WIRING.map((c) => c.file));
   const strays = [];
   for (const file of readdirSync(COMMANDS_DIR)) {
-    if (!file.startsWith("pharn-dev-") || !file.endsWith(".md")) continue;
+    if (!file.startsWith("pharn-dev-") || !file.endsWith(".md") || listed.has(file)) continue;
     const body = commandBody(file);
     if (/run-gates\.mjs|--base-stamp|--head-stamp|check-verify\.mjs --stamp/.test(body)) strays.push(file);
   }
   assert.deepEqual(strays, [], `a dev command picked up the gate-run surface: ${strays.join(", ")}`);
+  assert.ok(listed.has("pharn-dev-verify.md"), "premise: the dev verify twin is a wired member");
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// ✧ DEV VERDICT DISCIPLINE (7.3.0, review 2026-11-03 HIGH "the practised dev loop has merged past red floor
+// verdicts"). Three surfaces, each pinned with a mutant it must catch (L4/L60): /pharn-dev-verify's map is the
+// runner's (no hand assembly survives, the five --gates ids stay), /pharn-dev-ship's STOP is not delegable and its
+// SHIP.md verdict block spells only the checker's grammar (L29/L36), and /pharn-dev-review no longer says a finding
+// "blocks". Honest scope: these read command TEXT; they cannot prove a run obeyed it — that backstop is
+// .dev/floor/check-ship-record.mjs at the pull request.
+// ---------------------------------------------------------------------------------------------------------------
+
+const DEV_VERIFY_GATE_IDS = ["test", "validate", "lint", "format:check", "lint:md"];
+const devVerifyInitLine = (body) => body.split("\n").find((l) => /^node pharn\/floor\/run-gates\.mjs init --stage verify\b/.test(l));
+/** The ids the committed init line's --gates string declares, read the way gate-run-core.mjs parseGatesSpec does. */
+function initGateIds(line) {
+  const m = line?.match(/--gates "([^"]*)"/);
+  if (!m) return null;
+  return m[1].split(",").map((tok) => tok.slice(tok.indexOf("::") + 2).trim());
+}
+function devVerifyHandMapDefects(body) {
+  const d = [];
+  if (/results\.json/.test(body)) d.push("names a results.json");
+  if (/^\s*printf\b.*\{/m.test(body)) d.push("assembles a map with printf");
+  if (!/^node pharn\/floor\/check-verify\.mjs --stamp pharn\/\.run\/pharn-dev-verify\/gates\/stamp\.json --feature <name>$/m.test(body))
+    d.push("the pinned --stamp verdict line is missing");
+  const ids = initGateIds(devVerifyInitLine(body));
+  if (ids === null) d.push("no pinned init line with a --gates string");
+  else for (const id of DEV_VERIFY_GATE_IDS) if (!ids.includes(id)) d.push(`--gates drops ${id}`);
+  if (!/`3` \*\*INCOMPLETE\*\*/.test(body)) d.push("Step 3 does not name exit 3 INCOMPLETE");
+  // No PHARN_TEST_RESULTS wrapper: the runner strips an inherited value itself (run-gates.mjs gateEnv, 7.3.0 — its
+  // test sets the variable and fails on the old gateEnv). The env leak is the RUNNER's rule, never a command's patch.
+  return d;
+}
+
+test("✧ /pharn-dev-verify — the map is the runner's: --stamp line, all five --gates ids, no hand assembly, INCOMPLETE named", () => {
+  assert.deepEqual(devVerifyHandMapDefects(commandBody("pharn-dev-verify.md")), []);
+});
+
+test("✧ the /pharn-dev-verify rule DISCRIMINATES — the pre-7.3.0 lines and a dropped style gate are each caught", () => {
+  const body = commandBody("pharn-dev-verify.md");
+  const preFix = `${body}\nnode pharn/floor/check-verify.mjs pharn/.run/pharn-dev-verify/results.json --feature <name>\n`;
+  assert.ok(devVerifyHandMapDefects(preFix).includes("names a results.json"), "the old positional line must be caught");
+  const printf = `${body}\nprintf '{"test":%d}' "$t" > x\n`;
+  assert.ok(devVerifyHandMapDefects(printf).includes("assembles a map with printf"), "a printf map must be caught");
+  const dropped = body.replace(",npm run lint:md::lint:md", "");
+  assert.notEqual(dropped, body, "the mutation must change the body (L34)");
+  assert.ok(devVerifyHandMapDefects(dropped).includes("--gates drops lint:md"), "a dropped style gate must be caught (L9)");
+  const noStamp = body.replace(/check-verify\.mjs --stamp pharn/g, "check-verify.mjs pharn");
+  assert.ok(devVerifyHandMapDefects(noStamp).includes("the pinned --stamp verdict line is missing"));
+});
+
+const NO_DELEGATED_PROCEED_RE = /\*\*no delegation turns it into a\s+proceed\.\*\*/;
+const DELEGATE_SCOPE_RE = /may decide \*\*GATE 1 and GATE 2 only\*\*/;
+function devShipStopDefects(body) {
+  const d = [];
+  if (headingOffset(body, "A STOP is a STOP — no delegated proceed") < 0) d.push("no 'A STOP is a STOP' heading");
+  if (!NO_DELEGATED_PROCEED_RE.test(body)) d.push("no 'no delegation turns it into a proceed' sentence");
+  if (!DELEGATE_SCOPE_RE.test(body)) d.push("delegation is not bounded to GATE 1 and GATE 2");
+  if (!/`"INCONCLUSIVE"` or `"INCOMPLETE"`/.test(body)) d.push("the verify step does not STOP on INCOMPLETE");
+  if (/proceed(?:ed)? under (?:the )?delegation/i.test(body)) d.push("prescribes proceeding under delegation");
+  return d;
+}
+
+test("✧ /pharn-dev-ship — a STOP is not delegable, and INCOMPLETE is a STOP", () => {
+  assert.deepEqual(devShipStopDefects(commandBody("pharn-dev-ship.md")), []);
+});
+
+test("✧ the /pharn-dev-ship STOP rule DISCRIMINATES — each removed or inverted clause is caught", () => {
+  const body = commandBody("pharn-dev-ship.md");
+  const cases = [
+    [body.replace(NO_DELEGATED_PROCEED_RE, "**a delegate may proceed.**"), "no 'no delegation turns it into a proceed' sentence"],
+    [body.replace(DELEGATE_SCOPE_RE, "may decide anything"), "delegation is not bounded to GATE 1 and GATE 2"],
+    [body.replace('`"INCONCLUSIVE"` or `"INCOMPLETE"`', '`"INCONCLUSIVE"`'), "the verify step does not STOP on INCOMPLETE"],
+    [`${body}\nA verify FAIL may be proceeded under delegation.\n`, "prescribes proceeding under delegation"],
+  ];
+  for (const [mutant, want] of cases) {
+    assert.notEqual(mutant, body, `the mutation for "${want}" must change the body (L34)`);
+    assert.ok(devShipStopDefects(mutant).includes(want), `not caught: ${want}`);
+  }
+});
+
+/** Every back-ticked verdict-block spelling the command writes, GFM table escapes (`\|`) undone. */
+const blockSpellings = (body) => [...body.matchAll(/`((?:verdict-[a-z<>]+|run-ended):[^`]*)`/g)].map((m) => m[1].replace(/\\\|/g, "|"));
+
+test("✧ /pharn-dev-ship names EVERY verdict-block template the checker's grammar has (presence, L29)", () => {
+  const found = new Set(blockSpellings(commandBody("pharn-dev-ship.md")));
+  const missing = BLOCK_TEMPLATES.filter((t) => !found.has(t));
+  assert.deepEqual(missing, [], `pharn-dev-ship.md does not spell these block templates: ${missing.join(", ")}`);
+});
+
+test("✧ /pharn-dev-ship writes NO verdict-block spelling outside the checker's templates (closure, L36)", () => {
+  const found = blockSpellings(commandBody("pharn-dev-ship.md"));
+  assert.ok(found.length >= BLOCK_TEMPLATES.length, "expected the block templates to be spelled at all (L34)");
+  const stray = [...new Set(found.filter((f) => !BLOCK_TEMPLATES.includes(f)))];
+  assert.deepEqual(stray, [], `pharn-dev-ship.md spells block line(s) outside BLOCK_TEMPLATES: ${stray.join(", ")}`);
+});
+
+test("✧ the verdict-block closure DISCRIMINATES — a variant spelling of a member is caught", () => {
+  const body = commandBody("pharn-dev-ship.md");
+  const mutant = body.replace("`run-ended: STOP <stage>`", "`run-ended: STOP <stop>`");
+  assert.notEqual(mutant, body, "the mutation must change the body (L34)");
+  const stray = blockSpellings(mutant).filter((f) => !BLOCK_TEMPLATES.includes(f));
+  assert.deepEqual(stray, ["run-ended: STOP <stop>"]);
+});
+
+const PLAN_NO_LATER_ARTIFACTS_RE = /\*\*`## Files` names what `\/pharn-dev-build` writes — never a later stage's own artifact\.\*\*/;
+test("✧ /pharn-dev-plan says a plan never declares a later stage's artifacts in ## Files (each named), and the rule discriminates", () => {
+  const body = commandBody("pharn-dev-plan.md");
+  assert.match(body, PLAN_NO_LATER_ARTIFACTS_RE, "the ## Files later-stage-artifact rule is missing");
+  const at = body.search(PLAN_NO_LATER_ARTIFACTS_RE);
+  const para = body.slice(at, body.indexOf("\n\n", at));
+  for (const name of ["VERIFY.md", "verify-report.json", "REVIEW.md", "SHIP.md"]) {
+    assert.ok(para.includes(`\`${name}\``), `the rule must name ${name}`);
+  }
+  const mutant = body.replace(PLAN_NO_LATER_ARTIFACTS_RE, "**`## Files` names anything.**");
+  assert.notEqual(mutant, body, "the mutation must change the body (L34)");
+  assert.doesNotMatch(mutant, PLAN_NO_LATER_ARTIFACTS_RE);
+});
+
+const REVIEW_BLOCKS_RE = /These \*\*block\*\* the increment\./;
+test("✧ /pharn-dev-review no longer says a finding BLOCKS — it names who reads REVIEW.md (no checker)", () => {
+  const body = commandBody("pharn-dev-review.md");
+  assert.doesNotMatch(body, REVIEW_BLOCKS_RE, "the pre-7.3.0 'These **block** the increment.' claim is back");
+  assert.match(body, /\*\*`REVIEW\.md` itself\s+is read by no checker:\*\*/, "the replacement must say no checker reads REVIEW.md");
+  // DISCRIMINATES: the old sentence, spliced back, is caught.
+  assert.match(`${body}\nThese **block** the increment.\n`, REVIEW_BLOCKS_RE);
+});
+
+test("✧ the dev verify and review commands run their formatters with npx --no-install (no bare `npx <tool>` line)", () => {
+  for (const file of ["pharn-dev-verify.md", "pharn-dev-review.md"]) {
+    const bare = commandBody(file)
+      .split("\n")
+      .filter((l) => /^\s*npx (?!--no-install\b)\S/.test(l));
+    assert.deepEqual(bare, [], `${file} has a bare npx line: ${bare.join(" | ")}`);
+  }
+  assert.ok(/^\s*npx (?!--no-install\b)\S/.test("npx prettier --write x"), "DISCRIMINATES: a bare line is caught");
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -5090,8 +5245,14 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-dev-plan.md": 20480, // 18,512 B
   "pharn-dev-regress.md": 25088, // 22,563 B (7.0.0: the pharn/.run/ paths lengthened it by 35 B)
   "pharn-dev-review.md": 10240, // 8,931 B
-  "pharn-dev-ship.md": 47104, // 42,526 B
-  "pharn-dev-verify.md": 27648, // 24,713 B
+  // dev-verdict-discipline (7.3.0): the "A STOP is a STOP" rule, the SHIP.md verdict-block table and one audit bullet —
+  // 47,085 bytes measured, 19 under 47,104, which group S's `npx --no-install` conversion (+26 B) crosses on
+  // integration; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-dev-ship.md": 52224,
+  // dev-verdict-discipline (7.3.0): Step 1 pins the runner's two lines and their exits, Step 3 the --stamp line, its
+  // five exits and the no-substitution rule — 29,381 bytes measured, 1,733 over 27,648; raised by the rule (+10%, up to a
+  // multiple of 512).
+  "pharn-dev-verify.md": 31232,
 });
 const DESCRIPTION_MAX_BYTES = 250;
 const CLAIM_VOCABULARY_RE = /\b(FLOOR|ADVISORY)\b|NEVER means|\(P[0-7]\)/;

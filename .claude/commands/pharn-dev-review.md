@@ -98,7 +98,12 @@ Emit each finding in the exact object shape, with the split honored:
 
 - **floor-gate (blocking):** findings whose verdict comes from actual content the floor can check
   (a P0 guarantee with no floor reduction; a missing eval binding the floor confirms; a sibling
-  reference grep-detectable). These **block** the increment.
+  reference grep-detectable). Each one names a red that a floor check owns, and **that check's own verdict** is
+  what stops the chain — `validate` at `/pharn-dev-build`, the gate map at `/pharn-dev-verify`. **`REVIEW.md` itself
+  is read by no checker:** `/pharn-dev-ship` presents it at GATE 2 and computes nothing from it (its Step 2, step 6;
+  `.dev/floor/check-ship.mjs` has no review input). So a floor-gate finding means **the increment is not done** and
+  the GATE 2 decision is "fix", not "merge" — a decision the human (or a delegated GATE 2) makes by reading this
+  file, which is ADVISORY (P0), not a block the floor enforces.
 - **advisory-gate (warn):** findings that rest on your judgment of `severity` or of free-text. These
   **inform**; they are never the sole basis for blocking a guaranteed/constitutional invariant. Mark
   them clearly as advisory.
@@ -114,7 +119,8 @@ and does **not** repoint the code lenses at PHARN markdown (different axes, P3).
 ## Step — Write `.dev/features/<name>/REVIEW.md` and feed lessons
 
 Write `.dev/features/<name>/REVIEW.md`: the findings, grouped floor-gate vs advisory, and a one-line verdict (GREEN /
-blocked-with-N-floor-findings). A blocking floor-finding means the increment is not done.
+blocked-with-N-floor-findings). A blocking floor-finding means the increment is not done — read at GATE 2, never
+by a checker (see "Gates" above).
 
 If a finding reveals a **real** recurring failure (P7 — real, not hypothetical), **propose** one lesson
 for canon (`.dev/memory-bank/lessons-learned.md`): record it **inside this `REVIEW.md`** as a proposed
@@ -127,8 +133,8 @@ scope, runs `check-provenance.mjs`, and halts for accept/deny (the model never s
 Immediately after writing it, and **before** ending the turn:
 
 ```bash
-npx prettier --ignore-unknown --write .dev/features/<name>/REVIEW.md
-npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/REVIEW.md
+npx --no-install prettier --ignore-unknown --write .dev/features/<name>/REVIEW.md
+npx --no-install markdownlint-cli2 --no-globs --fix .dev/features/<name>/REVIEW.md
 ```
 
 Scoped to **this stage's own artifact** — never a repo-wide formatter, whose writes escape the fix #7

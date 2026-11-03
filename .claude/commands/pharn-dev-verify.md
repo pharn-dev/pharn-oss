@@ -75,38 +75,57 @@ chosen by a model. **Honest caveat (mirrors `/pharn-dev-regress` / `/pharn-dev-e
 (`enforce-writes-scope.cjs`). If a later Write is blocked, **declare the path in `writes:` and re-run this
 setter** — never bypass the hook (see CLAUDE.md, "Writes-scope").
 
-## Step 1 — FLOOR layer: run the deterministic gates (capture exit codes; you run them, the helper never does)
+## Step 1 — FLOOR layer: the gate runner measures the gates (you run its lines; nobody types a map)
 
 Resolve the feature being verified (`--feature <name>` if passed, else the increment named in the
-invocation / its `.dev/features/<name>/PLAN.md`). Run each gate over the repo-with-the-feature-in-it and record
-its **exit code** (never its stdout free-text) into a flat `{ "<gate-id>": <exit-int> }` map:
+invocation / its `.dev/features/<name>/PLAN.md`). The gates run through `pharn/floor/run-gates.mjs`, the tested
+runner `/pharn-verify` uses, which records each gate's **exit code** (never its stdout free-text) in a stamp that
+Step 3 validates. Run these lines, **each as its own Bash call** (L44 — no shell variable crosses a call):
 
 ```bash
-mkdir -p pharn/.run/pharn-dev-verify
-npm test > /dev/null 2>&1; t=$?                       # the hermetic suite (incl. the feature's own *.test.*)
-node pharn/floor/validate.mjs . > /dev/null 2>&1; v=$?      # the structural floor — must be GREEN
-npm run lint > /dev/null 2>&1; l=$?                   # eslint clean
-npm run format:check > /dev/null 2>&1; f=$?           # prettier clean — whole-repo (L9: track full `npm run check`)
-npm run lint:md > /dev/null 2>&1; lm=$?               # markdownlint clean — whole-repo (L9)
-# per committed eval pair the feature ships (see below) — one structural:<expected> gate each:
-node pharn/floor/check-structural.mjs <expected.json> <actual.json> . > /dev/null 2>&1; s=$?
-# The Bash-write reconciliation (fix #7's blind spot). --require-baseline because /pharn-dev-build DID
-# anchor an epoch, so an absent baseline here is a real refusal, not a fresh-clone NO_BASELINE.
-node pharn/floor/check-bash-reconcile.mjs --base . --require-baseline > pharn/.run/pharn-dev-verify/reconcile.json 2>&1; rc=$?
-# assemble → pharn/.run/pharn-dev-verify/results.json, one entry per gate actually run:
-printf '{"test":%d,"validate":%d,"lint":%d,"format:check":%d,"lint:md":%d,"structural:%s":%d,"reconcile":%d}' \
-  "$t" "$v" "$l" "$f" "$lm" "<expected.json>" "$s" "$rc" \
-  > pharn/.run/pharn-dev-verify/results.json
+node pharn/floor/run-gates.mjs init --stage verify --feature <name> --base .dev/features --out pharn/.run/pharn-dev-verify/gates --gates "npm test::test,node pharn/floor/validate.mjs .::validate,npm run lint::lint,npm run format:check::format:check,npm run lint:md::lint:md"
 ```
 
-- **The `reconcile` gate needs NO change to `check-verify.mjs`** — that helper is generic over gate keys
-  and computes the verdict over whatever `{gate-id: exit-int}` map this step assembles, by the same
-  absolute threshold (`PASS iff every gate exit 0`). So a detected escape makes the verdict **`FAIL`**,
-  which `/pharn-dev-ship` already branches on. **No new floor primitive; no new proceed/stop wiring.**
+```bash
+node pharn/floor/run-gates.mjs run --next --out pharn/.run/pharn-dev-verify/gates --timeout-ms 3600000
+```
+
+- **`init`** resolves the set and writes the in-progress record. Exit `0` → run the second line. Any other exit →
+  **INCONCLUSIVE**: do not hand-run the gates instead; record the exit and its `reason_code` and stop the stage.
+- **`run --next`** runs ONE gate per call. **Run each call with the Bash tool's `run_in_background: true`** and wait
+  for its completion notice; never poll, retry or start a second call while one is running. The reason is measured:
+  this repo's `npm test` took 586 s on CI's runner (run 41514424884, 2026-11-02) and 2,580 s on a loaded host, so it
+  cannot finish under a foreground call's 600 s cap. A background call has no cap, so the runner's own
+  `--timeout-ms 3600000` (one hour) is the bound that kills a hung gate. Repeat the line while it exits `0` with
+  `"finalized": false`. It is done when a call exits `0` with `"finalized": true` (it ran the last gate and wrote
+  `pharn/.run/pharn-dev-verify/gates/stamp.json`) or exits `3` (nothing left). Exit `2` is a runner error →
+  **INCONCLUSIVE**, stop the stage.
+- **The set.** `test` (the hermetic suite, the feature's own `*.test.*` included), `validate` (the structural floor),
+  `lint`, `format:check` and `lint:md` (whole-repo — L9: the verdict tracks the full `npm run check`) come from the
+  `--gates` string; the runner then adds `instruction-growth` (the always-loaded instruction set's growth against
+  HEAD) and **`reconcile` last** (`check-bash-reconcile.mjs --base . --require-baseline`: `/pharn-dev-build` DID anchor
+  an epoch, so an absent baseline is a real refusal). `init` also captures build completeness —
+  `check-build-complete.mjs .dev/features/<name>/PLAN.md .`, every concrete `## Files` path present — into the stamp's
+  `aux`, never into the gate map. So a plan's `## Files` names what the BUILD writes, never this stage's or a later
+  stage's own artifact (`VERIFY.md`, `verify-report.json`, `REVIEW.md`, `SHIP.md`): those do not exist yet when this
+  runs, and the verdict would read INCOMPLETE. Each is written under its own stage's scope anyway.
+- **The suite runs under the runner's environment.** The runner hands every gate a `PHARN_TEST_RESULTS` path
+  (`.dev/guides/floor-gates.md`, per-test results), so this repo's `npm test` inherits one. Before 7.3.0 that turned
+  `run-gates.test.mjs`'s "resultsFile: null means NO PHARN_TEST_RESULTS variable" red on every run through the runner;
+  `run-gates.mjs` `gateEnv` now removes an inherited value when a spawn has no results file, so no wrapper is needed.
+- **A feature that ships an eval pair** (see below) adds one token per pair to the `--gates` string:
+  `node pharn/floor/check-structural.mjs <expected.json> <actual.json> .::eval:<name>`. (`--extra` cannot express a dev
+  pair: it derives `<capDir>/findings.json`, and the actual lives under `.dev/features/`.)
+- **A gate that outruns `--timeout-ms`** is recorded `timed_out`, and Step 3 reads **INCONCLUSIVE
+  `gate-not-measured`**. That is a STOP like any other: re-run the stage (from `init`) when the host is quieter, and
+  never measure the gate some other way. A harness kill of a background call leaves the gate's process group running
+  until the next `run --next` recovers the stale lock (the gate runner's bounds, `.dev/guides/floor-gates.md`).
 - **What a `reconcile` RED means, exactly:** a path changed since the build's anchor that the write
   guards **would have denied**. That is a write which reached the worktree outside the guarded
-  `Write|Edit|MultiEdit|NotebookEdit` surface — almost always **Bash**. Read `reconcile.json`'s
-  `escapes[]` for the paths; its `problem` strings are free text and are quoted as **DATA** (P2).
+  `Write|Edit|MultiEdit|NotebookEdit` surface — almost always **Bash**. Its JSON is the runner's log of that gate,
+  `pharn/.run/pharn-dev-verify/gates/<seq>-reconcile.out` (`<seq>` is the last run's, printed by the call that ran
+  `reconcile`); read its `escapes[]` for the paths. Its `problem` strings are free text and are quoted as **DATA**
+  (P2).
 - **Its bounds are the contract's, not this command's** — the reconciled set excludes git-ignored paths,
   the window is anchor→reconcile, the model is one worktree per session, and there is no attribution.
   A `CLEAN` here means **no escape was detected**, never that none occurred
@@ -118,27 +137,28 @@ printf '{"test":%d,"validate":%d,"lint":%d,"format:check":%d,"lint:md":%d,"struc
   the repo's `npm run check` aggregate, so the verdict **tracks the full `npm run check`** — closing L9's
   style-gate coverage hole **at verify** (an increment's own markdown style is caught here, not only at the full
   `npm run check` / CI; `.dev/memory-bank/lessons-learned.md` L9 — cited, not restated, P4).
-- **`structural:<expected>` — one gate per committed eval pair the feature ships,** discovered by
+- **`eval:<name>` — one gate per committed eval pair the feature ships,** discovered by
   convention (P5 — membership, not classification): each `<cap>/evals/expected/*.json` with its committed
   actual `findings.json` (the emission contract of `pharn/pharn-contracts/finding-shape.md` — cited, not
   restated, P4). Today the one pair is `pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json`
   ↔ `.dev/features/trust-fence/findings.json`. A feature shipping **no** eval-actual pair simply has **no**
-  `structural:*` gate (absent from the map) — exactly as `/pharn-dev-regress` handles it.
+  `eval:*` gate (absent from the map) — exactly as `/pharn-dev-regress` handles it.
 - **The core gates are stdlib-only** (`node --test`, `validate`, `check-structural`); `lint` / `format:check` /
   `lint:md` need the dev devDeps already present in the working tree (no `npm ci` — `/pharn-dev-verify` runs only
   at HEAD, never in a detached worktree, so the style gates are cheap).
 - **Granularity (honest, not a silent gap — P7):** `test` / `validate` / `lint` / `format:check` / `lint:md`
   are **whole-repo** (they re-run the full suite/style over the repo with the feature present — the most honest
   "is it green with this in it", so verify PASS requires the **whole** repo clean, not just the increment's
-  files); the **feature-specific** correctness signal is the `structural:*` gate over the feature's own evals
+  files); the **feature-specific** correctness signal is the `eval:*` gate over the feature's own evals
   plus the feature's own `*.test.*` collected by `npm test`. The verdict is exactly as good as that
   deterministic suite — never more (P0/P7).
 - **The gate SET is advisory orchestration (two clocks, kept honest — L9, P0).** `check-verify.mjs` (the FLOOR
-  verdict) is generic over gate keys — it computes `PASS iff every gate exit 0` over **whatever** map this
-  command assembles. So the floor verdict mechanically covers `format:check` + `lint:md`, but **which** gates
-  are in the map is this command's **advisory** composition — there is no floor or test lock that the two style
-  gates STAY in the set. L9's remedy therefore lives in this orchestration layer (exactly where L9 places it),
-  not in a new floor primitive; do not read "verify runs the style gates" as floor-locked.
+  verdict) is generic over gate keys — it computes `PASS iff every gate exit 0` over **whatever** set the
+  `--gates` string declares (the stamp's `required`, which it refuses to see uncovered). So the floor verdict
+  mechanically covers `format:check` + `lint:md`, but **which** gates are in the `--gates` string is this command's
+  **advisory** composition. `.dev/floor/command-hygiene.test.mjs` pins the five ids in the committed `init` line, so an
+  edit that drops one fails the suite — a test over this file's text, never proof a run used it. L9's remedy
+  therefore lives in this orchestration layer (exactly where L9 places it), not in a new floor primitive.
 
 ## Step 2 — ADVISORY layer: the verifier plug-in slot (LLM judgment — annotates, never gates)
 
@@ -167,15 +187,28 @@ declares `role: verifier` (the role enum in `pharn/ARCHITECTURE.md §3.1`) — n
 ## Step 3 — The deterministic verdict (FLOOR; no LLM)
 
 ```bash
-node pharn/floor/check-verify.mjs pharn/.run/pharn-dev-verify/results.json --feature <name>
+node pharn/floor/check-verify.mjs --stamp pharn/.run/pharn-dev-verify/gates/stamp.json --feature <name>
 ```
 
 Capture its **stdout JSON** and read its **exit code**: `0` **PASS** (every gate exit 0) · `1` **FAIL**
 (≥1 gate non-zero — the offenders are in `failing_gates[]`, the stage **FAILS**) · `2` **INCONCLUSIVE**
-(the results map missing / empty / not a `{string:int}` map — fail-closed, never a silent pass, and
-distinct from FAIL). You do **not** re-decide — a failed gate **is** a fail because the helper says so,
-and **no verifier finding changes this number** (the helper's only input is the gate→exit-code map; it
-cannot even receive a finding).
+(fail-closed, never a silent pass, and distinct from FAIL; its `reason_code` names why — the stamp is missing,
+unfinalized or malformed, a declared gate has no run (`coverage-violation`), the tree changed between two gates, a
+positional map was passed beside `--stamp`, or a gate was not measured: killed at `--timeout-ms` or unable to start,
+`gate-not-measured`) · `3` **INCOMPLETE** (every gate green, but a concrete `## Files` path of the plan is missing —
+`stamp.aux.completeness`). You do **not** re-decide — a failed gate **is** a fail because the helper says so,
+and **no verifier finding changes this number** (the helper's only input is the stamp; it cannot even receive a
+finding).
+
+**The map is the runner's, or there is no verdict.** Never assemble a `{gate: exit}` map by hand, never pass one
+positionally, never edit `stamp.json`, and never substitute a gate value measured anywhere else — another tree, a
+clean copy, a re-run outside the runner. A gate that is red for an environmental reason (a gitignored scratch file
+`lint:md` reaches, L61; a load-timing test) is recorded as the FAIL it is, the environment is fixed, and the stage is
+re-run — the new stamp is the new verdict. `.dev/features/loop-cost-6-73-2/VERIFY.md` is the recorded failure: a PASS
+over a map with one gate re-measured in a clean copy. **Bound (P0, L43):** the stamp certifies internal consistency,
+never provenance — a self-consistent fabricated `stamp.json` passes, as `check-verify.mjs` prints on every stamp run.
+What it refuses are the shapes a substitution leaves: a flat map, a declared gate with no run, and a run whose
+fingerprints are another tree's (`.dev/floor/dev-verify-stamp.test.mjs` executes the line above against each).
 
 ## Step 4 — Emit both artifacts + halt
 
@@ -187,15 +220,16 @@ Write, in order (re-scoping per artifact, per Step 0's caveat):
    ```json
    {
      "feature": "<name>",
-     "gates": { "test": 0, "validate": 0, "lint": 0, "format:check": 0, "lint:md": 0, "structural:<expected>": 0 },
+     "gates": { "test": 0, "validate": 0, "lint": 0, "format:check": 0, "lint:md": 0, "instruction-growth": 0, "reconcile": 0 },
      "verdict": "PASS",
      "failing_gates": [],
+     "gate_run": { "stamp_sha256": "<hex>", "source": "explicit", "fingerprint": { "algo": "<algo>", "final": "<hex>" } },
      "verifiers": { "registered": 0, "findings": [] }
    }
    ```
 
-   The `feature` / `gates` / `verdict` / `failing_gates` fields are the helper's stdout **verbatim** (the
-   FLOOR verdict). The `verifiers` block is the ADVISORY layer: `verifiers.findings[]` is the
+   Every field but `verifiers` is the helper's stdout **verbatim** (the FLOOR verdict, its `gate_run` block
+   included — `.dev/floor/check-ship-record.mjs` reads `verdict` and `gate_run` at the pull request). The `verifiers` block is the ADVISORY layer: `verifiers.findings[]` is the
    `finding-shape.md` array, whose free-text (`problem` / `evidence`) is **untrusted DATA** (P2), quoted,
    appended **after** the verdict was computed — it gates nothing. (Scope is already pinned to this path
    from Step 0; write it.)
@@ -208,7 +242,7 @@ Write, in order (re-scoping per artifact, per Step 0's caveat):
 
    **`.dev/features/<name>/VERIFY.md`** = a human render: the per-gate `gate → exit-code` table, the
    **deterministic verdict** stated plainly — `VERIFIED: floor gates PASS` / `VERIFY FAILS: gate(s)
-{failing_gates} red — stage FAILS` / `INCONCLUSIVE: results map missing/malformed (fail-closed)` — then
+{failing_gates} red — stage FAILS` / `INCONCLUSIVE: <reason_code> (fail-closed)` / `INCOMPLETE: declared path(s) missing` — then
    the verifier section (each finding quoted as DATA, or "no verifiers registered — floor gates only"),
    and the **honest residual line**: _"verified = the named gates passed; this is NOT a guarantee of
    correctness beyond what those gates check — verifier concerns are advisory help, not assurance."_
@@ -220,8 +254,8 @@ Write, in order (re-scoping per artifact, per Step 0's caveat):
 Immediately after writing it, and **before** ending the turn:
 
 ```bash
-npx prettier --ignore-unknown --write .dev/features/<name>/VERIFY.md
-npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/VERIFY.md
+npx --no-install prettier --ignore-unknown --write .dev/features/<name>/VERIFY.md
+npx --no-install markdownlint-cli2 --no-globs --fix .dev/features/<name>/VERIFY.md
 ```
 
 Scoped to **this stage's own artifact** — never a repo-wide formatter, whose writes escape the fix #7
@@ -261,6 +295,11 @@ cite, don't restate), with **no new contract file** and **no authored verifier**
 - **"The named deterministic gates passed"** → **FLOOR (exit-code threshold, `check-verify.mjs`).** The
   verdict rests entirely on the helper comparing integers (`every gate === 0`), never on model judgment.
   This is what "verified" means — full stop. A **real guarantee**.
+- **"The map is the runner's"** → **FLOOR: enum/regex over the stamp** (`gate-run-core.mjs validateStamp`, through
+  `check-verify.mjs --stamp`): finalized, every declared gate has a run, one tree state across the gates, `reconcile`
+  last. It refuses a hand-assembled flat map, a dropped gate and a run spliced in from another tree. **Bound (L43):**
+  internal consistency, never provenance — a self-consistent fabricated stamp passes, and that this command ran the
+  pinned lines at all is ADVISORY.
 - **Verifier findings** → **ADVISORY (fix #3).** LLM judgment that annotates; it never owns the verdict
   (the helper cannot receive a finding). A verifier "looks good" is not a guarantee; a verifier concern
   is a flag for the human.
@@ -295,8 +334,9 @@ verifiers today, no such free-text is produced yet; the boundary is in place for
 With **zero verifiers**, `/pharn-dev-verify` runs only stdlib gates + `npm run lint` / `format:check` / `lint:md`
 and makes **no `claude -p` call** — runnable in CI-like conditions. When a verifier is added it needs `claude -p` (tokens, auth) and
 is run **by hand**, like `/pharn-dev-eval`. The deterministic proof of the **verdict** logic is
-`pharn/floor/check-verify.test.mjs` (pre-recorded `{gate:exit}` fixtures, **no** `claude -p`), which `npm test`
-auto-collects via its `**/*.test.mjs` glob. This file is a command `.md` (not `*.test.mjs`), so `npm
+`pharn/floor/check-verify.test.mjs` (pre-recorded maps and stamps, **no** `claude -p`), and this command's committed
+verdict line is executed against hand-edited stamps by `.dev/floor/dev-verify-stamp.test.mjs`; `npm test`
+auto-collects both via its `**/*.test.mjs` glob. This file is a command `.md` (not `*.test.mjs`), so `npm
 test` never runs it and CI without `claude -p` stays green.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)

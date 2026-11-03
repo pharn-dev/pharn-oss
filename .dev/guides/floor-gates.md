@@ -155,7 +155,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # runner did not cause stays a measured FAIL. check-regress gains the HEAD twin of the base rule (`head-timed-out`,
 # `head_timed_out`; 126/127 at regress are compared as before — a stated bound). The three codes are gate-run-core.mjs
 # UNMEASURED_CODES, which check-loop-fresh B passes through to check-loop.mjs (STOP_TERMINAL / unmeasured). The
-# positional map is unchanged (it carries no `timed_out`), so the dev twins are byte-identical.
+# positional map is unchanged (it carries no `timed_out`), so /pharn-dev-regress (positional) is byte-identical. Since
+# 7.3.0 (dev-verdict-discipline) /pharn-dev-verify reads a run-gates.mjs stamp through `--stamp`, so the dev verify
+# verdict gains this row, INCOMPLETE and the stamp refusals; .dev/floor/check-ship.mjs (`--loop`) still reads only
+# PASS/FAIL/INCONCLUSIVE, so an INCOMPLETE dev verify stops a `--loop` run INCONCLUSIVE (fail-closed).
 # THE FLUSH RULE (6.20.4): check-verify, check-regress, check-loop and check-red-run END by setting
 # process.exitCode (the first three unwind with a module-private sentinel only their top-level catch swallows) —
 # never by an immediate exit, which dropped queued stdout: on darwin a piped verdict was cut at 64 KiB, and
