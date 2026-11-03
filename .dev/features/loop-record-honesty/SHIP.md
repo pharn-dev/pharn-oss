@@ -57,5 +57,12 @@ candidate (REVIEW.md, "Proposed lesson candidate") is handed to the batch orches
 
 deferred: none
 
+## GATE 2 — decided
+
+**GATE 2 was decided by the batch orchestrator (a model) under the owner's delegation, not by a human: MERGE into
+the batch branch (`batch/audit-2026-11-03`) at integration.** The unreconciled interval is accepted as recorded above:
+three hook-gated Edit-tool writes inside the declared scope. The gap matters only for a Bash escape during those ~40
+minutes, and this record says so. The 15-name `RESERVED_BY` list is kept as it is. No further changes were made.
+
 Chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that
 is the human's call at the post-review gate.
