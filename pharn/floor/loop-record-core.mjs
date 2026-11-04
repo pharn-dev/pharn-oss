@@ -1,11 +1,14 @@
-// pharn/floor/loop-record-core.mjs — the ONE implementation of the loop-record's `## Handoff` grammar.
+// pharn/floor/loop-record-core.mjs — the loop-record's shared vocabulary: the ONE implementation of its `## Handoff`
+// grammar, and (7.3.0) the frozen set of blocked-stop ids its `blocked:` key may carry.
 //
 // Floor infrastructure, NOT a Capability (no `role:`; it lives in the floor-ignored dir). It carries no
-// verdict and no exit code: it is a pure reader that two consumers share.
+// verdict and no exit code: it is a pure reader that its consumers share. One axis (P3): it changes when the loop-record
+// contract (`pharn/pharn-contracts/loop-record.md`) changes.
 //
 //   • pharn/floor/check-loop-record.mjs — asks a STRUCTURAL question (are the three subsections present,
-//     in order, each with a non-blank body?) and owns the RED.
+//     in order, each with a non-blank body?) and owns the RED; and refuses a `blocked:` id outside BLOCKED_IDS.
 //   • pharn/floor/render-run-report.mjs — asks for the BODIES, to quote them verbatim as untrusted DATA.
+//   • pharn/floor/check-loop-decision.mjs — skips re-derivation only for a blocked stop whose id is a BLOCKED_IDS member.
 //
 // ── WHY A SHARED CORE, and not a second copy (L35) ───────────────────────────────────────────────────
 // The question "must the second copy exist?" is asked BEFORE choosing a remedy, never after. Here the
@@ -36,6 +39,34 @@
 //   what is there. Claiming otherwise is the P0 disease — see that file's header, cited not restated (P4).
 //
 // NON-LLM. Node stdlib only — in fact zero imports. No network, no eval, no child processes.
+
+/**
+ * The blocked-stop ids (7.3.0) — every `blocked: <id>` a `/pharn-loop` stuck-point row S1–S15 can record, frozen. A
+ * record's `blocked` value must be a member (check-loop-record.mjs `BLOCKED_UNKNOWN`), and check-loop-decision.mjs skips
+ * re-derivation only for a member. Before 7.3.0 the key was an open vocabulary: any value made the decision check SKIP.
+ * The contract renders this list between its `LOOP-BLOCKED-IDS` markers and the command's stuck-point table names the
+ * same set; tests hold all three equal both ways (L29, L36). Order: the stuck-point table's.
+ */
+export const BLOCKED_IDS = Object.freeze([
+  "no-slug",
+  "no-git-base",
+  "no-gates",
+  "seam-config",
+  "thin-intent",
+  "needs-clarification",
+  "not-quick",
+  "plan-ambiguity",
+  "seam-unresolved",
+  "stage-refused",
+  "stage-outlived-wait",
+  "unlisted-ask",
+  "stale-evidence",
+  "no-test-runner",
+  "ac-evidence-invalid",
+  "gates-red-at-entry",
+  "gates-unmeasured-at-entry",
+  "not-isolated",
+]);
 
 /** The Handoff subsections, in NORMATIVE ORDER. An array, not a Set: order is part of the shape, so the
  *  consumer's check is list equality rather than set membership. */

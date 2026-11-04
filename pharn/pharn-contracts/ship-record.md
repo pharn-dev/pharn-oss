@@ -42,16 +42,29 @@ ship-record: # pharn/features/<name>/ship-record.json — a JSON object
 
 ## Field shape + trust classes (the attestation block)
 
-| field         | shape (FLOOR — enum/regex/hash)                                               | trust                                                       |
-| ------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `by`          | single-line bounded handle: `^[A-Za-z0-9._@-]{1,64}$`                         | **value** shape-gated; that it is a **real human** advisory |
-| `at`          | ISO-8601: `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z\|[+-]\d{2}:\d{2})$` | trusted (regex)                                             |
-| `record_hash` | `^[0-9a-f]{64}$` **and** equals the recomputed hash (below)                   | trusted (content-hash)                                      |
+| field         | shape (FLOOR — enum/regex/hash)                                                                                      | trust                                                       |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `by`          | single-line bounded handle: `^[A-Za-z0-9._@-]{1,64}$`, **and** not a placeholder (below, 7.3.0)                      | **value** shape-gated; that it is a **real human** advisory |
+| `at`          | ISO-8601: `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z\|[+-]\d{2}:\d{2})$`, **and** a real instant (below, 7.3.0) | trusted (regex + arithmetic)                                |
+| `record_hash` | `^[0-9a-f]{64}$` **and** equals the recomputed hash (below)                                                          | trusted (content-hash)                                      |
 
 The `attestation` object MUST contain **exactly** these three keys (no more) or it is `malformed` — this
 prevents smuggling extra fields past the shape gate. `by`'s single-line bounded regex is deliberate (fix
 F2): it keeps an untrusted handle from becoming a multi-line / markup injection vector in the rendered seal
 clause or the record (P2; bounds — does not zero — the `pharn/LIMITS.md §2` residual).
+
+**Two further shape rules (7.3.0), each `malformed` when broken.** Before them, `by: agent` with
+`at: 2026-13-45T99:99:99Z` read `attested`.
+
+- **`by` is not a placeholder.** `check-attestation.mjs` holds a fixed list of 15 names — `agent`, `ai`, `anonymous`,
+  `assistant`, `bot`, `claude`, `human`, `llm`, `model`, `none`, `null`, `pharn`, `system`, `unknown`, `user` —
+  compared after lower-casing, exact match only. **It is a placeholder deny-list, not identity verification:** it
+  refuses the words an agent self-filling the field would reach for, and nothing else. A real-looking name typed by a
+  model (`jdoe`) passes exactly as before, and a name that merely contains a listed word (`agentsmith`) passes too.
+  That a real human supplied `by` stays advisory (below).
+- **`at` names a real instant.** Month 01–12, a day that exists in that month (Gregorian leap years), hour 00–23,
+  minute and second 00–59, and an offset of at most 23:59. A leap second (`:60`) is refused on purpose: JavaScript's
+  `Date` cannot represent it. The time is not compared with the clock: a future `at` that exists is accepted.
 
 ## The `cost` block (ADVISORY — measured tokens, never a guarantee)
 

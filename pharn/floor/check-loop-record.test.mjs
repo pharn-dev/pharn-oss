@@ -925,3 +925,50 @@ test("★ a witness that opens but whose read fails → RED ISOLATION_UNWITNESSE
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ── `blocked` — a closed set since 7.3.0 (loop-marker-integrity; review MEDIUM "blocked: is an open vocabulary") ──────
+// ONE enumeration (L29): loop-record-core.mjs's BLOCKED_IDS. The contract renders it between markers, and the command's
+// stuck-point table names the same set; both are EXTRACTED here (L52), so a member added to one place only fails.
+import { BLOCKED_IDS } from "./loop-record-core.mjs";
+
+const LOOP_COMMAND = join(here, "..", "..", ".claude", "commands", "pharn-loop.md");
+/** Every `blocked: <id>` the /pharn-loop stuck-point table (its `| S<n> |` rows) names, in row order, deduplicated. */
+function stuckPointTableIds() {
+  const rows = readFileSync(LOOP_COMMAND, "utf8")
+    .split("\n")
+    .filter((l) => /^\| S\d+[a-z]? +\|/.test(l));
+  assert.ok(rows.length >= 18, `non-vacuous (L34): the stuck-point table's rows were found (${rows.length})`);
+  return [...new Set(rows.flatMap((l) => [...l.matchAll(/`blocked: ([a-z0-9-]+)`/g)].map((m) => m[1])))];
+}
+
+test("★ 7.3.0 — `blocked: totally-made-up-id` → RED BLOCKED_UNKNOWN; a value with a control character too", () => {
+  for (const bad of ["totally-made-up-id", "Stage-Refused", "stage_refused"]) {
+    const r = run(record({ fm: { decision: "INCONCLUSIVE", blocked: bad } }));
+    assert.equal(r.status, 1, `${bad}: ${r.out}`);
+    assert.match(r.out, /BLOCKED_UNKNOWN/);
+    assert.match(r.out, new RegExp(JSON.stringify(bad).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "the guarded value is named");
+  }
+  const ctl = run(record({ fm: { decision: "INCONCLUSIVE", blocked: "no-slug\u0007" } }));
+  assert.equal(ctl.status, 1, ctl.out);
+  assert.match(ctl.out, /BLOCKED_UNKNOWN/);
+  assert.match(ctl.out, /not a clean one-line value/, "an unclean value is never quoted (L62)");
+});
+
+test("✧ 7.3.0 (L52) — every id the command's stuck-point table names is GREEN, and the table's set EQUALS BLOCKED_IDS", () => {
+  const ids = stuckPointTableIds();
+  assert.deepEqual(ids, [...BLOCKED_IDS], "the stuck-point table and BLOCKED_IDS name the same ids, in the same order");
+  for (const id of ids) {
+    const r = run(record({ fm: { decision: "INCONCLUSIVE", blocked: id } }));
+    assert.equal(r.status, 0, `${id}: ${r.out}`);
+  }
+});
+
+test("✧ 7.3.0 (L35/L36) — the contract's LOOP-BLOCKED-IDS list EQUALS BLOCKED_IDS, both ways, and BLOCKED_IDS is frozen", () => {
+  const contract = readFileSync(CONTRACT, "utf8");
+  const region = contract.match(/<!-- LOOP-BLOCKED-IDS:BEGIN -->([\s\S]*?)<!-- LOOP-BLOCKED-IDS:END -->/);
+  assert.ok(region, "the LOOP-BLOCKED-IDS markers must exist in pharn/pharn-contracts/loop-record.md");
+  const listed = [...region[1].matchAll(/^- `([a-z0-9-]+)`/gm)].map((m) => m[1]);
+  assert.deepEqual(listed, [...BLOCKED_IDS]);
+  assert.ok(Object.isFrozen(BLOCKED_IDS), "BLOCKED_IDS is frozen");
+  assert.equal(new Set(BLOCKED_IDS).size, BLOCKED_IDS.length, "no id is listed twice");
+});

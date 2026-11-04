@@ -104,3 +104,11 @@ test("inconclusive: all runs errored (no valid findings) → exit 2", () => {
   assert.equal(r.status, 2);
   assert.match(r.stdout, /INCONCLUSIVE/);
 });
+
+test("usage: a missing <runs-dir> is INCONCLUSIVE (exit 2) and the usage line names this file's real path", () => {
+  for (const args of [[], [EXPECTED]]) {
+    const r = spawnSync(process.execPath, [RUNNER, ...args], { encoding: "utf8" });
+    assert.equal(r.status, 2, JSON.stringify(args));
+    assert.equal(r.stdout, "INCONCLUSIVE — usage: node .dev/floor/check-variance.mjs <expected.json> <runs-dir> [repoDir]\n");
+  }
+});

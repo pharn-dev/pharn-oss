@@ -18,9 +18,9 @@ reads:
   ]
 # writes: DELIBERATELY UNCHANGED by the lesson-extract increment, and that is load-bearing (L7).
 # Step 2b PROPOSES a lesson; it never writes canon. Declaring `.dev/memory-bank/lessons-learned.md`
-# here would make the fix #7 setter resolve a two-path scope the pre-write hook then PERMITS —
-# silently granting /pharn-dev-ship the direct, ungated canon write that check-provenance + the human
-# accept exist to withhold. That is L7's own instance (it happened to /review) reproduced exactly.
+# here would make the fix #7 setter resolve a two-path scope enforce-writes-scope then permits — the
+# over-grant of the canon write that check-provenance + the human accept exist to withhold (protect-trusted-
+# paths' canon denylist refuses it since 3.1.1; a second layer, not a licence). That is L7's own instance.
 # The canon path is reachable ONLY by invoking /pharn-dev-memory-promote, which declares it itself.
 writes: [".dev/features/<name>/SHIP.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
@@ -125,8 +125,9 @@ present it to the human (terminal fallback = hand to the human, never a guess).
    `"inconclusive"` → **STOP**, present, hand to the human.
 
 5. **`/pharn-dev-verify`** → writes `.dev/features/<name>/verify-report.json`. **Verdict read (FLOOR):** that file's
-   `.verdict` (the `pharn/floor/check-verify.mjs` output). `"PASS"` (every gate exit 0) → proceed. `"FAIL"`
-   (offenders in `.failing_gates[]`) or `"INCONCLUSIVE"` → **STOP**, present, hand to the human. The
+   `.verdict` (the `pharn/floor/check-verify.mjs` output over the gate runner's stamp). `"PASS"` (every gate exit 0) → proceed. `"FAIL"`
+   (offenders in `.failing_gates[]`), `"INCONCLUSIVE"` or `"INCOMPLETE"` (a declared `## Files` path is missing)
+   → **STOP**, present, hand to the human. The
    advisory `verifiers` block is **NOT** a proceed/stop input — a verifier finding never flips the
    verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 
@@ -144,6 +145,30 @@ present it to the human (terminal fallback = hand to the human, never a guess).
    > — `/pharn-dev-ship` does **not** compute a proceed/stop from it. (Counting `/pharn-dev-review`'s blocking findings as
    > a deterministic gate would read **LLM severity** as a floor verdict — advisory-dressed-as-
    > deterministic, the disease — which is exactly why **`--loop` is a separate increment**.)
+
+### A STOP is a STOP — no delegated proceed
+
+A non-GREEN verdict at steps 2–5 ends the run at a **RED-verdict STOP**, and **no delegation turns it into a
+proceed.** A brief, a batch orchestrator or any other delegate may decide **GATE 1 and GATE 2 only** — plan
+acceptance and the post-review decision. It never decides past a floor verdict: not "the red is only the known
+load-timing tests", not "CI will measure it", not "the red is environmental". From a STOP there are exactly three
+ways forward, and each is a new run of a stage, never a skipped one:
+
+- **fix the cause and re-run the stopped stage**, which writes a new verdict (an environmental red — a load-timing
+  test, a gitignored scratch file a style gate reaches — is re-run once the environment is fixed; record both
+  results verbatim; a red that persists stays a STOP);
+- **re-plan** with a fresh `/pharn-dev-ship`;
+- **abandon**.
+
+Never substitute a gate value measured somewhere else, never hand-edit a gate map or a verdict report, and never
+hand-run a stage's work in place of the stage. The recorded failures this rule answers: a verify `FAIL` the run
+"proceeded to review instead of stopping" under a brief's delegation
+(`.dev/features/scanner-redos-sweep-2/SHIP.md`), a PASS over a map with one gate re-measured in a clean copy
+(`.dev/features/loop-cost-6-73-2/VERIFY.md`), and a product bump shipped with no stage run
+(`.dev/features/verify-test-reuse/SHIP.md`). **ADVISORY (P0)** at this command — nothing here stops an agent that
+ignores it. The backstop is at the pull request: `.dev/floor/check-ship-record.mjs` REDs a PR that changes product
+surface unless a `SHIP.md` in it records a green run (Step 3's verdict block), and REDs any `SHIP.md` in it that
+records a STOP.
 
 ## Step 2b — lesson-extract (propose ONE lesson, always ask, never write canon)
 
@@ -197,7 +222,7 @@ run and **why it would recur**. Free text from the artifacts appears here as quo
 
 ### 2b.3 — ALWAYS ask; never assume (the gate)
 
-Ask, via an **interactive form** (`AskQuestion`), one explicit question: **"Take this lesson candidate to
+Ask, via an **interactive form** (`AskUserQuestion`), one explicit question: **"Take this lesson candidate to
 `/pharn-dev-memory-promote`?"** with selectable options (e.g. _Promote_ / _Skip_ / _Edit, then promote_).
 **Wait for the answer.**
 
@@ -222,8 +247,8 @@ written for whichever member was in front of the author):
 | `lesson: not-reached (<stage>)` | the chain STOPped on a RED verdict before GATE 2             |
 | `lesson: error <reason>`        | Step 2b itself failed                                        |
 
-- On **Promote** → **invoke `/pharn-dev-memory-promote`**. It sets its own writes-scope, runs
-  `.dev/floor/check-provenance.mjs`, and halts for its **own** explicit accept/deny. **Never write
+- On **Promote** → **invoke `/pharn-dev-memory-promote`**. It runs `.dev/floor/check-provenance.mjs`, halts for
+  its **own** explicit accept/deny, and sets its own writes-scope only after an accept. **Never write
   `.dev/memory-bank/lessons-learned.md` from `/pharn-dev-ship`** — this command holds no scope to it
   (L7), and the deny would be a floor deny, not a style violation. The two halts are not redundant: 2b.3
   decides whether a candidate is worth taking to promotion; that gate decides whether it enters canon.
@@ -337,8 +362,26 @@ Write **`.dev/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
 
 - **which stages ran**, in order, and **where the run ended** (GATE 2, or which stage's RED-verdict
   STOPped it);
-- **each structural verdict read, verbatim:** `/pharn-dev-build` → `validate` exit code; `/pharn-dev-regress` →
-  `regression-report.json` `.verdict`; `/pharn-dev-verify` → `verify-report.json` `.verdict`;
+- **the verdict block — five lines, each exactly once, each from this closed set** (the grammar is
+  `.dev/floor/check-ship-record.mjs`'s `BLOCK_KEYS` / `parseBlock`, and `.dev/floor/command-hygiene.test.mjs` checks
+  every spelling below against it — L29, L36). Each line starts at column 0, outside any list or code fence:
+
+  | line                                                           | records                                                               |
+  | -------------------------------------------------------------- | --------------------------------------------------------------------- |
+  | `verdict-grill: exit <n>`                                      | `check-plan-lessons.mjs`'s exit at step 2                             |
+  | `verdict-build: exit <n>`                                      | `validate.mjs`'s exit at step 3                                       |
+  | `verdict-regress: <no-regressions\|regressions\|inconclusive>` | `regression-report.json` `.verdict`, verbatim                         |
+  | `verdict-verify: <PASS\|FAIL\|INCONCLUSIVE\|INCOMPLETE>`       | `verify-report.json` `.verdict`, verbatim                             |
+  | `verdict-<stage>: not-reached (<stage>)`                       | a stage after the STOP never ran; `<stage>` is the STOP's             |
+  | `run-ended: GATE 2`                                            | the chain completed and was presented at GATE 2                       |
+  | `run-ended: STOP <stage>`                                      | a RED-verdict STOP; `<stage>` ∈ `grill \| build \| regress \| verify` |
+
+  Under `--loop` the four verdict lines carry the **last** iteration's verdicts and `run-ended: GATE 2` records any of
+  the loop's stops (each is presented at GATE 2); the per-iteration verdicts go in the `--loop` roll-up below. The block
+  is copied from the verdicts read, never re-derived: a model-typed copy of a deterministic output, so **ADVISORY** at
+  this command. At the pull request `check-ship-record.mjs` parses it (enum/regex) and compares `verdict-verify` /
+  `verdict-regress` with the two committed reports beside it — agreement, never proof the stages ran (L43);
+
 - a **pointer** to `.dev/features/<name>/REVIEW.md` (cite the file; do **not** restate its findings — P4),
   and `GRILL.md` (advisory);
 - **the `changelog-entry:` line — exactly one, from Step 2c's two forms:** `changelog-entry: exit <n>` or
@@ -361,8 +404,8 @@ Write **`.dev/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
 Immediately after writing it, and **before** ending the turn:
 
 ```bash
-npx prettier --ignore-unknown --write .dev/features/<name>/SHIP.md
-npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/SHIP.md
+npx --no-install prettier --ignore-unknown --write .dev/features/<name>/SHIP.md
+npx --no-install markdownlint-cli2 --no-globs --fix .dev/features/<name>/SHIP.md
 ```
 
 Scoped to **this stage's own artifact** — never a repo-wide formatter, whose writes escape the fix #7
@@ -468,6 +511,12 @@ iteration would record a verdict about bytes that are not the ones presented. It
   `pharn/ARCHITECTURE.md §2` primitive #3);
   `/pharn-dev-ship`'s **act** of reading them and stopping is **ADVISORY orchestration** — the same two-clocks
   split as `/pharn-dev-regress` and `/pharn-dev-verify` themselves.
+- **"a STOP is never proceeded past, delegated or not"** → **ADVISORY** here (the rule under Step 2). **Backstop at
+  the pull request: FLOOR (enum/regex)** — `.dev/floor/check-ship-record.mjs` REDs a product-surface PR with no
+  green `SHIP.md` verdict block, or with a block that records a STOP or a non-green verdict. Bounded, and stated: it
+  reads committed records and reports, so it proves a green record is present and agrees with its report — never
+  that the chain ran; one green record satisfies a PR, so a PR can carry product changes no record covers (presence,
+  not coverage); and it runs the PR's own copy of itself.
 - **"`/pharn-dev-grill` gates the chain"** → **FLOOR, but narrowly, and the narrowness is the point.**
   Exactly one thing it emits is a proceed/stop input: `check-plan-lessons.mjs`'s exit code (step 2). Its
   **interrogation findings never are**, whatever `severity` they carry — that separation is what keeps

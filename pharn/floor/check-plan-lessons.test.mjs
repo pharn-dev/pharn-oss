@@ -154,6 +154,27 @@ test("`## L1x` does not satisfy a citation of L1 (the heading's trailing space i
   assert.match(r.out, /cites L1/);
 });
 
+// 7.3.0 (lesson-heading-parser): ids resolve against VISIBLE headings only — lessons-index-core.mjs's reader. The
+// shared fixture table in lessons-index-core.test.mjs runs this CLI over every case; these pin the review's three.
+test("a `## L9` inside a fenced block or an HTML comment does not satisfy a citation of L9; the visible control does", () => {
+  for (const hiding of ["```text\n## L9 — quoted\n```\n", "<!--\n## L9 — commented out\n-->\n"]) {
+    const r = run(devPlan("- applied_lessons: [L9]", "", REF("L9")), LESSONS + "\n" + hiding);
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, /cites L9 — no matching/);
+    assert.match(r.out, /inside a fenced block or an HTML comment is not one/);
+  }
+  assert.equal(run(devPlan("- applied_lessons: [L9]", "", REF("L9")), LESSONS + "\n## L9 — real\n").status, 0);
+});
+
+test("a BOM before the first heading does not hide L1; `## L20` (no title) and `## L20 ` resolve L20", () => {
+  const bom = String.fromCharCode(0xfeff);
+  assert.equal(run(devPlan("- applied_lessons: [L1]", "", REF("L1")), bom + LESSONS).status, 0);
+  for (const h of ["## L20", "## L20 "]) {
+    assert.equal(run(devPlan("- applied_lessons: [L20]", "", REF("L20")), `${LESSONS}\n${h}\n`).status, 0, JSON.stringify(h));
+  }
+  assert.equal(run(devPlan("- applied_lessons: [L020]", "", REF("L020")), `${LESSONS}\n## L020 — x\n`).status, 1, "no leading zero");
+});
+
 // ── (D) BODY REFERENCE: a cited id must also appear in the plan BODY ─────────────────────────────────
 //
 // Every ✧ row below carries its own DISCRIMINATION control — the same fixture with the body line added

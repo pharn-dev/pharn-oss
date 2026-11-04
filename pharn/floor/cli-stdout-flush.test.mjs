@@ -23,6 +23,9 @@
 // (render-review-assignments.mjs, check-review-assignments.mjs) and check-model-config (stage-agent-core.mjs, which
 // parses `resolve`), each ending `process.exitCode = main();` (form "main"). Their documents are a griller list, a lens
 // list and one {model, effort} pair — bounded by what is installed or configured, not by the reviewed input.
+// Since 7.3.0 (family-grammar-crlf; the 2026-11-03 review's overflow item) the set also holds validate.mjs: no floor
+// caller JSON-parses it, but its RED report grows one line pair per finding and is read through pipes (a CI log, a
+// gate capture), and it ended through `process.exit()` right after printing. Form "sentinel-uncaught".
 // NOT EVERY PARSED CLI IS HERE, and the list of the ones outside it is OPEN (L47), never a count: a grep sweep at
 // 6.71.1 (`JSON.parse(` over a child's stdout in the non-test floor and hook files) found no parsed floor CLI outside
 // the set, but it sees only those spellings, so a parse through another name is not ruled out.
@@ -39,7 +42,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -94,6 +97,21 @@ const FLUSH_CLIS = [
   // `resolve` is the parsed path, and it prints with process.stdout.write (validate and agreement print with
   // console.log, which no floor caller parses).
   { file: "check-model-config.mjs", form: "main", print: "write", crashArgs: ["resolve", "plan", "--config", MODEL_CONFIG_FIXTURE] },
+  // 7.3.0 (family-grammar-crlf): validate.mjs, whose RED report is one line pair per finding and so unbounded. It is
+  // top-level module code, not a main(): `emit(code)` sets the exit code and throws a sentinel that its
+  // uncaughtException handler returns on (form "sentinel-uncaught"). Its crash contract is NOT this file's no-verdict
+  // one: since 6.72.1 a crash prints one `FLOOR: INCONCLUSIVE — crashed (…)` line and exits 2 (`crashVerdict`).
+  {
+    file: "validate.mjs",
+    form: "sentinel-uncaught",
+    crashArgs: [SCAN_FIXTURE_DIR],
+    crashStatus: 2,
+    crashVerdict: /^FLOOR: INCONCLUSIVE — crashed \("pharn-test-crash"\)\n$/,
+  },
+  // 7.3.0 (audit 2026-11-03): merge-findings ended `process.exit()` right after its stdout write. Its document is a
+  // bounded count line read by /pharn-review's model, not a floor parser, so it has no >64 KiB round-trip below; the
+  // static pin and the crash row hold it to the rule. Zero inputs is legal, so `<out>` alone reaches its print.
+  { file: "merge-findings.mjs", form: "argv", print: "write", crashArgs: [join(SCAN_FIXTURE_DIR, "merge-out.json")] },
   ...PLAN_SCANNERS.map((file) => ({ file, form: "main", print: "write", crashArgs: [SCAN_FIXTURE] })),
   ...SCANNERS.map((file) => ({ file, form: "scanner", print: "write", crashArgs: [SCAN_FIXTURE] })),
 ];
@@ -123,6 +141,13 @@ test("✧ STATIC PIN — no code line of a CLI in the set ends the process with 
     } else if (form === "sentinel-async") {
       assert.match(src, /process\.exitCode = code;\n\s*throw EMITTED;/, `${file}: emit sets exitCode, then unwinds`);
       assert.match(src, /\.catch\(\(e\) => \{\n\s*if \(e === EMITTED\) return;/, `${file}: the rejection handler passes ONLY the sentinel`);
+    } else if (form === "sentinel-uncaught") {
+      assert.match(src, /process\.exitCode = code;\n\s*throw EMITTED;/, `${file}: emit sets exitCode, then unwinds`);
+      assert.match(
+        src,
+        /process\.on\("uncaughtException", \(e\) => \{\n\s*if \(e === EMITTED\) return;/,
+        `${file}: the uncaught-exception handler passes ONLY the sentinel`
+      );
     } else if (form === "scanner") {
       assert.match(src, /process\.exitCode = runScannerCli\(/, `${file}: the exit code is set from the shared front end, never forced`);
     } else if (form === "main") {
@@ -145,7 +170,7 @@ test("★ a crash stays a crash — a non-sentinel throw exits non-zero with its
     console: 'data:text/javascript,console.log=()=>{throw new Error("pharn-test-crash")}',
     write: 'data:text/javascript,process.stdout.write=()=>{throw new Error("pharn-test-crash")}',
   };
-  for (const { file, print = "console", crashArgs, crashStatus = 1 } of FLUSH_CLIS) {
+  for (const { file, print = "console", crashArgs, crashStatus = 1, crashVerdict } of FLUSH_CLIS) {
     const preload = preloads[print];
     const script = join(HERE, file);
     const normal = spawnSync(process.execPath, [script, ...crashArgs], { encoding: "utf8" });
@@ -157,6 +182,11 @@ test("★ a crash stays a crash — a non-sentinel throw exits non-zero with its
     assert.doesNotMatch(normal.stderr, /pharn-test-crash/, `${file}: the control did not crash`);
     const crashed = spawnSync(process.execPath, ["--import", preload, script, ...crashArgs], { encoding: "utf8" });
     assert.equal(crashed.status, crashStatus, `${file}: exit ${crashed.status} — the crash was swallowed`);
+    if (crashVerdict) {
+      // A CLI whose documented crash verdict is one INCONCLUSIVE line (validate.mjs, 6.72.1): that line and nothing else.
+      assert.match(crashed.stdout, crashVerdict, `${file}: the crash verdict, exactly`);
+      continue;
+    }
     assert.match(crashed.stderr, /Error: pharn-test-crash/, `${file}: the stack reaches stderr`);
     assert.equal(crashed.stdout, "", `${file}: no verdict printed`);
   }
@@ -296,6 +326,30 @@ test("★ check-model-config — a >64 KiB `resolve` document reaches a pipe who
     assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(r.stdout), { model, effort: "high" });
+    t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ validate — a >64 KiB RED report reaches a pipe whole, every finding its header counts (7.3.0)", (t) => {
+  // 400 role-bearing files with no evals and no required fields: each yields blocking findings, so the report is far
+  // past one pipe buffer. Whole means: the header's finding count equals the finding lines that arrived.
+  const dir = mkdtempSync(join(tmpdir(), "flush-validate-"));
+  try {
+    for (let i = 0; i < 400; i++) {
+      const d = join(dir, "caps", `capability-${"x".repeat(60)}-${String(i).padStart(4, "0")}`);
+      mkdirSync(d, { recursive: true });
+      writeFileSync(join(d, "c.md"), "---\nrole: lens\n---\n");
+    }
+    const r = spawnSync(process.execPath, [join(HERE, "validate.mjs"), dir], { encoding: "utf8" });
+    const bytes = Buffer.byteLength(r.stdout);
+    assert.ok(bytes > PIPE_BUFFER, `the recipe must exceed the pipe buffer to test anything (${bytes} bytes)`);
+    assert.equal(r.status, 1, r.stderr);
+    const header = r.stdout.match(/^FLOOR: RED — (\d+) finding\(s\), 400 capabilities checked/);
+    assert.ok(header, r.stdout.slice(0, 300));
+    assert.equal(r.stdout.split("\n").filter((l) => l.startsWith("- [blocking] ")).length, Number(header[1]));
+    assert.ok(r.stdout.endsWith("\n"), "the last finding line arrived complete");
     t.diagnostic(`negative control on ${process.platform}: the old pattern delivered ${oldPatternDelivers(bytes)} of ${bytes + 1} bytes`);
   } finally {
     rmSync(dir, { recursive: true, force: true });

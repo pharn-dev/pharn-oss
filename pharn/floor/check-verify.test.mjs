@@ -369,6 +369,33 @@ test("★ --stamp is MUTUALLY EXCLUSIVE with a positional map, and REQUIRES --fe
   });
 });
 
+test("★ 7.3.0 — on the stamp path a positional map is refused in EVERY position, not only the first", () => {
+  // Before 7.3.0 a map appended after `--feature <name>` (or between flags) was silently not read and the stamp alone
+  // decided. Iterated over every slot an operand can take (L52), each refused with the same usage error.
+  withStamp(mkStamp({ test: 0 }), (p, dir) => {
+    const rp = join(dir, "results.json");
+    writeFileSync(rp, JSON.stringify({ test: 0 }));
+    const placements = [
+      [rp, "--stamp", p, "--feature", "demo"],
+      ["--stamp", p, rp, "--feature", "demo"],
+      ["--stamp", p, "--feature", "demo", rp],
+      ["--stamp", p, "--feature", "demo", "--ac-gate", rp],
+      ["--stamp", p, "--complete", "0", rp, "--feature", "demo"],
+    ];
+    for (const args of placements) {
+      const r = run(args);
+      assert.equal(r.status, 2, `${args.join(" ")}: ${r.stdout}`);
+      assert.equal(json(r).reason_code, "usage-error", args.join(" "));
+      assert.match(json(r).reason, /mutually exclusive with a positional results\.json/, args.join(" "));
+    }
+    // CONTROL: flag VALUES are not operands — the same stamp with no stray operand reads PASS (`--complete 0` agrees).
+    assert.equal(run(["--stamp", p, "--feature", "demo"]).status, 0);
+    assert.equal(run(["--stamp", p, "--complete", "0", "--feature", "demo"]).status, 0);
+    // CONTROL: the POSITIONAL path still reads its leading operand only (unchanged — a trailing word is not read).
+    assert.equal(run([rp, "--feature", "demo", "extra"]).status, 0);
+  });
+});
+
 test("★ an explicit --complete must AGREE with aux.completeness — a disagreement is a usage error", () => {
   withStamp(mkStamp({ test: 0 }, { aux: { completeness: 0 } }), (p) => {
     assert.equal(run(["--stamp", p, "--feature", "demo", "--complete", "0"]).status, 0, "an agreeing --complete must be accepted");
@@ -517,9 +544,10 @@ test("★ 6.59.0 — a signal exit the runner did NOT cause, and exits 2/125, st
   }
 });
 
-test("★ 6.59.0 — the POSITIONAL map keeps its table: 124/126/127 are plain failures there (the dev twin is unchanged)", () => {
-  // The positional map carries exits alone — nothing says how a run ended — so the new row never fires there, and
-  // /pharn-dev-verify (which types the map) and .dev/floor/check-ship.mjs see byte-identical output.
+test("★ 6.59.0 — the POSITIONAL map keeps its table: 124/126/127 are plain failures there", () => {
+  // The positional map carries exits alone — nothing says how a run ended — so the new row never fires there, and a
+  // positional caller sees byte-identical output. (/pharn-dev-verify typed such a map until 7.3.0; it now reads a
+  // run-gates.mjs stamp. /pharn-dev-regress's check-regress.mjs positional maps are the remaining hand-built ones.)
   withResults({ test: 124, lint: 127, build: 126 }, (p) => {
     const r = run([p, "--feature", "demo"]);
     assert.equal(r.status, 1);

@@ -23,8 +23,9 @@
 // count-verifiers, check-model-config, griller-extract; in .dev, capability-catalog-core and check-config) never used
 // `FM_RE`: they test a LOOSER fence, `startsWith("---")` closed by the next `\n---`, on purpose. A BOM defeated it the
 // same way, and there the failure was OPEN — a BOM'd capability was "not a capability" and validate printed GREEN
-// over it. Each now calls `stripBom` before its own fence test and keeps the rest of its loose model unchanged. The
-// test's anchor closure ranges over both families.
+// over it. Each called `stripBom` before its own fence test. The test's anchor closure ranges over both families.
+// Since 7.3.0 (family-grammar-crlf) seven of them read through ONE reader here, `looseFrontmatter` (its own section at
+// the end of this file): their seven hand copies split lines on "\n" alone, so CRLF hid every key but the last.
 //
 // WHAT THIS DOES NOT DO (P0):
 //   - NOT a YAML parser. `FM_RE` captures the raw block; a consumer reads a scalar from it with `readField`
@@ -207,4 +208,80 @@ export function readField(block, key) {
     if (k === key) found = readValue(raw);
   }
   return found;
+}
+
+// ── The LOOSE family's ONE reader (7.3.0, family-grammar-crlf — 2026-11-03 review, HIGH) ───────────────────────────────
+//
+// WHY IT LIVES HERE (the trigger, P7). validate.mjs, count-lenses, count-grillers, count-verifiers, check-model-config and,
+// in .dev, check-config and capability-catalog-core each carried a hand copy of one parser: the loose fence above, then
+// `raw.split("\n")` and `/^([A-Za-z0-9_]+):\s*(.*)$/` per line. Split on "\n" alone, a CRLF file keeps a "\r" on every
+// line but the last (the block is trimmed), and `(.*)$` cannot run past it, so only a LAST-line key survived. Measured
+// on a copy of this repo: `trust-fence.md` saved with CRLF gave `FLOOR: GREEN — 36 capabilities` (37 before) and
+// count-lenses 21 (22), exit 0 both, so the lens left the review registry with every floor line green. The count-*
+// tests that claimed CRLF parity put `role:` last, the one line that survives. L35: retire the seven copies rather than
+// bind them; frontmatter-core.test.mjs holds the closure (no other non-test floor module tests the loose fence or
+// declares this grammar) and executes the family over CRLF and displaced fences.
+//
+// THE MODEL, unchanged apart from the split: one leading BOM stripped, the fence open at `startsWith("---")` (so a
+// `----` opening still parses), closed at the next `\n---`, the block between `slice(3, end).trim()`med, then each line
+// matched by LOOSE_FIELD_LINE_RE. The key class admits a leading digit and no `-`, unlike FIELD_LINE_RE; the two
+// families are different models and stay so.
+//
+// DISPLACED. A fence that is not at offset 0 but follows only whitespace or Unicode format characters (`\s` covers a
+// newline, a space, NBSP and a second U+FEFF; `\p{Cf}` covers U+200B and the other invisible format marks) is read and
+// flagged `displaced: true`. Before, such a file was silently "not a capability" — the same open failure as the BOM.
+// Each consumer decides what a displaced block means: validate counts it and REDs a role-bearing one; the counters and
+// the catalog count it, so they agree with validate's count; check-model-config and check-config read it as NO
+// frontmatter, because their subject is what Claude Code reads from a command file, and claiming an agreement the
+// platform may not see would be a false GREEN.
+//
+// BOUND (P0): any other leading byte — a letter, an HTML comment, a stray `<` — still makes the file frontmatter-less,
+// silently, as before. Not a YAML parser: no nesting, no multi-line values, a repeated key is the caller's choice.
+
+/** One `key: value` line of the LOOSE family (validate.mjs's grammar). The single definition — do not re-declare it. */
+export const LOOSE_FIELD_LINE_RE = /^([A-Za-z0-9_]+):\s*(.*)$/;
+
+/** Whitespace / format characters before a `---` that make a fence DISPLACED rather than absent. */
+const DISPLACED_LEAD_RE = /^[\s\p{Cf}]+(?=---)/u;
+
+/**
+ * The loose frontmatter block: `{ entries, body, displaced }`, or `null` when there is no fence (none at all, or one
+ * that never closes). `entries` is `fieldEntries` over LOOSE_FIELD_LINE_RE, in file order, values untrimmed; `body` is
+ * the text after the closing `\n---`; `displaced` says the fence was found after a whitespace/format-character lead.
+ * A non-string yields `null`. Pure; never throws.
+ */
+export function looseFrontmatter(rawText) {
+  if (typeof rawText !== "string") return null;
+  let text = stripBom(rawText);
+  let displaced = false;
+  if (!text.startsWith("---")) {
+    const lead = text.match(DISPLACED_LEAD_RE);
+    if (!lead) return null;
+    text = text.slice(lead[0].length);
+    displaced = true;
+  }
+  const end = text.indexOf("\n---", 3);
+  if (end === -1) return null;
+  const entries = fieldEntries(text.slice(3, end).trim().split(/\r?\n/), LOOSE_FIELD_LINE_RE);
+  return { entries, body: text.slice(end + 4), displaced };
+}
+
+/** The loose family's scalar value rule: trimmed, then one leading and one trailing `"` or `'` removed. */
+export function looseScalar(raw) {
+  return String(raw)
+    .trim()
+    .replace(/^["']|["']$/g, "");
+}
+
+/** validate.mjs's value rule: a `[a, "b"]` value is a list of non-empty scalars, anything else `looseScalar`. */
+export function looseValue(raw) {
+  const val = String(raw).trim();
+  if (val.startsWith("[") && val.endsWith("]")) {
+    return val
+      .slice(1, -1)
+      .split(",")
+      .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+      .filter(Boolean);
+  }
+  return val.replace(/^["']|["']$/g, "");
 }

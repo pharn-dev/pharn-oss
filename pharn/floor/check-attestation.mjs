@@ -35,7 +35,55 @@ import { createHash } from "node:crypto";
 
 // --- shape constants (the enum/regex floor; mirror pharn/pharn-contracts/ship-record.md — P4) ---
 const BY_RE = /^[A-Za-z0-9._@-]{1,64}$/; // single-line bounded handle (fix F2)
-const AT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/; // ISO-8601
+const AT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/; // ISO-8601
+
+// 7.3.0 (loop-record-honesty — review finding "check-attestation accepts `by: agent` and an impossible date"). A
+// PLACEHOLDER DENY-LIST, compared after lower-casing, exact match only: agent names and stand-in words an agent
+// self-filling the field would type. It is NOT identity verification — any real-looking name a model types still
+// passes, and that a real human supplied `by` stays advisory (pharn/pharn-contracts/ship-record.md). Wildcards
+// (`*-bot`, `claude-*`) are deliberately absent: a pattern the floor cannot justify member by member would be a
+// heuristic dressed as a check (P0).
+const RESERVED_BY = Object.freeze([
+  "agent",
+  "ai",
+  "anonymous",
+  "assistant",
+  "bot",
+  "claude",
+  "human",
+  "llm",
+  "model",
+  "none",
+  "null",
+  "pharn",
+  "system",
+  "unknown",
+  "user",
+]);
+
+/** Is `by` a reserved placeholder? Runs only after BY_RE accepted it (L14), so the string is a clean bounded line. */
+function reservedHandle(by) {
+  return RESERVED_BY.includes(by.toLowerCase());
+}
+
+/**
+ * Does `at` (already matching AT_RE — L14: the shape test stays the precondition) name a real instant? Month 01–12,
+ * day within that month (Gregorian leap years), hour 00–23, minute and second 00–59, offset hours 00–23 and minutes
+ * 00–59. A leap second (`:60`) is refused on purpose: JavaScript's Date cannot represent it, and an attestation timed
+ * to one is not worth an exception the rest of the toolchain could not read back. Pure arithmetic over the captured
+ * digits; total over any string (L62).
+ */
+function realInstant(at) {
+  const m = AT_RE.exec(at);
+  if (m === null) return false;
+  const [y, mo, d, h, mi, s] = m.slice(1, 7).map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || h > 23 || mi > 59 || s > 59) return false;
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mo - 1];
+  if (d > days) return false;
+  if (m[8] !== "Z" && (Number(m[9]) > 23 || Number(m[10]) > 59)) return false;
+  return true;
+}
 const HASH_RE = /^[0-9a-f]{64}$/;
 const ATTESTATION_KEYS = ["at", "by", "record_hash"]; // EXACTLY these three (sorted) — no smuggling
 
@@ -96,8 +144,10 @@ function attestationWellShaped(a) {
   return (
     typeof a.by === "string" &&
     BY_RE.test(a.by) &&
+    !reservedHandle(a.by) &&
     typeof a.at === "string" &&
     AT_RE.test(a.at) &&
+    realInstant(a.at) &&
     typeof a.record_hash === "string" &&
     HASH_RE.test(a.record_hash)
   );

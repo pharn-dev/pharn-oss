@@ -76,7 +76,7 @@ Locally, `npm run check:instruction-growth` runs the same check with `--base-rul
 The verdict is over the checker's model of what Claude Code loads, not over the loader itself ([`pharn/LIMITS.md`](./pharn/LIMITS.md) §3e). A per-PR budget does not bound growth spread over many PRs. The CI step has the same four bounds as the per-PR CHANGELOG check below:
 
 - it does not see direct pushes to `main`;
-- an admin merge bypasses required checks;
+- an admin merge skips the review, but not this step: it runs in the `check` job, which ruleset 25907495 requires of every account (no bypass) since 2026-10-26;
 - it judges GitHub's test merge commit as of the PR's last CI run, and `main` can move before the merge without a re-run;
 - a pull request runs its own copy of the checker and of `ci.yml`.
 
@@ -84,12 +84,12 @@ Its wiring is pinned, and its `node` line executed, by [`.dev/floor/instruction-
 
 ### Releases
 
-A merge that bumps [`SKILLS_VERSION`](./SKILLS_VERSION) becomes a release once its required checks are green on `main`. [`.github/workflows/release.yml`](./.github/workflows/release.yml) runs on every push to `main`. It waits until `floor`, `check`, `Analyze (javascript-typescript)` and `Socket Security: Project Report` have all concluded `success` on that commit. Then it creates the annotated tag `v<SKILLS_VERSION>` and a GitHub release whose body is that version's CHANGELOG section. Since `pharn-cli` 0.15.0, a new install takes the newest such release by default (`--ref latest`).
+A merge that bumps [`SKILLS_VERSION`](./SKILLS_VERSION) becomes a release once its required checks are green on `main`. [`.github/workflows/release.yml`](./.github/workflows/release.yml) runs on every push to `main`. It waits until `floor`, `check`, `gitleaks`, `Analyze (javascript-typescript)` and `Socket Security: Project Report` have all concluded `success` on that commit. Then it creates the annotated tag `v<SKILLS_VERSION>` and a GitHub release whose body is that version's CHANGELOG section. Since `pharn-cli` 0.15.0, a new install takes the newest such release by default (`--ref latest`).
 
-- **An `[Unreleased]` merge is not a release.** Once its version is tagged, the job finds the tag and stops.
+- **An `[Unreleased]` merge is not a release.** Its version's tag already points at an earlier commit, so the job fails with `TAG_ELSEWHERE` (a tag is never moved) and creates nothing. That red run is expected; do not re-run it.
 - **A failed release job is fixed and re-run** from the Actions tab with **Run workflow** on `main` (`workflow_dispatch`). It tags the tip of `main` at that time. Never move, delete or re-create a tag by hand.
-- **The check list in `release.yml` is a copy of the ruleset's.** It leaves out `Socket Security: Pull Request Alerts`, which runs on pull requests only. Change the two together. A check added to the ruleset and not to `release.yml` is not waited for.
-- **What it does not cover.** An admin merge still lands on `main`, and `pharn-cli`'s `main` channel installs it ([`pharn/LIMITS.md §11`](./pharn/LIMITS.md) says which installs are on it). New installs default to releases. The release job only keeps such a commit from becoming a tag.
+- **The check list in `release.yml` is a copy of what `main` requires**: ruleset 25907495's required checks plus `gitleaks`, which `main`'s classic branch protection requires. It leaves out `Socket Security: Pull Request Alerts`, which runs on pull requests only. Change them together. A check added to either and not to `release.yml` is not waited for.
+- **What it does not cover.** An admin merge skips the review and classic protection's `gitleaks` requirement (ruleset 25907495 still holds every account to its required checks), so a commit whose secret scan failed can still land on `main`, and `pharn-cli`'s `main` channel installs it ([`pharn/LIMITS.md §11`](./pharn/LIMITS.md) says which installs are on it). New installs default to releases. The release job, which waits for `gitleaks`, only keeps such a commit from becoming a tag.
 
 The job's guards are pinned, and its `run:` blocks executed against a stub `gh`, by [`.dev/floor/release-workflow.test.mjs`](./.dev/floor/release-workflow.test.mjs).
 
@@ -145,10 +145,19 @@ Two checks hold these rules. Both read the file through one shared grammar, [`.d
 
   It checks only that `SKILLS_VERSION` moved. The new version's CHANGELOG section is checked by the two checks above, and the size of the bump is not checked at all.
 
+- **`check:ship-record`** — **not** in `npm run check`, for the same reason. It REDs a PR that changes the same product paths (the four trusted docs aside, which only a human edits) unless a `.dev/features/<name>/SHIP.md` in the PR records a green `/pharn-dev-ship` run: the verdict block `/pharn-dev-ship` Step 3 writes, ending `run-ended: GATE 2`, beside a `verify-report.json` that reads `PASS` and a `regression-report.json` that reads `no-regressions`. It also REDs any `SHIP.md` in the PR that records a run which stopped on a red verdict. A product change has no light mode. Run it the same way, after fetching:
+
+  ```bash
+  git fetch --no-tags origin main
+  npm run check:ship-record
+  ```
+
+  It checks presence, not coverage: one green record satisfies the PR, even if the PR also carries product changes that record does not cover. A green record that agrees with its reports is not proof the stages ran.
+
 What the checks do **not** prove: that an entry describes its change, that a date is when anything merged (it is the date you wrote), or that a bump was needed or the right size. The per-PR checks are also bounded in four ways:
 
 - It does not see direct pushes to `main`.
-- An admin merge bypasses required checks.
+- An admin merge skips the review, but not these checks: they run in the `check` job, which ruleset 25907495 requires of every account (no bypass) since 2026-10-26.
 - It judges GitHub's test merge commit as of the PR's last CI run. Branch protection does not require branches to be up to date, so `main` can move before the merge without a re-run.
 - A pull request runs its own copy of the checker and of `ci.yml`, so review of changes to `.dev/floor/**` and `.github/workflows/**` is the backstop.
 
@@ -179,7 +188,7 @@ When you add a PHARN capability, follow the conventions in [`CLAUDE.md`](./CLAUD
 The repo separates the **product** (what a user receives) from the **build apparatus** (what a contributor uses), in the filesystem and in command names:
 
 - **`.dev/`** holds the apparatus — `.dev/floor/` (dev-only checkers + tests), `.dev/features/` (build-loop audit trails), `.dev/memory-bank/`. It is committed but is **not** what a user receives.
-- **The product lives under `pharn/`** — `pharn/pharn-contracts/`, `pharn/pharn-core/`, `pharn/pharn-pipeline/`, `pharn/pharn-review/`, and the **product floor** `pharn/floor/` (the checkers the `/pharn-*` commands run on a user's code) — plus `pharn/features/` for product-pipeline artifacts, which moved there from a root `features/` in 5.0.0. `pharn/floor/validate.mjs` **is** that product floor, and it excludes `.dev/**` wholesale: it scans the product surface only. So a change under `pharn/floor/` **ships** and is not apparatus — which means it must bump [`SKILLS_VERSION`](./SKILLS_VERSION) and add a `CHANGELOG.md` entry (the one exception: the checkers' `*.test.mjs` files never ship, so a test-only change does not bump); see [`CLAUDE.md`](./CLAUDE.md) ("SKILLS_VERSION discipline") for what counts as product surface and how big the bump is.
+- **The product lives under `pharn/`** — `pharn/pharn-contracts/`, `pharn/pharn-core/`, `pharn/pharn-pipeline/`, `pharn/pharn-review/`, and the **product floor** `pharn/floor/` (the checkers the `/pharn-*` commands run on a user's code) — plus `pharn/features/` for product-pipeline artifacts, which moved there from a root `features/` in 5.1.2. `pharn/floor/validate.mjs` **is** that product floor, and it excludes `.dev/**` wholesale: it scans the product surface only. So a change under `pharn/floor/` **ships** and is not apparatus — which means it must bump [`SKILLS_VERSION`](./SKILLS_VERSION) and add a `CHANGELOG.md` entry (the one exception: the checkers' `*.test.mjs` files never ship, so a test-only change does not bump); see [`CLAUDE.md`](./CLAUDE.md) ("SKILLS_VERSION discipline") for what counts as product surface and how big the bump is.
 - **Two floors exist on purpose:** `.dev/floor/` is contributor tooling that never ships; `pharn/floor/` ships. [`CLAUDE.md`](./CLAUDE.md) ("Repo layout — the dev/product boundary") is the authoritative split — defer to it rather than to this summary.
 - **Commands split by name prefix** (they cannot move out of `.claude/`): build-apparatus commands are **`pharn-dev-*`** (`pharn-dev-plan`, `-build`, …); product commands are **`pharn-*`** without `-dev-`. The prefix is naming/UX only — **not** an access gate.
 

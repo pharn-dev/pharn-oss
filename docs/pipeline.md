@@ -1,7 +1,7 @@
 # PHARN pipeline
 
 How a PHARN run moves through its stages, what binds them, what your project needs for the test stage, and which
-grillers and lenses it applies. This text moved here unchanged from the root [`README.md`](../README.md) in 6.65.3,
+grillers and lenses it applies. This text moved here unchanged from the root [`README.md`](../README.md) in 6.68.1,
 apart from re-based links and one "below" that pointed at the README's own layout.
 
 ## How the workflow works

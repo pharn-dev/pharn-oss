@@ -34,8 +34,9 @@
 //   no-snapshot         no record in the git dir, or a git dir git cannot name;
 //   snapshot-malformed  the record is not a regular file (a link, a FIFO, a directory, unreadable, over
 //                       `SNAPSHOT_MAX_BYTES`) of the closed `pharn-pre-run-snapshot/1` shape;
-//   other-run           the record names another feature, command or marker digest (every `--open` rewrites the
-//                       marker, so a re-opened run is another run);
+//   other-run           the record names another feature, command or marker digest (a re-opened run writes new
+//                       marker bytes — `run-marker.mjs --open` rewrites its marker, and a loop marker, whose `--open`
+//                       refuses an open one since 7.3.0, is re-opened only after `--close` — so it is another run);
 //   base-changed        the record's base is not the partition's base (HEAD moved after the capture, or a regress was
 //                       given another `--base`).
 // `applied` names an `inside` path when the record holds it with a hash or `absent` and the live digest is EQUAL.
@@ -54,6 +55,9 @@
 //   pre-run-changed test file stays inside — not compared by /pharn-regress (/pharn-verify still runs it at HEAD).
 // • /pharn-loop's commit never holds a subtracted path (it stages plan scope ∪ this feature's artifacts ∪ pinned tests),
 //   so a green loop's branch is not the whole tree its gates ran on; and a committed REGRESSION.md names those paths.
+//   Since 7.3.0 the closeout asks this same decision about the plan's OWN scope too (loop-closeout.mjs `buildStageList`,
+//   through `preRunUnchanged`): a scope path the snapshot holds unchanged is left out of the commit and named in the
+//   closing document's `left_dirty`, so a user's uncommitted edit to a file the plan names is not committed either.
 //
 // TRUST (P2): every operand is deterministic-tool output (git paths, digests, marker bytes) or a record's JSON. A
 // record's paths are only compared — never opened; the execution half hashes only paths git printed. Values are

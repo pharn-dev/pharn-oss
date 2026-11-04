@@ -14,6 +14,7 @@
 // Honest scope (P0): it guarantees a SPEC.md carries the REQUIRED SECTIONS, a VALID state enum, a present
 // spec_id, and — when Approved — a spec_content_hash that EQUALS sha256(body), taken with line endings folded
 // to LF (see bodyHash), with a `spec_kind:` line hashed in front when the frontmatter carries one (see pinHash).
+// Since 7.3.0 also: neither `state` nor `approved_by` appears twice, and `approved_by`, when present, reads `model` — which says what a model claimed about its own approval, never who approved.
 // It does NOT — cannot — judge
 // whether the INTENT is clear, complete, or wise: that is the human's advisory call, owned by the approval
 // halt in /pharn-spec. "passed check-spec" must NEVER read as "the intent is sound" — that conflation is the
@@ -113,7 +114,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
-import { FIELD_LINE_RE, FM_RE, readValue, stripBom } from "./frontmatter-core.mjs";
+import { FIELD_LINE_RE, FM_RE, describeRepeats, readValue, stripBom } from "./frontmatter-core.mjs";
 import {
   visibleH2Names,
   isTemplated,
@@ -154,16 +155,39 @@ function titleCase(s) {
 // SINGLE definition of "the SPEC body", reused by both validate and --hash, so the approved-pin and its
 // recompute never disagree. Returns null when there is no frontmatter block at all (fail-closed). The body is
 // frontmatter-independent, so flipping `state` / writing `spec_content_hash` on approval does NOT move its hash.
+//
+// `counts` (7.3.0, loop-record-honesty — review finding "a repeated `state:` reads LAST-wins") is how many times each
+// key occurs, a Map (L15). `fm` still holds the last copy — every print mode and frontmatter-core `readField` read that
+// same copy (the 6.20.5 parity a ✧ test pins) — but validate() REDs a repeat of a REPEAT_REFUSED key, so such a SPEC
+// never passes validate, nor check-spec-approved, which runs validate first. A person reading the file top-down sees the
+// FIRST copy, and YAML 1.2 refuses the mapping.
 function parseSpec(text) {
   const m = text.match(FM_RE);
   if (!m) return null;
   const fm = {};
+  const counts = new Map();
   for (const line of m[1].split(/\r?\n/)) {
     const kv = line.match(FIELD_LINE_RE);
-    if (kv) fm[kv[1]] = readValue(kv[2]);
+    if (kv) {
+      fm[kv[1]] = readValue(kv[2]);
+      counts.set(kv[1], (counts.get(kv[1]) ?? 0) + 1);
+    }
   }
-  return { fm, raw: m[1], body: text.slice(m[0].length) };
+  return { fm, counts, raw: m[1], body: text.slice(m[0].length) };
 }
+
+// The keys whose repeat is a `repeated-key` RED (7.3.0): `state`, the field the finding named — `state: Draft` then
+// `state: Approved` validated as Approved while a reader saw a Draft — and `approved_by`, whose value this file now
+// checks. NOT `spec_content_hash` or `spec_id`, deliberately: 6.20.5 (ac-tests-agreement) made every reader take their
+// LAST copy so a re-approval that appends a new pin under a stale one, or under a Draft's `spec_content_hash: ""`,
+// stays readable the same way everywhere (ac-tests-lock.test.mjs pins both cases), and changing that is outside this
+// finding (P7). A repeat of any other key is not validated here either.
+const REPEAT_REFUSED = ["state", "approved_by"];
+
+// The one value `approved_by` may hold (7.3.0). /pharn-spec writes the key only under --model-approve, so a human
+// approval carries no key at all; any other value — `human`, an empty string — is a model labelling its own approval
+// as something it is not. ABSENCE is not detected: a model-approved SPEC without the key passes (pharn/LIMITS.md §1d).
+const APPROVED_BY_ENUM = ["model"];
 
 // The body's SHA-256, with line endings FOLDED (`\r\n` → `\n`) before hashing. LF vs CRLF is the same
 // intent, not a content change: a Windows clone (`core.autocrlf=true`), or a Windows editor rewriting the
@@ -289,7 +313,10 @@ function emitSpecId(specPath) {
 // validate read `Draft` — a FAIL-OPEN on the one gate whose job is to admit only approved intent — and a
 // template-faithful `state: Approved # ratified …` read as a non-member, a false RED. Both are reproduced as
 // tests in check-spec-approved.test.mjs. Resolution order is parseSpec's, not a second opinion about it:
-// LAST-wins across duplicate keys, with the quote resolved before the comment (see readValue).
+// LAST-wins across duplicate keys, with the quote resolved before the comment (see readValue) — the reading
+// frontmatter-core `readField` gives, pinned equal by a ✧ parity test. Since 7.3.0 validate() REDs a repeated `state:`
+// (`repeated-key`), so a caller that, like check-spec-approved.mjs, validates before it reads this line never acts on
+// the last copy of a repeat.
 //
 // WHY a print-mode and not "read the state out of validate's GREEN line", which is the cheaper-looking
 // alternative a future reader will propose: that line is PROSE, and a membership fact read by pattern-matching
@@ -348,7 +375,17 @@ function validate(specPath) {
     red("frontmatter", `no YAML frontmatter block (\`---\` … \`---\`) in ${specPath}`);
     return fail();
   }
-  const { fm, raw, body } = parsed;
+  const { fm, counts, raw, body } = parsed;
+
+  // (0) a key the verdict reads appears at most once (7.3.0). Keys and counts only, never a value (P2).
+  const repeats = REPEAT_REFUSED.filter((k) => (counts.get(k) ?? 0) > 1).map((key) => ({ key, count: counts.get(key) }));
+  if (repeats.length > 0) {
+    red(
+      "repeated-key",
+      `${describeRepeats(repeats)} — a key the spec checks may appear once in the frontmatter (a person reads the first ` +
+        "copy, a last-wins reader the last); delete the extra line(s)"
+    );
+  }
 
   // (1) state present + ∈ enum (P5).
   if (!("state" in fm) || fm.state.length === 0) {
@@ -360,6 +397,15 @@ function validate(specPath) {
   // (2) spec_id present + non-empty — the §6 root identity every downstream artifact carries.
   if (!("spec_id" in fm) || fm.spec_id.length === 0) {
     red("spec_id", "missing or empty `spec_id` (the root identity downstream artifacts carry)");
+  }
+
+  // (2b) `approved_by`, when present, ∈ APPROVED_BY_ENUM (7.3.0). The value is never echoed (P2).
+  if ("approved_by" in fm && !APPROVED_BY_ENUM.includes(fm.approved_by)) {
+    red(
+      "approved-by",
+      `\`approved_by\` must read ${APPROVED_BY_ENUM.map((v) => `\`${v}\``).join(" or ")} when present — /pharn-spec writes ` +
+        "it only for a model's approval (--model-approve), and a human approval carries no such key"
+    );
   }
 
   // (3) required sections present as `##` headings — set membership (P5). Presence only; the intent's

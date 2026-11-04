@@ -74,7 +74,9 @@
 // RESULTS_ENV), valued with that gate's OWN absolute path under `<out>`, named by gate-run-core's
 // resultsFileName (one copy of the rule). A project's reporter config may write its results there. The rest of
 // the inherited environment is passed unchanged, except that a test-level gate also gets `CI=1` when `CI` is not
-// already defined (gateEnv, audit P2-F). The runner REMOVES that path before spawning — `init`'s wipe
+// already defined (gateEnv, audit P2-F) — and a spawn with NO results file has an inherited `PHARN_TEST_RESULTS`
+// removed (7.3.0: a runner running under a runner must not hand its children the outer run's path). The runner REMOVES
+// that path before spawning — `init`'s wipe
 // does not cover a stale-lock re-run, which would otherwise hash the crashed attempt's file — and afterwards
 // records `results_sha256`: the sha256 of the path if it is a REGULAR file, else `null`. The file is read
 // through a descriptor opened O_NOFOLLOW|O_NONBLOCK and fstat-checked on that same descriptor, in fixed-size
@@ -961,10 +963,14 @@ const CI_GATE_IDS = Object.freeze([...new Set([...Object.values(LEVEL_GATES).fla
 const FORWARDED_SIGNALS = Object.freeze(["SIGTERM", "SIGINT", "SIGHUP"]);
 
 /** The environment a gate is spawned with: the inherited one, plus — when `resultsFile` is not null — this gate's own
- *  results path, plus `CI=1` for a CI_GATE_IDS member when `CI` is not already defined. */
+ *  results path, plus `CI=1` for a CI_GATE_IDS member when `CI` is not already defined. With `resultsFile` null the
+ *  variable is REMOVED, not merely left unset (7.3.0): a runner that itself runs under a runner — this repo's suite
+ *  as /pharn-dev-verify's `test` gate — inherits its parent's PHARN_TEST_RESULTS, and passing it through handed a
+ *  child the parent's results path (measured: run-gates.test.mjs's "null means NO variable" test went red). */
 function gateEnv(id, resultsFile) {
   const env = { ...process.env };
   if (resultsFile !== null) env[RESULTS_ENV] = resultsFile;
+  else delete env[RESULTS_ENV];
   if (CI_GATE_IDS.includes(id) && !Object.hasOwn(process.env, "CI")) env.CI = "1";
   return env;
 }

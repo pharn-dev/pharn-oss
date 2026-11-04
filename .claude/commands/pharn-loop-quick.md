@@ -30,8 +30,10 @@ reads.
 `--quick` invocation too; only what is listed here changes.**
 
 1. **Entry.** `/pharn-loop --quick [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`. Step 1a runs unchanged
-   (its entry gates included), and writes no mode marker: the loop's mode is the SPEC's kind, and a marker would be a
-   second, unverified copy of it.
+   (its entry gates included), with `quick` as its marker line's `<mode>` (7.3.0). The marker is the one copy of the
+   invocation written before any SPEC exists: the closeout's decision check REDs a record whose mode differs from it
+   (`MODE_UNWITNESSED`, `pharn/pharn-contracts/loop-record.md`), so a quick-table green is committed only for a run
+   opened quick.
 
 2. **Step 3 — the SPEC.** Start it with this line in place of Step 3's start line. The decision is the same — the spec
    is a stage agent in both columns — but `--mode quick` is what gives the stage agent the quick invocation:

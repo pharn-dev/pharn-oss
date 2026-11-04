@@ -69,10 +69,28 @@
 // stated, not hidden.
 //
 // ====================================== THE MARKER — ONE OWNER (L35) ======================================
-//   node .claude/hooks/require-loop-record.cjs --open <name> --cap <M>   writes the marker (/pharn-loop Step 1a)
+//   node .claude/hooks/require-loop-record.cjs --open <name> --cap <M> [--mode full|quick]   writes the marker (Step 1a)
 //   node .claude/hooks/require-loop-record.cjs --close <name>           removes it (the /pharn-loop Final step)
 // The writer and the reader of `pharn-loop-active/1` are this one file, so the schema cannot drift between a
 // command's pinned `node -e` and a hook. The writer refuses any name that is not one plain path segment.
+// 7.3.0 (loop-marker-integrity — review HIGH x2, LOW):
+//   • `--mode` records the run's INVOCATION (`quick` iff /pharn-loop read --quick as the first argument token) in the
+//     marker, the one floor-readable copy written before any SPEC exists; check-loop-decision.mjs REDs MODE_UNWITNESSED
+//     when the record's mode differs. Absent, the marker has no `mode` key and reads `full`. MODES is the closed set.
+//   • `--open` REFUSES (exit 2, nothing written) when ANYTHING already sits at the marker path, so this CLI never
+//     re-opens a marker with a new cap or mode. For a regular-file marker the refusal names `--close <name>`, which the
+//     /pharn-loop Final step runs; for anything else (a directory, say) it says a human must remove it, and `--close`
+//     refuses that case too rather than crash.
+//   • The marker is PUBLISHED WHOLE: written to `active.json.tmp-<pid>` (flag `wx`, so a planted file or link there is
+//     refused, never followed) and renamed into place, as the counter's persist() does. A failure after this process
+//     created the tmp removes it; a tmp entry it did not create is left alone. Never a torn marker, which the guard
+//     would read as INERT.
+//   • The Write/Edit tools cannot rewrite the marker either: protect-trusted-paths.cjs denies pharn/.run/pharn-loop/**
+//     to them (7.3.0, its RUN_STATE_SUBTREES).
+//   ROUTES THAT REMAIN, stated: `--close` is pinned too, so `--close` then `--open` with a new cap then a pre-run
+//   re-capture re-opens a run in three pinned lines; a Bash write reaches the marker directly; two concurrent opens of
+//   one name race between the lstat and the rename (the last wins, as before); and `<mode>` is typed by the model from
+//   its reading of its own argv. Every comparison against the marker is agreement, never provenance (L43).
 // These modes are Bash calls — outside the PreToolUse gate (L19), ADVISORY: a run that skips `--open` is
 // simply unguarded, and one that skips `--close` leaves a marker the 24 h ceiling and a present LOOP.md both
 // make inert.
@@ -85,9 +103,9 @@
 // COST: on the inert path, one readdir of `pharn/.run/pharn-loop/` (usually absent) — measured in VERIFY.md.
 // No child process on any path. No network.
 //
-// NOT PROTECTED by protect-trusted-paths.cjs (adding it would edit a hook-protected file): a Write-tool edit
-// could disarm it. Proportionate for a fail-open, advisory guard that a Bash `--close` can already disarm; a
-// Bash edit to it is still caught by `reconcile` (.claude/hooks/* is always-reconciled). Named follow-up.
+// PROTECTED by protect-trusted-paths.cjs: it is one of the four hook scripts on that guard's list, so a Write-tool
+// edit of it is denied (corrected in 7.3.0 — this paragraph said the opposite after the list gained it). A Bash edit is
+// not prevented; it is caught by `reconcile`, which always reconciles this path against HEAD.
 
 "use strict";
 
@@ -103,6 +121,9 @@ const RECORD = "LOOP.md";
 const DEFAULT_MAX = 3;
 const MAX_CEILING = 7; // strictly under the platform's documented 8-consecutive-block override
 const AGE_CEILING_MS = 24 * 60 * 60 * 1000;
+// The `--mode` values (7.3.0) — pharn/floor/loop-mode-core.mjs's LOOP_MODES, restated because a hook never imports the
+// floor; check-loop-decision.test.mjs pins the two equal.
+const MODES = Object.freeze(["full", "quick"]);
 
 // Claude's current directory as this hook process sees it, with symlinks resolved (the same construction as
 // the two write guards). process.cwd() throws when the directory was deleted; the filesystem root is the
@@ -271,8 +292,9 @@ function stopGuard(stdinText, { now = Date.now(), root = null, env = process.env
   }
 }
 
-/** --open / --close. These are Bash-run by /pharn-loop and fail CLOSED (exit 2) on a bad name: a writer is not
- *  the guard, and refusing is the safe direction for a write. */
+/** --open / --close. These are Bash-run by /pharn-loop and fail CLOSED (exit 2) on a bad name, a bad mode, a marker
+ *  path that is already occupied (or, for --close, occupied by something not a regular file) and every write failure:
+ *  a writer is not the guard, and refusing is the safe direction for a write. */
 function markerMode(argv, { root = rootDir(), env = process.env, stderr = process.stderr } = {}) {
   const mode = argv[0];
   const name = argv[1];
@@ -291,11 +313,31 @@ function markerMode(argv, { root = rootDir(), env = process.env, stderr = proces
     }
   }
   if (mode === "--close") {
-    fs.rmSync(file, { force: true });
+    const present = lstatOrNull(file);
+    if (present !== null && !present.isFile()) {
+      stderr.write("require-loop-record: the marker path holds something that is not a regular file — a human must remove it\n");
+      return 2;
+    }
+    try {
+      fs.rmSync(file, { force: true });
+    } catch {
+      stderr.write("require-loop-record: the marker could not be removed — a human must remove it\n");
+      return 2;
+    }
     return 0;
   }
-  if (argv[2] !== "--cap" || !/^[1-9][0-9]{0,2}$/.test(argv[3] ?? "") || argv.length !== 4) {
-    stderr.write("require-loop-record: usage: --open <name> --cap <M>\n");
+  const withMode = argv.length === 6 && argv[4] === "--mode" && MODES.includes(argv[5]);
+  if (argv[2] !== "--cap" || !/^[1-9][0-9]{0,2}$/.test(argv[3] ?? "") || !(argv.length === 4 || withMode)) {
+    stderr.write("require-loop-record: usage: --open <name> --cap <M> [--mode full|quick]\n");
+    return 2;
+  }
+  const occupied = lstatOrNull(file);
+  if (occupied !== null) {
+    stderr.write(
+      occupied.isFile()
+        ? `require-loop-record: a marker is already open for this run — close it first: node .claude/hooks/require-loop-record.cjs --close ${name}\n`
+        : "require-loop-record: the marker path holds something that is not a regular file — a human must remove it\n"
+    );
     return 2;
   }
   const sid = env.CLAUDE_CODE_SESSION_ID;
@@ -305,9 +347,31 @@ function markerMode(argv, { root = rootDir(), env = process.env, stderr = proces
     session_id: typeof sid === "string" && sid !== "" ? sid : null,
     started_at: new Date().toISOString(),
     cap: Number(argv[3]),
+    ...(withMode ? { mode: argv[5] } : {}),
   };
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(marker)}\n`);
+  const tmp = `${file}.tmp-${process.pid}`;
+  let created = false;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const fd = fs.openSync(tmp, "wx"); // O_CREAT|O_EXCL: an existing entry there — a planted link included — refuses
+    created = true;
+    try {
+      fs.writeFileSync(fd, `${JSON.stringify(marker)}\n`);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, file);
+  } catch {
+    if (created) {
+      try {
+        fs.rmSync(tmp, { force: true });
+      } catch {
+        /* nothing more can be done; the marker was never published */
+      }
+    }
+    stderr.write("require-loop-record: the marker could not be written — no run is open\n");
+    return 2;
+  }
   return 0;
 }
 
@@ -342,6 +406,7 @@ module.exports = {
   blockReason,
   exhaustedMessage,
   SCHEMA,
+  MODES,
   DEFAULT_MAX,
   MAX_CEILING,
   AGE_CEILING_MS,

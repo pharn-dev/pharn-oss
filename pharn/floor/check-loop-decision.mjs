@@ -58,7 +58,8 @@
 // with `decision: INCONCLUSIVE` and a `blocked` frontmatter key never consulted `check-loop.mjs` in the
 // first place (a stuck-point stop, not a malformed-report stop) — there is nothing to re-derive, so this
 // checker SKIPS it (GREEN, distinct message) rather than attempting a re-run that was never meant to
-// happen.
+// happen. Since 7.3.0 only an id in loop-record-core.mjs's frozen BLOCKED_IDS is skipped; any other value is RED
+// `BLOCKED_UNKNOWN` (before, `blocked: <anything>` skipped, so a measured red could hide as a blocked stop).
 //
 // `cap` — the loop's `--max-iter` value — is read from the record's OWN (optional) `cap` field, added
 // alongside this file so `/pharn-loop` can capture it (it already knows the value at Step 1 entry). A
@@ -89,15 +90,23 @@
 //     ever quoted — L62);
 //   • and the record's `iterations` must not exceed its `cap`, else RED `ITER_OVER_CAP`: a compliant run stops at
 //     `iter <= cap` in every decision class (CONTINUE needs `iter < cap`; STOP_CAP fires at the first `iter >= cap`).
+//   • (7.3.0, review HIGH "the model can pick the quick table") the marker's `mode` — written by `--open … --mode
+//     <mode>` at Step 1a, absent (a pre-7.3.0 marker) → `full`, outside LOOP_MODES → CAP_UNWITNESSED's fail-closed
+//     path — must equal the record's mode, else RED `MODE_UNWITNESSED`. With MODE_MISMATCH above that chains the SPEC's
+//     kind to a value fixed before any SPEC existed, so a run opened `full` over a quick SPEC is not committed.
 // BOUND (L43): agreement between two files in the writable tree, never provenance — a run that rewrites the marker
-// through Bash together with the record passes, and `iterations` is still model-typed, so an under-count passes.
+// through Bash together with the record passes, `iterations` is still model-typed, so an under-count passes, and
+// `<mode>` is typed by the model from its own reading of its argv. Since 7.3.0 `--open` refuses a marker that already
+// exists and protect-trusted-paths.cjs denies the write tools everything below pharn/.run/pharn-loop/, so a marker is
+// rewritten only by Bash or by `--close` then `--open` (then a re-capture of the pre-run snapshot) — three pinned lines,
+// stated, not closed.
 //
 // NON-LLM. Node stdlib only (fs, child_process, url, path). No network, no eval, no deps.
 //
 // ── NO CROSS-TREE IMPORT, NO SIBLING-INTERNALS IMPORT (P3) ──────────────────────────────────────────────
 // `FM_RE` / `stripBom` come from the shared `frontmatter-core.mjs` (this file is added to its materialized
-// `CONSUMERS` list), and `LOOP_MODES` from `loop-mode-core.mjs` — both cores, never a CLI's internals (6.28.0: the mode
-// vocabulary has one owner, L35). The small envelope-scalar helpers below are RE-IMPLEMENTED IN-FILE rather than
+// `CONSUMERS` list), `LOOP_MODES` from `loop-mode-core.mjs` and (7.3.0) `BLOCKED_IDS` from `loop-record-core.mjs` — all
+// cores, never a CLI's internals (each vocabulary has one owner, L35). The small envelope-scalar helpers below are RE-IMPLEMENTED IN-FILE rather than
 // imported from `check-loop-record.mjs` — the same discipline `check-plan-spec-agree.mjs` already applies
 // to `check-spec.mjs`'s `readValue`: two files agreeing on a tiny parse is a CONVENTION tests can detect,
 // not a coupling that would make one file's shape depend on another's internals.
@@ -111,7 +120,8 @@
 //                    on a non-blocked record, a malformed `mode`, or a live re-derivation that does NOT match the
 //                    recorded decision (reports missing/malformed, or a genuine mismatch — DECISION_MISMATCH) or the
 //                    recorded mode (MODE_MISMATCH), a cap the run's marker does not witness (CAP_UNWITNESSED) or
-//                    contradicts (CAP_MISMATCH), or `iterations` over `cap` (ITER_OVER_CAP). Fail-closed throughout.
+//                    contradicts (CAP_MISMATCH), a mode the marker contradicts (MODE_UNWITNESSED), `iterations` over
+//                    `cap` (ITER_OVER_CAP), or a `blocked` id outside BLOCKED_IDS (BLOCKED_UNKNOWN). Fail-closed throughout.
 
 import { readFileSync, existsSync, openSync, fstatSync, closeSync, constants } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -119,6 +129,7 @@ import { fileURLToPath } from "node:url";
 import { basename, dirname, join, resolve } from "node:path";
 import { describeRepeats, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
+import { BLOCKED_IDS } from "./loop-record-core.mjs";
 
 // Resolve the sibling CLI RELATIVE TO THIS FILE (import.meta.url), never the cwd — so this check behaves
 // identically no matter where /pharn-loop is invoked from (mirrors check-plan-spec-agree.mjs).
@@ -129,6 +140,8 @@ const CHECK_LOOP = join(here, "check-loop.mjs");
 const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_GREEN_QUICK", "STOP_CAP", "STOP_TERMINAL", "INCONCLUSIVE"]);
 // The optional `mode`'s vocabulary — loop-mode-core.mjs's LOOP_MODES, never restated (L35).
 const MODE_ENUM = new Set(LOOP_MODES);
+// The blocked-stop ids (7.3.0) — loop-record-core.mjs's BLOCKED_IDS, never restated (L35). Only a member is SKIPPED.
+const BLOCKED_ENUM = new Set(BLOCKED_IDS);
 const ITER_RE = /^\d+$/;
 const CAP_RE = /^\d+$/;
 
@@ -142,10 +155,11 @@ function red(msg) {
 const MARKER_SCHEMA = "pharn-loop-active/1";
 
 /**
- * The cap the run opened with, from its Stop-guard marker beside the record's project root.
- * @returns {{ok: true, cap: number} | {ok: false, why: string}} — `why` is a fixed phrase, never marker text (L62).
+ * The cap and mode the run opened with, from its Stop-guard marker beside the record's project root.
+ * @returns {{ok: true, cap: number, mode: string} | {ok: false, why: string}} — `why` is a fixed phrase, never marker
+ *   text (L62). `mode` is the marker's own `mode` (7.3.0) — absent → `full`, a value outside LOOP_MODES → not ok.
  */
-function markerCap(recordPath) {
+function markerRun(recordPath) {
   const featureDir = dirname(resolve(recordPath));
   const name = basename(featureDir);
   const featuresDir = dirname(featureDir);
@@ -186,7 +200,12 @@ function markerCap(recordPath) {
   if (!Object.hasOwn(doc, "name") || doc.name !== name) return { ok: false, why: "the run marker names another run" };
   const cap = Object.hasOwn(doc, "cap") ? doc.cap : undefined;
   if (!Number.isSafeInteger(cap) || cap < 1) return { ok: false, why: "the run marker carries no positive integer cap" };
-  return { ok: true, cap };
+  // The mode the run was opened with (7.3.0): an own property, a string, a LOOP_MODES member (L15). A marker the
+  // pre-7.3.0 hook wrote has no key and reads `full`.
+  const mode = Object.hasOwn(doc, "mode") ? doc.mode : "full";
+  if (typeof mode !== "string" || !MODE_ENUM.has(mode))
+    return { ok: false, why: `the run marker's mode is not one of {${[...MODE_ENUM].join(", ")}}` };
+  return { ok: true, cap, mode };
 }
 
 // A string with no control characters and a bounded length — the SAME precondition
@@ -246,7 +265,18 @@ function gate(recordPath) {
   }
 
   // ── The blocked-stop exemption — never attempt re-derivation (the contract's stated exception) ────────
+  // Since 7.3.0 only a BLOCKED_IDS member is skipped: an id outside the set is RED BLOCKED_UNKNOWN, never SKIPPED and never
+  // re-derived (a record that names no real stuck point is not a blocked stop the contract defines). Quoted only as JSON
+  // of a guarded string (L62).
   if (decision === "INCONCLUSIVE" && fields.has("blocked")) {
+    const b = fields.get("blocked");
+    if (!cleanScalar(b, 64) || !BLOCKED_ENUM.has(b)) {
+      return red(
+        `loop-record's \`blocked\` is ${cleanScalar(b, 64) ? JSON.stringify(b) : "not a clean one-line value"} (${recordPath}) — ` +
+          `BLOCKED_UNKNOWN: only a stuck-point id {${BLOCKED_IDS.join(", ")}} makes a blocked stop, and only a blocked stop ` +
+          `skips re-derivation. Do not commit it.`
+      );
+    }
     console.log(
       `GREEN — loop-record is a blocked stop (${recordPath}, blocked: ${fields.get("blocked")}) — it never consulted check-loop.mjs; nothing to re-derive. SKIPPED.`
     );
@@ -348,7 +378,7 @@ function gate(recordPath) {
     );
   }
   // The cap the run opened with (6.65.0, LOOP-2) — after the re-run, so a decision or mode mismatch still prints.
-  const witnessed = markerCap(recordPath);
+  const witnessed = markerRun(recordPath);
   if (!witnessed.ok) {
     mismatches.push(
       `loop-record's \`cap\` ${cap} (${recordPath}) is not witnessed by the run's Stop-guard marker — ${witnessed.why} — ` +
@@ -361,6 +391,16 @@ function gate(recordPath) {
       `loop-record's \`cap\` is ${Number(cap)} (${recordPath}), but the run opened with --cap ${witnessed.cap} ` +
         `(pharn/.run/pharn-loop/<name>/active.json) — CAP_MISMATCH. The record's stop was computed against a cap the run was ` +
         `not given; do not commit it, and never repair this by editing \`cap\`.`
+    );
+  }
+  // The mode the run opened with (7.3.0) — the one floor-readable copy of the invocation, written at Step 1a before any
+  // SPEC exists. Compared only when the marker is usable; an unusable marker is already CAP_UNWITNESSED above.
+  if (witnessed.ok && witnessed.mode !== mode) {
+    mismatches.push(
+      `loop-record's \`mode\` is ${mode}${fields.has("mode") ? "" : " (absent — read as full)"} (${recordPath}), but the run ` +
+        `was opened with --mode ${witnessed.mode} (pharn/.run/pharn-loop/<name>/active.json) — MODE_UNWITNESSED. The record's ` +
+        `mode is the run's invocation, and the marker is where Step 1a wrote it; do not commit it, and never repair this by ` +
+        `editing \`mode\`.`
     );
   }
   if (Number(iterations) > Number(cap)) {
@@ -378,7 +418,7 @@ function gate(recordPath) {
   console.log(
     `GREEN — loop-record's decision ${decision} (${recordPath}) is re-derivable in mode ${rederivedMode}: a live re-run of ` +
       `check-loop.mjs against ${cited} with --iter ${iterations} --cap ${cap} reproduces it verbatim, the ` +
-      `record's mode agrees, and its cap is the one the run's marker recorded at Step 1a. NOTE (P0): this proves the decision is RE-DERIVABLE from the cited ` +
+      `record's mode agrees, and its cap and mode are the ones the run's marker recorded at Step 1a. NOTE (P0): this proves the decision is RE-DERIVABLE from the cited ` +
       `report${quick ? "" : "s"} — it does NOT prove ${quick ? "that report is" : "those reports are"} honest. A ` +
       `self-consistent fabricated ${quick ? "report" : "report pair"} still passes this check.`
   );

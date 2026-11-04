@@ -189,6 +189,14 @@ version: 0.1.0
 // Deliberately carries no `rule_id:`/`problem:` tokens, so CHECK 5 cannot fire and every RED below is
 // attributable to CHECK 8.
 const CANON_DOC = (cite) => `# a capability body that invokes the floor\n\nRun \`node ${cite}\` over the artifact.\n`;
+// The GREEN-expecting CHECK 8 cases below hold a real capability (frontmatter + evals) rather than a role-less doc:
+// since 7.3.0 a capability root holding markdown but zero capabilities is INCONCLUSIVE (exit 2), so a role-less canon
+// doc alone no longer reads GREEN. The CHECK 8 property each asserts — no P6/floor-path finding — is unchanged.
+const CANON_CAP = (dir, cite) => ({
+  [`${dir}/sample.md`]: VALID_CAP + "\n" + CANON_DOC(cite),
+  [`${dir}/evals/cases/case-1.md`]: "# a case\n",
+  [`${dir}/evals/expected/expected-1.md`]: "# expected\n",
+});
 
 test("CHECK 8: a canon cite of a RELOCATED floor checker (twin exists) is RED and names both paths", () => {
   withRepo(
@@ -237,7 +245,7 @@ test("CHECK 8: a griller cite of a RELOCATED scan-plan scanner is RED — the F2
 // now have twins and are flagged (above), while a ghost stays silent because there is still nothing
 // to point it at. One mechanism, two outcomes, decided solely by whether the file exists.
 test("CHECK 8: a GHOST cite (resident in neither floor) is NOT flagged", () => {
-  withRepo({ "pharn/pharn-pipeline/grillers/g/g.md": CANON_DOC(".dev/floor/scan-plan-a11y.mjs") }, (root) => {
+  withRepo(CANON_CAP("pharn/pharn-pipeline/grillers/g", ".dev/floor/scan-plan-a11y.mjs"), (root) => {
     const r = run(root);
     assert.equal(r.status, 0);
     assert.match(r.stdout, /FLOOR: GREEN/);
@@ -305,7 +313,7 @@ test("CHECK 8: an eval judge .json is scanned too, not just .md", () => {
 test("CHECK 8: canon citing the LIVE pharn/floor path is GREEN", () => {
   withRepo(
     {
-      "pharn/pharn-review/sample/sample.md": CANON_DOC("pharn/floor/scan-code-injection.mjs"),
+      ...CANON_CAP("pharn/pharn-review/sample", "pharn/floor/scan-code-injection.mjs"),
       "pharn/floor/scan-code-injection.mjs": "// lives here\n",
     },
     (root) => {
@@ -386,7 +394,7 @@ test("CHECK 8: the `pharn-` prefix excludes pharn/floor — a twinned dev-ref th
     {
       "pharn/floor/check-loop-record.mjs": "// deliberately does NOT import `.dev/floor/check-provenance.mjs`\n",
       "pharn/floor/check-provenance.mjs": "// the deliberate product-side copy\n",
-      "pharn/pharn-review/sample/sample.md": CANON_DOC("pharn/floor/check-provenance.mjs"),
+      ...CANON_CAP("pharn/pharn-review/sample", "pharn/floor/check-provenance.mjs"),
     },
     (root) => {
       const r = run(root);
@@ -1015,6 +1023,110 @@ test("★ TST-10: an uncaught throw prints `FLOOR: INCONCLUSIVE — crashed (…
       const lines = r.stdout.split("\n").filter((l) => l.startsWith("FLOOR:"));
       assert.equal(lines.length, 1, `exactly one FLOOR line; got:\n${r.stdout}`);
       assert.match(lines[0], /^FLOOR: INCONCLUSIVE — crashed \(".*EACCES.*"\)$/);
+    } finally {
+      chmodSync(file, 0o600);
+    }
+  });
+});
+
+// ── 7.3.0 (family-grammar-crlf) ─────────────────────────────────────────────────────────────────────────────────────
+const VALID_TREE = (dir) => ({
+  [`${dir}/sample.md`]: VALID_CAP,
+  [`${dir}/evals/cases/case-1.md`]: "# a case\n",
+  [`${dir}/evals/expected/expected-1.md`]: "# expected\n",
+});
+
+// A symlinked directory below pharn/ used to be descended, importing an outside directory's capabilities into the
+// count (measured on this repo: 38 for 37). Now it is not descended and is a blocking finding. Control twin: the same
+// tree with the outside lens copied in as a real directory is counted, so the link — not the lens — is what REDs.
+test("★ a symlinked directory below pharn/ is not descended — the count is unchanged and it REDs P6/symlinked-dir", () => {
+  const outside = mkdtempSync(join(tmpdir(), "pharn-validate-outside-"));
+  try {
+    for (const [rel, body] of Object.entries(VALID_TREE("evil"))) {
+      mkdirSync(dirname(join(outside, rel)), { recursive: true });
+      writeFileSync(join(outside, rel), body);
+    }
+    withRepo(VALID_TREE("pharn/pharn-review/sample"), (root) => {
+      const clean = run(root);
+      assert.equal(clean.status, 0, clean.stdout);
+      assert.match(clean.stdout, /GREEN — 1 capabilities/);
+      symlinkSync(outside, join(root, "pharn", "pharn-review", "linked"));
+      const r = run(root);
+      assert.equal(r.status, 1, r.stdout);
+      assert.match(r.stdout, /RED — 1 finding\(s\), 1 capabilities checked/, "the linked lens must not be counted");
+      assert.match(r.stdout, /- \[blocking\] P6\/symlinked-dir {2}pharn\/pharn-review\/linked\n/);
+      assert.doesNotMatch(r.stdout, /evil/, "nothing behind the link is read");
+    });
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+// GATE 1 of family-grammar-crlf: a `pharn` root that is itself a link is the operator's choice and is followed.
+test("★ a `pharn` root that is itself a symlink is followed as before — counted, no P6/symlinked-dir", () => {
+  const real = mkdtempSync(join(tmpdir(), "pharn-validate-realroot-"));
+  try {
+    for (const [rel, body] of Object.entries(VALID_TREE("pharn-review/sample"))) {
+      mkdirSync(dirname(join(real, rel)), { recursive: true });
+      writeFileSync(join(real, rel), body);
+    }
+    withRepo({ "README.md": "# project\n" }, (root) => {
+      symlinkSync(real, join(root, "pharn"));
+      const r = run(root);
+      assert.equal(r.status, 0, r.stdout);
+      assert.match(r.stdout, /FLOOR: GREEN — 1 capabilities checked/);
+    });
+  } finally {
+    rmSync(real, { recursive: true, force: true });
+  }
+});
+
+// L34: zero capabilities over markdown under a capability root is INCONCLUSIVE, not GREEN — and the narrow edges hold.
+test("★ zero capabilities among markdown under a capability root → INCONCLUSIVE exit 2 (each of the three roots)", () => {
+  for (const dir of ["pharn/pharn-review/x", "pharn/pharn-pipeline/grillers/x", "pharn/pharn-core/x"]) {
+    withRepo({ [`${dir}/x.md`]: "" }, (root) => {
+      const r = run(root);
+      assert.equal(r.status, 2, `${dir}: ${r.stdout}`);
+      assert.match(r.stdout, /^FLOOR: INCONCLUSIVE — 0 capabilities among the markdown under /);
+      assert.doesNotMatch(r.stdout, /GREEN/);
+    });
+  }
+});
+
+test("★ zero capabilities stays GREEN — 0 where nothing was expected: contracts only, no pharn/, a root with no .md", () => {
+  for (const files of [
+    { "pharn/pharn-contracts/finding-shape.md": "# a contract, no role\n" },
+    { "pharn-review/sample/sample.md": "# root-level, not under pharn/\n" },
+    { "pharn/pharn-review/x/notes.txt": "not markdown\n" },
+  ]) {
+    withRepo(files, (root) => {
+      const r = run(root);
+      assert.equal(r.status, 0, `${Object.keys(files)[0]}: ${r.stdout}`);
+      assert.match(r.stdout, /FLOOR: GREEN — 0 capabilities checked/);
+    });
+  }
+  // A RED stays a RED: a role-less canon doc that cites a relocated checker is not hidden behind INCONCLUSIVE.
+  withRepo({ "pharn/pharn-review/s/s.md": CANON_DOC(".dev/floor/validate.mjs"), "pharn/floor/validate.mjs": "// twin\n" }, (root) => {
+    const r = run(root);
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stdout, /FLOOR: RED/);
+  });
+});
+
+// CHECK 8's read used to `catch { continue }`, so an unreadable file in the canon scope was skipped silently.
+test("★ CHECK 8: an unreadable .json in the canon scope is INCONCLUSIVE (crashed, EACCES), never skipped", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root reads a mode-000 file, so the case cannot be produced");
+    return;
+  }
+  withRepo({ ...VALID_TREE("pharn/pharn-review/sample"), "pharn/pharn-review/sample/evals/judge.json": "{}\n" }, (root) => {
+    const file = join(root, "pharn/pharn-review/sample/evals/judge.json");
+    assert.equal(run(root).status, 0, "control: readable, GREEN");
+    chmodSync(file, 0o000);
+    try {
+      const r = run(root);
+      assert.equal(r.status, 2, r.stdout + r.stderr);
+      assert.match(r.stdout, /^FLOOR: INCONCLUSIVE — crashed \(".*EACCES.*"\)$/m);
     } finally {
       chmodSync(file, 0o600);
     }

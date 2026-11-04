@@ -14,6 +14,12 @@ docs/capabilities/
 # L15), so any reformatting pass would rewrite committed bytes and the drift checker would see false drift.
 docs/lessons-index.md
 
+# Memory-bank canon (7.3.0, plan-scope-hardening): canon changes only through the gated promotion, whose accepted bytes
+# a formatter must not rewrite. A Bash formatter pass over a plan-sourced scope that named canon rewrote it (review
+# 2026-11-03, probe D); the setter now refuses such a scope, and this is the second layer for an explicitly named path.
+.dev/memory-bank/
+pharn/memory-bank/
+
 # Tool-managed Claude/Cursor settings (not project source)
 .claude/settings.json
 .claude/settings.local.json
@@ -68,6 +74,13 @@ pharn/features/*/REGRESSION.md
 # gate ids, PLAN-derived paths and a checker's own message verbatim — content the renderer does not control — so
 # gate-clean output is not achievable by construction, and the conflict would land on `/pharn-verify` itself.
 pharn/features/*/VERIFY.md
+
+# REVIEW.md — the SAME reasoning as VERIFY.md above (7.3.0, audit 2026-11-03): `pharn/floor/render-review.mjs` renders
+# it deterministically for /pharn-review Step 6, and it quotes lens text, paths and the orchestrator's self-report
+# verbatim inside fences — content the renderer does not control — so gate-clean output is not achievable by
+# construction. A BENIGN render is still markdownlint-clean under this repo's config (render-review.test.mjs probes it).
+# `.dev/features/*/REVIEW.md` (the dev review, model-written) is NOT listed and stays formatted.
+pharn/features/*/REVIEW.md
 
 # The other machine-written JSON pipeline artifacts, on the SAME reasoning (L23): each is one floor module's
 # `JSON.stringify(…, null, 2)` output, and that layout expands a short array of strings over several lines where

@@ -147,8 +147,9 @@ const ITER_RE = /^\d{1,6}$/;
 
 /**
  * Control-char-free and bounded. The PRECONDITION that runs BEFORE any anchored shape regex, never as
- * a replacement for one (L14): JS `$` without `m` matches before a single trailing newline, so
- * `/^\d+$/.test("2\n")` is true. Composed, not substituted.
+ * a replacement for one (L14). Corrected in 7.3.0: JS `$` without `m` matches ONLY at the end of the input, so
+ * `/^\d+$/.test("2\n")` is FALSE (measured, Node 24); the guard covers a value trimmed or line-split before a
+ * regex, and the length bound. Composed, not substituted.
  *
  * THE ONE DEFINITION, exported. It previously existed as three byte-identical private copies — here,
  * in `render-cost-ledger.mjs` and in `check-cost-ledger.mjs` — which `/pharn-dev-review` found alongside

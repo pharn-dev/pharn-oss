@@ -45,11 +45,12 @@
 // MISS is never a question and never a guess: the caller runs the BASE side exactly as it did before 6.33.0. The same
 // predicate decides PUBLICATION: the caller publishes a record only when this function HITs with it.
 //
-// THE DELIVERY RUN (`deliveryRunIdentity`): the run marker is NEVER PARSED — run-marker.mjs's and
-// require-loop-record.cjs's headers both say no reader reads a marker's fields. It counts when it is present and open
-// by the write guard's own rule (a regular file whose mtime is within 24 h of now, in either direction:
-// enforce-writes-scope.cjs RUN_AGE_CEILING_MS), and its identity is sha256 of its bytes: each `--open` rewrites it, so a
-// new run has new bytes.
+// THE DELIVERY RUN (`deliveryRunIdentity`): THIS module never parses the run marker. (Other readers do:
+// require-loop-record.cjs's Stop guard reads a loop marker's session, name and age, and check-loop-decision.mjs its cap
+// and, since 7.3.0, its mode.) It counts when it is present and open by the write guard's own rule (a regular file whose
+// mtime is within 24 h of now, in either direction: enforce-writes-scope.cjs RUN_AGE_CEILING_MS), and its identity is
+// sha256 of its bytes. A re-opened run writes new bytes: `run-marker.mjs --open` rewrites its marker, and since 7.3.0
+// `require-loop-record.cjs --open` refuses an open one, so a loop run is re-opened only by `--close` then `--open`.
 //
 // HONEST SCOPE (P0): a HIT proves AGREEMENT — the run marker, the record, the stamp, its logs and the root files agree
 // with each other and with the current requirement — never PROVENANCE (L43): a self-consistent forged set passes. That

@@ -25,10 +25,12 @@
 // it accepts a known risk, never an unknown one (GATE 1, question 2).
 //
 // THE SELECTION RULE for CREDENTIAL_CODES: a file or env var whose presence alone gives a process write, push or deploy
-// access to a remote system (git hosting, a package registry, a cloud account, a deploy platform). NOT on the list, each
-// with its reason (pharn/pharn-contracts/loop-record.md, "The isolation field"): GITHUB_TOKEN (ephemeral and scoped by
-// the workflow's `permissions:` in Actions, and present in every run there; in a codespace it is long-lived, but the
-// codespace's credential helper is already a signal); ANTHROPIC_API_KEY and ~/.claude/ (the agent's own model
+// access to a remote system (git hosting, a package registry, a cloud account, a deploy platform). GITHUB_TOKEN counts
+// everywhere EXCEPT GitHub Actions (`GITHUB_ACTIONS=true`; 7.3.0): there it is ephemeral, scoped by the workflow's
+// `permissions:` and present in every run, so counting it would make `env:GITHUB_ACTIONS` useless; elsewhere it is
+// usually a personal access token, and before 7.3.0 a dev container, Gitpod or PHARN_ISOLATED=1 shell that exported one
+// read ISOLATED. NOT on the list, each with its reason (pharn/pharn-contracts/loop-record.md, "The isolation field"):
+// ANTHROPIC_API_KEY and ~/.claude/ (the agent's own model
 // credential — always present, the exfiltration residual this stop does not touch); ~/.docker/config.json and
 // ~/.kube/config (either can hold only non-secret settings, and no failure has named them yet, P7).
 //
@@ -63,6 +65,7 @@ export const CREDENTIAL_CODES = Object.freeze([
   "cred:ssh-agent",
   "cred:gh-hosts",
   "cred:env:GH_TOKEN",
+  "cred:env:GITHUB_TOKEN",
   "cred:git-credentials",
   "cred:credential-helper",
   "cred:netrc",
@@ -102,7 +105,11 @@ export const CREDENTIAL_ENV = Object.freeze([
   "STRIPE_SECRET_KEY",
 ]);
 
-/** Every env var the probe reads, beyond the two above: the home directory and the agent socket. */
+/** Credential env vars that count only OUTSIDE GitHub Actions (`GITHUB_ACTIONS` is not exactly "true"), each when set
+ *  to a non-empty value; the code is `cred:env:<name>` (7.3.0). */
+export const CREDENTIAL_ENV_OFF_ACTIONS = Object.freeze(["GITHUB_TOKEN"]);
+
+/** Every env var the probe reads, beyond the lists above: the home directory and the agent socket. */
 export const PROBE_ENV = Object.freeze(["HOME", "USERPROFILE", "SSH_AUTH_SOCK"]);
 
 /** `/proc/1/cgroup` naming one of these runtimes is container evidence. */
@@ -157,6 +164,9 @@ export function evidenceOf(probe) {
     if (own(holder, key) === true) hits.add(code);
   }
   for (const name of CREDENTIAL_ENV) if (nonEmpty(own(env, name))) hits.add(`cred:env:${name}`);
+  if (own(env, "GITHUB_ACTIONS") !== "true") {
+    for (const name of CREDENTIAL_ENV_OFF_ACTIONS) if (nonEmpty(own(env, name))) hits.add(`cred:env:${name}`);
+  }
   return [...hits].sort((a, b) => ORDER.get(a) - ORDER.get(b));
 }
 
@@ -254,7 +264,7 @@ export const REFUSAL_TEXT = Object.freeze({
   "probe-failed":
     "`git config` could not be read to look for a credential helper, so the evidence is incomplete. Fix git, then " +
     "re-run; --accept-host-execution does not accept unknown evidence (pharn/LIMITS.md §6).",
-  usage: "usage: node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]",
+  usage: "usage: node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name> (the flag only first)",
   crashed: "the check failed internally, so no verdict exists. Treat it as a refusal (pharn/LIMITS.md §6).",
 });
 

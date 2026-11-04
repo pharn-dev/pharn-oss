@@ -16,7 +16,10 @@
 //     staged or not) ∪ `git ls-files --others --exclude-standard -z` (untracked, not ignored);
 //   - a path is product surface iff it matches some PRODUCT_SURFACE.include pattern and no .exclude pattern;
 //   - RED (`NOT_BUMPED`) iff at least one changed path is product surface and SKILLS_VERSION's bytes at the
-//     base equal its bytes in the working tree (one trailing newline ignored on each side).
+//     base equal its bytes in the working tree (one trailing newline ignored on each side), OR the working tree's
+//     version is not a bare `X.Y.Z` (VERSION_RE, 7.3.0): `7.2.1 ` with a trailing space differed from `7.2.1` and
+//     counted as a bump, while release.yml's TAG_RE refuses it, so main would ship new product bytes under the
+//     old number.
 //
 // WHAT "BUMPED" DELIBERATELY DOES NOT RE-CHECK (L35 — one rule, one owner). A moved SKILLS_VERSION must also
 // open its own `## [X.Y.Z]` CHANGELOG section at the top: `check-skills-version-recorded.mjs` REDs when the
@@ -249,17 +252,24 @@ export function readBase(base, target) {
   }
 }
 
+/** A version a bump may move to: a bare `X.Y.Z`, release.yml's TAG_RE language without its `v` (7.3.0). */
+export const VERSION_RE = /^\d+\.\d+\.\d+$/;
+
 /** The pure core. Returns { ok, findings, stats }. */
 export function judge({ paths, baseVersion, headVersion }) {
   const surface = paths.filter((p) => isProductSurface(p));
-  const bumped = baseVersion !== headVersion;
+  const valid = VERSION_RE.test(headVersion);
+  const bumped = baseVersion !== headVersion && valid;
   const findings = [];
   if (surface.length > 0 && !bumped) {
     const listed = surface.slice(0, MAX_LISTED).map((p) => quote(p, QUOTE_LEN));
     const more = surface.length > MAX_LISTED ? ` … and ${surface.length - MAX_LISTED} more` : "";
+    const state = valid
+      ? `SKILLS_VERSION is still ${quote(headVersion, 40)}`
+      : `SKILLS_VERSION ${quote(headVersion, 40)} is not a bare X.Y.Z version, so it is not a bump`;
     findings.push({
       type: "NOT_BUMPED",
-      problem: `${surface.length} product-surface path(s) changed but SKILLS_VERSION is still ${quote(headVersion, 40)}: ${listed.join(", ")}${more}.`,
+      problem: `${surface.length} product-surface path(s) changed but ${state}: ${listed.join(", ")}${more}.`,
     });
   }
   return { ok: findings.length === 0, findings, stats: { compared: paths.length, surface, baseVersion, headVersion } };

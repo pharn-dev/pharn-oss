@@ -86,7 +86,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { stripBom } from "./frontmatter-core.mjs";
+import { looseFrontmatter, looseScalar } from "./frontmatter-core.mjs";
 
 // ── The enumeration IS the deliverable (L29 / L36) ───────────────────────────────────────────────────
 // The closed stage → product-command map. Every pass below iterates THIS object; no pass re-derives the
@@ -237,24 +237,21 @@ function resolveStage(stages, stage) {
   return { model: entry.model, effort: entry.effort };
 }
 
-// Parse a command file's frontmatter `model:` / `effort:`. Same `---` fence + `^([A-Za-z0-9_]+):\s*(.*)$`
-// line parse + quote-strip as `count-grillers.mjs`'s `frontmatterRole` and `.dev/floor/check-config.mjs`
-// — a STRUCTURED read of the structured location, never a substring grep (L6). The key match is EXACT,
-// which is what keeps `model_tier:` from ever being read as `model:`. One leading BOM is stripped first
-// (frontmatter-core.mjs `stripBom`, 6.65.2), as those readers now do: a BOM'd command used to read as having
-// no `model:` at all.
+// Parse a command file's frontmatter `model:` / `effort:` through frontmatter-core.mjs `looseFrontmatter` (7.3.0) —
+// the one loose reader `count-grillers.mjs` and `.dev/floor/check-config.mjs` share — a STRUCTURED read of the
+// structured location, never a substring grep (L6). The key match is EXACT, which is what keeps `model_tier:` from
+// ever being read as `model:`. One leading BOM is stripped (6.65.2) and CRLF lines are read (7.3.0; the hand copy this
+// replaced split on "\n" alone, so a CRLF command lost every key but its last). A DISPLACED fence (a blank line or an
+// invisible character before `---`) reads as NO frontmatter here, deliberately: this checker's subject is what Claude
+// Code reads from a command file, and reading a block the platform may not see would certify an agreement that does
+// not hold.
 function frontmatterModelEffort(rawText) {
-  const text = stripBom(rawText);
-  if (!text.startsWith("---")) return {};
-  const end = text.indexOf("\n---", 3);
-  if (end === -1) return {};
-  const raw = text.slice(3, end).trim();
+  const lf = looseFrontmatter(rawText);
+  if (!lf || lf.displaced) return {};
   const out = {};
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/);
-    if (!m) continue;
-    if (m[1] === "model") out.model = m[2].trim().replace(/^["']|["']$/g, "");
-    else if (m[1] === "effort") out.effort = m[2].trim().replace(/^["']|["']$/g, "");
+  for (const { key, raw } of lf.entries) {
+    if (key === "model") out.model = looseScalar(raw);
+    else if (key === "effort") out.effort = looseScalar(raw);
   }
   return out;
 }

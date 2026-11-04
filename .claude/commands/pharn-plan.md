@@ -205,14 +205,18 @@ applied_lessons: none | [L1, L2] # MANDATORY — floor-checked (Step 4b); `none`
 > **leading token is a back-tick path** — ``- `path/to/file` — <what changes>``; (3) to **exclude** a
 > path, put it under the `### Explicitly not touched` **subsection** (the setter stops at that
 > heading) — **never** inline as ``- `path` — not touched`` (an inline-marked item still enters
-> scope). Fenced code is never read as the list, and in an installed project the setter refuses a plan that
-> names PHARN's own files (`pharn/**` but `pharn/features/**`, `.claude/**`, `pharn.config.json`), so never name them
-> (6.61.0). **Caveat:** a bare, non-blockquote prose line under `## Files` that reads like an exclusion
-> (wording such as _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off
-> limits_) is treated by the setter as a head-less exclusion intro and **truncates the authorized list
-> right there** — every path after it silently falls out of scope. Keep narrative in a **blockquote**
-> (`> …`) or as a **path-item description** (``- `path` — note``), and use the `### Explicitly not
-touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **list items** whose
+> scope). Fenced code and HTML comment blocks are never read as the list; a second `## Files` heading, a raw HTML block
+> in the section, and an absolute or `..`-escaping path refuse. In an
+> installed project the setter refuses a plan that names PHARN's own files (`pharn/**` but `pharn/features/**`,
+> `.claude/**`, `pharn.config.json`) or an instruction file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`), and in every
+> project memory-bank canon, a CI workflow or local action, a git hooks directory and `.mcp.json`, so never name them.
+> **`## Files` lists only files this increment writes; put anything excluded under its own `###` heading after the
+> list.** It is one contiguous list with no labels between items: any line between two path items other than a blank
+> line or the item's own indented wrapped text — a label, a blockquote, a non-path bullet, prose, an unclosed `<!--` —
+> makes the setter refuse; group with a blank line only. **Caveat:** a bare, non-blockquote prose line that reads like an exclusion (wording such as
+> _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off limits_) ends the list, and refuses if a
+> path item follows it. Keep narrative before the list, after it, or as a **path-item description**
+> (``- `path` — note``), and use the `### Explicitly not touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **list items** whose
 > leading token is an angle-bracket path — ``- `<path>` `` (matching `pathsFromPlanFiles`) — so an
 > un-filled `## Files` **fails closed** at the setter (`isConcrete` rejects `<`/`>`); a bare
 > ``- `path` `` item is **unsafe** because it parses as a real scope path. The `## Steps` above is **advisory prose**,
@@ -242,6 +246,15 @@ node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memo
   last one is fixed by writing the line the field always asked for: **one body line per cited id saying
   how it was applied**. Cite only what you will discuss. A project with **no**
   `pharn/memory-bank/lessons-learned.md` passes with `applied_lessons: none`. Never relax or skip the check.
+
+Then read `## Files` exactly as `/pharn-build`'s Step 0 will, with every refusal it would meet — it writes nothing:
+
+```bash
+node .claude/hooks/set-writes-scope.cjs --check --from-plan pharn/features/<name>/PLAN.md
+```
+
+- **exit 0** → go to Step 4c. **Non-zero** → fix the PLAN's `## Files` (the message names the line or the entry)
+  and re-run. Never add an `--allow-*` flag to it: a refused path is the person's to edit or to scope.
 
 ## Step 4c — Map every Acceptance Criterion to a test, in `AC-TESTS.md` (templated SPEC only)
 

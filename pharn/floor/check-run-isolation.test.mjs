@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildProbe, credentialHelper, parseArgs, run } from "./check-run-isolation.mjs";
-import { CREDENTIAL_ENV, ISOLATION_ENV, evaluate } from "./check-run-isolation-core.mjs";
+import { CREDENTIAL_CODES, CREDENTIAL_ENV, CREDENTIAL_ENV_OFF_ACTIONS, ISOLATION_ENV, evaluate } from "./check-run-isolation-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CLI = join(here, "check-run-isolation.mjs");
@@ -84,7 +84,7 @@ test("★ each HOME credential file is a hit (PHARN_ISOLATED=1 → credentials-p
       assert.equal(r.status, 2, code);
       assert.match(r.stderr, /refused credentials-present/, code);
       assert.deepEqual(JSON.parse(r.stdout).evidence, ["operator:PHARN_ISOLATED", code], code);
-      const ok = cli(sb, ["--feature", "demo", "--accept-host-execution"], { PHARN_ISOLATED: "1" });
+      const ok = cli(sb, ["--accept-host-execution", "--feature", "demo"], { PHARN_ISOLATED: "1" });
       assert.equal(ok.status, 0, code);
       assert.equal(JSON.parse(ok.stdout).accepted_host_execution, true);
       assert.ok(!(r.stdout + r.stderr + ok.stdout + ok.stderr).includes(SECRET), `${code}: a file's content leaked`);
@@ -202,10 +202,14 @@ test("★ every credential env var is a hit by name, and its value never prints 
   const sb = sandbox();
   try {
     const env = { PHARN_ISOLATED: "1" };
-    for (const n of CREDENTIAL_ENV) env[n] = `${SECRET}-${n}`;
+    for (const n of [...CREDENTIAL_ENV, ...CREDENTIAL_ENV_OFF_ACTIONS]) env[n] = `${SECRET}-${n}`;
     const r = cli(sb, undefined, env);
     assert.equal(r.status, 2);
-    assert.deepEqual(JSON.parse(r.stdout).evidence, ["operator:PHARN_ISOLATED", ...CREDENTIAL_ENV.map((n) => `cred:env:${n}`)]);
+    assert.deepEqual(
+      JSON.parse(r.stdout).evidence,
+      ["operator:PHARN_ISOLATED", ...CREDENTIAL_CODES.filter((c) => c.startsWith("cred:env:"))],
+      "the CLI reads every credential env var, GITHUB_TOKEN included off Actions (7.3.0)"
+    );
     assert.ok(!(r.stdout + r.stderr).includes(SECRET), "an env value leaked");
   } finally {
     sb.done();
@@ -230,7 +234,7 @@ test("★ HOME unset, relative or a file → unreadable-home (exit 2, empty stdo
   try {
     writeFileSync(join(sb.root, "afile"), "x");
     for (const home of ["", "relative/home", join(sb.root, "afile"), join(sb.root, "missing")]) {
-      const r = spawnSync(process.execPath, [CLI, "--feature", "demo", "--accept-host-execution"], {
+      const r = spawnSync(process.execPath, [CLI, "--accept-host-execution", "--feature", "demo"], {
         cwd: sb.project,
         env: { PATH: process.env.PATH, HOME: home, PHARN_ISOLATED: "1" },
         encoding: "utf8",
@@ -260,6 +264,10 @@ test("★ usage: a bad slug, a missing or repeated flag, or an unknown argument 
       ["--feature", "a", "--feature", "b"],
       ["--feature", "a", "--x"],
       ["--accept-host-execution"],
+      // 7.3.0: the flag is accepted only FIRST — a trailing one is what the loop's granted `--feature *` would carry.
+      ["--feature", "a", "--accept-host-execution"],
+      ["--accept-host-execution", "--accept-host-execution", "--feature", "a"],
+      ["--accept-host-execution", "--feature", "a", "--accept-host-execution"],
     ]) {
       const r = cli(sb, args, { PHARN_ISOLATED: "1" });
       assert.equal(r.status, 2, args.join(" "));
@@ -267,6 +275,8 @@ test("★ usage: a bad slug, a missing or repeated flag, or an unknown argument 
       assert.match(r.stderr, /^check-run-isolation: refused usage — /);
     }
     assert.deepEqual(parseArgs(["--accept-host-execution", "--feature", "a"]), { feature: "a", accept: true });
+    assert.deepEqual(parseArgs(["--feature", "a"]), { feature: "a", accept: false });
+    assert.equal(parseArgs(["--feature", "a", "--accept-host-execution"]), null, "a trailing flag is never accepted");
   } finally {
     sb.done();
   }

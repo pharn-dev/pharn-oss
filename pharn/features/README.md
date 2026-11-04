@@ -27,7 +27,9 @@ dev/product boundary made structural:
 declared home for product-pipeline artifacts, so every product capability lands on the product side of
 the boundary from the start, never needing a later migration.
 
-## Upgrading from root `features/` (SKILLS_VERSION 5.0.0)
+## Upgrading from root `features/` (SKILLS_VERSION 5.1.2)
+
+The move was written as 5.0.0, a version that never reached `main`; it first shipped in 5.1.2 (`CHANGELOG [5.1.2]`).
 
 If your project still has pipeline artifacts under the old root `features/<name>/` tree:
 

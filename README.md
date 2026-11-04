@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.2.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.3.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -174,8 +174,10 @@ what it skips and what still stops it.
 
 Run an unattended loop in a container that holds none of your credentials. At entry it checks a fixed list of
 container markers and credential files and env vars. When it finds no container marker, or finds a credential, it
-refuses to start unless you pass `--accept-host-execution`. When it cannot read your home directory or git config, it
-refuses even with that flag (7.1.0;
+refuses to start unless you pass `--accept-host-execution`. Since 7.3.0 the command does not pre-approve the line that
+accepts it, so Claude Code's permission settings decide: in the default mode it asks you at the start of the run; in
+auto mode or under an allow rule of yours it may run the line without asking, and nothing in PHARN can tell who chose.
+When it cannot read your home directory or git config, it refuses even with that flag (7.1.0;
 [Running /pharn-loop in a container](./docs/pipeline.md#running-pharn-loop-in-a-container)).
 
 Use the full `/pharn-loop` for a feature that spans several files, has acceptance tests, or is likely to need more
@@ -261,8 +263,8 @@ pharn/.lock*
 pharn/.backup/
 ```
 
-Reconcile exempts runtime scratch only through git-ignore. Without the first line, every `/pharn-verify` reports
-`pharn/.run/**` as changed paths. Before 7.0.0 the scratch lived at `.pharn/`, and `memory-bank/`, the SPEC template
+Reconcile leaves `pharn/.run/` out of its set whether or not you ignore it (7.2.0); the three lines keep run state,
+the lock and backups out of your commits. Before 7.0.0 the scratch lived at `.pharn/`, and `memory-bank/`, the SPEC template
 and two of the trusted docs sat at the project root (migration: CHANGELOG [7.0.0]).
 
 The hooks enforce only after they are registered in Claude Code's settings — `.claude/settings.json`, or
@@ -278,19 +280,31 @@ and it fails open. It does nothing unless your settings register it under `Stop`
 `settings.json` the installer preserved still needs that entry copied by hand — `pharn update` never
 edits it.
 
-Copy the wiring **as it ships**, anchored on the project-directory placeholder:
+Copy the wiring **as it ships**, anchored on the project-directory placeholder and set to block on failure:
 
 ```json
-"command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/protect-trusted-paths.cjs"
+{
+  "type": "command",
+  "command": "node \"${CLAUDE_PROJECT_DIR}\"/.claude/hooks/protect-trusted-paths.cjs",
+  "onFailure": "block"
+}
 ```
 
 Claude Code runs a hook in Claude's _current_ directory, so a relative `node .claude/hooks/…` stops
-starting after any `cd` into a subdirectory: node exits 1, which Claude Code treats as a non-blocking
-error, and **both guards are then silently off**. That was the shipped form until `6.1.0`, and it is
+starting after any `cd` into a subdirectory: node exits 1. Without `onFailure`, Claude Code treats that as a
+non-blocking error, and **both guards are then silently off**. That was the shipped form until `6.1.0`, and it is
 measured, not theorised. Upgrading an older install is ordered: run `pharn update` first, then change
 these two commands — the anchored wiring over pre-`6.1.0` hooks regresses both guards, so roll back in the
 reverse order. Each guard judges the git working tree that contains Claude's current directory;
 [`pharn/LIMITS.md` §7](./pharn/LIMITS.md) states the bounds that remain.
+
+Since `7.3.0` both guard entries also carry `"onFailure": "block"`. On Claude Code 2.1.295 or later, a write
+is then blocked when a guard cannot start (a wrong path, no `node`), exits with a code other than 0 or 2, or
+times out. Without the field, that write goes through. The `Stop` hook does not carry the field: it fails open
+by design, and the field has no effect on a `Stop` hook. The Claude Code docs do not say what a client older than
+2.1.295 does with the key. On 2.1.312, `claude doctor` reports nothing for an unknown hook-handler key, so an older
+client most likely ignores it and keeps the old fail-open behaviour. That has not been measured on an older client.
+An existing install whose `settings.json` the installer preserved needs the field added by hand.
 
 ---
 
@@ -328,9 +342,11 @@ judgment is **advisory**.
 - **Guaranteed — narrow claims, each backed by a named checker.** For example: once the hooks are wired, Claude
   Code's Write/Edit/MultiEdit/NotebookEdit tools cannot edit the four trusted docs and are held to the active write
   scope; an approved spec is pinned, so later body drift is detectable; and the verify verdict is computed from a
-  gate map the gate runner wrote, not one a model typed. [The full table](./docs/guarantees.md#guaranteed-vs-advisory)
+  gate map written by the gate runner and validated for internal consistency, not one a model typed (a
+  self-consistent fabricated stamp still passes — see the table's bounds). [The full table](./docs/guarantees.md#guaranteed-vs-advisory)
   names the check behind each guarantee and its bounds.
-- **Detected, not prevented.** A write issued through `Bash` passes neither write guard. `/pharn-verify` detects a
+- **Detected, not prevented.** A write issued through `Bash`, or through an MCP server's tool (an
+  `mcp__<server>__<tool>` name, which is none of the four tools above), passes neither write guard. `/pharn-verify` detects a
   **non-adversarial** one that reached a path the active scope would have denied, with the exceptions
   [that guarantee](./docs/guarantees.md#guaranteed-vs-advisory) lists, and fails its verdict; it does not stop the
   write.
@@ -374,7 +390,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 11** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-test`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 147** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 148** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 
@@ -396,7 +412,7 @@ The architecture is specified in four documents:
 4. [`pharn/LIMITS.md`](./pharn/LIMITS.md) — what PHARN does **not** guarantee.
 
 These trusted docs are protected from edits through Claude Code's Write/Edit/MultiEdit/NotebookEdit tool
-surface. Bash writes are outside that protection (see [Current limitations](./docs/limitations.md#current-limitations)). All
+surface. Bash writes and writes through an MCP server's tools are outside that protection (see [Current limitations](./docs/limitations.md#current-limitations)). All
 four are copied into an install, under `pharn/` (before 7.0.0 the last two sat at the project root).
 
 ---

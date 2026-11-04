@@ -5,7 +5,9 @@
 // CLI changes).
 //
 // ================================ THE CLI — one line, run at /pharn-loop's entry ================================
-//   node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]
+//   node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name>
+// The flag is accepted only FIRST (7.3.0): /pharn-loop pre-approves the unflagged line with a `*` after `--feature`,
+// which a trailing flag would ride; the flagged line itself is in no grant (`parseArgs`, below).
 // `/pharn-loop` Step 1a runs it right after `require-loop-record.cjs --open` and before `pre-run-snapshot.mjs --capture`,
 // with stdout redirected to `pharn/.run/pharn-loop/<name>/isolation.json` (the witness), and stops (S15,
 // `blocked: not-isolated`) on any non-zero exit. `/pharn-ship` does not run it: a person approves its SPEC and decides
@@ -33,7 +35,7 @@
 //     the literal `_authToken` (also `<project root>/.npmrc`); SSH_AUTH_SOCK naming a path that is there; and
 //     `git config --get-regexp ^credential\..*helper$` (every scope git reads, with HOME as probed) printing a
 //     non-empty value — exit 1 is "none", any other exit, a spawn error or the GIT_TIMEOUT_MS bound is `probe-failed`.
-//   The env codes are the core's ISOLATION_ENV / CREDENTIAL_ENV, read from process.env.
+//   The env codes are the core's ISOLATION_ENV / CREDENTIAL_ENV / CREDENTIAL_ENV_OFF_ACTIONS, read from process.env.
 // A file's CONTENT is searched for one literal and dropped; nothing is echoed, logged or stored.
 //
 // ================================ BOUNDS (P0), each also in the contract and pharn/LIMITS.md §6 ================================
@@ -42,8 +44,9 @@
 // • A broken git shim that exits 1 reads "no helper"; such a run already stopped at Step 1a's S3 (`git rev-parse HEAD`).
 // • The witness is written by the caller's shell redirect, which follows a link planted at that path; every reader of
 //   the witness (check-loop-record.mjs, loop-closeout.mjs, render-run-report.mjs) opens it with O_NOFOLLOW and fails
-//   closed on such a link. The witness is git-ignored `pharn/.run/` state the Write tool and Bash both reach and reconcile
-//   never sees, so every line built from it is faithful only while nobody rewrites it.
+//   closed on such a link. The witness is git-ignored `pharn/.run/` state that reconcile never sees. Since 7.3.0
+//   protect-trusted-paths.cjs denies the write tools everything below `pharn/.run/pharn-loop/`, but Bash still reaches
+//   it, so every line built from it is faithful only while nobody rewrites it.
 //
 // TRUST (P2): env values and file contents are reduced to booleans here; only the core's frozen codes and fixed text
 // reach stdout or stderr. LOAD GRAPH: runtime-floor.mjs, gate-run-core.mjs (FEATURE_SLUG_RE) and the core — nothing else
@@ -54,7 +57,15 @@ import { lstatSync, statSync, readdirSync, openSync, readSync, fstatSync, closeS
 import { spawnSync } from "node:child_process";
 import { isAbsolute, join } from "node:path";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
-import { CREDENTIAL_ENV, ISOLATION_ENV, PROBE_ENV, evaluate, refusalLine, renderIsolationLine } from "./check-run-isolation-core.mjs";
+import {
+  CREDENTIAL_ENV,
+  CREDENTIAL_ENV_OFF_ACTIONS,
+  ISOLATION_ENV,
+  PROBE_ENV,
+  evaluate,
+  refusalLine,
+  renderIsolationLine,
+} from "./check-run-isolation-core.mjs";
 
 /** The most bytes read from any one file. */
 export const READ_CAP = 64 * 1024;
@@ -174,7 +185,7 @@ export function credentialHelper(env, home, cwd) {
 /** Only the env names the core reads, copied as strings. */
 function pickEnv(env) {
   const out = {};
-  for (const name of [...ISOLATION_ENV.map((e) => e.name), ...CREDENTIAL_ENV, ...PROBE_ENV]) {
+  for (const name of [...ISOLATION_ENV.map((e) => e.name), ...CREDENTIAL_ENV, ...CREDENTIAL_ENV_OFF_ACTIONS, ...PROBE_ENV]) {
     if (typeof env[name] === "string") out[name] = env[name];
   }
   return out;
@@ -214,14 +225,16 @@ export function buildProbe({ fsRoot = "/", env = process.env, cwd = process.cwd(
   };
 }
 
-/** `{feature, accept}` or null (usage). `--feature <name>` once, `--accept-host-execution` at most once, nothing else. */
+/** `{feature, accept}` or null (usage). `--feature <name>` once, `--accept-host-execution` at most once and ONLY as the
+ *  FIRST argument (7.3.0), nothing else. The position is load-bearing: /pharn-loop pre-approves
+ *  `node pharn/floor/check-run-isolation.mjs --feature * > …`, whose `*` would carry a trailing flag, so a flag after
+ *  `--feature` is `usage` — the flagged line is reachable only in a form no grant names. */
 export function parseArgs(argv) {
   let feature = null;
-  let accept = false;
-  for (let i = 0; i < argv.length; i++) {
+  const accept = argv[0] === "--accept-host-execution";
+  for (let i = accept ? 1 : 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--feature" && feature === null && i + 1 < argv.length) feature = argv[++i];
-    else if (a === "--accept-host-execution" && !accept) accept = true;
     else return null;
   }
   if (typeof feature !== "string" || !FEATURE_SLUG_RE.test(feature)) return null;

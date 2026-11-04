@@ -23,6 +23,394 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.3.0] - 2026-11-03
+
+This release collects the fixes for the 2026-11-03 principal review, built on separate branches and integrated on
+`batch/audit-2026-11-03`.
+
+### Added
+
+- 2026-11-03: **`set-writes-scope.cjs --check` and a plan-time `## Files` check.** `--check` (placed before the mode)
+  runs every parse and every refusal of a `--from-plan` scope and writes nothing. `/pharn-plan` (Step 4b) and
+  `/pharn-dev-plan` (Step 4) run it on the PLAN they just wrote, so a refusal surfaces at plan time instead of at the
+  test or build stage; `/pharn-loop` pre-approves that one line. New opt-in `--allow-instruction-files` (see Fixed).
+- 2026-11-03: **A pull request that changes product files must carry a green `/pharn-dev-ship` record.** The new
+  per-PR check `npm run check:ship-record` (`.dev/floor/check-ship-record.mjs`, a CI step on pull requests) REDs a PR
+  that changes a bump-triggering product path unless a `.dev/features/<name>/SHIP.md` in it records a green run: the
+  new five-line verdict block, ending `run-ended: GATE 2`, beside a `verify-report.json` that reads `PASS` from the
+  stamp path and a `regression-report.json` that reads `no-regressions`. It also REDs any record in the PR that shows a
+  run which stopped on a red verdict. The four trusted docs are exempt, because only a human edits them. It checks
+  presence, not coverage: one green record satisfies a PR, so a PR can still carry product changes no record covers,
+  and a record agreeing with its reports is not proof the stages ran. Found by the 2026-11-03 review: #377, #385, #391
+  and #392 merged past a red verify, a hand-substituted map, or no stage run at all. Dev apparatus only, so no
+  `SKILLS_VERSION` bump.
+- 2026-11-03: **New ✧ pins for CI wiring and command vocabulary** (audit 2026-11-03). `.dev/floor/ci-steps.test.mjs`
+  pins that `ci.yml` runs `node pharn/floor/validate.mjs .` and `npm run check:markers` under the install-gated `if:`
+  and that `floor.yml` runs the validator unconditionally, with a negative control (a step set to `if: false`, deleted,
+  or running another command fails). `.dev/floor/test-globs.test.mjs` binds `test:coverage`'s globs equal to `test`'s,
+  so a pattern added to one cannot be missing from the CI job whose lcov the coverage gate reads.
+  `.dev/floor/command-hygiene.test.mjs` pins that no command names `AskQuestion` and that every dev command's `npx`
+  formatter/linter line carries `--no-install` (every dev command, now that the four converted elsewhere in this
+  release have landed; the pending list is empty). Apparatus only.
+
+### Changed
+
+- 2026-11-04: **Restore the pharn-ci diff-coverage threshold to 100%.** Pull requests must cover every added coverable line; the configuration change is surfaced to reviewers as `CONFIG_CHANGED_IN_DIFF`.
+- 2026-11-03: **The four trusted docs state what 7.3.0 changed, and canon gains a correction entry** (audit
+  2026-11-03; a maintainer-applied patch, since the agent cannot write these files). `pharn/LIMITS.md`: §1a (no hook
+  reads a capability's `kind:`), §3a (the review set has no overall bound; under `/pharn-loop` the model picks the
+  quick kind and the marker records the mode), §3f and §6 (the setter's new refusals and their bounds), §6
+  (`writes-scope.json` outside reconcile, one baseline per tree, CI exec config always reconciled, the
+  `--accept-host-execution` line not pre-approved, the isolation witness denied to the write tools), §7
+  (`"onFailure": "block"` on 2.1.295 or later, the Stop-guard marker's re-open refusal), §10 (three CLIs load the
+  runtime floor inside
+  `run()`) and §11 (ruleset 25907495 has no bypass, so the owner's bypass skips only the review and classic
+  protection's `gitleaks`; the release waits for `gitleaks`; tag ruleset 25907484). `pharn/THREAT-MODEL.md` §2 item 10,
+  §4 item 2, §5 8a and 8c say the same. `pharn/CONSTITUTION.md` says the constitution is loaded as a prefix by
+  instruction, with no injector. `pharn/ARCHITECTURE.md`: hooks are the layer a prompt cannot argue with, not one a
+  `Bash` write cannot reach; the memory bank is under `pharn/memory-bank/`; the finding `type` list is closed. Canon:
+  L82 corrects L14's stated reason (JavaScript's `$` does not match before a trailing newline; the guard-first rule
+  holds because validators trim first). `.dev/floor/specified-primitives.json`'s `community-privilege` marker follows
+  the new §1a text, and `docs/lessons-index.md` is regenerated.
+- 2026-11-03: **`/pharn-review`'s `REVIEW.md` is written by a floor renderer, not by the model** (audit 2026-11-03).
+  New `pharn/floor/render-review.mjs` renders it from `findings.json`, `merge-report.json` (`v1` or `v2`),
+  `assignments.json` and the orchestrator's own notes (`pharn/.run/pharn-review-notes/<name>.md`, fenced as
+  self-report, and only when newer than the record). Inline text is only renderer prose, counts, the validated name,
+  closed-set values shown after a membership test, and a `rule_id` that passes the merge's own shape check. Every other
+  value a lens, a record or the notes supplied is inside a fence one back-tick longer than any run in it, with C0
+  controls other than TAB/LF, and DEL, shown as `\uXXXX`. Each fenced value is capped at 2,000 characters (the notes
+  at 20,000); a finding's lens text is budgeted at 200,000 characters across the document, while the record's and
+  report's lists are rendered in full. Step 6 now writes the notes and runs the renderer, says not to
+  edit `REVIEW.md` afterwards, and Step 6b re-renders on a RED. Before, Step 6 told the model to render the text "as
+  quoted DATA", and the claims block stated it without a Floor/Advisory label. The audit merged ten injected payloads
+  verbatim, among them a 100 KB string and four-back-tick runs. The renderer makes REVIEW.md's bytes inert to a
+  CommonMark parser; it does not prevent forgery, and an edit after the render is outside it. The five backstop
+  phrases moved from Step 6's table into the module. `pharn/features/*/REVIEW.md` joins `.prettierignore` and
+  `.markdownlint-cli2.jsonc`; a benign render is still lint-clean under this repo's config. Step 4 now tags the skill
+  catalogue's names and descriptions `trust: untrusted`, as it already tagged the `SKILL.md` bodies. Step 1b states
+  that the review set has no size bound as a whole. The claims block says why the lens subagent keeps `Bash` and
+  `Write`: the scanners and the catalogue line need `Bash`, `findings.json` is written with `Write`, and by Claude
+  Code's documentation a `tools:` entry cannot narrow `Bash` to one command. The agent definition's bytes are unchanged.
+- 2026-11-03: **Memory-bank canon leaves the formatters' reach, and `/pharn-dev-build` Step 2b runs `npx --no-install`.**
+  `.prettierignore` and `.markdownlint-cli2.jsonc` list `.dev/memory-bank/` and `pharn/memory-bank/`, so canon leaves
+  `format:check` / `lint:md`. Of the two promote commands, only `/pharn-dev-memory-promote`'s advisory canon `--check`
+  line became a no-op, and 7.3.0 removes it (see Fixed); `/pharn-memory-promote`'s `vendor/bin/prettier --check` line
+  reads an installed project's canon, which these ignore files do not cover.
+  Step 2b's prettier, markdownlint-cli2 and eslint lines fail on a missing local binary instead of fetching one, take
+  the scoped paths NUL-separated (`join('\0')` + `xargs -0 -r`, so no entry is split at a space or read as quoted),
+  and end each tool's options with `--` (all three treat what follows as paths); its Step 0 says a setter refusal is a
+  stop for the human — never an `--allow-*` flag the agent adds. It passes on only entries that are existing regular
+  files by their literal path (lstat; realpath inside the checkout and equal to the literal path, so an entry under a
+  symlinked directory — `gp/mb/x.md` with `gp/mb -> ../.dev/memory-bank` had canon reformatted — is refused too) with
+  no glob character, naming the rest: all three tools read arguments as globs, so a scope entry `CLAUDE.m[d]` had
+  reformatted `CLAUDE.md`. That block is the only shell consumer of
+  `pharn/.run/writes-scope.json` (`loop-closeout.mjs` already stages through `--pathspec-file-nul` with literal pathspecs).
+- 2026-11-03: **`/pharn-dev-verify` takes its gate map from the gate runner, and `/pharn-dev-ship` never proceeds past
+  a red verdict.** `/pharn-dev-verify` now runs its gates through `pharn/floor/run-gates.mjs` and validates the stamp
+  with `check-verify.mjs --stamp`, as `/pharn-verify` does. A hand-typed map, a dropped gate, or a gate re-measured in
+  another tree is refused, and the verdict gains INCOMPLETE (a declared file is missing) and "gate not measured" (a
+  timed-out gate). Its gate calls run in the background with a one-hour timeout per gate, because this repo's own
+  `npm test` takes longer than a foreground call allows (586 s on CI). `/pharn-dev-ship` says that delegation covers GATE 1 and GATE 2 only, never a red floor verdict. It
+  also writes the verdict block into `SHIP.md`. `/pharn-dev-review` no longer says a finding "blocks" the increment:
+  no checker reads `REVIEW.md`. The dev verify and review commands run their formatters with `npx --no-install`. Dev
+  apparatus only, so no `SKILLS_VERSION` bump.
+- 2026-11-03: **Reconcile always checks `.github/workflows/` and `.github/actions/`** (audit 2026-11-03, BLOCKER fix 3).
+  They join `always_reconciled.prefixes` in `pharn/floor/reconcile-ignore.json`, so in every project a change there is
+  compared against HEAD's committed blobs, with or without a baseline. That covers an added file too, and a forged
+  baseline entry no longer hides a Bash edit. It is visibility, not a deny: an edit a recorded scope covers stays clean.
+  A plan reaches these paths only with an operator's `--allow-exec-config`. **Costs:** an uncommitted edit of a
+  workflow or action now reds `check-bash-reconcile.mjs` with no baseline (a local `npm run check`) until it is
+  committed, and so does a file already dirty when a build anchors, at that build's verify. `apply-plan-deletions.mjs`
+  reads the same set, so a plan's `(delete)` of a file there is refused (`control-path`) with no opt-in. CI checkouts
+  and repositories without these directories are unaffected (`reconciliation-record.md` §4b).
+- 2026-11-03: **`pharn/.run/writes-scope.json` stays outside reconcile, and the reason is now stated and pinned**
+  (audit 2026-11-03). The review proposed reconciling it again after 7.2.0. It is the setter's own designed Bash write,
+  and both guards deny it to the Write tool, so that would be an escape on every correct run in a project that does not
+  ignore `pharn/.run/`. Reconcile cannot tell that write from a hand-edit. A new test pins what a forged scope can buy:
+  the write it widens is still judged against the anchored snapshot and reported. `reconcile-ignore.json` and the
+  contract no longer call the file "gitignored runtime state": it is under the state root, which is out whether or not
+  it is ignored.
+- 2026-11-03: **`npm audit fix`, lockfile only** (audit 2026-11-03). `eslint` 10.13.0 → 10.14.0,
+  `@eslint-community/eslint-utils` 4.9.1 → 4.10.1, `brace-expansion` 5.0.6 → 5.0.12, `minimatch` → 10.2.6:
+  `npm audit` went from 12 advisories (2 low, 6 moderate, 4 high) to 11 (2 low, 6 moderate, 3 high). The rest have no
+  non-breaking fix: `re2js` (high) arrives through `markdownlint-cli2` ≥ 0.24.0 and only a downgrade removes it, and the
+  `eslint` family's moderates resolve only to an older major. All are devDependencies; `npm audit --omit=dev` is 0.
+- 2026-11-03: **Prompt hygiene in two commands** (audit 2026-11-03). `/pharn-dev-plan` now says the lessons file it
+  reads in full is `trust: untrusted` DATA, as `/pharn-plan` already did. `/pharn-build`'s trusted prefix now treats
+  the project's existing source it reads as DATA the same way it treats `PLAN.md`: instruction-looking text in it is
+  code to work with, never a directive.
+- 2026-11-03: **Dev commands no longer let `npx` fetch a formatter** (audit 2026-11-03). `/pharn-dev-plan`,
+  `/pharn-dev-grill`, `/pharn-dev-regress` and `/pharn-dev-ship` run `npx --no-install prettier` /
+  `npx --no-install markdownlint-cli2` on their one artifact, so a missing install refuses instead of downloading the
+  package. `/pharn-dev-build`, `/pharn-dev-verify` and `/pharn-dev-review` are converted by their own entries in this
+  release, and `/pharn-dev-memory-promote`'s only such line was removed.
+- 2026-11-03: **`.dev/guides/versioning.md` states the publish-first rule for `MIN_CLI`.** The CLI reads `MIN_CLI` from
+  the tree it fetches, so a raised `MIN_CLI` binds every `init` and `update` from the moment it merges; publish the
+  matching `@pharn-dev/pharn` to npm first. Advisory: nothing in this repo checks it.
+
+### Fixed
+
+- 2026-11-03: **`CONTRIBUTING.md` no longer says an admin merge bypasses required checks** (audit 2026-11-03,
+  integration). Since 2026-10-26 ruleset 25907495 holds every account to `main`'s required checks, so the per-PR
+  CHANGELOG and instruction-growth steps, which run in the required `check` job, bind an admin merge too; the owner's
+  bypass skips the review and classic protection's `gitleaks` requirement only. Repo-meta, no product bytes.
+- 2026-11-03: **`merge-findings.mjs`: `type` is a closed set, the lens directory name is quoted, and `file`s outside
+  the target are named** (audit 2026-11-03).
+  - `type` must be `FINDING` or `CONSTITUTION_VIOLATION`, the two values `finding-shape.md` now lists without a
+    trailing `...`. `type: "APPROVED"`, which the old open shape `^[A-Z][A-Z0-9_]*$` merged, is dropped and named
+    (exit 3). Every shipped capability emits `FINDING`, and a test binds the contract's list to the code by set
+    equality.
+  - A lens directory name carrying a newline is stored JSON-quoted in the merged `sources[]`, as `merge-report.json`
+    already stored it.
+  - With a usable `assignments.json`, a findings file under a lens directory the record does not name is skipped
+    unread and named in `unreadable[]` as `unrecorded-lens` (exit 3). In an installed project
+    `pharn/features/<name>/lenses/` sits inside the reviewed tree, so a planted `lenses/<dir>/findings.json` used to
+    merge as real findings. With no usable record every input still merges, and a file planted under a recorded lens's
+    directory still merges as that lens's.
+  - `merge-report.json` is `merge-report/v2`. It adds `outside_target`, which names every contributor whose `file` is
+    not in the assignment record's target (`../../etc/passwd:1`, `/etc/passwd:1`, `http://…:80` all merged and went
+    unnamed before). The field is `null` when no usable record exists. Nothing is dropped and the exit code is
+    unchanged. A reader treats a `v1` report's missing field as not recorded (`finding-shape.md`, "The merge report").
+  - The merge ends `process.exitCode = main(process.argv)` instead of `process.exit()` right after its stdout write,
+    and it is in `cli-stdout-flush.test.mjs`'s set.
+  - `finding-shape.md` says what `type` and `file` buy today: `file` is a `path:line` shape, resolved only at eval
+    time. Its closing summary called declaring the `findings.json` path "guaranteed today"; it now says advisory, as
+    its own first bullet does.
+  - The `isCleanScalar` comment no longer claims JavaScript's `$` matches before a trailing newline; measured false on
+    Node 24.
+- 2026-11-03: **A plan can no longer scope canon, executable config, or — during a product run in a dev or unsignalled
+  tree — PHARN's own floor and commands** (review 2026-11-03: BLOCKER setter half, HIGH canon, MEDIUM `.mcp.json` /
+  `CLAUDE.md`). `set-writes-scope.cjs --from-plan` now refuses, writing nothing: memory-bank canon in every posture with
+  no opt-in (a dev plan naming canon had `/pharn-dev-build`'s Bash formatter pass rewrite it; the promote command is
+  the route); executable config in every posture, the class gaining `.github/actions/**` and `.mcp.json`
+  (`core.hooksPath` stays fail-closed in an installed project and is read best-effort elsewhere); the instruction files
+  `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md` (any depth) in an installed project; in a dev or unsignalled tree
+  while a `/pharn-loop` or `/pharn-ship` marker is open, PHARN's own surface and the instruction files; and in every
+  project an entry holding a quote, a back-tick, a backslash or a control character, or one that — whole or in any
+  space-separated part — is absolute, climbs out with `..`, or is led by `-` (each class refusal tests the relative
+  spelling, so an absolute path to canon passed them all, and `src/a.js --plugin=./evil.mjs` reached Step 2b's
+  formatter as two arguments and loaded the plugin — found by adversarial reviews of the first two patches). With no product
+  run open, a dev build still scopes `pharn/floor/**` and `.claude/commands/**` (self-hosting) — so the review's
+  BLOCKER is narrowed, not closed: a model-approved dev plan can still scope the floor, and what guards that is GATE 1
+  and the GitHub review layer. The hook change was applied by the maintainer; the trusted-doc wording is proposed in
+  `.dev/features/plan-scope-hardening/DOCS-PROPOSAL.md`.
+- 2026-11-03: **The `## Files` readers stop reading HTML comments and raw HTML, refuse a second `## Files`, and
+  require one contiguous list** (review 2026-11-03, MEDIUMs; an adversarial review of the first patch). Both readers
+  (`set-writes-scope.cjs` and `pharn/floor/plan-files-core.mjs`, held together by byte-equal pins and parity fixtures
+  checked against markdown-it): lines split on `\r\n`, `\r` or `\n`; a comment block (a line beginning `<!--`, through
+  the first line holding `-->`) is never the list, an inline comment closed on its line is cut, and an unclosed inline
+  `<!--` is literal text outside `## Files` and refuses inside it; a raw HTML block inside `## Files` refuses; a second
+  visible `## Files` heading refuses with both line numbers; an item marker is `-` plus spaces or tabs only (never a
+  no-break space), and an item indented four or more columns past the previous item's text refuses; and any line
+  between two path items other than a blank line or the item's own indented wrapped text — a label in any spelling, a
+  blockquote, a non-path bullet, a setext underline — refuses, so `Excluded:` / `NOT in scope:` can no longer scope
+  the paths under them. Over the 342 committed plans (pre-batch setter vs 7.3.0, dev posture): 293 identical, 44 newly
+  refused (each counted under the first rule that refuses it: 27 split list, 14 CI workflow, 3 canon), 5 already refused and now refused first by the split-list rule, 0
+  silent changes; plans are not re-run, so none was edited — new plans write one contiguous list. `render-ship-briefing.mjs` reads `## Files` with the floor's own heading test (`## Files:` no longer
+  reads "not found") and skips comment-hidden headings; `apply-plan-deletions.mjs` reports the reader's own refusal
+  reason instead of a fixed "no `## Files` heading".
+- 2026-11-03: **The gate runner no longer passes its own `PHARN_TEST_RESULTS` path down to a gate that has no
+  results file, and `check-verify.mjs --stamp` refuses a results map wherever it stands.** `pharn/floor/run-gates.mjs`
+  removes an inherited `PHARN_TEST_RESULTS` when it spawns a process with no results file; before, a suite run as a
+  gate inside another run handed its children the outer run's path, which turned a run-gates test red the first time
+  `/pharn-dev-verify` ran this repo's suite through the runner. `pharn/floor/check-verify.mjs` on the stamp path now
+  refuses a positional results map in any position; before, only a leading one was refused and one placed after the
+  flags was silently not read (the stamp alone decided, so no verdict changed). `/pharn-dev-plan` now says a plan's
+  `## Files` never declares a later stage's own artifacts. Found by this batch's dev verify running on itself.
+- 2026-11-03: **One lesson-heading grammar: a `## L<n>` inside a fenced block or an HTML comment is no longer a lesson**
+  (review 2026-11-03, MEDIUM). `check-plan-lessons.mjs`, the lessons index (`lessons-index-core.mjs`, so both
+  `gen-lessons-index.mjs` and `check-lessons-index.mjs`) and `check-provenance.mjs` each scanned canon line by line
+  with their own regex, so a quoted example or a commented-out entry was a citable, indexed lesson that blocked a real
+  id, and the three disagreed on `## L20` with and without a trailing space and on a BOM (a BOM before the first `## L1` dropped L1 from the
+  index and let a duplicate L1 past provenance). They now read canon through one exported `LESSON_HEADING_RE` and one
+  reader that strips the BOM and skips lines inside a column-0 fenced block, HTML comment or `<pre>`/`<script>`/
+  `<style>`/`<textarea>` block — `spec-template-core.mjs`'s existing block model, now exported as `blockSpans()`, so a
+  change to it moves both readers. `## L20`, with or without a trailing space, is L20 everywhere; `## L020` and `## L0` are no lesson
+  heading anywhere. A lesson heading hidden by a block that never closes is refused by the index (ENUM_ERROR), and
+  provenance refuses any block left open at the end of canon (`canon` RED — the promoted entry would be appended
+  inside it), both naming line numbers only. Both generators print one
+  `RED — <message>` line on an invalid canon instead of a stack trace (exit 1 as before). Bound: the block model is
+  not a CommonMark parser (an opener indented 1–3 columns and HTML blocks of types 6–7 are not modelled, fail-open as
+  before); provenance's id set stays a superset (the first token after any visible `##`, for pattern ids).
+- 2026-11-03: **`/pharn-memory-promote` sets the canon writes-scope only after the accept** (review 2026-11-03, LOW).
+  Step 0 set it, so the guarded write tools could reach the canon file for the whole run, before the human had seen
+  the entry. The setter and `--amend-scope` now open Step 6; a non-zero setter exit, or a count other than
+  `1 path(s)`, halts with nothing written. The command also stops saying a plan naming canon "would grant an ungated
+  canon write (follow-up `canon-write-denylist`)": `protect-trusted-paths.cjs` has denied that since 3.1.1, and from
+  7.3.0 the setter refuses such a plan; a Bash write still reaches canon. `/pharn-dev-memory-promote` gets the same
+  move and corrections, its retired `--from-plan` annotation route becomes a human hand-edit, and its canon
+  `--check` format step (bare `npx`) is removed, since canon is in both formatters' ignore files. A ✧ pin holds the
+  setter below the accept/deny question in both commands.
+- 2026-11-03: **Comments no longer repeat L14's false JavaScript fact** (review 2026-11-03). `lessons-index-core.mjs`
+  and `mark-phase.mjs` said `$` without the `m` flag matches before a trailing newline, so `/^[a-z0-9-]+$/` admits
+  `"enum-gate\n"`; measured on Node 24 it does not (the hole is a `.trim()` or a line-split before the regex). The
+  guards stay; their stated reason is corrected, and a dev test asserts the measured fact. Canon L14's own sentence is
+  proposed for the owner in `.dev/features/lesson-heading-parser/DOCS-PROPOSAL.md`.
+- 2026-11-03: **`/pharn-loop` no longer commits an edit the user made before the run** (audit 2026-11-03, MEDIUM).
+  A file named in the plan's `## Files` that the user had already edited, and that the run then left alone, was
+  committed on `pharn-loop/<name>` with the user's bytes. `loop-closeout.mjs` now asks the run's pre-run snapshot (the
+  reader `/pharn-regress` already uses) which scope paths still hold their pre-run bytes, and leaves those out of the
+  commit. The closing document gains `left_dirty` (`{status, paths}`) and the close part's summary names those paths.
+  Bounds: a file the run changed after the user's edit is still committed whole, edit included; the feature's own
+  artifacts and the tests its lock pins are always committed; when no snapshot applies (no open run marker, one older
+  than 24 h, no record) nothing is left out, as before, and `left_dirty.status` says why. The commit message's second
+  paragraph no longer cites `approved_by: model`, a SPEC field the closeout never reads.
+- 2026-11-03: **A report or SPEC that repeats a key is refused, not read last-wins** (audit 2026-11-03, LOW).
+  `check-loop.mjs` read `{"verdict":"FAIL",…,"verdict":"PASS"}` as PASS and stopped `STOP_GREEN`. It now stops
+  `INCONCLUSIVE` (exit 2) on any repeated top-level key in the verify or regression report, a `\u`-escaped spelling
+  included; a repeat inside a nested object is not refused. `check-spec.mjs` REDs a second `state` or `approved_by`
+  line (kind `repeated-key`) instead of keeping the last, so `check-spec-approved.mjs`, which runs it first, refuses
+  such a SPEC too. A repeated `spec_content_hash` or `spec_id` keeps 6.20.5's last-wins reading.
+- 2026-11-03: **`check-attestation.mjs` refuses a placeholder `by` and an impossible `at`; `check-spec.mjs` checks
+  `approved_by`** (audit 2026-11-03, LOW). `by: agent` with `at: 2026-13-45T99:99:99Z` read `attested`. `by` is now
+  `malformed` when it is one of 15 placeholder names (`agent`, `claude`, `model`, `human`, `unknown`, …, compared after
+  lower-casing). That list is a deny-list, not identity verification: a real-looking name typed by a model still
+  passes. `at` must be a real calendar instant (a leap second is refused). A SPEC's `approved_by`, when present, must
+  read `model` (RED `approved-by`), so a model can no longer label its own approval `human` there; a model-approved
+  SPEC with no `approved_by` key still passes.
+- 2026-11-03: **An unattended `/pharn-loop` can no longer pick the quick table, re-open its own iteration cap, or
+  accept host execution for the operator without a prompt (review 2026-11-03, loop-marker-integrity).**
+  - The Stop-guard marker now records the run's mode. Step 1a's pinned line is
+    `require-loop-record.cjs --open '<name>' --cap <M> --mode <mode>`, with `quick` only for the quick form, and
+    `check-loop-decision.mjs` REDs `MODE_UNWITNESSED` when the record's mode differs. Before, a model-written
+    `spec_kind: quick` SPEC plus `mode: quick` in the record reached a regress-free green commit in a run nobody
+    invoked with `--quick`; the quick part's "writes no mode marker" sentence is struck.
+  - `--open` refuses (exit 2, nothing written) when anything already exists at the marker path, so the pre-approved
+    `--open * --cap *` line can no longer re-open the marker with a larger cap. It publishes the marker by a `wx` tmp
+    file and a rename, so a crash no longer leaves a torn marker that silently disarms the Stop guard; `--close`
+    refuses a marker path holding a non-regular file instead of crashing.
+  - The write tools can no longer rewrite a run's state either: `protect-trusted-paths.cjs` denies every
+    Write/Edit/MultiEdit/NotebookEdit below `pharn/.run/pharn-loop/`, `pharn/.run/pharn-ship/` and
+    `pharn/.run/pharn-review/`, whatever the scope. Before, the Write tool could set a marker's cap or mode prompt-free,
+    because `pharn/.run/**` is always writable. No command writes those files with the Write tool; their CLIs own them.
+    Residual, stated: a Bash write still reaches them, and `--close`, `--open` and a pre-run re-capture are all pinned
+    lines, so a run can still re-open itself in three steps (agreement, never provenance). Both hook changes are a
+    maintainer-applied patch.
+  - The `--accept-host-execution` isolation line is no longer in `/pharn-loop`'s `allowed-tools`, so Claude Code's
+    permission settings decide whether the person is asked (auto mode or an allow rule may still run it unasked).
+    Removing that grant was not enough on its own: the unflagged grant's `--feature *` also matched a trailing flag. So
+    `check-run-isolation.mjs` now accepts the flag only as its first argument, and the pinned line is
+    `check-run-isolation.mjs --accept-host-execution --feature '<name>' > …`. A corpus test holds that no `allowed-tools`
+    entry in any `pharn-*.md` carries the flag.
+  - `blocked:` is a closed set. The 18 stuck-point ids live in `loop-record-core.mjs` `BLOCKED_IDS`, rendered in
+    `pharn/pharn-contracts/loop-record.md`. `check-loop-record.mjs` REDs `BLOCKED_UNKNOWN`, and `check-loop-decision.mjs`
+    skips only a member; before, `blocked: <anything>` skipped the re-derivation, so a measured red could be recorded
+    as a blocked stop.
+  - `/pharn-loop` no longer says it "cannot end its turn": the Stop guard refuses at most three times, then lets the
+    turn end with a warning. `check-loop-record.mjs`'s comment claiming `/^\d+$/.test("2\n")` is true is corrected
+    (it is false in JavaScript).
+- 2026-11-03: **A second run's build anchor no longer silently erases a first run's reconcile window** (audit
+  2026-11-03). A tree holds one baseline. When a second run's `/pharn-build` anchored, it replaced the first run's
+  baseline, and the first run's `/pharn-verify` then judged only the writes made after that anchor. Now
+  `reconcile-baseline.mjs --anchor` refuses (exit 2, nothing written) when the baseline on disk opened another feature's
+  epoch and that feature's `/pharn-loop` or `/pharn-ship` marker is still open. The marker test re-implements the write
+  guards' 24 h open-run rule (present, within 24 h, and an `lstat` error counts as open); it is pinned by value, not
+  against the hook sources, so a later hook change is not inherited. A baseline that cannot be read refuses on any other
+  feature's open marker. The command line, the loop's grant and the record's shape are unchanged, and in the loop a
+  refused anchor is the build's Step-0 stop (S9). **Bounds:** markers are presence-only, and the loop's own
+  `require-loop-record.cjs --close *` grant can close one. Runs that open no marker and two runs of one feature are not
+  told apart. The remedy is still one worktree per run.
+- 2026-11-03: **The cost-ledger's pre-build exception is back to the shape the contract defines** (audit 2026-11-03).
+  7.2.0 stopped `check-cost-ledger.mjs` from warning "no stage-start marker carries iteration(s) 1" on a blocked
+  `/pharn-loop` stop before the first build (#411 A). The exception also silenced two records it should not have: a
+  non-blocked record at `iterations: 1` whose build marker was lost, and a build `stage-start` written without an
+  iteration. It now needs `outcome.blocked` and no `stage-start` naming `pharn-build`, `pharn-regress` or
+  `pharn-verify`, and both of those records warn again. It is still a WARN; no verdict moves.
+- 2026-11-03: **A capability saved with CRLF line endings, or with anything before its opening `---`, is no longer
+  silently "not a capability" (2026-11-03 review, HIGH).** Seven hand copies of validate.mjs's frontmatter parser
+  (validate, count-lenses, count-grillers, count-verifiers, check-model-config, and in `.dev` check-config and the
+  capability catalog) split lines on `\n` alone, so in a CRLF file every key but the last kept a `\r` and was lost.
+  Measured on a copy of this repo: `trust-fence.md` in CRLF gave `FLOOR: GREEN — 36 capabilities` (37 before) and
+  count-lenses 21 (22), both exit 0, so the lens left `/pharn-review`'s registry with every floor line green. A blank
+  line, a space, U+200B or a second BOM before `---` did the same. All seven now read through one reader,
+  `pharn/floor/frontmatter-core.mjs` `looseFrontmatter` (CRLF-tolerant). A fence after whitespace or an invisible
+  character is counted by validate and the three counters, and validate REDs it as `P6/frontmatter-offset`.
+  check-model-config and check-config still read such a fence as no frontmatter, because their subject is what Claude
+  Code reads from a command file. The existing "CRLF frontmatter registers" tests passed only because their fixtures
+  put `role:` on the last line; the new twins put it first. Closure tests now refuse an eighth copy of the fence or
+  of the line grammar. `griller-extract.mjs` keeps its own `kind:` reader, which already handled CRLF.
+- 2026-11-03: **validate.mjs no longer follows a symlinked directory out of the tree (review, MEDIUM).** A link
+  below `pharn/` to an outside directory used to be walked, adding that directory's capabilities to the count
+  (measured `RED — 3 finding(s), 38 capabilities`, the findings citing the outside file).
+  `pharn/floor/capability-files-core.mjs` now skips a link to a directory in both of its rules and reports the ones
+  strictly below `pharn/`. validate REDs each as `P6/symlinked-dir`, and count-lenses, count-grillers and
+  count-verifiers refuse with exit 1, so a lens behind a link no longer drops out of the registry. CHECK 8's walk
+  skips such links too. A `pharn` directory that is itself a link is still followed. A link to an `.md` file is still
+  read through the link. The module header claimed this bound before the code had it; it now states what the walk
+  does.
+- 2026-11-03: **validate.mjs no longer prints GREEN over zero capabilities when there was markdown to check (review,
+  overflow).** If `pharn/pharn-review`, `pharn/pharn-pipeline/grillers` or `pharn/pharn-core` holds markdown and none
+  of it declares a capability, validate prints `FLOOR: INCONCLUSIVE — 0 capabilities …` and exits 2. A tree with only
+  `pharn/pharn-contracts`, or no `pharn/pharn-*` at all, stays `GREEN — 0`. Three CHECK 8 tests that expected GREEN
+  from a role-less canon doc now use a real capability; what they assert is unchanged.
+- 2026-11-03: **An unreadable file in validate's CHECK 8 scope is INCONCLUSIVE instead of skipped (review,
+  overflow).** That read used to `catch { continue }`. Now it ends `FLOOR: INCONCLUSIVE — crashed (…)`, exit 2, as an
+  unreadable capability already did. The report also said an unreadable capability was skipped silently. It was not:
+  the capability loop already crashed to INCONCLUSIVE (TST-10).
+- 2026-11-03: **validate.mjs ends through `process.exitCode`, not `process.exit()` after printing (review,
+  overflow).** It joins `pharn/floor/cli-stdout-flush.test.mjs`'s set with a new form, `sentinel-uncaught`, and a
+  pipe test now shows a RED report over 64 KiB arriving whole. The crash line is written with
+  `process.stdout.write`, so a broken console cannot turn the INCONCLUSIVE verdict into a second throw.
+- 2026-11-03: **A write guard that cannot start, or that times out, now blocks the write on Claude Code 2.1.295 or
+  later.** `.claude/settings.json` adds `"onFailure": "block"` to both `PreToolUse` guard handlers
+  (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`). Before, a wrong path, a missing `node`, a crash before
+  the guard's own handler registered, or the 600 s timeout was a non-blocking error, so the write went through. The
+  `Stop` hook is unchanged: it fails open by design, and the field has no effect on `Stop`. What a client older than
+  2.1.295 does with the key is undocumented; on 2.1.312 `claude doctor` reports nothing for an unknown hook-handler
+  key, so an older client most likely keeps the old fail-open behaviour. `hook-wiring.test.cjs` pins both handlers as
+  whole objects, with a negative control. The README's wiring section shows the field. An install whose `settings.json` the installer
+  preserved needs the field added by hand (review 2026-11-03, HIGH).
+- 2026-11-03: **README and SECURITY now say that a write through an MCP server's tool is outside both write guards**,
+  as `pharn/LIMITS.md §6` already did. Neither hook judges an `mcp__*` tool. That is a decision, not an oversight: a
+  path in an MCP tool's input does not say whether the call reads or writes, and a list of write-sounding tool names
+  would be a heuristic. Verify-time reconciliation covers such a write as it covers a Bash write (review 2026-11-03,
+  MEDIUM, won't fix in the hooks).
+- 2026-11-03: **New `enforce-writes-scope.test.cjs` cases pin that the dev-posture scratchpad allow (6.73.1) cannot
+  reach into the project.** In the dev and unsignalled postures, a payload whose `scratchpad_dir` names a project
+  directory (`<root>/pharn`, `<root>/src`), or a Claude-shaped scratchpad inside the project, unlocks nothing there.
+  That holds with no scope and under a set scope, with `TMPDIR` at a temp base or at the project. The review asked for
+  a hook change. None was needed: both postures already share one rule (`ownScratchpadDir()`), which requires the
+  scratchpad to sit directly under `os.tmpdir()` or `/tmp`, and the allow applies only to a target outside the root
+  (review 2026-11-03, MEDIUM).
+- 2026-11-03: **The human-gate tool is named `AskUserQuestion`** in `/pharn-dev-plan`, `/pharn-dev-memory-promote`,
+  `/pharn-spec`, `/pharn-memory-promote` and `/pharn-dev-ship` (ten lines named `AskQuestion`, which is not a Claude
+  Code tool, so each gate worked by the model guessing the name). The command-hygiene pin that matched the old name now
+  matches the new one.
+- 2026-11-03: **`/pharn-loop`'s entry isolation check counts `GITHUB_TOKEN` outside GitHub Actions** (audit 2026-11-03).
+  It was excluded on every host because in Actions it is ephemeral and always present. Elsewhere it is usually a
+  personal access token, so a dev container, a Gitpod workspace or a `PHARN_ISOLATED=1` shell that exported one read
+  `ISOLATED`. It now reads `ISOLATED_WITH_CREDENTIALS` there (`cred:env:GITHUB_TOKEN`, a new code in
+  `check-run-isolation-core.mjs` and the contract's table, `pharn/pharn-contracts/loop-record.md`); under
+  `GITHUB_ACTIONS=true` nothing changes. A witness written before this change still parses.
+- 2026-11-03: **`check:surface-bump` no longer counts a whitespace-only version change as a bump** (audit 2026-11-03).
+  `7.2.1` followed by a space differed from `7.2.1` and passed, while `release.yml`'s `TAG_RE` refuses it, so `main`
+  would ship new product bytes under the old number. A version that is not a bare `X.Y.Z` is now `NOT_BUMPED`, with
+  its own wording. Apparatus only.
+- 2026-11-03: **`release.yml` waits for `gitleaks`** (audit 2026-11-03). `main`'s classic branch protection requires it,
+  and the job ignored it, so a push whose gitleaks run failed was still tagged. The comment now cites ruleset 25907495
+  (the one that holds the required checks; 18045407 no longer does), says a non-bump merge fails `TAG_ELSEWHERE` rather
+  than "stopping" (2 of the last 6 runs), gives the measured 11–15 minutes for `check`, and says the setter refuses
+  this file from a plan since 7.3.0. `CONTRIBUTING.md`'s "Releases" says the same. Apparatus only.
+- 2026-11-03: **Stale names, versions and headers corrected against live state** (audit 2026-11-03).
+  `docs/{guarantees,limitations,pipeline}.md` cite 6.68.1 for the README move (6.65.3 never shipped); `CLAUDE.md`,
+  `CONTRIBUTING.md` and `pharn/features/README.md` cite 5.1.2 for the `pharn/features/` move (5.0.0 never reached
+  `main`). `SECURITY.md` says `/pharn-loop`'s marker is opened by `require-loop-record.cjs` (`run-marker.mjs` refuses
+  `pharn-loop`). `pharn/floor/runtime-floor.mjs` says the installer refuses Node below 24.2.0 since pharn-cli 0.8.0.
+  `/pharn-ship`'s stages and close-out, and `check-spec-approved.mjs`'s refusal text, say what the floor checks
+  (`state: Approved` and the pin), not that "the human approved". Headers naming moved files are corrected in
+  `check-regress.mjs`, `.dev/floor/check-variance.mjs` (its usage line too), `trust-fence.md` and `stage-exit.md`;
+  `instruction-files.mjs` and `instruction-files-core.mjs` no longer call `enumerate()`'s list the reconciled set
+  (since 7.2.0 that set also drops `pharn/.run/`). README: reconcile leaves `pharn/.run/` out whether or not it is
+  ignored, and the verify-verdict guarantee carries its bound (a self-consistent fabricated stamp passes). `CLAUDE.md`
+  hard constraint 1: ruleset 25907495 binds every account to the required checks; the owner's bypass skips the review
+  and classic protection's `gitleaks`. Eleven hook-test comments that said "EXPECTED TO FAIL until apply.py" for cases
+  that pass now say when the patch was applied.
+- 2026-11-03: **The two TAKEOVER tests in `entry-gates.test.mjs` no longer fail under load** (audit 2026-11-03 LOW-1).
+  Their `--wait` calls run on the virtual-clock preload from 6.72.0 with `Date.now()` frozen, so the takeover's budget
+  arithmetic reads 0 elapsed at any load and drains every gate in one call; before, a call that took over 250 ms to
+  reach the takeover ran nothing and six calls ended on exit 5. Measured green alone and at load average 84 on 8 cores.
+  Test-only.
+
 ## [7.2.1] - 2026-11-02
 
 ### Added

@@ -202,7 +202,8 @@ function wiringOffenders(text) {
   if (!f3.includes("- `0` → Step 4 spawns one subagent per printed group.")) out.push("Step 3: no exit-0 branch");
   // Exit 2 has two causes (review A2): the map fallback prints a document, the Node runtime refusal prints nothing. The
   // spawn branch must require the document, and the stop branch must name the document-less exit 2.
-  if (!/- `2` with a `lens-groups\/v1` line → the map is unusable .* Spawn by them, and say so in `REVIEW\.md`\./.test(f3)) {
+  // 7.3.0: the note goes to the Step 6 notes file — REVIEW.md is rendered by code and the orchestrator never edits it.
+  if (!/- `2` with a `lens-groups\/v1` line → the map is unusable .* Spawn by them, and say so in the Step 6 notes\./.test(f3)) {
     out.push("Step 3: no exit-2 branch");
   }
   if (
@@ -268,6 +269,7 @@ test("★ WIRING controls: each pin turns red on its own in-memory edit, and a m
     [(t) => t.replace(`${HELPER_LINE}\n`, ""), /helper line appears 0 times/],
     [(t) => t.replace("- `0` → Step 4 spawns", "- `0` → Step 4 may spawn"), /no exit-0 branch/],
     [(t) => t.replace("Spawn by them, and say so", "Spawn by them, and"), /no exit-2 branch/],
+    [(t) => t.replace("say so in the Step 6 notes.", "say so in `REVIEW.md`."), /no exit-2 branch/],
     [(t) => t.replace("- `2` with a `lens-groups/v1` line →", "- `2` →"), /no exit-2 branch/],
     [(t) => t.replace("**STOP**: spawn nothing", "spawn nothing"), /no exit-1 stop/],
     [(t) => t.replace("`2` with no `lens-groups/v1` line (the Node runtime refusal), ", ""), /no exit-1 stop/],

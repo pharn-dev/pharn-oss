@@ -913,7 +913,11 @@ silently reinterpreting files already written.
 - **`markers[]` is ADVISORY.** Markers are written by the orchestrator through `Bash`, outside the fix #7
   `PreToolUse` gate, so nothing on the floor forces a marker call. A missing marker is reported by the
   checker as a **WARN with a count** — never a RED, because an orchestration lapse is not a malformed
-  artifact, and never a silent merge into a neighbouring stage.
+  artifact, and never a silent merge into a neighbouring stage. **One record is not warned:** a blocked stop
+  before the first build. `loop-record.md` counts it as `iterations: 1`, and no iterated-stage marker can carry 1
+  there. The checker recognizes it as `outcome.blocked` present, `iterations` 1, and no `stage-start` naming
+  `pharn-build`, `pharn-regress` or `pharn-verify` (7.2.0, #411 A; narrowed to that shape in 7.3.0, so a non-blocked
+  record at 1, or a build `stage-start` with no iteration, warns).
 
 ---
 

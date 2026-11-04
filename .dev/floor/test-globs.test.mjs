@@ -83,6 +83,17 @@ test("✧ the fixture DISCRIMINATES: floor.yml's pre-6.49.3 `.claude/**` pattern
   }
 });
 
+// ci.yml's "Test" step runs `npm run test:coverage`, which restates the globs (it needs the coverage reporter flags in
+// front of them). Both copies must exist, so they are bound equal here (L35): a pattern added to `test` alone would be
+// collected by `npm test` and floor.yml but not by the CI job whose lcov the coverage gate reads (7.3.0).
+test("✧ test:coverage names exactly test's globs, in order", () => {
+  const scripts = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8")).scripts;
+  const patterns = (s) => [...s.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  assert.match(scripts["test:coverage"], /\bnode --test --experimental-test-coverage\b/);
+  assert.deepEqual(patterns(scripts["test:coverage"]), npmTestPatterns());
+  assert.notDeepEqual(patterns(scripts["test:coverage"]).slice(1), npmTestPatterns(), "a dropped glob is caught (L4)");
+});
+
 test("✧ floor.yml runs `npm test` itself, on the Node major ci.yml pins (no restated globs, no `lts/*`)", () => {
   const floor = readFileSync(join(REPO, ".github", "workflows", "floor.yml"), "utf8");
   const ci = readFileSync(join(REPO, ".github", "workflows", "ci.yml"), "utf8");

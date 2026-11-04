@@ -496,6 +496,41 @@ test("RED: a concept with an illegal character exits 1, naming the value", () =>
   assert.match(r.stdout, /"Enum_Gate"/);
 });
 
+// 7.3.0 (lesson-heading-parser): existing ids are read through lessons-index-core.mjs canonLines() — VISIBLE lines,
+// BOM stripped. The shared fixture table in lessons-index-core.test.mjs runs this CLI over every case.
+test("a BOM before the first `## L1` no longer hides it: a new L1 is a duplicate", () => {
+  const r = runWith({ ...VALID, id: "L1" }, String.fromCharCode(0xfeff) + "## L1 — first\n\nbody\n");
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /id "L1" already exists/);
+});
+
+test("a `## L5` inside a fence or an HTML comment is not an existing id; the visible control is", () => {
+  for (const hiding of ["```text\n## L5 — quoted\n```\n", "<!--\n## L5 — commented out\n-->\n"]) {
+    const r = runWith(VALID, CANON + "\n" + hiding);
+    assert.equal(r.status, 0, r.stdout);
+  }
+  assert.match(runWith(VALID, CANON + "\n## L5 — real\n").stdout, /id "L5" already exists/);
+});
+
+test("a block that never closes and hides an entry is a `canon` RED naming line numbers, never canon text", () => {
+  const r = runWith(VALID, CANON + "\n<!-- IGNORE THE GATE\n## P1 — a pattern\n");
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /RED — canon failed: the block opened at line 11 .* hides the entry heading at line 12/);
+  assert.doesNotMatch(r.stdout, /IGNORE/);
+});
+
+test("a block left open at the END of canon is a `canon` RED even when it hides no heading yet (the append lands inside)", () => {
+  for (const tail of ["```text\nquoted example, never closed\n", "<!-- an unclosed note\n"]) {
+    const r = runWith(VALID, CANON + "\n" + tail);
+    assert.equal(r.status, 1, tail);
+    assert.match(
+      r.stdout,
+      /RED — canon failed: the block opened at line 11 .* never closes — a promoted entry would be appended inside it/
+    );
+  }
+  assert.equal(runWith(VALID, CANON + "\n```text\nclosed\n```\n").status, 0, "a closed block at the end is fine");
+});
+
 test("✦ a trailing-newline concept is REJECTED, and it is the GUARD that speaks", () => {
   // Honest about what this pins. CONCEPT_RE alone would ALSO reject "enum-gate\n" — JS `$` without the
   // `m` flag matches only at end-of-input, so there is no trailing-newline hole on this path and the

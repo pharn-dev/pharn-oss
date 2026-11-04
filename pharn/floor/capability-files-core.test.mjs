@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, unlinkSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { listMarkdownFiles, walkMarkdown } from "./capability-files-core.mjs";
 
@@ -116,6 +116,98 @@ test("only .md paths, sorted, as join(target, rel)", () => {
   });
 });
 
+// ── symlinks (7.3.0, family-grammar-crlf — L59: the path kinds are an enumeration, not the author's picture) ─────────
+// Before 7.3.0 walkMarkdown followed every link with statSync, so a link to a directory below pharn/ imported an
+// outside directory's capabilities, in BOTH rules (the git rule adds a walk of pharn/), while this module's header said
+// such a link was not descended.
+const PATH_KINDS = ["regular .md", "link to an .md file", "link to a directory", "dangling link", "looping link"];
+
+/** Builds each PATH_KINDS member under `<root>/<base>/`, pointing outside at `outside` where a target is needed. */
+function plantKinds(root, base, outside) {
+  const d = join(root, base);
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, "regular.md"), LENS);
+  symlinkSync(join(outside, "target.md"), join(d, "file-link.md"));
+  symlinkSync(join(outside, "dir"), join(d, "dir-link"));
+  symlinkSync(join(outside, "nowhere"), join(d, "dangling-link.md"));
+  symlinkSync(join(d, "loop-b"), join(d, "loop-a"));
+  symlinkSync(join(d, "loop-a"), join(d, "loop-b"));
+}
+
+function withOutside(fn) {
+  const outside = mkdtempSync(join(tmpdir(), "pharn-capfiles-outside-"));
+  try {
+    writeFileSync(join(outside, "target.md"), LENS);
+    mkdirSync(join(outside, "dir"));
+    writeFileSync(join(outside, "dir", "inside.md"), LENS);
+    return fn(outside);
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+}
+
+test("★ walkMarkdown over every PATH_KIND: a file link is listed, a directory link is recorded not descended, broken links skipped", () => {
+  assert.equal(PATH_KINDS.length, 5);
+  withOutside((outside) =>
+    withTree({}, { git: false }, (root) => {
+      plantKinds(root, "pharn/pharn-review/k", outside);
+      const links = [];
+      const files = walkMarkdown(root, [], links);
+      assert.deepEqual(rels(root, files), ["pharn/pharn-review/k/file-link.md", "pharn/pharn-review/k/regular.md"]);
+      assert.deepEqual(rels(root, links), ["pharn/pharn-review/k/dir-link"]);
+      assert.ok(!files.some((f) => f.endsWith("inside.md")), "nothing behind the directory link is listed");
+    })
+  );
+});
+
+test("★ listMarkdownFiles reports a directory link strictly below pharn/ as linkedDirs, in the walk rule and the git rule", () => {
+  withOutside((outside) => {
+    for (const useGit of [false, true]) {
+      withTree({ "README.md": "# r\n" }, { git: useGit }, (root) => {
+        plantKinds(root, "pharn/pharn-review/k", outside);
+        mkdirSync(join(root, "docs"));
+        symlinkSync(join(outside, "dir"), join(root, "docs", "elsewhere"));
+        const r = listMarkdownFiles(root);
+        assert.equal(r.source, useGit ? "git" : "walk");
+        assert.deepEqual(rels(root, r.linkedDirs), ["pharn/pharn-review/k/dir-link"], "a link outside pharn/ is skipped silently");
+        assert.ok(!r.files.some((f) => f.endsWith("inside.md")), `${r.source}: nothing behind a link is listed`);
+      });
+    }
+  });
+});
+
+test("★ a `pharn` root that is itself a link is FOLLOWED in both rules, and is not reported (GATE 1)", () => {
+  withOutside((outside) => {
+    mkdirSync(join(outside, "dir", "pharn-review", "l"), { recursive: true });
+    writeFileSync(join(outside, "dir", "pharn-review", "l", "l.md"), LENS);
+    for (const useGit of [false, true]) {
+      withTree({ "README.md": "# r\n" }, { git: useGit }, (root) => {
+        symlinkSync(join(outside, "dir"), join(root, "pharn"));
+        const r = listMarkdownFiles(root);
+        assert.deepEqual(r.linkedDirs, []);
+        assert.ok(rels(root, r.files).includes("pharn/pharn-review/l/l.md"), `${r.source}: ${rels(root, r.files)}`);
+      });
+    }
+  });
+});
+
+test("★ the three counters REFUSE a directory link below pharn/ (exit 1, nothing on stdout, the link named)", () => {
+  withOutside((outside) =>
+    withTree({ "pharn/pharn-review/l/l.md": LENS }, { git: false }, (root) => {
+      for (const script of ["count-grillers.mjs", "count-lenses.mjs", "count-verifiers.mjs"]) {
+        assert.equal(spawnSync(process.execPath, [join(here, script), root], { encoding: "utf8" }).status, 0, `${script}: control`);
+      }
+      symlinkSync(join(outside, "dir"), join(root, "pharn", "pharn-review", "linked"));
+      for (const script of ["count-grillers.mjs", "count-lenses.mjs", "count-verifiers.mjs"]) {
+        const r = spawnSync(process.execPath, [join(here, script), root], { encoding: "utf8" });
+        assert.equal(r.status, 1, `${script}: ${r.stdout}`);
+        assert.equal(r.stdout, "");
+        assert.match(r.stderr, /symlinked directory below pharn\/ not descended: "pharn\/pharn-review\/linked"/);
+      }
+    })
+  );
+});
+
 // ── through the consumers ───────────────────────────────────────────────────────────────────────────────────────────
 
 function runJson(script, root) {
@@ -151,7 +243,9 @@ test("★ closure: every consumer takes its list from listMarkdownFiles and keep
   for (const f of CONSUMERS) {
     const src = readFileSync(join(here, f), "utf8");
     assert.match(src, /import \{ listMarkdownFiles \} from "\.\/capability-files-core\.mjs";/, `${f} imports the shared list`);
-    assert.match(src, /listMarkdownFiles\((TARGET|dir)\)\.files/, `${f} uses it`);
+    // 7.3.0: each consumer also reads the listing's `linkedDirs`, so it keeps the whole listing, not only `.files`.
+    assert.match(src, /= listMarkdownFiles\(TARGET\);/, `${f} uses it`);
+    assert.match(src, /\.linkedDirs\b/, `${f} reads the symlinked directories the list did not descend`);
     // A recursive readdirSync walk of the capability surface is the copy this file retired. validate.mjs keeps two
     // scoped readdirSync uses that are not capability discovery (canonDirs and walkExts, both under pharn/, and the
     // expected-fixture listing), so the check is on the shape of the retired function, not on readdirSync itself.

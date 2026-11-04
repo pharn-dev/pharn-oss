@@ -245,7 +245,16 @@ function main() {
     );
   }
   if (stampPath !== undefined) {
-    if (resultsPath !== undefined) {
+    // ANY operand that is neither a flag nor a flag's value is a positional map here, wherever it stands (7.3.0,
+    // dev-verdict-discipline): before, only a LEADING one was refused and a map appended after `--feature <name>` was
+    // silently not read. The positional path above is unchanged (it reads its leading operand only).
+    const VALUE_FLAGS = ["--stamp", "--feature", "--complete"];
+    let strayOperand = false;
+    for (let i = 0; i < argv.length; i++) {
+      if (VALUE_FLAGS.includes(argv[i])) i++;
+      else if (!argv[i].startsWith("--")) strayOperand = true;
+    }
+    if (resultsPath !== undefined || strayOperand) {
       emit(
         {
           feature,

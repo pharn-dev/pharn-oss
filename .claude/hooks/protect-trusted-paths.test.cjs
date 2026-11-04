@@ -1013,8 +1013,8 @@ test("✧ MUTANT: dropping the trailing dot/space strip lets the Windows spellin
 // write-guard-narrowing (M4) — the target the filesystem reaches is judged too. On a `/` system a backslash is
 // part of a file NAME, while both older readings read it as a separator, so a symlink named `s\x` → `.` carried a
 // write to a trusted doc — or to canon under a plan-origin scope — past this hook (a security review, reproduced).
-// Every case runs the SHIPPED hook, so each case asserting the new reading is EXPECTED TO FAIL until the human
-// applies `.dev/features/write-guard-narrowing/proposed/human-only.patch`, and to PASS once they do.
+// Every case runs the SHIPPED hook. The human-only patch (`.dev/features/write-guard-narrowing/proposed/`) was
+// applied in 6.31.1, so every case here passes against it.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const ONLY_POSIX = { skip: require("node:path").sep !== "/" && "a backslash is a separator on this system" };
@@ -1152,8 +1152,8 @@ test("✧ a 100k-segment payload path is judged in linear time, with the same ve
 // --- NO INPUT, AND A CRASH (audit TST-4 / TST-11, 2026-10-12; hook-hardening-batch). Before the human-applied patch,
 // readStdin() turned a read error into "" and the caller parsed `raw || "{}"`, so an empty or unreadable stdin became
 // `{}` — not a write — and the hook exited 0. And this hook had no uncaughtException handler, so a throw outside its
-// per-path try exited 1, which Claude Code treats as non-blocking. The ★ tests below are RED until
-// .dev/features/hook-hardening-batch/apply.py has run, GREEN after; the controls are GREEN on both sides.
+// per-path try exited 1, which Claude Code treats as non-blocking. The patch
+// (.dev/features/hook-hardening-batch/apply.py) was applied in 6.71.0, so the ★ tests and the controls all pass.
 test("★ TST-4: an EMPTY stdin denies (exit 2) with the fixed 'empty input' detail, never exit 0", () => {
   const r = spawnSync(process.execPath, [HOOK], { input: "", encoding: "utf8" });
   assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
@@ -1196,8 +1196,8 @@ test("TST-11 control (L60): the same throw placed BEFORE the handler's registrat
 // SEC-11 (audit 2026-10-12, LOW): a payload path holding a NUL byte. No file has such a name — Node's `fs` refuses
 // one — so both passes used to judge a name that is no file a write can reach: `pharn/LIMITS.md\u0000x` matched no
 // trusted path and exited 0. The patch (.dev/features/audit-low-human-patch/HUMAN-PATCH.md) denies any such path
-// through the malformed-input deny, before either pass. The deny cases are EXPECTED TO FAIL until the maintainer
-// runs that patch's apply.py, and to PASS after; the controls pass on both sides.
+// through the malformed-input deny, before either pass. It was applied in 6.73.1, so the deny cases and the controls
+// all pass.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const NUL_PATHS = [
@@ -1274,4 +1274,107 @@ test("★ 7.0.0 the OLD root paths are a user's own files in a sandbox too — p
     for (const p of OLD)
       assert.equal(runIn(sb, { tool_name: "Write", tool_input: { file_path: p } }).status, 0, `${p} (present: ${present})`);
   }
+});
+
+// --- 7.3.0 RUN STATE (loop-marker-integrity): the delivery runs' CLI-owned state is denied to the write tools. A review
+// confirmed the Write tool could rewrite pharn/.run/pharn-loop/<name>/active.json (any cap, any mode) prompt-free, since
+// enforce-writes-scope.cjs always allows pharn/.run/**. No command writes any file under these three directories with
+// the Write or Edit tool; their CLIs own every one. A Bash write still reaches them — this closes the TOOL surface. ---
+
+const RUN_STATE_FILES = [
+  "pharn/.run/pharn-loop/demo/active.json",
+  "pharn/.run/pharn-loop/demo/isolation.json",
+  "pharn/.run/pharn-loop/demo/stage-result.json",
+  "pharn/.run/pharn-loop/demo/freshness.jsonl",
+  "pharn/.run/pharn-loop/demo/stop-blocks.json",
+  "pharn/.run/pharn-ship/demo/active.json",
+  "pharn/.run/pharn-ship/demo/stage-result.json",
+  "pharn/.run/pharn-review/demo/active.json",
+  "pharn/.run/pharn-loop/new-name/anything-new.json", // a file no list names yet is covered too (L36)
+];
+
+for (const p of RUN_STATE_FILES) {
+  for (const tool of ["Write", "Edit", "MultiEdit", "NotebookEdit"]) {
+    test(`✧ 7.3.0 blocks a ${tool} to a delivery run's state: ${p}`, () => {
+      const input = tool === "NotebookEdit" ? { notebook_path: p } : tool === "MultiEdit" ? { file_path: p, edits: [] } : { file_path: p };
+      const r = run({ tool_name: tool, tool_input: input });
+      assert.equal(r.status, 2, r.stdout);
+      assert.match(r.stderr, /a delivery run's state/);
+      assert.match(r.stderr, /require-loop-record\.cjs --open \/ --close/, "the deny names the CLI that owns the marker (L27)");
+      assert.match(r.stderr, /CANNOT authorize/);
+    });
+  }
+}
+
+test("✧ 7.3.0 the run-state rule folds case and spelling like every rule here, and holds under ANY writes-scope", () => {
+  for (const p of [
+    "PHARN/.RUN/PHARN-LOOP/demo/active.json",
+    "pharn/.run/pharn-loop./demo/active.json",
+    "pharn/./.run/pharn-loop/demo/active.json",
+  ]) {
+    assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 2, p);
+  }
+  // A scope that names the marker exactly is no authorization: this rule has no escape.
+  const sb = sandbox([]);
+  setScopeRecord(sb, ["pharn/.run/pharn-loop/demo/active.json"], ".claude/commands/pharn-loop.md");
+  assert.equal(writeIn(sb, "pharn/.run/pharn-loop/demo/active.json").status, 2);
+  setScopeRecord(sb, ["pharn/.run/pharn-loop/demo/active.json"], PROMOTE_ORIGIN);
+  assert.equal(writeIn(sb, "pharn/.run/pharn-loop/demo/active.json").status, 2, "not even a promote origin");
+});
+
+test("✧ 7.3.0 the run-state rule judges the target a symlink reaches (both passes)", ONLY_POSIX, () => {
+  const sb = sandbox([]);
+  fs.mkdirSync(join(sb, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+  fs.symlinkSync(join("pharn", ".run", "pharn-loop", "demo"), join(sb, "alias"));
+  const r = writeIn(sb, "alias/active.json");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /alias\/active\.json -> .*pharn\/\.run\/pharn-loop\/demo\/active\.json/);
+  assert.match(r.stderr, /a delivery run's state/);
+});
+
+test("✧ 7.3.0 run state through a backslash-named link — found only by the filesystem's reading (PASS 2)", ONLY_POSIX, () => {
+  const sb = sandbox([]);
+  fs.mkdirSync(join(sb, "pharn", ".run", "pharn-loop", "demo"), { recursive: true });
+  fs.symlinkSync(".", join(sb, "s\\x"));
+  assert.equal(
+    fs.statSync(join(sb, "s\\x", "pharn", ".run", "pharn-loop", "demo")).ino,
+    fs.statSync(join(sb, "pharn", ".run", "pharn-loop", "demo")).ino,
+    "premise: the same directory"
+  );
+  const r = writeIn(sb, "s\\x/pharn/.run/pharn-loop/demo/active.json");
+  assert.equal(r.status, 2, r.stdout);
+  assert.match(r.stderr, /a delivery run's state/);
+  assert.match(r.stderr, /s\\x\/pharn\/\.run\/pharn-loop\/demo\/active\.json -> .*pharn\/\.run\/pharn-loop\/demo\/active\.json/);
+  // CONTROL: the same link to a neighbouring pharn/.run/ path is not run state.
+  assert.equal(writeIn(sb, "s\\x/pharn/.run/pharn-test/x.json").status, 0);
+});
+
+for (const p of [
+  "pharn/.run/pharn-loop", // the directory itself: a planted FILE there already fails closed (the run cannot open)
+  "pharn/.run/pharn-loopx/demo/active.json",
+  "pharn/.run/pharn-test/gates/x.json",
+  "pharn/.run/pharn-regress/scope.json",
+  "pharn/.run/feature-name/candidate.txt", // /pharn-loop's S1 writes this one with the Write tool
+  "pharn/.run/lessons-index.md",
+  "pharn/features/demo/LOOP.md",
+  "src/pharn/.run/pharn-loop/demo/active.json", // not under a guarded root's pharn/
+]) {
+  test(`✧ 7.3.0 the run-state rule does NOT over-block a neighbouring path: ${p}`, () => {
+    assert.equal(run({ tool_name: "Write", tool_input: { file_path: p } }).status, 0);
+  });
+}
+
+test("✧ 7.3.0 no product command or part prescribes a Write-tool write under the three run-state directories", () => {
+  // The rule is only safe while this holds: the files there are CLI-owned. A prose scan, so presence-grade (P0): it
+  // finds a path named next to the Write tool on one line, not every way a command could ask for such a write.
+  const dir = join(__dirname, "..", "commands");
+  const offenders = [];
+  for (const f of fs.readdirSync(dir).filter((x) => /^pharn-(?!dev-).*\.md$/.test(x))) {
+    fs.readFileSync(join(dir, f), "utf8")
+      .split("\n")
+      .forEach((l, i) => {
+        if (/\b(Write|Edit) tool\b/.test(l) && /pharn\/\.run\/pharn-(loop|ship|review)\/[^`\s]+/.test(l)) offenders.push(`${f}:${i + 1}`);
+      });
+  }
+  assert.deepEqual(offenders, []);
 });

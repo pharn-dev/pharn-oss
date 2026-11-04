@@ -49,7 +49,7 @@ docs) from **the apparatus used to build it** (under `.dev/`):
   four trusted docs live here too (`pharn/CONSTITUTION.md`, `pharn/ARCHITECTURE.md`); the other two
   (`pharn/THREAT-MODEL.md`, `pharn/LIMITS.md`) too since 7.0.0; `README`/`LICENSE`/`CHANGELOG`/`SECURITY`, `pharn.config.json`,
   `SKILLS_VERSION` and `MIN_CLI` sit at the root; the **product-pipeline** artifacts (`SPEC.md`, …) live under
-  `pharn/features/`, which is where they MOVED in 5.0.0 — a root `features/` collided with a project's own
+  `pharn/features/`, which is where they MOVED in 5.1.2 — a root `features/` collided with a project's own
   (Cucumber's default glob; feature-sliced architectures). This is what a user clones.
 - **Build apparatus (`.dev/`):** `.dev/floor/` (dev-only checkers — `check-provenance`, `check-variance`,
   `check-config` — with their tests; the `scan-plan-*` grill-scanners **moved to `pharn/floor/` in 2.4.0**,
@@ -106,10 +106,10 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    and will deny any Write/Edit/MultiEdit/NotebookEdit to them (exit 2). Do not try to edit them or work around the
    hook — if a change is genuinely needed, say so and let a human edit them outside the agent loop.
    The same hook also protects `CODEOWNERS` (the GitHub-layer write-guard itself — "guarding the
-   guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks, but it binds
-   other contributors only: the owner's account is the ruleset's bypass actor and `enforce_admins` is off, so any
-   merge made with the owner's credentials skips both — including an agent running `gh pr merge --admin` with the
-   owner's token. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
+   guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks. The owner's account
+   is the review ruleset's bypass actor and `enforce_admins` is off, so a merge made with the owner's credentials —
+   an agent running `gh pr merge --admin` with the owner's token included — skips the review and classic protection's
+   `gitleaks`; since 2026-10-26 ruleset 25907495 binds every account to the other required checks. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
    commit, so pharn-cli's `--ref latest` (the default for new installs since 0.15.0) does not receive a red tree through
    the workflow; its `main` channel still can (`pharn/LIMITS.md §11`).
    **It also protects the two guards' own
@@ -127,6 +127,9 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    path, whether or not the file exists: its guidance comments are instructions `/pharn-spec` follows, so the
    path is fixed rather than configurable and a human edits the file directly (contract:
    `pharn/pharn-contracts/spec-template.md`, "The project template"). Bash reaches it, as for the trusted docs.
+   **Since 7.3.0 it also denies the delivery runs' state** — every Write/Edit/MultiEdit/NotebookEdit below
+   `pharn/.run/pharn-{loop,ship,review}/**` (markers, witnesses, stage results: only PHARN's CLIs write them), whatever
+   the scope; Bash still reaches them.
    **Since 6.1.0 the same hook also denies GIT METADATA** — any `.git` path segment under a guarded root
    (never `.github/**` or `.gitignore`). A `.git` entry decides which working tree each guard judges, and
    `.git/hooks` / `.git/config` run code on the next git command, so the write tools may not touch them;
@@ -161,11 +164,12 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live
-  (`npm test`), never assert it from this doc (P6). Two per-PR gates are deliberately **outside** the
+  (`npm test`), never assert it from this doc (P6). Three per-PR gates are deliberately **outside** the
   chain because each needs a base to compare against: `npm run check:changelog-entry`
-  (`.dev/floor/check-changelog-entry.mjs`, the CHANGELOG diff) and `npm run check:surface-bump`
-  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`). CI runs both on pull requests
-  only, against the merge commit's first parent.
+  (`.dev/floor/check-changelog-entry.mjs`, the CHANGELOG diff), `npm run check:surface-bump`
+  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`) and `npm run check:ship-record`
+  (`.dev/floor/check-ship-record.mjs`, product paths vs a green `/pharn-dev-ship` record). CI runs all three on pull
+  requests only, against the merge commit's first parent.
 - `node pharn/floor/validate.mjs .` reports `GREEN` over the product surface — the `pharn/pharn-review/*`
   code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and the `pharn/pharn-core/` skills
   (`seam-resolver/`, `installed-skill-selection/`), over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.
@@ -197,11 +201,13 @@ file's baseline entry gets a silent `CLEAN`. This is an **accounting tool agains
 its scope** — a formatter, a generator, a script, a mistake — **not a control against an attacker**. Only
 the always-reconciled control surface resists that actor, because only it is anchored in committed blob
 ids rather than in the baseline. Since 6.53.0 that surface includes the four trusted docs, `CODEOWNERS`,
-`pharn/spec-template.md` and memory-bank canon, and an added untracked file there. So a maintainer's
+`pharn/spec-template.md` and memory-bank canon, since 7.3.0 the CI exec-config `.github/workflows/` and
+`.github/actions/`, and an added untracked file there. So a maintainer's
 **uncommitted** trusted-doc edit REDs `npm run check`: commit it first (L68). The only true prevention is OS-level sandboxing, harness-layer and not
 implemented; an authenticated baseline store outside the worktree is the same category and equally
 absent. Further bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are
-outside the reconciled set; the window is anchor→verify; one worktree per session; **no attribution** (it
+outside the reconciled set; the window is anchor→verify; one worktree per session (a second run's anchor would
+replace the first's epoch: since 7.3.0 `--anchor` refuses while that run's loop/ship marker is open); **no attribution** (it
 reports _what_, never _who_); the checker runs from the worktree, so it cannot vouch for its own
 integrity; and the anchor is a Bash step (L19), so a run that SKIPS it silently reuses an earlier epoch
 instead of failing — only a tree that has never anchored yields `INCONCLUSIVE`. **No shell command string

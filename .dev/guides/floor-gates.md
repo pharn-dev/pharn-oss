@@ -155,7 +155,10 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # runner did not cause stays a measured FAIL. check-regress gains the HEAD twin of the base rule (`head-timed-out`,
 # `head_timed_out`; 126/127 at regress are compared as before — a stated bound). The three codes are gate-run-core.mjs
 # UNMEASURED_CODES, which check-loop-fresh B passes through to check-loop.mjs (STOP_TERMINAL / unmeasured). The
-# positional map is unchanged (it carries no `timed_out`), so the dev twins are byte-identical.
+# positional map is unchanged (it carries no `timed_out`), so /pharn-dev-regress (positional) is byte-identical. Since
+# 7.3.0 (dev-verdict-discipline) /pharn-dev-verify reads a run-gates.mjs stamp through `--stamp`, so the dev verify
+# verdict gains this row, INCOMPLETE and the stamp refusals; .dev/floor/check-ship.mjs (`--loop`) still reads only
+# PASS/FAIL/INCONCLUSIVE, so an INCOMPLETE dev verify stops a `--loop` run INCONCLUSIVE (fail-closed).
 # THE FLUSH RULE (6.20.4): check-verify, check-regress, check-loop and check-red-run END by setting
 # process.exitCode (the first three unwind with a module-private sentinel only their top-level catch swallows) —
 # never by an immediate exit, which dropped queued stdout: on darwin a piped verdict was cut at 64 KiB, and
@@ -588,7 +591,8 @@ node pharn/floor/check-instruction-files.mjs --growth (--base <ref> | --base-rul
 # tools cannot — ★ HOOK); never attributed (an earlier run's escape is pre-run state for a re-run); escape set ONLY —
 # `inside` is unchanged, so a pre-run change that breaks a gate still reads as a regression (follow-up
 # `regress-base-pre-run-overlay`) and a pre-run-changed test file is not compared at regress; a green loop never commits
-# a subtracted path. pharn/LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
+# a subtracted path — and since 7.3.0 not a SCOPE path the snapshot holds unchanged either (loop-closeout.mjs
+# buildStageList asks preRunUnchanged; the document's `left_dirty` names them). pharn/LIMITS.md §3a/§6 understate it: .dev/features/regress-pre-run-snapshot/PROTECTED-FOLLOWUPS.md.
 # Exit: 0 recorded · 2 refused (closed REASON_CODES, `crashed` a caught throw); a module that cannot load is node's 1.
 node pharn/floor/pre-run-snapshot.mjs --capture <name>
 ```
@@ -618,13 +622,16 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 # is environment-supplied — the operator AND a project's own .claude/settings.json `env` can fake it (hook-wiring.test.cjs
 # pins this repo's files only); the lists are partial (a project .env, a keychain, cloud metadata unseen); an unlisted
 # container on cgroup v2 needs PHARN_ISOLATED=1; the floor sees argv, never who typed the flag; the record agrees with a
-# run-writable witness, never provenance (L43) — git-ignored `pharn/.run/` state the Write tool and Bash both reach and
+# run-writable witness, never provenance (L43) — git-ignored `pharn/.run/` state a Bash write reaches (the write tools are
+# denied it since 7.3.0, protect-trusted-paths.cjs RUN_STATE_SUBTREES) and
 # reconcile never sees, so every line built from it (record, report, commit) repeats a rewrite; a witness no admitted
 # run can write is marked NOT ADMITTED; the agent's own model credential is always present — the exfiltration
 # residual this stop does not touch. Exit: 0 admitted (record on stdout) · 2 refused (`check-run-isolation: refused
 # <reason> — …` on stderr; the record on stdout for not-isolated / credentials-present only) · node's 1 on a module that
 # cannot load.
-node pharn/floor/check-run-isolation.mjs --feature <name> [--accept-host-execution]
+# 7.3.0: the flag is accepted only FIRST (a trailing one is `usage`), because /pharn-loop pre-approves the unflagged
+# line with a `*` after --feature that a trailing flag would ride; the flagged line itself is in no grant.
+node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name>
 ```
 
 ## `entry-gates.mjs` — the entry gates

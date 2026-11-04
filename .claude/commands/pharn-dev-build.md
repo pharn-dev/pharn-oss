@@ -50,7 +50,10 @@ is also what makes "writes only the files the plan names" true. Deterministic (P
 parsed, not chosen. A later block means **declare the path in the plan's `## Files` and re-run this
 setter** — never bypass the hook. Since 6.54.0 that clears the hook but not verify: the anchored plan did not
 name the path, so `reconcile` reports it `plan-widened-after-anchor` and the human decides at GATE 2. Declaring
-every path before this step is what stays clean.
+every path before this step is what stays clean. **A setter refusal is a STOP for the human** (since 7.3.0 it refuses
+memory-bank canon, CI workflows and local actions, git hooks dirs and `.mcp.json` from a plan in this checkout too):
+never add an `--allow-*` flag yourself. Canon changes only through `/pharn-dev-memory-promote`; a CI file is the
+maintainer's human patch (`.dev/guides/writes-scope.md`).
 
 ## Step 1 — Verify, then refuse-or-proceed (P6, fix #4)
 
@@ -103,17 +106,30 @@ else
   # ALL scoped paths -> prettier. `--ignore-unknown` is REQUIRED, not decorative: without it prettier
   # exits 1 on an extension-less path (e.g. a plan that declares `SKILLS_VERSION`). `.prettierignore`
   # IS honored for explicitly-named paths, so generated artifacts stay protected.
-  node -p "require('./$SCOPE').scope.join('\n')" | xargs npx prettier --ignore-unknown --write
+  # 7.3.0: `npx --no-install` — a missing local binary fails here instead of being fetched from the registry; the
+  # paths travel NUL-separated (`join("\0")` + `xargs -0`), so xargs never splits an entry at a space or reads a
+  # quote, and `--` ends each tool's options, so no path is read as a flag (the setter also refuses such entries);
+  # `-r` runs nothing on an empty list (BSD and GNU xargs both accept it).
+  # PICK passes on only entries that are EXISTING REGULAR FILES by their literal path (lstat: never a symlink, never a
+  # directory; realpath equal to the literal path under this checkout, so no PARENT directory is a symlink either —
+  # measured: `gp/mb/x.md` with `gp/mb -> ../.dev/memory-bank` passed lstat and reformatted canon before 7.3.0) and
+  # hold no glob character. All three tools read their arguments as
+  # globs, and none reliably treats an existing literal path holding `[`, `{` or `(` as that file — measured: with
+  # `app/[s].md` and `app/s.md` both present, prettier, markdownlint-cli2 and eslint each processed `app/s.md`, and
+  # each brace-expanded an existing `b/{x,y}.md` — so a glob-shaped entry (`CLAUDE.m[d]`, `.husk{y,x}/pre-commit`,
+  # `!src/a.md`) is NOT formatted here and is named on stderr; `/pharn-dev-verify`'s whole-repo gates still check it.
+  PICK='const fs = require("fs"), path = require("path"); const want = new RegExp(process.argv[1]); const root = fs.realpathSync("."); const keep = [], skip = []; for (const p of require("./pharn/.run/writes-scope.json").scope) { if (!want.test(p)) continue; let ok = !/[*?[\]{}()!]/.test(p); try { const real = fs.realpathSync(p); ok = ok && fs.lstatSync(p).isFile() && real.startsWith(root + path.sep) && real === path.join(root, p); } catch { ok = false; } (ok ? keep : skip).push(p); } if (skip.length) process.stderr.write("Step 2b: not formatted here (not an existing regular file by its literal path, or glob-shaped): " + skip.join(", ") + "\n"); process.stdout.write(keep.join("\0"));'
+  node -e "$PICK" '' | xargs -0 -r npx --no-install prettier --ignore-unknown --write --
   # The .md SUBSET -> markdownlint. `--no-globs` is LOAD-BEARING: markdownlint-cli2 ADDS its config's
   # `globs` (`**/*.md`) to the paths on argv rather than replacing them, so without the flag this line
   # lints and FIXES every markdown file the globs reach — measured `Linting: 1340 files` for ONE named
   # file — and, from a checkout holding other sessions' worktrees, it rewrote files inside them
   # (`ignores` match only at the root). With it: exactly the named files, every `ignores` entry intact.
-  # The explicit non-empty test predates the flag (L16): with an empty list, GNU xargs runs the command
-  # ONCE WITH NO ARGUMENTS, and BSD xargs does not run it. Under `--no-globs` that path-less run lints 0
-  # files (measured), so here the test is defense in depth; it stays load-bearing for eslint below.
-  MD=$(node -p "require('./$SCOPE').scope.filter(p=>p.endsWith('.md')).join('\n')")
-  [ -n "$MD" ] && printf '%s\n' "$MD" | xargs npx markdownlint-cli2 --no-globs --fix
+  # The empty-list guard predates the flag (L16): with an empty list, GNU xargs runs the command ONCE WITH
+  # NO ARGUMENTS, and BSD xargs does not run it. Since 7.3.0 the guard is `xargs -r` (a shell variable cannot
+  # hold the NUL-separated list). Under `--no-globs` a path-less run lints 0 files (measured), so here the
+  # guard is defense in depth; it stays load-bearing for eslint below.
+  node -e "$PICK" '\.md$' | xargs -0 -r npx --no-install markdownlint-cli2 --no-globs --fix --
   # The JS SUBSET -> eslint, READ-ONLY (no `--fix`: the finding that forced this line,
   # `no-useless-assignment`, has no autofix, and mechanizing a fixer is a different axis). The same
   # non-empty test is LOAD-BEARING for the same reason (L16), and MEASURED for this linter rather than
@@ -122,8 +138,7 @@ else
   # unrelated pre-existing error as this increment's (L11). This line is PINNED rather than described,
   # because the prose it replaces ("Confirm `npm run lint` is clean") left the invocation open and the
   # open choice was the one that got skipped (L22).
-  JS=$(node -p "require('./$SCOPE').scope.filter(p=>/\.(mjs|cjs|js)$/.test(p)).join('\n')")
-  [ -n "$JS" ] && printf '%s\n' "$JS" | xargs npx eslint
+  node -e "$PICK" '\.(mjs|cjs|js)$' | xargs -0 -r npx --no-install eslint --
 fi
 ```
 

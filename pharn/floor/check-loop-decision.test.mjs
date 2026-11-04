@@ -23,6 +23,8 @@ import { dirname, join } from "node:path";
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, symlinkSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
+import { BLOCKED_IDS } from "./loop-record-core.mjs";
+import { LOOP_MODES } from "./loop-mode-core.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(here, "check-loop-decision.mjs");
@@ -67,7 +69,10 @@ function withFixture(fm, verifyObj, regressObj, fn, spec = null, marker = "auto"
   if (marker !== null) {
     const mdir = join(root, "pharn", ".run", "pharn-loop", MARKER_NAME);
     mkdirSync(mdir, { recursive: true });
-    const doc = marker === "auto" ? markerDoc(/^\d+$/.test(fm.cap ?? "") ? Number(fm.cap) : 3) : marker;
+    // "auto" is a run that obeyed both its cap and (7.3.0) its invocation: the record's own mode, when it names one of
+    // the two, is the mode the marker was opened with; no record mode → a marker with no `mode` key (read as full).
+    const autoMode = fm.mode === "quick" || fm.mode === "full" ? { mode: fm.mode } : {};
+    const doc = marker === "auto" ? markerDoc(/^\d+$/.test(fm.cap ?? "") ? Number(fm.cap) : 3, autoMode) : marker;
     writeFileSync(join(mdir, "active.json"), typeof doc === "string" ? doc : `${JSON.stringify(doc)}\n`);
     writeFileSync(join(mdir, "isolation.json"), `${ISO}\n`);
   }
@@ -337,10 +342,14 @@ test("★ D8's OWN RECORD (grill G1) — STOP_GREEN_QUICK, no mode, over a quick
       const shape = spawnSync(process.execPath, [RECORD_CHECKER, r.loopPath], { encoding: "utf8" });
       assert.equal(shape.status, 1, shape.stdout);
       assert.match(shape.stdout, /requires `mode: quick`/);
-      // CONTROL: "repairing" it by writing mode: quick turns BOTH green — which is exactly why Step 6b never edits `mode`.
+      // "Repairing" it by writing mode: quick turns the SHAPE check green — and, since 7.3.0, no longer the decision check:
+      // the run's marker was opened without --mode quick (read as full), so the edited record is RED MODE_UNWITNESSED.
       writeFileSync(r.loopPath, withHandoff(loopRecord({ decision: "STOP_GREEN_QUICK", mode: "quick", ...REC, isolation: ISO })));
       assert.equal(spawnSync(process.execPath, [RECORD_CHECKER, r.loopPath], { encoding: "utf8" }).status, 0);
-      assert.equal(spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" }).status, 0);
+      const repaired = spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" });
+      assert.equal(repaired.status, 1, repaired.stdout);
+      assert.match(repaired.stdout, /MODE_UNWITNESSED/);
+      assert.doesNotMatch(repaired.stdout, /MODE_MISMATCH|DECISION_MISMATCH/, "record and SPEC now agree; only the marker disagrees");
     },
     QUICK_SPEC
   );
@@ -422,7 +431,7 @@ const GREEN_REC = { decision: "STOP_GREEN", iterations: "1", cap: "3", commit: "
 test("★ LOOP-2 — the record's cap equals the marker's → GREEN, and the line says the cap was witnessed", () => {
   withFixture(GREEN_REC, PASS, CLEAN, (r) => {
     assert.equal(r.status, 0, r.out);
-    assert.match(r.out, /its cap is the one the run's marker recorded/);
+    assert.match(r.out, /its cap and mode are the ones the run's marker recorded/);
   });
 });
 
@@ -499,7 +508,9 @@ test("★ LOOP-2 / CodeQL js/file-system-race — the marker is checked and read
   // The source form: one openSync with O_NOFOLLOW, fstat on its descriptor, the read from the descriptor — never a
   // path-based lstat followed by a path-based read, which a symlink swapped in between would follow.
   const src = readFileSync(CHECKER, "utf8");
-  const fn = src.slice(src.indexOf("function markerCap("), src.indexOf("\n}\n", src.indexOf("function markerCap(")));
+  // 7.3.0: the reader is `markerRun` (it returns the cap and the mode); found first, so a rename cannot slice nothing.
+  assert.ok(src.indexOf("function markerRun(") >= 0, "the marker reader is found (L60)");
+  const fn = src.slice(src.indexOf("function markerRun("), src.indexOf("\n}\n", src.indexOf("function markerRun(")));
   assert.match(fn, /openSync\(marker, constants\.O_RDONLY \| constants\.O_NOFOLLOW \| constants\.O_NONBLOCK\)/);
   assert.match(fn, /fstatSync\(fd\)\.isFile\(\)/);
   assert.match(fn, /readFileSync\(fd, "utf8"\)/);
@@ -606,4 +617,126 @@ test("✧ L35 — the restated marker schema equals require-loop-record.cjs's ex
       null
     );
   }
+});
+
+// ── 7.3.0 (loop-marker-integrity): the marker witnesses the MODE, and only a listed id is a blocked stop ─────────────
+// Review HIGH "the model can pick the quick table … nothing floor-readable records the invocation" and MEDIUM "blocked:
+// is an open vocabulary". The quick part's Step 1a opens the marker with --mode quick; the record's mode must agree.
+
+test("★ 7.3.0 MODE_UNWITNESSED — quick SPEC, record mode: quick / STOP_GREEN_QUICK, marker opened with no mode → RED", () => {
+  withFixture(
+    { decision: "STOP_GREEN_QUICK", mode: "quick", ...REC },
+    PASS,
+    null,
+    (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /MODE_UNWITNESSED/);
+      assert.match(r.out, /--mode full/, "names the mode the marker read as");
+      assert.doesNotMatch(r.out, /MODE_MISMATCH|DECISION_MISMATCH|CAP_/, "record, SPEC and cap all agree");
+    },
+    QUICK_SPEC,
+    markerDoc(3)
+  );
+  // control: the same run opened with --mode quick is GREEN
+  withFixture(
+    { decision: "STOP_GREEN_QUICK", mode: "quick", ...REC },
+    PASS,
+    null,
+    (r) => assert.equal(r.status, 0, r.out),
+    QUICK_SPEC,
+    markerDoc(3, { mode: "quick" })
+  );
+});
+
+test("7.3.0 MODE_UNWITNESSED — a full record over a feature SPEC, marker opened --mode quick → RED; --mode full → GREEN", () => {
+  withFixture(
+    { ...GREEN_REC },
+    PASS,
+    CLEAN,
+    (r) => {
+      assert.equal(r.status, 1, r.out);
+      assert.match(r.out, /MODE_UNWITNESSED/);
+      assert.match(r.out, /\(absent — read as full\)/);
+    },
+    FEATURE_SPEC,
+    markerDoc(3, { mode: "quick" })
+  );
+  withFixture({ ...GREEN_REC }, PASS, CLEAN, (r) => assert.equal(r.status, 0, r.out), FEATURE_SPEC, markerDoc(3, { mode: "full" }));
+});
+
+test("7.3.0 — a marker mode outside {full, quick} is unusable: RED CAP_UNWITNESSED (fail-closed), never compared", () => {
+  for (const bad of ["QUICK", "", 1, null, ["quick"]]) {
+    withFixture(
+      { ...GREEN_REC },
+      PASS,
+      CLEAN,
+      (r) => {
+        assert.equal(r.status, 1, r.out);
+        assert.match(r.out, /CAP_UNWITNESSED/);
+        assert.match(r.out, /mode is not one of \{full, quick\}/);
+        assert.doesNotMatch(r.out, /MODE_UNWITNESSED/);
+      },
+      FEATURE_SPEC,
+      markerDoc(3, { mode: bad })
+    );
+  }
+});
+
+test("★ 7.3.0 BLOCKED_UNKNOWN — a blocked stop with an id outside BLOCKED_IDS is RED, never SKIPPED", () => {
+  for (const bad of ["totally-made-up-id", "No-Slug", "stage_refused", "no-slug\u0007"]) {
+    withFixture(
+      { decision: "INCONCLUSIVE", blocked: bad, iterations: "1", commit: "unknown", date: "2026-11-03" },
+      undefined,
+      undefined,
+      (r) => {
+        assert.equal(r.status, 1, `${JSON.stringify(bad)}: ${r.out}`);
+        assert.match(r.out, /BLOCKED_UNKNOWN/);
+        assert.doesNotMatch(r.out, /SKIPPED/);
+      }
+    );
+  }
+});
+
+test("✧ 7.3.0 — every BLOCKED_IDS member is SKIPPED (L29: the whole set, not one member)", () => {
+  assert.ok(BLOCKED_IDS.length >= 18, "non-vacuous (L34)");
+  for (const id of BLOCKED_IDS) {
+    withFixture(
+      { decision: "INCONCLUSIVE", blocked: id, iterations: "1", commit: "unknown", date: "2026-11-03" },
+      undefined,
+      undefined,
+      (r) => {
+        assert.equal(r.status, 0, `${id}: ${r.out}`);
+        assert.match(r.out, /SKIPPED/);
+      }
+    );
+  }
+});
+
+test("✧ 7.3.0 (L35) — the hook's --mode set equals loop-mode-core.mjs's LOOP_MODES, the vocabulary's one owner", () => {
+  const hook = createRequire(import.meta.url)(join(here, "..", "..", ".claude", "hooks", "require-loop-record.cjs"));
+  assert.ok(Array.isArray(hook.MODES), "require-loop-record.cjs exports MODES");
+  assert.deepEqual([...hook.MODES], [...LOOP_MODES]);
+});
+
+test("✧ 7.3.0 — a marker the REAL --open wrote with --mode quick is read as quick", () => {
+  const hookPath = join(here, "..", "..", ".claude", "hooks", "require-loop-record.cjs");
+  withFixture(
+    { decision: "STOP_GREEN_QUICK", mode: "quick", ...REC },
+    PASS,
+    null,
+    (r) => {
+      const env = { ...process.env, CLAUDE_PROJECT_DIR: r.root };
+      delete env.CLAUDE_CODE_SESSION_ID;
+      const open = spawnSync(process.execPath, [hookPath, "--open", MARKER_NAME, "--cap", "3", "--mode", "quick"], {
+        cwd: r.root,
+        env,
+        encoding: "utf8",
+      });
+      assert.equal(open.status, 0, open.stderr);
+      const out = spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" });
+      assert.equal(out.status, 0, out.stdout);
+    },
+    QUICK_SPEC,
+    null
+  );
 });

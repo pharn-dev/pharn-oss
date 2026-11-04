@@ -37,7 +37,8 @@ const LINES = WORKFLOW.split("\n");
 const PHARN_CLI_TAG_RE = "^v\\d+\\.\\d+\\.\\d+$";
 /** pharn-cli `src/lib/constants.ts` SKILLS_VERSION_FILE. */
 const PHARN_CLI_SKILLS_VERSION_FILE = "SKILLS_VERSION";
-/** Ruleset 18045407's required status checks, read 2026-10-26 (`gh api repos/pharn-dev/pharn-oss/rulesets/18045407`). */
+/** Ruleset 25907495's required status checks, read 2026-11-03 (`gh api repos/pharn-dev/pharn-oss/rulesets/25907495`;
+ *  until 7.3.0 this cited ruleset 18045407, which no longer holds the status-check rule). */
 const RULESET_REQUIRED = [
   "floor",
   "check",
@@ -45,10 +46,14 @@ const RULESET_REQUIRED = [
   "Socket Security: Project Report",
   "Socket Security: Pull Request Alerts",
 ];
+/** main's classic branch protection required contexts, read 2026-11-03
+ *  (`gh api repos/pharn-dev/pharn-oss/branches/main/protection`). `gitleaks` is required here only. */
+const CLASSIC_REQUIRED = ["check", "floor", "gitleaks", "Analyze (javascript-typescript)", "Socket Security: Project Report"];
 /** The ones that post on a push to main, each with the app whose run counts (GATE 1, Q1). */
 const REQUIRED = [
   "github-actions floor",
   "github-actions check",
+  "github-actions gitleaks",
   "github-actions Analyze (javascript-typescript)",
   "socket-security Socket Security: Project Report",
 ];
@@ -182,15 +187,17 @@ test("✧ the poll bound: every 60 s, at most 45 times, inside the job's 60-minu
   assert.ok((Number(env.POLL_INTERVAL_S) * Number(env.POLL_MAX)) / 60 < 60);
 });
 
-test("✧ REQUIRED_CHECKS is exactly the ruleset's checks that post on a push, each with its app", () => {
+test("✧ REQUIRED_CHECKS is exactly the required checks (ruleset ∪ classic protection) that post on a push, each with its app", () => {
   const env = jobEnv();
   assert.deepEqual(env.REQUIRED_CHECKS, REQUIRED);
   const names = REQUIRED.map((l) => l.slice(l.indexOf(" ") + 1));
-  for (const n of names) assert.ok(RULESET_REQUIRED.includes(n), `${n} is not a required check`);
+  const required = new Set([...RULESET_REQUIRED, ...CLASSIC_REQUIRED]);
+  for (const n of names) assert.ok(required.has(n), `${n} is not a required check`);
   assert.deepEqual(
-    RULESET_REQUIRED.filter((n) => !names.includes(n)),
+    [...required].filter((n) => !names.includes(n)),
     ["Socket Security: Pull Request Alerts"]
   );
+  assert.ok(names.includes("gitleaks"), "gitleaks is required by classic protection, so the release waits for it");
 });
 
 test("✧ the CHANGELOG step runs the two checkers on this commit", () => {
@@ -445,7 +452,8 @@ const ALL_GREEN = [
   run(11, "github-actions", "check", "completed", "success"),
   run(12, "github-actions", "Analyze (javascript-typescript)", "completed", "success"),
   run(13, "socket-security", "Socket Security: Project Report", "completed", "success"),
-  run(14, "github-actions", "gitleaks", "completed", "failure"),
+  run(14, "github-actions", "gitleaks", "completed", "success"),
+  run(15, "github-actions", "comment", "completed", "failure"),
 ];
 const checksRoute = (rows) => ({ match: CHECKS, stdout: `${rows.join("\n")}\n` });
 const polls = (r) => r.calls.filter((c) => c.join(" ").includes(CHECKS)).length;
@@ -453,7 +461,15 @@ const polls = (r) => r.calls.filter((c) => c.join(" ").includes(CHECKS)).length;
 test("★ wait: every required check succeeded → exit 0 on the first poll (an unrequired red check is ignored)", () => {
   const r = runStep("Wait for the required checks", { routes: [checksRoute(ALL_GREEN)] });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /all 4 required checks succeeded/);
+  assert.match(r.stdout, /all 5 required checks succeeded/);
+  assert.equal(polls(r), 1);
+});
+
+test("★ wait: a failed gitleaks run ends the job at once (classic protection requires it; until 7.3.0 it was ignored)", () => {
+  const rows = ALL_GREEN.map((l) => (l.includes("\tgitleaks\t") ? run(14, "github-actions", "gitleaks", "completed", "failure") : l));
+  const r = runStep("Wait for the required checks", { routes: [checksRoute(rows)] });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /CHECK_FAILED: gitleaks \(github-actions\) concluded failure/);
   assert.equal(polls(r), 1);
 });
 

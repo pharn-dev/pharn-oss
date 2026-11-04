@@ -323,8 +323,9 @@ test("setter --from-frontmatter keeps concrete paths and resolves placeholders w
 // --- Regression (pipeline-integration-probe finding #2): the REAL /review declares ONLY its output ---
 // /review writes one artifact — pharn/features/<name>/REVIEW.md. Canon (pharn/memory-bank/**) is written solely by
 // /memory-promote (gated + check-provenance + human accept). A `pharn/memory-bank/**` entry in /review's
-// `writes:` would make the setter resolve a scope the pre-write hook then PERMITS — a direct, ungated
-// canon write. Pin the real command file's resolved scope to exactly its REVIEW.md path.
+// `writes:` would make the setter resolve a scope THIS hook then permits — the over-grant L7 records; since 3.1.1
+// protect-trusted-paths.cjs denies that canon write (origin is not a promote command; probed 7.3.0, exit 2). Pin the
+// real command file's resolved scope to exactly its REVIEW.md path.
 
 test("setter --from-frontmatter on the REAL pharn-dev-review.md resolves to ONLY .dev/features/<name>/REVIEW.md (no canon path)", () => {
   const cwd = tmp();
@@ -351,6 +352,8 @@ test("setter --from-plan reads the leading back-tick path of each ## Files item,
       "",
       "## Files",
       "",
+      // Prose before the first item is allowed; since 7.3.0 a line BETWEEN items, or an exclusion intro with items
+      // under it, refuses (one contiguous list), so the exclusion below is the heading form.
       "Written by `/build`:",
       "",
       // A `.claude/` path deliberately OUTSIDE the setter's CONTROL_SURFACE refusal (the hook's own test
@@ -360,7 +363,7 @@ test("setter --from-plan reads the leading back-tick path of each ## Files item,
       "- `.claude/hooks/enforce-writes-scope.test.cjs` — **NEW.** the hook suite",
       "- `CLAUDE.md` — **EDIT.** add a section",
       "",
-      "Explicitly **not** touched:",
+      "### Explicitly **not** touched",
       "",
       "- `floor/validate.mjs` — unchanged (must NOT enter scope)",
       "",
@@ -464,7 +467,9 @@ test("setter --from-plan: the live-corpus `### Explicitly **not** touched` headi
   assert.ok(!rec.scope.includes("floor/validate.mjs"), "excluded-section path must be ABSENT");
 });
 
-test("setter --from-plan: a head-less prose exclusion intro ('Files NOT written:') keeps its paths OUT", () => {
+test("setter --from-plan: a head-less prose exclusion intro ('Files NOT written:') with items under it REFUSES (7.3.0)", () => {
+  // Before 7.3.0 the cue ended the list silently; since 7.3.0 any line between path items refuses (one contiguous
+  // list), so the excluded path still never enters scope — nothing is written at all.
   const cwd = tmp();
   const plan = join(cwd, "PLAN.md");
   fs.writeFileSync(
@@ -483,10 +488,9 @@ test("setter --from-plan: a head-less prose exclusion intro ('Files NOT written:
     ].join("\n")
   );
   const r = setter(cwd, "--from-plan", plan);
-  assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["pharn-core/a.md"]);
-  assert.ok(!rec.scope.includes("floor/validate.mjs"), "excluded-section path must be ABSENT");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /line 7 under `## Files` .* interrupts the path list and a path item follows it \(line 9\)/);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "nothing written");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -550,9 +554,10 @@ test("setter --from-plan: the cue's OTHER alternatives are equally exempt on a w
   ]);
 });
 
-test("setter --from-plan: a BLANK line closes the item body — an INDENTED exclusion intro after one still excludes", () => {
+test("setter --from-plan: a BLANK line closes the item body — an INDENTED exclusion intro after one still REFUSES", () => {
   // The fail-OPEN case the naive "exempt every indented line" rule would have introduced. Kept as its
-  // own test because it is the reason the exemption is stateful rather than a one-line regex.
+  // own test because it is the reason the exemption is stateful rather than a one-line regex. Since 7.3.0 the
+  // indented intro ends the contiguous list and the item after it refuses: nothing is written.
   const cwd = tmp();
   const plan = join(cwd, "PLAN.md");
   fs.writeFileSync(
@@ -571,10 +576,9 @@ test("setter --from-plan: a BLANK line closes the item body — an INDENTED excl
     ].join("\n")
   );
   const r = setter(cwd, "--from-plan", plan);
-  assert.equal(r.status, 0);
-  const rec = JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8"));
-  assert.deepEqual(rec.scope, ["pharn-core/a.md"]);
-  assert.ok(!rec.scope.includes("floor/validate.mjs"), "an indented exclusion section must still exclude");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /interrupts the path list/);
+  assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "an indented exclusion section never enters scope");
 });
 
 test("setter --from-plan: a flat `## Files` with no exclusion captures ALL authorized paths (no early break)", () => {
@@ -1463,10 +1467,10 @@ test("deny message: the extractor ignores PATH segments, so the tests above are 
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // 6.24.0 — THE THREE-POSTURE RELAXATION (D1–D9). Every test below runs against the SHIPPED hook path
-// (`HOOK`, above) — the still-unpatched `.claude/hooks/enforce-writes-scope.cjs` this file always tests.
-// That means EVERY test in this section is EXPECTED TO FAIL until the human applies
-// `.dev/features/writes-scope-run-only/proposed/human-only.patch`, and to PASS once they do — exactly the
-// same shape as every pre-existing test in this file, which is why no new HOOK constant was introduced.
+// (`HOOK`, above) — the `.claude/hooks/enforce-writes-scope.cjs` this file always tests. They were written before
+// the human applied `.dev/features/writes-scope-run-only/proposed/human-only.patch` (6.24.0) and pass against the
+// patched hook — the same shape as every pre-existing test in this file, which is why no new HOOK constant was
+// introduced.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 function seedUnsignalled(cwd) {
@@ -1951,8 +1955,8 @@ test("★ crafted marker names from the review (a newline + imperative text, she
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // GATE-2 FIXES (REVIEW.md at a154214, and the maintainer's D2 decision of 2026-09-26). Every case below is
 // one of the review's own repros, a D2 case, or a regression found while verifying the fixes, run against
-// the SHIPPED hook path — so, like the section above, each is EXPECTED TO FAIL until the human applies
-// `proposed/human-only.patch`, and to PASS once they do.
+// the SHIPPED hook path. Like the section above, they were written before the human applied
+// `proposed/human-only.patch` (6.24.0) and pass against the patched hook.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 // The hook with an explicit environment: `null` removes a variable, anything else sets it. `nodeArgs` go
@@ -2465,9 +2469,8 @@ test("★ L27 per branch: each 6.24.0 remedy is PRESENT in its own case and ABSE
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 // write-guard-narrowing (M7) — outside a run, with no scope, the install posture allows an out-of-project path
 // only in THIS project's auto-memory folder, THIS session's own scratchpad, and an ordinary temp path. Every case
-// runs the SHIPPED hook path, so, like the 6.24.0 sections above, each case asserting the narrowed rule is
-// EXPECTED TO FAIL until the human applies `.dev/features/write-guard-narrowing/proposed/human-only.patch`, and
-// to PASS once they do.
+// runs the SHIPPED hook path; the human applied `.dev/features/write-guard-narrowing/proposed/human-only.patch` in
+// 6.31.1, so every case asserting the narrowed rule passes.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const CLAUDE_STATE_CUE = /and it is Claude Code's own state outside this project/;
@@ -2967,7 +2970,7 @@ test("✧ a 100k-segment payload path is judged in linear time and still denied 
 
 // --- NO INPUT (audit TST-4, 2026-10-12; hook-hardening-batch). Before the human-applied patch, readStdin() turned a read
 // error into "" and the caller parsed `readStdin() || "{}"`, so an empty or unreadable stdin became `{}` — not a write —
-// and the hook exited 0. The ★ tests are RED until .dev/features/hook-hardening-batch/apply.py has run, GREEN after.
+// and the hook exited 0. .dev/features/hook-hardening-batch/apply.py was applied in 6.71.0, so the ★ tests pass.
 test("★ TST-4: an EMPTY stdin denies (exit 2) with the fixed 'empty input' detail, never exit 0", () => {
   const r = spawnSync(process.execPath, [HOOK], { input: "", cwd: tmp(), encoding: "utf8" });
   assert.equal(r.status, 2, `exit ${r.status}: ${r.stderr}`);
@@ -3045,9 +3048,8 @@ test("scoped mode: a write through a symlinked parent into .github/workflows/ is
 // TST-12 (audit 2026-10-12, LOW): the dev and unsignalled postures denied every out-of-project Write, the session's
 // own harness scratchpad included, and the out-of-root body sent scratch writes to Bash. The patch
 // (.dev/features/audit-low-human-patch/HUMAN-PATCH.md) admits THIS session's own scratchpad there, by the install
-// posture's rule (2) unchanged (ownScratchpadDir()), in every mode, and nothing else outside the project. The cases
-// that expect an allow, and the new bullet, are EXPECTED TO FAIL until the maintainer runs that patch's apply.py, and
-// to PASS after; every deny case passes on both sides.
+// posture's rule (2) unchanged (ownScratchpadDir()), in every mode, and nothing else outside the project. It was
+// applied in 6.73.1, so the allow cases, the new bullet and every deny case pass.
 // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const DEV_SCRATCHPAD_BULLET_CUE = /put it inside this session's own scratchpad, which the Write tool reaches in this posture/;
@@ -3113,6 +3115,40 @@ test("TST-12 fail-closed (dev): a scratchpad the payload does not name as THIS s
   // The right fields, but the scratchpad's base is not a temp root here (TMPDIR unchanged): the shape rule still holds.
   assert.equal(hookSession(cwd, target, { session_id: SID, scratchpad_dir: t.own }, {}).status, 2, "not under a temp root");
 });
+
+// Review 2026-11-03 (MED, #389): the dev posture's scratchpad allow must not widen into the project. It cannot — the
+// allow is read only for a target OUTSIDE the root, through the same ownScratchpadDir() temp-root rule the install
+// posture uses — and these cases pin that: a payload naming a project directory as the scratchpad unlocks nothing in
+// it, under no scope and under a set scope, nor does a Claude-shaped scratchpad planted inside the project.
+for (const [posture, seed] of [
+  ["dev", seedDevRepo],
+  ["unsignalled", seedUnsignalled],
+]) {
+  test(`TST-12 (${posture}): a scratchpad_dir INSIDE the project grants nothing there — the scope still decides`, () => {
+    const cwd = fs.realpathSync(seed(tmp()));
+    const t = claudeTempLayout();
+    const planted = join(cwd, "claude-4242", "-proj-key", SID, "scratchpad");
+    for (const [dir, target] of [
+      [join(cwd, "pharn"), join(cwd, "pharn", "floor", "x.mjs")], // the finding's own case
+      [join(cwd, "src"), join(cwd, "src", "x.js")],
+      [planted, join(planted, "x.mjs")], // Claude Code's own shape, but below the project, not a temp root
+    ]) {
+      const fields = { session_id: SID, scratchpad_dir: dir };
+      assert.equal(hookSession(cwd, target, fields, TEMP_ROOT_ENV(t)).status, 2, `no scope: ${dir} -> ${target}`);
+      assert.equal(hookSession(cwd, target, fields, { TMPDIR: cwd }).status, 2, `TMPDIR = the project: ${dir} -> ${target}`);
+    }
+    const scoped = fs.realpathSync(seed(tmp()));
+    setScope(scoped, ["only/this.md"]);
+    const fields = { session_id: SID, scratchpad_dir: join(scoped, "pharn") };
+    assert.equal(hookSession(scoped, join(scoped, "pharn", "floor", "x.mjs"), fields, TEMP_ROOT_ENV(t)).status, 2, "scoped");
+    assert.equal(hookSession(scoped, join(scoped, "only", "this.md"), fields, TEMP_ROOT_ENV(t)).status, 0, "control: the scope");
+    assert.equal(
+      hookSession(scoped, join(t.own, "gates.sh"), { session_id: SID, scratchpad_dir: t.own }, TEMP_ROOT_ENV(t)).status,
+      0,
+      "control: the real scratchpad under a temp root is still allowed"
+    );
+  });
+}
 
 test("TST-12 (dev): the target the write REACHES is judged — a link in the scratchpad back into the repo or out of it", () => {
   const cwd = seedDevRepo(tmp());

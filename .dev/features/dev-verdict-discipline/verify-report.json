@@ -1,0 +1,26 @@
+{
+  "feature": "dev-verdict-discipline",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "fedfff85680ea0b0d644693baef360e5201613d6359fa5242fd56f57f0671837",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "04321da3268b33cbb73fa893db2dd257dfc9b7723a6d284c47740da09b39c402"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

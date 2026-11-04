@@ -25,8 +25,15 @@
 //     an empty surface that the walk is not.
 //
 // BOUNDS (P0), stated because the old walk did these differently:
-//   * A symlinked DIRECTORY inside the work tree is not descended (git lists the link, not what it points at); the
-//     walk followed it. A symlinked `.md` file is still listed and read through the link.
+//   * A symlinked DIRECTORY is not descended, in either rule (7.3.0, L59). Git lists the link, not what it points at;
+//     the walk classifies each entry with lstatSync and skips a link to a directory. Before 7.3.0 this line claimed
+//     the bound while the walk — the fallback AND the `pharn/` union every git-mode run adds — followed such a link
+//     with statSync, so a link under pharn/ imported an outside directory's capabilities (measured: 38 for 37).
+//     The links skipped strictly below the target's own `pharn/` are returned as `linkedDirs`, so a consumer can
+//     refuse rather than silently lose what they point at; a link anywhere else is skipped silently. ONE exception,
+//     decided at family-grammar-crlf's GATE 1: a `pharn` directory that is itself a link is the operator's explicit
+//     choice and is followed, in both rules, as before. A symlinked `.md` file is still listed and read through the
+//     link; a dangling or looping link is skipped (its stat fails).
 //   * A submodule or a nested repository is not descended (git lists a gitlink or `dir/`, never its files); the walk
 //     descended. Asked from the target, a target that IS a nested repository answers for itself.
 //   * The walk fallback keeps every residual it had, including the ignored copies this file exists to drop: a tree
@@ -38,17 +45,19 @@
 // EXCLUDE_SEGMENTS and its own frontmatter reader.
 
 import { execFileSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { lstatSync, readdirSync, statSync } from "node:fs";
+import { join, sep } from "node:path";
 
 /** The listing's output ceiling: 256 MiB, the value stage-runtime.mjs's gitSync and reconcile-baseline.mjs use. */
 export const MAX_BUFFER = 1 << 28;
 /** A git that has not answered in this long is treated as failed, and the walk runs instead. */
 export const GIT_TIMEOUT_MS = 60_000;
 
-/** The recursive `*.md` walk the four readers each carried (validate.mjs's, byte for byte in behaviour): every
- *  directory is followed through `statSync`, an unreadable directory or entry is skipped, order is readdirSync's. */
-export function walkMarkdown(dir, acc = []) {
+/** The recursive `*.md` walk the four readers each carried: an unreadable directory or entry is skipped, order is
+ *  readdirSync's. Since 7.3.0 each entry is classified with `lstatSync` (L59): a link to a directory is NOT descended
+ *  and its path is pushed onto `links`; a link to a file is classified by its target (an `.md` one is listed); a
+ *  dangling or looping link fails its stat and is skipped. `dir` itself is read as given — a linked root is followed. */
+export function walkMarkdown(dir, acc = [], links = []) {
   let entries;
   try {
     entries = readdirSync(dir);
@@ -59,11 +68,18 @@ export function walkMarkdown(dir, acc = []) {
     const p = join(dir, name);
     let st;
     try {
-      st = statSync(p);
+      st = lstatSync(p);
+      if (st.isSymbolicLink()) {
+        st = statSync(p);
+        if (st.isDirectory()) {
+          links.push(p);
+          continue;
+        }
+      }
     } catch {
       continue;
     }
-    if (st.isDirectory()) walkMarkdown(p, acc);
+    if (st.isDirectory()) walkMarkdown(p, acc, links);
     else if (name.endsWith(".md")) acc.push(p);
   }
   return acc;
@@ -94,20 +110,44 @@ function isRegularFile(p) {
   }
 }
 
+/** True when `p` is a symbolic link whose target is a directory. */
+function isLinkToDir(p) {
+  try {
+    return lstatSync(p).isSymbolicLink() && statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The markdown files the capability readers scan under `target`, as `join(target, rel)` paths (the shape the old
- * walk returned, so `relative(target, file)` still gives the repo-relative path). `{files, source}`: `source` is
- * `"git"` or `"walk"`, for tests and for a reader that wants to say which rule ran. Never throws.
+ * walk returned, so `relative(target, file)` still gives the repo-relative path). `{files, source, linkedDirs}`:
+ * `source` is `"git"` or `"walk"`, for tests and for a reader that wants to say which rule ran; `linkedDirs` (7.3.0)
+ * lists, sorted, the links to directories the walks skipped strictly below `join(target, "pharn")`. Never throws.
  */
 export function listMarkdownFiles(target) {
+  const pharnDir = join(target, "pharn");
+  const links = [];
   const listed = gitListing(target);
-  if (listed === null || listed.length === 0) return { files: walkMarkdown(target), source: "walk" };
-  const set = new Set();
-  for (const rel of listed) {
-    if (!rel.endsWith(".md")) continue;
-    const p = join(target, rel);
-    if (isRegularFile(p)) set.add(p);
+  let files;
+  let source;
+  if (listed === null || listed.length === 0) {
+    files = walkMarkdown(target, [], links);
+    // The GATE-1 exception, kept equal across both rules: a linked `pharn` root is followed, as the git-mode union
+    // below follows it, so the walk fallback walks it too instead of recording it.
+    if (isLinkToDir(pharnDir)) walkMarkdown(pharnDir, files, links);
+    source = "walk";
+  } else {
+    const set = new Set();
+    for (const rel of listed) {
+      if (!rel.endsWith(".md")) continue;
+      const p = join(target, rel);
+      if (isRegularFile(p)) set.add(p);
+    }
+    for (const p of walkMarkdown(pharnDir, [], links)) set.add(p);
+    files = [...set].sort();
+    source = "git";
   }
-  for (const p of walkMarkdown(join(target, "pharn"))) set.add(p);
-  return { files: [...set].sort(), source: "git" };
+  const linkedDirs = [...new Set(links.filter((p) => p.startsWith(pharnDir + sep)))].sort();
+  return { files, source, linkedDirs };
 }

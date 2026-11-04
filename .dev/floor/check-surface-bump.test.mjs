@@ -16,7 +16,8 @@
 //
 // ── Honest scope (P0) ────────────────────────────────────────────────────────────────────────────────────────────
 // A green run means the committed strings and the checker's behaviour on these fixtures are as pinned. It does NOT
-// mean CI ran the step on a given PR (admin merges and direct pushes skip it), and the binding proves the constant
+// mean CI ran the step on a given PR (direct pushes skip it; an admin merge does not, since ruleset 25907495 holds
+// every account to the required `check` job it runs in), and the binding proves the constant
 // and CLAUDE.md AGREE — never that they name what an install really receives.
 
 import { test, after } from "node:test";
@@ -398,6 +399,31 @@ test("G8: SKILLS_VERSION's trailing newline alone is not a bump", () => {
     put(root, "SKILLS_VERSION", "1.0.0");
     const r = run(["--base-ref", "HEAD", "."], root);
     assert.equal(r.code, 1, r.out);
+  } finally {
+    cleanup();
+  }
+});
+
+test("G9 (7.3.0): a version that differs only by whitespace, or is not a bare X.Y.Z, is not a bump", () => {
+  const paths = ["pharn/LIMITS.md"];
+  for (const head of ["1.0.0 ", " 1.0.0", "1.0.0\n", "1.0.0\t", "v1.0.1", "1.0", "1.0.1-rc.1", ""]) {
+    const res = judge({ paths, baseVersion: "1.0.0", headVersion: head });
+    assert.equal(res.ok, false, `${JSON.stringify(head)} must not count as a bump`);
+    assert.match(res.findings[0].problem, /is not a bare X\.Y\.Z version/);
+  }
+  assert.equal(judge({ paths, baseVersion: "1.0.0", headVersion: "1.0.1" }).ok, true, "a real bump still passes (L4 control)");
+  assert.equal(
+    judge({ paths: ["README.md"], baseVersion: "1.0.0", headVersion: "1.0.0 " }).ok,
+    true,
+    "no surface path, no verdict on the version"
+  );
+  const { root, cleanup } = repo();
+  try {
+    put(root, "pharn/LIMITS.md", "limits\n");
+    put(root, "SKILLS_VERSION", "1.0.0 \n");
+    const r = run(["--base-ref", "HEAD", "."], root);
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /NOT_BUMPED/);
   } finally {
     cleanup();
   }

@@ -123,7 +123,7 @@ function gate(specPath) {
       // explicitly instead. JSON.stringify escapes control characters, so an untrusted frontmatter value
       // reaching this message as DATA cannot forge a verdict line in this checker's own stdout (P2).
       `spec state ${JSON.stringify(state === "" ? "(none)" : state)} is not ${JSON.stringify(STATE_APPROVED)} — ` +
-        `approve the intent via /pharn-spec before planning (a Draft is not yet human-approved)`
+        `approve the intent via /pharn-spec before planning (a Draft has not been marked Approved)`
     );
   }
 

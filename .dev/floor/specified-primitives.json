@@ -148,8 +148,9 @@
         "markdown-only, no `.cjs`, cannot declare trusted-write. Of the three sub-claims exactly one is live —",
         "pharn/floor/validate.mjs restricts `seal` to kind: pharn-owned (:293) and enum-checks `kind` (:292).",
         "The markdown-only / no-.cjs half is enforced by NOTHING, and the egress half waits on the (separately",
-        "registered) pre-egress hook. LIMITS §1a states the absence precisely: the three hooks contain zero",
-        "`kind` references.",
+        "registered) pre-egress hook. LIMITS §1a states the absence precisely: none of the four hooks reads a",
+        "capability's `kind:` field (7.3.0 wording; the word `kind` appears in three of them only as an internal",
+        "record field).",
         "",
         "PROBE CHOICE, and its miss. Both sites locate the missing backstop in the HOOKS, so the probe watches",
         ".claude/hooks for a *community* file — the pre-egress precedent (probe the directory where the doc says",
@@ -175,7 +176,7 @@
         },
         {
           "file": "pharn/LIMITS.md",
-          "marker": "contain zero `kind` references, so both are _(specified; ships with the guarded surface)_."
+          "marker": "a capability's `kind:` field, so both are _(specified; ships with the guarded surface)_."
         }
       ]
     },

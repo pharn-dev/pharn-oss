@@ -30,6 +30,12 @@
 // blocked ones included. That the mode is the TRUE invocation is advisory; that it AGREES with the table the SPEC's
 // kind selects is check-loop-decision.mjs's question (MODE_MISMATCH), never this file's.
 //
+// ── `blocked` — a closed set (7.3.0, review MEDIUM "blocked: is an open vocabulary") ─────────────────────────────
+// A blocked stop is `decision: INCONCLUSIVE` plus `blocked: <id>`. The id, when the key is present, must be a member of
+// loop-record-core.mjs's frozen BLOCKED_IDS (the stuck-point ids S1–S15) — guard first, then exact membership; else RED
+// BLOCKED_UNKNOWN. That the id is the TRUE reason the run stopped is advisory; that it is one of the reasons the command
+// can stop for is primitive #3.
+//
 // NON-LLM. Node stdlib only (fs). No network, no eval, no deps, no child processes.
 //
 // ── NO CROSS-TREE IMPORT (P3) ────────────────────────────────────────────────────────────────────────
@@ -43,7 +49,8 @@
 // ── Honest scope (P0) — the split this file must never blur ───────────────────────────────────────────
 // FLOOR (what the exit code guarantees, GIVEN a record handed to it): the envelope's four MANDATORY
 //   fields, plus the optional fifth (`cap`, ADDITIVE since the loop-decision-integrity increment — see
-//   below) and the optional sixth (`mode`, 6.28.0 — above), are shape-valid (enum membership + anchored regexes over
+//   below), the optional sixth (`mode`, 6.28.0 — above) and an optional `blocked` id (7.3.0 — above), are shape-valid
+//   (enum membership + anchored regexes over
 //   control-char-guarded values + an integer compare), `decision` and `mode` are a consistent pair (the one
 //   cross-field rule, above), and the Handoff's STRUCTURE is exactly `## Handoff` containing `### investigated`,
 //   `### learned`, `### next_steps` — in that order, as the ONLY `###` headings there, each with a
@@ -108,7 +115,7 @@
 import { readFileSync, openSync, fstatSync, readSync, closeSync, constants } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { FM_RE, describeRepeats, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
-import { HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
+import { BLOCKED_IDS, HANDOFF_SECTIONS, handoffSections } from "./loop-record-core.mjs";
 import { LOOP_MODES } from "./loop-mode-core.mjs";
 import { admitted, parseIsolationLine } from "./check-run-isolation-core.mjs";
 
@@ -122,6 +129,9 @@ const DECISION_ENUM = new Set(["STOP_GREEN", "STOP_GREEN_QUICK", "STOP_CAP", "ST
 
 // The optional `mode` field's vocabulary, as a Set over loop-mode-core.mjs's frozen LOOP_MODES (L15, L35).
 const MODE_ENUM = new Set(LOOP_MODES);
+
+// The `blocked` key's vocabulary (7.3.0), as a Set over loop-record-core.mjs's frozen BLOCKED_IDS (L15, L35).
+const BLOCKED_ENUM = new Set(BLOCKED_IDS);
 
 // HANDOFF_SECTIONS + the four structure regexes + the fence-pairing scan now live in
 // ./loop-record-core.mjs, so render-run-report.mjs reads the SAME grammar instead of re-deriving it
@@ -141,12 +151,13 @@ function red(msg) {
 
 // A string with no control characters and a bounded length. This is the PRECONDITION that must run
 // BEFORE any anchored shape regex, never as a replacement for one (lessons-learned.md L14 — cited, not
-// restated, P4): JavaScript `$` without the `m` flag matches at end-of-string OR just before a single
-// trailing newline, so `/^\d+$/.test("2\n")` is TRUE. Line-splitting happens to make that particular
-// vector unreachable HERE, and the guard is kept anyway — deliberately. L14's discipline is to COMPOSE
-// rather than to re-derive, per field, whether today's parser makes the hole reachable; a future refactor
-// that stops splitting by lines must not silently reopen it. A char-code scan rather than a control-char
-// regex, so the rejected bytes are unambiguous in a diff.
+// restated, P4). Corrected in 7.3.0: in JavaScript, `$` without the `m` flag matches ONLY at the end of the
+// input — `/^\d+$/.test("2\n")` is FALSE (measured, Node 24), unlike Perl's or Python's `$`. The anchored
+// regexes here therefore do not admit a trailing newline on their own; what they do not see is every OTHER
+// control character a looser regex (a `.`, a `[^…]` class, a future `m` flag) would let through, and a value
+// read some way other than line-splitting. The guard is kept for that — deliberately: L14's discipline is to
+// COMPOSE rather than to re-derive, per field and per regex, whether today's grammar happens to close the hole.
+// A char-code scan rather than a control-char regex, so the rejected bytes are unambiguous in a diff.
 function cleanScalar(v, maxLen) {
   if (typeof v !== "string") return false;
   if (v.length < 1 || v.length > maxLen) return false;
@@ -325,6 +336,20 @@ function gate(recordPath) {
       `loop-record's \`decision\` is STOP_GREEN but its \`mode\` is quick (${recordPath}) — a quick run's green is ` +
         `STOP_GREEN_QUICK, never STOP_GREEN, which claims a regression verdict a quick run never reads.`
     );
+  }
+
+  // (A8, 7.3.0) blocked — OPTIONAL; when present, exact membership in BLOCKED_IDS after the guard (L14, L15). Before
+  // 7.3.0 any value passed here and made check-loop-decision.mjs SKIP its re-derivation, so a measured red could be
+  // recorded as a blocked stop under an invented id. The value is quoted only as JSON of a guarded string (L62).
+  if (fields.has("blocked")) {
+    const b = fields.get("blocked");
+    if (!cleanScalar(b, 64) || !BLOCKED_ENUM.has(b)) {
+      return red(
+        `loop-record's \`blocked\` is ${cleanScalar(b, 64) ? JSON.stringify(b) : "not a clean one-line value"} (${recordPath}) — ` +
+          `BLOCKED_UNKNOWN: expected one of the stuck-point ids {${BLOCKED_IDS.join(", ")}} ` +
+          `(pharn/pharn-contracts/loop-record.md, "The one exception: a blocked stop").`
+      );
+    }
   }
 
   // (A7) isolation — MANDATORY (7.1.0). The witness grammar is check-run-isolation-core.mjs's, never re-derived here

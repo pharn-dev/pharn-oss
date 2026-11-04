@@ -412,5 +412,7 @@ test("chain: a DUPLICATE `state:` key no longer fails OPEN through the chain (ex
   const spec = `---\nspec_id: my-feature\nstate: Approved\nstate: Draft\nspec_content_hash: ${h}\n---\n${body}`;
   const r = runWith(makePlan({ hash: h }), spec);
   assert.equal(r.status, 1, r.stdout + r.stderr);
-  assert.match(r.stdout, /"Draft" is not "Approved"/);
+  // Since 7.3.0 check-spec's validate refuses the repeat itself (`repeated-key`) before any copy is read as the
+  // state; before, the chain refused on the LAST copy ("Draft" is not "Approved").
+  assert.match(r.stdout, /RED — repeated-key failed: `state` ×2/);
 });

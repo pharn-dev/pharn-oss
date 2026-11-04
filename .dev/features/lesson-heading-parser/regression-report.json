@@ -1,0 +1,68 @@
+{
+  "base": "fb997e4bd192ed57dd9ca3240d9866c4c54d9408",
+  "inside": [
+    ".claude/commands/pharn-dev-memory-promote.md",
+    ".claude/commands/pharn-dev-ship.md",
+    ".claude/commands/pharn-memory-promote.md",
+    ".claude/hooks/enforce-writes-scope.test.cjs",
+    ".dev/features/lesson-heading-parser/BUILD.md",
+    ".dev/features/lesson-heading-parser/DOCS-PROPOSAL.md",
+    ".dev/features/lesson-heading-parser/GRILL.md",
+    ".dev/features/lesson-heading-parser/PLAN.md",
+    ".dev/features/lesson-heading-parser/REGRESSION.md",
+    ".dev/features/lesson-heading-parser/VERIFY.md",
+    ".dev/features/lesson-heading-parser/regression-report.json",
+    ".dev/features/lesson-heading-parser/verify-report.json",
+    ".dev/floor/check-provenance.test.mjs",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/gen-lessons-index.mjs",
+    ".dev/floor/gen-lessons-index.test.mjs",
+    ".dev/guides/floor-checks.md",
+    "CHANGELOG.md",
+    "pharn/floor/check-plan-lessons.mjs",
+    "pharn/floor/check-plan-lessons.test.mjs",
+    "pharn/floor/check-provenance.mjs",
+    "pharn/floor/check-provenance.test.mjs",
+    "pharn/floor/check-spec.test.mjs",
+    "pharn/floor/gen-lessons-index.mjs",
+    "pharn/floor/gen-lessons-index.test.mjs",
+    "pharn/floor/lessons-index-core.mjs",
+    "pharn/floor/lessons-index-core.test.mjs",
+    "pharn/floor/mark-phase.mjs",
+    "pharn/floor/spec-template-core.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 5243,
+      "failed": 0,
+      "skipped": 4,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 5246,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

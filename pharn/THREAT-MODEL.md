@@ -85,15 +85,17 @@ memory, is an agent operating on hostile input. The concrete surface:
     `## Files` (`set-writes-scope.cjs --from-plan`), and under `/pharn-loop` no human reads that PLAN before it is
     built. So the plan decides which paths the write guard opens, and executable project configuration is in that
     class: CI workflows, git hooks directories and `package.json` scripts all hold code that runs later. The setter
-    refuses a plan that scopes the guards' own control surface (in every project) and, in an installed project,
-    PHARN's own installed files (6.61.0), a CI workflow (`.github/workflows/**`) or a git hooks directory
-    (`.husky/**`, or a `core.hooksPath` inside the project), each unless the operator passes its opt-in before the
-    mode. What the last two buy is narrow: a plan cannot name a file under `.github/workflows/`, under `.husky/`, or
-    in a `core.hooksPath` directory the setter finds — the files that run on the next push with the repository's
-    secrets, or on the next git command in the person's shell. Other routes to code that runs after the run stay
-    open: a hook manager configured elsewhere (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in
-    `package.json`), and what a workflow or an existing hook runs from elsewhere in the repository (a local action,
-    a script, the project's own tests) — `pharn/LIMITS.md §6` lists them. Nor is any of this containment: code a plan writes
+    refuses a plan that scopes the guards' own control surface or memory-bank canon (in every project, canon with no
+    opt-in — 7.3.0), a CI workflow or local action (`.github/workflows/**`, `.github/actions/**`), a git hooks
+    directory (`.husky/**`, or a `core.hooksPath` inside the project) or `.mcp.json` (in every project since 7.3.0),
+    and, in an installed project, PHARN's own installed files (6.61.0) and the instruction files `CLAUDE.md`,
+    `CLAUDE.local.md` and `AGENTS.md` (7.3.0); in a dev or unsignalled tree it refuses those last two classes while a
+    `/pharn-loop` or `/pharn-ship` run marker is open. Each refusal but canon yields to the operator's opt-in before the
+    mode. What the executable-config refusal buys is narrow: a plan cannot name a file in those places — the files that
+    run on the next push with the repository's secrets, on the next git command in the person's shell, or at the next
+    session's start. Other routes to code that runs after the run stay open: a hook manager configured elsewhere
+    (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in `package.json`), and what a workflow or an existing hook
+    runs from elsewhere in the repository (a script, the project's own tests) — `pharn/LIMITS.md §6` lists them. Nor is any of this containment: code a plan writes
     still runs during the run, because the pinned gates run the project's tests. `package.json` scripts are not
     refused, since a feature legitimately edits `package.json`; a changed gate command is at most detected, at
     `/pharn-verify`, by the test-infrastructure pin of a run that carries an AC lock, never prevented
@@ -138,9 +140,10 @@ The red-team's verdict: a **single disease in five places — "written in the co
    paths, and is not a PHARN floor primitive. Since 4.0.0 such a write is **detected** after the fact
    when it lands inside a build's anchor-to-verify window (`check-bash-reconcile.mjs`, as in item 7);
    outside that window it is neither denied nor detected (residual — `pharn/LIMITS.md §6`). The same split
-   holds one layer up, at GitHub: `main`'s ruleset binds other contributors but not the owner's bypass, so a red
-   tree can still reach `main`; since `release.yml`, only a commit whose required checks succeeded is tagged, so
-   pharn-cli's `--ref latest` channel does not receive it (`pharn/LIMITS.md §11`)._
+   holds one layer up, at GitHub: since 2026-10-26 `main`'s required-checks ruleset has no bypass actor, so no account
+   merges a tree whose required checks failed, but the owner's bypass still skips the review and classic protection's
+   `gitleaks` check; since `release.yml`, only a commit whose required checks succeeded is tagged (with `gitleaks` since
+   7.3.0), so pharn-cli's `--ref latest` channel does not receive such a commit (`pharn/LIMITS.md §11`)._
 3. **Deterministic gate over probabilistic severity** — split into floor-gate (blocks guaranteed
    invariants from actual content) vs advisory-gate (reads LLM severity, never sole basis for a
    guaranteed block) (fix #3). _Closed by separation; the advisory half is labeled, not "fixed."_
@@ -165,7 +168,7 @@ trusted-write or off-allowlist egress (specified; ships with the guarded surface
 is bounded even when the body is hostile. **What is live today is narrower and must be read as the
 whole of it:** `pharn/floor/validate.mjs` enforces `kind` enum membership and restricts `seal` to
 `kind: pharn-owned`. The markdown-only / no-`.cjs` half and the trusted-write half are **enforced by
-no running check** — the three hooks contain zero `kind` references.
+no running check** — none of the four hooks reads a capability's `kind:` field.
 
 8b. **The fence is enforced by the same model that may be compromised** — fencing reduces blast
 radius and converts some attacks into findings, but does **not** make the LLM layer injection-
@@ -175,7 +178,9 @@ so residual injection moves only _advisory_ judgments.
 8c. **An unattended run's `Bash` escape is closed only by a sandbox** — the 2026-10-12 review's SEC-1, SEC-3 and SEC-5
 each reproduced prompt-free execution in an unattended `/pharn-loop`, and each fix left the same residual. Since 7.1.0
 the loop refuses to start without evidence of an isolated environment holding none of a fixed list of credentials,
-unless the operator passes `--accept-host-execution` (`pharn/floor/check-run-isolation.mjs`). The record, the run
+unless the operator passes `--accept-host-execution` (`pharn/floor/check-run-isolation.mjs`). Since 7.3.0 the line that
+passes it is not pre-approved, so the harness's permission settings, not the loop's grant, decide whether a person
+confirms it; in auto mode nobody may. The record, the run
 report and the commit message repeat the outcome from a witness file the run itself can rewrite. That is a refusal,
 not a closure: the evidence is environment-supplied and fakeable, the lists are partial, and the agent's own model
 credential is always present (`pharn/LIMITS.md §6`).

@@ -257,8 +257,8 @@ breakage outside the feature` or `REGRESSIONS: N outside the feature — stage F
 Immediately after writing it, and **before** ending the turn:
 
 ```bash
-npx prettier --ignore-unknown --write .dev/features/<name>/REGRESSION.md
-npx markdownlint-cli2 --no-globs --fix .dev/features/<name>/REGRESSION.md
+npx --no-install prettier --ignore-unknown --write .dev/features/<name>/REGRESSION.md
+npx --no-install markdownlint-cli2 --no-globs --fix .dev/features/<name>/REGRESSION.md
 ```
 
 Scoped to **this stage's own artifact** — never a repo-wide formatter, whose writes escape the fix #7

@@ -34,7 +34,15 @@ come from the single code block this text was moved from, so the entry they name
 # dev-ref); it is GREEN when the target has no pharn/floor at all; and its scope is silently empty when
 # the target has no pharn/ at all.
 # Exit: 0 GREEN (or GREEN-with-warnings) · 1 RED · 2 INCONCLUSIVE — an uncaught throw prints one
-# `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line).
+# `FLOOR: INCONCLUSIVE — crashed ("<message>")` line (6.72.1, audit TST-10; it used to exit 1 with no FLOOR line), and
+# since 7.3.0 zero capabilities among the markdown under pharn/pharn-review, pharn/pharn-pipeline/grillers or
+# pharn/pharn-core is INCONCLUSIVE too (a contracts-only tree, or one with no pharn/pharn-*, stays GREEN over 0).
+# 7.3.0 (family-grammar-crlf): frontmatter is read through frontmatter-core.mjs `looseFrontmatter` (CRLF-tolerant; a
+# fence after a blank line or an invisible character is counted and REDs `P6/frontmatter-offset`); a symlinked
+# directory strictly below pharn/ is not descended and REDs `P6/symlinked-dir` (a linked `pharn` root is followed); an
+# unreadable file in CHECK 8's scope is a crash (INCONCLUSIVE), no longer skipped; every exit goes through
+# `process.exitCode` (pharn/floor/cli-stdout-flush.test.mjs). count-lenses / -grillers / -verifiers refuse (exit 1) on
+# the same symlinked directory.
 # THE CAPABILITY LIST (7.2.0, issue #407): validate.mjs and count-lenses / count-grillers / count-verifiers take their
 # markdown list from pharn/floor/capability-files-core.mjs — inside a git work tree, git's tracked + untracked-not-ignored
 # files plus the target's own pharn/; otherwise, or when git cannot answer, the old readdirSync walk. A git-ignored copy
@@ -73,6 +81,11 @@ node pharn/floor/check-structural.mjs <expected.json> <actual.json> [repoDir]
 # `none` followed by `[L9999]` was GREEN. The RED names counts and regions only, never a value. A line in the
 # body or inside a header fence is still not a declaration (L6). The LOOP.md / BRIEFING.md envelope readers
 # refuse ANY repeated key since 6.71.3 (frontmatter-core.mjs frontmatterEntries; see floor-orchestration.md).
+# ONE HEADING GRAMMAR (7.3.0, lesson-heading-parser): an id resolves only against a VISIBLE lesson heading, read through
+# lessons-index-core.mjs's LESSON_HEADING_RE + lessonHeadings() — the reader the index and check-provenance share. A
+# `## L<n>` inside a column-0 fenced block, HTML comment or <pre>/<script>/<style>/<textarea> block is not one (the
+# block model is spec-template-core.mjs blockSpans, with its stated bounds); a BOM is stripped; `## L20` and `## L20 `
+# are L20; `## L020` / `## L0` are no heading.
 node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 ```
 
@@ -144,6 +157,17 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # setter's own writes-scope.json is Write-tool-denied. Cost: a Bash write to writes-scope.json is unreported, as it
 # already was wherever pharn/.run/ is ignored (the checker reads the baseline's snapshot, never the live file).
 # Every reconcile fixture's default .gitignore ignores pharn/.run/ (L41) — a state-root test must pass its own.
+# 7.3.0 (audit 2026-11-03) answered the "reconcile writes-scope.json again" finding with a PIN, not a change: it is the
+# setter's designed rewrite (an escape on every run, unattributable), and a forged widening is caught through the write it
+# widens, judged against the snapshot.
+# EPOCH OWNER (7.3.0, contract §1): `--anchor` refuses (exit 2, nothing written) to replace a baseline whose feature
+# (activeFeatureSlug of its scope_snapshot; PIPELINE_RE + activeFeatureSlug now live in reconcile-baseline.mjs, the checker
+# re-exports) differs from the new anchor's and whose pharn-loop / pharn-ship marker is open (run-marker.mjs markerPath;
+# lstat presence + the hooks' symmetric 24h ceiling; any lstat error but ENOENT/ENOTDIR = open). An unreadable prior record
+# refuses on ANY other feature's open marker; a legacy null snapshot never refuses. Bounds: presence-only markers (the
+# loop's own --close grant reaches them), no-marker runs and same-feature runs are not told apart.
+# EXEC CONFIG (7.3.0, contract §4b): `.github/workflows/` and `.github/actions/` are always-reconciled prefixes. Cost: an
+# uncommitted edit there REDs with no baseline (commit first, L68), and apply-plan-deletions refuses a plan's (delete) there.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
@@ -193,7 +217,9 @@ node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
 # `require-loop-record.cjs --open` line exits non-zero — that writer is a human-only hook and still crashes
 # with exit 1 on a planted file (re-review R2); run-marker.test.mjs executes those two lines too. No new contract
 # (P7): the guard reads only a path and an age, and this script's own header is its spec, the
-# require-loop-record.cjs precedent. Exit: 0 ok · 2 refusal on ANY failure, never a crash; no marker written.
+# require-loop-record.cjs precedent. Since 7.3.0 `reconcile-baseline.mjs --anchor` is a second presence+age reader of the
+# pharn-ship (and pharn-loop) markers, through this module's markerPath (contract reconciliation-record.md §1).
+# Exit: 0 ok · 2 refusal on ANY failure, never a crash; no marker written.
 node pharn/floor/run-marker.mjs --open <pharn-review|pharn-ship> <name>
 node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 ```
@@ -248,6 +274,10 @@ node pharn/floor/feature-name.mjs [--fresh]
 # grammar) moves the two-file target enum under <dir>; `--strict-commit` refuses `unknown`. BOUND: the flag
 # relocates nothing else — the promote command's target stays pharn/memory-bank/. Exits 1 on any RED, 2 on an
 # invalid --canon-root.
+# EXISTING IDS (7.3.0): read through lessons-index-core.mjs canonLines() — BOM stripped, VISIBLE lines only (a `##`
+# inside a fence / HTML comment / raw block is no entry). The id is still the first token after `##` (pattern-library
+# ids are not L<n>), so the set is a deliberate SUPERSET of the lessons set. A block left open at the end of canon is
+# a `canon` RED naming line numbers, whether or not it hides a heading yet (the promoted entry would land inside it).
 node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <candidate.json> <canon-file.md>
 ```
 
@@ -270,6 +300,10 @@ node pharn/floor/check-provenance.mjs [--canon-root <dir>] [--strict-commit] <ca
 # <dir>/lessons-learned.md instead (output stays pharn/.run/; the header names the root and a regenerate hint
 # carrying the flag); invalid → exit 2, nothing on stdout. This repo dogfoods it with
 # `--canon-root .dev/memory-bank`. BOUND: the flag relocates nothing else in the product.
+# 7.3.0: lessons are the VISIBLE LESSON_HEADING_RE headings (the grammar check-plan-lessons and check-provenance share);
+# a section ends at the next visible `##`; a lesson heading hidden by a block that never closes is a refusal
+# (ENUM_ERROR) naming both lines — a human closes the block in canon. Both generators (this one and the dev wrapper)
+# print one `RED — <message>` line on an invalid canon, exit 1, never a stack trace.
 node pharn/floor/gen-lessons-index.mjs [target-dir] [--canon-root <dir>]
 node pharn/floor/check-lessons-index.mjs [target-dir] [--verdict] [--canon-root <dir>]
 ```
@@ -449,6 +483,49 @@ node .dev/floor/check-version-badge.mjs [target-dir]
 # `check:surface-bump` (NOT in `npm run check` — it needs a base) and as the ci.yml step "SKILLS_VERSION
 # surface-bump check"; both pinned, and the CI run block executed, by its test. Apparatus: no SKILLS_VERSION bump.
 node .dev/floor/check-surface-bump.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
+```
+
+## `check-ship-record.mjs` — a green dev-chain record for product paths, per PR
+
+```bash
+# RED when a PR changes a bump-triggering product path (check-surface-bump.mjs's readBase + isProductSurface, imported,
+# minus the four human-only trusted docs) and no .dev/features/<name>/SHIP.md in the diff records a GREEN /pharn-dev-ship
+# run, or when any SHIP.md in it records a STOP or a non-green verdict (7.3.0, dev-verdict-discipline; review
+# 2026-11-03: #377, #385, #391 and #392 merged past a red verdict, a hand-substituted map or no stage run at all).
+# FLOOR (enum/regex, primitive #3): a record's verdict block is its column-0 `verdict-grill` / `verdict-build` /
+# `verdict-regress` / `verdict-verify` / `run-ended` lines outside code fences, one closed grammar (BLOCK_KEYS,
+# BLOCK_TEMPLATES — /pharn-dev-ship Step 3 spells it, command-hygiene.test.mjs binds the spelling); a green block must
+# match its directory's verify-report.json (PASS, this feature, a gate_run.stamp_sha256) and regression-report.json
+# (no-regressions). A SHIP.md with no block (every record before 7.3.0) is legacy: neither green nor red.
+# Closed refusal set: BAD_USAGE | BASE_UNREADABLE | HEAD_UNREADABLE (exit 2), NO_SHIP_RECORD | RECORD_MALFORMED |
+# RECORD_NOT_GREEN | REPORT_MISMATCH (exit 1).
+# BOUNDS, stated plainly (GATE 1 asked for the first): PRESENCE, NOT COVERAGE — one green record satisfies a PR, so a PR
+# can carry product changes no record covers (a batch PR passes on one feature's record; a legacy record rides along).
+# AGREEMENT, NOT PROVENANCE (L43) — committed records against committed reports; stamp_sha256 is a SHAPE check (the
+# stamp is gitignored, absent in CI). A PR runs its own copy of this checker and of ci.yml; admin merges and direct
+# pushes bypass it. Wired as `check:ship-record` (NOT in `npm run check` — it needs a base) and as the ci.yml step
+# "Dev-chain record check"; both pinned, and the CI run block executed, by its test. Apparatus: no SKILLS_VERSION bump.
+node .dev/floor/check-ship-record.mjs (--base-ref <ref> | --merge-base <ref>) [target-dir]
+```
+
+## `merge-findings.mjs` / `render-review.mjs` — /pharn-review's merge and REVIEW.md
+
+```bash
+# /pharn-review Step 5: merge the per-lens findings.json files into one, deduped on (type, rule_id, file). Drops a
+# finding whose enum-gated fields fail (`type` is a CLOSED set {FINDING, CONSTITUTION_VIOLATION} since 7.3.0) and names
+# it in merge-report.json (schema merge-report/v2 since 7.3.0: `unreadable`, `dropped`, and `outside_target`, every
+# contributor whose `file` is not in the assignment record's target — named, never dropped; null with no usable record).
+# A lens directory name is stored through reportSafe in sources[] too. With a usable assignment record, an input under
+# a lens directory the record does not name is skipped unread (unreadable reason `unrecorded-lens`, 7.3.0).
+# Exit 0 complete · 3 INCOMPLETE · 1 usage/write.
+# Ends `process.exitCode = main(process.argv)` (cli-stdout-flush.test.mjs FLUSH_CLIS).
+node pharn/floor/merge-findings.mjs <out.json> [<in.json> ...] [--lens-map <path>] [--assignments <path>]
+# /pharn-review Step 6: render pharn/features/<name>/REVIEW.md from findings.json, merge-report.json (v1 or v2),
+# assignments.json and the orchestrator's pharn/.run/pharn-review-notes/<name>.md (rendered only when newer than the
+# record). Every lens-supplied value is fenced (quote-core.mjs quoteData), C0 controls escaped, FIELD_CAP per field and
+# TEXT_BUDGET per document. Exit 0 written · 1 usage, an unusable findings.json (nothing written) or a failed write.
+# REVIEW.md under pharn/features/ is in .prettierignore and .markdownlint-cli2.jsonc; a benign render is lint-clean.
+node pharn/floor/render-review.mjs <name> [--root <dir>]
 ```
 
 ## `check-contributing-gates.mjs` — CONTRIBUTING gate list

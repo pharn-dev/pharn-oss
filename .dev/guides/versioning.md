@@ -18,8 +18,8 @@ the whole `pharn/` capability tree. **All four trusted docs DO land**, and all f
 `@pharn-dev/pharn` 0.4.0 (pharn-cli `7c54820`) until 7.0.0 the installer copied `THREAT-MODEL.md` and `LIMITS.md` at
 the root beside the two under `pharn/`. Since 7.0.0 all four sit under `pharn/` (pharn-cli 0.14.0 moves an existing
 install's), and `MIN_CLI` (0.14.0) makes every CLI that honors it refuse anything older. The gate cannot reach a pre-0.4.0 CLI, because `minCliGate` itself first shipped in
-0.4.0. Such a CLI omits the two root docs, and it is already broken on this tree by the 5.0.0
-relocation.
+0.4.0. Such a CLI omits the two root docs, and it is already broken on this tree by the 5.1.2
+relocation (written as 5.0.0, which never reached `main`).
 
 ## `MIN_CLI`
 
@@ -29,7 +29,7 @@ install this tree, and the CLI's `minCliGate()` refuses a **strictly older** CLI
 message instead of letting it half-install. **Bump it only when an older CLI would install a BROKEN
 tree** — a relocation of an installed path, a frontmatter/contract change that invalidates existing
 installs — never merely because `SKILLS_VERSION` moved; most releases leave it untouched. It went in at
-`0.5.0` with the 5.0.0 `features/` → `pharn/features/` relocation, because a pre-0.5.0 CLI looks for the
+`0.5.0` with the 5.1.2 `features/` → `pharn/features/` relocation, because a pre-0.5.0 CLI looks for the
 boundary contract at the old root, finds nothing, and — both of its readers being existence-guarded —
 installs it **silently, with no error and no warning**. It moved to `0.14.0` with the 7.0.0 relocation
 (`pharn-footprint-move`) for the same reason: an older CLI looks for the two docs and the canon at the old paths. It did **not** move for 6.27.0's stage-model routing,
@@ -44,6 +44,14 @@ the gate** instead. Nothing in this repo checks the file: no floor primitive rea
 is care, not a guarantee. The named residual is `min-cli-format-check`, deliberately unbuilt — P7's bar
 is a real failure and there has not been a first one. What it CANNOT do is make an old CLI understand a
 new layout; it converts a silent half-install into a clean refusal, which is the whole benefit.
+
+**Publish the CLI to npm BEFORE merging a `MIN_CLI` bump.** The CLI reads `MIN_CLI` from the tree it fetches: the tip
+of `main` on the `main` channel, and the newest release otherwise, which a bump merge becomes once `release.yml` tags
+it. So a raised `MIN_CLI` binds every `init` and `update` from the moment it merges. If npm does not yet have a
+`@pharn-dev/pharn` that satisfies it, `npx @pharn-dev/pharn@latest init` refuses for everyone (a clean refusal, nothing
+written) until the CLI is published. Before merging, check that `npm view @pharn-dev/pharn version` is at least the new
+`MIN_CLI`. ADVISORY (P0): nothing in this repo checks it — the two repositories are separate, and no gate here reads
+npm.
 
 ## Cite the CHANGELOG by version section
 

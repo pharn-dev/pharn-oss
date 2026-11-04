@@ -10,7 +10,9 @@ name: release
 #      absent: release. Tag present at another commit: fail — a tag is never moved. Tag present at this commit: a
 #      published release for it means "already released" (exit 0, nothing else runs); no release means a run created
 #      the tag and failed, so only the release is created; a draft or prerelease is left alone and the run fails.
-#      An [Unreleased]-only merge therefore releases nothing new once its version is tagged.
+#      A merge that does not bump SKILLS_VERSION therefore FAILS here with TAG_ELSEWHERE (its version's tag points at
+#      the earlier commit that bumped it) and releases nothing: that red run is expected, and re-running it changes
+#      nothing.
 #   2. Wait — poll this commit's check runs every POLL_INTERVAL_S seconds, at most POLL_MAX times. For each required
 #      check (app slug + name), the run with the highest id counts (a re-run supersedes the run it re-ran). A required
 #      run that concluded anything but `success` fails the job at once; the bound fails it too. A failed API call is
@@ -21,23 +23,24 @@ name: release
 #   5. Tag and release — the tag object and its ref (creating a ref that exists fails, never overwrites), then
 #      `gh release create --verify-tag --latest`: not a draft, not a prerelease.
 #
-# REQUIRED_CHECKS is a COPY of ruleset 18045407's required status checks, minus `Socket Security: Pull Request
-# Alerts`, which runs on pull requests only and never posts on a push to main (measured on the two main commits before
-# this file; it is still enforced on the pull request by the ruleset). Change the two together. The copy drifts
-# unevenly: a check renamed in a workflow makes this job time out (fails closed), but a check ADDED to the ruleset and
-# not here is simply not waited for (fails open). The app slug pins which app's run counts, which the ruleset does
-# only for Socket.
+# REQUIRED_CHECKS is a COPY of what main requires: ruleset 25907495's required status checks (no bypass actors; read
+# 2026-11-03), minus `Socket Security: Pull Request Alerts`, which runs on pull requests only and never posts on a push
+# to main (measured on the two main commits before this file; it is still enforced on the pull request by the
+# ruleset), plus `gitleaks`, which main's classic branch protection requires (that layer has `enforce_admins` off).
+# Change them together. The copy drifts unevenly: a check renamed in a workflow makes this job time out (fails closed),
+# but a check ADDED to either layer and not here is simply not waited for (fails open). The app slug pins which app's
+# run counts, which the ruleset does only for Socket.
 #
 # BOUNDS (P0): this is a property of this workflow, not a PHARN floor primitive. It does not stop a person with
 # admin rights from creating or moving a tag by hand (a tag ruleset protecting v* is a maintainer setting), and it
-# says nothing about `main` itself: the owner's ruleset bypass can still merge a red tree, which pharn-cli's default
-# `main` channel installs. GitHub keeps one PENDING run per concurrency group, so a newer push cancels an older
+# says nothing about `main` itself: the owner's bypass still merges past the review and classic protection's
+# `gitleaks` (ruleset 25907495's checks bind every account), and pharn-cli's `main` channel installs what lands. GitHub keeps one PENDING run per concurrency group, so a newer push cancels an older
 # pending run (never a running one); the next run releases the then-current SKILLS_VERSION at its own commit. A
 # failed run is fixed and re-run with workflow_dispatch on main — never by moving or re-creating a tag.
 #
-# WHO MAY EDIT THIS FILE: set-writes-scope.cjs refuses `.github/workflows/**` from a plan in an INSTALLED PHARN project
-# only. In this repository (the dev checkout) a /pharn-dev-build plan may scope it — this file was written that way —
-# so review is what guards it. The pins and the executed run blocks: .dev/floor/release-workflow.test.mjs.
+# WHO MAY EDIT THIS FILE: since 7.3.0 set-writes-scope.cjs refuses `.github/workflows/**` from any plan, in every
+# posture, unless a human passes the operator flag `--allow-exec-config`. A Bash write still reaches it
+# (pharn/LIMITS.md §6), so review is what guards it. The pins and the executed run blocks: .dev/floor/release-workflow.test.mjs.
 
 on:
   push:
@@ -61,13 +64,15 @@ jobs:
       # pharn-cli's RELEASE_TAG_RE language (`src/lib/validate.ts`) and its SKILLS_VERSION_FILE (`src/lib/constants.ts`).
       TAG_RE: '^v\d+\.\d+\.\d+$'
       SKILLS_VERSION_FILE: SKILLS_VERSION
-      # The `check` job takes about 11 minutes on main; 45 polls a minute apart leave room for a slow runner.
+      # The `check` job takes 11 to 15 minutes on main (measured 2026-11-03); 45 polls a minute apart leave room for a
+      # slow runner.
       POLL_INTERVAL_S: 60
       POLL_MAX: 45
       # One per line: the app slug, a space, the check name.
       REQUIRED_CHECKS: |
         github-actions floor
         github-actions check
+        github-actions gitleaks
         github-actions Analyze (javascript-typescript)
         socket-security Socket Security: Project Report
     steps:

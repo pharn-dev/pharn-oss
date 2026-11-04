@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 
@@ -132,6 +132,93 @@ for (const [name, block] of Object.entries({ "attestation is array": [], "attest
     });
   });
 }
+
+// --- 7.3.0 (loop-record-honesty): a placeholder `by`, an impossible `at` --------------------------------------
+//
+// Review finding: `by: agent`, `at: 2026-13-45T99:99:99Z` read `attested` with a recomputed hash. Each case below is
+// BOUND to its record's hash (attested() pins refHash), so the only thing that can refuse it is the shape gate.
+
+const RESERVED_SRC = readFileSync(CA, "utf8").match(/const RESERVED_BY = Object\.freeze\(\[([^\]]*)\]\)/);
+
+test("RESERVED_BY is exactly the 15-name placeholder deny-list (the set the next test iterates)", () => {
+  assert.ok(RESERVED_SRC, "the RESERVED_BY literal is present");
+  const names = JSON.parse(`[${RESERVED_SRC[1].replace(/,\s*$/, "")}]`);
+  assert.deepEqual(names, [
+    "agent",
+    "ai",
+    "anonymous",
+    "assistant",
+    "bot",
+    "claude",
+    "human",
+    "llm",
+    "model",
+    "none",
+    "null",
+    "pharn",
+    "system",
+    "unknown",
+    "user",
+  ]);
+});
+
+test("every RESERVED_BY member, and an upper-cased and a capitalised spelling of it, is malformed (exit 2) — L52", () => {
+  const names = JSON.parse(`[${RESERVED_SRC[1].replace(/,\s*$/, "")}]`);
+  for (const n of names) {
+    for (const by of [n, n.toUpperCase(), n[0].toUpperCase() + n.slice(1)]) {
+      withRecord(attested(BASE, by), undefined, (r) => {
+        assert.equal(r.status, 2, `${by}: ${r.stdout}`);
+        assert.equal(json(r).verdict, "malformed", by);
+      });
+    }
+  }
+});
+
+test("a name that only CONTAINS a reserved word, or a real-looking name, still attests (deny-list, not identity)", () => {
+  for (const by of ["agentsmith", "claude.dev@example", "jdoe", "model-t"]) {
+    withRecord(attested(BASE, by), undefined, (r) => {
+      assert.equal(r.status, 0, `${by}: ${r.stdout}`);
+      assert.equal(json(r).verdict, "attested", by);
+    });
+  }
+});
+
+test("an `at` that matches the ISO shape but names no real instant is malformed (exit 2)", () => {
+  for (const at of [
+    "2026-13-45T99:99:99Z", // the review's probe
+    "2026-00-10T10:00:00Z", // month 0
+    "2026-02-30T10:00:00Z", // no 30 February
+    "2025-02-29T10:00:00Z", // not a leap year
+    "1900-02-29T10:00:00Z", // century, not a leap year
+    "2026-04-31T10:00:00Z", // April has 30 days
+    "2026-01-00T10:00:00Z", // day 0
+    "2026-01-10T24:00:00Z", // hour 24
+    "2026-01-10T10:60:00Z", // minute 60
+    "2026-12-31T23:59:60Z", // a leap second: refused on purpose
+    "2026-01-10T10:00:00+24:00", // offset hour 24
+    "2026-01-10T10:00:00+05:60", // offset minute 60
+  ]) {
+    withRecord(attested(BASE, "jdoe", at), undefined, (r) => {
+      assert.equal(r.status, 2, `${at}: ${r.stdout}`);
+      assert.equal(json(r).verdict, "malformed", at);
+    });
+  }
+});
+
+test("controls: real instants attest — leap days, a 400-year leap day, month ends, an offset, fractional seconds", () => {
+  for (const at of [
+    "2024-02-29T10:00:00Z",
+    "2000-02-29T00:00:00Z",
+    "2026-12-31T23:59:59Z",
+    "2026-04-30T00:00:00-05:30",
+    "2026-01-02T03:04:05.678+23:59",
+  ]) {
+    withRecord(attested(BASE, "jdoe", at), undefined, (r) => {
+      assert.equal(r.status, 0, `${at}: ${r.stdout}`);
+      assert.equal(json(r).verdict, "attested", at);
+    });
+  }
+});
 
 // --- --compute ------------------------------------------------------------------------------------
 test("--compute prints the canonical 64-hex hash, ignoring any existing attestation", () => {
