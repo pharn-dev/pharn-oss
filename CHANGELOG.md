@@ -23,10 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-### Changed
-
-- 2026-11-04: **Lower the pharn-ci diff-coverage threshold to 95%.** Pull requests may now have up to 5% of added coverable lines uncovered; the configuration change is surfaced to reviewers as `CONFIG_CHANGED_IN_DIFF`.
-
 ## [7.3.0] - 2026-11-03
 
 This release collects the fixes for the 2026-11-03 principal review, built on separate branches and integrated on
@@ -59,6 +55,7 @@ This release collects the fixes for the 2026-11-03 principal review, built on se
 
 ### Changed
 
+- 2026-11-04: **Lower the pharn-ci diff-coverage threshold to 95%.** Pull requests may now have up to 5% of added coverable lines uncovered; the configuration change is surfaced to reviewers as `CONFIG_CHANGED_IN_DIFF`.
 - 2026-11-03: **The four trusted docs state what 7.3.0 changed, and canon gains a correction entry** (audit
   2026-11-03; a maintainer-applied patch, since the agent cannot write these files). `pharn/LIMITS.md`: §1a (no hook
   reads a capability's `kind:`), §3a (the review set has no overall bound; under `/pharn-loop` the model picks the
