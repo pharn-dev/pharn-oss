@@ -23,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-11-04: **Lower the pharn-ci diff-coverage threshold to 95%.** Pull requests may now have up to 5% of added coverable lines uncovered; the configuration change is surfaced to reviewers as `CONFIG_CHANGED_IN_DIFF`.
+
 ## [7.3.0] - 2026-11-03
 
 This release collects the fixes for the 2026-11-03 principal review, built on separate branches and integrated on
