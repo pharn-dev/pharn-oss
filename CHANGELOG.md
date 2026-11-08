@@ -23,8 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.3.1] - 2026-11-08
+
+A release cut for the repository-tooling changes below: no product-surface bytes changed since 7.3.0.
+
 ### Added
 
+- 2026-11-08: **Release 7.3.1.** Bumps `SKILLS_VERSION` and the README badge so that the repository-tooling changes
+  below get a tag and a GitHub release. No product-surface bytes changed since 7.3.0, so an install receives the same
+  files as before.
 - 2026-11-08: **The five `phargus-*` skills are installed for this repository.** `npx skills add pharn-dev/skills`
   (copy mode, Claude Code) wrote `phargus-setup`, `-diagnose`, `-verify`, `-memory` and `-rules` under
   `.claude/skills/`, pinned by `skills-lock.json`; they replace the user-level `argus-*` skills, the same plugin under
