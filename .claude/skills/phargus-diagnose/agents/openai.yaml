@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Phargus Diagnose'
+  short_description: 'Investigate runtime incidents with Phargus evidence'
+  default_prompt: 'Use $phargus-diagnose for this Phargus workflow.'

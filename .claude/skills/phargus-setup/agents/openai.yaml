@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Phargus Setup'
+  short_description: 'Connect and verify Phargus in a Node.js application'
+  default_prompt: 'Use $phargus-setup for this Phargus workflow.'
