@@ -23,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.3.1] - 2026-11-08
+
+A release cut for the repository-tooling changes below: no product-surface bytes changed since 7.3.0.
+
 ### Added
 
 - 2026-11-08: **The five `phargus-*` skills are installed for this repository.** `npx skills add pharn-dev/skills`
