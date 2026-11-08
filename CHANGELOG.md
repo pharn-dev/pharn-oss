@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-08: **The five `phargus-*` skills are installed for this repository.** `npx skills add pharn-dev/skills`
+  (copy mode, Claude Code) wrote `phargus-setup`, `-diagnose`, `-verify`, `-memory` and `-rules` under
+  `.claude/skills/`, pinned by `skills-lock.json`; they replace the user-level `argus-*` skills, the same plugin under
+  its old name. `.prettierignore` leaves both to the skills CLI, which owns their bytes. Repository tooling only: the
+  installer does not copy `.claude/skills/`, so no `SKILLS_VERSION` bump. Phargus itself is not wired into any process
+  here; `phargus-setup` targets a long-running Node.js application, which this repository does not have.
+
 ### Changed
 
 - 2026-11-08: **pharn-ci reinstalled, pinned to v0.9.1 (from v0.4.0).** Removed the old wiring

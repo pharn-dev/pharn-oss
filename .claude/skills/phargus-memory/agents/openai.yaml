@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Phargus Memory'
+  short_description: 'Investigate memory growth and compare heap snapshots'
+  default_prompt: 'Use $phargus-memory for this Phargus workflow.'

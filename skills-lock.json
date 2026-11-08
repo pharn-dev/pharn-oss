@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "phargus-diagnose": {
+      "source": "pharn-dev/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/phargus/skills/phargus-diagnose/SKILL.md",
+      "computedHash": "196664f8f6351706ae07910a33c93cb6648a2e6603d355a57b64583c23c22a28",
+      "installMode": "copy"
+    },
+    "phargus-memory": {
+      "source": "pharn-dev/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/phargus/skills/phargus-memory/SKILL.md",
+      "computedHash": "52a9b124fb907f73c6c997794b06e0f4d2dcd1c26a50cfef7843a7ea10851ccf",
+      "installMode": "copy"
+    },
+    "phargus-rules": {
+      "source": "pharn-dev/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/phargus/skills/phargus-rules/SKILL.md",
+      "computedHash": "d1fd8f8661bd0ac866b4a4498845b425194059c8f1fcf6628fb075430cbf4ef4",
+      "installMode": "copy"
+    },
+    "phargus-setup": {
+      "source": "pharn-dev/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/phargus/skills/phargus-setup/SKILL.md",
+      "computedHash": "92c69c6fbcc20eb5142d4cfb788471cbbeb2858d96c2a32a75eb350349d213fe",
+      "installMode": "copy"
+    },
+    "phargus-verify": {
+      "source": "pharn-dev/skills",
+      "sourceType": "github",
+      "skillPath": "plugins/phargus/skills/phargus-verify/SKILL.md",
+      "computedHash": "6deb31b4203151e6f3ed3639118cd0aadee79342b51825fd49d2c176d98a5820",
+      "installMode": "copy"
+    }
+  }
+}
