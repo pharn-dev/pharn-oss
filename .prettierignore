@@ -33,6 +33,12 @@ pharn/memory-bank/
 # matches nothing.
 .claude/worktrees/
 
+# Project skills vendored by `npx skills add pharn-dev/skills` (the phargus-* skills, copy mode). The skills CLI owns
+# these bytes: skills-lock.json pins each skill's computedHash, so a formatter pass would make the copies drift from
+# upstream and the next `npx skills update` would overwrite it anyway. Measured: 41 files flagged on install, style only.
+.claude/skills/
+skills-lock.json
+
 # Machine stage-reports that /pharn-dev-regress and /pharn-dev-verify must write VERBATIM — each is its
 # floor helper's stdout JSON, deliberately NOT formatted so the recorded verdict is the helper's own
 # bytes. Without these entries those two requirements conflict with whole-repo `format:check`, which the
