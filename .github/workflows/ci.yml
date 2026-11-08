@@ -11,6 +11,11 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Job-level block replaces the workflow-level one above, so it repeats contents: read and adds
+    # pull-requests: read — the accept label, read by the pharn-ci step below in test-integrity: block.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -114,7 +119,7 @@ jobs:
       - id: pharn-ci
         name: pharn-ci diff coverage gate
         if: ${{ always() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}
-        uses: pharn-dev/pharn-ci@a9314e9fda1ae220e42fa0d7e6ff5c0a04e1d756 # v0.4.0
+        uses: pharn-dev/pharn-ci@dec4a0ed2d0b111233522753909c74a90b6d09e0 # v0.9.1
         timeout-minutes: 5
         with:
           comment: false

@@ -23,6 +23,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-11-08: **pharn-ci reinstalled, pinned to v0.9.1 (from v0.4.0).** Removed the old wiring
+  (`.pharn/ci.yml`, the `pharn-ci diff coverage gate` and comment-upload steps in `ci.yml`, and
+  `pharn-ci-comment.yml`) and re-added it via the updated `pharn-ci-install` skill: the same
+  `coverage.threshold: 100` and `test-integrity: block`, the `ci` job's four extra steps re-pinned to
+  `pharn-dev/pharn-ci@dec4a0ed2d0b111233522753909c74a90b6d09e0`, a job-level `pull-requests: read` added
+  so the accept label is readable in `block` mode, and `pharn-ci-comment.yml`'s deprecated
+  `fail-on-threshold` renamed to `fail-on-verdict`. Dependency safety now runs by default (`dependencies:
+auto`, from 0.8.0): a pull request that changes a manifest's dependencies without its lockfile, or adds
+  a git/URL/local-file dependency, now fails the check where it previously passed. Does not add the
+  `labeled`/`unlabeled` trigger types that would re-run the check when the accept label is applied —
+  left for a maintainer decision, since it changes when the whole `check` job re-runs.
+
 ## [7.3.0] - 2026-11-03
 
 This release collects the fixes for the 2026-11-03 principal review, built on separate branches and integrated on
