@@ -2910,6 +2910,29 @@ test("✧ LOOP GRILL + TRIAGE (L65): pharn-triage.md's writes: is exactly grill-
   assert.equal(triageWritesOffenders(text.replace(`${line}\n`, "")).length, 1, "a removed writes: fails");
 });
 
+// 7.7.0: the full loop's grill is routed, so the floor-only property moved to the quick part, which keeps it.
+test("✧ FLOOR-ONLY GRILL: pharn-loop-quick.md invokes /pharn-grill --quick inline and runs neither grill checker itself (one read)", () => {
+  const body = commandBody("pharn-loop-quick.md");
+  assert.match(body, /invoke `\/pharn-grill <name> --quick` INLINE, and run\s+no Agent call and no `finish`/);
+  assert.match(body, /both exits \(`check-plan-spec-agree` and `check-plan-lessons`\) are read exactly as Step 4 says/);
+  const pinned = fencedLines(body).map((f) => f.text.trim());
+  for (const want of GRILL_STOP_LINES) assert.ok(!pinned.includes(want), `pharn-loop-quick.md must not pin ${want} a second time`);
+  assert.ok(
+    !pinned.some((t) => /stage-agent\.mjs (route|read|finish|brief) .*--stage pharn-grill/.test(t)),
+    "no grill route, read, brief or finish line"
+  );
+  assert.deepEqual(
+    pinned.filter((t) => /stage-agent\.mjs start .*--stage pharn-grill/.test(t)),
+    ["node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>' --mode quick"],
+    "exactly one grill start line, the --mode quick one"
+  );
+  // CONTROL (L60): the same predicates see a pasted checker line and a pasted finish line.
+  const pasted = `${body}\n\`\`\`bash\n${GRILL_STOP_LINES[1]}\nnode pharn/floor/stage-agent.mjs finish --command pharn-loop --stage pharn-grill --name '<name>'\n\`\`\`\n`;
+  const pastedLines = fencedLines(pasted).map((f) => f.text.trim());
+  assert.ok(pastedLines.includes(GRILL_STOP_LINES[1]));
+  assert.ok(pastedLines.some((t) => /stage-agent\.mjs (route|read|finish|brief) .*--stage pharn-grill/.test(t)));
+});
+
 test("✧ FLOOR-ONLY GRILL: pharn-ship.md reads both grill stops ONCE, before its grill agent's route line", () => {
   const body = commandBody("pharn-ship.md");
   assert.deepEqual(shipGrillReadReasons(body), []);
