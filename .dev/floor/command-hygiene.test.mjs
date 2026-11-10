@@ -5264,7 +5264,10 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // 5,927 over 52,736; raised by the rule (+10%, up to a multiple of 512).
   // loop-isolation-stop (7.1.0): the isolation check's two pinned lines, the S15 row, the flag's rule and two grants —
   // 67,613 bytes measured, 2,589 over 65,024; raised by the rule (+10%, up to a multiple of 512).
-  "pharn-loop.md": 74752,
+  // entry-verdict-early-read (7.5.0): two peek blocks with their branch, the S14/S14b rows naming every entry read (which
+  // widened the stuck-point table's padding) and one grant — 75,158 bytes measured, 406 over 74,752; raised by the rule
+  // (+10%, up to a multiple of 512).
+  "pharn-loop.md": 82944,
   // loop-isolation-stop (7.1.0): Step 6b's `isolation` capture rule, the Step 7 line and one claims bullet — 35,042
   // bytes measured, 226 over 34,816; raised by the rule (+10%, up to a multiple of 512).
   "pharn-loop-close.md": 38912,

@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -31,8 +31,11 @@ import {
   shown,
   RUNNER_SCHEMA,
   RESULT_SCHEMA,
+  CHANGES_RECORD,
+  inProgressStampView,
+  partialGateCount,
 } from "./entry-gates-core.mjs";
-import { STYLE_SET, unmeasuredRuns } from "./gate-run-core.mjs";
+import { STYLE_SET, unmeasuredRuns, validateStamp } from "./gate-run-core.mjs";
 import { commandFamilyText } from "../../.dev/floor/command-family.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -822,6 +825,267 @@ test("CLI: usage — no default for --timeout-ms or --budget-ms (L41), one mode,
   }
 });
 
+// ── 7.5.0 (entry-verdict-early-read): --peek — one read, no wait, no takeover, no write; red is its only partial verdict ──
+function peek(dir) {
+  const r = cli(dir, "--peek", "--feature", FEATURE);
+  const doc = JSON.parse(r.stdout);
+  assert.equal(documentDefect(doc), null, `every printed document is well-formed: ${r.stdout}`);
+  assert.equal(r.status, EXIT[doc.status], "the exit is the status's");
+  return { status: r.status, doc };
+}
+
+/** Every file under the entry root, path → bytes (the "writes nothing" witness). */
+function entryTree(dir) {
+  const root = join(dir, ENTRY_PATHS.root);
+  const out = {};
+  const walk = (rel) => {
+    for (const name of readdirSync(join(root, rel)).sort()) {
+      const p = rel ? `${rel}/${name}` : name;
+      if (statSync(join(root, p)).isDirectory()) walk(p);
+      else out[p] = readFileSync(join(root, p), "utf8");
+    }
+  };
+  if (existsSync(root)) walk("");
+  return out;
+}
+
+const costLog = (dir) => join(dir, "pharn", ".run", "cost", FEATURE, "entry.jsonl");
+const costLines = (dir) => (existsSync(costLog(dir)) ? readFileSync(costLog(dir), "utf8").split("\n").filter(Boolean).length : 0);
+
+test("inProgressStampView: null for no runs, a non-object or no fingerprint; else finalized, final = the last fp_after, required narrowed to what ran, other keys carried", () => {
+  assert.equal(inProgressStampView(null), null);
+  assert.equal(inProgressStampView([]), null);
+  assert.equal(inProgressStampView({ runs: [], fingerprint: {} }), null);
+  assert.equal(inProgressStampView({ runs: [{ id: "lint", fp_after: "b".repeat(64) }] }), null, "no fingerprint object");
+  const state = {
+    schema: "x",
+    finalized: false,
+    fingerprint: { algo: "a", init: "1".repeat(64), final: null },
+    required: ["lint", "test", "build", "e2e", "typecheck"],
+    entries: [{ id: "lint" }, { id: "test" }, { id: "build" }, { id: "e2e" }, { id: "typecheck" }],
+    cwd: "/x",
+    reuse: { y: 1 },
+    runs: [
+      { id: "lint", fp_after: "2".repeat(64) },
+      { id: "test", fp_after: "3".repeat(64) },
+    ],
+  };
+  const v = inProgressStampView(state);
+  assert.equal(v.finalized, true);
+  assert.equal(v.fingerprint.final, "3".repeat(64));
+  assert.equal(v.fingerprint.init, "1".repeat(64));
+  assert.deepEqual(v.entries, state.entries, "the in-progress keys are carried: validateStamp reads none of them");
+  assert.deepEqual(v.required, ["lint", "test"], "completeness is what a partial run lacks (GRILL finding 1)");
+  assert.equal(state.finalized, false, "the record itself is not modified");
+  assert.equal(state.required.length, 5);
+});
+
+test("partialGateCount: k of n leaves the evidence-only base:test slot out of both; n falls back to k without entries", () => {
+  const state = {
+    entries: [{ id: "lint" }, { id: "test" }, { id: "base:test" }, { id: "build" }],
+    runs: [{ id: "lint" }, { id: "base:test" }],
+  };
+  assert.deepEqual(partialGateCount(state), { ran: 1, total: 3 });
+  assert.deepEqual(partialGateCount({ runs: [{ id: "lint" }, { id: "test" }] }), { ran: 2, total: 2 });
+  assert.deepEqual(partialGateCount(null), { ran: 0, total: 0 });
+});
+
+test("CLI --peek: unusable without a runner record; continue while the gates run, writing nothing", () => {
+  const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+  const dir = sandbox({ gates: { lint: {}, test: { sleepMs: 30000, pidFile } } });
+  try {
+    assert.equal(peek(dir).doc.reason_code, "no-runner");
+    assert.ok(!existsSync(join(dir, ENTRY_PATHS.root)), "a peek with no run writes nothing");
+    assert.equal(start(dir).status, 0);
+    waitForFile(pidFile);
+    const before = entryTree(dir);
+    const lines = costLines(dir);
+    const { status, doc } = peek(dir);
+    assert.equal(status, 5, JSON.stringify(doc));
+    assert.equal(doc.status, "continue");
+    assert.deepEqual(entryTree(dir), before, "the entry root is byte-identical after a peek");
+    assert.equal(costLines(dir), lines, "no observation line");
+  } finally {
+    cleanup(dir);
+    rmSync(dirname(pidFile), { recursive: true, force: true });
+  }
+});
+
+test("CLI --peek: a red gate already finished is exit 4 before the last gate — non-style counts, an untouched style gate counts; detail names k of n", () => {
+  const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+  const dir = sandbox({ gates: { lint: { exit: 1 }, test: { exit: 1 }, build: { sleepMs: 30000, pidFile } } });
+  try {
+    assert.equal(start(dir).status, 0);
+    waitForFile(pidFile);
+    const state = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.state), "utf8"));
+    assert.ok(state.required.length > state.runs.length, "non-vacuous: the state's required lists gates that have not run");
+    assert.equal(validateStamp(state, { stage: "entry", feature: FEATURE }).ok, false, "the raw record is refused (unfinalized)");
+    const before = entryTree(dir);
+    const { status, doc } = peek(dir);
+    assert.equal(status, 4, JSON.stringify(doc));
+    assert.deepEqual(doc.red, ["lint", "test"]);
+    assert.deepEqual(
+      doc.gates.map((g) => g.id),
+      ["lint", "test"]
+    );
+    assert.equal(doc.changes_record, "deferred");
+    assert.match(doc.detail, /decided over 2 of 3 gates/);
+    assert.ok(!existsSync(join(dir, ENTRY_PATHS.result)), "the runner is still working");
+    assert.deepEqual(entryTree(dir), before, "nothing written");
+  } finally {
+    cleanup(dir);
+    rmSync(dirname(pidFile), { recursive: true, force: true });
+  }
+});
+
+test("CLI --peek: no partial verdict but red — a style red the front stages overlapped, or a gate that could not start (unmeasured), never stops early", () => {
+  const spec = join("pharn", "features", FEATURE, "SPEC.md");
+  for (const gates of [
+    { lint: { exit: 1, writes: [[spec, "# SPEC\n"]] }, test: { exit: 0 } },
+    // exit 127 is `not-started`: unmeasured so far, which a later red could still turn into S14 — so it waits.
+    { lint: { exit: 0 }, test: { exit: 127 } },
+  ]) {
+    const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+    const dir = sandbox({ gates: { ...gates, build: { sleepMs: 30000, pidFile } } });
+    try {
+      assert.equal(start(dir).status, 0);
+      waitForFile(pidFile);
+      const { status, doc } = peek(dir);
+      assert.equal(status, 5, JSON.stringify({ gates: Object.keys(gates), doc }));
+    } finally {
+      cleanup(dir);
+      rmSync(dirname(pidFile), { recursive: true, force: true });
+    }
+  }
+});
+
+test("CLI --peek: never a TAKEOVER — the runner killed mid-gate leaves its gates for --wait; a red already finished is still read", () => {
+  for (const [lintExit, want] of [
+    [0, 5],
+    [1, 4],
+  ]) {
+    const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+    const dir = sandbox({ gates: { lint: { exit: lintExit }, test: { sleepMs: 1500, pidFile }, build: {} } });
+    try {
+      assert.equal(start(dir).status, 0);
+      waitForFile(pidFile);
+      const runner = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.runner), "utf8"));
+      process.kill(-runner.pid, "SIGKILL");
+      execFileSync("sleep", ["2"]); // the orphaned gate finishes alone; nothing records it
+      const before = entryTree(dir);
+      const { status } = peek(dir);
+      assert.equal(status, want, `lint exit ${lintExit}`);
+      assert.deepEqual(entryTree(dir), before, "no gate was run and no record written");
+      assert.ok(!existsSync(join(dir, ENTRY_PATHS.result)));
+      let r = frozenWait(dir);
+      for (let i = 0; i < 5 && r.status === 5; i++) r = frozenWait(dir);
+      assert.equal(r.status, lintExit ? 4 : 0, "the final --wait still takes over and decides");
+    } finally {
+      cleanup(dir);
+      rmSync(dirname(pidFile), { recursive: true, force: true });
+    }
+  }
+});
+
+test("CLI --peek: an in-progress record it cannot bind — another feature, a chain break, malformed, a symlink — is continue, never a decision", () => {
+  const pidFile = join(mkdtempSync(join(tmpdir(), "entry-pid-")), "gate.pid");
+  const dir = sandbox({ gates: { test: { exit: 1 }, lint: { exit: 1 }, build: { sleepMs: 30000, pidFile } } });
+  const elsewhere = mkdtempSync(join(tmpdir(), "entry-elsewhere-"));
+  try {
+    assert.equal(start(dir).status, 0);
+    waitForFile(pidFile);
+    // Stop the runner first, so the record stays as this test writes it.
+    abort(dir);
+    rmSync(join(dir, ENTRY_PATHS.result), { force: true });
+    const statePath = join(dir, ENTRY_PATHS.state);
+    const good = readFileSync(statePath, "utf8");
+    assert.equal(peek(dir).status, 4, "control: the untouched record is read");
+    const st = JSON.parse(good);
+    for (const [why, bytes] of [
+      ["another feature", JSON.stringify({ ...st, feature: "other" })],
+      ["a chain break", JSON.stringify({ ...st, runs: [st.runs[0], { ...st.runs[1], fp_before: "f".repeat(64) }] })],
+      ["malformed", "{not json"],
+      ["no runs", JSON.stringify({ ...st, runs: [] })],
+    ]) {
+      writeFileSync(statePath, bytes);
+      assert.equal(peek(dir).status, 5, why);
+    }
+    writeFileSync(join(elsewhere, "state.json"), good);
+    rmSync(statePath);
+    symlinkSync(join(elsewhere, "state.json"), statePath);
+    assert.equal(peek(dir).status, 5, "a symlinked state.json is never followed (L54)");
+  } finally {
+    cleanup(dir);
+    rmSync(dirname(pidFile), { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("CLI --peek over a finished result: the same verdict as --wait, `deferred`, and none of --wait's effects — which the --wait after it performs once", () => {
+  const dir = sandbox({ gates: { lint: {}, test: { exit: 1 }, build: { exit: 0, writes: [["a.txt", "rewritten by the build\n"]] } } });
+  try {
+    const o = spawnSync(process.execPath, [RUN_MARKER, "--open", "pharn-ship", FEATURE], { cwd: dir, encoding: "utf8" });
+    assert.equal(o.status, 0, o.stderr);
+    assert.equal(start(dir).status, 0);
+    waitForFile(join(dir, ENTRY_PATHS.result));
+    const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { cwd: dir, encoding: "utf8" }).trim();
+    const changes = join(gitDir, "pharn-entry-gate-changes.json");
+    const gitFiles = () =>
+      readdirSync(gitDir)
+        .filter((n) => n.startsWith("pharn-entry"))
+        .sort();
+    const beforeGit = gitFiles();
+    const lines = costLines(dir);
+    const p = peek(dir);
+    assert.equal(p.status, 4, JSON.stringify(p.doc));
+    assert.equal(p.doc.changes_record, "deferred");
+    assert.ok(!existsSync(changes), "no changes record");
+    assert.deepEqual(gitFiles(), beforeGit, "no offer published in the git dir");
+    assert.equal(costLines(dir), lines, "no observation line");
+    const w = wait(dir);
+    for (const k of ["status", "gates", "red", "unattributed", "unmeasured", "mutated", "changed_paths", "excluded"])
+      assert.deepEqual(w.doc[k], p.doc[k], `${k}: one decision path`);
+    assert.equal(w.doc.changes_record, "recorded", "the --wait records the gates' changes");
+    assert.ok(existsSync(changes));
+    assert.equal(costLines(dir), lines + 1, "the --wait appends its one observation");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("CLI --peek: usage — no --budget-ms, a slug, no unknown flag; a usage error prints the unusable document", () => {
+  const dir = sandbox({ gates: { test: {} } });
+  try {
+    for (const args of [
+      ["--peek", "--feature", FEATURE, "--budget-ms", "1000"],
+      ["--peek", "--feature", "../x"],
+      ["--peek", "--wait", "--feature", FEATURE],
+      ["--peek"],
+    ]) {
+      const r = cli(dir, ...args);
+      assert.equal(r.status, 2, JSON.stringify(args));
+      assert.equal(JSON.parse(r.stdout).reason_code, "usage-error", JSON.stringify(args));
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("✧ CLOSURE — every CHANGES_RECORD member has an emitter (a literal in the CLI, or a recordEntryChanges refusal code), and every emitted literal is a member (L36)", () => {
+  const src = readFileSync(CLI, "utf8");
+  const fromCli = [...src.matchAll(/changesRecord(?:\s*=|:)\s*"([a-z-]+)"|\?\s*"([a-z-]+)"\s*:\s*CHANGES_RECORD/g)].map(
+    (m) => m[1] ?? m[2]
+  );
+  const pre = readFileSync(join(HERE, "pre-run-snapshot.mjs"), "utf8");
+  const body = pre.slice(pre.indexOf("export function recordEntryChanges"));
+  const fromRecord = [...body.slice(0, body.indexOf("\n}\n")).matchAll(/refusal\("([a-z-]+)"/g)].map((m) => m[1]);
+  const fallback = [...src.matchAll(/CHANGES_RECORD\.includes\(w\.code\) \? w\.code : "([a-z-]+)"/g)].map((m) => m[1]);
+  const emitted = new Set([...fromCli, ...fromRecord, ...fallback]);
+  assert.ok(emitted.has("deferred") && emitted.has("none") && emitted.has("no-delivery-run"), "the scans found each source");
+  for (const c of emitted) assert.ok(CHANGES_RECORD.includes(c), `${c} is not a member`);
+  for (const c of CHANGES_RECORD) assert.ok(emitted.has(c), `${c} has no emitter`);
+});
+
 test("✧ CLOSURE — every reason_code the CLI emits is a member of REASON_CODES, and every member has an emitter (L36)", () => {
   const src = readFileSync(CLI, "utf8");
   const emitted = new Set(
@@ -943,6 +1207,68 @@ function entryStopSites(loop) {
   ];
 }
 
+// 7.5.0 (entry-verdict-early-read) — the PEEK line: twice in /pharn-loop (after the spec, after the plan), once in
+// /pharn-ship (after the plan), each with its branch. A copy-pair (L31): one table ranges over both commands.
+const PEEK_LINE = "node pharn/floor/entry-gates.mjs --peek --feature '<name>'";
+const PEEK_WIRING = [
+  {
+    file: "pharn-loop.md",
+    sites: [
+      {
+        after: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
+        before: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name '<name>'",
+      },
+      {
+        after: "node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-plan --budget-ms 570000",
+        before: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill",
+      },
+    ],
+    rows: [
+      /`4` → \*\*S14\*\*/,
+      new RegExp(`\`${EXIT.unmeasured}\` → \\*\\*S14b\\*\\*`),
+      /`--allow-red-entry`/,
+      /every\s+other exit → go on/,
+      /never re-run on `5`|Never run this line again on `5`/,
+    ],
+  },
+  {
+    file: "pharn-ship.md",
+    sites: [
+      {
+        after: "node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memory-bank/lessons-learned.md",
+        before: "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-grill --name '<name>'",
+      },
+    ],
+    rows: [
+      /`4` or `6`/,
+      /\*\*Stop\*\* \/ \*\*Continue\*\*/,
+      /every other exit → proceed/,
+      /A \*\*Continue\*\* here carries to Step 2\.3's final read/,
+      /its `2` still asks/,
+    ],
+  },
+];
+
+for (const w of PEEK_WIRING) {
+  test(`★ WIRING (7.5.0): ${w.file} pins the peek line at each early boundary, before the final wait, each with its branch`, () => {
+    const body = commandFamilyText(COMMANDS_DIR, w.file);
+    assert.equal(count(body, PEEK_LINE), w.sites.length, `${w.file}: the peek line, exactly ${w.sites.length} time(s)`);
+    let from = 0;
+    for (const site of w.sites) {
+      const at = body.indexOf(PEEK_LINE, from);
+      const after = body.lastIndexOf(site.after, at);
+      assert.ok(after >= from && after < at, `${w.file}: a peek after ${site.after}`);
+      const before = body.indexOf(site.before, at);
+      const next = body.indexOf(PEEK_LINE, at + 1);
+      assert.ok(before > at && (next === -1 || before < next), `${w.file}: and before ${site.before}`);
+      assert.ok(at < body.indexOf(LINES.wait), `${w.file}: the peek comes before the final wait`);
+      const branch = body.slice(at - 600, at + 900);
+      for (const re of w.rows) assert.match(branch, re, `${w.file}: the peek's branch ${re}`);
+      from = at + 1;
+    }
+  });
+}
+
 test("★ /pharn-loop names the gates.exclude remedy, its cost and --allow-red-entry at every S14/S14b site (L29)", () => {
   const sites = entryStopSites(commandFamilyText(COMMANDS_DIR, "pharn-loop.md"));
   assert.equal(sites.length, 4);
@@ -958,7 +1284,13 @@ test("★ /pharn-loop names the gates.exclude remedy, its cost and --allow-red-e
 test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part of both entry grammars", () => {
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   assert.match(loop, /^\| S14\s+\|/m);
-  assert.match(loop, /^\| S14b\s+\| Step 4's entry read exits `6`/m, "6.75.0: the unmeasured stop row, on exit 6");
+  // 7.5.0: the rows name every entry read (the two peeks and Step 4's final read).
+  assert.match(loop, /^\| S14\s+\| an entry read \(a peek after Step 3 or after the plan, or Step 4's final read\) exits `4`/m);
+  assert.match(
+    loop,
+    /^\| S14b\s+\| an entry read \(a peek after Step 3 or after the plan, or Step 4's final read\) exits `6`/m,
+    "6.75.0: the unmeasured stop row, on exit 6"
+  );
   // 7.1.0: `--accept-host-execution` joins both entry grammars, before the description.
   assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`"));
   assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`"));

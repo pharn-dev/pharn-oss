@@ -23,6 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.5.0] - 2026-11-10
+
+### Added
+
+- **`/pharn-loop` and `/pharn-ship` act on a red entry gate at the next stage boundary, not only before
+  `/pharn-test`.** Measured on 7.3.1 in a user's project: `entry-gates.mjs --start` ran 7 gates from 06:00:46Z, and its
+  only reader, `--wait`, ran between the grill and the test stage. It was first called at 06:35:41Z and returned red
+  (`format:check`, `e2e`) 26 s later, after spec, plan (both `agent:opus`) and grill: about 39 minutes, 102 requests and
+  19.6M cache-read tokens. The runner writes its result only after its last gate, so a read of the finished result alone
+  would have come too late there too, although `format:check`, which runs first, was red within minutes. The new
+  `node pharn/floor/entry-gates.mjs --peek --feature '<name>'` reads once: it never waits, never takes over a dead
+  runner's gates (that stays with the final `--wait`), and writes nothing — no changes record, no offer to
+  `/pharn-regress`, no cost-ledger observation: it adds none of `--wait`'s effects, which the final `--wait` performs as before. It decides a finished
+  result with the same checks and `entryVerdict` as `--wait` (one shared `decideResult`), or, with no result yet, a
+  red among the gates finished so far: run-gates' in-progress record through the new `inProgressStampView` (finalized,
+  `required` narrowed to the gates that ran) and the same `validateStamp` and `entryVerdict`. Red is its only partial
+  verdict, because it cannot change as more gates finish; anything else prints `continue`. Its documents carry the
+  new `changes_record` value `deferred`. `/pharn-loop` peeks after the spec stage and after the plan stage (`4` → S14,
+  `6` → S14b, unless `--allow-red-entry`; any other exit goes on), and its `allowed-tools` gains that one line.
+  `/pharn-ship` starts its entry gates after GATE 1, so it peeks once, after the plan stage; a `4` or `6` asks the same
+  Stop/Continue question, and a Continue there carries to the final read. The final `--wait` before `/pharn-test` is
+  unchanged. Bound: a later gate can still break the tree chain and make the final result `unusable`, which the loop's
+  final read would let go on; an early red stops the run anyway. `MIN_CLI` is unchanged.
+
 ## [7.4.0] - 2026-11-10
 
 ### Added

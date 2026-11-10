@@ -48,6 +48,19 @@
 // — and `--wait` records them beside the snapshot (pre-run-snapshot.mjs `recordEntryChanges`), so regress reports them
 // instead of counting them as the build's escape. Only a `mutated` gate's diff is taken.
 //
+// THE EARLY READ (7.5.0, entry-verdict-early-read). `--peek` decides the same verdict before the run's last gate, but
+// only a RED one: over the runs finished so far (`inProgressStampView`, validated by the same `validateStamp`),
+// `entryVerdict` ranks red first and a run already recorded is final, so an attributable red cannot become another
+// status as more gates finish. An unmeasured gate so far could still be joined by a red (S14b → S14), and no red yet
+// says nothing, so both wait for the finished result. THE P7 TRIGGER: a 7.3.1 /pharn-loop run in a user's project
+// (2026-11-10) had `format:check` red minutes after `--start`, but the runner writes its result after its LAST gate
+// (a slow `e2e`), so the one read, before /pharn-test, saw it after spec, plan and grill — about 39 minutes, 102
+// requests and 19.6M cache-read tokens later.
+// ONE ORDERING BOUND, in the safe direction: run-gates rewrites `state.json` when a gate ends, and the runner writes
+// that gate's feature-directory digests to `progress.json` just after. A STYLE red read in between has no digest yet,
+// so it reads `unattributed` (`continue`), and the next boundary or the final `--wait` decides it. A non-style red
+// needs no digest and is read at once.
+//
 // ============================== WHAT IT DOES NOT CLAIM (P0) ==============================
 //   • That the run would have failed verify. A gate red at entry predicts a red verify gate only if the run does not
 //     fix it; a gate green at entry may still go red. The stop says "red on the tree the run started from".
@@ -58,6 +71,9 @@
 //     follow-up `entry-gates-nonstyle-overlap` names the extension). `--allow-red-entry` is the person's remedy.
 //   • That a style gate read nothing between the two digest samples: a write and a byte-identical restore inside one
 //     gate is invisible to two samples.
+//   • That an early red is the run's final verdict. A later gate run can break the tree chain
+//     (`tree-changed-between-gates`), or the finalize can fail, and the final result is then `unusable`, which a loop's
+//     final read lets go on. The early read stops anyway: the red it saw was measured on the tree the run started from.
 //   • Provenance (L43). The stamp, the result record and the digests live under `pharn/.run/`, which Bash reaches; a
 //     self-consistent forged set passes. Agreement between the stamp, its digest and the result is all that is checked.
 //
@@ -80,6 +96,8 @@ export const ENTRY_PATHS = Object.freeze({
   root: ENTRY_ROOT,
   gates: `${ENTRY_ROOT}/gates`,
   stamp: `${ENTRY_ROOT}/gates/stamp.json`,
+  // 7.5.0 — run-gates' in-progress record (the stamp before its last gate), read by `--peek` and the takeover test.
+  state: `${ENTRY_ROOT}/gates/state.json`,
   runner: `${ENTRY_ROOT}/runner.json`,
   progress: `${ENTRY_ROOT}/progress.json`,
   result: `${ENTRY_ROOT}/result.json`,
@@ -115,8 +133,49 @@ export const REASON_CODES = Object.freeze([
 ]);
 
 /** What `--wait` did with the gates' own writes (review R1): `none` (no `mutated` gate changed a listed path), `recorded`
- *  (written beside the pre-run snapshot), or why it could not be (pre-run-snapshot.mjs `recordEntryChanges`'s codes). */
-export const CHANGES_RECORD = Object.freeze(["none", "recorded", "no-delivery-run", "git-failed", "git-dir-unresolved", "write-failed"]);
+ *  (written beside the pre-run snapshot), or why it could not be (pre-run-snapshot.mjs `recordEntryChanges`'s codes).
+ *  7.5.0: `deferred` — a `--peek` document, which records nothing; the run's final `--wait` does. */
+export const CHANGES_RECORD = Object.freeze([
+  "none",
+  "recorded",
+  "no-delivery-run",
+  "git-failed",
+  "git-dir-unresolved",
+  "write-failed",
+  "deferred",
+]);
+
+/** 7.5.0 (entry-verdict-early-read): the in-progress `state.json` of an entry run as a stamp `validateStamp` can judge,
+ *  or null. run-gates writes that record atomically after every gate and replaces it with the finalized stamp at the
+ *  last one (run-gates.mjs header, "SINGLE STORE"), so it holds the gates finished so far. The view is a copy of the
+ *  record with `finalized: true`, `fingerprint.final` = the last run's `fp_after`, and `required` narrowed to the
+ *  required ids that have already run — completeness is exactly what a partial run lacks; every other check
+ *  `validateStamp` makes (each run's shape, `runs[0].fp_before === init`, the between-gates chain, the stage and
+ *  feature) still runs over the runs so far. The record's in-progress-only keys are carried as they are: `validateStamp`
+ *  reads none of them, so no list of them is kept here (a second copy of run-gates' detail, L35). null when the record
+ *  is not an object, has no runs, or carries no fingerprint object. */
+export function inProgressStampView(state) {
+  if (!isPlainObject(state) || !Array.isArray(state.runs) || state.runs.length === 0) return null;
+  if (!isPlainObject(state.fingerprint)) return null;
+  const last = state.runs[state.runs.length - 1];
+  if (!isPlainObject(last)) return null;
+  const ran = new Set(state.runs.map((r) => (isPlainObject(r) ? r.id : undefined)));
+  return {
+    ...state,
+    finalized: true,
+    fingerprint: { ...state.fingerprint, final: last.fp_after },
+    required: Array.isArray(state.required) ? state.required.filter((id) => ran.has(id)) : state.required,
+  };
+}
+
+/** The "k of n gates" a partial `--peek` names: runs so far and entries in all, the evidence-only base:test slot left
+ *  out of both (it is never a gate a person counts — 6.49.0). `n` falls back to `k` when the record lists no entries. */
+export function partialGateCount(state) {
+  const gate = (x) => isPlainObject(x) && x.id !== ENTRY_BASE_TEST_ID;
+  const ran = Array.isArray(state?.runs) ? state.runs.filter(gate).length : 0;
+  const total = Array.isArray(state?.entries) ? state.entries.filter(gate).length : ran;
+  return { ran, total };
+}
 
 /** What the runner (or `--start`, or `--abort`) recorded as the run's outcome. */
 export const RESULT_STATUSES = Object.freeze(["done", "no-gates", "unusable", "aborted"]);

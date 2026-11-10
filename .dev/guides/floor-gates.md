@@ -647,9 +647,13 @@ node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <na
 # Since 6.48.0 each mode also appends observations for the cost ledger to `pharn/.run/cost/<name>/entry.jsonl`
 # (entry-observations.mjs; cost-ledger.md "Entry gate observations") — after its control record, best-effort, read by
 # nothing here; exits and stdout documents are unchanged (a test runs every append failing and compares them).
-# Exit (--wait): 0 green · 4 red · 6 unmeasured · 3 no-gates · 5 continue (run again) · 2 unusable; --start 0 · 3 · 2;
-# --abort 0.
+# Since 7.5.0 (entry-verdict-early-read) `--peek` reads once — no wait, no takeover, no write — after /pharn-loop's spec
+# and plan stages and /pharn-ship's plan stage: a finished result decided as --wait decides it, or a RED among the gates
+# finished so far (entry-gates-core.mjs `inProgressStampView`); anything else is `continue`, left to the final --wait.
+# Exit (--wait): 0 green · 4 red · 6 unmeasured · 3 no-gates · 5 continue (run again) · 2 unusable; --peek the same
+# codes (5 = not decided yet, never re-run); --start 0 · 3 · 2; --abort 0.
 node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
 node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
+node pharn/floor/entry-gates.mjs --peek --feature <name>
 node pharn/floor/entry-gates.mjs --abort --feature <name>
 ```
