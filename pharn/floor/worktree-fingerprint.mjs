@@ -153,7 +153,16 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
 ]);
 
 /** PRE-GATE artifacts: reconcile exempts these, this INCLUDES them. The divergence is the point (L39). */
-export const INCLUDED_ARTIFACTS = Object.freeze(["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md", "AC-TESTS.md", "AC-TESTS.lock.json"]);
+// grill-findings.json (7.6.0) is written by the grill beside GRILL.md, before any gate runs, so it is classified with it.
+export const INCLUDED_ARTIFACTS = Object.freeze([
+  "SPEC.md",
+  "PLAN.md",
+  "GRILL.md",
+  "grill-findings.json",
+  "BUILD.md",
+  "AC-TESTS.md",
+  "AC-TESTS.lock.json",
+]);
 
 /** /pharn-review writes one findings.json per lens, NESTED. An exact-filename set cannot express that,
  *  so it gets its own narrow shape: exactly one segment for the lens name, filename still findings.json.

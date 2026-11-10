@@ -23,6 +23,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.6.0] - 2026-11-10
+
+### Added
+
+- **A full `/pharn-grill` writes its findings to `pharn/features/<name>/grill-findings.json`, each with an id
+  (`G1-1`, `G1-2`, …), and a new floor CLI renders and checks the file.** Part 1 of 3 of restore-loop-grill. 6.45.0 made
+  `/pharn-loop`'s grill floor-only because no stage read the findings before the build. To make a later stage act on a
+  finding, the finding needs a name, and code needs to be able to list the findings. Until now they existed only as
+  model-written YAML inside `GRILL.md`, which no floor code parsed. The new file holds every finding the grill raised:
+  the interrogation's, every griller's, and each scanner hit. Each element is the finding object plus an `id`, which
+  must be exactly `G<round>-<i+1>` for element `i`. The finding object itself is unchanged, so `findings.json`, the
+  review merge and evals read nothing new.
+  `node pharn/floor/grill-findings.mjs render <file>` prints `GRILL.md`'s findings section between two marker lines. The
+  model pastes that section, so `GRILL.md` is derived from the file, never a second copy.
+  `node pharn/floor/grill-findings.mjs check <file> --grill <GRILL.md> --plan <PLAN.md>` checks three things: the shape
+  and the ids (enum/regex; a key repeated at any depth is refused), that the section is byte-identical to the render,
+  and that every scanner finding `grill-scan.mjs` produces for that plan is in the file. A RED names each defect by code
+  and index, then prints one fixed hint per code naming the accepted shape. Measured on 161 real `GRILL.md` files from a
+  user project (714 findings), 27 held at least one value the check refuses — 57 `rule_id`s, mostly a bare griller name,
+  and 50 `file` values such as a line range — so `/pharn-grill`'s finding output now states those two shapes and the
+  repair round has the shape, not only the code. `grill-scan.mjs` now exports
+  `scanFindings`, the one builder both the section and the check use; its printed output is unchanged (a golden test
+  pins it). `grill-findings.json` is classified as a pipeline artifact in `check-regress.mjs`,
+  `reconcile-ignore.json` and `worktree-fingerprint.mjs`, and `/pharn-loop`'s `allowed-tools` grants the grill's three
+  new lines. **Bounds (P0):** the check is floor when it runs, but running it is the grill's command prose. A finding
+  the model never writes into the file is invisible to every check. Nothing reads the ids to decide anything yet: part 2
+  adds a triage stage that does. `--quick` and `--floor-only` grills are unchanged and write no file. Contract:
+  `pharn/pharn-contracts/finding-shape.md`, "Emission — grill-findings.json".
+
 ## [7.5.0] - 2026-11-10
 
 ### Added

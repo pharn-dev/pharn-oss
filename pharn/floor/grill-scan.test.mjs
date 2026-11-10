@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync, symlinkSync, readdirSync
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { GRILL_SCANS, shapeReason, renderScanSection, runScans } from "./grill-scan.mjs";
+import { GRILL_SCANS, shapeReason, renderScanSection, runScans, scanFindings } from "./grill-scan.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "grill-scan.mjs");
@@ -202,4 +202,56 @@ test("★ each scanner finding carries the rule_id and severity its griller's Pr
     "pii: rule_id P5 is not in privacy's Procedure",
     "i18n: severity minor is not in i18n's Procedure",
   ]);
+});
+
+// 7.6.0 (grill-finding-ids): `scanFindings` became the one builder of the scanner findings, and `renderScanSection`
+// prints from it. GOLDEN: the expected string was captured from the pre-refactor implementation over these exact
+// results, so a byte that moves fails here (the output is unchanged by the refactor).
+const GOLDEN_RESULTS = () => {
+  const by = Object.fromEntries(GRILL_SCANS.map((s) => [s.id, s]));
+  return [
+    { scan: by.secrets, out: { found: true, hits: [{ line: 3, kind: "aws-access-key-id" }] } },
+    {
+      scan: by.pii,
+      out: {
+        found: true,
+        hits: [
+          { line: 4, kind: "email" },
+          { line: 9, kind: "phone" },
+        ],
+      },
+    },
+    { scan: by.i18n, out: { found: false, hits: [] } },
+    { scan: by.migrations, out: { mentions: true, hits: [{ line: 6, term: "migration" }] } },
+    { scan: by.observability, out: { mentions: false, hits: [] } },
+  ];
+};
+const GOLDEN_SECTION =
+  '## Deterministic plan scans (`pharn/floor/grill-scan.mjs`)\n\nAdvisory: each finding below gates nothing. The scanners detect a pattern\'s presence on a line; a scanner finding\nis not the griller\'s judgment.\n\n```yaml\n- type: FINDING\n  rule_id: "P2"\n  severity: important\n  file: "pharn/features/demo/PLAN.md:3"\n  problem: "a secret-shaped literal appears in the plan (scan-plan-secrets, security griller\'s deterministic half)"\n  evidence: "scan-plan-secrets matched kind aws-access-key-id on line 3"\n- type: FINDING\n  rule_id: "P2"\n  severity: important\n  file: "pharn/features/demo/PLAN.md:4"\n  problem: "a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller\'s deterministic half)"\n  evidence: "scan-plan-pii matched kind email on line 4"\n- type: FINDING\n  rule_id: "P2"\n  severity: important\n  file: "pharn/features/demo/PLAN.md:9"\n  problem: "a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller\'s deterministic half)"\n  evidence: "scan-plan-pii matched kind phone on line 9"\n```\n\n- `scan-plan-migrations`: mentions true — lines 6 (migration). Not a finding: whether the plan needs or adequately declares this is the migrations griller\'s judgment.\n- `scan-plan-observability`: mentions false. Not a finding: whether the plan needs or adequately declares this is the observability griller\'s judgment.\n';
+
+test("GOLDEN (7.6.0): renderScanSection's bytes are unchanged by the scanFindings refactor", () => {
+  assert.equal(renderScanSection("pharn/features/demo/PLAN.md", GOLDEN_RESULTS()), GOLDEN_SECTION);
+});
+
+test("scanFindings returns the section's findings as finding-shape objects, in print order, mentions excluded", () => {
+  const got = scanFindings("pharn/features/demo/PLAN.md", GOLDEN_RESULTS());
+  assert.equal(got.length, 3, "one per secrets/pii/i18n hit; migrations and observability are never findings");
+  for (const f of got) assert.deepEqual(Object.keys(f), ["type", "rule_id", "severity", "file", "problem", "evidence"]);
+  assert.deepEqual(
+    got.map((f) => f.file),
+    ["pharn/features/demo/PLAN.md:3", "pharn/features/demo/PLAN.md:4", "pharn/features/demo/PLAN.md:9"]
+  );
+  // Every object appears in the printed section field for field (the one-builder claim, both directions).
+  const section = renderScanSection("pharn/features/demo/PLAN.md", GOLDEN_RESULTS());
+  for (const f of got) {
+    assert.ok(section.includes(`  file: "${f.file}"\n  problem: "${f.problem}"\n  evidence: "${f.evidence}"`), f.file);
+  }
+  assert.equal((section.match(/- type: FINDING/g) ?? []).length, got.length);
+  assert.deepEqual(
+    scanFindings(
+      "p.md",
+      GOLDEN_RESULTS().map((r) => ({ scan: r.scan, out: { ...r.out, hits: [] } }))
+    ),
+    []
+  );
 });
