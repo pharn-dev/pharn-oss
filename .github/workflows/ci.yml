@@ -119,7 +119,7 @@ jobs:
       - id: pharn-ci
         name: pharn-ci diff coverage gate
         if: ${{ always() && steps.install.outcome == 'success' && github.event_name == 'pull_request' }}
-        uses: pharn-dev/pharn-ci@dec4a0ed2d0b111233522753909c74a90b6d09e0 # v0.9.1
+        uses: pharn-dev/pharn-ci@38aca1f95b3f5e4bfa83ff08a98d0d3147869a90 # v0.10.0
         timeout-minutes: 5
         with:
           comment: false
