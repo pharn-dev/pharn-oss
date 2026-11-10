@@ -187,6 +187,58 @@ test("a criterion with no candidate token is CLEAR without a setter (no spawn ne
   });
 });
 
+// ── a stub setter: the paths the real setter never takes in a test (a killed run; a refusal no token explains) ──
+
+/**
+ * A project whose setter is a stub. `onMany` / `onOne` say what the stub does for a plan of two or more entries and
+ * for a plan of one: "ok" exits 0, "refuse" exits 1, "kill" ends the process by a signal.
+ */
+function withStubSetter({ onMany, onOne }, fn) {
+  return withProject({ setter: false }, (root) => {
+    const act = { ok: "process.exit(0)", refuse: "process.exit(1)", kill: 'process.kill(process.pid, "SIGKILL")' };
+    mkdirSync(join(root, ".claude", "hooks"), { recursive: true });
+    writeFileSync(
+      join(root, SETTER),
+      [
+        'const fs = require("fs");',
+        'const plan = process.argv[process.argv.indexOf("--from-plan") + 1];',
+        'const n = fs.readFileSync(plan, "utf8").split("\\n").filter((l) => l.startsWith("- `")).length;',
+        `if (n > 1) { ${act[onMany]}; } else { ${act[onOne]}; }`,
+        "",
+      ].join("\n")
+    );
+    return fn(root);
+  });
+}
+
+const TWO_TOKENS = "Given `docs/one.md` When the page loads Then `docs/two.md` is shown";
+
+test("a refusal of the tokens together that no token explains alone is UNUSABLE unattributed", () => {
+  withStubSetter({ onMany: "refuse", onOne: "ok" }, (root) => {
+    const v = verdict(spec([TWO_TOKENS]), root);
+    assert.equal(v.code, 2);
+    assert.equal(v.token, "UNUSABLE unattributed");
+    assert.deepEqual(v.hits, []);
+  });
+});
+
+test("a setter killed on the batch run is UNUSABLE setter-failed", () => {
+  withStubSetter({ onMany: "kill", onOne: "ok" }, (root) => {
+    const v = verdict(spec([TWO_TOKENS]), root);
+    assert.equal(v.token, "UNUSABLE setter-failed");
+    assert.match(v.detail, /\(signal\)/);
+  });
+});
+
+test("a setter killed on a per-token run is UNUSABLE setter-failed, never a partial MENTIONS", () => {
+  withStubSetter({ onMany: "refuse", onOne: "kill" }, (root) => {
+    const v = verdict(spec([TWO_TOKENS]), root);
+    assert.equal(v.code, 2);
+    assert.equal(v.token, "UNUSABLE setter-failed");
+    assert.deepEqual(v.hits, []);
+  });
+});
+
 // ── the CLI ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 function cli(root, args) {
@@ -212,6 +264,24 @@ test("CLI: exit 0 CLEAR, exit 2 on usage and on an unreadable SPEC", () => {
     assert.equal(cli(root, []).status, 2);
     assert.equal(cli(root, ["SPEC.md", "extra"]).status, 2);
     assert.equal(cli(root, ["missing.md"]).status, 2);
+  });
+});
+
+test("CLI: a verdict-level UNUSABLE exits 2 and says the check did not run", () => {
+  withProject({ setter: false }, (root) => {
+    writeFileSync(join(root, "SPEC.md"), spec([EDIT]));
+    const r = cli(root, ["SPEC.md"]);
+    assert.equal(r.status, 2);
+    assert.match(r.stdout, /^UNUSABLE no-setter — .*; the check did not run$/m);
+  });
+});
+
+test("CLI: two criteria with hits use the plural line", () => {
+  withProject({}, (root) => {
+    writeFileSync(join(root, "SPEC.md"), spec([EDIT, "Given a repo When editing AGENTS.md Then done"]));
+    const r = cli(root, ["SPEC.md"]);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /^MENTIONS — 2 acceptance criteria mention a path/m);
   });
 });
 
