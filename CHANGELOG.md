@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-10: **Measured: the triage stage on five real grills.** Each `/pharn-triage` run (sonnet, high, headless)
+  wrote a `grill-triage.json` that passed `grill-triage.mjs check` on its first call. All five verdicts escalated (3
+  `replan`, 2 `spec`), so all five full loops would stop at S16 for a person; three of those stops come from the
+  `blocking` rule alone. A triage took 34–49 s and $0.38–$0.52, against 229–284 s for the routed grill before it.
+  Record: `.dev/features/loop-grill-triage/TRIAGE-CHECK-MEASUREMENT.md`. Dev apparatus only, so no `SKILLS_VERSION`
+  bump.
+
 ## [7.7.0] - 2026-11-10
 
 ### Added
