@@ -31,7 +31,7 @@
 // still-RED check as a line in GRILL.md.
 
 import "./runtime-floor.mjs";
-import { lstatSync, readFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
 import { defectHints, formatDefects, missingScannerFindings, render, sectionDefects, validate } from "./grill-findings-core.mjs";
 import { runScans, scanFindings } from "./grill-scan.mjs";
 
@@ -41,20 +41,25 @@ const USAGE =
   "usage: node pharn/floor/grill-findings.mjs render <grill-findings.json>\n" +
   "       node pharn/floor/grill-findings.mjs check <grill-findings.json> --grill <GRILL.md> --plan <PLAN.md>\n";
 
-/** Read one input: `{ok, text}` or `{ok: false, reason}`. The reason names the path the caller passed, never content. */
+/**
+ * Read one input: `{ok, text}` or `{ok: false, reason}`. The reason names the path the caller passed, never content.
+ * Opened once with O_NOFOLLOW and checked and read through that descriptor, so a final-component link is refused and
+ * the file cannot be swapped between the check and the read (L54).
+ */
 function readInput(path, label) {
-  let st;
+  let fd;
   try {
-    st = lstatSync(path);
-  } catch {
-    return { ok: false, reason: `${label} not found: ${path}` };
-  }
-  if (!st.isFile()) return { ok: false, reason: `${label} is not a regular file: ${path}` };
-  if (st.size > INPUT_MAX) return { ok: false, reason: `${label} is larger than ${INPUT_MAX} bytes: ${path}` };
-  try {
-    return { ok: true, text: readFileSync(path, "utf8") };
-  } catch {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    const st = fstatSync(fd);
+    if (!st.isFile()) return { ok: false, reason: `${label} is not a regular file: ${path}` };
+    if (st.size > INPUT_MAX) return { ok: false, reason: `${label} is larger than ${INPUT_MAX} bytes: ${path}` };
+    return { ok: true, text: readFileSync(fd, "utf8") };
+  } catch (e) {
+    if (e?.code === "ENOENT") return { ok: false, reason: `${label} not found: ${path}` };
+    if (e?.code === "ELOOP") return { ok: false, reason: `${label} is not a regular file: ${path}` };
     return { ok: false, reason: `${label} could not be read: ${path}` };
+  } finally {
+    if (fd !== undefined) closeSync(fd);
   }
 }
 

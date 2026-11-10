@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -88,6 +88,9 @@ test("a repeated key is RED at the top level and inside an element; a \\u-escape
   assert.equal(repeatedKeyCount(JSON.stringify(doc([finding(1), finding(2)]))), 0);
   // A key-looking string VALUE is not a key.
   assert.equal(repeatedKeyCount('{"a":"b","c":["a","a"],"d":{"a":1}}'), 0);
+  // Total (L62): a key whose escape JSON.parse rejects falls back to its raw token, and still counts as a repeat.
+  assert.equal(repeatedKeyCount('{"\\q":1,"\\q":2}'), 1);
+  assert.equal(repeatedKeyCount('{"\\q":1,"\\r":2}'), 0);
 });
 
 test("element keys closed both ways; a non-object element", () => {
@@ -358,6 +361,19 @@ test("render CLI: prints the section; usage and unreadable inputs exit 2 with no
     const l = run(["render", join(dir, "link.json")], dir);
     assert.equal(l.status, 2, "a symlink is refused");
     assert.match(l.stderr, /not a regular file/);
+    const big = join(dir, "big.json");
+    writeFileSync(big, " ".repeat(4 * 1024 * 1024 + 1));
+    const b = run(["render", big], dir);
+    assert.equal(b.status, 2, "an input over 4 MiB");
+    assert.match(b.stderr, /is larger than 4194304 bytes/);
+    if (process.getuid?.() !== 0) {
+      const locked = join(dir, "locked.json");
+      writeFileSync(locked, "{}");
+      chmodSync(locked, 0o000);
+      const k = run(["render", locked], dir);
+      assert.equal(k.status, 2, "an unreadable input");
+      assert.match(k.stderr, /could not be read/);
+    }
   });
 });
 
