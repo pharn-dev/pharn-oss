@@ -30,16 +30,17 @@
 // A policy-inline cell NEVER consults the config (policy precedence). THE LOOP'S QUICK COLUMN (6.28.0,
 // loop-quick-mode — added by the second of the two increments to merge): `/pharn-loop --quick` routes what
 // its full column routes and never runs /pharn-regress; its spec agent is briefed with the quick invocation,
-// `/pharn-spec --quick --model-approve`. THE LOOP'S GRILL IS FLOOR-ONLY IN BOTH COLUMNS (6.45.0,
-// front-grill-concurrent — a decision made by the orchestrating model under the maintainer's delegation): the full
-// loop runs `/pharn-grill <name> --floor-only` inline — its two floor stops plus the five deterministic `scan-plan-*`
-// scanners (pharn/floor/grill-scan.mjs, findings advisory), and no grill agent. THE TRADE: the plan interrogation and
-// the model-driven grillers (the security griller's judgment half included) no longer run in an unattended loop.
-// Why: unattended, the grill's findings gate nothing, and since 6.27.0 routing split the stages into separate
-// contexts no stage reads them before the build (GRILL.md is still read afterwards — the loop's summary points at
-// it). The 92-minute run's ledger (pharn-starter billing-plan-catalog cost.json) shows the grill stage at 361.0 s,
-// 43 opus requests, cache_write 391,438 and cache_read 16,097,324 tokens; an inline floor-only grill measured 8.5 s
-// in that project's quick run. /pharn-ship keeps its routed full grill: a person reads GRILL.md at GATE 2.
+// `/pharn-spec --quick --model-approve`. THE FULL LOOP'S GRILL IS READ BY TRIAGE (7.7.0, loop-grill-triage): the full
+// column routes `/pharn-grill <name>` (interrogation and every griller) and then `/pharn-triage <name>`, a stage that
+// gives each finding in grill-findings.json one disposition; grill-triage.mjs derives the verdict, and anything but
+// `proceed` stops the run (contract: pharn/pharn-contracts/grill-triage.md). Before 7.7.0 (6.45.0,
+// front-grill-concurrent) the full loop's grill was floor-only, because unattended its findings gated nothing and no
+// stage read them before the build; four pharn-starter runs wrote 26 findings that way, three ending green
+// (.dev/features/loop-grill-triage/PLAN.md, "The failure"). The trade, measured: a full grill took 229-284 s in five
+// headless 7.6.0 runs (.dev/features/loop-grill-triage/GRILL-CHECK-MEASUREMENT.md; the 92-minute run's ledger showed
+// 361.0 s and 43 opus requests) against 8.5 s for an inline floor-only grill. THE QUICK LOOP'S GRILL STAYS FLOOR-ONLY:
+// `/pharn-grill <name> --quick`, its two floor stops, no interrogation and no triage. /pharn-ship keeps its routed
+// full grill and runs no triage: a person reads GRILL.md at GATE 2.
 //
 // ============================ THE FALLBACK — every inline reason, with its remedy ============================
 // Every case runs the stage inline, exactly as before 6.27.0, and SAYS SO: a routed stage's stage-start marker
@@ -218,11 +219,12 @@ import { shelledVerdict } from "./shelled-verdict-core.mjs";
 /** The two orchestrators that spawn stage agents. */
 export const STAGE_AGENT_COMMANDS = Object.freeze(["pharn-ship", "pharn-loop"]);
 
-/** The seven pipeline stages, in spine order. */
+/** The eight pipeline stages, in spine order. `pharn-triage` (7.7.0) runs in the full loop only. */
 export const STAGES = Object.freeze([
   "pharn-spec",
   "pharn-plan",
   "pharn-grill",
+  "pharn-triage",
   "pharn-test",
   "pharn-build",
   "pharn-regress",
@@ -242,6 +244,7 @@ export const STAGE_CONFIG_KEYS = Object.freeze({
   "pharn-spec": "spec",
   "pharn-plan": "plan",
   "pharn-grill": "grill",
+  "pharn-triage": "triage",
   "pharn-test": "ac-test",
   "pharn-build": "build",
   "pharn-regress": "regress",
@@ -264,6 +267,7 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-spec": "interactive",
       "pharn-plan": AGENT,
       "pharn-grill": AGENT,
+      "pharn-triage": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -273,6 +277,7 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-spec": "interactive",
       "pharn-plan": AGENT,
       "pharn-grill": "floor-only",
+      "pharn-triage": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": SKIPPED,
@@ -280,11 +285,12 @@ export const ROUTE_POLICY = Object.freeze({
     }),
   }),
   "pharn-loop": Object.freeze({
-    // 6.45.0 (front-grill-concurrent): the full loop's grill is floor-only too — the header says why.
+    // 7.7.0 (loop-grill-triage): the full loop routes its grill and then triage — the header says why.
     full: Object.freeze({
       "pharn-spec": AGENT,
       "pharn-plan": AGENT,
-      "pharn-grill": "floor-only",
+      "pharn-grill": AGENT,
+      "pharn-triage": AGENT,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -296,6 +302,7 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-spec": AGENT,
       "pharn-plan": AGENT,
       "pharn-grill": "floor-only",
+      "pharn-triage": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": SKIPPED,
@@ -326,6 +333,8 @@ export const INVOCATIONS = Object.freeze({
     full: Object.freeze({
       "pharn-spec": "/pharn-spec --model-approve",
       "pharn-plan": "/pharn-plan <name>",
+      "pharn-grill": "/pharn-grill <name>",
+      "pharn-triage": "/pharn-triage <name>",
       "pharn-test": "/pharn-test <name> --unattended",
       "pharn-build": "/pharn-build <name>",
     }),

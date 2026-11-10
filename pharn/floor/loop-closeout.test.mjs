@@ -910,7 +910,7 @@ test("a pre-run reader that throws is not swallowed: the builder throws, so the 
   }
 });
 
-test("STAGE_ARTIFACTS is the close part's former list, in its order", () => {
+test("STAGE_ARTIFACTS is the close part's former list, in its order, plus the grill's and triage's JSON (7.7.0)", () => {
   assert.deepEqual(
     [...STAGE_ARTIFACTS],
     [
@@ -919,6 +919,8 @@ test("STAGE_ARTIFACTS is the close part's former list, in its order", () => {
       "AC-TESTS.md",
       "AC-TESTS.lock.json",
       "GRILL.md",
+      "grill-findings.json",
+      "grill-triage.json",
       "BUILD.md",
       "REGRESSION.md",
       "VERIFY.md",

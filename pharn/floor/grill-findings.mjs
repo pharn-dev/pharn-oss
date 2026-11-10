@@ -22,18 +22,18 @@
 // Exit 1 is ALWAYS printed WITH its `RED — ` line first (shelled-verdict-core.mjs's contract), so a caller can tell this
 // checker's RED from node's own exit 1 on a crash.
 //
-// READING: each input must be a regular file by lstat (a symlink is refused, as grill-scan.mjs refuses one) of at most
-// INPUT_MAX bytes. Output names codes, indexes and the scanner findings' own fixed fields — never a value read from the
-// findings file or GRILL.md (P2).
+// READING: each input is read through regular-file.mjs — one O_NOFOLLOW descriptor, a regular file of at most
+// INPUT_MAX bytes (a symlink is refused, as grill-scan.mjs refuses one). Output names codes, indexes and the scanner
+// findings' own fixed fields — never a value read from the findings file or GRILL.md (P2).
 //
 // FLOOR: the verdict (enum/regex, byte equality, field equality — see the core's header). ADVISORY: that the grill runs
 // this, repairs on RED, or lists every finding it formed. This increment gates nothing on it; /pharn-grill records a
 // still-RED check as a line in GRILL.md.
 
 import "./runtime-floor.mjs";
-import { closeSync, constants, fstatSync, openSync, readFileSync } from "node:fs";
 import { defectHints, formatDefects, missingScannerFindings, render, sectionDefects, validate } from "./grill-findings-core.mjs";
 import { runScans, scanFindings } from "./grill-scan.mjs";
+import { readRegularFile } from "./regular-file.mjs";
 
 export const INPUT_MAX = 4 * 1024 * 1024;
 
@@ -41,26 +41,10 @@ const USAGE =
   "usage: node pharn/floor/grill-findings.mjs render <grill-findings.json>\n" +
   "       node pharn/floor/grill-findings.mjs check <grill-findings.json> --grill <GRILL.md> --plan <PLAN.md>\n";
 
-/**
- * Read one input: `{ok, text}` or `{ok: false, reason}`. The reason names the path the caller passed, never content.
- * Opened once with O_NOFOLLOW and checked and read through that descriptor, so a final-component link is refused and
- * the file cannot be swapped between the check and the read (L54).
- */
+/** Read one input as text: `{ok, text}` or `{ok: false, reason}` (regular-file.mjs; the reason never holds content). */
 function readInput(path, label) {
-  let fd;
-  try {
-    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const st = fstatSync(fd);
-    if (!st.isFile()) return { ok: false, reason: `${label} is not a regular file: ${path}` };
-    if (st.size > INPUT_MAX) return { ok: false, reason: `${label} is larger than ${INPUT_MAX} bytes: ${path}` };
-    return { ok: true, text: readFileSync(fd, "utf8") };
-  } catch (e) {
-    if (e?.code === "ENOENT") return { ok: false, reason: `${label} not found: ${path}` };
-    if (e?.code === "ELOOP") return { ok: false, reason: `${label} is not a regular file: ${path}` };
-    return { ok: false, reason: `${label} could not be read: ${path}` };
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-  }
+  const r = readRegularFile(path, label, INPUT_MAX);
+  return r.ok ? { ok: true, text: r.bytes.toString("utf8") } : r;
 }
 
 /** Parse `check`'s argv after the subcommand: one positional, `--grill` and `--plan` once each. */

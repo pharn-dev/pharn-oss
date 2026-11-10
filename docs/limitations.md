@@ -173,8 +173,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   well-scoped change, `/pharn-ship --quick` (6.25.0) is the manual lever: it drops `/pharn-regress`'s
   base-and-head suite run (its scope check still runs), the plan interrogation, and the briefing/run-report
   renders. `/pharn-loop --quick` (6.28.0) is the unattended one: it drops the same base-and-head run on every
-  iteration, where the loop multiplied it, plus the run report (every `/pharn-loop` run skips the plan
-  interrogation since 6.45.0). There is no
+  iteration, where the loop multiplied it, plus the run report and the plan interrogation (a full `/pharn-loop`
+  interrogates the plan and has every finding triaged since 7.7.0). There is no
   automatic proportionality — nothing measures whether a change is "small" — the flag is a person's choice (under
   `/pharn-loop --quick` the model then writes and approves the quick SPEC), and a change too large for it stops (S6c,
   under `/pharn-loop --quick`) or takes the full pipeline.

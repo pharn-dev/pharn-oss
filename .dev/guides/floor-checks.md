@@ -301,6 +301,31 @@ node pharn/floor/grill-findings.mjs render pharn/features/<name>/grill-findings.
 node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.json --grill pharn/features/<name>/GRILL.md --plan pharn/features/<name>/PLAN.md
 ```
 
+## `grill-triage.mjs` — one disposition per grill finding
+
+```bash
+# THE TRIAGE STAGE'S SKELETON AND THE LOOP'S TRIAGE VERDICT (added 7.7.0, loop-grill-triage; part 2a of
+# restore-loop-grill). /pharn-triage writes pharn/features/<name>/grill-triage.json — {schema: "pharn-grill-triage/1",
+# round, findings_sha256, dispositions: [{id, disposition, reason}]} — and a full /pharn-loop reads its verdict after the
+# routed grill. THE RECORDED FAILURE (P7): four pharn-starter loop runs wrote 26 grill findings no stage read, all 0
+# blocking-severity, three ending STOP_GREEN, so a branch on the grill's own severity would have done nothing; a stage
+# must read every finding. Rules and bounds: grill-triage-core.mjs's header; contract: pharn-contracts/grill-triage.md.
+# FLOOR: closed keys, no key repeated at any depth, the schema, round equal to the findings file's, findings_sha256 equal
+# to the sha256 of the findings file's BYTES (content-hash: a triage of another or an older findings file is refused),
+# dispositions index-aligned with the findings by id (closed both ways — L36; non-empty findings with [] is RED — L34),
+# disposition in {proceed, replan, spec}, a single-line non-blank reason ≤ 2,000, and a `blocking` finding never
+# `proceed`; the verdict is spec > replan > proceed. The findings file is validated with grill-findings-core.mjs's own
+# `validate` first (its codes, on its RED line). AGREEMENT, NEVER TRUTH (L43): both files are run-written. ADVISORY:
+# every disposition and reason, the severity the blocking rule reads, and that a caller acts on the exit code. Inputs
+# are read through one O_NOFOLLOW descriptor each (L54); output names codes, indexes and ids, never a reason (P2, L62).
+# Exit: skeleton 0 the skeleton JSON · 1 the findings file's RED · 2 usage/unreadable | check 0 proceed · 3 replan ·
+# 4 spec (one verdict JSON line: verdict, counts, escalated ids) · 1 `RED — <codes>` first, then one fixed hint per code
+# · 2 usage/unreadable. /pharn-loop maps 3 and 4 to S16 (`blocked: grill-escalation`), anything else but 0 to S9.
+# Ships: bumps SKILLS_VERSION.
+node pharn/floor/grill-triage.mjs skeleton pharn/features/<name>/grill-findings.json
+node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json
+```
+
 ## `pharn/floor/check-provenance.mjs` — product provenance
 
 ```bash

@@ -1108,8 +1108,9 @@ const WIRING = [
     startAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start",
     // 6.43.0 (orchestrator-direct-stage-calls): the routed stages' `route`/`read` lines are `start`/`finish` lines.
     startBefore: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name '<name>'",
-    // 6.45.0: the loop's grill runs inline (floor-only) and has no `finish` line; its stage-start marker anchors it.
-    waitAfter: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill",
+    // 7.7.0: the full loop's grill is routed and followed by triage; the final wait comes after the triage read.
+    waitAfter:
+      "node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json",
     waitBefore: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'",
     abortIn: "\n## At the stop — ",
     rows: [
@@ -1220,7 +1221,8 @@ const PEEK_WIRING = [
       },
       {
         after: "node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-plan --budget-ms 570000",
-        before: "node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill",
+        // 7.7.0: the full loop reads the grill's two stops before its grill agent; the peek precedes that read.
+        before: "node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md",
       },
     ],
     rows: [

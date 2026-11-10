@@ -1923,6 +1923,7 @@ const STUCK_POINTS = [
   { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
   { id: "S14b", blocked: "gates-unmeasured-at-entry" }, // 6.75.0: no red, but a gate the entry runner did not measure
   { id: "S15", blocked: "not-isolated" }, // 7.1.0: Step 1a's isolation check refused (check-run-isolation.mjs)
+  { id: "S16", blocked: "grill-escalation" }, // 7.7.0: the triage read exited 3 (replan) or 4 (spec)
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -2021,7 +2022,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 19, "the stuck-point table is S1–S15 plus S6b, S6c, S9b and S14b");
+  assert.equal(STUCK_POINTS.length, 20, "the stuck-point table is S1–S16 plus S6b, S6c, S9b and S14b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -2315,7 +2316,8 @@ const PHASE_MARKER_WIRING = [
     file: "pharn-loop.md",
     // The loop marks pharn-spec: it resolves `<name>` at S2 and marks run-start there, before the spec
     // stage runs.
-    stages: ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-test", "pharn-build", "pharn-regress", "pharn-verify"],
+    // 7.7.0: the full loop also runs pharn-triage, after its grill.
+    stages: ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-triage", "pharn-test", "pharn-build", "pharn-regress", "pharn-verify"],
     iterated: ["pharn-build", "pharn-regress", "pharn-verify"],
     // The loop's iteration count is a RUNTIME value under a `--max-iter` cap, so the command pins the
     // PLACEHOLDER and the agent substitutes it. Pinning `\d+` here would be wrong for this command.
@@ -2834,19 +2836,101 @@ for (const file of Object.keys(GRILL_COMMANDS)) {
   });
 }
 
-test("✧ FLOOR-ONLY GRILL: pharn-loop.md invokes --floor-only inline and runs neither grill checker itself (one read)", () => {
+// ── LOOP GRILL + TRIAGE (7.7.0, loop-grill-triage) ──────────────────────────────────────────────────────────────────
+// The full loop's front, in order: both grill stops read ONCE before the grill's start line (the ship pattern), the
+// grill's routed lines, the findings read, triage's routed lines, the triage read, then the entry gates' final read and
+// the test stage. Presence and order over committed prose — never that a run executed them (P0).
+const LOOP_FRONT_ORDER = [
+  ...GRILL_STOP_LINES,
+  "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>'",
+  "node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-grill --budget-ms 570000",
+  "node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.json --grill pharn/features/<name>/GRILL.md --plan pharn/features/<name>/PLAN.md",
+  "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-triage --name '<name>'",
+  "node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-triage --budget-ms 570000",
+  "node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json",
+  "node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000",
+  "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'",
+];
+
+/** Reasons pharn-loop.md's front lines are not each pinned ONCE, in LOOP_FRONT_ORDER's order. [] when clean. */
+function loopFrontOrderReasons(body) {
+  const lines = fencedLines(body).map((f) => ({ idx: f.line, text: f.text.trim() }));
+  const reasons = [];
+  let prev = -1;
+  for (const want of LOOP_FRONT_ORDER) {
+    const at = lines.filter((l) => l.text === want);
+    if (at.length !== 1) {
+      reasons.push(`pinned ${at.length} times, not once: ${want}`);
+      continue;
+    }
+    if (at[0].idx < prev) reasons.push(`out of order: ${want}`);
+    prev = at[0].idx;
+  }
+  return reasons;
+}
+
+test("✧ LOOP GRILL + TRIAGE: pharn-loop.md's front reads the grill stops, grill, findings, triage and verdict ONCE, in order", () => {
   const body = commandBody(LOOP_FILE);
-  assert.match(body, /invoke `\/pharn-grill <name> --floor-only` yourself/);
-  assert.match(body, /\*\*The grill's two floor stops ARE the verdict read\*\*/);
+  assert.deepEqual(loopFrontOrderReasons(body), []);
+  // The triage read's branch: 3 or 4 → S16, never a proceed.
+  assert.match(body, /`3` \(`replan`\) or `4` \(`spec`\) → \*\*S16\*\* \(`blocked: grill-escalation`\)/);
+  // CONTROLS (L60): the stop block moved after the grill's start line, and a doubled triage read, each fail.
+  const block = GRILL_STOP_LINES.join("\n");
+  assert.ok(body.includes(block), "fixture sanity: the two stop lines are one block");
+  // The full-mode start line is a prefix of the quick part's `--mode quick` line, so the splice anchors on its newline.
+  const grillStart = `${LOOP_FRONT_ORDER[2]}\n`;
+  assert.ok(body.includes(grillStart), "fixture sanity: the full-mode grill start line ends its line");
+  const moved = body.replace(block, "").replace(grillStart, `${grillStart}${block}\n`);
+  assert.match(loopFrontOrderReasons(moved).join("\n"), /out of order/);
+  const doubled = `${body}\n\`\`\`bash\n${LOOP_FRONT_ORDER[7]}\n\`\`\`\n`;
+  assert.match(loopFrontOrderReasons(doubled).join("\n"), /pinned 2 times/);
+});
+
+// L65: a pin is only as strong as the scope around its record. /pharn-triage is checked against grill-findings.json
+// (its sha256 and its ids), so its writes: must hold its own output and nothing else — never the findings file, GRILL.md,
+// PLAN.md or SPEC.md. The hook enforces whatever writes: says; this pins what it says (presence of a declaration, never
+// that a Bash write is prevented — reconcile only detects one).
+const TRIAGE_WRITES = ["pharn/features/<name>/grill-triage.json"];
+function triageWritesOffenders(text) {
+  const writes = frontmatterWrites(text);
+  return JSON.stringify(writes) === JSON.stringify(TRIAGE_WRITES)
+    ? []
+    : [`pharn-triage.md writes: ${JSON.stringify(writes)} is not exactly ${JSON.stringify(TRIAGE_WRITES)}`];
+}
+
+test("✧ LOOP GRILL + TRIAGE (L65): pharn-triage.md's writes: is exactly grill-triage.json", () => {
+  const text = readFileSync(join(COMMANDS_DIR, "pharn-triage.md"), "utf8");
+  assert.deepEqual(triageWritesOffenders(text), []);
+  // CONTROLS (L60): the findings file added, the output dropped, and the key removed each fail.
+  const line = 'writes: ["pharn/features/<name>/grill-triage.json"]';
+  assert.ok(text.includes(line), "fixture sanity: the writes: line is found first");
+  const widened = text.replace(line, 'writes: ["pharn/features/<name>/grill-triage.json", "pharn/features/<name>/grill-findings.json"]');
+  assert.equal(triageWritesOffenders(widened).length, 1, "a widened writes: fails");
+  assert.equal(triageWritesOffenders(text.replace(line, "writes: []")).length, 1, "an emptied writes: fails");
+  assert.equal(triageWritesOffenders(text.replace(`${line}\n`, "")).length, 1, "a removed writes: fails");
+});
+
+// 7.7.0: the full loop's grill is routed, so the floor-only property moved to the quick part, which keeps it.
+test("✧ FLOOR-ONLY GRILL: pharn-loop-quick.md invokes /pharn-grill --quick inline and runs neither grill checker itself (one read)", () => {
+  const body = commandBody("pharn-loop-quick.md");
+  assert.match(body, /invoke `\/pharn-grill <name> --quick` INLINE, and run\s+no Agent call and no `finish`/);
+  assert.match(body, /both exits \(`check-plan-spec-agree` and `check-plan-lessons`\) are read exactly as Step 4 says/);
   const pinned = fencedLines(body).map((f) => f.text.trim());
-  for (const want of GRILL_STOP_LINES) assert.ok(!pinned.includes(want), `pharn-loop.md must not pin ${want} a second time`);
+  for (const want of GRILL_STOP_LINES) assert.ok(!pinned.includes(want), `pharn-loop-quick.md must not pin ${want} a second time`);
   assert.ok(
-    !pinned.some((t) => /stage-agent\.mjs (route|read|start|finish|brief) .*--stage pharn-grill/.test(t)),
-    "no grill stage-agent line"
+    !pinned.some((t) => /stage-agent\.mjs (route|read|finish|brief) .*--stage pharn-grill/.test(t)),
+    "no grill route, read, brief or finish line"
   );
-  // CONTROL (L60): the same predicate sees a pasted checker line.
-  const pasted = `${body}\n\`\`\`bash\n${GRILL_STOP_LINES[1]}\n\`\`\`\n`;
-  assert.ok(fencedLines(pasted).some((f) => f.text.trim() === GRILL_STOP_LINES[1]));
+  assert.deepEqual(
+    pinned.filter((t) => /stage-agent\.mjs start .*--stage pharn-grill/.test(t)),
+    ["node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>' --mode quick"],
+    "exactly one grill start line, the --mode quick one"
+  );
+  // CONTROL (L60): the same predicates see a pasted checker line and a pasted finish line.
+  const pasted = `${body}\n\`\`\`bash\n${GRILL_STOP_LINES[1]}\nnode pharn/floor/stage-agent.mjs finish --command pharn-loop --stage pharn-grill --name '<name>'\n\`\`\`\n`;
+  const pastedLines = fencedLines(pasted).map((f) => f.text.trim());
+  assert.ok(pastedLines.includes(GRILL_STOP_LINES[1]));
+  assert.ok(pastedLines.some((t) => /stage-agent\.mjs (route|read|finish|brief) .*--stage pharn-grill/.test(t)));
 });
 
 test("✧ FLOOR-ONLY GRILL: pharn-ship.md reads both grill stops ONCE, before its grill agent's route line", () => {
@@ -2874,10 +2958,12 @@ test("✧ FLOOR-ONLY GRILL (review R1): the loop's Step 7 `inline (policy)` list
   const want = Object.keys(loop.full)
     .filter((s) => POLICY_INLINE.includes(loop.full[s]))
     .sort();
-  assert.deepEqual(want, ["pharn-grill", "pharn-regress", "pharn-verify"], "fixture sanity: the 6.45.0 policy");
+  assert.deepEqual(want, ["pharn-regress", "pharn-verify"], "fixture sanity: the 7.7.0 policy (the full grill is routed)");
   assert.deepEqual(inlinePolicyListed(commandBody(LOOP_FILE)), want);
-  // CONTROL (L60): the list with /pharn-grill dropped fails.
-  const dropped = commandBody(LOOP_FILE).replace("`/pharn-grill`, `/pharn-regress`", "`/pharn-regress`");
+  // CONTROL (L60): the list with /pharn-verify dropped fails.
+  const listed = "`inline (policy)` for\n  `/pharn-regress` and `/pharn-verify`, citing";
+  assert.ok(commandBody(LOOP_FILE).includes(listed), "fixture sanity: the Step 7 list is found first (L60)");
+  const dropped = commandBody(LOOP_FILE).replace(listed, "`inline (policy)` for\n  `/pharn-regress`, citing");
   assert.notDeepEqual(inlinePolicyListed(dropped), want);
 });
 
@@ -3184,9 +3270,9 @@ const LOOP_QUICK_POINTERS = [
     re: /_\(A\s+`--quick` run uses `## Quick mode` item 2's start and brief lines, each with\s+`--mode quick`, in place of Step 3's\s+two\.\)_/,
   },
   {
-    // 6.45.0: the grill has no start line in either column; the pointer sits on its inline invocation.
-    site: "Step 4's inline grill invocation",
-    re: /invoke `\/pharn-grill <name> --floor-only` yourself _\(a `--quick` run: `\/pharn-grill <name> --quick` instead —\s+`## Quick mode` item 3\)_/,
+    // 7.7.0: the full grill is routed; the quick grill's start line and inline invocation are ## Quick mode item 3's.
+    site: "Step 4's quick grill pointer",
+    re: /_A `--quick` run_ runs its grill \*\*inline by policy \(`floor-only`\)\*\* instead: `## Quick mode` item 3's start line/,
   },
   {
     site: "Step 5.1's build start lines",
@@ -4615,11 +4701,19 @@ const STAGE_AGENT_WIRING = [
   {
     file: "pharn-loop.md",
     command: "pharn-loop",
-    // 6.45.0 (front-grill-concurrent): the loop's grill is floor-only in both columns, so it has no route line at all.
-    routed: { "pharn-spec": [null], "pharn-plan": [null], "pharn-test": [null], "pharn-build": ["<N>"] },
+    // 7.7.0 (loop-grill-triage): the full loop routes its grill and then triage (6.45.0 had made its grill floor-only).
+    routed: {
+      "pharn-spec": [null],
+      "pharn-plan": [null],
+      "pharn-grill": [null],
+      "pharn-triage": [null],
+      "pharn-test": [null],
+      "pharn-build": ["<N>"],
+    },
     // 6.28.0 (loop-quick-mode): ## Quick mode's lines — the spec (its brief names the quick invocation) and the build
-    // (its brief's rule 7 reads verify-report.json alone). Its grill --mode line went with the full one (6.45.0).
-    modeLines: { quick: ["pharn-spec", "pharn-build"] },
+    // (its brief's rule 7 reads verify-report.json alone); 7.7.0 restores the grill's --mode line (it prints
+    // inline:floor-only), as /pharn-ship --quick has it.
+    modeLines: { quick: ["pharn-spec", "pharn-grill", "pharn-build"] },
     section: "Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model",
     // 6.74.0 (stage-agent-background-wait): a background-launch notice is no longer S9 by itself — finish waits on disk.
     waitRule:
@@ -5034,15 +5128,15 @@ test("★ STAGE_AGENT_WIRING (6) — every committed start line routes AND marks
   }
   assert.equal(
     routes,
-    12,
-    "L34: 6 ship start lines (plan, grill, test, build@1, build@2, the quick grill) + 6 loop lines (4 full; the quick spec and build — 6.28.0; the loop's grill lost both, 6.45.0)"
+    15,
+    "L34: 6 ship start lines (plan, grill, test, build@1, build@2, the quick grill) + 9 loop lines (6 full, with its grill and triage since 7.7.0; the quick spec, grill and build)"
   );
   assert.equal(
     briefs,
-    11,
-    "one brief prompt line per full-mode start line (9), plus the loop's quick spec and build (the quick grills run inline, so have none)"
+    13,
+    "one brief prompt line per full-mode start line (11), plus the loop's quick spec and build (the quick grills run inline, so have none)"
   );
-  assert.equal(finishes, 9, "L34: one finish line per full-mode start line (ship 5, loop 4 — its grill is inline, 6.45.0)");
+  assert.equal(finishes, 11, "L34: one finish line per full-mode start line (ship 5, loop 6 — its grill and triage since 7.7.0)");
 });
 
 // ★ (7) PROBED (L37, L40): the two write guards give IDENTICAL verdicts for a subagent-shaped payload (with
@@ -5216,10 +5310,11 @@ test("✧ STAGE_AGENT_WIRING (9) — each rule fails on its mutant: start, finis
   assert.notEqual(briefAfterInline, real, "fixture sanity: the brief landed after the quick grill's start line");
   assert.match(saOrderReasons(briefAfterInline).join("\n"), /an inline \(floor-only\) --mode cell is followed by a brief/);
   assert.match(saWiringReasons(ship, briefAfterInline).join("\n"), /--mode brief prompt lines/, "…and the wiring rule sees it");
-  // …and a grill route line pasted back into the loop is refused by policy parity (its cell is floor-only everywhere).
-  const loopGrillRoute = "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>'";
-  const withGrillRoute = `${loopBody}\n\`\`\`bash\n${loopGrillRoute}\n\`\`\`\n`;
-  assert.match(saPolicyReasons(ROUTE_POLICY, loop, withGrillRoute).join("\n"), /pharn-loop\/full: stages with a route line/);
+  // …and a regress route line pasted into the loop is refused by policy parity (its cell is floor-only in both columns;
+  // the grill's full-mode route line is legitimate since 7.7.0).
+  const loopRegressRoute = "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-regress --name '<name>'";
+  const withRegressRoute = `${loopBody}\n\`\`\`bash\n${loopRegressRoute}\n\`\`\`\n`;
+  assert.match(saPolicyReasons(ROUTE_POLICY, loop, withRegressRoute).join("\n"), /pharn-loop\/full: stages with a route line/);
   const qSpecBrief = `${BRIEF_PROMPT_PREFIX}node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-spec --name '<name>' --mode quick`;
   const noQuickBrief = dropLine(loopBody, qSpecBrief);
   assert.match(saWiringReasons(loop, noQuickBrief).join("\n"), /--mode brief prompt lines/, "a dropped quick brief");
@@ -5249,7 +5344,11 @@ test("✧ STAGE_AGENT_WIRING (10) — every --mode stage-agent line of pharn-loo
       .map((l) => l.text)
       .sort();
   const inFile = modeText(body);
-  assert.equal(inFile.length, 4, "L34: the quick spec's route and brief, the quick build's route and brief (no grill line, 6.45.0)");
+  assert.equal(
+    inFile.length,
+    5,
+    "L34: the quick spec's route and brief, the quick grill's route (7.7.0; it runs inline, so no brief), the quick build's route and brief"
+  );
   assert.deepEqual(modeText(loopQuickSection(body)), inFile);
   // CONTROL (L60): a --mode line pasted after the section is seen outside it.
   const pasted = `${body}\n\`\`\`bash\n${inFile.find((t) => t.includes(" start "))}\n\`\`\`\n`;
@@ -5341,6 +5440,7 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // move and one claims bullet — 29,472 bytes measured; 29,472 × 1.1 → 32,768.
   "pharn-spec.md": 32768,
   "pharn-test.md": 25088, // 7.2.0 ac-tests-style-gate (#409): 22,523 B measured + 10% → next 512 (was 20480)
+  "pharn-triage.md": 8704, // 7.7.0 loop-grill-triage: 7,468 B measured + 10% → next 512 (new)
   "pharn-verify.md": 20480, // 6.40.0 regress-head-install-drift: 18519 B measured + 10% → next 512 (was 18432)
   // ship-step2-part (6.70.0): the dev commands, by bytes only (R1/R2) — each its measured bytes at main 6.67.0 + 10%,
   // rounded up to 512. R3–R5 do not apply to them (header).
@@ -5656,6 +5756,7 @@ const NAME_ORIGINS = Object.freeze({
   "pharn-ship.md": { cls: "via", from: "pharn-spec.md" },
   "pharn-plan.md": { cls: "asks" },
   "pharn-grill.md": { cls: "asks" },
+  "pharn-triage.md": { cls: "asks" },
   "pharn-test.md": { cls: "asks" },
   "pharn-build.md": { cls: "asks" },
   "pharn-review.md": { cls: "asks" },
@@ -5676,7 +5777,7 @@ function nameOriginOffenders(pairs, table = NAME_ORIGINS) {
 
 test("✧ SHELL-SINK 2 — NAME_ORIGINS is closed over the product commands with a `<name>` shell line, both ways", () => {
   assert.deepEqual(nameOriginOffenders(productPairs()), []);
-  assert.equal(Object.keys(NAME_ORIGINS).length, 10, "L34: the classified set is counted, not merely iterated");
+  assert.equal(Object.keys(NAME_ORIGINS).length, 11, "L34: the classified set is counted, not merely iterated");
   // CONTROLS (L60): a command that gains a <name> shell line with no entry, and an entry dropped, are both red.
   const gained = productPairs().map(([f, b]) => [f, f === "pharn-memory-promote.md" ? `${b}\n\`\`\`bash\nx '<name>'\n\`\`\`\n` : b]);
   assert.deepEqual(nameOriginOffenders(gained), ["pharn-memory-promote.md: a <name> shell line, no NAME_ORIGINS entry"]);
@@ -5780,7 +5881,7 @@ function sentenceReason(file, body) {
 
 test("✧ SHELL-SINK 5 — each asks / resolves command carries its fixed sentence in Step 0 (PRESENCE ONLY — never that a run follows it)", () => {
   const set = Object.entries(NAME_ORIGINS).filter(([, o]) => o.cls === "asks" || o.cls === "resolves");
-  assert.equal(set.length, 7, "L34: the seven commands that take a name");
+  assert.equal(set.length, 8, "L34: the eight commands that take a name");
   for (const [file] of set) assert.equal(sentenceReason(file, commandBody(file)), null, file);
   // CONTROLS (L60), per member: the sentence deleted is red, and swapped for the other class's is red.
   const loose = looseSentenceRe;
@@ -6113,7 +6214,7 @@ test("PLAN_DELETION_WIRING — the deletion line sits once, fenced, in /pharn-bu
 // through the Skill tool (LOOP_SKILL_COMMANDS), equal both ways (L36). A bare `Skill` pre-approved every skill that
 // declares its own `allowed-tools` (measured: .dev/features/loop-grant-seam-skill/PROBE.md).
 const LOOP_RUN_FILES = ["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md", "pharn-grill.md"];
-const LOOP_INLINE_STAGE_FILES = ["pharn-spec.md", "pharn-plan.md", "pharn-test.md", "pharn-build.md"];
+const LOOP_INLINE_STAGE_FILES = ["pharn-spec.md", "pharn-plan.md", "pharn-triage.md", "pharn-test.md", "pharn-build.md"];
 // 6.74.0 (stage-agent-background-wait): TaskStop, to stop a stage agent left running in the background after its
 // finish line could not use a result (`## Running a stage` item 3 — ADVISORY, a reviewed widening).
 const LOOP_NON_BASH_GRANTS = ["Read", "Write", "Edit", "Glob", "Grep", "Agent", "TaskStop"];
@@ -6353,12 +6454,13 @@ function loopSkillGrantOffenders(grants, familyText) {
 test("✧ loop-grant-seam-skill: the Skill grants are derived, closed both ways, and the rule DISCRIMINATES (L36/L60)", () => {
   const family = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   const commands = loopSkillCommands(family);
-  // Non-vacuity, per source of the derivation: the routing table gives the four routed stages, and the family's own
-  // "invoke `/pharn-…`" text gives the floor-only grill (an anchor that went missing would silently drop it).
-  assert.deepEqual(commands, ["pharn-build", "pharn-grill", "pharn-plan", "pharn-spec", "pharn-test"]);
+  // Non-vacuity, per source of the derivation: the routing table gives the six routed stages (the full loop's grill and
+  // triage since 7.7.0), and the family's own "invoke `/pharn-…`" text gives the quick run's floor-only grill (an anchor
+  // that went missing would silently drop it).
+  assert.deepEqual(commands, ["pharn-build", "pharn-grill", "pharn-plan", "pharn-spec", "pharn-test", "pharn-triage"]);
   assert.ok(
     [...family.matchAll(INVOKE_RE)].some((m) => m[1] === "pharn-grill"),
-    "the grill is found through the family's own invoke phrase"
+    "the quick grill is found through the family's own invoke phrase"
   );
   const live = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
   assert.deepEqual(loopSkillGrantOffenders(live, family), []);

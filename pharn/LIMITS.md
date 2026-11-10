@@ -157,8 +157,9 @@ those contexts in full (`/pharn-review` Step 1b states it; no cap exists).
 > SPEC still needs a regression verdict. It keeps the grill's floor stops, the test-first evidence, the scope check
 > (within the bounds §6 states for that check; it leaves no record, so nothing after its iteration re-checks it) and
 > the freshness check (a quick run's verify evidence must still describe the live tree and reproduce from its
-> stamp). It leaves out the regression check and `RUN-REPORT.md` (`cost.json` is still written). Like every
-> `/pharn-loop` run since 6.45.0, it does not interrogate the plan: the grill runs its two floor stops only. Its
+> stamp). It leaves out the regression check and `RUN-REPORT.md` (`cost.json` is still written). Like a full
+> `/pharn-loop` run before 7.7.0, it does not interrogate the plan: its grill runs its two floor stops only, and no
+> triage runs. Its
 > green stop is `STOP_GREEN_QUICK`, which is not `STOP_GREEN` and claims no regression check; the
 > record, the commit message and the summary name the mode after the run. Under `/pharn-loop` the SPEC's kind is the
 > model's: it writes and approves the quick SPEC. Since 7.3.0 the run's Stop-guard marker records the mode the run was
@@ -276,8 +277,9 @@ scanners; there is no `scan-code-*` counterpart, and no lens in `pharn/pharn-rev
 telemetry wiring.
 
 The consequence, stated plainly: **a plan may declare telemetry, pass the grill, and the diff that
-results may wire none — with every floor green.** Under an unattended `/pharn-loop` (since 6.45.0) the grill runs
-only the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all.
+results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs only
+the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all. A full
+`/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions.
 Nothing downstream re-checks the promise against the code. `/pharn-verify` runs the project's own discovered gates,
 less any the project excludes in `pharn.config.json` `gates.exclude` (6.36.0); a gate result can also be reused from
 the same delivery run's `/pharn-regress` (6.34.0). If the project has no telemetry test, or excludes the gate that

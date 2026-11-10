@@ -334,7 +334,11 @@ test("brief — exit 0 for EVERY routed cell with renderBrief's exact text; exit
         }
       }
     }
-    assert.equal(routed, 15, "L34 — 12 in 6.27.0, plus the loop's four quick agent cells (6.28.0), minus its full grill (6.45.0)");
+    assert.equal(
+      routed,
+      17,
+      "L34 — 12 in 6.27.0, plus the loop's four quick agent cells (6.28.0), minus its full grill (6.45.0), plus its full grill and triage (7.7.0)"
+    );
     assert.deepEqual(readdirSync(dir), [], "brief writes nothing");
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -803,8 +807,8 @@ test(`start ${NO_FOREGROUND_AGENT} (6.73.2) — an agent cell is inline:no-foreg
     ]);
     assert.equal(quick.status, 3, quick.stderr);
     assert.equal(lines(quick.stdout)[0], "inline:no-foreground-agent");
-    // A policy-inline cell keeps its own reason.
-    const q = run(dir, startArgs("pharn-loop", "pharn-grill", [NO_FOREGROUND_AGENT]));
+    // A policy-inline cell keeps its own reason (the quick loop's grill; the full loop's is routed since 7.7.0).
+    const q = run(dir, startArgs("pharn-loop", "pharn-grill", ["--mode", "quick", NO_FOREGROUND_AGENT]));
     assert.equal(q.status, 3, q.stderr);
     assert.equal(lines(q.stdout)[0], "inline:floor-only");
     // Both flags: no Agent tool at all is the stronger reading.

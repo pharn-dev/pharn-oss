@@ -27,10 +27,23 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(here, "check-model-config.mjs");
 const REPO_ROOT = join(here, "..", ".."); // pharn/floor → repo root
 
-// The eleven product stages, mirrored here from the checker's own PRODUCT_STAGES so a silent change to the
+// The twelve product stages, mirrored here from the checker's own PRODUCT_STAGES so a silent change to the
 // map fails a test rather than passing unnoticed. The ENUMERATION is the deliverable (L29/L36): every
 // per-stage assertion below iterates THIS list, never one member its author had in front of them.
-const PRODUCT_STAGES = ["spec", "plan", "grill", "build", "regress", "verify", "ship", "loop", "review", "memory-promote", "ac-test"];
+const PRODUCT_STAGES = [
+  "spec",
+  "plan",
+  "grill",
+  "triage",
+  "build",
+  "regress",
+  "verify",
+  "ship",
+  "loop",
+  "review",
+  "memory-promote",
+  "ac-test",
+];
 
 // A stage's command FILE, mirrored from the checker's map: every key is its file stem except `ac-test`, whose file
 // is `pharn-test.md` (the checker's reverse pass tests the map's file names for exactly this reason).
@@ -83,7 +96,7 @@ function writeCommand(cmdDir, fileName, me) {
   writeFileSync(join(cmdDir, fileName), fm);
 }
 
-// A commands dir whose eleven product commands all AGREE with `cfg`, then apply `overrides` by stage name
+// A commands dir whose twelve product commands all AGREE with `cfg`, then apply `overrides` by stage name
 // (a value of `undefined` deletes the file entirely, to simulate an absent command).
 function writeCommands(dir, cfg, overrides = {}) {
   const cmdDir = join(dir, "commands");
@@ -241,6 +254,19 @@ test("resolve: `loop` has no own entry and falls back to default (the fallback b
   assert.equal(r.stdout.trim(), '{"model":"sonnet","effort":"high"}');
 });
 
+test("★ live ★ L41: the SHIPPED config names no `triage` key, so `triage` resolves through its `default` (7.7.0)", () => {
+  // The production path: pharn.config.json is what `pharn init` copies, and it deliberately carries no `triage` entry
+  // (an older pharn-cli refuses a block naming a stage its port does not know). A fixture that always names the key
+  // would leave this fallback exercised by nothing.
+  const cfgPath = join(REPO_ROOT, "pharn.config.json");
+  const shipped = JSON.parse(readFileSync(cfgPath, "utf8"));
+  assert.ok(!Object.hasOwn(shipped.models.stages, "triage"), "the shipped config must not name `triage`");
+  const r = run(["resolve", "triage", "--config", cfgPath]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const d = shipped.models.stages.default;
+  assert.equal(r.stdout.trim(), JSON.stringify({ model: d.model, effort: d.effort }));
+});
+
 test("resolve: a prototype-chain key falls back to default, NEVER `{}` (L15 — the own-property pick)", () => {
   // Regression witness for the P0-class leak: `stages[stage] || stages.default` returns the inherited
   // Object.prototype member (truthy) → {model:undefined,effort:undefined} → `{}` printed at exit 0.
@@ -253,10 +279,10 @@ test("resolve: a prototype-chain key falls back to default, NEVER `{}` (L15 — 
 
 // ── agreement ────────────────────────────────────────────────────────────────────────────────────────
 
-test("agreement GREEN: eleven product commands whose frontmatter matches the config exit 0", () => {
+test("agreement GREEN: twelve product commands whose frontmatter matches the config exit 0", () => {
   const r = onAgreement(VALID);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /GREEN — config valid; 11\/11 product stage\(s\) agree/);
+  assert.match(r.stdout, /GREEN — config valid; 12\/12 product stage\(s\) agree/);
 });
 
 // ENF-3 (6.65.2): a leading UTF-8 BOM used to make a command's `model:`/`effort:` unreadable, so an agreeing
@@ -297,7 +323,7 @@ test("✧ CRLF product commands are read as their LF twins; a displaced fence re
   };
   const crlf = (s) => s.replace(/\n/g, "\r\n");
   for (const [overrides, fn, status, mustMatch] of [
-    [{}, crlf, 0, /GREEN — config valid; 11\/11/],
+    [{}, crlf, 0, /GREEN — config valid; 12\/12/],
     [
       { [PRODUCT_STAGES[0]]: { model: "haiku", effort: expected(VALID, PRODUCT_STAGES[0]).effort } },
       crlf,
@@ -407,7 +433,7 @@ test("agreement: a `pharn-dev-*` command is NOT a product command — its model:
     writeCommand(cmdDir, "pharn-dev-eval.md", { model: "haiku", effort: "low" });
     const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /11 product command\(s\) scanned/);
+    assert.match(r.stdout, /12 product command\(s\) scanned/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -492,10 +518,10 @@ test("★ live ★: agreement over the REAL repo config + commands is GREEN (the
   assert.match(r.stdout, /GREEN/);
 });
 
-test("★ live ★: the real repo declares all eleven product stages, and each command's frontmatter is reachable", () => {
+test("★ live ★: the real repo declares all twelve product stages, and each command's frontmatter is reachable", () => {
   // Guards the emptiness direction on the REAL tree (L34): a repo whose commands were renamed away
   // would otherwise show a green agreement over a shrunken map.
   const r = run(["agreement", "--config", join(REPO_ROOT, "pharn.config.json"), "--commands-dir", join(REPO_ROOT, ".claude", "commands")]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /11\/11 product stage\(s\) agree/);
+  assert.match(r.stdout, /12\/12 product stage\(s\) agree/);
 });
