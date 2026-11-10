@@ -188,7 +188,7 @@ analogy.
 
 **Then start the entry gates** (6.42.0) — the gates `/pharn-verify` will discover, run once on this tree in the
 background while `/pharn-plan` and `/pharn-grill` work; the read before `/pharn-test` decides
-(`pharn/floor/entry-gates.mjs`, header):
+(`pharn/floor/entry-gates.mjs`, header; a peek after `/pharn-plan` stops earlier on a red already finished):
 
 ```bash
 node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
@@ -245,6 +245,19 @@ re-reads them after the grill: its write tools are scoped to `GRILL.md` (fix #7)
 `PLAN.md` is not re-checked for lessons before the build (`/pharn-build` re-checks only the chain) — a
 stated bound (`pharn/LIMITS.md §6`).
 
+**Then peek at the entry gates (7.5.0)** — Step 2.1's run, read once and never waited on: a finished result, or a red
+gate among those finished so far (`pharn/floor/entry-gates.mjs`, header). A `--quick` run reads it too (its part skips
+only the verdict block above):
+
+```bash
+node pharn/floor/entry-gates.mjs --peek --feature '<name>'
+```
+
+Branch **only** on the exit code (P5): `4` or `6` → present the document's `red` ids or its `unmeasured` entries as
+DATA and ask Step 2.3's **Stop** / **Continue** form now; every other exit → proceed to the grill (Step 2.3's final read
+decides). A **Continue** here carries to Step 2.3's final read: its `4` or `6` then proceeds without asking again,
+keeping the ids for `SHIP.md`; its `2` still asks.
+
 ### Step 2.3 — `/pharn-grill`
 
 1. **`/pharn-grill`** → writes `pharn/features/<name>/GRILL.md`. Routed (`## Running a stage`; in Quick mode
@@ -272,7 +285,7 @@ interrogation itself is **advisory** and gates nothing — **present** its findi
 (P2), then proceed regardless of what it raised. Never write that the grill verified the plan's lesson
 application.
 
-**Then read the entry gates** (6.42.0), before `/pharn-test` writes anything a gate reads. The line blocks until the
+**Then read the entry gates** (6.42.0) — the final read, before `/pharn-test` writes anything a gate reads. The line blocks until the
 verdict is in, or for at most its budget (Bash-tool timeout 600000):
 
 ```bash
@@ -283,7 +296,7 @@ Branch **only** on the exit code (P5): `5` → run it again; `0` or `3` → proc
 `mutated` gates with their `changed_paths`, for `SHIP.md` — regress reports those paths, it does not count them). `4` (a gate red on the tree the run started from), `6` (no gate red, but one not measured: killed at the per-gate timeout, or unable to start), `2` or anything else → present the document's `red` ids,
 its `unmeasured` entries or its `reason_code` as DATA and ask, through the interactive form: **Stop** (a STOP, through Steps 3 and 3a) or
 **Continue** (fixing that gate is the feature, or the human accepts a red or unmeasured verify at GATE 2; keep the ids for
-`SHIP.md`). Never continue without the answer.
+`SHIP.md`). Never continue without the answer — the answer given at Step 2.2's peek, for a `4` or `6`, is that answer.
 
 ### Step 2.4 — `/pharn-test`
 
