@@ -105,6 +105,30 @@ export function shapeReason(scan, out) {
   return null;
 }
 
+/**
+ * The scanner findings, as finding-shape objects in the order the section prints them (GRILL_SCANS order, then hit
+ * order). Pure. ONE builder (7.6.0, grill-finding-ids — L35): `renderScanSection` prints from it, and
+ * `grill-findings.mjs check` compares a grill's `grill-findings.json` against it, so the findings a check expects come
+ * from the code that printed them. Every value is a closed-table member, the caller's plan path or a validated hit.
+ */
+export function scanFindings(planPath, results) {
+  const findings = [];
+  for (const { scan, out } of results) {
+    if (scan.rule_id === null) continue;
+    for (const h of out.hits) {
+      findings.push({
+        type: "FINDING",
+        rule_id: scan.rule_id,
+        severity: scan.severity,
+        file: `${planPath}:${h.line}`,
+        problem: `${scan.problem} (scan-plan-${scan.id}, ${scan.griller} griller's deterministic half)`,
+        evidence: `scan-plan-${scan.id} matched kind ${h.kind} on line ${h.line}`,
+      });
+    }
+  }
+  return findings;
+}
+
 /** Render the section from validated results (`[{scan, out}]`, GRILL_SCANS order). Pure. */
 export function renderScanSection(planPath, results) {
   const lines = ["## Deterministic plan scans (`pharn/floor/grill-scan.mjs`)", ""];
@@ -112,23 +136,19 @@ export function renderScanSection(planPath, results) {
     "Advisory: each finding below gates nothing. The scanners detect a pattern's presence on a line; a scanner finding",
     "is not the griller's judgment."
   );
-  const findings = [];
-  for (const { scan, out } of results) {
-    if (scan.rule_id === null) continue;
-    for (const h of out.hits) findings.push({ scan, h });
-  }
+  const findings = scanFindings(planPath, results);
   lines.push("");
   if (findings.length === 0) lines.push("Findings: none (no secrets, PII or i18n scanner hit).");
   else {
     lines.push("```yaml");
-    for (const { scan, h } of findings) {
+    for (const f of findings) {
       lines.push(
-        "- type: FINDING",
-        `  rule_id: "${scan.rule_id}"`,
-        `  severity: ${scan.severity}`,
-        `  file: "${planPath}:${h.line}"`,
-        `  problem: "${scan.problem} (scan-plan-${scan.id}, ${scan.griller} griller's deterministic half)"`,
-        `  evidence: "scan-plan-${scan.id} matched kind ${h.kind} on line ${h.line}"`
+        `- type: ${f.type}`,
+        `  rule_id: "${f.rule_id}"`,
+        `  severity: ${f.severity}`,
+        `  file: "${f.file}"`,
+        `  problem: "${f.problem}"`,
+        `  evidence: "${f.evidence}"`
       );
     }
     lines.push("```");

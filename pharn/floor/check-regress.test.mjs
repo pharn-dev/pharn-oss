@@ -231,7 +231,10 @@ test("★ ENUMERATION (L23/L29): every machine-written JSON pipeline artifact is
     "verify-report.json": "check-verify.mjs",
   };
   // name → why it is not machine-written (so the ignore rule does not apply)
-  const MODEL_WRITTEN = { "ship-record.json": "/pharn-ship writes it with the Write tool; only record_hash is computed" };
+  const MODEL_WRITTEN = {
+    "ship-record.json": "/pharn-ship writes it with the Write tool; only record_hash is computed",
+    "grill-findings.json": "/pharn-grill writes it with the Write tool; grill-findings.mjs only renders and checks it (7.6.0)",
+  };
   assert.deepEqual(
     json,
     [...Object.keys(MACHINE_WRITTEN), ...Object.keys(MODEL_WRITTEN)].sort(),

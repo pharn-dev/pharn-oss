@@ -144,6 +144,44 @@ assignment record, a findings file under a lens directory the record does not na
 never merge. A reader that predates the value treats an unknown `reason` as not a recorded value. **Bound:** with no
 usable record every input merges, and a file planted under a recorded lens's directory merges as that lens's.
 
+## Emission — grill-findings.json (the grill's findings, each with an id — 7.6.0)
+
+A full `/pharn-grill` (not `--quick`, not `--floor-only`) writes `pharn/features/<name>/grill-findings.json` beside
+`GRILL.md`: every finding it raised — the interrogation's, every griller's, and each scanner finding
+`pharn/floor/grill-scan.mjs` printed — so that a later stage can name a finding and code can enumerate them.
+
+```json
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [{ "id": "G1-1", "type": "…", "rule_id": "…", "severity": "…", "file": "…", "problem": "…", "evidence": "…" }]
+}
+```
+
+- **Each element is the finding object above plus `id`.** No field of the object is redefined (P4), and the object
+  itself is unchanged: the `id` key exists in this file only, so `findings.json`, `merge-findings.mjs` and every eval
+  read nothing new.
+- **The id is positional:** element `i` (0-based) carries exactly `G<round>-<i+1>`, so ids are unique, contiguous and
+  in file order. `round` is a positive integer (at most 99); `/pharn-grill` writes `1`. An id names a finding within
+  one round; nothing says that `G1-3` and a later round's id are the same concern.
+- **Closed:** keys exactly as shown at both levels, no key repeated at any depth, at most 500 findings, `[]` allowed;
+  `type`, `severity` and `rule_id` by the same rules as the merge (`TYPE_ENUM`, the severity set, `RULE_ID_OK`, each
+  after the control-character guard); `file` a `path:line` shape, never resolved; `problem` and `evidence` single-line,
+  control-character-free, non-blank, at most 2,000 characters.
+- **One source, one derived view.** `GRILL.md` shows the findings as a section between two marker lines, rendered from
+  this file by `node pharn/floor/grill-findings.mjs render`; the model pastes it and never edits it.
+- **Taint:** `problem` and `evidence` inherit the plan's `untrusted` tag exactly as in `GRILL.md`. The render prints
+  each as one JSON-escaped quoted line inside a YAML fence, so a value cannot close the fence or forge a marker line.
+
+**What is floor and what is not (P0).** `node pharn/floor/grill-findings.mjs check <file> --grill <GRILL.md> --plan
+<PLAN.md>` (exit 0 GREEN · 1 `RED — <codes>`, then one fixed hint per code naming the accepted shape · 2 unusable) verifies,
+**when it runs**: the shape and ids above
+(enum/regex); that `GRILL.md`'s section is byte-identical to the render (content equality); and that every scanner
+finding `grill-scan.mjs` produces for that plan is in the file, equal on all six fields. **Advisory:** that the grill
+runs it, repairs on RED, or lists every finding the interrogation and the grillers formed — a finding never written is
+invisible to every check. **Readers:** none decides anything from the file in 7.6.0; `/pharn-grill` records a still-RED
+check as a header line in `GRILL.md`.
+
 ## The rule of the contract (P0, P2)
 
 A **guaranteed decision** (a floor-gate / constitutional block) is computed from the **enum-gated

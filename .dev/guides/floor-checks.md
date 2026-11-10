@@ -274,6 +274,33 @@ node pharn/floor/feature-name.mjs [--fresh]
 node pharn/floor/check-spec-unscopable.mjs pharn/features/<name>/SPEC.md
 ```
 
+## `grill-findings.mjs` — the grill's findings file
+
+```bash
+# RENDER AND CHECK A GRILL'S FINDINGS FILE (added 7.6.0, grill-finding-ids; part 1 of restore-loop-grill). A full
+# /pharn-grill writes pharn/features/<name>/grill-findings.json — {schema: "pharn-grill-findings/1", round, findings[]},
+# each element the finding object plus `id`, exactly G<round>-<i+1> for element i — then pastes `render`'s stdout (the
+# section between two marker lines) into GRILL.md and runs `check`. THE RECORDED FAILURE (P7): 6.45.0 made the loop's
+# grill floor-only because no stage read the findings; acting on a finding needs a name and an enumerable set, and the
+# findings existed only as model-written YAML in GRILL.md prose (no YAML parser, stdlib-only). ONE SOURCE (L35): the JSON
+# is the source, the GRILL.md section is derived and byte-compared; the scanner findings come from grill-scan.mjs's
+# exported scanFindings, which also prints the scan section. Rules and bounds: grill-findings-core.mjs's header; contract:
+# finding-shape.md, "Emission — grill-findings.json". FLOOR, when it runs: closed keys at both levels, no key repeated at
+# any depth, the schema, round 1..99, positional ids, TYPE_ENUM / severity set / RULE_ID_OK (imported from
+# merge-findings.mjs, guard first — L14/L82), a `path:line` shape, single-line non-blank free text ≤ 2,000; the section
+# byte-identical to the render (CRLF folded; exactly one BEGIN and one END marker line); every scanner finding for
+# `--plan` present, equal on six fields (a multiset). `--plan` must be spelled as the grill ran grill-scan (a scanner
+# finding's file is `<plan path>:<line>`). ADVISORY: that the grill runs it, repairs, or lists every finding it formed.
+# Output names codes and indexes only, never a file value (P2, L62). Nothing gates on it in 7.6.0; part 2's triage is
+# the consumer. Exit: render 0 section · 1 `RED — grill-findings.json invalid: <codes>` · 2 usage/unreadable | check 0
+# GREEN · 1 `RED — <codes>` first (missing scanner findings on later lines) · 2 usage, unreadable, or scanners that could
+# not run with nothing else RED. Every RED ends with one fixed hint per distinct code (DEFECT_HINTS, keys = DEFECT_CODES):
+# measured on 161 real GRILL.md files, 17% held a value the check refuses (a bare griller name as rule_id, a line range as
+# file), so the repair round needs the shape, not only the code. Ships: bumps SKILLS_VERSION.
+node pharn/floor/grill-findings.mjs render pharn/features/<name>/grill-findings.json
+node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.json --grill pharn/features/<name>/GRILL.md --plan pharn/features/<name>/PLAN.md
+```
+
 ## `pharn/floor/check-provenance.mjs` — product provenance
 
 ```bash

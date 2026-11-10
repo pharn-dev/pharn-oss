@@ -2681,6 +2681,49 @@ test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, 
   assert.match(body, /`scans: NOT run \(grill-scan\.mjs exit <n>\)`/);
 });
 
+// grill-finding-ids (7.6.0): a full grill scopes grill-findings.json, writes it, renders it, re-scopes GRILL.md, writes
+// it with the rendered section, then checks — the check must run AFTER GRILL.md holds the render, and the render must
+// exist before GRILL.md is written. The loop grant test pins only that each line is granted, never their order.
+const GRILL_FINDINGS_LINES = Object.freeze([
+  "node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-grill.md --target pharn/features/<name>/grill-findings.json",
+  "node pharn/floor/grill-findings.mjs render pharn/features/<name>/grill-findings.json",
+  "node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.json --grill pharn/features/<name>/GRILL.md --plan pharn/features/<name>/PLAN.md",
+]);
+const GRILL_RESCOPE_RE = /Re-run Step 0's `GRILL\.md` setter line/;
+
+/** Offenders for the findings-file order in a grill body: each line pinned once, in order, the re-scope between render and check. */
+function grillFindingsOrderOffenders(body) {
+  const pinned = fencedLines(body).map((f) => f.text.trim());
+  const out = [];
+  const at = GRILL_FINDINGS_LINES.map((l) => {
+    const hits = pinned.filter((p) => p === l).length;
+    if (hits !== 1) out.push(`pinned ${hits} times: ${l}`);
+    return body.indexOf(l);
+  });
+  if (out.length > 0) return out;
+  if (!(at[0] < at[1] && at[1] < at[2])) out.push("order: scope the JSON, then render, then check");
+  const rescope = body.search(GRILL_RESCOPE_RE);
+  if (rescope === -1 || !(at[1] < rescope && rescope < at[2])) out.push("the GRILL.md re-scope must sit between render and check");
+  return out;
+}
+
+test("✧ GRILL FINDINGS (7.6.0): pharn-grill.md scopes, renders, re-scopes GRILL.md and checks, in that order", () => {
+  const body = commandBody("pharn-grill.md");
+  assert.deepEqual(grillFindingsOrderOffenders(body), []);
+  // CONTROLS (L60): swapping render and check, dropping the re-scope sentence, or pinning a line twice each fail.
+  const swapped = body
+    .replace(GRILL_FINDINGS_LINES[1], "\u0000RENDER\u0000")
+    .replace(GRILL_FINDINGS_LINES[2], GRILL_FINDINGS_LINES[1])
+    .replace("\u0000RENDER\u0000", GRILL_FINDINGS_LINES[2]);
+  assert.ok(grillFindingsOrderOffenders(swapped).length > 0, "render after check fails");
+  assert.ok(grillFindingsOrderOffenders(body.replace(GRILL_RESCOPE_RE, "Write")).length > 0, "no re-scope fails");
+  const twice = body.replace(
+    GRILL_FINDINGS_LINES[1],
+    `${GRILL_FINDINGS_LINES[1]}\n   \`\`\`\n\n   \`\`\`bash\n   ${GRILL_FINDINGS_LINES[1]}`
+  );
+  assert.ok(grillFindingsOrderOffenders(twice).length > 0, "a line pinned twice fails");
+});
+
 // grill-griller-trim (6.60.0, review CTX-1): the full grill loads its grillers through ONE pinned extract line, falls back
 // to the whole files on any other exit, and records which happened in GRILL.md. Pinned, never described (L22).
 // grill-griller-slim (6.63.0): the extract leaves `### Layer 1` (where the scanner instructions lived) out of every
@@ -5256,7 +5299,10 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-build.md": 27136,
   // grill-griller-trim (6.60.0): Step 3b pins griller-extract.mjs, its whole-file fallback and the every-griller-still-runs
   // sentence — 23,796 bytes measured, 756 over 23,040; raised by the rule (+10%, up to a multiple of 512).
-  "pharn-grill.md": 26624,
+  // grill-finding-ids (7.6.0): full mode writes grill-findings.json, renders it and checks it (three pinned lines, the id
+  // rule and two claims bullets) — 28,336 bytes measured, 1,712 over 26,624; raised by the rule (+10%, up to a multiple
+  // of 512).
+  "pharn-grill.md": 31232,
   // orchestrator-direct-stage-calls (6.43.0), after #313 merged: 47,664 bytes measured, 48 over 47,616 (the GATE-2
   // review's R1/R3 text plus #313's entry gates); raised by the rule (+10%, up to a multiple of 512).
   // loop-scope-hardening (6.61.0): the `allowed-tools` grant became the 84 exact pinned lines of the loop's run and of

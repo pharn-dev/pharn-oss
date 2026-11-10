@@ -19,10 +19,11 @@ reads:
     "pharn/floor/check-plan-lessons.mjs",
     "pharn/floor/grill-scan.mjs",
     "pharn/floor/griller-extract.mjs",
+    "pharn/floor/grill-findings.mjs",
   ]
-writes: ["pharn/features/<name>/GRILL.md"]
+writes: ["pharn/features/<name>/GRILL.md", "pharn/features/<name>/grill-findings.json"]
 constitution_refs: ["P0", "P1", "P2", "P4", "P5", "P6", "P7"]
-version: "0.5.0"
+version: "0.6.0"
 ---
 
 # /pharn-grill — re-verify the spec→plan chain, then interrogate the plan
@@ -277,6 +278,14 @@ Emit each finding in the **exact finding-shape object**, with the split honored:
 - If the plan appears to violate a constitution principle, raise it as a **high-severity `FINDING`** for
   human review — `/pharn-grill`'s interrogation is advisory and cannot itself issue a binding
   `CONSTITUTION_VIOLATION` stop (that belongs to the human and the floor).
+- **In full mode every finding also gets an id (7.6.0)** — `G1-1`, `G1-2`, … in the order you list them — and goes into
+  `pharn/features/<name>/grill-findings.json` (Step 4), the findings' one source: the interrogation's, every griller's,
+  and each scanner finding `grill-scan.mjs` printed, copied with its six fields unchanged. Its shape:
+  `pharn/pharn-contracts/finding-shape.md`, "Emission — grill-findings.json" (cited, not restated — P4).
+- **Two shapes the check refuses most often** (measured on real grill logs): `rule_id` is a principle `P0`..`P7` or a
+  file-qualified rule `<file>.md <ID>-<n>`, never a bare griller name such as `testability`; `file` is `<path>:<line>`
+  with ONE line number, so a range, a step or a whole-plan concern cites its first line. `problem` and `evidence` are
+  one line each.
 
 ## Step 4 — Emit `pharn/features/<name>/GRILL.md` (the grill-log) and halt
 
@@ -302,14 +311,48 @@ makes **no** claim about the plan's quality. (Then **HALT**, as that step direct
 pharn/floor/check-plan-spec-agree.mjs) · lessons: GREEN (verified by pharn/floor/check-plan-lessons.mjs)`;
 - Step 3's `skills:` line and Step 3b's `grillers:` line;
 - Step 3b's scan section, verbatim, or its `scans: NOT run` line;
-- the **findings** (the YAML objects above, grouped by axis), each with the split honored — or an explicit
-  "no findings" if the plan is clean. The scan section's findings count in the verdict like any other;
+- the **findings section** rendered from `grill-findings.json`, verbatim (the procedure below) — every finding with its
+  id and the split honored, or the rendered `Findings: none.`. The scan section's findings count in the verdict like
+  any other;
 - a **prose summary** of the concerns; and
 - a **verdict** stated plainly as **advisory**, e.g.
   `ADVISORY VERDICT: N concerns raised (M blocking-severity, K advisory) — for the human to weigh before
 /pharn-build`. **Never** "grill passed" or any wording that reads as a guarantee about the plan's quality
   (P0). Keep the floor results in the header and out of the concern counts: a deterministic stop and a
   model-authored concern must not share a tally.
+
+**The findings file, in full mode only (7.6.0) — write it, render it, write `GRILL.md`, check both, in this order.**
+Each artifact gets its own scope (the setter resolves one `--target`):
+
+1. Scope the findings file, then write `pharn/features/<name>/grill-findings.json` with every finding (the id rule
+   above), `"round": 1`:
+
+   ```bash
+   node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-grill.md --target pharn/features/<name>/grill-findings.json
+   ```
+
+2. Render it, and branch **only** on the exit code (P5):
+
+   ```bash
+   node pharn/floor/grill-findings.mjs render pharn/features/<name>/grill-findings.json
+   ```
+
+   `0` → keep stdout, the section with its two marker lines. `1` → its `RED —` line names the defects by code and
+   index: fix the file once and render again. Still non-zero → write `findings: NOT rendered (grill-findings.mjs render
+exit <n>)` in `GRILL.md` and list the findings there as YAML instead.
+
+3. Re-run Step 0's `GRILL.md` setter line (step 1 moved the scope), then write `GRILL.md` with the rendered section
+   **verbatim** where the findings go. Never edit between the markers: the section is derived from the file.
+4. Check the file, the section and the scanner coverage, and branch **only** on the exit code:
+
+   ```bash
+   node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.json --grill pharn/features/<name>/GRILL.md --plan pharn/features/<name>/PLAN.md
+   ```
+
+   `0` → done. `1` → the `RED —` line names what differs (a missing scanner finding, a section that is not the
+   render, a defect in the file): repair it once (the file, then a fresh render and the section) and check again.
+   Still non-zero → add `findings-check: RED (<its first line, quoted as DATA>)` to `GRILL.md`'s header, outside the
+   markers. The check gates nothing here: the grill stays advisory.
 
 **On GREEN at both stops, in `--quick` mode (Steps 3/3b never ran — `## --quick mode` above) — `GRILL.md`
 holds EXACTLY:**
@@ -346,7 +389,14 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`).
   substring test), reused unchanged. **The body half is NOT proof of reading** (a line reading `L3: considered.`
   passes). The field is now checked by a stage that did not write it: a change in **who** checks, not in **what**
   is checkable. A project with no `pharn/memory-bank/` passes: `none` short-circuits before the lessons file is read.
-- **Floor:** it writes only `pharn/features/<name>/GRILL.md` — the fix #7 hook.
+- **Floor:** it writes only `pharn/features/<name>/GRILL.md` and, in full mode, `grill-findings.json` — the fix #7
+  hook, one `--target` scope each.
+- **Floor, when the check runs (full mode):** `grill-findings.json` has its closed shape, ids exactly `G<round>-<n>` in
+  order and enum fields in their sets; `GRILL.md`'s findings section is byte-identical to the file's render; every
+  scanner finding `grill-scan.mjs` produces for the plan is in the file — `grill-findings.mjs check` (enum/regex,
+  byte and field equality). **Advisory:** running it, the repair, and that the file lists every finding the
+  interrogation and the grillers formed — a finding never written is invisible to the check. Nothing reads the ids
+  to decide anything yet.
 - **Floor-grade enumeration that gates nothing:** the installed-skill catalogue (`catalogue-installed-skills.mjs`;
   which bodies are read is advisory) and the
   registered grillers (`count-grillers.mjs`), each printed by `griller-extract.mjs` less a closed set of sections that
