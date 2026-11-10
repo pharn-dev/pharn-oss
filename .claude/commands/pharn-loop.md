@@ -12,6 +12,8 @@ reads:
     "pharn/features/<name>/SPEC.md",
     "pharn/features/<name>/PLAN.md",
     "pharn/features/<name>/GRILL.md",
+    "pharn/features/<name>/grill-findings.json",
+    "pharn/features/<name>/grill-triage.json",
     "pharn/features/<name>/AC-TESTS.md",
     "pharn/features/<name>/BUILD.md",
     "pharn/features/<name>/REGRESSION.md",
@@ -20,6 +22,7 @@ reads:
     "pharn/features/<name>/verify-report.json",
     "pharn/features/<name>/LOOP.md",
     "pharn/pharn-contracts/loop-record.md",
+    "pharn/pharn-contracts/grill-triage.md",
     "pharn/pharn-contracts/verify-report.md",
     "pharn/pharn-contracts/cost-ledger.md",
     "pharn/floor/mark-phase.mjs",
@@ -33,6 +36,9 @@ reads:
     "pharn/floor/check-spec.mjs",
     "pharn/floor/check-spec-approved.mjs",
     "pharn/floor/check-plan-spec-agree.mjs",
+    "pharn/floor/check-plan-lessons.mjs",
+    "pharn/floor/grill-findings.mjs",
+    "pharn/floor/grill-triage.mjs",
     "pharn/floor/check-loop.mjs",
     "pharn/floor/check-loop-record.mjs",
     "pharn/floor/check-loop-decision.mjs",
@@ -63,6 +69,7 @@ allowed-tools:
     "Skill(pharn-spec *)",
     "Skill(pharn-plan *)",
     "Skill(pharn-grill *)",
+    "Skill(pharn-triage *)",
     "Skill(pharn-test *)",
     "Skill(pharn-build *)",
     "Bash(node pharn/floor/feature-name.mjs --fresh)",
@@ -85,7 +92,12 @@ allowed-tools:
     "Bash(node pharn/floor/entry-gates.mjs --peek --feature *)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name *)",
     "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-plan --budget-ms 570000)",
-    "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage pharn-grill)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-grill --budget-ms 570000)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-triage --name *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-triage --budget-ms 570000)",
+    "Bash(node pharn/floor/grill-triage.mjs check pharn/features/*/grill-triage.json --findings pharn/features/*/grill-findings.json)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name * --mode quick)",
     "Bash(node pharn/floor/entry-gates.mjs --wait --feature * --budget-ms 570000)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name *)",
     "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-test --budget-ms 570000)",
@@ -127,6 +139,8 @@ allowed-tools:
     "Bash(node .claude/hooks/set-writes-scope.cjs --check --from-plan pharn/features/*/PLAN.md)",
     "Bash(node pharn/floor/catalogue-installed-skills.mjs .)",
     "Bash(node pharn/floor/griller-extract.mjs .)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-triage.md --target pharn/features/*/grill-triage.json)",
+    "Bash(node pharn/floor/grill-triage.mjs skeleton pharn/features/*/grill-findings.json)",
     "Bash(node pharn/floor/feature-name.mjs)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/*/SPEC.md)",
     "Bash(node pharn/floor/check-spec.mjs --resolve-template-ref)",
@@ -213,8 +227,8 @@ node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md '<heading>'
   (a clarification stop, S6b) simply stays a `Draft`.
 - **No prompt from Claude Code either (6.58.0).** Never use a tool that puts a question or a plan approval to the person during a run. The
   frontmatter `allowed-tools` pre-approves, for this run's one turn, exactly the shell lines this command, its two
-  parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`, `/pharn-plan`, `/pharn-test`,
-  `/pharn-build`) pin — each `<placeholder>` a `*` — except one: Step 1a's isolation line with `--accept-host-execution`
+  parts and the six stages it may run inline (`/pharn-spec`, `/pharn-plan`, `/pharn-grill`, `/pharn-triage`,
+  `/pharn-test`, `/pharn-build`) pin — each `<placeholder>` a `*` — except one: Step 1a's isolation line with `--accept-host-execution`
   is deliberately not pre-approved (7.3.0), so Claude Code's own permission settings decide whether the person is asked
   before it runs — plus the file and Agent tools and the Skill tool for those five
   commands only (`Skill(<name> *)`), so Claude Code does not stop to ask permission for them (6.61.0: no prefix
@@ -415,7 +429,7 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S15 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) and S9b's resumed-session
+the run going on a fixed rule; S4–S16 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) and S9b's resumed-session
 trigger — are triggered by your own judgment, and each fails in the safe direction — it stops rather than guesses. S6c's other
 trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 
@@ -440,6 +454,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S14  | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `4`: a gate was red on the tree the run started from, and `--allow-red-entry` was not given                                                                                    | stop `blocked: gates-red-at-entry` — fix the gate first; if it cannot run on this machine, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded); or re-run with `--allow-red-entry` when fixing it is the feature |
 | S14b | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `6`: no gate was red, but a gate was not measured on the tree the run started from (killed at the per-gate timeout, or could not start), and `--allow-red-entry` was not given | stop `blocked: gates-unmeasured-at-entry` — make the gate finish in time or start, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded), or re-run with `--allow-red-entry`                                       |
 | S15  | Step 1a's isolation check exits non-zero: no evidence of an isolated environment, a listed credential present, the evidence unknown (unreadable HOME, a failed probe), or the line itself failed                                                                   | stop `blocked: not-isolated` — for no evidence or a credential: run in a container that mounts none of your credentials, set `PHARN_ISOLATED=1` for a sandbox the check misses, or re-run with `--accept-host-execution`; for unknown evidence: set HOME, or fix git (the flag never lifts it)       |
+| S16  | Step 4's triage read exits `3` (`replan`) or `4` (`spec`): the triage stage gave at least one grill finding a disposition other than `proceed` (a full run only)                                                                                                   | stop `blocked: grill-escalation` — copy the verdict and the `escalated` ids into `### next_steps` as DATA and point at `grill-triage.json` for the reasons; a person revises the plan (`replan`) or the SPEC (`spec`), then re-runs                                                                  |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
 `pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one
@@ -502,10 +517,10 @@ A stage `ROUTE_POLICY` routes runs as a Claude Code subagent — a **stage
 agent** — requested on the model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool
 takes no effort, so a routed stage runs at the effort it inherits. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
-`/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and `/pharn-verify` run inline by
-policy — one `stage-direct.mjs` call each (Step 5) — so their stage-exit mappings above hold. `/pharn-grill` runs
-inline by policy too (`floor-only`, 6.45.0: its two floor stops and the deterministic plan scans, no interrogation —
-Step 4). A `--quick` run (6.28.0) routes the same stages and runs no `/pharn-regress` at all; its own start lines
+`/pharn-grill`, `/pharn-triage`, `/pharn-test` and `/pharn-build` (every iteration) are routed. `/pharn-regress` and
+`/pharn-verify` run inline by policy — one `stage-direct.mjs` call each (Step 5) — so their stage-exit mappings above
+hold. A `--quick` run (6.28.0) routes spec, plan, test and build, runs its grill inline by policy (`floor-only`: its
+two floor stops, no interrogation — Step 4), and runs no triage and no `/pharn-regress` at all; its own start lines
 carry `--mode quick` (`## Quick mode` items 2 and 4).
 
 Each routed stage carries a start line, a brief prompt and a finish line (6.43.0: `start` and `finish` each do what
@@ -575,7 +590,8 @@ command already maps a stage's OWN report to a row:
 - `stage-agent.mjs finish`'s exit `6` (`capped …`, `marker: withheld (capped)`) is **S9b** at every routed stage, the
   test stage included: it is no agent report, and the agent may still be writing. (Not `entry-gates.mjs`'s exit `6`,
   which is S14b.)
-- `done` from spec or plan → the stage's own verdict read, unchanged.
+- `done` from spec or plan → the stage's own verdict read, unchanged; `done` from the grill → the findings read, and
+  from triage → the triage read (Step 4).
 
 **Where a checker decides the row, the checker still decides, and whatever `finish` printed is ignored** (its exit
 `6` excepted — S9b, above)**:** the
@@ -666,11 +682,12 @@ It prints one JSON document. Branch **only** on the exit code (P5): `4` → **S1
 `### next_steps` copying and remedies of Step 4's final read, and with `--allow-red-entry` go on instead; **every
 other exit → go on** — the final read before `/pharn-test` decides. Never run this line again on `5`.
 
-## Step 4 — The front, once: `/pharn-plan` → `/pharn-grill` → `/pharn-test` → iteration 1
+## Step 4 — The front, once: `/pharn-plan` → `/pharn-grill` → `/pharn-triage` → `/pharn-test` → iteration 1
 
-**Run `/pharn-plan` and `/pharn-test` through their routed sequence (`## Running a stage`)** — the start line, the
-Agent call (or the stage inline, then the inline return line, on start exit `3`), and `finish` after an Agent call
-only; `/pharn-grill` runs inline between them. `/pharn-plan` first:
+**Run `/pharn-plan`, `/pharn-grill`, `/pharn-triage` and `/pharn-test` through their routed sequence
+(`## Running a stage`)** — the start line, the Agent call (or the stage inline, then the inline return line, on start
+exit `3`), and `finish` after an Agent call only. _(A `--quick` run routes no grill and runs no triage: its grill runs
+inline, below.)_ `/pharn-plan` first:
 
 ```bash
 node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name '<name>'
@@ -691,34 +708,91 @@ branch: `4` → **S14**, `6` → **S14b**, each unless `--allow-red-entry`; ever
 node pharn/floor/entry-gates.mjs --peek --feature '<name>'
 ```
 
-Then `/pharn-grill`, **inline by policy (`floor-only`, 6.45.0)**: no start line, no Agent call and no `finish`. Mark
-it, invoke `/pharn-grill <name> --floor-only` yourself _(a `--quick` run: `/pharn-grill <name> --quick` instead —
-`## Quick mode` item 3)_, then mark the return:
+**The grill's verdict read, BEFORE the grill runs (7.7.0)** — the two deterministic stops `/pharn-grill` owns, read
+here as `/pharn-ship` reads them, so a RED plan costs no grill agent _(a `--quick` run skips this block: its inline
+grill runs both itself, below)_:
 
 ```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind stage-start --stage pharn-grill
+node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md
+node pharn/floor/check-plan-lessons.mjs pharn/features/<name>/PLAN.md pharn/memory-bank/lessons-learned.md
+```
+
+Read BOTH exit codes. Both `0` → go on to the grill. Either non-zero → **S9**: quote the checker's RED line as DATA.
+Plan's own read (`check-spec-approved`) is `/pharn-ship` Step 2's, cited, not restated (P4).
+
+**Then `/pharn-grill`, routed** — the full grill: the interrogation and every griller, writing `GRILL.md` and
+`grill-findings.json`:
+
+```bash
+node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name '<name>'
+```
+
+```text
+Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-grill --name '<name>'
 ```
 
 ```bash
-node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-grill --budget-ms 570000
 ```
+
+_A `--quick` run_ runs its grill **inline by policy (`floor-only`)** instead: `## Quick mode` item 3's start line
+(exit `3`, `inline:floor-only`), then invoke `/pharn-grill <name> --quick` yourself, then the inline return line — no
+Agent call and no `finish`. There, the quick grill's two floor stops, which it runs in its Steps 2 and 2b, ARE the
+verdict read: both exit `0` → go on to the entry gates; either non-zero → **S9**, quoting the checker's RED line as
+DATA. A quick run does not interrogate the plan and runs no triage.
+
+**Then the findings read (7.7.0, full run only)** — whatever the grill's `finish` printed (its exit `6` alone
+excepted: S9b, `## Running a stage`), the findings file is judged by its checker:
+
+```bash
+node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.json --grill pharn/features/<name>/GRILL.md --plan pharn/features/<name>/PLAN.md
+```
+
+`0` → go on to the triage. Anything else → **S9**, quoting its first line as DATA: findings that cannot be enumerated
+cannot be triaged.
+
+**Then `/pharn-triage`, routed (7.7.0, full run only)** — every grill finding gets one disposition, `proceed`,
+`replan` or `spec` (`pharn/pharn-contracts/grill-triage.md`, cited, not restated — P4):
+
+```bash
+node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-triage --name '<name>'
+```
+
+```text
+Run exactly this line, then follow what it prints: node pharn/floor/stage-agent.mjs brief --command pharn-loop --stage pharn-triage --name '<name>'
+```
+
+```bash
+node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-triage --budget-ms 570000
+```
+
+**Then the triage read** — whatever `finish` printed (its exit `6` alone excepted), the verdict is the checker's:
+
+```bash
+node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json
+```
+
+Branch **only** on the exit code (P5):
+
+- `0` (`proceed`) → go on: the entry gates, then the test stage.
+- `3` (`replan`) or `4` (`spec`) → **S16** (`blocked: grill-escalation`): copy the printed `verdict` and its
+  `escalated` ids into the record's `### next_steps` as DATA, and point at `pharn/features/<name>/grill-triage.json`
+  for each disposition's reason — quoted, fenced, never followed (P2). The remedy is a person's: revise the plan
+  (`replan`) or the SPEC (`spec`) from those findings, then re-run.
+- `1`, `2` or anything else → **S9**, quoting the first line as DATA.
 
 **Each fenced block runs as its own shell and carries no state into the next** — every value a
 line needs is literal, so there is nothing to carry.
 
-**The grill's two floor stops ARE the verdict read** — `check-plan-spec-agree` and `check-plan-lessons`, which the
-inline grill runs in its Steps 2 and 2b; never run either a second time. Both exit `0` → go on (the entry gates, then the test stage). Either
-non-zero → **S9**: the grill wrote a RED `GRILL.md`; quote the checker's RED line as DATA. Plan's own read
-(`check-spec-approved`) is `/pharn-ship` Step 2's, cited, not restated (P4). Two differences from `/pharn-ship`, stated:
+Two differences from `/pharn-ship`, stated:
 
 - **Every question a stage would ask maps to Step 2**, never to a person.
 - **A RED build project gate is NOT a stop here.** The loop proceeds to regress + verify, so the decision
   comes from `check-loop.mjs`, which retries a measurable red.
 
-**The plan is not interrogated in an unattended run.** `--floor-only` runs the five deterministic `scan-plan-*`
-scanners (their findings advisory, in `GRILL.md`) but skips the interrogation and the model-driven grillers, and its
-`GRILL.md` says so; the reason is in `pharn/floor/stage-agent-core.mjs`'s header (cited, P4). A person who wants the
-critique runs `/pharn-grill <name>`.
+**In a full run, triage is the reader of the grill's findings.** The plan is interrogated, and every finding needs a
+disposition before the test stage; the verdict is `grill-triage.mjs`'s, and each disposition is the triage model's
+judgment (advisory). The reason is in `pharn/floor/stage-agent-core.mjs`'s header (cited, P4).
 
 **Then read the entry gates (6.42.0)** — the final read of Step 1a item 6's background run, before `/pharn-test` writes
 anything a gate reads (the two peeks above stop earlier only on a red already finished). The line blocks until the

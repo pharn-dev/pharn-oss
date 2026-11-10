@@ -161,6 +161,7 @@ const PIPELINE_ARTIFACTS = [
   "PLAN.md",
   "GRILL.md",
   "grill-findings.json",
+  "grill-triage.json",
   "BUILD.md",
   "REGRESSION.md",
   "regression-report.json",

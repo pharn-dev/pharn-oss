@@ -462,11 +462,11 @@ node pharn/floor/check-ship-briefing.mjs <BRIEFING.md>
 # rows are evidence of what it ran on). THE RECORDED FAILURE (P7): a command's
 # model: frontmatter lasts the invoking turn, so every stage run inside an orchestrator ran on the ORCHESTRATOR's
 # model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
-# Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted); spec, plan, test and build in
-# /pharn-loop, whose grill is floor-only in BOTH columns since 6.45.0 (front-grill-concurrent: inline
-# `/pharn-grill <name> --floor-only`: its two checkers plus the five scan-plan-* scanners via pharn/floor/grill-scan.mjs,
-# no interrogation and no model-driven griller — unattended, no stage reads the findings before the build since
-# routing split the contexts, and the 92-min run's grill cost 361 s and 43 opus requests; /pharn-ship also reads the grill's two stops BEFORE spawning its grill agent);
+# Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted); spec, plan, grill, triage, test and
+# build in a full /pharn-loop (7.7.0, loop-grill-triage: the full grill and then /pharn-triage, whose dispositions
+# grill-triage.mjs turns into a verdict; 6.45.0 had made the loop's grill floor-only because no stage read its findings),
+# and spec, plan, test and build in a quick one, whose grill stays floor-only (`/pharn-grill <name> --quick`, its two
+# checkers) and which runs no triage. Both orchestrators read the grill's two stops BEFORE spawning a grill agent;
 # ship's spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. THE LOOP'S QUICK
 # COLUMN (6.28.0, loop-quick-mode — the second of the two to merge added it): /pharn-loop --quick routes the loop's
 # stages, never runs regress, briefs its spec agent with `/pharn-spec --quick

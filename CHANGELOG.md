@@ -23,6 +23,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.7.0] - 2026-11-10
+
+### Added
+
+- **A full `/pharn-loop` runs the full grill again, then a new triage stage gives every grill finding one disposition,
+  and anything but `proceed` stops the run for a person.** Part 2a of restore-loop-grill. Four `/pharn-loop` runs in a
+  user project wrote 26 grill findings that no stage read; all four recorded 0 blocking-severity findings, and three
+  ended `STOP_GREEN`. 6.45.0 had then made the loop's grill floor-only, dropping the findings instead of reading them.
+  Since a branch on the grill's own severity would have done nothing in those runs, a separate stage now reads every
+  finding. In a full run, Step 4 is: the plan; the grill's two floor stops, read before the grill (as `/pharn-ship`
+  reads them); `/pharn-grill <name>` as a routed stage agent; `grill-findings.mjs check` (anything but `0` is S9); the
+  new `/pharn-triage <name>` as a routed stage agent; then `node pharn/floor/grill-triage.mjs check
+pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json`. Exit `0` (`proceed`)
+  goes on to the entry gates and the test stage; `3` (`replan`) or `4` (`spec`) stops at the new row **S16**
+  (`blocked: grill-escalation`), with the verdict and the escalated ids in the record's `### next_steps`; anything else
+  is S9. `/pharn-triage` writes only `pharn/features/<name>/grill-triage.json`: one element per finding, aligned by id,
+  each with `proceed`, `replan` or `spec` and a one-line reason, plus the sha256 of the findings file it triaged.
+  `grill-triage.mjs` checks the shape, that every finding has exactly one disposition, that the digest matches the
+  findings file's bytes, and that a finding the grill rated `blocking` is never `proceed`, then derives the verdict
+  (spec > replan > proceed). A person can run `/pharn-triage <name>` after any full `/pharn-grill`. `pharn-triage`
+  joins the pipeline stages (`stage-agent-core.mjs` `STAGES`, its policy cell `skipped` everywhere but the full loop) and
+  `check-model-config.mjs`'s product stages as `triage`; the shipped `pharn.config.json` names no `triage` key, so it
+  resolves through `default` (sonnet), and no `MIN_CLI` change is needed — an older pharn-cli installs the command
+  by its `pharn-*.md` name. `--quick` is unchanged: its grill stays floor-only, now with its own `--mode quick` start
+  line (as `/pharn-ship --quick` has), and it runs no triage. `grill-triage.json` is classified as a pipeline artifact in
+  `check-regress.mjs`, `reconcile-ignore.json` and `worktree-fingerprint.mjs`, and the green commit stages it and
+  `grill-findings.json`. Measured before the build: five real full 7.6.0 grills headless, every one passed
+  `grill-findings.mjs check` on its first call, and three of the five raised a `blocking` finding
+  (`.dev/features/loop-grill-triage/GRILL-CHECK-MEASUREMENT.md`). **Bounds (P0):** the verdict is floor over shape,
+  coverage and the digest; every disposition is the triage model's judgment over untrusted text, and an injected finding
+  can steer it toward `proceed` (`pharn/THREAT-MODEL.md §5`, the triage channel). The automatic re-plan round is part
+  2b; until then a `replan` or `spec` verdict is a person's to act on. A full run's front gains a routed grill
+  (229–284 s measured, against 8.5 s for the floor-only grill) and a triage agent, whose time is not measured yet.
+  `grill-findings.mjs` and `grill-triage.mjs` read their inputs through one shared module, `regular-file.mjs`.
+  Contract: `pharn/pharn-contracts/grill-triage.md`.
+
 ## [7.6.0] - 2026-11-10
 
 ### Added

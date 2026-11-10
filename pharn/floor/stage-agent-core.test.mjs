@@ -107,7 +107,11 @@ function policyTotalityReds(policy) {
 
 test("POLICY TOTALITY — every command has a full column, and every column holds every stage exactly once, each a policy cell", () => {
   assert.deepEqual(policyTotalityReds(ROUTE_POLICY), []);
-  assert.equal(allCells().length, 28, "four columns x seven stages (ship full, ship quick, loop full, loop quick — 6.28.0) — L34");
+  assert.equal(
+    allCells().length,
+    32,
+    "four columns x eight stages (ship full, ship quick, loop full, loop quick — 6.28.0; triage 7.7.0) — L34"
+  );
 });
 
 test("POLICY TOTALITY DISCRIMINATES — a column missing one cell, or holding an unknown cell, fails (L60)", () => {
@@ -131,12 +135,19 @@ test("the plan's policy, cell by cell — the routed set per column (a flipped c
       .map((c) => c.stage);
   assert.deepEqual(routed("pharn-ship", "full"), ["pharn-plan", "pharn-grill", "pharn-test", "pharn-build"]);
   assert.deepEqual(routed("pharn-ship", "quick"), ["pharn-plan", "pharn-test", "pharn-build"]);
-  // 6.45.0 (front-grill-concurrent): the loop's grill is floor-only in its full column too, so both columns route the
-  // same four stages.
-  assert.deepEqual(routed("pharn-loop", "full"), ["pharn-spec", "pharn-plan", "pharn-test", "pharn-build"]);
-  // 6.28.0 (loop-quick-mode, the coupling): the loop's quick column routes the full column's stages.
+  // 7.7.0 (loop-grill-triage): the full loop routes its grill and then triage; the quick column keeps a floor-only
+  // grill and runs no triage.
+  assert.deepEqual(routed("pharn-loop", "full"), ["pharn-spec", "pharn-plan", "pharn-grill", "pharn-triage", "pharn-test", "pharn-build"]);
   assert.deepEqual(routed("pharn-loop", "quick"), ["pharn-spec", "pharn-plan", "pharn-test", "pharn-build"]);
-  assert.equal(policyCell("pharn-loop", "full", "pharn-grill"), "floor-only", "the loop's grill runs its two checkers (6.45.0)");
+  assert.equal(policyCell("pharn-loop", "full", "pharn-grill"), AGENT, "the full loop's grill interrogates again (7.7.0)");
+  assert.equal(policyCell("pharn-loop", "full", "pharn-triage"), AGENT, "triage reads every finding (7.7.0)");
+  for (const [command, mode] of [
+    ["pharn-ship", "full"],
+    ["pharn-ship", "quick"],
+    ["pharn-loop", "quick"],
+  ]) {
+    assert.equal(policyCell(command, mode, "pharn-triage"), SKIPPED, `${command}/${mode} runs no triage`);
+  }
   assert.equal(policyCell("pharn-ship", "full", "pharn-grill"), AGENT, "ship keeps its routed full grill (a person reads it)");
   assert.equal(policyCell("pharn-ship", "full", "pharn-spec"), "interactive", "ship's spec IS GATE 1");
   assert.equal(policyCell("pharn-ship", "quick", "pharn-regress"), SKIPPED);
@@ -296,7 +307,7 @@ test("renderBrief — every ROUTED cell renders; every other cell is refused", (
       rendered++;
     } else assert.equal(b.ok, false, `${c.command}/${c.mode}/${c.stage} is ${c.cell} and must have no brief`);
   }
-  assert.equal(rendered, 15, "4 ship-full + 3 ship-quick + 4 loop-full (6.45.0) + 4 loop-quick cells (L34)");
+  assert.equal(rendered, 17, "4 ship-full + 3 ship-quick + 6 loop-full (7.7.0) + 4 loop-quick cells (L34)");
 });
 
 test("renderBrief — the invocation, the exact report lines, rule 5's trust wording; no placeholder, no ask tool", () => {
@@ -353,7 +364,7 @@ test("renderBrief — EVERY routed brief carries the write-tool rule inside rule
     }
     routed++;
   }
-  assert.equal(routed, 15, "every routed cell was checked (L34)");
+  assert.equal(routed, 17, "every routed cell was checked (L34)");
   // A closed constant: no placeholder, no interpolation, one line.
   assert.doesNotMatch(WRITE_TOOL_RULE, PLACEHOLDER_RE);
   assert.doesNotMatch(WRITE_TOOL_RULE, /\$\{|\n/);
@@ -389,7 +400,7 @@ test("renderBrief — rule 4 forbids EVERY routed agent the orchestrator's own l
     );
     routed++;
   }
-  assert.equal(routed, 15, "every routed cell was checked (L34; the loop's full grill is floor-only since 6.45.0)");
+  assert.equal(routed, 17, "every routed cell was checked (L34; the full loop routes its grill and triage since 7.7.0)");
 });
 
 test("renderBrief — rule 7 (the fix list) appears ONLY for /pharn-loop's build at iteration >= 2, naming the four fields", () => {

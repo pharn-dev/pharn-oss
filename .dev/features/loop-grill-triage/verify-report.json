@@ -1,0 +1,26 @@
+{
+  "feature": "loop-grill-triage",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "0db23173ffcade0628e22b95f9e20274db0e01940080d0bf4196e8f362df1111",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "78da0ba2fa4cbeef179943e6a7ae03e0fc8366601c01d8b0c972f7650c9e6440"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

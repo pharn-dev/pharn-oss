@@ -146,6 +146,8 @@ export const STAGE_ARTIFACTS = Object.freeze([
   "AC-TESTS.md",
   "AC-TESTS.lock.json",
   "GRILL.md",
+  "grill-findings.json",
+  "grill-triage.json",
   "BUILD.md",
   "REGRESSION.md",
   "VERIFY.md",

@@ -226,7 +226,8 @@ Report, plainly and without asking anything:
   the run itself can rewrite;
 - **each stage's route** (6.27.0), one line per stage and iteration: the token its stage-start marker recorded
   (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
-  `/pharn-grill`, `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs`. A route
+  `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs` (a quick run's
+  grill is `inline (policy)` too, and a quick run has no triage line). A route
   records what was REQUESTED; never write that a stage ran on a model — what it was served is `cost.json`'s
   `requests[].model`. A stage agent that may still be running (a backgrounded call, S9 or S9b) is named here;
 - the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
@@ -275,8 +276,10 @@ Report, plainly and without asking anything:
   not a person. This is not a judgment that the change is good; review the branch before merging."_ When
   the SPEC state is **not approved**, its second sentence reads instead: _"The SPEC was never approved;
   it is a Draft waiting for a person."_ A quick run adds: _"It ran in quick mode: no regression outside the
-  feature was looked for, and the plan was not interrogated."_ A full run adds (6.45.0): _"The grill ran its two
-  floor stops and the deterministic plan scans only; the plan was not interrogated."_
+  feature was looked for, and the plan was not interrogated."_ A full run whose triage read exited `0`, `3` or `4`
+  adds (7.7.0): _"Every grill finding was given a disposition by the triage model; the verdict was computed from
+  those dispositions, and whether each is right was not checked."_ A triage read that exited otherwise (S9) adds
+  nothing here: no disposition set passed its check.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the claims block for document layout only, and a reader who stops at the turn-end never reaches it.
 
@@ -396,8 +399,9 @@ last three feeds `check-loop.mjs`'s inputs.
 - **Reported for a human, never agent-edited:** `pharn/LIMITS.md §1d`'s backstop list should name the Draft revert and the
   merge review; and `/pharn-verify`'s premise of human-approved intent does not hold under this command (a follow-up).
 - **Not a claim:** "`/pharn-loop` finished" means **a stop was reached and recorded** — STRUCK: "the feature is good",
-  "a human approved the intent", "the fix converged", "context was carried forward", "the change is small", "the plan
-  was interrogated" (6.45.0: the grill runs its floor stops and the deterministic plan scans only). It never
+  "a human approved the intent", "the fix converged", "context was carried forward", "the change is small", "every
+  grill finding was rightly dispositioned" (7.7.0: the dispositions are the triage model's judgment), and, for a quick
+  run, "the plan was interrogated" (its grill runs its floor stops only). It never
   pushes, merges, seals, attests or uses `--no-verify`, and the merge decision stays a person's.
 
 ## Final step — release the writes-scope (ADVISORY lifecycle hygiene)

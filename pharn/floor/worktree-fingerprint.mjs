@@ -153,12 +153,14 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
 ]);
 
 /** PRE-GATE artifacts: reconcile exempts these, this INCLUDES them. The divergence is the point (L39). */
-// grill-findings.json (7.6.0) is written by the grill beside GRILL.md, before any gate runs, so it is classified with it.
+// grill-findings.json (7.6.0) is written by the grill beside GRILL.md, before any gate runs, so it is classified with it;
+// grill-triage.json (7.7.0) is written by the triage stage right after the grill, also before any gate runs.
 export const INCLUDED_ARTIFACTS = Object.freeze([
   "SPEC.md",
   "PLAN.md",
   "GRILL.md",
   "grill-findings.json",
+  "grill-triage.json",
   "BUILD.md",
   "AC-TESTS.md",
   "AC-TESTS.lock.json",
