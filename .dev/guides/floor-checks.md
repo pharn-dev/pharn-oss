@@ -251,6 +251,29 @@ node pharn/floor/run-marker.mjs --close <pharn-review|pharn-ship> <name>
 node pharn/floor/feature-name.mjs [--fresh]
 ```
 
+## `check-spec-unscopable.mjs` — criteria no plan may scope
+
+```bash
+# LIST THE ACCEPTANCE CRITERIA THAT MENTION A PATH NO PLAN MAY SCOPE HERE (added 7.4.0, spec-unscopable-criteria). THE
+# RECORDED FAILURE (P7): 2026-11-10 on 7.3.1, an installed project — `/pharn-spec --model-approve` pinned a SPEC whose
+# AC-13 required correcting CLAUDE.md, and the setter's instruction-file refusal (7.3.0) stopped the run S10 at the plan
+# stage after ~17 min. ONE OWNER (L35): the setter exports nothing and is guard control surface, so this CLI copies none
+# of its predicates; it writes a throwaway `## Files` plan of the candidate tokens under mkdtemp and RUNS
+# `.claude/hooks/set-writes-scope.cjs --check --from-plan` from the project root (one batch run; one run per token only to
+# attribute a refusal), reading exit codes only (L6). So the verdict is the setter's whole refusal set in this project's
+# posture (the human chose the whole set over a narrowed copy at GATE 1). Tokens: runs of [A-Za-z0-9._/-] per criterion
+# (verify lines dropped, spec-template-core.mjs's parser), leading - / ./ ../ stripped, kept when holding / or .<alnum>.
+# FLOOR: which criteria carry a token the setter refuses as a plan entry here (enum-regex + the setter's membership
+# tests). ADVISORY: that a hit REQUIRES a write — a mention is not a write, and /pharn-spec judges edit vs cite; that
+# every such criterion is found (bare `CONSTITUTION.md`, a spaced path, a prose-only name are missed); in a dev or
+# unsignalled tree the setter refuses PHARN's surface and instruction files only while a run marker is open, and
+# /pharn-ship opens its marker after GATE 1, so its spec stage there reads CLEAR. Output: AC ids, line numbers and tokens
+# only (P2). Exit: 0 CLEAR · 1 MENTIONS · 2 UNUSABLE <code> (usage, unreadable, no-criteria, no-setter, too-many-tokens
+# over 64, setter-failed, unattributed). /pharn-spec runs it after the Draft validates; it never blocks. No contract
+# (P7): the module's header is its spec. Ships: bumps SKILLS_VERSION.
+node pharn/floor/check-spec-unscopable.mjs pharn/features/<name>/SPEC.md
+```
+
 ## `pharn/floor/check-provenance.mjs` — product provenance
 
 ```bash

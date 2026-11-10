@@ -18,6 +18,7 @@ after the directory passed forty).
 | `validate.mjs`                                  | enum / regex / structural check          | P1, P3, P4; fixes #1, #5, #6                                      |
 | `check-structural.mjs`                          | enum / regex-substring / path-resolution | `structural[]` of an eval `expected` (P0, P1)                     |
 | `check-spec.mjs`                                | content-hash (+ enum / presence / regex) | the approved-intent pin, fix #4; the opt-in `spec-template` shape |
+| `check-spec-unscopable.mjs`                     | enum / regex + the setter's own refusals | criteria naming a path no plan may scope here (a mention only)    |
 | `../../.claude/hooks/protect-trusted-paths.cjs` | pre-write hook                           | P2; fix #2                                                        |
 | `../../.claude/hooks/enforce-writes-scope.cjs`  | pre-write hook                           | P2, P5; fix #7                                                    |
 
