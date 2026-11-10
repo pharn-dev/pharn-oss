@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-83 lessons · 83 tagged · 0 malformed · 0 untagged · ~57655 tokens total
+84 lessons · 84 tagged · 0 malformed · 0 untagged · ~58151 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -107,4 +107,5 @@ L80 | process  | test-blindspot,default-values,fixture-environment,lesson-recurr
 L81 | floor    | test-fixtures,scratch-tree,copy-list,dependency-set,second-copy                                | A test that copies a hand-picked list of floor modules into a scratch tree holds a second copy of their imports — a new import breaks it with no edit to the test | 2026-11-02 | ~553
 L82 | floor    | regex-anchoring,control-char-guard,lesson-correction,live-measurement                          | L14's reason was Perl's `$`, not JavaScript's — the guard-first rule holds because validators trim before the anchored regex | 2026-11-03 | ~412
 L83 | process  | stage-seam,refusal-path,early-detection,writes-scope                                           | A refusal added at a later stage must be surfaced at the earliest stage that pins the input it refuses | 2026-11-10 | ~441
+L84 | floor    | safe-default,validator-reuse,test-blindspot,partial-state                                      | A feature whose only effect is a branch off a safe default needs a test that takes the branch on realistic input — the default makes a dead branch read as 'nothing to do yet' | 2026-11-10 | ~496
 ```

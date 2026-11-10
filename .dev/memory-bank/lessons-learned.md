@@ -2514,3 +2514,18 @@ type: process · concepts: [stage-seam, refusal-path, early-detection, writes-sc
 - commit: 1b4271ea2dd84a1d3943b1e11609b73f07e05018
 - source: .dev/features/spec-unscopable-criteria/REVIEW.md § Proposed lesson candidate; .dev/features/spec-unscopable-criteria/PLAN.md § The failure
 - promoted: 2026-11-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L84 — A feature whose only effect is a branch off a safe default needs a test that takes the branch on realistic input — the default makes a dead branch read as 'nothing to do yet'
+
+type: floor · concepts: [safe-default, validator-reuse, test-blindspot, partial-state]
+
+**Lesson.** 7.5.0's early entry read (`entry-gates.mjs --peek`) reuses `validateStamp` to judge run-gates' in-progress record. As planned, the view kept the record's `required` list, so `validateStamp`'s final `coverageGap` check refused every real partial run, and `--peek` would have printed `continue` — its safe default — on every call. No gate would have gone red: `continue` is also the correct answer whenever no gate has failed yet, so a dead branch and "nothing to do yet" print the same thing. Remedy: when an optional or early path falls back to a safe default, write one test that builds the realistic input (here, a state with required gates that have not run) and asserts the non-default outcome; and when a validator is reused on partial input, read its whole rule list for the conditions a partial input cannot meet.
+
+**Why it matters.** The grill caught it by reading the validator, and a mutation at build confirmed it: dropping the `required` narrowing fails three tests. Without either, the feature would have shipped doing nothing while every gate stayed green. Neighbours: [[L34]] (an assertion set over an empty domain says nothing), [[L41]] (a default every test overrides is exercised by nothing), [[L60]] (non-vacuity is per asserted property). This is their shape arriving through a fail-safe fallback.
+
+**Provenance.**
+
+- feature: entry-verdict-early-read
+- commit: ba7b5bb256bf4c7647cfd3cf253ec9a5c5e885d9
+- source: .dev/features/entry-verdict-early-read/GRILL.md § Inline — guarantee audit / evals (the P6 blocking finding); .dev/features/entry-verdict-early-read/REVIEW.md § Proposed lesson candidate
+- promoted: 2026-11-10 via gated `/pharn-dev-memory-promote` (human-approved).
