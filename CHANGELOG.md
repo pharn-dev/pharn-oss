@@ -23,6 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.4.0] - 2026-11-10
+
+### Added
+
+- **`/pharn-spec` lists, before approval and pinning, the acceptance criteria that mention a path no plan may scope.**
+  Measured on 7.3.1 in an installed project: `/pharn-spec --model-approve` pinned a SPEC whose AC-13 required
+  correcting `CLAUDE.md`, the setter refused that instruction file from the plan (7.3.0), and the run stopped S10 at the
+  plan stage after about 17 minutes, 33 requests and 6.2M cache-read tokens. The new
+  `pharn/floor/check-spec-unscopable.mjs` takes the path-like tokens of each criterion and asks the writes-scope setter
+  itself, through `set-writes-scope.cjs --check` over a throwaway plan, which of them it would refuse from a plan in
+  this project. So the path lists keep one owner and are not copied: instruction files, PHARN's own files (`pharn/**`
+  except `pharn/features/**` and `pharn/.run/**`, `.claude/**`, `pharn.config.json`, the trusted docs), and the
+  setter's other refusals (canon, CI workflows and actions, git hooks dirs, `.mcp.json`). `/pharn-spec` runs it once
+  the Draft validates. With a human approving, each hit is shown as a gap to resolve before the approval question.
+  Under `--model-approve`, the model moves a criterion that needs the write into a `## Needs a person` section and keeps
+  one that only cites the path, with an `## Assumptions` line saying so. If no criterion remains it stops on thin
+  intent (S6). `RUN-REPORT.md` gains a `## Needs a person` section that copies the SPEC's, and `/pharn-loop`'s summary
+  names it. **What it proves (P0):** a hit means the criterion MENTIONS such a path, never that it requires writing it
+  (the tests pin both directions: "correct `CLAUDE.md`" and "the conventions `CLAUDE.md` states" are both hits). The
+  edit-or-cite judgment and the move are advisory. Known misses: a bare `CONSTITUTION.md`, a path with a space, a file
+  named only in prose, and, in a dev or unsignalled tree, `/pharn-ship`'s spec stage, which runs before its run marker
+  opens. The check never blocks; when it cannot run, a `--model-approve` SPEC records that in `## Assumptions`.
+  `## Needs a person` is not a template section, so the contract and `check-spec.mjs` are unchanged.
+
 ## [7.3.2] - 2026-11-10
 
 ### Changed

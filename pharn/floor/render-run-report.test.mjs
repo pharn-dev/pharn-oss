@@ -165,7 +165,7 @@ test("L36 CLOSURE: the rendered `##` headings equal SECTIONS exactly, both direc
   try {
     feature(root, "feat", { "cost.json": costJson(), "LOOP.md": LOOP_MD });
     const got = headings(renderRunReport("feat", { repo: root }));
-    assert.equal(SECTIONS.length, 8, "non-vacuity: the vocabulary must be non-empty");
+    assert.equal(SECTIONS.length, 9, "non-vacuity: the vocabulary must be non-empty");
     // Equality, not per-member presence: a variant spelling of ANY member fails here, which is the
     // whole point — a presence set is satisfied by the spelling its author was looking at.
     assert.deepEqual(got, [...SECTIONS]);
@@ -193,6 +193,39 @@ test("★ NEGATIVE CONTROL (L34): the closure assertion FAILS on a dropped or re
   const renamed = [...SECTIONS];
   renamed[0] = "## Outcomes"; // one character
   assert.throws(() => assert.deepEqual(renamed, [...SECTIONS]));
+});
+
+// ── `## Needs a person` (7.4.0, spec-unscopable-criteria) ───────────────────────────────────────────────────────
+
+const SPEC_FM =
+  '---\nspec_id: feat\nstate: Approved\nspec_content_hash: ""\nspec_template: pharn-default@sha256:' + "a".repeat(64) + "\n---\n";
+
+test("Needs a person: the SPEC section is copied verbatim inside a fence, a heading in it stays text", () => {
+  const root = scratch();
+  try {
+    const specMd = SPEC_FM + "\n## Intent\n\nx\n\n## Needs a person\n\n- AC-13 — correct `CLAUDE.md`\n## Fake heading? no\n";
+    feature(root, "feat", { "cost.json": costJson(), "SPEC.md": specMd.replace("## Fake heading? no", "  ## indented heading text") });
+    const md = renderRunReport("feat", { repo: root });
+    assert.deepEqual(headings(md), [...SECTIONS], "the copied text adds no heading");
+    const sec = md.split("\n## Needs a person\n")[1].split("\n## ")[0];
+    assert.match(sec, /```+text\n- AC-13 — correct `CLAUDE\.md`/);
+    assert.match(sec, /nothing checks that the list is complete/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Needs a person: None when the SPEC has no such section; n/a when there is no SPEC", () => {
+  const root = scratch();
+  try {
+    feature(root, "has", { "cost.json": costJson(), "SPEC.md": SPEC_FM + "\n## Intent\n\nx\n" });
+    feature(root, "none", { "cost.json": costJson() });
+    const sec = (name) => renderRunReport(name, { repo: root }).split("\n## Needs a person\n")[1].split("\n## ")[0];
+    assert.match(sec("has"), /None — the SPEC has no single `## Needs a person` section\./);
+    assert.match(sec("none"), /_n\/a — no SPEC\.md was readable/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // ── the n/a domain (L51: justify guards against the FULL input domain) ───────────────────────────────

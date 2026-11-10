@@ -395,6 +395,10 @@ node pharn/floor/check-cost-ledger.mjs <cost.json> [--verify-transcript]
 # the verify report's `reconcile_detail` block through reconcile-detail-core.mjs's `reconcileDetailLines`, the SAME
 # renderer VERIFY.md uses (L35): escape rows JSON-quoted in a fence, closed reasons inline after a membership test, the
 # merged count, or one line naming a missing/garbage log and the re-run command. Any other report: no lines.
+# NEEDS A PERSON (7.4.0, spec-unscopable-criteria): `## Needs a person`, after `## Outcome`, copies the SPEC's section of
+# that name verbatim in a fence (spec-template-core.mjs's specSectionLines, never a grep) — the criteria /pharn-spec
+# --model-approve moved out because no plan may scope their write — or `None`, or n/a with no readable SPEC. Copied,
+# never checked for completeness.
 # NO MARKDOWN TABLE ANYWHERE, and it is a measurement not a taste (L37): sanitizeIdentity("opus|5", …)
 # returns it UNCHANGED — rule 3 bounds length, control chars and paths, not a pipe — and one pipe shifts
 # every column right of it. So every untrusted region is a fence computed longer than any back-tick run

@@ -103,6 +103,12 @@ reaches it (§6). Since 6.53.0 `check-bash-reconcile.mjs` compares the file agai
 made it and whatever its baseline entry says, unless the file is git-ignored. That check runs at `/pharn-*verify`,
 after `/pharn-spec` ran, so a write that steered the current SPEC is reported after it steered it, never prevented. A change landed by a merge, a pull or a human editor is obeyed as-is.
 
+A model-approved SPEC (`/pharn-spec --model-approve`, 7.4.0) is first checked for criteria no plan may scope:
+`check-spec-unscopable.mjs` asks `set-writes-scope.cjs --check` which path tokens in each criterion it would refuse
+from a plan in this project, and the model moves a criterion that needs such a write into `## Needs a person`. The
+check proves a mention, never a required write; the move is the model's judgment, and nothing verifies the list is
+complete. It is triage before the pin, not a gate: the setter's refusal at the plan stage stays the backstop.
+
 ---
 
 ## 2. The residual (named, bounded, not zeroed)

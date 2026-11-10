@@ -14,12 +14,13 @@ reads:
     "pharn/spec-template.md",
     "pharn/features/<name>/SPEC.md",
     "pharn/floor/check-spec.mjs",
+    "pharn/floor/check-spec-unscopable.mjs",
     "pharn/floor/feature-name.mjs",
     "package.json",
   ]
 writes: ["pharn/features/<name>/SPEC.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.7.1"
+version: "0.8.0"
 ---
 
 # /pharn-spec — capture intent as a human-approved SPEC.md
@@ -232,6 +233,20 @@ frontmatter or change the body's first line. (`pin` cannot fire on a Draft: the 
 defined in `pharn/pharn-contracts/spec-template.md`. (`check-spec.mjs` owns this verdict; you do not
 re-decide it — P0.)
 
+**Then, with the Draft GREEN, list the criteria no plan here may scope** (7.4.0):
+
+```bash
+node pharn/floor/check-spec-unscopable.mjs pharn/features/<name>/SPEC.md
+```
+
+It asks the writes-scope setter itself which path-like tokens in each criterion it would refuse from a plan in this
+project (instruction files, PHARN's own files, canon, CI workflows, …). Exit `0` → nothing to do. Exit `1` → each
+`AC-<n> (line <L>): <path>` line is a criterion that **mentions** such a path: Step 4 shows it as a gap, Step 4a acts
+on it. A mention is not a required write — "correct `CLAUDE.md`" needs the write, "the conventions `CLAUDE.md` states"
+does not; deciding which is judgment. Exit `2` → the check did not run: say so and why (its first line); under
+`--model-approve` add one `## Assumptions` line, `not checked: criteria that need a write no plan may scope (<its
+first token>)`. It never blocks.
+
 ## Step 4 — Render + HALT for explicit human approval (the thesis — non-negotiable)
 
 Show the human the **full Draft SPEC.md exactly as written**, plus your Step-2 interrogation notes. Then ask,
@@ -244,6 +259,10 @@ answer.**
 - On **_Keep as Draft_**: leave the file `Draft` (unpinned) and end the turn.
 - On **_Revise_**: apply the requested changes to the Draft (Steps 2–3 again), then re-render and re-ask. Never
   approve on the user's behalf.
+- **A criterion `check-spec-unscopable.mjs` listed (Step 3) is a gap to resolve before approving.** Before the
+  question, name each one and say: if it needs that file written, no plan in this project can scope the write, so the
+  plan stage will stop. The human chooses: reword it, move it to a `## Needs a person` section (Step 4a's shape), or
+  keep it (then they run the setter themselves with its operator flag at plan time). Approval is still offered.
 - **While the Draft still carries a clarification marker, do not offer approval.** The options are _Revise_
   (answer the marked questions) and _Keep as Draft_. Say why: the floor REDs an `Approved` templated SPEC
   that still carries a marker (`clarification`), so an approval now would fail Step 5 anyway.
@@ -268,6 +287,12 @@ render the form and do not wait:
 - If the Draft carries `spec_kind: test-infra`, do **not** approve. Report back that the run is blocked: a
   bootstrap increment — the one kind of SPEC whose tests do not run before the build — is approved by a human,
   never by the model on the user's behalf.
+- **Each criterion `check-spec-unscopable.mjs` listed (Step 3):** judge whether it requires writing the listed path.
+  If it does, move the item out of `## Acceptance Criteria`, text unchanged with its id written plain (`AC-13 — …`),
+  into one bullet of a `## Needs a person` section after `## Assumptions`. If it only cites the path, keep it and add
+  one `## Assumptions` line: `AC-<n> names <path> only as a reference; it asks for no write to it`. Then re-run both
+  checks: `check-spec.mjs` must be GREEN, and every criterion still listed must have its Assumptions line. If no
+  criterion would remain, approve nothing and report back blocked on thin intent.
 - Otherwise, with Step 3's Draft GREEN, go straight to Step 5, and in Step 5's frontmatter edit also add
   `approved_by: model`.
 
@@ -336,6 +361,12 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). The contract's
 - **Floor, in the checker:** an existing project template is never skipped for the default — once a directory entry
   case-folds to `pharn/spec-template.md`, every failure is a refusal (exit 1), never a fallback. Not falling back by
   hand is command prose (advisory).
+- **Floor:** `check-spec-unscopable.mjs` lists each criterion holding a path-like token that the setter's own `--check`
+  refuses as a plan entry in this project, now (enum-regex + the setter's membership tests, read by exit code).
+  **Advisory:** that a listed criterion requires the write (a mention is not a write), the edit-or-cite judgment, the
+  move under `--model-approve`, and that every such criterion is listed — its tokenizer misses a bare
+  `CONSTITUTION.md`, a path with a space, a file named in prose, and in a dev or unsignalled tree `/pharn-ship`'s spec
+  stage runs before its run marker opens (`pharn/floor/check-spec-unscopable.mjs`, header).
 - **Provenance, not a check:** `spec_template` is computed by the checker, never typed, but nothing compares it with
   the template later; rule 7 checks only its shape and known id, so a hand-typed value passes too.
 - **Floor on the Write/Edit/MultiEdit/NotebookEdit surface only:** the project template's path

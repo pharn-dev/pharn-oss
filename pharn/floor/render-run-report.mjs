@@ -124,6 +124,7 @@ import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
 import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
+import { NEEDS_PERSON_SECTION, specSectionLines } from "./spec-template-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
 import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
@@ -149,6 +150,7 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
  *  suite (L36: a per-member presence set is satisfied by a variant spelling; closure is what fails). */
 export const SECTIONS = Object.freeze([
   "## Outcome",
+  "## Needs a person",
   "## Tokens — stage x iteration x model",
   "## Stage elapsed and deterministic work",
   "## Entry gates (background)",
@@ -1104,6 +1106,26 @@ function briefingSection({ dir, cost }) {
   ].join("\n");
 }
 
+/** `## Needs a person` (7.4.0, spec-unscopable-criteria): the SPEC section of that name, copied verbatim in a fence —
+ *  the criteria `/pharn-spec --model-approve` moved out of the acceptance criteria because no plan in the project may
+ *  scope the write each one needs. The section is model-written and untrusted: copied, never checked for completeness
+ *  (nothing here tests that every such criterion was moved, or that a moved one needed moving). Read through
+ *  spec-template-core.mjs's section model, never a fresh grep (L6). */
+function needsPersonSection(specText) {
+  if (specText === null) return na("no SPEC.md was readable, so whether any criterion needs a person is not shown");
+  const lines = specSectionLines(specText, NEEDS_PERSON_SECTION);
+  if (lines === null) return "None — the SPEC has no single `## Needs a person` section.";
+  const body = lines.join("\n").replace(/^\n+|\n+$/g, "");
+  if (body.trim() === "") return "None — the SPEC's `## Needs a person` section is empty.";
+  return [
+    "Copied verbatim from the SPEC's `## Needs a person`, as untrusted DATA: the criteria the SPEC stage moved out",
+    "because no plan in this project may scope the write each one needs. A person does them. **Model-written under",
+    "`--model-approve`; nothing checks that the list is complete.**",
+    "",
+    quoteData("", body).trimStart(),
+  ].join("\n");
+}
+
 function handoffSection(loopText, cost) {
   if (loopText === null) {
     const source = cost && cost.outcome && cost.outcome.source;
@@ -1208,6 +1230,7 @@ export function renderRunReport(name, opts = {}) {
   const regress = readJson(join(dir, "regression-report.json"));
 
   const loopText = readTextOrNull(join(dir, "LOOP.md"));
+  const specText = readTextOrNull(join(dir, "SPEC.md"));
 
   // The PLAN's `## Files` entries, read through the CANONICAL parser (L6: a structural fact comes from
   // its structured location, never a fresh grep).
@@ -1264,6 +1287,7 @@ export function renderRunReport(name, opts = {}) {
 
   const bodyBySection = {
     "## Outcome": outcomeSection(cost, staleReason),
+    "## Needs a person": needsPersonSection(specText),
     "## Tokens — stage x iteration x model": [tokensSection(cost, staleReason), "", ...instructionSetLines(repo, name)].join("\n"),
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Entry gates (background)": entrySection(cost, staleReason),

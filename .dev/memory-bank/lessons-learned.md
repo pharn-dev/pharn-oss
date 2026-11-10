@@ -2499,3 +2499,18 @@ type: floor · concepts: [regex-anchoring, control-char-guard, lesson-correction
 - commit: `5a307fb7bcdef7e5ed20fdeb01cd9c7999802bb2`
 - source: .dev/features/lesson-heading-parser/REVIEW.md R6
 - promoted: 2026-11-03 by the maintainer's owner-run docs script for the 2026-11-03 audit batch (the candidate was validated with `.dev/floor/check-provenance.mjs`; not a `/pharn-dev-memory-promote` run).
+
+## L83 — A refusal added at a later stage must be surfaced at the earliest stage that pins the input it refuses
+
+type: process · concepts: [stage-seam, refusal-path, early-detection, writes-scope]
+
+**Lesson.** 7.3.0 taught set-writes-scope.cjs to refuse instruction files (and, in an installed project, PHARN's own surface) from a plan, and /pharn-plan documented the refusal. /pharn-spec, which pins the acceptance criteria that decide what a plan must write, was not updated. On 2026-11-10 an installed project's /pharn-spec --model-approve pinned a SPEC whose AC-13 required correcting CLAUDE.md; no plan could scope that write, and the run found out only at the plan stage and stopped S10 after about 17 minutes, 33 requests and 6.2M cache-read tokens. Remedy: when a stage gains a refusal, list the earlier stages that commit to the input it refuses (here the SPEC that pins criteria) and give the earliest one a check that asks the refusing owner itself, never a copy of its rule (7.4.0: check-spec-unscopable.mjs runs the setter's --check).
+
+**Why it matters.** A refusal that fires late spends a whole run on input that was fixed at an earlier, cheaper point; [[L1]] asks a plan to scope the docs an increment makes stale, and this asks the same of the stages before a new refusal. Asking the owner keeps one copy ([[L35]]). **Bound (P0):** discipline only; nothing lists which stages consume an input a refusal judges.
+
+**Provenance.**
+
+- feature: spec-unscopable-criteria
+- commit: 1b4271ea2dd84a1d3943b1e11609b73f07e05018
+- source: .dev/features/spec-unscopable-criteria/REVIEW.md § Proposed lesson candidate; .dev/features/spec-unscopable-criteria/PLAN.md § The failure
+- promoted: 2026-11-10 via gated `/pharn-dev-memory-promote` (human-approved).

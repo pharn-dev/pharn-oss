@@ -254,6 +254,10 @@ Report, plainly and without asking anything:
   and that the run changed further: the commit holds the user's earlier edit to it too;
 - every path `pre_run_snapshot.unchanged` lists (`regression-report.json`, or a quick run's scope-check output):
   changed before the run, present when the gates ran, and never in the commit;
+- **the criteria that need a person** (7.4.0): the SPEC's `## Needs a person` section — the criteria `/pharn-spec`
+  moved out because no plan in this project may scope the write each needs — reproduced from RUN-REPORT.md's section of
+  that name, or, for a quick run (no report), from the SPEC; `none` when it has no such section. A person does them;
+  the list is model-written and nothing checks that it is complete;
 - the SPEC state: **approved by the model** (inside the commit), **reverted to `Draft`**, **revert failed**
   (still approved by the model — say so), or **not approved** (the run never approved it, as on S6b);
 - **the run report**: print `pharn/features/<name>/RUN-REPORT.md`'s `## Tokens` table and its `## Files`

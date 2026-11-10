@@ -67,6 +67,11 @@
 // (lessons-index-core.mjs canonLines) reads canon through this same column-0 model rather than a copy (L35). The
 // coupling is accepted and stated: a change to the block model made for SPEC sections also moves which `## L<n>`
 // lessons exist for check-plan-lessons, the lessons index and check-provenance — run their suites with any change here.
+//
+// TWO MORE READERS (7.4.0, spec-unscopable-criteria). specAcceptanceCriteriaText() gives check-spec-unscopable.mjs each
+// criterion's text through parseAcItems(), and specSectionLines() gives render-run-report.mjs the `## Needs a person`
+// section through sectionsOf(), so neither re-reads a SPEC with a grep of its own (L6). Run their suites with any
+// change to the AC grammar or the block model too.
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -471,6 +476,48 @@ export function specAcceptanceCriteria(text) {
   if (acs.length !== 1) return { templated: true, kind, kindInBody, sections: acs.length, items: [] };
   const items = parseAcItems(acs[0]).items.map((it) => ({ id: `AC-${it.id}`, level: verifyOf(it).level, line: it.n }));
   return { templated: true, kind, kindInBody, sections: 1, items };
+}
+
+/**
+ * Each acceptance criterion's TEXT (7.4.0, spec-unscopable-criteria): the same parse as specAcceptanceCriteria(), plus
+ * the item's lines with every verify-like line dropped (VERIFY_LIKE_RE, the rule-2 recogniser). Read by
+ * check-spec-unscopable.mjs, which tokenizes it. The lines are untrusted SPEC body text: a caller must never print them.
+ * @returns {{templated: boolean, sections: number, items: {id: string, line: number, lines: string[]}[]}}
+ */
+export function specAcceptanceCriteriaText(text) {
+  const src = stripBom(String(text));
+  const fmMatch = matchFrontmatter(src);
+  if (!fmMatch || !isTemplated({}, fmMatch[1])) return { templated: false, sections: 0, items: [] };
+  const body = src.slice(fmMatch[0].length);
+  const firstLine = (fmMatch[0].match(/\n/g) || []).length + 1;
+  const acs = sectionsOf(body, firstLine).sections.filter((s) => s.name === "acceptance criteria");
+  if (acs.length !== 1) return { templated: true, sections: acs.length, items: [] };
+  const items = parseAcItems(acs[0]).items.map((it) => ({
+    id: `AC-${it.id}`,
+    line: it.n,
+    lines: it.lines.filter((l, i) => i === 0 || !VERIFY_LIKE_RE.test(l)),
+  }));
+  return { templated: true, sections: 1, items };
+}
+
+/** The heading `/pharn-spec --model-approve` moves a criterion under when no plan in the project may scope the write it
+ *  needs (7.4.0). NOT a template section: the contract allows headings the template does not name and never checks
+ *  them, so no template rule reads this name. Lowercased, as sectionsOf() keys sections. */
+export const NEEDS_PERSON_SECTION = "needs a person";
+
+/**
+ * The lines of a SPEC body's VISIBLE `## <name>` section (sectionsOf()'s block model), or `null` when the section is
+ * absent or appears more than once. `name` is matched case-insensitively. No frontmatter → `null`. The lines are
+ * untrusted SPEC body text: render-run-report.mjs copies them into a fence, as DATA.
+ * @returns {string[]|null}
+ */
+export function specSectionLines(text, name) {
+  const src = stripBom(String(text));
+  const fmMatch = matchFrontmatter(src);
+  if (!fmMatch) return null;
+  const firstLine = (fmMatch[0].match(/\n/g) || []).length + 1;
+  const hits = sectionsOf(src.slice(fmMatch[0].length), firstLine).sections.filter((s) => s.name === String(name).toLowerCase());
+  return hits.length === 1 ? hits[0].lines.map((l) => l.text) : null;
 }
 
 /**

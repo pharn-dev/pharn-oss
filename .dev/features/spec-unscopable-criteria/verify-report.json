@@ -1,0 +1,26 @@
+{
+  "feature": "spec-unscopable-criteria",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "a3289b4f60c0ea06937869bb66b8ac29ef5e63a8f67e24ac49648a7abb6c754e",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "4698a83fdc9b58423172f81e0cd334067694b8af9b84a0901208a5c45d670c6b"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
