@@ -923,6 +923,38 @@ for (const w of WIRING) {
   });
 }
 
+// 7.3.2: a run stopped S14 on an `e2e` gate that could not run on the machine, and the stop never offered the
+// 6.36.0 `gates.exclude` declaration. The remedy is owed at every S14/S14b site, so the sites are one enumeration
+// and every assertion iterates it (L29): each table row and each stop-procedure bullet names the declaration, the
+// `--allow-red-entry` alternative and the declaration's cost.
+function entryStopSites(loop) {
+  const row = (id) => loop.split("\n").find((l) => new RegExp(`^\\| ${id}\\s+\\|`).test(l));
+  const bullet = (exit, id) => {
+    const start = loop.indexOf(`- \`${exit}\` → **${id}** (`);
+    if (start < 0) return undefined;
+    const end = loop.indexOf("\n- ", start + 1);
+    return loop.slice(start, end < 0 ? undefined : end);
+  };
+  return [
+    { site: "S14 row", text: row("S14") },
+    { site: "S14b row", text: row("S14b") },
+    { site: "exit-4 bullet", text: bullet(4, "S14") },
+    { site: `exit-${EXIT.unmeasured} bullet`, text: bullet(EXIT.unmeasured, "S14b") },
+  ];
+}
+
+test("★ /pharn-loop names the gates.exclude remedy, its cost and --allow-red-entry at every S14/S14b site (L29)", () => {
+  const sites = entryStopSites(commandFamilyText(COMMANDS_DIR, "pharn-loop.md"));
+  assert.equal(sites.length, 4);
+  for (const { site, text } of sites) {
+    assert.ok(text, `${site}: not found`);
+    // A bullet slice that missed its terminator would swallow the next bullet and pass on its words.
+    assert.ok(text.length < 900, `${site}: the slice is ${text.length} chars, so it ran past its own site`);
+    for (const re of [/`gates\.exclude`/, /`pharn\.config\.json`/, /`--allow-red-entry`/, /does not run/, /reported as\s+excluded/])
+      assert.match(text, re, `${site}: ${re}`);
+  }
+});
+
 test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part of both entry grammars", () => {
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   assert.match(loop, /^\| S14\s+\|/m);

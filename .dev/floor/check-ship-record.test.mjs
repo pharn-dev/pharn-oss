@@ -178,16 +178,21 @@ test("P4: a block line inside a code fence or indented is NOT a block line (a te
   assert.equal(parseBlock(`\`\`\`\nx\n\`\`\`\n${BLOCK_GREEN}\n`).present, true);
 });
 
-test("P5: every committed SHIP.md written before 7.3.0 reads as LEGACY (no block), not malformed", () => {
+// 7.3.2: P5 named the one block-carrying record (dev-verdict-discipline) it exempted, so the first SHIP.md that
+// /pharn-dev-ship wrote after 7.3.0 — as its Step 3 requires — turned it red. A record either carries no block (a
+// legacy record, read as LEGACY) or carries one that parses with zero defects; a half-recognised legacy record has
+// missing keys, so it still fails here.
+test("P5: every committed SHIP.md reads as LEGACY (no block) or carries a well-formed block, never malformed", () => {
   const dir = join(REPO, ".dev", "features");
-  let n = 0;
+  let legacy = 0;
   for (const d of readdirSync(dir)) {
     const p = join(dir, d, "SHIP.md");
-    if (d === "dev-verdict-discipline" || !existsSync(p)) continue;
-    n++;
-    assert.equal(parseBlock(readFileSync(p, "utf8")).present, false, `${d}/SHIP.md reads as carrying a block`);
+    if (!existsSync(p)) continue;
+    const r = parseBlock(readFileSync(p, "utf8"));
+    if (!r.present) legacy++;
+    else assert.deepEqual(r.defects, [], `${d}/SHIP.md carries a malformed block`);
   }
-  assert.ok(n > 100, `expected the committed legacy records (L34), found ${n}`);
+  assert.ok(legacy > 100, `expected the committed legacy records (L34), found ${legacy}`);
 });
 
 test("P6: BLOCK_TEMPLATES is derived from the value sets (the command's spelling binds to this grammar)", () => {
