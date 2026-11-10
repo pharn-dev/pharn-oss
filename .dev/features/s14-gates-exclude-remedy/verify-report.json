@@ -1,0 +1,26 @@
+{
+  "feature": "s14-gates-exclude-remedy",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "01c421eac6e39421a33ea55f23a80030357471df068451ce6a7b4cdca37c9c86",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "ca6d3f32a72466e4345e6ce7226a8ad1b2273f43cd1ceb86fbb39c4149880ab6"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

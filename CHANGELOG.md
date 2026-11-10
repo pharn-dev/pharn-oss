@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.3.2] - 2026-11-10
+
+### Changed
+
+- 2026-11-10: **`/pharn-loop`'s S14 and S14b stops name `gates.exclude` next to `--allow-red-entry`.** Measured:
+  a run stopped S14 (`blocked: gates-red-at-entry`) because the `e2e` gate could not run (Playwright browsers not
+  installed), and the S14 row offered only "fix the gate first, or re-run with `--allow-red-entry`", so the stop
+  message never mentioned the 6.36.0 declaration for a gate that cannot run on this machine:
+  `{ "gates": { "exclude": ["e2e"] } }` in `pharn.config.json`. The S14 row and the exit-4 step of the stop procedure
+  now offer it for a gate that cannot run on this machine; the S14b row ("exclude it") and the exit-6 step now name
+  `pharn.config.json` `gates.exclude` too. All four say to commit the declaration before the re-run (an uncommitted
+  one reads as a change since base) and state its cost: an excluded gate
+  does not run and is reported as excluded. Nothing about how a red or unmeasured gate is classified changed, and the
+  stop still copies ids from the entry JSON document, never gate output. The README's stop paragraph names the same
+  remedy. A test in `pharn/floor/entry-gates.test.mjs` checks that each of the four places names `gates.exclude`,
+  `--allow-red-entry` and the cost; it checks the command's words, not what an agent writes at a stop (advisory).
+  Repository tooling in the same change: `check-ship-record.test.mjs` P5 exempted the one block-carrying `SHIP.md`
+  by name, so this run's record, the first `/pharn-dev-ship` wrote since 7.3.0, turned it red. It now accepts a
+  record whose verdict block parses with no defects; a record without one must still read as legacy.
+
 ## [7.3.1] - 2026-11-08
 
 A release cut for the repository-tooling changes below: no product-surface bytes changed since 7.3.0.
