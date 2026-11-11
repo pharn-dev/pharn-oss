@@ -43,6 +43,10 @@
 //       check RED'd and 6d reverted, so exit 4 keeps the revert (GRILL G1);
 //     • a green token whose decision check is RED, or that disagrees with the record's mode (STOP_GREEN ⇔ full,
 //       STOP_GREEN_QUICK ⇔ quick), or whose `iterations` is unreadable → `not committed: decision unverifiable`, exit 4.
+//     • (7.9.0, loop-supervisor) with a SUPERVISOR.json in the feature directory: `knownRisk` checks it through
+//       supervisor.mjs `readSupervision`; a file that does not check, a `stop` decision or an id outside the finding-id
+//       grammar → `not committed: decision unverifiable`, exit 4. A checked `proceed-at-risk` puts its ids in the
+//       document's `known_risk` and one paragraph in the commit message (step 13). No file → `known_risk` null.
 //  9. check-loop-fresh.mjs --feature <name> --base <base> --commit-gate --front; non-zero → `evidence stale`, exit 4.
 // 10. set-writes-scope.cjs --from-plan pharn/features/<name>/PLAN.md; non-zero → `stage failed`, exit 4. Then
 //     reconcile-baseline.mjs --amend-scope — reported, never gating (exit 2 "no baseline" is harmless, as before).
@@ -65,6 +69,8 @@
 //     7.1.0 (loop-isolation-stop) a paragraph after the fixed one ALWAYS names the run's Step 1a isolation outcome,
 //     read from the witness `pharn/.run/pharn-loop/<name>/isolation.json` (`isolationWitness`, the core's grammar), never
 //     from the record: `isolation: <outcome>`, plus ` (host execution accepted by operator)`, or the not-recorded line.
+//     Since 7.9.0 a `proceed-at-risk` run adds the KNOWN RISK paragraph after it (supervisor-core.mjs `knownRiskLine`:
+//     ids, a count and the slug — no reason or finding text reaches the message, P2).
 //     Hooks run (never --no-verify; nothing is pushed or merged). A failed add → `stage failed`, a failed commit → `commit failed`, each followed by the undo the close
 //     part prescribed — reset of the list, `git checkout - --`, `git branch -d <branch>` — exit 4. Success → the SHA
 //     from `git rev-parse HEAD`, `committed <branch>`, exit 0.
@@ -114,6 +120,8 @@ import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
 import { closingLine, echo, floorScript, indent, ledgerSteps, runLedgerTail, runStep, runStop, step } from "./closeout-core.mjs";
 import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
 import { preRunUnchanged } from "./pre-run-snapshot.mjs";
+import { knownRiskLine } from "./supervisor-core.mjs";
+import { readSupervision } from "./supervisor.mjs";
 
 export const SCHEMA = "pharn-loop-closeout/1";
 
@@ -156,6 +164,7 @@ export const STAGE_ARTIFACTS = Object.freeze([
   "GRILL.r2.md",
   "grill-findings.r2.json",
   "grill-triage.r2.json",
+  "SUPERVISOR.json",
   "BUILD.md",
   "REGRESSION.md",
   "VERIFY.md",
@@ -191,6 +200,7 @@ export const DOC_KEYS = Object.freeze([
   "report",
   "freshness",
   "excluded_gates",
+  "known_risk",
   "left_dirty",
   "branch",
   "commit",
@@ -294,7 +304,7 @@ export function gitRun(args, { literal = false, timeoutMs = GIT_TIMEOUT_MS } = {
 export function addArgs(list) {
   return ["add", "-A", `--pathspec-from-file=${list}`, "--pathspec-file-nul"];
 }
-export function commitArgs(list, feature, decision, iterations, excluded = null, isolation = null) {
+export function commitArgs(list, feature, decision, iterations, excluded = null, isolation = null, knownRiskText = null) {
   const note = exclusionNote(excluded);
   return [
     "commit",
@@ -310,8 +320,25 @@ export function commitArgs(list, feature, decision, iterations, excluded = null,
     // P2), so a committed branch names the outcome whatever the record says (the record check does not gate the commit).
     "-m",
     isolationLine(isolation, feature),
+    // 7.9.0 (loop-supervisor): the KNOWN RISK paragraph, only as supervisor-core.mjs `knownRiskLine` built it (ids that
+    // match ID_RE, a count and the slug — P2); any other value adds nothing.
+    ...(typeof knownRiskText === "string" && knownRiskText.startsWith("known risk: ") ? ["-m", knownRiskText] : []),
     ...(note === null ? [] : ["-m", note]),
   ];
+}
+
+/** 7.9.0 — the carried findings of a `proceed-at-risk` decision, read and checked through supervisor.mjs
+ *  `readSupervision` (the CLI's own derivation, L35). `{ok: true, ids: null, line: null}` with no SUPERVISOR.json;
+ *  `{ok: true, ids, line}` for a checked `proceed-at-risk`; `{ok: false, why}` for a file that does not check, a `stop`
+ *  decision, or ids outside the grammar — the green gate then refuses to commit (`decision unverifiable`). */
+export function knownRisk(feature) {
+  const s = readSupervision(featureDir(feature));
+  if (s.state === "absent") return { ok: true, ids: null, line: null };
+  if (s.state !== "ok") return { ok: false, why: `SUPERVISOR.json is ${s.state}` };
+  if (s.verdict.decision !== "proceed-at-risk") return { ok: false, why: "SUPERVISOR.json records a stop decision" };
+  const line = knownRiskLine(feature, s.verdict.known_risk);
+  if (line === null) return { ok: false, why: "a carried id is outside the finding-id grammar" };
+  return { ok: true, ids: s.verdict.known_risk, line };
 }
 
 /** 7.1.0 — the run's Step 1a isolation witness, `pharn/.run/pharn-loop/<name>/isolation.json`, as a record, or null (absent,
@@ -708,6 +735,15 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   const agrees = facts.mode !== null && GREEN_TOKENS[facts.mode] === facts.decision;
   if (doc.decision_check !== "GREEN" || !agrees || facts.iterations === null) return owed("decision unverifiable");
 
+  trace.phase = "known-risk";
+  const kr = knownRisk(feature);
+  if (!kr.ok) {
+    log(`── KNOWN RISK not verifiable: ${kr.why} — nothing is committed\n`);
+    return owed("decision unverifiable");
+  }
+  doc.known_risk = kr.ids;
+  if (kr.ids !== null) log(`── known risk carried by the supervisor: ${kr.ids.join(", ")}\n`);
+
   trace.phase = "commit-gate";
   const fr = run(steps.fresh);
   echo(log, steps.fresh, fr);
@@ -766,7 +802,7 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   trace.phase = "commit";
   writePhase(feature, "commit", log);
   const cm = git(
-    commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations, doc.excluded_gates, isolationWitness(feature)),
+    commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations, doc.excluded_gates, isolationWitness(feature), kr.line),
     { literal: true }
   );
   echo(log, { id: "git commit" }, cm);

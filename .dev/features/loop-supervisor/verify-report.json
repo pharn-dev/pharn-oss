@@ -1,0 +1,27 @@
+{
+  "feature": "loop-supervisor",
+  "gates": {
+    "eval:trust-fence": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "c12baea544865cd54f94c494e63887f66006b2fa46e74798620ea84d30d41cd2",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "b426cb82bb4065895800c5db5fed462291a390b2e2af81865ed5c425a412023c"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

@@ -34,7 +34,11 @@
 // column routes `/pharn-grill <name>` (interrogation and every griller) and then `/pharn-triage <name>`, a stage that
 // gives each finding in grill-findings.json one disposition; grill-triage.mjs derives the verdict: `spec` stops the
 // run, and `replan` re-routes these same plan, grill and triage cells for up to two re-plan rounds (7.8.0,
-// grill-round.mjs) before it stops (contract: pharn/pharn-contracts/grill-triage.md). Before 7.7.0 (6.45.0,
+// grill-round.mjs) before it stops (contract: pharn/pharn-contracts/grill-triage.md). THE ESCALATION GOES TO A
+// SUPERVISOR (7.9.0, loop-supervisor): a `spec` verdict, or a `replan` with no round left, routes
+// `/pharn-supervise <name>` once, whose decision (`proceed-at-risk` | `stop`, checked by supervisor.mjs) replaces the
+// stop for a person; it is a fresh agent so the arbiter is not the orchestrating session whose context holds every
+// stage's returned text (contract: pharn/pharn-contracts/supervisor.md). Before 7.7.0 (6.45.0,
 // front-grill-concurrent) the full loop's grill was floor-only, because unattended its findings gated nothing and no
 // stage read them before the build; four pharn-starter runs wrote 26 findings that way, three ending green
 // (.dev/features/loop-grill-triage/PLAN.md, "The failure"). The trade, measured: a full grill took 229-284 s in five
@@ -220,12 +224,14 @@ import { shelledVerdict } from "./shelled-verdict-core.mjs";
 /** The two orchestrators that spawn stage agents. */
 export const STAGE_AGENT_COMMANDS = Object.freeze(["pharn-ship", "pharn-loop"]);
 
-/** The eight pipeline stages, in spine order. `pharn-triage` (7.7.0) runs in the full loop only. */
+/** The pipeline stages, in spine order. `pharn-triage` (7.7.0) and `pharn-supervise` (7.9.0) run in the full loop
+ *  only, the supervisor only on an escalation. */
 export const STAGES = Object.freeze([
   "pharn-spec",
   "pharn-plan",
   "pharn-grill",
   "pharn-triage",
+  "pharn-supervise",
   "pharn-test",
   "pharn-build",
   "pharn-regress",
@@ -246,6 +252,7 @@ export const STAGE_CONFIG_KEYS = Object.freeze({
   "pharn-plan": "plan",
   "pharn-grill": "grill",
   "pharn-triage": "triage",
+  "pharn-supervise": "supervise",
   "pharn-test": "ac-test",
   "pharn-build": "build",
   "pharn-regress": "regress",
@@ -269,6 +276,7 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-plan": AGENT,
       "pharn-grill": AGENT,
       "pharn-triage": SKIPPED,
+      "pharn-supervise": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -279,6 +287,7 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-plan": AGENT,
       "pharn-grill": "floor-only",
       "pharn-triage": SKIPPED,
+      "pharn-supervise": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": SKIPPED,
@@ -286,12 +295,14 @@ export const ROUTE_POLICY = Object.freeze({
     }),
   }),
   "pharn-loop": Object.freeze({
-    // 7.7.0 (loop-grill-triage): the full loop routes its grill and then triage — the header says why.
+    // 7.7.0 (loop-grill-triage): the full loop routes its grill and then triage — the header says why. 7.9.0: and the
+    // supervisor, on an escalation only.
     full: Object.freeze({
       "pharn-spec": AGENT,
       "pharn-plan": AGENT,
       "pharn-grill": AGENT,
       "pharn-triage": AGENT,
+      "pharn-supervise": AGENT,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -304,6 +315,7 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-plan": AGENT,
       "pharn-grill": "floor-only",
       "pharn-triage": SKIPPED,
+      "pharn-supervise": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": SKIPPED,
@@ -336,6 +348,7 @@ export const INVOCATIONS = Object.freeze({
       "pharn-plan": "/pharn-plan <name>",
       "pharn-grill": "/pharn-grill <name>",
       "pharn-triage": "/pharn-triage <name>",
+      "pharn-supervise": "/pharn-supervise <name>",
       "pharn-test": "/pharn-test <name> --unattended",
       "pharn-build": "/pharn-build <name>",
     }),

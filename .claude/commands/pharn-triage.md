@@ -81,8 +81,8 @@ Rules:
 
 - A finding whose `severity` is `blocking` is never `proceed`; `grill-triage.mjs` refuses it.
 - When you cannot tell whether the plan must change, choose `replan`: in a full `/pharn-loop` it sends the plan back for
-  a re-plan round while one is left (7.8.0), and then stops for a person, which is the question this stage cannot ask
-  itself (P5).
+  a re-plan round while one is left (7.8.0), and then to the supervisor, whose decision is recorded and named in the
+  commit (7.9.0) — the question this stage cannot ask itself (P5).
 - `reason`: one line, at most 2,000 characters, saying why — for `replan` what must change (a re-plan reads it), for `spec` what the SPEC
   lacks, for `proceed` where it is handled or why it does not matter. Write your own words; never paste the finding's
   text as the reason.

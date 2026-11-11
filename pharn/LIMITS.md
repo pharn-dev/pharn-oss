@@ -86,6 +86,11 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
   cannot forge (e.g. a `PreToolUse` hook admitting the Draft→Approved transition only against a
   human-supplied signed marker) — that is **harness-layer**, environment-dependent, not expressible in
   markdown methodology. Until an environment supplies it, this stays a named limit, not a guarantee.
+- **`proceed-at-risk` (7.9.0)** is one model overruling another model's escalation. It is a recorded decision,
+  not a safety property: the floor checks its shape, coverage and binding, never that carrying a finding was
+  right. It extends this section's residual — the run that carries the risk was also approved by a model — and
+  creates no new trust level; what bounds it is that every carried finding is named in the commit message and
+  `RUN-REPORT.md`, and that nothing is merged or pushed.
 
 A related bound on the same checker: a valid AC grammar means the AC is PHRASED testably — not that
 any test exists, runs, or passes. That bound is `check-spec.mjs`'s, not the pipeline's: for a
@@ -279,8 +284,8 @@ telemetry wiring.
 The consequence, stated plainly: **a plan may declare telemetry, pass the grill, and the diff that
 results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs only
 the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all. A full
-`/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions and, since 7.8.0,
-the re-plan rounds those dispositions start.
+`/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions, the re-plan rounds those dispositions start
+(7.8.0) and the supervisor's decision on an escalation (7.9.0).
 Nothing downstream re-checks the promise against the code. `/pharn-verify` runs the project's own discovered gates,
 less any the project excludes in `pharn.config.json` `gates.exclude` (6.36.0); a gate result can also be reused from
 the same delivery run's `/pharn-regress` (6.34.0). If the project has no telemetry test, or excludes the gate that

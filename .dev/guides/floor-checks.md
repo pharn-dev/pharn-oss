@@ -320,8 +320,8 @@ node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.j
 # are read through one O_NOFOLLOW descriptor each (L54); output names codes, indexes and ids, never a reason (P2, L62).
 # Exit: skeleton 0 the skeleton JSON · 1 the findings file's RED · 2 usage/unreadable | check 0 proceed · 3 replan ·
 # 4 spec (one verdict JSON line: verdict, counts, escalated ids) · 1 `RED — <codes>` first, then one fixed hint per code
-# · 2 usage/unreadable. /pharn-loop maps 4 to S16 (`blocked: grill-escalation`), 3 to `grill-round.mjs next` (7.8.0,
-# below), anything else but 0 to S9.
+# · 2 usage/unreadable. /pharn-loop maps 3 to `grill-round.mjs next` (7.8.0, below), 4 to the
+# supervisor (7.9.0, `supervisor.mjs`, below), anything else but 0 to S9.
 # Ships: bumps SKILLS_VERSION.
 node pharn/floor/grill-triage.mjs skeleton pharn/features/<name>/grill-findings.json
 node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json
@@ -332,8 +332,8 @@ node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json 
 ```bash
 # THE ROUND COUNTER AND ARCHIVER (added 7.8.0, loop-replan-rounds; part 2b of restore-loop-grill). After a `replan`
 # triage verdict, `next` renames the round's PLAN.md, GRILL.md, grill-findings.json and grill-triage.json to their
-# `.r<round>` archives and names the next round; at most two re-plan rounds (REPLAN_CAP), so exit 5 at round 3 stops the
-# run (S16). `current` prints the round the next grill writes and what a re-plan reads (`live` after an S16 stop, the
+# `.r<round>` archives and names the next round; at most two re-plan rounds (REPLAN_CAP), so exit 5 at round 3 sends the
+# escalation to the supervisor (7.9.0). `current` prints the round the next grill writes and what a re-plan reads (`live` after an S16 stop, the
 # newest archive in a round, null on a first plan) — /pharn-grill and /pharn-plan run it themselves. THE TRIGGER (P7):
 # the 7.7.0 triage measurement, all five measured full loops escalating (3 replan), each stopping for a person. Rules and
 # bounds: grill-round-core.mjs's header; contract: pharn-contracts/grill-triage.md, "Rounds (7.8.0)".
@@ -348,6 +348,29 @@ node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json 
 # left · 1 `RED — <codes>` · 2 usage/unreadable. Ships: bumps SKILLS_VERSION.
 node pharn/floor/grill-round.mjs current <name>
 node pharn/floor/grill-round.mjs next <name>
+```
+
+## `supervisor.mjs` — the decision on an escalated full loop
+
+```bash
+# THE SUPERVISOR'S CHECKER (added 7.9.0, loop-supervisor; part 3a of restore-loop-grill). On an escalation — a `spec`
+# triage verdict, or `replan` with no re-plan round left — /pharn-supervise writes SUPERVISOR.json: `proceed-at-risk` or
+# `stop`, one reason per escalated finding id, bound to grill-triage.json by its sha256. THE TRIGGER (P7): every measured
+# full loop escalated, and before 7.9.0 an escalation stopped the run for a person (S16). Rules and bounds:
+# supervisor-core.mjs's header; contract: pharn-contracts/supervisor.md. `readSupervision` is the same derivation for
+# loop-closeout.mjs (the KNOWN RISK paragraph of the green commit, ids only) and render-run-report.mjs (`## Known risk`).
+# FLOOR: closed keys, no repeated key, the decision enum, risks index-aligned with the escalated ids (closed both ways,
+# never empty), the reason bounds, the sha256 binding to the triage (which is re-checked against the findings), and the
+# escalation precondition (`not-escalated`); links and non-regular files refused (lstat, then one O_NOFOLLOW read each,
+# L54). AGREEMENT, NEVER TRUTH (L43): the precondition reads the run's own triage and archive count. ADVISORY: the
+# decision and every reason (one model overruling another's escalation), and that the loop acts on the exit code.
+# Output names codes, indexes and ids, never a reason or finding text (P2, L62).
+# Exit: skeleton 0 the skeleton JSON · 1 `RED — <codes>` · 2 usage/unreadable | check 0 proceed-at-risk · 3 stop (one
+# verdict JSON line: decision, round, known_risk) · 1 `RED — <codes>` first, then one fixed hint per code · 2
+# usage/unreadable (SUPERVISOR.json absent included). /pharn-loop maps 0 to the test stage, 3 to S16
+# (`blocked: grill-escalation`), anything else to S17 (`blocked: supervisor-red`). Ships: bumps SKILLS_VERSION.
+node pharn/floor/supervisor.mjs skeleton <name>
+node pharn/floor/supervisor.mjs check <name>
 ```
 
 ## `pharn/floor/check-provenance.mjs` — product provenance

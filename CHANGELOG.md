@@ -23,6 +23,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.9.0] - 2026-11-11
+
+### Added
+
+- **An escalated full `/pharn-loop` ends in a recorded decision, not a stop (part 3a of restore-loop-grill).** Until now
+  a `spec` triage verdict, or a `replan` still standing after the last re-plan round, stopped the run for a person
+  (S16). Now it goes to a new routed stage, `/pharn-supervise`, a fresh agent that decides `proceed-at-risk` or `stop`
+  and writes one reason per escalated grill finding in `pharn/features/<name>/SUPERVISOR.json`. A new checker,
+  `pharn/floor/supervisor.mjs` (code half `supervisor-core.mjs`), re-derives the escalated ids from the findings and
+  the triage every time and checks the file: closed keys, the decision, one reason per escalated id in order, the
+  sha256 binding to `grill-triage.json`, and that a decision is made only on an escalation. `proceed-at-risk` goes on to
+  the test stage. The escalated findings are then **KNOWN RISK**:
+  - the green commit's message names their ids in a fixed paragraph (ids, a count and the slug; no model text), and
+    `loop-closeout.mjs` refuses to commit when the decision does not check;
+  - `RUN-REPORT.md` gains a `## Known risk` section with each finding's severity, rule and file, and its text and the
+    supervisor's reason fenced as untrusted DATA (only for a `/pharn-loop` ledger);
+  - the record and the run summary name them.
+
+  `stop` is S16 (`blocked: grill-escalation`, kept so 7.7.0–7.8.0 records stay valid); a decision that does not check is
+  a new stop, S17 (`blocked: supervisor-red`). The supervisor's decision is advisory: one model overruling or upholding
+  another's escalation (`pharn/LIMITS.md §1d`, trusted-doc text committed by the maintainer). Contract:
+  `pharn/pharn-contracts/supervisor.md`. `/pharn-supervise` resolves through `models.stages.default` (no `supervise`
+  key in the shipped config, no `MIN_CLI` change); a pharn-cli port that accepts the key is a follow-up. Amending the
+  SPEC on an escalation is part 3b.
+
 ### Changed
 
 - 2026-11-11: **`docs/limitations.md` now says how to give `/pharn-triage` a model of its own.** 7.7.1 suggested no

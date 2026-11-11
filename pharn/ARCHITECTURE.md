@@ -256,10 +256,13 @@ every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restate
 **Triage** (7.7.0, a full `/pharn-loop` only): after the grill, `/pharn-triage` gives each grill finding one
 disposition — `proceed`, `replan` or `spec` — in `grill-triage.json`, bound to the findings file by its sha256.
 `pharn/floor/grill-triage.mjs` derives the verdict from the dispositions; the floor checks their shape, their
-coverage of every finding id and the binding, and each disposition is the model's judgment (advisory). A `spec`
-verdict stops the run. A `replan` verdict sends the plan back to `/pharn-plan` for a re-plan round — at most two,
-each round's plan and grill outputs archived by `pharn/floor/grill-round.mjs` (7.8.0) — and stops the run when no
-round is left. Shape: `pharn-contracts/grill-triage.md`.
+coverage of every finding id and the binding, and each disposition is the model's judgment (advisory). A `replan` verdict sends the plan back to `/pharn-plan` for a re-plan round — at most two, each round's
+plan and grill outputs archived by `pharn/floor/grill-round.mjs` (7.8.0). A `spec` verdict, or a `replan` with no
+round left, goes to `/pharn-supervise` (7.9.0), whose decision — `proceed-at-risk` or `stop`, in
+`SUPERVISOR.json` — `pharn/floor/supervisor.mjs` checks: `stop` stops the run, and `proceed-at-risk` goes on to
+the build with every escalated finding carried as KNOWN RISK into the commit message (its ids), `RUN-REPORT.md`
+and the loop record. The decision is the model's (advisory). Shapes: `pharn-contracts/grill-triage.md`,
+`pharn-contracts/supervisor.md`.
 
 **Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`
 SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its

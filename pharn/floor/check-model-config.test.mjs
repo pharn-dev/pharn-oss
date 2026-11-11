@@ -27,7 +27,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CHECK = join(here, "check-model-config.mjs");
 const REPO_ROOT = join(here, "..", ".."); // pharn/floor → repo root
 
-// The twelve product stages, mirrored here from the checker's own PRODUCT_STAGES so a silent change to the
+// The product stages, mirrored here from the checker's own PRODUCT_STAGES so a silent change to the
 // map fails a test rather than passing unnoticed. The ENUMERATION is the deliverable (L29/L36): every
 // per-stage assertion below iterates THIS list, never one member its author had in front of them.
 const PRODUCT_STAGES = [
@@ -35,6 +35,7 @@ const PRODUCT_STAGES = [
   "plan",
   "grill",
   "triage",
+  "supervise",
   "build",
   "regress",
   "verify",
@@ -44,6 +45,9 @@ const PRODUCT_STAGES = [
   "memory-promote",
   "ac-test",
 ];
+
+/** How many product stages the mirror holds — every count assertion reads it, never a literal (7.9.0). */
+const N = PRODUCT_STAGES.length;
 
 // A stage's command FILE, mirrored from the checker's map: every key is its file stem except `ac-test`, whose file
 // is `pharn-test.md` (the checker's reverse pass tests the map's file names for exactly this reason).
@@ -96,7 +100,7 @@ function writeCommand(cmdDir, fileName, me) {
   writeFileSync(join(cmdDir, fileName), fm);
 }
 
-// A commands dir whose twelve product commands all AGREE with `cfg`, then apply `overrides` by stage name
+// A commands dir whose product commands all AGREE with `cfg`, then apply `overrides` by stage name
 // (a value of `undefined` deletes the file entirely, to simulate an absent command).
 function writeCommands(dir, cfg, overrides = {}) {
   const cmdDir = join(dir, "commands");
@@ -267,6 +271,18 @@ test("★ live ★ L41: the SHIPPED config names no `triage` key, so `triage` re
   assert.equal(r.stdout.trim(), JSON.stringify({ model: d.model, effort: d.effort }));
 });
 
+test("★ live ★ L41: the SHIPPED config names no `supervise` key, so `supervise` resolves through its `default` (7.9.0)", () => {
+  // As for `triage`: pharn-cli copies this block, and a release that does not know the stage rejects a block naming it,
+  // so the shipped config leaves `supervise` to `default` and this fallback is the production path.
+  const cfgPath = join(REPO_ROOT, "pharn.config.json");
+  const shipped = JSON.parse(readFileSync(cfgPath, "utf8"));
+  assert.ok(!Object.hasOwn(shipped.models.stages, "supervise"), "the shipped config must not name `supervise`");
+  const r = run(["resolve", "supervise", "--config", cfgPath]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const d = shipped.models.stages.default;
+  assert.equal(r.stdout.trim(), JSON.stringify({ model: d.model, effort: d.effort }));
+});
+
 test("resolve: a prototype-chain key falls back to default, NEVER `{}` (L15 — the own-property pick)", () => {
   // Regression witness for the P0-class leak: `stages[stage] || stages.default` returns the inherited
   // Object.prototype member (truthy) → {model:undefined,effort:undefined} → `{}` printed at exit 0.
@@ -279,10 +295,12 @@ test("resolve: a prototype-chain key falls back to default, NEVER `{}` (L15 — 
 
 // ── agreement ────────────────────────────────────────────────────────────────────────────────────────
 
+// The title keeps its 7.6.0 wording so test-integrity tracking (pharn-ci TI02) follows the test by name; the count is
+// thirteen since 7.9.0 (supervise) and the assertion reads it from the mirror, `N`.
 test("agreement GREEN: twelve product commands whose frontmatter matches the config exit 0", () => {
   const r = onAgreement(VALID);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /GREEN — config valid; 12\/12 product stage\(s\) agree/);
+  assert.match(r.stdout, new RegExp(`GREEN — config valid; ${N}/${N} product stage\\(s\\) agree`));
 });
 
 // ENF-3 (6.65.2): a leading UTF-8 BOM used to make a command's `model:`/`effort:` unreadable, so an agreeing
@@ -323,7 +341,7 @@ test("✧ CRLF product commands are read as their LF twins; a displaced fence re
   };
   const crlf = (s) => s.replace(/\n/g, "\r\n");
   for (const [overrides, fn, status, mustMatch] of [
-    [{}, crlf, 0, /GREEN — config valid; 12\/12/],
+    [{}, crlf, 0, new RegExp(`GREEN — config valid; ${N}/${N}`)],
     [
       { [PRODUCT_STAGES[0]]: { model: "haiku", effort: expected(VALID, PRODUCT_STAGES[0]).effort } },
       crlf,
@@ -433,7 +451,7 @@ test("agreement: a `pharn-dev-*` command is NOT a product command — its model:
     writeCommand(cmdDir, "pharn-dev-eval.md", { model: "haiku", effort: "low" });
     const r = run(["agreement", "--config", configPath, "--commands-dir", cmdDir]);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /12 product command\(s\) scanned/);
+    assert.match(r.stdout, new RegExp(`${N} product command\\(s\\) scanned`));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -518,10 +536,12 @@ test("★ live ★: agreement over the REAL repo config + commands is GREEN (the
   assert.match(r.stdout, /GREEN/);
 });
 
+// The title keeps its wording for the same tracking reason; the real repo has thirteen product stages since 7.9.0.
 test("★ live ★: the real repo declares all twelve product stages, and each command's frontmatter is reachable", () => {
   // Guards the emptiness direction on the REAL tree (L34): a repo whose commands were renamed away
   // would otherwise show a green agreement over a shrunken map.
   const r = run(["agreement", "--config", join(REPO_ROOT, "pharn.config.json"), "--commands-dir", join(REPO_ROOT, ".claude", "commands")]);
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /12\/12 product stage\(s\) agree/);
+  assert.match(r.stdout, new RegExp(`${N}/${N} product stage\\(s\\) agree`));
+  assert.equal(N, 13, "non-vacuity: thirteen product stages since 7.9.0 (supervise)");
 });
