@@ -4,7 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import fs, { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -24,6 +25,7 @@ import {
   roundArchives,
 } from "./grill-round-core.mjs";
 import { SCHEMA as TRIAGE_SCHEMA } from "./grill-triage-core.mjs";
+import { main } from "./grill-round.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CLI = join(HERE, "grill-round.mjs");
@@ -363,6 +365,91 @@ test("two advances then the cap: rounds 1 and 2 archived, round 3 stays live", (
     assert.equal(cli(p, "next", p.name).code, EXIT.cap);
     for (const n of ARCHIVE_NAMES) assert.equal(existsSync(join(p.dir, n)), true, n);
     assert.deepEqual(JSON.parse(cli(p, "current", p.name).out), { schema: SCHEMA, round: 3, archived: 2, replan_from: "live" });
+  } finally {
+    cleanup(p);
+  }
+});
+
+// ── A rename that fails part-way (in-process, so one rename call can be made to fail) ────────────────────────────────
+
+/** Run `main` from `p.root` (it resolves pharn/features/<name> against the cwd), capturing stdout and stderr. */
+function runMain(p, ...args) {
+  const out = [];
+  const err = [];
+  const io = { stdout: { write: (s) => out.push(s) }, stderr: { write: (s) => err.push(s) } };
+  const cwd = process.cwd();
+  process.chdir(p.root);
+  try {
+    return { code: main(["node", "grill-round.mjs", ...args], io), out: out.join(""), err: err.join("") };
+  } finally {
+    process.chdir(cwd);
+  }
+}
+
+/** Make the listed renameSync calls (1-based) throw EIO for the duration of `fn`; every other call is the real one. */
+function withFailingRenames(t, failing, fn) {
+  const real = fs.renameSync;
+  let n = 0;
+  t.mock.method(fs, "renameSync", (from, to) => {
+    n += 1;
+    if (failing.includes(n)) throw Object.assign(new Error("injected rename failure"), { code: "EIO" });
+    return real(from, to);
+  });
+  syncBuiltinESMExports();
+  try {
+    return fn();
+  } finally {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  }
+}
+
+test("next: a later rename fails, the files already moved are moved back, and the round is as it was (rename-failed)", (t) => {
+  const p = project();
+  try {
+    writeRound(p.dir, 1);
+    const before = Object.fromEntries(LIVE_NAMES.map((n) => [n, readFileSync(join(p.dir, n), "utf8")]));
+    // call 1 moves PLAN.md, call 2 (GRILL.md) fails, call 3 moves PLAN.md back
+    const r = withFailingRenames(t, [2], () => runMain(p, "next", p.name));
+    assert.equal(r.code, EXIT.red);
+    assert.match(r.out, /^RED — rename-failed\n/);
+    assert.doesNotMatch(r.out, /exists:/);
+    for (const n of LIVE_NAMES) assert.equal(readFileSync(join(p.dir, n), "utf8"), before[n], `${n} restored`);
+    for (const n of roundArchives(1)) assert.equal(existsSync(join(p.dir, n)), false, `${n} absent`);
+  } finally {
+    cleanup(p);
+  }
+});
+
+test("next: a later rename fails and moving back fails too: rename-partial lists the names that exist, no content", (t) => {
+  const p = project();
+  try {
+    writeRound(p.dir, 1);
+    // call 1 moves PLAN.md to PLAN.r1.md, call 2 (GRILL.md) fails, call 3 (PLAN.r1.md back) fails
+    const r = withFailingRenames(t, [2, 3], () => runMain(p, "next", p.name));
+    assert.equal(r.code, EXIT.red);
+    const lines = r.out.trimEnd().split("\n");
+    assert.equal(lines[0], "RED — rename-partial");
+    assert.equal(lines.at(-1), "  exists: GRILL.md, grill-findings.json, grill-triage.json, PLAN.r1.md");
+    assert.doesNotMatch(r.out, /round 1 plan|refresh grant/);
+    assert.equal(existsSync(join(p.dir, "PLAN.md")), false);
+    assert.equal(existsSync(join(p.dir, "PLAN.r1.md")), true);
+  } finally {
+    cleanup(p);
+  }
+});
+
+test("usage: a feature path that is a file, not a directory, exits 2 with the reason on stderr", () => {
+  const p = project();
+  try {
+    writeFileSync(join(p.root, "pharn", "features", "plain-file"), "not a directory\n");
+    for (const cmd of ["current", "next"]) {
+      const r = cli(p, cmd, "plain-file");
+      assert.equal(r.code, EXIT.usage, cmd);
+      assert.equal(r.out, "");
+      assert.match(r.err, /^grill-round: not a directory: pharn\/features\/plain-file\n$/);
+    }
+    assert.equal(runMain(p, "current", "plain-file").code, EXIT.usage);
   } finally {
     cleanup(p);
   }

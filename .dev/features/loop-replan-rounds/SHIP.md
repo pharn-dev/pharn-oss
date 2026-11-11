@@ -25,6 +25,10 @@ run-ended: GATE 2
   passed, `new_failures: []`. The first verdict call used a stale `--inside` file; it was recomputed with this
   feature's scope, and both calls read `no-regressions`.
 - Verify: `VERIFY.md` / `verify-report.json` — all eight gates exit 0, `reconcile` included.
+- **Fix after GATE 2:** the pull request's pharn-ci diff-coverage gate failed (96.61% against 100%: twelve untested
+  lines in `grill-round.mjs`). Three tests were added to `pharn/floor/grill-round.test.mjs`, a declared `## Files`
+  path written under the plan's scope, and verify was re-run over that tree (PASS, eight gates; the report above is the
+  re-run's). Regress was not re-run: the one changed file is inside the feature, so no outside gate's input changed.
 - Review: `REVIEW.md` (GREEN, 0 floor-gate findings, 3 minor advisory).
 
 changelog-entry: exit 0
