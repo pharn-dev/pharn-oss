@@ -162,7 +162,8 @@ A full `/pharn-grill` (not `--quick`, not `--floor-only`) writes `pharn/features
   itself is unchanged: the `id` key exists in this file only, so `findings.json`, `merge-findings.mjs` and every eval
   read nothing new.
 - **The id is positional:** element `i` (0-based) carries exactly `G<round>-<i+1>`, so ids are unique, contiguous and
-  in file order. `round` is a positive integer (at most 99); `/pharn-grill` writes `1`. An id names a finding within
+  in file order. `round` is a positive integer (at most 99); `/pharn-grill` writes the round `grill-round.mjs current` prints — `1`, or
+  `2` / `3` in a full `/pharn-loop`'s re-plan round (`grill-triage.md`, "Rounds"). An id names a finding within
   one round; nothing says that `G1-3` and a later round's id are the same concern.
 - **Closed:** keys exactly as shown at both levels, no key repeated at any depth, at most 500 findings, `[]` allowed;
   `type`, `severity` and `rule_id` by the same rules as the merge (`TYPE_ENUM`, the severity set, `RULE_ID_OK`, each

@@ -1,0 +1,65 @@
+{
+  "base": "8839760e8b35dcabac1589fea0847a1fd017d86d",
+  "inside": [
+    ".claude/commands/pharn-grill.md",
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-plan.md",
+    ".claude/commands/pharn-triage.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/floor-orchestration.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "docs/limitations.md",
+    "pharn/floor/check-regress.mjs",
+    "pharn/floor/check-regress.test.mjs",
+    "pharn/floor/loop-closeout.mjs",
+    "pharn/floor/loop-closeout.test.mjs",
+    "pharn/floor/reconcile-ignore.json",
+    "pharn/floor/stage-agent-core.mjs",
+    "pharn/floor/worktree-fingerprint.mjs",
+    "pharn/pharn-contracts/finding-shape.md",
+    "pharn/pharn-contracts/grill-triage.md",
+    ".dev/features/loop-replan-rounds/GRILL.md",
+    ".dev/features/loop-replan-rounds/PLAN.md",
+    "pharn/floor/grill-round-core.mjs",
+    "pharn/floor/grill-round.mjs",
+    "pharn/floor/grill-round.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6104,
+      "failed": 0,
+      "skipped": 7,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6110,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

@@ -32,8 +32,9 @@
 // its full column routes and never runs /pharn-regress; its spec agent is briefed with the quick invocation,
 // `/pharn-spec --quick --model-approve`. THE FULL LOOP'S GRILL IS READ BY TRIAGE (7.7.0, loop-grill-triage): the full
 // column routes `/pharn-grill <name>` (interrogation and every griller) and then `/pharn-triage <name>`, a stage that
-// gives each finding in grill-findings.json one disposition; grill-triage.mjs derives the verdict, and anything but
-// `proceed` stops the run (contract: pharn/pharn-contracts/grill-triage.md). Before 7.7.0 (6.45.0,
+// gives each finding in grill-findings.json one disposition; grill-triage.mjs derives the verdict: `spec` stops the
+// run, and `replan` re-routes these same plan, grill and triage cells for up to two re-plan rounds (7.8.0,
+// grill-round.mjs) before it stops (contract: pharn/pharn-contracts/grill-triage.md). Before 7.7.0 (6.45.0,
 // front-grill-concurrent) the full loop's grill was floor-only, because unattended its findings gated nothing and no
 // stage read them before the build; four pharn-starter runs wrote 26 findings that way, three ending green
 // (.dev/features/loop-grill-triage/PLAN.md, "The failure"). The trade, measured: a full grill took 229-284 s in five

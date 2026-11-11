@@ -464,7 +464,8 @@ node pharn/floor/check-ship-briefing.mjs <BRIEFING.md>
 # model — build, configured sonnet, ran opus on 79% of its requests (.dev/measurements/token-cost-2026-08-18.md §2).
 # Routed: plan, grill, test and build in /pharn-ship (the quick grill excepted); spec, plan, grill, triage, test and
 # build in a full /pharn-loop (7.7.0, loop-grill-triage: the full grill and then /pharn-triage, whose dispositions
-# grill-triage.mjs turns into a verdict; 6.45.0 had made the loop's grill floor-only because no stage read its findings),
+# grill-triage.mjs turns into a verdict; 6.45.0 had made the loop's grill floor-only because no stage read its findings;
+# since 7.8.0 a `replan` verdict re-routes the same plan, grill and triage cells for up to two rounds, grill-round.mjs),
 # and spec, plan, test and build in a quick one, whose grill stays floor-only (`/pharn-grill <name> --quick`, its two
 # checkers) and which runs no triage. Both orchestrators read the grill's two stops BEFORE spawning a grill agent;
 # ship's spec (it IS GATE 1) and every regress/verify (floor-only thin callers) are inline BY POLICY. THE LOOP'S QUICK

@@ -2848,6 +2848,8 @@ const LOOP_FRONT_ORDER = [
   "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-triage --name '<name>'",
   "node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --stage pharn-triage --budget-ms 570000",
   "node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json",
+  // 7.8.0: a `replan` verdict's round, decided by grill-round.mjs; a round re-runs the lines above, never a copy of them.
+  "node pharn/floor/grill-round.mjs next '<name>'",
   "node pharn/floor/entry-gates.mjs --wait --feature '<name>' --budget-ms 570000",
   "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name '<name>'",
 ];
@@ -2872,8 +2874,9 @@ function loopFrontOrderReasons(body) {
 test("✧ LOOP GRILL + TRIAGE: pharn-loop.md's front reads the grill stops, grill, findings, triage and verdict ONCE, in order", () => {
   const body = commandBody(LOOP_FILE);
   assert.deepEqual(loopFrontOrderReasons(body), []);
-  // The triage read's branch: 3 or 4 → S16, never a proceed.
-  assert.match(body, /`3` \(`replan`\) or `4` \(`spec`\) → \*\*S16\*\* \(`blocked: grill-escalation`\)/);
+  // The triage read's branch (7.8.0): 4 → S16; 3 → a re-plan round through grill-round.mjs next; never a proceed.
+  assert.match(body, /- `4` \(`spec`\), or `next`'s `5` → \*\*S16\*\* \(`blocked: grill-escalation`\)/);
+  assert.match(body, /- `3` \(`replan`\) → \*\*a re-plan round \(7\.8\.0\)\*\*/);
   // CONTROLS (L60): the stop block moved after the grill's start line, and a doubled triage read, each fail.
   const block = GRILL_STOP_LINES.join("\n");
   assert.ok(body.includes(block), "fixture sanity: the two stop lines are one block");
@@ -2909,9 +2912,57 @@ test("✧ S16 RE-RUN: pharn-loop.md says a re-run starts in a fresh feature dire
     assert.ok(body.includes(needle), `fixture sanity: ${needle}`);
     return body.replace(needle, "");
   };
-  assert.match(reasons(cut("reads nothing this run wrote")).join("\n"), /fresh feature directory/);
+  assert.match(reasons(cut("reads nothing this")).join("\n"), /fresh feature directory/);
   assert.match(reasons(cut("which rewrites `PLAN.md` from the approved SPEC")).join("\n"), /\/pharn-plan <name> route/);
-  assert.match(reasons(cut("That\n  route runs no triage")).join("\n"), /runs no triage/);
+  assert.match(reasons(cut("That route runs no triage")).join("\n"), /runs no triage/);
+});
+
+// 7.8.0 (loop-replan-rounds): a `replan` verdict starts a re-plan round. The branch's exits are pinned, and the round
+// re-runs the front's lines rather than copying them (LOOP_FRONT_ORDER keeps each line once).
+test("✧ REPLAN ROUND: next's exits are 0 → back to the plan, 5 → S16, other → S9; /pharn-plan reads the round it names", () => {
+  const flat = (text) => text.replace(/\s+/g, " ");
+  const reasons = (body) => {
+    const out = [];
+    const branch = flat(body).match(/- `3` \(`replan`\) → \*\*a re-plan round \(7\.8\.0\)\*\*.*?(?= - `4` \(`spec`\), or `next`'s `5`)/);
+    if (!branch) return ["no re-plan branch in Step 4's triage read"];
+    if (!/`0` → \*\*go back to `\/pharn-plan`'s start line above\*\*/.test(branch[0])) out.push("exit 0 does not go back to the plan");
+    if (!/`5` → no re-plan round is left: \*\*S16\*\*/.test(branch[0])) out.push("exit 5 does not stop at S16");
+    if (!/Anything else → \*\*S9\*\*/.test(branch[0])) out.push("another exit does not stop at S9");
+    return out;
+  };
+  const body = commandBody(LOOP_FILE);
+  assert.deepEqual(reasons(body), []);
+  // Cut the first occurrence AFTER the branch starts: "Anything else → **S9**" also appears earlier in Step 4.
+  const start = body.indexOf("- `3` (`replan`) → **a re-plan round (7.8.0)**");
+  assert.ok(start >= 0, "fixture sanity: the re-plan branch");
+  const cut = (needle) => {
+    const at = body.indexOf(needle, start);
+    assert.ok(at >= 0, `fixture sanity: ${needle}`);
+    return body.slice(0, at) + body.slice(at + needle.length);
+  };
+  // CONTROLS (L60): each exit's sentence, removed, is reported.
+  assert.match(reasons(cut("**go back to `/pharn-plan`'s start line above**")).join("\n"), /go back to the plan/);
+  assert.match(reasons(cut("`5` → no re-plan round is left: **S16**")).join("\n"), /exit 5/);
+  assert.match(reasons(cut("Anything else → **S9**")).join("\n"), /another exit/);
+  // /pharn-plan's re-plan mode is a membership test over grill-round.mjs current, and it names the archives it reads.
+  const plan = commandBody("pharn-plan.md");
+  assert.ok(fencedLines(plan).some((f) => f.text.trim() === "node pharn/floor/grill-round.mjs current <name>"));
+  for (const n of ["PLAN.r1.md", "grill-findings.r1.json", "grill-triage.r1.json"]) assert.ok(plan.includes(`\`${n}\``), n);
+  // /pharn-grill writes the round current prints, never a literal 1.
+  const grill = commandBody("pharn-grill.md");
+  assert.ok(fencedLines(grill).some((f) => f.text.trim() === "node pharn/floor/grill-round.mjs current <name>"));
+  assert.ok(!grill.includes('`"round": 1`'), 'pharn-grill.md no longer writes a literal "round": 1');
+});
+
+// L65: no stage may write the record a later round is judged against. Only grill-round.mjs writes the archives.
+test("✧ ARCHIVES ARE NO STAGE'S TO WRITE: pharn-plan, pharn-grill and pharn-triage name no round archive in writes:", async () => {
+  const { ARCHIVE_NAMES } = await import("../../pharn/floor/grill-round-core.mjs");
+  for (const file of ["pharn-plan.md", "pharn-grill.md", "pharn-triage.md"]) {
+    const text = readFileSync(join(COMMANDS_DIR, file), "utf8");
+    const writes = text.match(/^writes:\s*(\[[^\n]*\])/m);
+    assert.ok(writes, `${file} has a one-line writes:`);
+    for (const n of ARCHIVE_NAMES) assert.ok(!writes[1].includes(n), `${file} writes: must not name ${n}`);
+  }
 });
 
 // L65: a pin is only as strong as the scope around its record. /pharn-triage is checked against grill-findings.json
@@ -5448,7 +5499,9 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   "pharn-memory-promote.md": 27648,
   // loop-scope-hardening (6.61.0): one `## Files` sentence (fenced code; PHARN's own files refused in an install) —
   // 24,152 bytes measured, 88 over 24,064; raised by the rule (+10%, up to a multiple of 512).
-  "pharn-plan.md": 26624,
+  // 7.8.0 loop-replan-rounds: re-plan mode (grill-round.mjs current, the round's three inputs) and its reads —
+  // 26,748 bytes measured, 124 over 26,624; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-plan.md": 29696,
   "pharn-regress.md": 25600, // 6.66.0 regress-install-config: 23140 B measured + 10% → next 512 (was 23040)
   // review-lens-grouping (6.64.0): Step 3's grouping line and its three exit branches, Step 4's subagent type, fallback,
   // per-lens rules and unwritten re-check, Step 6's `## Lens agents` block and four claims lines — 27,537 bytes

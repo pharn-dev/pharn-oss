@@ -217,7 +217,11 @@ or sets a flag, it is scoped to one feature's record and quoted as DATA — and 
 `/pharn-loop` hands the grill's free-text findings to `/pharn-triage`, whose disposition decides whether the run
 proceeds. An injected finding can steer that disposition toward `proceed`. The floor holds the shape, the coverage
 of every finding id, the sha256 binding, and that a `blocking` finding is never `proceed`; a steer toward stopping
-is the safe direction, and a steer toward proceeding is the residual. The quantifier is corrected in the heading
+is the safe direction, and a steer toward proceeding is the residual. Since 7.8.0 the same
+findings, with triage's reasons, also reach `/pharn-plan` in a re-plan round, which revises the plan from them: an
+injected finding can steer a revision as well as a disposition. The floor holds the round count, the archive set and
+the binding between each round's files; the revised plan passes the same spec-hash and lessons checks and a fresh
+grill and triage, and what it changed is the model's judgment. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and

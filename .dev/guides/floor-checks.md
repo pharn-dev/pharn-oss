@@ -320,10 +320,34 @@ node pharn/floor/grill-findings.mjs check pharn/features/<name>/grill-findings.j
 # are read through one O_NOFOLLOW descriptor each (L54); output names codes, indexes and ids, never a reason (P2, L62).
 # Exit: skeleton 0 the skeleton JSON · 1 the findings file's RED · 2 usage/unreadable | check 0 proceed · 3 replan ·
 # 4 spec (one verdict JSON line: verdict, counts, escalated ids) · 1 `RED — <codes>` first, then one fixed hint per code
-# · 2 usage/unreadable. /pharn-loop maps 3 and 4 to S16 (`blocked: grill-escalation`), anything else but 0 to S9.
+# · 2 usage/unreadable. /pharn-loop maps 4 to S16 (`blocked: grill-escalation`), 3 to `grill-round.mjs next` (7.8.0,
+# below), anything else but 0 to S9.
 # Ships: bumps SKILLS_VERSION.
 node pharn/floor/grill-triage.mjs skeleton pharn/features/<name>/grill-findings.json
 node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json
+```
+
+## `grill-round.mjs` — the full loop's re-plan round
+
+```bash
+# THE ROUND COUNTER AND ARCHIVER (added 7.8.0, loop-replan-rounds; part 2b of restore-loop-grill). After a `replan`
+# triage verdict, `next` renames the round's PLAN.md, GRILL.md, grill-findings.json and grill-triage.json to their
+# `.r<round>` archives and names the next round; at most two re-plan rounds (REPLAN_CAP), so exit 5 at round 3 stops the
+# run (S16). `current` prints the round the next grill writes and what a re-plan reads (`live` after an S16 stop, the
+# newest archive in a round, null on a first plan) — /pharn-grill and /pharn-plan run it themselves. THE TRIGGER (P7):
+# the 7.7.0 triage measurement, all five measured full loops escalating (3 replan), each stopping for a person. Rules and
+# bounds: grill-round-core.mjs's header; contract: pharn-contracts/grill-triage.md, "Rounds (7.8.0)".
+# FLOOR: the cap; the closed set of eight archive names (ARCHIVE_NAMES — the four artifact lists are bound to it by a
+# test); a gap or a partial round refused; `next` only on a `replan` verdict over a triage bound to its findings, whose
+# round equals 1 + the archived rounds; no archive overwritten; links and non-regular files refused (lstat, L54); every
+# source and destination checked before the first rename, and a failed rename moved back (`rename-failed`) or reported
+# with the names that exist (`rename-partial`). AT WRITE TIME ONLY: the archives are pipeline artifacts reconcile
+# exempts. AGREEMENT, NEVER TRUTH (L43); ADVISORY: that a re-plan fixed anything. Output names codes, names and
+# integers, never file content (P2, L62).
+# Exit: current 0 one JSON line · 1 `RED — <codes>` · 2 usage/unreadable | next 0 advanced (one JSON line) · 5 no round
+# left · 1 `RED — <codes>` · 2 usage/unreadable. Ships: bumps SKILLS_VERSION.
+node pharn/floor/grill-round.mjs current <name>
+node pharn/floor/grill-round.mjs next <name>
 ```
 
 ## `pharn/floor/check-provenance.mjs` — product provenance

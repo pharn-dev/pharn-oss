@@ -910,7 +910,7 @@ test("a pre-run reader that throws is not swallowed: the builder throws, so the 
   }
 });
 
-test("STAGE_ARTIFACTS is the close part's former list, in its order, plus the grill's and triage's JSON (7.7.0)", () => {
+test("STAGE_ARTIFACTS is the close part's former list, in its order, plus the grill's and triage's JSON (7.7.0) and the round archives (7.8.0)", () => {
   assert.deepEqual(
     [...STAGE_ARTIFACTS],
     [
@@ -921,6 +921,14 @@ test("STAGE_ARTIFACTS is the close part's former list, in its order, plus the gr
       "GRILL.md",
       "grill-findings.json",
       "grill-triage.json",
+      "PLAN.r1.md",
+      "GRILL.r1.md",
+      "grill-findings.r1.json",
+      "grill-triage.r1.json",
+      "PLAN.r2.md",
+      "GRILL.r2.md",
+      "grill-findings.r2.json",
+      "grill-triage.r2.json",
       "BUILD.md",
       "REGRESSION.md",
       "VERIFY.md",

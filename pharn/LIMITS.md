@@ -279,7 +279,8 @@ telemetry wiring.
 The consequence, stated plainly: **a plan may declare telemetry, pass the grill, and the diff that
 results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs only
 the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all. A full
-`/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions.
+`/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions and, since 7.8.0,
+the re-plan rounds those dispositions start.
 Nothing downstream re-checks the promise against the code. `/pharn-verify` runs the project's own discovered gates,
 less any the project excludes in `pharn.config.json` `gates.exclude` (6.36.0); a gate result can also be reused from
 the same delivery run's `/pharn-regress` (6.34.0). If the project has no telemetry test, or excludes the gate that
