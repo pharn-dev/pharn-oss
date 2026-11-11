@@ -2886,6 +2886,34 @@ test("✧ LOOP GRILL + TRIAGE: pharn-loop.md's front reads the grill stops, gril
   assert.match(loopFrontOrderReasons(doubled).join("\n"), /pinned 2 times/);
 });
 
+// 7.7.1: S16 tells a person to re-run, so the loop says what a re-run is (the 7.7.0 grill's comprehension finding).
+test("✧ S16 RE-RUN: pharn-loop.md says a re-run starts in a fresh feature directory and names the by-hand route", () => {
+  const flat = (text) => text.replace(/\s+/g, " ");
+  const reasons = (body) => {
+    const out = [];
+    const s16 = flat(body).match(/→ \*\*S16\*\* \(`blocked: grill-escalation`\):.*?(?= - `1`, `2` or anything else → \*\*S9\*\*)/);
+    if (!s16) return ["no S16 branch in Step 4's triage read"];
+    if (!/A re-run starts from the intent in a fresh feature directory \(S2\) and reads nothing this run wrote/.test(s16[0]))
+      out.push("the S16 branch does not say a re-run starts in a fresh feature directory (S2)");
+    if (!/then `\/pharn-plan <name>`, which rewrites `PLAN\.md` from the approved SPEC/.test(s16[0]))
+      out.push("the S16 branch does not name the /pharn-plan <name> route");
+    if (!/That route runs no triage/.test(s16[0])) out.push("the S16 branch does not say the by-hand route runs no triage");
+    return out;
+  };
+  const body = commandBody(LOOP_FILE);
+  assert.deepEqual(reasons(body), []);
+  // The stuck-point row points at the explanation.
+  assert.match(body, /then re-runs \(Step 4 says what a re-run is\)/);
+  // CONTROL (L60): each asserted sentence, removed, is reported.
+  const cut = (needle) => {
+    assert.ok(body.includes(needle), `fixture sanity: ${needle}`);
+    return body.replace(needle, "");
+  };
+  assert.match(reasons(cut("reads nothing this run wrote")).join("\n"), /fresh feature directory/);
+  assert.match(reasons(cut("which rewrites `PLAN.md` from the approved SPEC")).join("\n"), /\/pharn-plan <name> route/);
+  assert.match(reasons(cut("That\n  route runs no triage")).join("\n"), /runs no triage/);
+});
+
 // L65: a pin is only as strong as the scope around its record. /pharn-triage is checked against grill-findings.json
 // (its sha256 and its ids), so its writes: must hold its own output and nothing else — never the findings file, GRILL.md,
 // PLAN.md or SPEC.md. The hook enforces whatever writes: says; this pins what it says (presence of a declaration, never

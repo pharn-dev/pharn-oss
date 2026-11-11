@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.7.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.7.1-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -237,7 +237,7 @@ normal install adds:
 ```text
 your-repo/
 ├── .claude/
-│   ├── commands/pharn-*.md        # the 11 product commands
+│   ├── commands/pharn-*.md        # the product commands
 │   ├── hooks/*.cjs                # the write guards, their setter, the /pharn-loop Stop guard
 │   └── settings.json              # wires the hooks (see the caveat below)
 ├── pharn/
