@@ -295,7 +295,9 @@ test("resolve: a prototype-chain key falls back to default, NEVER `{}` (L15 — 
 
 // ── agreement ────────────────────────────────────────────────────────────────────────────────────────
 
-test("agreement GREEN: every product command whose frontmatter matches the config exit 0", () => {
+// The title keeps its 7.6.0 wording so test-integrity tracking (pharn-ci TI02) follows the test by name; the count is
+// thirteen since 7.9.0 (supervise) and the assertion reads it from the mirror, `N`.
+test("agreement GREEN: twelve product commands whose frontmatter matches the config exit 0", () => {
   const r = onAgreement(VALID);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(r.stdout, new RegExp(`GREEN — config valid; ${N}/${N} product stage\\(s\\) agree`));
@@ -534,7 +536,8 @@ test("★ live ★: agreement over the REAL repo config + commands is GREEN (the
   assert.match(r.stdout, /GREEN/);
 });
 
-test("★ live ★: the real repo declares every product stage, and each command's frontmatter is reachable", () => {
+// The title keeps its wording for the same tracking reason; the real repo has thirteen product stages since 7.9.0.
+test("★ live ★: the real repo declares all twelve product stages, and each command's frontmatter is reachable", () => {
   // Guards the emptiness direction on the REAL tree (L34): a repo whose commands were renamed away
   // would otherwise show a green agreement over a shrunken map.
   const r = run(["agreement", "--config", join(REPO_ROOT, "pharn.config.json"), "--commands-dir", join(REPO_ROOT, ".claude", "commands")]);

@@ -1,8 +1,13 @@
 # VERIFY — loop-supervisor
 
 Gates run through `pharn/floor/run-gates.mjs` (stamp `pharn/.run/pharn-dev-verify/gates/stamp.json`, sha256
-`1652a20c8c08481d38774c26f4012a1ce253e722f5ed57ae23042c7bdf76ba6b`), one gate at a time; verdict by
+`c12baea544865cd54f94c494e63887f66006b2fa46e74798620ea84d30d41cd2`), one gate at a time; verdict by
 `pharn/floor/check-verify.mjs --stamp`.
+
+**Third run.** The second run (stamp `1652a20c…`) read PASS. The pull request's pharn-ci test-integrity check then
+blocked on two TI02 findings: two tests in `pharn/floor/check-model-config.test.mjs` had been renamed (their titles
+said "twelve") as well as changed, so they read as removed. Their original titles were restored, each with a comment;
+their bodies are unchanged. This table is the re-run over that tree.
 
 **Second run.** The first run (stamp `b359d474…`) also read PASS. A local diff-coverage measure before CI then found
 seven added lines of `pharn/floor/supervisor.mjs` with no test (98.60% against pharn-ci's 100%): a feature path that is

@@ -33,6 +33,11 @@ run-ended: GATE 2
   (98.60% against pharn-ci's 100%). Tests were added to `pharn/floor/supervisor.test.mjs`, a declared `## Files` path,
   under the plan's scope; verify was re-run over that tree (PASS, eight gates; the report above is the re-run's).
   Regress was not re-run: the one changed file is inside the feature, so no outside gate's input changed.
+- **Second fix after GATE 2:** pharn-ci's test-integrity check blocked the pull request on two TI02 findings: two tests in
+  `pharn/floor/check-model-config.test.mjs` had been renamed (from "twelve") as well as changed, which reads as a
+  removal. Their original titles were restored with a comment each; verify was re-run (PASS, eight gates; the report
+  above is the third run's). The three TI07 warnings are counts that moved with the new stage (21 stuck points, 16
+  routed start lines, 12 classified commands), stated on the pull request for a reviewer.
 - Review: `REVIEW.md` (GREEN, 0 floor-gate findings, 3 minor advisory).
 
 changelog-entry: exit 0
