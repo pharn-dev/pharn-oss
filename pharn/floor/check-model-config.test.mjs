@@ -256,7 +256,7 @@ test("resolve: `loop` has no own entry and falls back to default (the fallback b
 
 test("★ live ★ L41: the SHIPPED config names no `triage` key, so `triage` resolves through its `default` (7.7.0)", () => {
   // The production path: pharn.config.json is what `pharn init` copies, and it deliberately carries no `triage` entry
-  // (an older pharn-cli refuses a block naming a stage its port does not know). A fixture that always names the key
+  // (pharn-cli before 0.18.1 refuses a block naming a stage its port does not know). A fixture that always names the key
   // would leave this fallback exercised by nothing.
   const cfgPath = join(REPO_ROOT, "pharn.config.json");
   const shipped = JSON.parse(readFileSync(cfgPath, "utf8"));
