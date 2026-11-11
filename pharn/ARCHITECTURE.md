@@ -256,8 +256,10 @@ every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restate
 **Triage** (7.7.0, a full `/pharn-loop` only): after the grill, `/pharn-triage` gives each grill finding one
 disposition — `proceed`, `replan` or `spec` — in `grill-triage.json`, bound to the findings file by its sha256.
 `pharn/floor/grill-triage.mjs` derives the verdict from the dispositions; the floor checks their shape, their
-coverage of every finding id and the binding, and each disposition is the model's judgment (advisory). Any verdict
-but `proceed` stops the run. Shape: `pharn-contracts/grill-triage.md`.
+coverage of every finding id and the binding, and each disposition is the model's judgment (advisory). A `spec`
+verdict stops the run. A `replan` verdict sends the plan back to `/pharn-plan` for a re-plan round — at most two,
+each round's plan and grill outputs archived by `pharn/floor/grill-round.mjs` (7.8.0) — and stops the run when no
+round is left. Shape: `pharn-contracts/grill-triage.md`.
 
 **Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`
 SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its
