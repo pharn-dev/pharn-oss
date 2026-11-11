@@ -23,6 +23,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.10.0] - 2026-11-11
+
+### Added
+
+- **The supervisor of an escalated full `/pharn-loop` may amend the SPEC, once per run (part 3b of
+  restore-loop-grill).** Until now its decision was `proceed-at-risk` or `stop`, so a `spec` triage verdict, which says
+  no plan can fix a finding without changing the SPEC, could only be carried or end the run. `/pharn-supervise` gains a
+  third decision, `amend-spec` (`supervisor.mjs check` exits `4`), refused (`amend-used`) once the run has amended. A
+  new CLI, `pharn/floor/spec-amend.mjs` (code half `spec-amend-core.mjs`), carries it out:
+  - `begin` copies `SPEC.md` to `SPEC.a1.md` and renames the round's files and `SUPERVISOR.json` to their `.a1` names,
+    so the re-plan count restarts; a failed rename is undone;
+  - a routed `/pharn-spec --model-approve` reads `status` (`none`, `pending`, `applied`) and, on `pending`, appends
+    acceptance criteria answering the escalated findings, then re-pins;
+  - `check` holds the amend append-only: `## Intent` and `## Scope` identical to `SPEC.a1.md`'s, every earlier
+    criterion kept at its place with its id, lines and verify level, at least one criterion added, the SPEC Approved
+    and pinned.
+
+  Then the whole front runs again from `/pharn-plan`. The green commit names the added AC ids in a fixed paragraph (no
+  criterion text), and `loop-closeout.mjs` refuses to commit when the amend does not check. `RUN-REPORT.md` gains a
+  `## SPEC amendment` section with each added criterion fenced as DATA. A failing line of the amend branch stops the
+  run at the new stuck point S18 (`blocked: spec-amend-red`). The fourteen `.a1` names join the pipeline-artifact lists
+  (regress, reconcile, the worktree fingerprint and the green commit's staging list), bound to the code by a test. The
+  trusted docs (`pharn/ARCHITECTURE.md`, `pharn/THREAT-MODEL.md` §5, `pharn/LIMITS.md` §1d) state the decision and its
+  bound, from a human patch. **Bound:** whether the added criteria are right is not checked; they are written and
+  approved by a model from untrusted findings, and named where a person reads them before merging. "Once per run"
+  holds at write time: a Bash `rm` of `SPEC.a1.md` is neither prevented nor detected. MINOR: a new decision and a new
+  checker; no shape an install reads changes incompatibly.
+
 ## [7.9.0] - 2026-11-11
 
 ### Added

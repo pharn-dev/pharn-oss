@@ -47,6 +47,9 @@
 //       supervisor.mjs `readSupervision`; a file that does not check, a `stop` decision or an id outside the finding-id
 //       grammar → `not committed: decision unverifiable`, exit 4. A checked `proceed-at-risk` puts its ids in the
 //       document's `known_risk` and one paragraph in the commit message (step 13). No file → `known_risk` null.
+//     • (7.10.0, loop-amend-spec) with a SPEC.a1.md in the feature directory: `specAmend` checks the amend through
+//       spec-amend.mjs `readAmend` (append-only, Approved and pinned); a failing amend → `not committed: decision
+//       unverifiable`, exit 4. A checked amend adds one paragraph naming the added AC ids (step 13). No archive → none.
 //  9. check-loop-fresh.mjs --feature <name> --base <base> --commit-gate --front; non-zero → `evidence stale`, exit 4.
 // 10. set-writes-scope.cjs --from-plan pharn/features/<name>/PLAN.md; non-zero → `stage failed`, exit 4. Then
 //     reconcile-baseline.mjs --amend-scope — reported, never gating (exit 2 "no baseline" is harmless, as before).
@@ -70,7 +73,8 @@
 //     read from the witness `pharn/.run/pharn-loop/<name>/isolation.json` (`isolationWitness`, the core's grammar), never
 //     from the record: `isolation: <outcome>`, plus ` (host execution accepted by operator)`, or the not-recorded line.
 //     Since 7.9.0 a `proceed-at-risk` run adds the KNOWN RISK paragraph after it (supervisor-core.mjs `knownRiskLine`:
-//     ids, a count and the slug — no reason or finding text reaches the message, P2).
+//     ids, a count and the slug — no reason or finding text reaches the message, P2). Since 7.10.0 an amended run adds
+//     the amend paragraph after that (spec-amend-core.mjs `amendLine`: AC ids and the slug — no criterion text, P2).
 //     Hooks run (never --no-verify; nothing is pushed or merged). A failed add → `stage failed`, a failed commit → `commit failed`, each followed by the undo the close
 //     part prescribed — reset of the list, `git checkout - --`, `git branch -d <branch>` — exit 4. Success → the SHA
 //     from `git rev-parse HEAD`, `committed <branch>`, exit 0.
@@ -120,6 +124,8 @@ import { containmentWalk, lstatSafe } from "./stage-runtime.mjs";
 import { closingLine, echo, floorScript, indent, ledgerSteps, runLedgerTail, runStep, runStop, step } from "./closeout-core.mjs";
 import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
 import { preRunUnchanged } from "./pre-run-snapshot.mjs";
+import { amendLine } from "./spec-amend-core.mjs";
+import { readAmend } from "./spec-amend.mjs";
 import { knownRiskLine } from "./supervisor-core.mjs";
 import { readSupervision } from "./supervisor.mjs";
 
@@ -165,6 +171,21 @@ export const STAGE_ARTIFACTS = Object.freeze([
   "grill-findings.r2.json",
   "grill-triage.r2.json",
   "SUPERVISOR.json",
+  // The amend archive (7.10.0): spec-amend-core.mjs AMEND_NAMES, written out; a test binds the two.
+  "SPEC.a1.md",
+  "PLAN.a1.md",
+  "GRILL.a1.md",
+  "grill-findings.a1.json",
+  "grill-triage.a1.json",
+  "PLAN.r1.a1.md",
+  "GRILL.r1.a1.md",
+  "grill-findings.r1.a1.json",
+  "grill-triage.r1.a1.json",
+  "PLAN.r2.a1.md",
+  "GRILL.r2.a1.md",
+  "grill-findings.r2.a1.json",
+  "grill-triage.r2.a1.json",
+  "SUPERVISOR.a1.json",
   "BUILD.md",
   "REGRESSION.md",
   "VERIFY.md",
@@ -304,7 +325,7 @@ export function gitRun(args, { literal = false, timeoutMs = GIT_TIMEOUT_MS } = {
 export function addArgs(list) {
   return ["add", "-A", `--pathspec-from-file=${list}`, "--pathspec-file-nul"];
 }
-export function commitArgs(list, feature, decision, iterations, excluded = null, isolation = null, knownRiskText = null) {
+export function commitArgs(list, feature, decision, iterations, excluded = null, isolation = null, knownRiskText = null, amendText = null) {
   const note = exclusionNote(excluded);
   return [
     "commit",
@@ -323,6 +344,9 @@ export function commitArgs(list, feature, decision, iterations, excluded = null,
     // 7.9.0 (loop-supervisor): the KNOWN RISK paragraph, only as supervisor-core.mjs `knownRiskLine` built it (ids that
     // match ID_RE, a count and the slug — P2); any other value adds nothing.
     ...(typeof knownRiskText === "string" && knownRiskText.startsWith("known risk: ") ? ["-m", knownRiskText] : []),
+    // 7.10.0 (loop-amend-spec): the amend paragraph, only as spec-amend-core.mjs `amendLine` built it (AC ids and the
+    // slug — P2); any other value adds nothing.
+    ...(typeof amendText === "string" && amendText.startsWith("spec amended once ") ? ["-m", amendText] : []),
     ...(note === null ? [] : ["-m", note]),
   ];
 }
@@ -335,10 +359,21 @@ export function knownRisk(feature) {
   const s = readSupervision(featureDir(feature));
   if (s.state === "absent") return { ok: true, ids: null, line: null };
   if (s.state !== "ok") return { ok: false, why: `SUPERVISOR.json is ${s.state}` };
-  if (s.verdict.decision !== "proceed-at-risk") return { ok: false, why: "SUPERVISOR.json records a stop decision" };
+  if (s.verdict.decision !== "proceed-at-risk") return { ok: false, why: "SUPERVISOR.json records a decision other than proceed-at-risk" };
   const line = knownRiskLine(feature, s.verdict.known_risk);
   if (line === null) return { ok: false, why: "a carried id is outside the finding-id grammar" };
   return { ok: true, ids: s.verdict.known_risk, line };
+}
+
+/** 7.10.0 — the run's SPEC amend, read and checked through spec-amend.mjs `readAmend` (L35: one reader).
+ *  `{ok: true, added: null, line: null}` with no SPEC.a1.md; `{ok: true, added, line}` for a checked amend; `{ok: false,
+ *  why}` for an amend that does not check — the green gate then refuses to commit (`decision unverifiable`). */
+export function specAmend(feature) {
+  const a = readAmend(featureDir(feature));
+  if (a.state === "absent") return { ok: true, added: null, line: null };
+  if (a.state !== "ok") return { ok: false, why: `the SPEC amend is ${a.state}${a.codes ? ` (${a.codes.join(", ")})` : ""}` };
+  const line = amendLine(feature, a.added);
+  return line === null ? { ok: false, why: "an added id is outside the AC-id grammar" } : { ok: true, added: a.added, line };
 }
 
 /** 7.1.0 — the run's Step 1a isolation witness, `pharn/.run/pharn-loop/<name>/isolation.json`, as a record, or null (absent,
@@ -744,6 +779,14 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   doc.known_risk = kr.ids;
   if (kr.ids !== null) log(`── known risk carried by the supervisor: ${kr.ids.join(", ")}\n`);
 
+  trace.phase = "spec-amend";
+  const sa = specAmend(feature);
+  if (!sa.ok) {
+    log(`── SPEC amend not verifiable: ${sa.why} — nothing is committed\n`);
+    return owed("decision unverifiable");
+  }
+  if (sa.added !== null) log(`── SPEC amended once on the supervisor's decision: added ${sa.added.join(", ")}\n`);
+
   trace.phase = "commit-gate";
   const fr = run(steps.fresh);
   echo(log, steps.fresh, fr);
@@ -802,7 +845,16 @@ export function closeLoop({ feature, base, afterRepair = false, run = runStep, g
   trace.phase = "commit";
   writePhase(feature, "commit", log);
   const cm = git(
-    commitArgs(stageListPath(feature), feature, facts.decision, facts.iterations, doc.excluded_gates, isolationWitness(feature), kr.line),
+    commitArgs(
+      stageListPath(feature),
+      feature,
+      facts.decision,
+      facts.iterations,
+      doc.excluded_gates,
+      isolationWitness(feature),
+      kr.line,
+      sa.line
+    ),
     { literal: true }
   );
   echo(log, { id: "git commit" }, cm);

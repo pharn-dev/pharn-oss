@@ -1925,6 +1925,7 @@ const STUCK_POINTS = [
   { id: "S15", blocked: "not-isolated" }, // 7.1.0: Step 1a's isolation check refused (check-run-isolation.mjs)
   { id: "S16", blocked: "grill-escalation" }, // 7.7.0: triage escalated; since 7.9.0, and the supervisor decided stop
   { id: "S17", blocked: "supervisor-red" }, // 7.9.0: no supervisor decision passed supervisor.mjs check
+  { id: "S18", blocked: "spec-amend-red" }, // 7.10.0: a line of the amend-spec branch exited non-zero
 ];
 // The one non-member spelling the closure admits: the command's own placeholder in generic prose.
 const BLOCKED_PLACEHOLDER = "<id>";
@@ -2023,7 +2024,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 21, "the stuck-point table is S1–S17 plus S6b, S6c, S9b and S14b");
+  assert.equal(STUCK_POINTS.length, 22, "the stuck-point table is S1–S18 plus S6b, S6c, S9b and S14b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -2890,10 +2891,37 @@ test("✧ LOOP GRILL + TRIAGE: pharn-loop.md's front reads the grill stops, gril
   const body = commandBody(LOOP_FILE);
   assert.deepEqual(loopFrontOrderReasons(body), []);
   // The triage read's branch (7.8.0, 7.9.0): 3 → a re-plan round through grill-round.mjs next; 4, or next's 5 → the
-  // supervisor; the supervisor's 3 → S16, its other exits → S17. A triage verdict never proceeds by itself.
+  // supervisor; the supervisor's 3 → S16, its 4 → the amend (7.10.0), its other exits → S17. A triage verdict never
+  // proceeds by itself.
   assert.match(body, /- `4` \(`spec`\), or `next`'s `5` → \*\*the supervisor \(7\.9\.0\)\*\*/);
   assert.match(body, /- The supervisor's `3` → \*\*S16\*\* \(`blocked: grill-escalation`\)/);
-  assert.match(body, /`3` \(`stop`\) →\s+\*\*S16\*\*, below\. Anything else → \*\*S17\*\* \(`blocked: supervisor-red`\)/);
+  assert.match(
+    body,
+    /`3` \(`stop`\) →\s+\*\*S16\*\*, below\. `4` \(`amend-spec`, 7\.10\.0\) → \*\*the amend\*\*, below\. Anything else → \*\*S17\*\*\s+\(`blocked: supervisor-red`\)/
+  );
+  // The amend branch (7.10.0): begin, then the re-run spec stage, then the approval read, then the amend check, then
+  // back to the plan; every other exit in the branch → S18.
+  const amendAt = body.indexOf("- The supervisor's `4` → **the amend (7.10.0)**");
+  assert.ok(amendAt > 0, "the amend branch exists");
+  const amend = body.slice(amendAt, body.indexOf("\n- The supervisor's `3`", amendAt));
+  const order = [
+    "node pharn/floor/spec-amend.mjs begin '<name>'",
+    "run Step 3's start, Agent-prompt and `finish` lines again",
+    "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
+    "node pharn/floor/spec-amend.mjs check '<name>'",
+    "**go back to `/pharn-plan`'s start line above**",
+  ].map((n) => amend.indexOf(n));
+  assert.ok(
+    order.every((i) => i >= 0),
+    `every amend-branch step is present: ${order}`
+  );
+  assert.deepEqual(
+    [...order].sort((a, b) => a - b),
+    order,
+    "the amend branch runs in order"
+  );
+  assert.match(amend, /\*\*Every other exit in this branch\*\*[\s\S]*→ \*\*S18\*\* \(`blocked: spec-amend-red`\)/);
+  assert.match(amend, /Step 3's S6 and\s+S6b do not apply here/);
   assert.match(body, /`0` \(`proceed-at-risk`\) → go on: the entry gates, then the test stage\./);
   assert.match(body, /- `3` \(`replan`\) → \*\*a re-plan round \(7\.8\.0\)\*\*/);
   // CONTROLS (L60): the stop block moved after the grill's start line, and a doubled triage read, each fail.
@@ -6746,4 +6774,20 @@ test("✧ 6.70.0 compaction re-read: /pharn-ship and /pharn-loop each pin the ru
       `${file}: moved`
     );
   }
+});
+
+// ── 7.10.0 (loop-amend-spec, L65): the amend archive is the record an amend is checked against, so no command writes it ──
+
+test("✧ 7.10.0 (L65) — no command's writes: names an `.a1` amend name; only spec-amend.mjs begin writes them", async () => {
+  const { AMEND_NAMES } = await import("../../pharn/floor/spec-amend-core.mjs");
+  assert.equal(AMEND_NAMES.length, 14, "non-vacuity (L34)");
+  const isAmend = (w) => AMEND_NAMES.some((n) => w.endsWith(`/${n}`));
+  const offenders = [];
+  for (const file of commandAndPartFiles()) {
+    for (const w of writesEntries(commandBody(file))) if (isAmend(w)) offenders.push(`${file}: ${w}`);
+  }
+  assert.deepEqual(offenders, []);
+  // CONTROL (L60): an archive name spliced into /pharn-spec's real writes: line is caught.
+  const mutant = commandBody("pharn-spec.md").replace(/^writes:.*$/m, (l) => l.replace(/\]\s*$/, ', "pharn/features/<name>/SPEC.a1.md"]'));
+  assert.ok(writesEntries(mutant).some(isAmend), "the rule must catch a spliced archive name");
 });

@@ -10,8 +10,10 @@
 //        2 → usage, or an input that cannot be read (reason on stderr, nothing on stdout)
 //
 //   node pharn/floor/supervisor.mjs check <name>
-//        0 → proceed-at-risk   3 → stop — each with one verdict JSON line {schema, decision, round, known_risk}
-//        1 → `RED — <codes>` first, then the hints (an input or SUPERVISOR.json breaks its contract, or no escalation)
+//        0 → proceed-at-risk   3 → stop   4 → amend-spec (7.10.0) — each with one verdict JSON line
+//            {schema, decision, round, known_risk}
+//        1 → `RED — <codes>` first, then the hints (an input or SUPERVISOR.json breaks its contract, no escalation, or
+//            a second `amend-spec` in one run: `amend-used`)
 //        2 → usage, or a file that cannot be read, SUPERVISOR.json absent included (stderr)
 //
 // Exit 1 is ALWAYS printed WITH its `RED — ` line first, so a caller can tell this checker's RED from node's own exit 1.
@@ -19,7 +21,8 @@
 // WHAT IT DERIVES, EVERY CALL: it re-validates grill-findings.json (grill-findings-core.mjs), re-checks grill-triage.json
 // against those exact bytes (grill-triage-core.mjs `checkTriage`) for the verdict and the escalated ids, counts the
 // complete round archives (grill-round-core.mjs `archivedRounds`), requires an escalation (supervisor-core.mjs
-// `escalation`), and only then reads SUPERVISOR.json. Nothing is taken from a previous call.
+// `escalation`), reads whether the run already amended its SPEC (spec-amend-core.mjs SPEC_ARCHIVE on disk, 7.10.0), and
+// only then reads SUPERVISOR.json. Nothing is taken from a previous call.
 //
 // READING (L54): every input and archive name is lstat'ed first and a link or non-regular file is refused
 // (`not-regular`); each file is then read through regular-file.mjs (one O_NOFOLLOW descriptor). Output names codes,
@@ -38,6 +41,7 @@ import { join } from "node:path";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { validate } from "./grill-findings-core.mjs";
 import { ARCHIVE_NAMES, archivedRounds } from "./grill-round-core.mjs";
+import { SPEC_ARCHIVE } from "./spec-amend-core.mjs";
 import { checkTriage } from "./grill-triage-core.mjs";
 import { readRegularFile } from "./regular-file.mjs";
 import { ARTIFACT, DECISION_EXIT, checkSupervisor, defectHints, escalation, formatDefects, skeleton } from "./supervisor-core.mjs";
@@ -58,11 +62,11 @@ function kindOf(path) {
 
 /**
  * Derive what a decision is checked against, from the feature directory `dir`. Returns
- * `{ok: true, round, triageSha256, escalated, findingsDoc}`, `{ok: false, red: [codes]}` (a contract defect), or
+ * `{ok: true, round, triageSha256, escalated, amended, findingsDoc}`, `{ok: false, red: [codes]}` (a contract defect), or
  * `{ok: false, unreadable: reason}` (a file that cannot be read; the reason names a path and a cause, never content).
  */
 export function deriveEscalation(dir) {
-  for (const n of [FINDINGS, TRIAGE, ARTIFACT, ...ARCHIVE_NAMES]) {
+  for (const n of [FINDINGS, TRIAGE, ARTIFACT, SPEC_ARCHIVE, ...ARCHIVE_NAMES]) {
     if (kindOf(join(dir, n)) === "other") return { ok: false, red: ["not-regular"] };
   }
   const present = new Set(ARCHIVE_NAMES.filter((n) => kindOf(join(dir, n)) === "file"));
@@ -83,6 +87,7 @@ export function deriveEscalation(dir) {
     round: v.doc.round,
     triageSha256: createHash("sha256").update(t.bytes).digest("hex"),
     escalated: tr.verdict.escalated,
+    amended: kindOf(join(dir, SPEC_ARCHIVE)) === "file",
     findingsDoc: v.doc,
   };
 }

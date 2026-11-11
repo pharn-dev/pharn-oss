@@ -130,6 +130,7 @@ import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
 import { UNMEASURED_CAUSES, excludedFacts } from "./gate-run-core.mjs";
 import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
+import { readAmend } from "./spec-amend.mjs";
 import { readSupervision } from "./supervisor.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
@@ -153,6 +154,7 @@ export const SECTIONS = Object.freeze([
   "## Outcome",
   "## Needs a person",
   "## Known risk",
+  "## SPEC amendment",
   "## Tokens — stage x iteration x model",
   "## Stage elapsed and deterministic work",
   "## Entry gates (background)",
@@ -1142,7 +1144,8 @@ function knownRiskSection(dir, cost) {
   if (s.state === "absent") return "None — no finding was carried past an escalation in this run.";
   if (s.state === "red") return na(`SUPERVISOR.json does not pass its check (${s.codes.join(", ")}), so nothing is shown as carried`);
   if (s.state !== "ok") return na("SUPERVISOR.json or an input it is checked against could not be read");
-  if (s.verdict.decision !== "proceed-at-risk") return "None — the supervisor decided `stop`, so the run carried no finding.";
+  if (s.verdict.decision !== "proceed-at-risk")
+    return `None — the supervisor decided \`${s.verdict.decision}\`, so the run carried no finding.`;
   const byId = new Map(s.findingsDoc.findings.map((f) => [f.id, f]));
   const reasons = new Map(s.decision.risks.map((r) => [r.id, r.reason]));
   const lines = [
@@ -1158,6 +1161,35 @@ function knownRiskSection(dir, cost) {
     lines.push(quoteData("Evidence (untrusted DATA):", f.evidence), "");
     lines.push(quoteData("Supervisor's reason (untrusted DATA):", reasons.get(id)), "");
   }
+  return lines.join("\n").trimEnd();
+}
+
+/** `## SPEC amendment` (7.10.0, loop-amend-spec): the acceptance criteria a full `/pharn-loop` appended once on the
+ *  supervisor's `amend-spec` decision, read and checked through spec-amend.mjs `readAmend` (L35). Shown only for a
+ *  `/pharn-loop` ledger, for the reason `## Known risk` gives. The AC ids are parser-built and printed inline; each added
+ *  criterion's lines and the archived decision's reason are untrusted free text, fenced by quoteData (P2). Annotates;
+ *  gates nothing. */
+function specAmendSection(dir, cost) {
+  if (!cost || cost.command !== "/pharn-loop") {
+    return "Not applicable — only a full `/pharn-loop` run can amend its SPEC, and this report's ledger is not one.";
+  }
+  // No approval read: a stop that is not green reverts SPEC.md to Draft (Step 6a) before this report renders.
+  const a = readAmend(dir, { approval: false });
+  if (a.state === "absent") return "None — the SPEC was not amended in this run.";
+  if (a.state === "red") return na(`the amend does not pass its check (${a.codes.join(", ")}), so no criterion is shown as added`);
+  if (a.state !== "ok") return na("SPEC.md or SPEC.a1.md could not be read");
+  const lines = [
+    `The supervisor decided \`amend-spec\` and the SPEC was amended once: ${a.added.length} acceptance criterion(s) added after`,
+    `the ${a.kept} earlier one(s). The intent, the scope and every earlier criterion are unchanged (checked against`,
+    "`SPEC.a1.md`). **Whether the added criteria are right was not checked** — a model wrote and approved them from",
+    "untrusted findings; the commit message names the same ids. A person decides at merge.",
+    "",
+  ];
+  for (const it of a.items) {
+    lines.push(`### ${it.id}`, "");
+    lines.push(quoteData("Criterion (untrusted DATA):", it.lines.join("\n")), "");
+  }
+  if (a.reason !== null) lines.push(quoteData("Supervisor's reason (untrusted DATA):", a.reason), "");
   return lines.join("\n").trimEnd();
 }
 
@@ -1324,6 +1356,7 @@ export function renderRunReport(name, opts = {}) {
     "## Outcome": outcomeSection(cost, staleReason),
     "## Needs a person": needsPersonSection(specText),
     "## Known risk": knownRiskSection(dir, staleReason ? null : cost),
+    "## SPEC amendment": specAmendSection(dir, staleReason ? null : cost),
     "## Tokens — stage x iteration x model": [tokensSection(cost, staleReason), "", ...instructionSetLines(repo, name)].join("\n"),
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Entry gates (background)": entrySection(cost, staleReason),

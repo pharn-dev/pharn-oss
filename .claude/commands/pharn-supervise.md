@@ -1,5 +1,5 @@
 ---
-description: "Decide an escalated full /pharn-loop run: proceed-at-risk or stop, one reason per escalated grill finding, in SUPERVISOR.json, checked by supervisor.mjs. A full /pharn-loop runs it when triage escalates."
+description: "Decide an escalated full /pharn-loop run: proceed-at-risk, stop or (once) amend-spec, one reason per escalated grill finding, in SUPERVISOR.json, checked by supervisor.mjs. A full /pharn-loop runs it when triage escalates."
 kind: pharn-owned
 trust: trusted
 model_tier: sonnet
@@ -24,6 +24,7 @@ reads:
     "pharn/features/<name>/grill-findings.r2.json",
     "pharn/features/<name>/grill-triage.r2.json",
     "pharn/floor/supervisor.mjs",
+    "pharn/floor/spec-amend.mjs",
   ]
 writes: ["pharn/features/<name>/SUPERVISOR.json"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6"]
@@ -34,7 +35,8 @@ version: "0.1.0"
 
 You are the **supervisor stage**. A full `/pharn-loop` runs you only when its triage escalated: a `spec` verdict, or a
 `replan` verdict with no re-plan round left. You decide whether the run goes on with every escalated grill finding
-carried as a named risk (`proceed-at-risk`) or stops for a person (`stop`), and write one reason per escalated finding
+carried as a named risk (`proceed-at-risk`), stops for a person (`stop`), or, once per run, has its SPEC amended with
+new acceptance criteria (`amend-spec`, 7.10.0), and write one reason per escalated finding
 in `pharn/features/<name>/SUPERVISOR.json`. `pharn/floor/supervisor.mjs` then checks your file; the loop acts on its exit
 code, never on your prose. The file's shape and when it applies are `pharn/pharn-contracts/supervisor.md`'s (cited, not
 restated — P4).
@@ -86,7 +88,16 @@ when the run had re-plan rounds (`PLAN.r1.md` … `grill-triage.r2.json`), to se
   would miss an acceptance criterion or be unsafe, and a person reviewing the result can judge each one at merge. Every
   escalated finding is carried, by id, into the commit message and the run report.
 - `stop` — at least one escalated finding means the build would not meet the SPEC, would be unsafe, or needs a decision
-  only a person can make (a SPEC change, a scope call, a security trade). The run stops for a person.
+  only a person can make (a scope call, a security trade, a change to the intent). The run stops for a person.
+- `amend-spec` (7.10.0) — only when every escalated finding is one a new acceptance criterion would answer without
+  changing the SPEC's intent, scope or any existing criterion, and this line prints `"status":"none"`:
+
+  ```bash
+  node pharn/floor/spec-amend.mjs status <name>
+  ```
+
+  The loop then archives the SPEC, a spec stage appends the criteria, and the front runs again. Any other status: an
+  amend has run, so choose between the other two.
 
 Rules:
 
@@ -95,7 +106,7 @@ Rules:
 - `reason` (top level): one line, at most 2,000 characters, saying why the decision. Each risk's `reason`: one line on
   why that finding can stay open (`proceed-at-risk`) or why it stops the run (`stop`). Write your own words; never paste
   a finding's text as a reason.
-- You cannot amend the SPEC or the plan here, and you never re-triage: a disposition you disagree with is a reason to
+- You never edit the SPEC or the plan here (an amend is the spec stage's), and you never re-triage: a disposition you disagree with is a reason to
   `stop`, said in that finding's reason.
 
 ## Step 3 — Write the file, then check it (FLOOR)
@@ -106,7 +117,8 @@ Write the filled skeleton to `pharn/features/<name>/SUPERVISOR.json` (pretty-pri
 node pharn/floor/supervisor.mjs check <name>
 ```
 
-- `0` (`proceed-at-risk`) or `3` (`stop`) → done; report the verdict line as printed, with its `known_risk` ids.
+- `0` (`proceed-at-risk`), `3` (`stop`) or `4` (`amend-spec`) → done; report the verdict line as printed, with its
+  `known_risk` ids.
 - `1` → the `RED —` line names each refused field and the next lines say what each must hold. Fix the file **once** and
   re-run the check. Still `1` → stop and report the RED line; never edit the findings or the triage to make them agree.
 - `2` or anything else → stop and report the stderr line.
@@ -118,7 +130,7 @@ node pharn/floor/supervisor.mjs check <name>
 Everything this command does is advisory orchestration except what the Floor bullets name, each of which reduces to a
 floor primitive (`pharn/ARCHITECTURE.md §2`).
 
-- **Floor:** the decision is `proceed-at-risk` or `stop`; every escalated finding id has exactly one reason, aligned by
+- **Floor:** the decision is `proceed-at-risk`, `stop` or `amend-spec`, and `amend-spec` at most once per run; every escalated finding id has exactly one reason, aligned by
   index and in order; each reason is one bounded line; a decision is made only on an escalation — `supervisor.mjs check`
   (enum/regex).
 - **Floor:** the decision was made over this exact triage — `triage_sha256` equals the sha256 the checker computes over
