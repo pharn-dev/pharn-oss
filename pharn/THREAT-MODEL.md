@@ -221,7 +221,11 @@ is the safe direction, and a steer toward proceeding is the residual. Since 7.8.
 findings, with triage's reasons, also reach `/pharn-plan` in a re-plan round, which revises the plan from them: an
 injected finding can steer a revision as well as a disposition. The floor holds the round count, the archive set and
 the binding between each round's files; the revised plan passes the same spec-hash and lessons checks and a fresh
-grill and triage, and what it changed is the model's judgment. The quantifier is corrected in the heading
+grill and triage, and what it changed is the model's judgment. Since 7.9.0 an escalation goes to
+`/pharn-supervise`, which reads the same findings, dispositions and reasons and may decide `proceed-at-risk`: an
+injected finding can steer that decision toward carrying itself past the stop. The floor holds the decision enum,
+one reason per escalated id, the sha256 binding to the triage file, and that the supervisor runs only on an
+escalation; every carried id is named in the commit message and `RUN-REPORT.md`, so a person sees it at merge. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
