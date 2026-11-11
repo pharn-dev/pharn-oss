@@ -124,6 +124,7 @@ const STAGE_LOADS = Object.freeze({
     "pharn/pharn-contracts/templates/spec-template.md", // the default template `check-spec.mjs --template-path` prints: "Read that file"
   ]),
   "pharn-test": Object.freeze([CONSTITUTION]),
+  "pharn-supervise": Object.freeze([CONSTITUTION]), // 7.9.0: the contracts are cited, never told to be read
   "pharn-triage": Object.freeze([CONSTITUTION]), // 7.7.0: the contract is cited, never told to be read
   "pharn-verify": Object.freeze([CONSTITUTION]),
 });
@@ -141,6 +142,7 @@ const STAGE_LOAD_CEILINGS = Object.freeze({
   "pharn-ship": 162816, // 147,718 — with /pharn-spec inline
   "pharn-spec": 70144, // 63,344
   "pharn-test": 31232, // 28,046
+  "pharn-supervise": 17920, // 16,093 — measured at 7.9.0 (loop-supervisor)
   "pharn-triage": 17408, // 15,596 — measured at 7.7.0 (loop-grill-triage)
   "pharn-verify": 29696, // 26,940
 });

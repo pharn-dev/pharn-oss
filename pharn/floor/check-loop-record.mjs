@@ -32,7 +32,7 @@
 //
 // ── `blocked` — a closed set (7.3.0, review MEDIUM "blocked: is an open vocabulary") ─────────────────────────────
 // A blocked stop is `decision: INCONCLUSIVE` plus `blocked: <id>`. The id, when the key is present, must be a member of
-// loop-record-core.mjs's frozen BLOCKED_IDS (the stuck-point ids S1–S15) — guard first, then exact membership; else RED
+// loop-record-core.mjs's frozen BLOCKED_IDS (the stuck-point ids S1–S17) — guard first, then exact membership; else RED
 // BLOCKED_UNKNOWN. That the id is the TRUE reason the run stopped is advisory; that it is one of the reasons the command
 // can stop for is primitive #3.
 //

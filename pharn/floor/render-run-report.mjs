@@ -130,6 +130,7 @@ import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
 import { UNMEASURED_CAUSES, excludedFacts } from "./gate-run-core.mjs";
 import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
+import { readSupervision } from "./supervisor.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -151,6 +152,7 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const SECTIONS = Object.freeze([
   "## Outcome",
   "## Needs a person",
+  "## Known risk",
   "## Tokens — stage x iteration x model",
   "## Stage elapsed and deterministic work",
   "## Entry gates (background)",
@@ -1126,6 +1128,39 @@ function needsPersonSection(specText) {
   ].join("\n");
 }
 
+/** `## Known risk` (7.9.0, loop-supervisor): the grill findings a full `/pharn-loop`'s supervisor carried past an
+ *  escalation (`proceed-at-risk`), read and checked through supervisor.mjs `readSupervision` — the CLI's own derivation
+ *  (L35), never a fresh parse. Shown only for a `/pharn-loop` ledger: a `/pharn-ship` run in the same directory (S16's
+ *  re-run note sends a person there) would otherwise show an earlier loop's decision as its own. Each finding's
+ *  `severity`, `rule_id` and `file` are enum-gated / path-checked and printed inline; its `problem`, `evidence` and the
+ *  supervisor's reason are untrusted free text, fenced by quoteData (P2). Annotates; gates nothing. */
+function knownRiskSection(dir, cost) {
+  if (!cost || cost.command !== "/pharn-loop") {
+    return "Not applicable — only a full `/pharn-loop` run has a supervisor, and this report's ledger is not one.";
+  }
+  const s = readSupervision(dir);
+  if (s.state === "absent") return "None — no finding was carried past an escalation in this run.";
+  if (s.state === "red") return na(`SUPERVISOR.json does not pass its check (${s.codes.join(", ")}), so nothing is shown as carried`);
+  if (s.state !== "ok") return na("SUPERVISOR.json or an input it is checked against could not be read");
+  if (s.verdict.decision !== "proceed-at-risk") return "None — the supervisor decided `stop`, so the run carried no finding.";
+  const byId = new Map(s.findingsDoc.findings.map((f) => [f.id, f]));
+  const reasons = new Map(s.decision.risks.map((r) => [r.id, r.reason]));
+  const lines = [
+    `The supervisor decided \`proceed-at-risk\`: these ${s.verdict.known_risk.length} grill finding(s) were escalated by`,
+    "triage and the run went on with each one open. **Whether carrying each was acceptable was not checked** — the",
+    "decision is a model's (advisory); the commit message names the same ids. A person decides at merge.",
+    "",
+  ];
+  for (const id of s.verdict.known_risk) {
+    const f = byId.get(id);
+    lines.push(`### ${id} — ${f.severity}, \`${f.rule_id}\`, \`${f.file}\``, "");
+    lines.push(quoteData("Problem (untrusted DATA):", f.problem), "");
+    lines.push(quoteData("Evidence (untrusted DATA):", f.evidence), "");
+    lines.push(quoteData("Supervisor's reason (untrusted DATA):", reasons.get(id)), "");
+  }
+  return lines.join("\n").trimEnd();
+}
+
 function handoffSection(loopText, cost) {
   if (loopText === null) {
     const source = cost && cost.outcome && cost.outcome.source;
@@ -1288,6 +1323,7 @@ export function renderRunReport(name, opts = {}) {
   const bodyBySection = {
     "## Outcome": outcomeSection(cost, staleReason),
     "## Needs a person": needsPersonSection(specText),
+    "## Known risk": knownRiskSection(dir, staleReason ? null : cost),
     "## Tokens — stage x iteration x model": [tokensSection(cost, staleReason), "", ...instructionSetLines(repo, name)].join("\n"),
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Entry gates (background)": entrySection(cost, staleReason),

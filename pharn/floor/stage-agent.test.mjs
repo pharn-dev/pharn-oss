@@ -336,8 +336,8 @@ test("brief — exit 0 for EVERY routed cell with renderBrief's exact text; exit
     }
     assert.equal(
       routed,
-      17,
-      "L34 — 12 in 6.27.0, plus the loop's four quick agent cells (6.28.0), minus its full grill (6.45.0), plus its full grill and triage (7.7.0)"
+      18,
+      "L34 — 12 in 6.27.0, plus the loop's four quick agent cells (6.28.0), minus its full grill (6.45.0), plus its full grill and triage (7.7.0), plus its supervisor (7.9.0)"
     );
     assert.deepEqual(readdirSync(dir), [], "brief writes nothing");
   } finally {

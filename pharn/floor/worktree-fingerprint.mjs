@@ -170,6 +170,7 @@ export const INCLUDED_ARTIFACTS = Object.freeze([
   "GRILL.r2.md",
   "grill-findings.r2.json",
   "grill-triage.r2.json",
+  "SUPERVISOR.json",
   "BUILD.md",
   "AC-TESTS.md",
   "AC-TESTS.lock.json",

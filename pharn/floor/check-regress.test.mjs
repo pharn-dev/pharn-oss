@@ -240,6 +240,7 @@ test("★ ENUMERATION (L23/L29): every machine-written JSON pipeline artifact is
     "grill-triage.r1.json": "grill-round.mjs renames /pharn-triage's grill-triage.json unchanged (7.8.0)",
     "grill-findings.r2.json": "grill-round.mjs renames /pharn-grill's grill-findings.json unchanged (7.8.0)",
     "grill-triage.r2.json": "grill-round.mjs renames /pharn-triage's grill-triage.json unchanged (7.8.0)",
+    "SUPERVISOR.json": "/pharn-supervise writes it on an escalation (7.9.0)",
   };
   assert.deepEqual(
     json,

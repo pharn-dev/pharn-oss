@@ -150,7 +150,10 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   needs pharn-cli 0.18.1 or newer: older releases report a block naming `triage` as rejected. The shipped block names
   no `triage` key for the same reason, since `MIN_CLI` still admits those releases. `pharn update` keeps a block you
   changed, and a re-run `pharn init` replaces it with the shipped one
-  ([pharn-cli's `pharn.config.json` reference](https://github.com/pharn-dev/pharn-cli/blob/main/docs/reference/pharn-config.md#what-each-command-does-with-it)). Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
+  ([pharn-cli's `pharn.config.json` reference](https://github.com/pharn-dev/pharn-cli/blob/main/docs/reference/pharn-config.md#what-each-command-does-with-it)).
+  `/pharn-supervise` (7.9.0) is the same: no `supervise` key in the shipped block, so it resolves through `default` and
+  `pharn-supervise.md`'s frontmatter must follow `default` too. No pharn-cli release accepts a `supervise` key yet, so
+  do not add one. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
   stage their routing policy routes runs as a subagent, requested on the model the block resolves for it.
   `/pharn-ship`'s spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no
   config; a pre-0.7.0 block, which `pharn update` with `@pharn-dev/pharn` ≥ 0.7.0 migrates; `inherit`; a full
@@ -182,8 +185,10 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   base-and-head suite run (its scope check still runs), the plan interrogation, and the briefing/run-report
   renders. `/pharn-loop --quick` (6.28.0) is the unattended one: it drops the same base-and-head run on every
   iteration, where the loop multiplied it, plus the run report and the plan interrogation (a full `/pharn-loop`
-  interrogates the plan and has every finding triaged since 7.7.0, and since 7.8.0 a `replan` verdict costs up to two
-  more plan, grill and triage rounds before the run stops). There is no
+  interrogates the plan and has every finding triaged since 7.7.0, since 7.8.0 a `replan` verdict costs up to two
+  more plan, grill and triage rounds, and since 7.9.0 an escalation costs one supervisor agent, whose
+  `proceed-at-risk` decision is a model's and carries the escalated findings into the commit as KNOWN RISK). There is
+  no
   automatic proportionality — nothing measures whether a change is "small" — the flag is a person's choice (under
   `/pharn-loop --quick` the model then writes and approves the quick SPEC), and a change too large for it stops (S6c,
   under `/pharn-loop --quick`) or takes the full pipeline.
