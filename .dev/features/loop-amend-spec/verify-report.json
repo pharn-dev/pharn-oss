@@ -1,0 +1,24 @@
+{
+  "feature": "loop-amend-spec",
+  "gates": {
+    "eval:trust-fence": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "c30493932547f143e37c99a137dd04c2f617a7fb67e453b7bce9b1e88716da5b",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "0c4c725ef1e5361663ff5fc0092f9e431f91d5e167bfbf0277176d79592fa8a2"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}

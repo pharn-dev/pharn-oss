@@ -156,6 +156,7 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
 // grill-findings.json (7.6.0) is written by the grill beside GRILL.md, before any gate runs, so it is classified with it;
 // grill-triage.json (7.7.0) is written by the triage stage right after the grill, also before any gate runs; the
 // re-plan round archives (7.8.0, grill-round-core.mjs ARCHIVE_NAMES) are written by grill-round.mjs in the front too.
+// The amend archive (7.10.0, spec-amend-core.mjs AMEND_NAMES) is written by spec-amend.mjs begin, also in the front.
 export const INCLUDED_ARTIFACTS = Object.freeze([
   "SPEC.md",
   "PLAN.md",
@@ -171,6 +172,21 @@ export const INCLUDED_ARTIFACTS = Object.freeze([
   "grill-findings.r2.json",
   "grill-triage.r2.json",
   "SUPERVISOR.json",
+  // The amend archive (7.10.0): spec-amend-core.mjs AMEND_NAMES, written out; a test binds the two.
+  "SPEC.a1.md",
+  "PLAN.a1.md",
+  "GRILL.a1.md",
+  "grill-findings.a1.json",
+  "grill-triage.a1.json",
+  "PLAN.r1.a1.md",
+  "GRILL.r1.a1.md",
+  "grill-findings.r1.a1.json",
+  "grill-triage.r1.a1.json",
+  "PLAN.r2.a1.md",
+  "GRILL.r2.a1.md",
+  "grill-findings.r2.a1.json",
+  "grill-triage.r2.a1.json",
+  "SUPERVISOR.a1.json",
   "BUILD.md",
   "AC-TESTS.md",
   "AC-TESTS.lock.json",

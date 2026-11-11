@@ -43,6 +43,7 @@ reads:
     "pharn/floor/grill-triage.mjs",
     "pharn/floor/grill-round.mjs",
     "pharn/floor/supervisor.mjs",
+    "pharn/floor/spec-amend.mjs",
     "pharn/floor/check-loop.mjs",
     "pharn/floor/check-loop-record.mjs",
     "pharn/floor/check-loop-decision.mjs",
@@ -107,6 +108,8 @@ allowed-tools:
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-supervise --name *)",
     "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-supervise --budget-ms 570000)",
     "Bash(node pharn/floor/supervisor.mjs check *)",
+    "Bash(node pharn/floor/spec-amend.mjs begin *)",
+    "Bash(node pharn/floor/spec-amend.mjs check *)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name * --mode quick)",
     "Bash(node pharn/floor/entry-gates.mjs --wait --feature * --budget-ms 570000)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name *)",
@@ -153,6 +156,7 @@ allowed-tools:
     "Bash(node pharn/floor/grill-triage.mjs skeleton pharn/features/*/grill-findings.json)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-supervise.md --target pharn/features/*/SUPERVISOR.json)",
     "Bash(node pharn/floor/supervisor.mjs skeleton *)",
+    "Bash(node pharn/floor/spec-amend.mjs status *)",
     "Bash(node pharn/floor/feature-name.mjs)",
     "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/*/SPEC.md)",
     "Bash(node pharn/floor/check-spec.mjs --resolve-template-ref)",
@@ -441,7 +445,7 @@ Look for `pharn/features/<slug>-<N>/LOOP.md` with the highest existing `<N>`, el
 ## Step 2 — The stuck-point table (the ONE enumeration of every question a sub-stage could ask)
 
 Every "ask the human" a sub-stage would make during this run maps to **exactly one** row. Rows S1–S3 keep
-the run going on a fixed rule; S4–S17 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) and S9b's resumed-session
+the run going on a fixed rule; S4–S18 **stop** it. S6, S6b, S7 and S8 — and S6c's fit-check trigger (6.28.0) and S9b's resumed-session
 trigger — are triggered by your own judgment, and each fails in the safe direction — it stops rather than guesses. S6c's other
 trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 
@@ -467,7 +471,8 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S14b | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `6`: no gate was red, but a gate was not measured on the tree the run started from (killed at the per-gate timeout, or could not start), and `--allow-red-entry` was not given | stop `blocked: gates-unmeasured-at-entry` — make the gate finish in time or start, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded), or re-run with `--allow-red-entry`                                       |
 | S15  | Step 1a's isolation check exits non-zero: no evidence of an isolated environment, a listed credential present, the evidence unknown (unreadable HOME, a failed probe), or the line itself failed                                                                   | stop `blocked: not-isolated` — for no evidence or a credential: run in a container that mounts none of your credentials, set `PHARN_ISOLATED=1` for a sandbox the check misses, or re-run with `--accept-host-execution`; for unknown evidence: set HOME, or fix git (the flag never lifts it)       |
 | S16  | triage escalated (Step 4's read exits `4`, or `3` with no re-plan round left) and `supervisor.mjs check` exits `3`: the supervisor decided `stop` (a full run only)                                                                                                | stop `blocked: grill-escalation` — copy the verdict, the round and the `escalated` ids into `### next_steps` as DATA, pointing at `grill-triage.json` and `SUPERVISOR.json` for the reasons; a person revises the plan or the SPEC, then re-runs (Step 4 says what a re-run is)                      |
-| S17  | triage escalated and `supervisor.mjs check` exits anything but `0` or `3`: no decision passed its check (a full run only)                                                                                                                                          | stop `blocked: supervisor-red` — quote the check's first line as DATA in `### next_steps`; a person decides the escalation (S16's remedy)                                                                                                                                                            |
+| S17  | triage escalated and `supervisor.mjs check` exits anything but `0`, `3` or `4`: no decision passed its check (a full run only)                                                                                                                                     | stop `blocked: supervisor-red` — quote the check's first line as DATA in `### next_steps`; a person decides the escalation (S16's remedy)                                                                                                                                                            |
+| S18  | the supervisor decided `amend-spec` (`supervisor.mjs check` exits `4`) and a line of the amend branch exits non-zero: `spec-amend.mjs begin`, the re-run spec stage, `check-spec-approved.mjs` or `spec-amend.mjs check` (a full run only)                         | stop `blocked: spec-amend-red` — quote the failing line's first line of output as DATA in `### next_steps`; an amend runs once, so a person decides the escalation (S16's remedy)                                                                                                                    |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
 `pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one
@@ -826,7 +831,33 @@ Branch **only** on the exit code (P5):
 
   `0` (`proceed-at-risk`) → go on: the entry gates, then the test stage. The printed `known_risk` ids are carried: the
   close names them in the record, the commit message and `RUN-REPORT.md` (Step 6). `3` (`stop`) →
-  **S16**, below. Anything else → **S17** (`blocked: supervisor-red`), quoting its first line as DATA.
+  **S16**, below. `4` (`amend-spec`, 7.10.0) → **the amend**, below. Anything else → **S17** (`blocked: supervisor-red`),
+  quoting its first line as DATA.
+
+- The supervisor's `4` → **the amend (7.10.0)**, at most once per run (`supervisor.md`, "Amend-spec"): archive the SPEC
+  and move the round's files aside, so the re-plan count restarts at 0:
+
+  ```bash
+  node pharn/floor/spec-amend.mjs begin '<name>'
+  ```
+
+  On `0`, run Step 3's start, Agent-prompt and `finish` lines again, unchanged (on start exit `3`, its inline
+  `/pharn-spec --model-approve`): `/pharn-spec` reads `spec-amend.mjs status`, appends acceptance criteria and re-pins.
+  Step 3's entry-gates peek is not run again. Then the two reads:
+
+  ```bash
+  node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md
+  ```
+
+  ```bash
+  node pharn/floor/spec-amend.mjs check '<name>'
+  ```
+
+  Both `0` → **go back to `/pharn-plan`'s start line above**: the whole front runs again over the amended SPEC, its
+  rounds counted from 0. The check's `added` ids are carried: the close names them in the record, the commit message and
+  `RUN-REPORT.md` (Step 6). **Every other exit in this branch** — `begin`, the spec stage's report-back (Step 3's S6 and
+  S6b do not apply here) or its `finish` read, either check — → **S18** (`blocked: spec-amend-red`), quoting the line's
+  first line of output as DATA.
 
 - The supervisor's `3` → **S16** (`blocked: grill-escalation`): copy the printed triage `verdict` and its `escalated`
   ids (their `G<n>-` prefix names the round) into the record's `### next_steps` as DATA, and point at

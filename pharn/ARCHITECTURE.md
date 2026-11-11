@@ -258,10 +258,13 @@ disposition — `proceed`, `replan` or `spec` — in `grill-triage.json`, bound 
 `pharn/floor/grill-triage.mjs` derives the verdict from the dispositions; the floor checks their shape, their
 coverage of every finding id and the binding, and each disposition is the model's judgment (advisory). A `replan` verdict sends the plan back to `/pharn-plan` for a re-plan round — at most two, each round's
 plan and grill outputs archived by `pharn/floor/grill-round.mjs` (7.8.0). A `spec` verdict, or a `replan` with no
-round left, goes to `/pharn-supervise` (7.9.0), whose decision — `proceed-at-risk` or `stop`, in
+round left, goes to `/pharn-supervise` (7.9.0), whose decision — `proceed-at-risk`, `stop` or, once per run, `amend-spec` (7.10.0), in
 `SUPERVISOR.json` — `pharn/floor/supervisor.mjs` checks: `stop` stops the run, and `proceed-at-risk` goes on to
 the build with every escalated finding carried as KNOWN RISK into the commit message (its ids), `RUN-REPORT.md`
-and the loop record. The decision is the model's (advisory). Shapes: `pharn-contracts/grill-triage.md`,
+and the loop record. `amend-spec` archives the SPEC and the round's files under `.a1` names
+(`pharn/floor/spec-amend.mjs`), a routed `/pharn-spec` appends acceptance criteria — the intent, the scope and
+every earlier criterion held unchanged by the floor — and the front re-runs from `/pharn-plan`. The decision is
+the model's (advisory). Shapes: `pharn-contracts/grill-triage.md`,
 `pharn-contracts/supervisor.md`.
 
 **Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`

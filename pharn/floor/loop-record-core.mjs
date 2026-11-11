@@ -41,7 +41,7 @@
 // NON-LLM. Node stdlib only — in fact zero imports. No network, no eval, no child processes.
 
 /**
- * The blocked-stop ids (7.3.0) — every `blocked: <id>` a `/pharn-loop` stuck-point row S1–S17 can record, frozen. A
+ * The blocked-stop ids (7.3.0) — every `blocked: <id>` a `/pharn-loop` stuck-point row S1–S18 can record, frozen. A
  * record's `blocked` value must be a member (check-loop-record.mjs `BLOCKED_UNKNOWN`), and check-loop-decision.mjs skips
  * re-derivation only for a member. Before 7.3.0 the key was an open vocabulary: any value made the decision check SKIP.
  * The contract renders this list between its `LOOP-BLOCKED-IDS` markers and the command's stuck-point table names the
@@ -68,6 +68,7 @@ export const BLOCKED_IDS = Object.freeze([
   "not-isolated",
   "grill-escalation",
   "supervisor-red",
+  "spec-amend-red",
 ]);
 
 /** The Handoff subsections, in NORMATIVE ORDER. An array, not a Set: order is part of the shape, so the

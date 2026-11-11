@@ -365,12 +365,40 @@ node pharn/floor/grill-round.mjs next <name>
 # L54). AGREEMENT, NEVER TRUTH (L43): the precondition reads the run's own triage and archive count. ADVISORY: the
 # decision and every reason (one model overruling another's escalation), and that the loop acts on the exit code.
 # Output names codes, indexes and ids, never a reason or finding text (P2, L62).
-# Exit: skeleton 0 the skeleton JSON · 1 `RED — <codes>` · 2 usage/unreadable | check 0 proceed-at-risk · 3 stop (one
-# verdict JSON line: decision, round, known_risk) · 1 `RED — <codes>` first, then one fixed hint per code · 2
-# usage/unreadable (SUPERVISOR.json absent included). /pharn-loop maps 0 to the test stage, 3 to S16
-# (`blocked: grill-escalation`), anything else to S17 (`blocked: supervisor-red`). Ships: bumps SKILLS_VERSION.
+# SINCE 7.10.0 (loop-amend-spec) a third decision, `amend-spec`, exits 4, and is refused `amend-used` once the run's
+# SPEC.a1.md exists (one amend per run; spec-amend.mjs, below).
+# Exit: skeleton 0 the skeleton JSON · 1 `RED — <codes>` · 2 usage/unreadable | check 0 proceed-at-risk · 3 stop · 4
+# amend-spec (one verdict JSON line: decision, round, known_risk) · 1 `RED — <codes>` first, then one fixed hint per
+# code · 2 usage/unreadable (SUPERVISOR.json absent included). /pharn-loop maps 0 to the test stage, 3 to S16
+# (`blocked: grill-escalation`), 4 to the amend, anything else to S17 (`blocked: supervisor-red`). Ships: bumps
+# SKILLS_VERSION.
 node pharn/floor/supervisor.mjs skeleton <name>
 node pharn/floor/supervisor.mjs check <name>
+```
+
+## `spec-amend.mjs` — the supervisor's `amend-spec`, carried out once
+
+```bash
+# THE AMEND (added 7.10.0, loop-amend-spec; part 3b of restore-loop-grill). On a checked `amend-spec` decision, `begin`
+# copies SPEC.md to SPEC.a1.md and renames the round's live files, the eight round archives and SUPERVISOR.json to their
+# `.a1` names (AMEND_NAMES, 14, derived from grill-round-core.mjs's lists; a test binds every artifact list to it), so
+# the re-plan count restarts at 0; a failed rename is undone and the copy removed (`rename-failed`), or reported when an
+# undo fails too (`rename-partial`). `status` prints none / pending / applied (SPEC.md's body vs SPEC.a1.md's) for
+# /pharn-spec's amend mode. `check` holds the amend append-only: Intent and Scope identical line for line, the archived
+# AC section a prefix of the new one, every archived criterion's id, lines and verify level kept, at least one added
+# (L34), SPEC.md Approved and pinned (check-spec-approved.mjs, run as a CLI, its output not echoed). THE TRIGGER (P7): a
+# `spec` triage verdict says no plan can fix the finding without changing the SPEC, and before 7.10.0 the supervisor
+# could only carry it or stop. `readAmend` is the same derivation for loop-closeout.mjs (the amend paragraph of the green
+# commit, AC ids only) and render-run-report.mjs (`## SPEC amendment`). Rules and bounds: spec-amend-core.mjs's header;
+# contract: pharn-contracts/supervisor.md, "Amend-spec (7.10.0)". FLOOR: the archive set, the state token, the
+# append-only rule, one amend per run (SPEC.a1.md on disk, L35); links refused (lstat, one O_NOFOLLOW read, L54).
+# ADVISORY: whether the added criteria answer the findings (L43). BOUND: once-per-run holds at write time; a Bash rm of
+# SPEC.a1.md is neither prevented nor detected. Output names codes, AC ids and the fixed names, never text (P2, L62).
+# Exit: 0 one JSON line · 1 `RED — <codes>` first, then one hint per code · 2 usage/unreadable. /pharn-loop maps any
+# non-zero exit of `begin` or `check` to S18 (`blocked: spec-amend-red`). Ships: bumps SKILLS_VERSION.
+node pharn/floor/spec-amend.mjs status <name>
+node pharn/floor/spec-amend.mjs begin <name>
+node pharn/floor/spec-amend.mjs check <name>
 ```
 
 ## `pharn/floor/check-provenance.mjs` — product provenance

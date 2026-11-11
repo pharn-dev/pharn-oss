@@ -241,6 +241,14 @@ test("★ ENUMERATION (L23/L29): every machine-written JSON pipeline artifact is
     "grill-findings.r2.json": "grill-round.mjs renames /pharn-grill's grill-findings.json unchanged (7.8.0)",
     "grill-triage.r2.json": "grill-round.mjs renames /pharn-triage's grill-triage.json unchanged (7.8.0)",
     "SUPERVISOR.json": "/pharn-supervise writes it on an escalation (7.9.0)",
+    // The amend archive (7.10.0): spec-amend.mjs begin renames the model-written files byte for byte.
+    "grill-findings.a1.json": "spec-amend.mjs begin renames grill-findings.json unchanged (7.10.0)",
+    "grill-triage.a1.json": "spec-amend.mjs begin renames grill-triage.json unchanged (7.10.0)",
+    "grill-findings.r1.a1.json": "spec-amend.mjs begin renames a round archive unchanged (7.10.0)",
+    "grill-triage.r1.a1.json": "spec-amend.mjs begin renames a round archive unchanged (7.10.0)",
+    "grill-findings.r2.a1.json": "spec-amend.mjs begin renames a round archive unchanged (7.10.0)",
+    "grill-triage.r2.a1.json": "spec-amend.mjs begin renames a round archive unchanged (7.10.0)",
+    "SUPERVISOR.a1.json": "spec-amend.mjs begin renames /pharn-supervise's SUPERVISOR.json unchanged (7.10.0)",
   };
   assert.deepEqual(
     json,

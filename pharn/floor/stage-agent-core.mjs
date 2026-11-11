@@ -36,9 +36,11 @@
 // run, and `replan` re-routes these same plan, grill and triage cells for up to two re-plan rounds (7.8.0,
 // grill-round.mjs) before it stops (contract: pharn/pharn-contracts/grill-triage.md). THE ESCALATION GOES TO A
 // SUPERVISOR (7.9.0, loop-supervisor): a `spec` verdict, or a `replan` with no round left, routes
-// `/pharn-supervise <name>` once, whose decision (`proceed-at-risk` | `stop`, checked by supervisor.mjs) replaces the
+// `/pharn-supervise <name>` once, whose decision (`proceed-at-risk` | `stop` | `amend-spec`, checked by supervisor.mjs) replaces the
 // stop for a person; it is a fresh agent so the arbiter is not the orchestrating session whose context holds every
-// stage's returned text (contract: pharn/pharn-contracts/supervisor.md). Before 7.7.0 (6.45.0,
+// stage's returned text (contract: pharn/pharn-contracts/supervisor.md). Its third decision, `amend-spec` (7.10.0,
+// loop-amend-spec), routes the spec cell once more — `/pharn-spec --model-approve` appends criteria — and then the whole
+// front again (spec-amend.mjs). Before 7.7.0 (6.45.0,
 // front-grill-concurrent) the full loop's grill was floor-only, because unattended its findings gated nothing and no
 // stage read them before the build; four pharn-starter runs wrote 26 findings that way, three ending green
 // (.dev/features/loop-grill-triage/PLAN.md, "The failure"). The trade, measured: a full grill took 229-284 s in five

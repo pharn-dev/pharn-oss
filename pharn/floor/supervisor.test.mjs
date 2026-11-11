@@ -108,8 +108,9 @@ const SPEC_IDS = ["G1-1", "G1-3", "G1-7"];
 // ── The core ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 test("the decision enum, its exits and the hint table are closed (L29)", () => {
-  assert.deepEqual([...DECISIONS], ["proceed-at-risk", "stop"]);
-  assert.deepEqual(DECISION_EXIT, { "proceed-at-risk": 0, stop: 3 });
+  // 7.10.0 adds amend-spec (exit 4) to the two 7.9.0 decisions.
+  assert.deepEqual([...DECISIONS], ["proceed-at-risk", "stop", "amend-spec"]);
+  assert.deepEqual(DECISION_EXIT, { "proceed-at-risk": 0, stop: 3, "amend-spec": 4 });
   assert.deepEqual(Object.keys(DEFECT_HINTS).sort(), [...DEFECT_CODES].sort());
   for (const c of DEFECT_CODES) assert.ok(DEFECT_HINTS[c].length > 10, c);
   assert.equal(ARTIFACT, "SUPERVISOR.json");
@@ -155,7 +156,12 @@ test("checkSupervisor: every defect code over a realistic decision, by code and 
     assert.deepEqual(codes({ ...base, round: 2 }), ["round"]);
     assert.deepEqual(codes({ ...base, triage_sha256: "0".repeat(64) }), ["triage-sha256"]);
     assert.deepEqual(codes({ ...base, triage_sha256: "not-hex" }), ["triage-sha256"]);
-    assert.deepEqual(codes({ ...base, decision: "amend-spec" }), ["decision"]);
+    assert.deepEqual(codes({ ...base, decision: "amend" }), ["decision"]);
+    assert.deepEqual(codes({ ...base, decision: "amend-spec" }), []);
+    // amend-used (7.10.0): a second amend in one run, once the caller derived the archived SPEC.
+    const used = (doc) => checkSupervisor(JSON.stringify(doc), { ...want, amended: true });
+    assert.deepEqual(used({ ...base, decision: "amend-spec" }).defects, [{ code: "amend-used" }]);
+    assert.equal(used(base).ok, true, "proceed-at-risk stays open after an amend");
     assert.deepEqual(codes({ ...base, decision: "" }), ["decision"]);
     assert.deepEqual(codes({ ...base, reason: "" }), ["reason"]);
     assert.deepEqual(codes({ ...base, reason: "two\nlines" }), ["reason"]);
@@ -214,6 +220,27 @@ test("check: a realistic spec escalation in round 1 — proceed-at-risk exits 0,
     r = cli(p, "check", p.name);
     assert.equal(r.code, 3);
     assert.deepEqual(JSON.parse(r.out).known_risk, []);
+  } finally {
+    cleanup(p);
+  }
+});
+
+test("check: amend-spec exits 4 with an empty known_risk; once SPEC.a1.md exists it is RED amend-used (7.10.0)", () => {
+  const p = project(1, "spec");
+  try {
+    writeDecision(p, decisionDoc(p, "spec", "amend-spec"));
+    let r = cli(p, "check", p.name);
+    assert.equal(r.code, 4, r.out + r.err);
+    assert.deepEqual(JSON.parse(r.out), { schema: VERDICT_SCHEMA, decision: "amend-spec", round: 1, known_risk: [] });
+    writeFileSync(join(p.dir, "SPEC.a1.md"), "the archived SPEC\n");
+    r = cli(p, "check", p.name);
+    assert.equal(r.code, 1);
+    assert.match(r.out, /^RED — amend-used\n {2}amend-used: /);
+    writeDecision(p, decisionDoc(p, "spec", "stop"));
+    assert.equal(cli(p, "check", p.name).code, 3, "stop stays open after an amend");
+    rmSync(join(p.dir, "SPEC.a1.md"));
+    symlinkSync(join(p.dir, "grill-findings.json"), join(p.dir, "SPEC.a1.md"));
+    assert.match(cli(p, "check", p.name).out, /^RED — not-regular\n/);
   } finally {
     cleanup(p);
   }

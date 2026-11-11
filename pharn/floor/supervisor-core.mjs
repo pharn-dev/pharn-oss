@@ -4,7 +4,8 @@
 // feature directory, is `pharn/floor/supervisor.mjs` (P3).
 //
 // CONTRACT: `pharn/pharn-contracts/supervisor.md` — cited, not restated (P4). In short:
-// `{schema, round, triage_sha256, decision, reason, risks: [{id, reason}, …]}`, `decision` one of proceed-at-risk | stop,
+// `{schema, round, triage_sha256, decision, reason, risks: [{id, reason}, …]}`, `decision` one of proceed-at-risk | stop |
+// amend-spec (7.10.0, loop-amend-spec),
 // `risks[i].id` equal to the i-th escalated id `grill-triage-core.mjs checkTriage` derives.
 //
 // WHY (P7): every measured full loop escalated (.dev/features/loop-grill-triage/TRIAGE-CHECK-MEASUREMENT.md), and until
@@ -25,6 +26,10 @@
 // REFUSALS NAME CODES, NEVER VALUES (P2, L62): a defect is a closed code plus, for an element, its index. The KNOWN RISK
 // line is built from ids that match ID_RE, a count and the slug — no reason or finding text can reach it.
 //
+// ONCE PER RUN (7.10.0): `amend-spec` is refused (`amend-used`) when the caller derived `amended` — the run's archived
+// SPEC, spec-amend-core.mjs SPEC_ARCHIVE, is on disk (L35: the file is the count). A second escalation in the same run
+// may only be `proceed-at-risk` or `stop`. Bound: a Bash `rm` of the archive is neither prevented nor detected here.
+//
 // FLOOR (primitive #3, with #2's kind for the digest): the shape, the decision enum, the binding to the triage bytes,
 // the index-aligned coverage of every escalated id, the reason bounds, and the escalation precondition.
 // ADVISORY: the decision and every reason (a model's judgment over untrusted text); that a caller acts on the exit code.
@@ -37,11 +42,11 @@ export const VERDICT_SCHEMA = "pharn-supervisor-verdict/1";
 export const ARTIFACT = "SUPERVISOR.json";
 export const TOP_KEYS = Object.freeze(["schema", "round", "triage_sha256", "decision", "reason", "risks"]);
 export const RISK_KEYS = Object.freeze(["id", "reason"]);
-export const DECISIONS = Object.freeze(["proceed-at-risk", "stop"]);
+export const DECISIONS = Object.freeze(["proceed-at-risk", "stop", "amend-spec"]);
 export const REASON_MAX = 2000;
 
-/** Decision → exit code. RED is 1 and usage is 2, so the two decisions take 0 and 3. */
-export const DECISION_EXIT = Object.freeze({ "proceed-at-risk": 0, stop: 3 });
+/** Decision → exit code. RED is 1 and usage is 2, so the three decisions take 0, 3 and 4. */
+export const DECISION_EXIT = Object.freeze({ "proceed-at-risk": 0, stop: 3, "amend-spec": 4 });
 
 /** A grill finding id, as grill-findings-core.mjs writes it: `G<round>-<n>`, both positive, no leading zero. */
 export const ID_RE = /^G[1-9][0-9]*-[1-9][0-9]*$/;
@@ -69,6 +74,7 @@ export const DEFECT_CODES = Object.freeze([
   "risk-keys",
   "id",
   "risk-reason",
+  "amend-used",
 ]);
 
 /** One fixed repair hint per defect code. Keys are exactly DEFECT_CODES (a test holds the two equal). */
@@ -93,6 +99,7 @@ export const DEFECT_HINTS = Object.freeze({
   "risk-keys": `each risk holds exactly ${RISK_KEYS.join(", ")}`,
   id: "risk i must carry the i-th escalated id, in the triage's order; never reorder or skip one",
   "risk-reason": `each risk's reason must be one non-blank line of at most ${REASON_MAX} characters`,
+  "amend-used": "this run has already amended its SPEC once (SPEC.a1.md exists); decide proceed-at-risk or stop",
 });
 
 /** True iff `s` holds a C0 control character or DEL (charcode scan; the source holds no control-char literal). */
@@ -132,11 +139,12 @@ export function escalation(triageVerdict, archived) {
 }
 
 /**
- * Check a decision file's TEXT against what the CLI derived: `{round, triageSha256, escalated}`, the escalated ids in
- * findings order (non-empty: the caller has already required an escalation). Returns `{ok: true, verdict}` with
+ * Check a decision file's TEXT against what the CLI derived: `{round, triageSha256, escalated, amended}`, the escalated
+ * ids in findings order (non-empty: the caller has already required an escalation) and whether the run's SPEC was
+ * already amended (an absent `amended` reads as false). Returns `{ok: true, verdict}` with
  * `verdict = {schema, decision, round, known_risk}`, or `{ok: false, defects}`. Every element is checked.
  */
-export function checkSupervisor(text, { round, triageSha256, escalated }) {
+export function checkSupervisor(text, { round, triageSha256, escalated, amended = false }) {
   if (typeof text !== "string") return { ok: false, defects: [defect("not-json")] };
   let doc;
   try {
@@ -155,6 +163,7 @@ export function checkSupervisor(text, { round, triageSha256, escalated }) {
   if (!shaOk || doc.triage_sha256 !== triageSha256) defects.push(defect("triage-sha256"));
   const decisionOk = typeof doc.decision === "string" && DECISIONS.includes(doc.decision);
   if (!decisionOk) defects.push(defect("decision"));
+  if (doc.decision === "amend-spec" && amended === true) defects.push(defect("amend-used"));
   if (!isReason(doc.reason)) defects.push(defect("reason"));
   if (!Array.isArray(doc.risks)) return { ok: false, defects: [...defects, defect("risks-not-array")] };
   if (doc.risks.length !== escalated.length) defects.push(defect("risks-length"));
