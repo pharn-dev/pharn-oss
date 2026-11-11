@@ -228,8 +228,9 @@ one reason per escalated id, the sha256 binding to the triage file, and that the
 escalation; every carried id is named in the commit message and `RUN-REPORT.md`, so a person sees it at merge.
 Since 7.10.0 the supervisor may decide `amend-spec`, and `/pharn-spec` writes new acceptance criteria from the
 same findings: an injected finding can steer what the amended SPEC asks for. The floor holds that the intent,
-the scope and every earlier criterion are byte-identical to the archived SPEC, that at least one criterion is
-added, and that it happens once per run; the added criteria are named in the commit message and `RUN-REPORT.md`. The quantifier is corrected in the heading
+the scope and every earlier criterion are line for line equal to the archived SPEC (the `##` heading lines and
+trailing blank lines aside), that at least one criterion is added, and that it happens once per run while the
+run's `SPEC.a1.md` stays on disk; the added criteria are named in the commit message and `RUN-REPORT.md`. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
