@@ -20,6 +20,7 @@ reads:
     "pharn/floor/grill-scan.mjs",
     "pharn/floor/griller-extract.mjs",
     "pharn/floor/grill-findings.mjs",
+    "pharn/floor/grill-round.mjs",
   ]
 writes: ["pharn/features/<name>/GRILL.md", "pharn/features/<name>/grill-findings.json"]
 constitution_refs: ["P0", "P1", "P2", "P4", "P5", "P6", "P7"]
@@ -278,7 +279,8 @@ Emit each finding in the **exact finding-shape object**, with the split honored:
 - If the plan appears to violate a constitution principle, raise it as a **high-severity `FINDING`** for
   human review — `/pharn-grill`'s interrogation is advisory and cannot itself issue a binding
   `CONSTITUTION_VIOLATION` stop (that belongs to the human and the floor).
-- **In full mode every finding also gets an id (7.6.0)** — `G1-1`, `G1-2`, … in the order you list them — and goes into
+- **In full mode every finding also gets an id (7.6.0)** — `G1-1`, `G1-2`, … in the order you list them (round 2 is
+  `G2-1`, …: the round below) — and goes into
   `pharn/features/<name>/grill-findings.json` (Step 4), the findings' one source: the interrogation's, every griller's,
   and each scanner finding `grill-scan.mjs` printed, copied with its six fields unchanged. Its shape:
   `pharn/pharn-contracts/finding-shape.md`, "Emission — grill-findings.json" (cited, not restated — P4).
@@ -324,8 +326,17 @@ pharn/floor/check-plan-spec-agree.mjs) · lessons: GREEN (verified by pharn/floo
 **The findings file, in full mode only (7.6.0) — write it, render it, write `GRILL.md`, check both, in this order.**
 Each artifact gets its own scope (the setter resolves one `--target`):
 
-1. Scope the findings file, then write `pharn/features/<name>/grill-findings.json` with every finding (the id rule
-   above), `"round": 1`:
+1. Read the round (7.8.0: a full `/pharn-loop`'s re-plan round is 2 or 3), branching only on the exit code:
+
+   ```bash
+   node pharn/floor/grill-round.mjs current <name>
+   ```
+
+   `0` → `"round"` from its JSON line is the round you write, and every id is `G<round>-<n>`. Any other exit → write
+   `findings: NOT written (grill-round.mjs exit <n>)` in `GRILL.md` and skip the findings file, as below.
+
+   Scope the findings file, then write `pharn/features/<name>/grill-findings.json` with every finding (the id rule
+   above) and that `"round"`:
 
    ```bash
    node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-grill.md --target pharn/features/<name>/grill-findings.json

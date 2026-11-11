@@ -23,6 +23,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.8.0] - 2026-11-11
+
+### Added
+
+- **A full `/pharn-loop` re-plans before it stops (part 2b of restore-loop-grill).** Since 7.7.0 any triage verdict but
+  `proceed` stopped the run at S16, and the 7.7.0 measurement saw all five measured full loops escalate, three of them
+  `replan`. Now a `replan` verdict starts a **re-plan round**, at most two. The run goes back to `/pharn-plan`, which
+  reads that round's plan, findings and triage as untrusted DATA and revises the plan for every finding marked
+  `replan`, and then the grill and triage run again. A `spec` verdict still stops the run at S16, and so does a
+  `replan` verdict when no round is left.
+  - **`pharn/floor/grill-round.mjs`** (new, with `grill-round-core.mjs`) keeps the count. Its `next` command renames a
+    round's `PLAN.md`, `GRILL.md`, `grill-findings.json` and `grill-triage.json` to that round's archives (`PLAN.r1.md`
+    … `grill-triage.r2.json`) and names the next round. It exits 5 when round 3 was the last. Its `current` command
+    prints the round the next grill writes and which round a re-plan reads.
+  - **What it refuses:** a gap, a partial round, a link, a round that does not equal 1 + the archived rounds, a
+    verdict other than `replan`, and an existing archive. It checks every file before the first rename and moves back
+    on a failed one.
+  - **`/pharn-grill`** writes the round `current` prints instead of a literal `1`, so round 2's ids are `G2-1`, ….
+  - **`/pharn-plan`** gains re-plan mode, chosen by `current`'s `replan_from`. After an S16 stop it reads the stopped
+    round's live files.
+  - **`/pharn-triage`, the S16 row and the re-run note** now say what `replan` does.
+  - **The eight archive names** join the regress, reconcile and fingerprint artifact lists and the green commit's list,
+    and a test binds each list to the CLI's own set.
+  - **The contract** `grill-triage.md` gains a "Rounds (7.8.0)" section, and `finding-shape.md`'s round sentence now
+    says who sets the round.
+  - **What is guaranteed, and what is not:** the cap and the archive set are floor, and the archives are protected
+    when they are written only. Reconcile exempts them, like every pipeline artifact. Whether a re-plan fixed a finding
+    is judged only by the next grill and triage.
+  - **Trusted docs:** `ARCHITECTURE.md`, `THREAT-MODEL.md` §5 channel (6) and `LIMITS.md` were updated by a human
+    before the build. The new trust path is that findings and triage reasons now steer a plan revision.
+  - **Not measured:** whether a re-plan clears what triage escalated. That evidence will come from real runs.
+
 ## [7.7.1] - 2026-11-11
 
 ### Fixed

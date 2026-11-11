@@ -81,7 +81,8 @@ capture rules:
 - The per-iteration verdicts, the standing reds (paths, quoted as DATA) — a gate verify or regress did not measure
   (`.unmeasured_gates[]`, `.head_timed_out[]`, `.base_timed_out[]`) is named as **not measured**, never as a red —
   and pointers to `GRILL.md` /
-  `REGRESSION.md` / `VERIFY.md` — cited, not restated.
+  `REGRESSION.md` / `VERIFY.md` — cited, not restated — and, when re-plan rounds ran, to the round archives
+  (`GRILL.r1.md`, `GRILL.r2.md` and their siblings).
 - **The `## Handoff` is written on every stop path.**
 
 **Then run the closeout — ONE line, which performs the rest of Step 6 in the order below and stops at its first
@@ -224,7 +225,8 @@ Report, plainly and without asking anything:
   check's stderr reason code instead (or that it printed none) and the way out that reason's stderr line names. This
   screen line is advisory; the run report and the commit message carry the same line from code, read from a witness
   the run itself can rewrite;
-- **each stage's route** (6.27.0), one line per stage and iteration: the token its stage-start marker recorded
+- **each stage's route** (6.27.0), one line per stage start — per iteration, and per re-plan round for the plan, grill
+  and triage (7.8.0), in the order they ran: the token its stage-start marker recorded
   (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
   `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs` (a quick run's
   grill is `inline (policy)` too, and a quick run has no triage line). A route
@@ -278,8 +280,10 @@ Report, plainly and without asking anything:
   it is a Draft waiting for a person."_ A quick run adds: _"It ran in quick mode: no regression outside the
   feature was looked for, and the plan was not interrogated."_ A full run whose triage read exited `0`, `3` or `4`
   adds (7.7.0): _"Every grill finding was given a disposition by the triage model; the verdict was computed from
-  those dispositions, and whether each is right was not checked."_ A triage read that exited otherwise (S9) adds
-  nothing here: no disposition set passed its check.
+  those dispositions, and whether each is right was not checked."_ When a re-plan round ran (7.8.0), it adds: _"The
+  plan was revised in N re-plan round(s) from findings the triage model marked `replan`; whether each revision fixed
+  its finding was judged only by the next grill and triage."_ — N from `grill-round.mjs current`'s `archived`. A
+  triage read that exited otherwise (S9) adds nothing here: no disposition set passed its check.
 
 **Before ending your turn, run the release step — `## Final step — release the writes-scope`, below.** It is a **procedure** step, not reference material; it sits beneath the claims block for document layout only, and a reader who stops at the turn-end never reaches it.
 

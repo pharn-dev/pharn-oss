@@ -154,13 +154,22 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
 
 /** PRE-GATE artifacts: reconcile exempts these, this INCLUDES them. The divergence is the point (L39). */
 // grill-findings.json (7.6.0) is written by the grill beside GRILL.md, before any gate runs, so it is classified with it;
-// grill-triage.json (7.7.0) is written by the triage stage right after the grill, also before any gate runs.
+// grill-triage.json (7.7.0) is written by the triage stage right after the grill, also before any gate runs; the
+// re-plan round archives (7.8.0, grill-round-core.mjs ARCHIVE_NAMES) are written by grill-round.mjs in the front too.
 export const INCLUDED_ARTIFACTS = Object.freeze([
   "SPEC.md",
   "PLAN.md",
   "GRILL.md",
   "grill-findings.json",
   "grill-triage.json",
+  "PLAN.r1.md",
+  "GRILL.r1.md",
+  "grill-findings.r1.json",
+  "grill-triage.r1.json",
+  "PLAN.r2.md",
+  "GRILL.r2.md",
+  "grill-findings.r2.json",
+  "grill-triage.r2.json",
   "BUILD.md",
   "AC-TESTS.md",
   "AC-TESTS.lock.json",

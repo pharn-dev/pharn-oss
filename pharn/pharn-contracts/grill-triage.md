@@ -91,10 +91,37 @@ an unreadable input. On `0`, `3` and `4` stdout is one JSON line:
   which the `blocking` rule reads, is the grill model's assignment. That a stage acts on the verdict is orchestration
   (`/pharn-loop` Step 4), not something this file can force.
 
+## Rounds (7.8.0)
+
+In a full `/pharn-loop`, a `replan` verdict starts a **re-plan round** while one is left: at most **two**, so the plan,
+the grill and the triage run at most three times. `pharn/floor/grill-round.mjs` (code half
+`pharn/floor/grill-round-core.mjs`) keeps the count:
+
+- `next <name>` — after a `replan` verdict, renames the round's four live files to that round's archives:
+  `PLAN.md` → `PLAN.r1.md`, `GRILL.md` → `GRILL.r1.md`, `grill-findings.json` → `grill-findings.r1.json`,
+  `grill-triage.json` → `grill-triage.r1.json` for round 1, and the same with `r2` for round 2. Exit `0` names the next
+  round; exit `5` means round 3 was the last, so nothing is renamed and the run stops (S16). The eight archive names
+  are the whole set: round 3 is never archived.
+- `current <name>` — the round the next grill writes (`1 +` the complete archived rounds), and which round a re-plan
+  reads: `live` when a live `grill-triage.json` binds to live findings of that round (the state an S16 stop leaves),
+  else the newest archive, else none (a first plan).
+
+**What the floor holds (enum/regex):** the cap; the closed archive set, refusing a gap or a partial round; that `next`
+runs only on a `replan` verdict over a triage that binds to its findings, whose `round` equals `1 +` the archived
+rounds; that no archive is ever overwritten; and links or non-regular files are refused. A failed rename is moved back.
+**At write time only:** the archive names are pipeline artifacts, which reconcile exempts, so a later change to an
+archive is neither prevented nor detected. **Agreement, never truth (L43):** the counts and bindings agree; nothing
+checks that a re-plan fixed what triage escalated — the next grill and triage judge that, and the cap bounds the cost.
+A grill that writes a wrong `round` passes its own check; `next` refuses it, but a `proceed` or `spec` verdict over it
+never reaches `next`.
+
 ## Trust (P2)
 
 `/pharn-triage` reads the grill's `problem` and `evidence`, the plan and the SPEC — all untrusted. Its `disposition`
 is enum-gated, but a model chose it after reading that text, so an injected finding can steer it toward `proceed`
 (`pharn/THREAT-MODEL.md §5`, the triage channel). The `blocking` rule makes a steer toward stopping the safe direction.
 `reason` inherits the untrusted tag: a reader quotes it as DATA and never passes it to a stage as an instruction. The
-checker never reads a `reason` for meaning and never prints one.
+checker never reads a `reason` for meaning and never prints one. In a re-plan round (7.8.0) `/pharn-plan` reads the
+findings and the reasons as DATA and revises the plan from them, so an injected finding can steer a revision as well as
+a disposition (`pharn/THREAT-MODEL.md §5`, channel 6); the revised plan meets the same SPEC gate, spec-hash and lessons
+checks, a fresh grill and a fresh triage, and the round count is capped.

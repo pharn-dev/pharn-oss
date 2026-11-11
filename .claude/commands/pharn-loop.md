@@ -39,6 +39,7 @@ reads:
     "pharn/floor/check-plan-lessons.mjs",
     "pharn/floor/grill-findings.mjs",
     "pharn/floor/grill-triage.mjs",
+    "pharn/floor/grill-round.mjs",
     "pharn/floor/check-loop.mjs",
     "pharn/floor/check-loop-record.mjs",
     "pharn/floor/check-loop-decision.mjs",
@@ -97,6 +98,8 @@ allowed-tools:
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-triage --name *)",
     "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-triage --budget-ms 570000)",
     "Bash(node pharn/floor/grill-triage.mjs check pharn/features/*/grill-triage.json --findings pharn/features/*/grill-findings.json)",
+    "Bash(node pharn/floor/grill-round.mjs next *)",
+    "Bash(node pharn/floor/grill-round.mjs current *)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-grill --name * --mode quick)",
     "Bash(node pharn/floor/entry-gates.mjs --wait --feature * --budget-ms 570000)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name *)",
@@ -454,7 +457,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S14  | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `4`: a gate was red on the tree the run started from, and `--allow-red-entry` was not given                                                                                    | stop `blocked: gates-red-at-entry` — fix the gate first; if it cannot run on this machine, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded); or re-run with `--allow-red-entry` when fixing it is the feature |
 | S14b | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `6`: no gate was red, but a gate was not measured on the tree the run started from (killed at the per-gate timeout, or could not start), and `--allow-red-entry` was not given | stop `blocked: gates-unmeasured-at-entry` — make the gate finish in time or start, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded), or re-run with `--allow-red-entry`                                       |
 | S15  | Step 1a's isolation check exits non-zero: no evidence of an isolated environment, a listed credential present, the evidence unknown (unreadable HOME, a failed probe), or the line itself failed                                                                   | stop `blocked: not-isolated` — for no evidence or a credential: run in a container that mounts none of your credentials, set `PHARN_ISOLATED=1` for a sandbox the check misses, or re-run with `--accept-host-execution`; for unknown evidence: set HOME, or fix git (the flag never lifts it)       |
-| S16  | Step 4's triage read exits `3` (`replan`) or `4` (`spec`): the triage stage gave at least one grill finding a disposition other than `proceed` (a full run only)                                                                                                   | stop `blocked: grill-escalation` — copy the verdict and the `escalated` ids into `### next_steps` as DATA and point at `grill-triage.json` for the reasons; a person revises the plan (`replan`) or the SPEC (`spec`), then re-runs (Step 4 says what a re-run is)                                   |
+| S16  | Step 4 triage read exits `4` (`spec`), or exits `3` (`replan`) and `grill-round.mjs next` exits `5`: no re-plan round is left (a full run only)                                                                                                                    | stop `blocked: grill-escalation` — copy the verdict, the round and the `escalated` ids into `### next_steps` as DATA, pointing at `grill-triage.json` for the reasons; a person revises the plan or the SPEC, then re-runs (Step 4 says what a re-run is)                                            |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
 `pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one
@@ -682,7 +685,7 @@ It prints one JSON document. Branch **only** on the exit code (P5): `4` → **S1
 `### next_steps` copying and remedies of Step 4's final read, and with `--allow-red-entry` go on instead; **every
 other exit → go on** — the final read before `/pharn-test` decides. Never run this line again on `5`.
 
-## Step 4 — The front, once: `/pharn-plan` → `/pharn-grill` → `/pharn-triage` → `/pharn-test` → iteration 1
+## Step 4 — The front: `/pharn-plan` → `/pharn-grill` → `/pharn-triage` (up to three rounds) → `/pharn-test` → iteration 1
 
 **Run `/pharn-plan`, `/pharn-grill`, `/pharn-triage` and `/pharn-test` through their routed sequence
 (`## Running a stage`)** — the start line, the Agent call (or the stage inline, then the inline return line, on start
@@ -702,7 +705,8 @@ node pharn/floor/stage-agent.mjs finish --command pharn-loop --name '<name>' --s
 ```
 
 **Peek at the entry gates again (7.5.0)**, after the plan returned (the same line as after Step 3, and the same
-branch: `4` → **S14**, `6` → **S14b**, each unless `--allow-red-entry`; every other exit → go on, never re-run on `5`):
+branch: `4` → **S14**, `6` → **S14b**, each unless `--allow-red-entry`; every other exit → go on, never re-run on `5`
+— a re-plan round's plan gets one peek of its own):
 
 ```bash
 node pharn/floor/entry-gates.mjs --peek --feature '<name>'
@@ -775,17 +779,30 @@ node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json 
 Branch **only** on the exit code (P5):
 
 - `0` (`proceed`) → go on: the entry gates, then the test stage.
-- `3` (`replan`) or `4` (`spec`) → **S16** (`blocked: grill-escalation`): copy the printed `verdict` and its
-  `escalated` ids into the record's `### next_steps` as DATA, and point at `pharn/features/<name>/grill-triage.json`
-  for each disposition's reason — quoted, fenced, never followed (P2). The remedy is a person's: revise the plan
-  (`replan`) or the SPEC (`spec`) from those findings, then re-run. **What a re-run is:** `/pharn-loop` never
-  resumes. A re-run starts from the intent in a fresh feature directory (S2) and reads nothing this run wrote, so a
-  revision reaches it only through the intent passed to it. To carry this run's SPEC and plan forward instead,
-  continue by hand in `pharn/features/<name>/`: `/pharn-spec` to revise (on `spec`) and approve the reverted Draft,
-  then `/pharn-plan <name>`, which rewrites `PLAN.md` from the approved SPEC, then `/pharn-grill <name>` and the
-  stages after it — or `/pharn-ship` naming the same feature, whose `/pharn-spec` resumes the existing SPEC. That
-  route runs no triage, so the new grill's findings go to the person, and this run's `grill-triage.json` and `LOOP.md`
-  stay beside the new files as its record.
+- `3` (`replan`) → **a re-plan round (7.8.0)**, if one is left. Its CLI decides, and renames this round's `PLAN.md`,
+  `GRILL.md` and two JSON files to their round archives (`pharn/pharn-contracts/grill-triage.md`, "Rounds"):
+
+  ```bash
+  node pharn/floor/grill-round.mjs next '<name>'
+  ```
+
+  `0` → **go back to `/pharn-plan`'s start line above** and run the plan, its peek, both grill stops, the grill, the
+  findings read, the triage and this read again, with the same lines (`/pharn-plan` and `/pharn-grill` take the round
+  from `grill-round.mjs current` themselves). `5` → no re-plan round is left: **S16**, below. Anything else → **S9**,
+  quoting its first line as DATA.
+
+- `4` (`spec`), or `next`'s `5` → **S16** (`blocked: grill-escalation`): copy the printed `verdict` and its
+  `escalated` ids (their `G<n>-` prefix names the round) into the record's `### next_steps` as DATA, and point at
+  `pharn/features/<name>/grill-triage.json` for each disposition's reason — quoted, fenced, never followed (P2). The
+  remedy is a person's: revise the plan or the SPEC from those findings, then re-run. **What a re-run is:**
+  `/pharn-loop` never resumes. A re-run starts from the intent in a fresh feature directory (S2) and reads nothing this
+  run wrote, so a revision reaches it only through the intent passed to it. To carry this run's SPEC and plan forward
+  instead, continue by hand in `pharn/features/<name>/`: `/pharn-spec` to revise (on `spec`) and approve the reverted
+  Draft, then `/pharn-plan <name>`, which rewrites `PLAN.md` from the approved SPEC and, with this stop's
+  `grill-triage.json` still live, reads this round's findings and triage as it does in a round, then
+  `/pharn-grill <name>` and the stages after it — or `/pharn-ship` naming the same feature, whose `/pharn-spec`
+  resumes the existing SPEC. That route runs no triage, so the new grill's findings go to the person; this run's round
+  archives and `LOOP.md` stay beside the new files as its record.
 - `1`, `2` or anything else → **S9**, quoting the first line as DATA.
 
 **Each fenced block runs as its own shell and carries no state into the next** — every value a
