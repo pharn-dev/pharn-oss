@@ -144,7 +144,13 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   two disagree — so editing the config is only half the change: update the command frontmatter too, or the
   checker will tell you. `/pharn-triage` (7.7.0) has no key of its own in the shipped block and resolves through
   `default`, so changing `default` also changes what `pharn-triage.md`'s frontmatter must say: update it too, or the
-  checker's `agreement` mode reports that file (`via default`). Routing reads the block either way. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
+  checker's `agreement` mode reports that file (`via default`). Routing reads the block either way. To route
+  `/pharn-triage` apart from `default`, give your own block a `models.stages.triage` entry and make
+  `pharn-triage.md`'s frontmatter match it; the checker then holds that file to the entry, not to `default`. This
+  needs pharn-cli 0.18.1 or newer: older releases report a block naming `triage` as rejected. The shipped block names
+  no `triage` key for the same reason, since `MIN_CLI` still admits those releases. `pharn update` keeps a block you
+  changed, and a re-run `pharn init` replaces it with the shipped one
+  ([pharn-cli's `pharn.config.json` reference](https://github.com/pharn-dev/pharn-cli/blob/main/docs/reference/pharn-config.md#what-each-command-does-with-it)). Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
   stage their routing policy routes runs as a subagent, requested on the model the block resolves for it.
   `/pharn-ship`'s spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no
   config; a pre-0.7.0 block, which `pharn update` with `@pharn-dev/pharn` ≥ 0.7.0 migrates; `inherit`; a full

@@ -1,0 +1,27 @@
+{
+  "feature": "triage-model-key",
+  "gates": {
+    "eval:trust-fence": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "0d3bbff4940671f312acaa3ea7a1c50e89123dbdf731cecb34d1468cec08c523",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "737ab2c8ebb527518cd647c2c22a6096b4b40137bfea592f75c8e2e0ca6bbb7c"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

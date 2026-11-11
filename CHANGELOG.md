@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-11-11: **`docs/limitations.md` now says how to give `/pharn-triage` a model of its own.** 7.7.1 suggested no
+  `triage` key in `models.stages` because pharn-cli did not accept one. pharn-cli 0.18.1 does. A project on 0.18.1 or
+  newer may add the entry and match `pharn-triage.md`'s frontmatter to it. The shipped `pharn.config.json` still names
+  none, because `MIN_CLI` (0.14.0) admits releases that reject it. The page also points at pharn-cli's reference for
+  how `pharn update` and a re-run `pharn init` treat an edited block. No product-surface change.
+
 ## [7.8.0] - 2026-11-11
 
 ### Added

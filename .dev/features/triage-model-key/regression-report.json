@@ -1,0 +1,44 @@
+{
+  "base": "43e08663a596872bc06991d34e995836a8240241",
+  "inside": [
+    "CHANGELOG.md",
+    "docs/limitations.md",
+    "pharn/floor/check-model-config.test.mjs",
+    ".dev/features/triage-model-key/PLAN.md",
+    ".dev/features/triage-model-key/GRILL.md"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6544,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6552,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
