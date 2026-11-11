@@ -352,6 +352,31 @@ test("readSupervision: absent, ok with the parsed decision and findings, red, an
     writeDecision(p, "{");
     assert.deepEqual(readSupervision(p.dir), { state: "red", codes: ["not-json"] });
     assert.equal(readSupervision(join(p.root, "no", "such")).state, "absent");
+    // Never a throw: a value that is not a path at all reads as unreadable, with a fixed reason.
+    assert.deepEqual(readSupervision(null), { state: "unreadable", reason: "the decision could not be read" });
+  } finally {
+    cleanup(p);
+  }
+});
+
+test("usage: a feature path that is a file exits 2 with the reason on stderr; a missing findings file is unreadable", () => {
+  const p = project(1, "spec");
+  try {
+    writeFileSync(join(p.root, "pharn", "features", "plain-file"), "not a directory\n");
+    for (const cmd of ["skeleton", "check"]) {
+      const r = cli(p, cmd, "plain-file");
+      assert.equal(r.code, 2, cmd);
+      assert.equal(r.out, "");
+      assert.match(r.err, /^supervisor: not a directory: pharn\/features\/plain-file\n$/);
+    }
+    rmSync(join(p.dir, "grill-findings.json"));
+    const r = cli(p, "skeleton", p.name);
+    assert.equal(r.code, 2);
+    assert.equal(r.out, "");
+    assert.match(r.err, /^supervisor: findings file not found: /);
+    assert.deepEqual(readSupervision(p.dir), { state: "absent" }, "no decision file: absent, whatever the inputs");
+    writeDecision(p, "{}");
+    assert.equal(readSupervision(p.dir).state, "unreadable");
   } finally {
     cleanup(p);
   }

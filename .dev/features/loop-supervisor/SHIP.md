@@ -29,6 +29,10 @@ run-ended: GATE 2
 - Regress: `REGRESSION.md` / `regression-report.json` — base eae5fce8, 179 outside test files, base 5,899 / head 5,905
   passed, `new_failures: []`.
 - Verify: `VERIFY.md` / `verify-report.json` — all eight gates exit 0, `reconcile` included.
+- **Fix after GATE 2:** a local diff-coverage measure before CI found seven untested added lines in `supervisor.mjs`
+  (98.60% against pharn-ci's 100%). Tests were added to `pharn/floor/supervisor.test.mjs`, a declared `## Files` path,
+  under the plan's scope; verify was re-run over that tree (PASS, eight gates; the report above is the re-run's).
+  Regress was not re-run: the one changed file is inside the feature, so no outside gate's input changed.
 - Review: `REVIEW.md` (GREEN, 0 floor-gate findings, 3 minor advisory).
 
 changelog-entry: exit 0

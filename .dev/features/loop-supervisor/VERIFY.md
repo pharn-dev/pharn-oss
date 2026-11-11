@@ -1,8 +1,14 @@
 # VERIFY — loop-supervisor
 
 Gates run through `pharn/floor/run-gates.mjs` (stamp `pharn/.run/pharn-dev-verify/gates/stamp.json`, sha256
-`b359d474a4220cba48355f63ebfb9451cb8a567f3e11662a6f4b6974dc334c51`), one gate at a time; verdict by
+`1652a20c8c08481d38774c26f4012a1ce253e722f5ed57ae23042c7bdf76ba6b`), one gate at a time; verdict by
 `pharn/floor/check-verify.mjs --stamp`.
+
+**Second run.** The first run (stamp `b359d474…`) also read PASS. A local diff-coverage measure before CI then found
+seven added lines of `pharn/floor/supervisor.mjs` with no test (98.60% against pharn-ci's 100%): a feature path that is
+a file, a missing findings file, and `readSupervision`'s never-throw fallback. Tests for them were added to
+`pharn/floor/supervisor.test.mjs` (a declared `## Files` path, under the plan's scope) and nothing else changed; this
+table is the re-run over that tree.
 
 | gate                 | exit |
 | -------------------- | ---- |
