@@ -225,7 +225,11 @@ grill and triage, and what it changed is the model's judgment. Since 7.9.0 an es
 `/pharn-supervise`, which reads the same findings, dispositions and reasons and may decide `proceed-at-risk`: an
 injected finding can steer that decision toward carrying itself past the stop. The floor holds the decision enum,
 one reason per escalated id, the sha256 binding to the triage file, and that the supervisor runs only on an
-escalation; every carried id is named in the commit message and `RUN-REPORT.md`, so a person sees it at merge. The quantifier is corrected in the heading
+escalation; every carried id is named in the commit message and `RUN-REPORT.md`, so a person sees it at merge.
+Since 7.10.0 the supervisor may decide `amend-spec`, and `/pharn-spec` writes new acceptance criteria from the
+same findings: an injected finding can steer what the amended SPEC asks for. The floor holds that the intent,
+the scope and every earlier criterion are byte-identical to the archived SPEC, that at least one criterion is
+added, and that it happens once per run; the added criteria are named in the commit message and `RUN-REPORT.md`. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and
