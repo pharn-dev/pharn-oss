@@ -139,10 +139,12 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   rest of `pharn-core` — the constitution engine, the agnostic rule set, and the memory-bank commands
   beyond promotion. What exists is what the [generated inventory](../README.md#pharn-builds-pharn) lists.
 - **Per-stage models are routed for most orchestrated stages, effort is not, and nothing proves what a
-  stage ran on.** `pharn.config.json`'s `models.stages` is the source of truth for the eleven product
+  stage ran on.** `pharn.config.json`'s `models.stages` is the source of truth for the product
   commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when the
   two disagree — so editing the config is only half the change: update the command frontmatter too, or the
-  checker will tell you. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
+  checker will tell you. `/pharn-triage` (7.7.0) has no key of its own in the shipped block and resolves through
+  `default`, so changing `default` also changes what `pharn-triage.md`'s frontmatter must say: update it too, or the
+  checker's `agreement` mode reports that file (`via default`). Routing reads the block either way. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
   stage their routing policy routes runs as a subagent, requested on the model the block resolves for it.
   `/pharn-ship`'s spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no
   config; a pre-0.7.0 block, which `pharn update` with `@pharn-dev/pharn` ≥ 0.7.0 migrates; `inherit`; a full

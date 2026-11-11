@@ -404,11 +404,10 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 
 ```bash
 # PRODUCT-surface twin of check-config (below), but NOT a copy-pair: hold pharn.config.json's
-# `models.stages` in EQUALITY with the ELEVEN /pharn-* product commands' platform `model:`/`effort:`
+# `models.stages` in EQUALITY with the /pharn-* product commands' platform `model:`/`effort:`
 # frontmatter. Same three modes (validate | resolve <stage> | agreement) and the same primitive #3, over a
-# DIFFERENT closed map (PRODUCT_STAGES: spec plan grill build regress verify ship loop review
-# memory-promote ac-test — `ac-test` is the one key that is not its file stem, `pharn-test.md`, so the reverse
-# pass tests the map's FILE names), a DIFFERENT filename prefix, and a DIFFERENT fresh-install posture. The DISTINCT
+# DIFFERENT closed map (the checker's PRODUCT_STAGES, read there and not mirrored here — `ac-test` is the one
+# key that is not its file stem, `pharn-test.md`, so the reverse pass tests the map's FILE names), a DIFFERENT filename prefix, and a DIFFERENT fresh-install posture. The DISTINCT
 # BASENAME is deliberate: unlike check-provenance / lessons-index-core, the two files share almost no
 # substance, so no ✧ shared-constant obligation set is implied.
 # MECHANISM, read live (P6): Claude Code selects a COMMAND's model from STATIC FRONTMATTER and nothing
@@ -458,7 +457,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 #   (2) the pharn.config.json the INSTALLER writes into a USER's project — skillsVersion + the exact
 #       installed commit, which `pharn status` / `pharn update` compare against SKILLS_VERSION.
 # `models.stages` is NO LONGER dev-apparatus-only: since 3.2.0 the SAME map is the source of truth for
-# the eleven PRODUCT commands' frontmatter (check-model-config.mjs, above). This checker therefore scopes
+# the PRODUCT commands' frontmatter (check-model-config.mjs, above). This checker therefore scopes
 # its agreement to a CLOSED `DEV_WIRED` set {plan, build, review} rather than "every non-default config
 # stage" — otherwise a product-only key (`spec`, `loop`) would send it looking for a pharn-dev-spec.md
 # that does not exist and RED a correct repo. A materialized set, NOT a filesystem probe: an existence

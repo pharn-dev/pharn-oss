@@ -23,6 +23,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.7.1] - 2026-11-11
+
+### Fixed
+
+- **`/pharn-loop` says what a re-run after an S16 stop is.** S16 (`blocked: grill-escalation`) told a person to
+  revise the plan or the SPEC and re-run, but not what a re-run does. `pharn-loop.md`'s triage read now says it: a
+  `/pharn-loop` re-run starts from the intent in a fresh feature directory (S2) and reads nothing the blocked run
+  wrote. To carry that run's SPEC and plan forward, continue by hand in its directory: `/pharn-spec` to revise and
+  approve the reverted Draft, then `/pharn-plan <name>`, `/pharn-grill <name>` and the stages after it, or
+  `/pharn-ship` naming the same feature. That route runs no triage. The stuck-point row points at the explanation,
+  and a new hygiene test pins it. This closes the comprehension finding the 7.7.0 grill left open.
+- **The cost of `/pharn-triage` resolving through `default` is stated.** The shipped `pharn.config.json` has no
+  `triage` key, so `/pharn-triage` takes `models.stages.default`. Changing `default` therefore also changes what
+  `pharn-triage.md`'s frontmatter must say, or `check-model-config.mjs agreement` reports that file (`via default`).
+  Routing is unaffected. `docs/limitations.md` now says so. It suggests no `triage` key, because pharn-cli does not
+  accept one yet.
+- **"The eleven product commands" no longer appears where it is false.** `/pharn-triage` made the count twelve in
+  7.7.0. The count is now an open phrase ("the product commands") in `docs/limitations.md`, `docs/guarantees.md`,
+  `README.md`, `pharn.config.json`'s `_models_stages_note`, `.dev/guides/floor-checks.md` and a
+  `.dev/floor/check-config.mjs` comment. The guide's copy of the checker's stage list, which also lacked `triage`, is
+  now a pointer to the checker. A comment recording the 6.24.0 rewording keeps its count, since it was true then.
+
 ### Added
 
 - 2026-11-10: **Measured: the triage stage on five real grills.** Each `/pharn-triage` run (sonnet, high, headless)
