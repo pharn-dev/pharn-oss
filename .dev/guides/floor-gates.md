@@ -637,7 +637,7 @@ node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <na
 ## `check-entry-context.mjs` — the entry-context guard
 
 ```bash
-# THE ENTRY-CONTEXT GUARD (7.12.0, entry-context-guard, Linear CORE-103) — /pharn-loop stops at entry when the context
+# THE ENTRY-CONTEXT GUARD (7.13.0, entry-context-guard, Linear CORE-103) — /pharn-loop stops at entry when the context
 # running it already holds more tokens than `budget.entryContextTokens` (pharn.config.json; default 320,000), because
 # every later request of the run re-sends that context. THE TRIGGER (P7): .dev/measurements/loop-baseline-2026-11-11.md
 # §4 — the 12 of 36 runs started in a main session entered at a median 484k tokens (210k–905k) on their first

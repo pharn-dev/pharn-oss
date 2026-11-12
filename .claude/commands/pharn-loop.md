@@ -410,7 +410,7 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    membership", which states its bounds). **A stop BEFORE S2 records nothing** and goes straight to the Step 7
    summary.
 
-   **Then measure the context running this command** (7.12.0) — as its own Bash call, once the run-start line's result
+   **Then measure the context running this command** (7.13.0) — as its own Bash call, once the run-start line's result
    is back, never in one batch with it: the check finds that line in this context's tool result
    (`pharn/floor/entry-context-core.mjs`, header):
 

@@ -98,9 +98,9 @@ header), so this is evidence, not a floor fact.
 - `.dev/guides/floor-gates.md` — a `## check-entry-context.mjs` section after the isolation check's. — dev apparatus
 - `README.md` — the generated `## Current state` floor-checker count (160 → 162), via `npm run docs:generate` only. —
   repo meta (generated region)
-- `SKILLS_VERSION` — 7.11.0 → 7.12.0 (minor: a new checker and stop; renumbered from 7.11.0 after CORE-105 merged
-  as 7.11.0). — repo meta
-- `CHANGELOG.md` — a new `## [7.12.0] - 2026-11-12` section with this entry. — repo meta
+- `SKILLS_VERSION` — → 7.13.0 (minor: a new checker and stop; renumbered from 7.11.0 after CORE-105 merged as
+  7.11.0 and CORE-75 claimed 7.12.0). — repo meta
+- `CHANGELOG.md` — a new `## [7.13.0] - 2026-11-12` section with this entry. — repo meta
 
 ### Not in this increment (human-only or later)
 
