@@ -1,0 +1,47 @@
+{
+  "base": "f1a7a84ec85486361f10ef206d50207d8b0484c3",
+  "inside": [
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/spec-amend-core.mjs",
+    "pharn/floor/spec-amend.test.mjs",
+    "pharn/pharn-contracts/supervisor.md",
+    ".dev/features/amend-wording-7102/GRILL.md",
+    ".dev/features/amend-wording-7102/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6616,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6624,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

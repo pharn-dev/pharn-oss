@@ -92,7 +92,7 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
   creates no new trust level; what bounds it is that every carried finding is named in the commit message and
   `RUN-REPORT.md`, and that nothing is merged or pushed.
 - **`amend-spec` (7.10.0)** lets a model change the approved SPEC it is building against, once per run (while
-  the run's `SPEC.a1.md` stays on disk: a Bash `rm` of it is neither prevented nor detected) and append-only: the
+  the run's `SPEC.a1.md` stays on disk: a Bash `rm` of every `.a1` file the amend left is neither prevented nor detected; removing `SPEC.a1.md` alone reads as `partial-archive`) and append-only: the
   floor holds the intent, the scope and every earlier criterion line for line equal to the archived SPEC (the `##`
   heading lines and trailing blank lines aside) and names the added criteria in the commit; it does not hold that the added criteria are right, and the
   run's approval stays a model's (this section's residual), never a person's.

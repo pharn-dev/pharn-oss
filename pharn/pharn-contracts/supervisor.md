@@ -95,7 +95,7 @@ At most once per run, and only in a full `/pharn-loop`. `pharn/floor/spec-amend.
 - A routed `/pharn-spec --model-approve` reads `pending` and appends criteria (`/pharn-spec` Step 1a); its `writes:` is
   `SPEC.md` alone, so it cannot write the archive it is checked against.
 - **`check <name>`** holds the amend append-only: `## Intent` and `## Scope` identical, line for line, to
-  `SPEC.a1.md`'s; the archived `## Acceptance Criteria` lines a prefix of the new section's; every archived criterion at
+  `SPEC.a1.md`'s, trailing blank lines dropped (7.10.2); the archived `## Acceptance Criteria` lines a prefix of the new section's; every archived criterion at
   its position with its id, lines and verify level; at least one criterion added; `SPEC.md` Approved and pinned
   (`check-spec-approved.mjs`). Exit `0` prints `{schema: "pharn-spec-amend-check/1", added: [AC ids], kept}`.
 - Then the front runs again from `/pharn-plan`. The green commit names the added ids
@@ -110,8 +110,9 @@ At most once per run, and only in a full `/pharn-loop`. `pharn/floor/spec-amend.
 - **Floor (enum/regex, with the content-hash's kind for the digest):** the closed keys, the decision enum, the
   index-aligned coverage of every escalated id, the reason bounds, the binding to the triage bytes, and that a decision
   is checked only on an escalation; one `amend-spec` per run (over `SPEC.a1.md` on disk); the amend's append-only rule.
-- **Bounded:** "once per run" holds at write time only. A Bash `rm` of `SPEC.a1.md` is neither prevented nor detected
-  (the `.a1` names are pipeline artifacts reconcile exempts).
+- **Bounded:** "once per run" holds at write time only. A Bash `rm` of every `.a1` file the amend left is neither
+  prevented nor detected (the `.a1` names are pipeline artifacts reconcile exempts); removing `SPEC.a1.md` alone, while
+  `SUPERVISOR.a1.json` or another `.a1` name stays, reads as `partial-archive` at `status`, `begin` and `check` (7.10.2).
 - **Agreement, never truth (L43):** the escalation precondition reads the triage verdict and the archive count, both
   written by the run; the check says they agree, never that the re-plan rounds really ran or that triage was right.
 - **Advisory:** the decision and every reason — one model upholding or overruling another model's escalation

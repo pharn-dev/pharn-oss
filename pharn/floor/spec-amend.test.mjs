@@ -305,6 +305,34 @@ test("checkAmend refuses each change that is not an append, by its own code (L36
   });
 });
 
+test("✧ 7.10.2 — checkAmend drops trailing blank lines from Intent and Scope, and only trailing ones (L60)", () => {
+  const plus = [...CRITERIA, NEW];
+  const sc = [
+    "**In scope:**",
+    "",
+    "- closing every team the erased account owns",
+    "",
+    "**Out of scope (non-goals):**",
+    "",
+    "- teams the account only belongs to",
+  ];
+  const intent = "Erasing an owner's account must not leave their teams open.";
+  const codes = (archiveBody, amendedBody) =>
+    (checkAmend(specText(archiveBody), specText(amendedBody)).defects ?? []).map((d) => (d.id ? `${d.code}@${d.id}` : d.code));
+  // The fixture's default scope is `sc`: the controls below are only meaningful while it is.
+  assert.deepEqual(body({ scope: sc }), body());
+  // A trailing blank line added on the amended side, in each section: passes.
+  assert.deepEqual(codes(body(), body({ criteria: plus, intent: `${intent}\n` })), []);
+  assert.deepEqual(codes(body(), body({ criteria: plus, scope: [...sc, ""] })), []);
+  // The reverse: the archive has the extra trailing blank line and the amended SPEC drops it.
+  assert.deepEqual(codes(body({ intent: `${intent}\n`, scope: [...sc, "", "   "] }), body({ criteria: plus })), []);
+  // Control: a blank line inserted INSIDE Scope (not trailing), or before Intent's text, is still a change.
+  assert.deepEqual(codes(body(), body({ criteria: plus, scope: [...sc.slice(0, 3), "", ...sc.slice(3)] })), ["scope-changed"]);
+  assert.deepEqual(codes(body(), body({ criteria: plus, intent: `\n${intent}` })), ["intent-changed"]);
+  // Control: trailing text is not blank.
+  assert.deepEqual(codes(body(), body({ criteria: plus, scope: [...sc, "", "- and their files"] })), ["scope-changed"]);
+});
+
 test("checkAmend: a reordered criterion is refused (criterion-changed, both ways)", () => {
   const swapped = [CRITERIA[1], CRITERIA[0], ...CRITERIA.slice(2), NEW];
   // The template numbers by position, so swapping the texts changes AC-1 and AC-2.
