@@ -23,6 +23,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-12: **Measured: the `/pharn-loop` baseline over 36 runs on 7.1.4 and 7.3.0 in a user project.** One run
+  ended green. 16 stopped at the entry check, and 11 of the 12 unmeasured ones name `test` killed at the 540 s per-gate
+  timeout. 9 ended `STOP_TERMINAL`: 6 on the same gate timed out later, 3 on `reconcile`. Main-session runs carried a
+  median of 505k tokens per orchestrator request, against 231k for runs started inside an agent. Weighted with the
+  brief's own weights, the cost split is 62% cache read, 27% cache write and 11% output, not the 54 / 37 / 9 first
+  reported, which priced every cache write as a 1-hour one. The record also sizes a fresh stage agent's first request by
+  component, picks three benchmark features, and rates 19 planned increments (CORE-75 … CORE-113): 8 go, 6 no-go, 5
+  needs-evidence. Every rating is advisory. Record: `.dev/measurements/loop-baseline-2026-11-11.md`. Dev apparatus only,
+  so no `SKILLS_VERSION` bump.
+
 ## [7.10.3] - 2026-11-12
 
 ### Fixed
