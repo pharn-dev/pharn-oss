@@ -410,7 +410,7 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    membership", which states its bounds). **A stop BEFORE S2 records nothing** and goes straight to the Step 7
    summary.
 
-   **Then measure the context running this command** (7.11.0) — as its own Bash call, once the run-start line's result
+   **Then measure the context running this command** (7.12.0) — as its own Bash call, once the run-start line's result
    is back, never in one batch with it: the check finds that line in this context's tool result
    (`pharn/floor/entry-context-core.mjs`, header):
 
@@ -575,15 +575,11 @@ two lines did), and you run them in this order:
    reading of your tools, failing in the safe direction. A second line `marker: not written` changes only the
    summary's route line.
 
-   With an Agent tool whose parameters list no `run_in_background`, append `--no-foreground-agent` to the start line:
-   it records `inline:no-foreground-agent` and exits `3` — ADVISORY, your own reading of the tool's schema. What
-   such a tool was measured to do, and what item 3's wait did with it, is `stage-agent-core.mjs`'s residual
-   `stage-agent-background`.
-
-2. **On start exit `0` only, the Agent call:** `subagent_type: "general-purpose"`, `model: "<alias>"` (the part
-   after `agent:`), `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; item 3
-   runs after the call whichever launch the harness picks — and **no `isolation`** — the stages
-   write into this one tree, one after another, never a worktree each. Its `prompt` is the stage's
+2. **On start exit `0` only, the Agent call, whatever parameters your Agent tool lists:**
+   `subagent_type: "general-purpose"`, `model: "<alias>"` (the part after `agent:`),
+   `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; item 3 runs after the
+   call whichever launch the harness picks — and **no `isolation`** — the stages write into this one tree, one after
+   another, never a worktree each. Its `prompt` is the stage's
    pinned one-line brief prompt, `<name>` (and `<N>`) substituted; the stage agent runs that line first and
    receives its rules from code. Only `/pharn-spec`'s prompt carries anything more: the increment description,
    below that line, in a fence longer than any backtick run inside it, labelled DATA (ADVISORY, like every

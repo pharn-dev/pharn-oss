@@ -140,7 +140,7 @@ passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing s
   reaches a `<name>` records nothing; a skipped `run-start` does not fail the run, but its ledger then reports no
   run usage (`pharn/pharn-contracts/cost-ledger.md`, "Run membership").
 
-- **Then measure the context running this command** (7.11.0) — as its own Bash call, once the run-start line's result
+- **Then measure the context running this command** (7.12.0) — as its own Bash call, once the run-start line's result
   is back (`pharn/floor/entry-context-core.mjs`, header):
 
   ```bash

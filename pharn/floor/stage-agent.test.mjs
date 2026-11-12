@@ -31,6 +31,7 @@ import {
   RESULT_MAX_BYTES,
   NO_AGENT_TOOL,
   NO_FOREGROUND_AGENT,
+  NO_FOREGROUND_AGENT_IGNORED,
   MARKER_KEPT,
   MARKER_DEFERRED,
   MARKER_WAITING,
@@ -766,20 +767,39 @@ test(`start ${NO_AGENT_TOOL} — an agent cell is inline:no-agent-tool WITHOUT c
   }
 });
 
-test(`start ${NO_FOREGROUND_AGENT} (6.73.2) — an agent cell is inline:no-foreground-agent WITHOUT consulting the config, with ITS remedy`, () => {
-  const dir = scratch();
+test(`start ${NO_FOREGROUND_AGENT} (retired, inline-fallback-stop) — accepted and IGNORED: the route is decided without it, with one stderr note`, () => {
+  const dirs = [];
+  const fresh = (withConfig) => {
+    const d = scratch();
+    dirs.push(d);
+    if (withConfig) copyFileSync(REPO_CONFIG, join(d, "pharn.config.json"));
+    return d;
+  };
   try {
-    // No config: without the flag this is no-config, so the token proves the probe was skipped.
-    const plain = run(dir, ["route", ...startArgs("pharn-loop", "pharn-spec").slice(1)]);
-    assert.equal(plain.stdout, "inline:no-config\n", "control: without the flag the config decides");
-    const r = run(dir, startArgs("pharn-loop", "pharn-spec", [NO_FOREGROUND_AGENT]));
+    const cfg = JSON.parse(readFileSync(REPO_CONFIG, "utf8")).models.stages;
+    // No config: the flag used to short-circuit the config read (inline:no-foreground-agent); now the config decides.
+    const noCfg = fresh(false);
+    const r = run(noCfg, startArgs("pharn-loop", "pharn-spec", [NO_FOREGROUND_AGENT]));
     assert.equal(r.status, 3, r.stderr);
-    assert.equal(lines(r.stdout)[0], "inline:no-foreground-agent");
-    assert.equal(markersIn(dir)[0].route, "inline:no-foreground-agent");
-    assert.match(r.stderr, /runs inline \(no-foreground-agent\) — .*run_in_background/, "its own remedy (L27)");
-    assert.doesNotMatch(r.stderr, /allow the Agent tool/, "never no-agent-tool's remedy");
-    // Anywhere in argv it is the bare flag, mid-line included.
-    const mid = run(dir, [
+    assert.equal(lines(r.stdout)[0], "inline:no-config", "the config was read: the flag no longer decides");
+    assert.equal(markersIn(noCfg)[0].route, "inline:no-config");
+    assert.ok(r.stderr.includes(NO_FOREGROUND_AGENT_IGNORED), "the ignored note on the call that gave the flag (L27)");
+    assert.doesNotMatch(r.stderr, /no-foreground-agent\)/, "never the retired reason's runs-inline line");
+    // Over this repo's config, an agent cell routes: exit 0, the alias token, the marker records it.
+    const withCfg = fresh(true);
+    const a = run(withCfg, startArgs("pharn-loop", "pharn-spec", [NO_FOREGROUND_AGENT]));
+    assert.equal(a.status, 0, a.stderr);
+    assert.equal(lines(a.stdout)[0], `agent:${cfg.spec.model}`);
+    assert.equal(markersIn(withCfg)[0].route, `agent:${cfg.spec.model}`);
+    assert.equal(a.stderr.trim(), `stage-agent: ${NO_FOREGROUND_AGENT_IGNORED}`, "exactly the one note on a routed start");
+    // The same start without the flag: the same token and marker route, and no note (absent where not given, L27).
+    const control = fresh(true);
+    const c = run(control, startArgs("pharn-loop", "pharn-spec"));
+    assert.deepEqual([c.status, lines(c.stdout)[0]], [a.status, lines(a.stdout)[0]], "the flag changes no decision");
+    assert.equal(markersIn(control)[0].route, markersIn(withCfg)[0].route);
+    assert.ok(!c.stderr.includes(NO_FOREGROUND_AGENT_IGNORED), "no note without the flag");
+    // Anywhere in argv it is the bare flag, mid-line and before --mode included; still ignored.
+    const mid = run(fresh(true), [
       "start",
       "--command",
       "pharn-loop",
@@ -791,9 +811,9 @@ test(`start ${NO_FOREGROUND_AGENT} (6.73.2) — an agent cell is inline:no-foreg
       "--iteration",
       "1",
     ]);
-    assert.equal(mid.status, 3, mid.stderr);
-    assert.equal(lines(mid.stdout)[0], "inline:no-foreground-agent");
-    const quick = run(dir, [
+    assert.equal(mid.status, 0, mid.stderr);
+    assert.equal(lines(mid.stdout)[0], `agent:${cfg.build.model}`);
+    const quick = run(fresh(true), [
       "start",
       "--command",
       "pharn-loop",
@@ -805,25 +825,26 @@ test(`start ${NO_FOREGROUND_AGENT} (6.73.2) — an agent cell is inline:no-foreg
       "--mode",
       "quick",
     ]);
-    assert.equal(quick.status, 3, quick.stderr);
-    assert.equal(lines(quick.stdout)[0], "inline:no-foreground-agent");
-    // A policy-inline cell keeps its own reason (the quick loop's grill; the full loop's is routed since 7.7.0).
-    const q = run(dir, startArgs("pharn-loop", "pharn-grill", ["--mode", "quick", NO_FOREGROUND_AGENT]));
+    assert.equal(quick.status, 0, quick.stderr);
+    assert.equal(lines(quick.stdout)[0], `agent:${cfg.plan.model}`);
+    // A policy-inline cell keeps its own reason (the quick loop's grill).
+    const q = run(fresh(true), startArgs("pharn-loop", "pharn-grill", ["--mode", "quick", NO_FOREGROUND_AGENT]));
     assert.equal(q.status, 3, q.stderr);
     assert.equal(lines(q.stdout)[0], "inline:floor-only");
-    // Both flags: no Agent tool at all is the stronger reading.
-    const both = run(dir, startArgs("pharn-loop", "pharn-plan", [NO_FOREGROUND_AGENT, NO_AGENT_TOOL]));
+    // With --no-agent-tool too, that flag decides, as it does alone.
+    const both = run(fresh(true), startArgs("pharn-loop", "pharn-plan", [NO_FOREGROUND_AGENT, NO_AGENT_TOOL]));
     assert.equal(both.status, 3, both.stderr);
     assert.equal(lines(both.stdout)[0], "inline:no-agent-tool");
-    const written = markersIn(dir).length;
-    // At most once; never a value.
-    const twice = run(dir, startArgs("pharn-loop", "pharn-plan", [NO_FOREGROUND_AGENT, NO_FOREGROUND_AGENT]));
+    // At most once; never a value; a refused start writes no marker.
+    const refused = fresh(true);
+    const twice = run(refused, startArgs("pharn-loop", "pharn-plan", [NO_FOREGROUND_AGENT, NO_FOREGROUND_AGENT]));
     assert.deepEqual([twice.status, twice.stdout], [2, ""]);
-    const asValue = run(dir, ["start", "--command", "pharn-loop", "--stage", "pharn-plan", "--name", NO_FOREGROUND_AGENT]);
+    assert.match(twice.stderr, /--no-foreground-agent was given more than once/);
+    const asValue = run(refused, ["start", "--command", "pharn-loop", "--stage", "pharn-plan", "--name", NO_FOREGROUND_AGENT]);
     assert.deepEqual([asValue.status, asValue.stdout], [2, ""]);
-    assert.equal(markersIn(dir).length, written, "a refused start writes no marker");
+    assert.deepEqual(markersIn(refused), [], "a refused start writes no marker");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    for (const d of dirs) rmSync(d, { recursive: true, force: true });
   }
 });
 

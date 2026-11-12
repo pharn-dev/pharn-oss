@@ -44,8 +44,9 @@ export const AGENT_MODELS = Object.freeze(["sonnet", "opus", "haiku", "fable"]);
 /**
  * Every reason a stage with a route line can run inline. The first two are POLICY (`ROUTE_POLICY` in
  * `stage-agent-core.mjs`); the next six are decided by `stage-agent.mjs route` from the config and the
- * checker's exit codes; `no-agent-tool` and `no-foreground-agent` (6.73.2) record the orchestrating model's
- * reading of its own Agent tool (advisory), passed to `stage-agent.mjs start` as a flag; `route-unavailable`
+ * checker's exit codes; `no-agent-tool` records the orchestrating model's reading of its own tools (advisory),
+ * passed to `stage-agent.mjs start` as a flag; `no-foreground-agent` (6.73.2) is RETIRED — no `start` records it
+ * now, and it stays a member so the markers and ledgers written before still validate; `route-unavailable`
  * is `start`'s own fallback, and the orchestrators record it themselves when the start line crashes. `stage-agent-core.mjs`'s header carries the table with each reason's remedy.
  */
 export const INLINE_REASONS = Object.freeze([

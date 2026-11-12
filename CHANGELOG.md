@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [7.11.0] - 2026-11-12
+## [7.12.0] - 2026-11-12
 
 ### Added
 
@@ -41,7 +41,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   runs the same line at Step 1 and only warns at GATE 1. The key is optional, so no shipped config needs it and
   `MIN_CLI` does not change. FLOOR: the compare and the exit code. ADVISORY: that the transcript's counts are this
   context's size (an undocumented, agent-writable format), and that a run obeys the exit. `pharn-loop.md` grows from
-  86,865 to about 88.2 KB, inside its 93,184-byte ceiling, so no ceiling moves. Linear CORE-103.
+  86,540 to 87,901 bytes, inside its 93,184-byte ceiling, so no ceiling moves. Linear CORE-103.
+
+## [7.11.0] - 2026-11-12
+
+### Changed
+
+- **`/pharn-loop` no longer runs a routed stage inline when its Agent tool lists no `run_in_background` parameter.**
+  6.73.2's `--no-foreground-agent` rule is gone from `pharn-loop.md`: a routed stage now always runs as a stage agent,
+  and `stage-agent.mjs finish --budget-ms` waits for it on disk whichever launch the harness picks (6.74.0). Why: in
+  the measured baseline (`.dev/measurements/loop-baseline-2026-11-11.md` §4), 11 of 12 runs started in a main session
+  recorded `inline:no-foreground-agent`, and the 8 that reached build carried a median of 643k tokens per orchestrator
+  request, against 267k for routed runs. 6.74.0 had kept the rule by a human decision; removing it is a decision of the
+  orchestrating model under the maintainer's delegation, citing those figures. `stage-agent.mjs start` still accepts
+  the flag, at most once, and ignores it with one stderr note, so an install whose edited `pharn-loop.md` predates
+  this change still routes. The token stays a valid route, so markers and ledgers written before still check. **Not
+  yet measured:** the wait in a main session whose Agent tool lists no `run_in_background`, the setting of those 11
+  runs; until it is observed, a session that fails the wait stops S9b at a routed stage (stop the agent, set its work
+  aside, re-run), with no inline fallback. An edited 6.73.2 `pharn-loop.md` (the one version with the flag and no
+  wait) kept through every update would now route and could stop S9 on a background launch.
+
+### Added
+
 - 2026-11-12: **Measured: the `/pharn-loop` baseline over 36 runs on 7.1.4 and 7.3.0 in a user project.** One run
   ended green. 16 stopped at the entry check, and 11 of the 12 unmeasured ones name `test` killed at the 540 s per-gate
   timeout. 9 ended `STOP_TERMINAL`: 6 on the same gate timed out later, 3 on `reconcile`. Main-session runs carried a
