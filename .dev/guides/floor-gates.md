@@ -74,6 +74,11 @@ come from the single code block this text was moved from, so the entry they name
 # moved the same way in 6.26.0, into pharn/floor/stage-verify.mjs, whose ★ WIRING test executes pharn-verify.md's
 # pinned line). Contract:
 # pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
+# GATE DURATION (7.12.0, gate-durations): every run the runner SPAWNED records `duration_ms` — one performance.now()
+# interval from just before the spawn to the settle; `run --next` prints it (null when nothing was spawned). A no-files or
+# reused run carries none and validateStamp refuses one that does. The kill timer re-arms until --timeout-ms has passed on
+# that clock, so a timed-out run lasts at least the timeout (tested behaviour, not floor). OBSERVATIONAL: outside the
+# execution identity and the BASE requirement; gate-durations.test.mjs pins that no verdict, reuse or route reads it.
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.

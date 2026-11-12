@@ -69,7 +69,8 @@ initialize at all.
       "fp_after": "<sha256>",
       "stdout_sha256": "<sha256>",
       "stderr_sha256": "<sha256>",
-      "results_sha256": "<sha256> | null"
+      "results_sha256": "<sha256> | null",
+      "duration_ms": 1234
     }
   ],
   "aux": { "completeness": 0 }
@@ -92,6 +93,7 @@ initialize at all.
 | `runs[].results_sha256`  | Optional (6.15.0). The sha256 of the gate's results file, or `null`. See below.                                                   |
 | `runs[].identity_sha256` | Optional (6.34.0). The entry's execution identity (`gate-reuse-core.mjs`). See "Reused entries".                                  |
 | `runs[].reused`          | Only on a reused entry (6.34.0): `{stage, side, seq, stamp_sha256}` naming the source execution.                                  |
+| `runs[].duration_ms`     | Optional (7.12.0). The runner's monotonic wall time for a process it spawned; only on `ran: true`. See "Gate duration".           |
 | `excluded`               | Optional (6.36.0): `{declared_in, ids}` — the discovered gates the project's `gates.exclude` removed. See below.                  |
 
 ## Per-test results (`results_sha256`, 6.15.0)
@@ -116,6 +118,31 @@ The field is **optional and additive**. `SCHEMA` is unchanged: `validateStamp` c
 **malformed** value is refused as `stamp-malformed` by all three `validateStamp` callers — a route reachable
 only by a forged or corrupted stamp, never by one the runner wrote. What the file means, and when it can be
 read, is `test-results-record.md`'s contract, not this one.
+
+## Gate duration (`duration_ms`, 7.12.0)
+
+`run-gates.mjs` reads `performance.now()` immediately before it spawns a gate and again when the gate settles (the
+child's `close`, or a spawn error), and records `duration_ms`, the floor of the difference in milliseconds, on every run
+it spawned. A `no-files` run and a reused run spawned nothing here, so they carry no `duration_ms`. `run --next` also
+prints the value (`null` when nothing was spawned).
+
+- **The shape is floor; the value is an observation.** `validateStamp` admits the field only when present, so every
+  stamp written before it still validates and `SCHEMA` is unchanged. Present, it must be a non-negative safe integer on
+  a run with `ran: true`. On a `ran: false` run, or with any other value, the stamp is `stamp-malformed`. What the number
+  measured is ADVISORY: one monotonic interval in the runner process, process start-up and teardown included, never CPU
+  time, in `pharn/.run/` state a Bash write reaches (`pharn/LIMITS.md §6`). Under machine load it measures the machine as
+  much as the gate.
+- **A timed-out run's duration is at least `--timeout-ms`.** The kill timer re-arms while less than the timeout has
+  passed on that same clock, so the runner never sends SIGTERM earlier. This is tested runner behaviour, not a floor
+  claim.
+- **It decides nothing.** It is outside the execution identity (`identity_sha256` is computed from inputs read before the
+  spawn) and outside `/pharn-regress`'s BASE requirement (`regress-base-reuse-core.mjs` reads a run's `id`, `shell`,
+  `argv` and `files` only). No verdict, reuse decision or route reads it: `pharn/floor/gate-durations.test.mjs` compares
+  the verdict CLIs and the reuse and identity functions over stamps with the field absent and perturbed, and scans
+  `pharn/floor/` for the modules that name it. That pins the readers that exist today, never one added later.
+- **Where it goes next.** A stamp is cleared at each stage's fresh start, so the cost ledger copies the durations at the
+  moment of the act: `/pharn-regress` and `/pharn-verify` into their work rows, and the entry runner into one `gate`
+  observation per gate (`cost-ledger.md`).
 
 ## Reused entries (`identity_sha256`, `reused`, 6.34.0)
 

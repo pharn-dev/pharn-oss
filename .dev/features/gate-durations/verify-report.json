@@ -1,0 +1,26 @@
+{
+  "feature": "gate-durations",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "d7a6d0f5f35071a740e905cac1e3767adc39c2a6dd09cf1b51ca247ce2b25f56",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "b32ba7cc63f95efa489376d735b32641a1d93a471f4e95a4a3c06522abba730a"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

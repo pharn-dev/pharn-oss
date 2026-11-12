@@ -506,6 +506,14 @@ test("6.35.0 OBSERVATIONAL — the work record is written at done; a planted `ph
     assert.equal(records.length, 1);
     assert.equal(records[0].stage, "pharn-verify");
     assert.equal(records[0].gates.executed, records[0].gates.required, "no delivery run: every gate executed");
+    // gate-durations (L84, realistic input): the real run's line is `/2`, with one integer duration per executed gate.
+    assert.equal(records[0].schema, "pharn-stage-work/2");
+    assert.equal(records[0].gates.durations.length, records[0].gates.executed);
+    for (const d of records[0].gates.durations) assert.ok(Number.isSafeInteger(d.duration_ms) && d.duration_ms >= 0, JSON.stringify(d));
+    assert.ok(
+      records[0].gates.durations.some((d) => d.id === "reconcile"),
+      "the ids are the stamp's gate names"
+    );
     control = { code: r.code, doc: r.doc, verdict: readReport(dir).verdict, gates: readReport(dir).gates };
   });
   withFixture({}, ({ dir }) => {
@@ -1388,10 +1396,18 @@ test("★ REUSE — FRESH-vs-REUSE EQUIVALENCE (mandatory): same coverage, exits
       ["pharn-regress", "pharn-verify"]
     );
   }
-  const fv = freshPath.work.records[1].gates;
-  const rv = reusePath.work.records[1].gates;
+  const { durations: fd, ...fv } = freshPath.work.records[1].gates;
+  const { durations: rd, ...rv } = reusePath.work.records[1].gates;
   assert.deepEqual(fv, { required: freshPath.stamp.runs.length, executed: freshPath.stamp.runs.length, reused: 0, no_files: 0 });
   assert.deepEqual(rv, { required: reusePath.stamp.runs.length, executed: reusePath.stamp.runs.length - 2, reused: 2, no_files: 0 });
+  // gate-durations: one duration per process each path SPAWNED — the two reused gates have none on the REUSE path.
+  assert.equal(fd.length, fv.executed);
+  assert.equal(rd.length, rv.executed);
+  const spawnedIds = (stamp) => stamp.runs.filter((r) => r.ran === true).map((r) => r.id);
+  assert.deepEqual(
+    rd.map((d) => d.id),
+    spawnedIds(reusePath.stamp)
+  );
   assert.equal(fv.executed - rv.executed, freshPath.verifySpawned.length - reusePath.verifySpawned.length, "avoided = not spawned");
 });
 
