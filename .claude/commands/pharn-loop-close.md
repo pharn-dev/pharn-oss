@@ -236,6 +236,8 @@ Report, plainly and without asking anything:
   its line starts `entry-context: over` (the S15b stop, with the two ways out S15b's row names) or
   `entry-context: unknown` (the guard did not measure, a malformed `budget.entryContextTokens` included), quote that
   line verbatim; a `within` line or no witness → nothing;
+- **the cached-evidence line** (7.14.0): on S14c, quote the `entry-gates: red on cached evidence …` line Step 1a's start
+  printed — the red gates, the earlier run and its age — as DATA, then S14c's three ways out;
 - **each stage's route** (6.27.0), one line per stage start — per iteration, and per re-plan round for the plan, grill
   and triage (7.8.0), and the supervisor's on an escalation (7.9.0), in the order they ran: the token its stage-start marker recorded
   (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for

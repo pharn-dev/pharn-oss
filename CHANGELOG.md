@@ -23,6 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.14.0] - 2026-11-12
+
+### Added
+
+- **A gate measured red at entry stops the next run on the same tree before its spec stage (S14c,
+  `blocked: gates-red-cached`).** After `run-gates.mjs init`, `entry-gates.mjs --start` looks up the repository's one
+  cached-red record in the git common directory (so every worktree reads it) and, when every bound input is equal,
+  exits 4 without spawning a runner: no gate runs and no entry-base offer is published, so `/pharn-regress` measures
+  BASE itself. The key binds the entry fingerprint with the earlier run's and this run's own `pharn/features/<name>/`
+  excluded (a stopped run leaves its directory behind), HEAD, each gate's command and files, the declared
+  `gates.exclude`, the per-gate timeout, the lockfiles and the package managers' install records, the node version
+  and platform, and the repo-relative working directory, with a fixed 24-hour age limit. Each miss is one of 14 closed
+  members, printed as one line, and the run goes on exactly as before. A `--wait` that decided a verdict records a
+  completed red with no timed-out, unstarted or mutating gate and at least one non-style red gate, and clears the
+  record otherwise, so a re-measured green removes the red it replaces; greens are never cached. `--refresh` measures
+  again: `/pharn-loop` runs it for the new `--refresh-entry` flag and for `--allow-red-entry`, and `/pharn-ship` asks
+  Stop or Continue on exit 4, where Continue runs it. The stop names the earlier run and its age. The record and the
+  start-time inputs live in the git dir, out of the write tools' reach (★ HOOK-probed). FLOOR: the hit decision
+  (hash and string equality, closed enums). ADVISORY: that a cached red is what a fresh run would measure —
+  environment variables, machine load, a flaky test, ignored files other than the install records and the absolute
+  path stay unbound. The gain is bounded: in the 36-run baseline, 5 of the 16 entry stops repeated an earlier run's
+  base commit, and tree equality could not be checked then. `pharn-loop.md` grows from 87,901 to 89,079 bytes, inside
+  its 93,184-byte ceiling. Linear CORE-86.
+
 ### Changed
 
 - 2026-11-12: Configure CodeRabbit to ignore `.dev/` during reviews and refresh the logo asset.

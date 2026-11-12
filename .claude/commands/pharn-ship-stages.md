@@ -194,8 +194,16 @@ background while `/pharn-plan` and `/pharn-grill` work; the read before `/pharn-
 node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
 ```
 
-Whatever the exit → `/pharn-plan`: with no gates, `/pharn-verify` asks about that, as before, and a start that
-failed is reported by the read before `/pharn-test`, which asks.
+Exit `4` (7.14.0) → an earlier run measured a gate red on this same tree and no gate ran
+(`pharn/floor/entry-gate-cache-core.mjs`, header): present the `entry-gates: red on cached evidence …` line as DATA and
+ask, through the interactive form, **Stop** (a STOP, through Steps 3 and 3a) or **Continue** — which measures again:
+
+```bash
+node pharn/floor/entry-gates.mjs --start --refresh --feature '<name>' --timeout-ms 540000
+```
+
+Every other exit (and after a Continue, whatever that line's exit) → `/pharn-plan`: with no gates, `/pharn-verify` asks
+about that, as before, and a start that failed is reported by the read before `/pharn-test`, which asks.
 
 ### Step 2.2 — `/pharn-plan`
 

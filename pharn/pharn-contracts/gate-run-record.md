@@ -299,6 +299,11 @@ gate — it already is one today.
   `base:test` (`ENTRY_BASE_TEST_ID`, reserved): the discovered `test` command handed regress's own default test list,
   right after the style part; the entry verdict never counts it. Any other tree change between two gates still refuses (`tree-changed-between-gates`). What
   counts as red at entry, and why a style gate's red is weighed differently, is `entry-gates-core.mjs`'s header.
+  Since 7.14.0 a completed `entry` stamp whose verdict holds a non-style red, with no unmeasured and no mutated run, is
+  also the source of the repository's one cached-red record (`entry-gate-cache-core.mjs`, in the git common dir): a
+  later `--start` whose bound inputs are all equal stops on it without running a gate. That record is evidence for no
+  stage — no row of the matrix above, never an offer, never a green — and one record per repository, last writer wins:
+  a clear only ever removes a hit, never adds a stop.
 - **`build` (6.39.0), `/pharn-build`'s own gate, run by `pharn/floor/build-gate.mjs`:** `--discover` or a human's
   `--gates` is required, and `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side` and `--base` are
   refused. The set is the DISCOVERED ids minus `E2E_SET` (the regress rule — e2e runs at `/pharn-verify`), then the

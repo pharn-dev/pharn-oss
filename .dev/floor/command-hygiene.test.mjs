@@ -1922,6 +1922,7 @@ const STUCK_POINTS = [
   { id: "S13", blocked: "ac-evidence-invalid" }, // 6.20.0: the AC evidence changed or is missing — a rebuild cannot fix it
   { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
   { id: "S14b", blocked: "gates-unmeasured-at-entry" }, // 6.75.0: no red, but a gate the entry runner did not measure
+  { id: "S14c", blocked: "gates-red-cached" }, // CORE-86: Step 1a's entry start exited 4 on an earlier run's red (entry-gate-cache-core.mjs)
   { id: "S15", blocked: "not-isolated" }, // 7.1.0: Step 1a's isolation check refused (check-run-isolation.mjs)
   { id: "S15b", blocked: "context-too-large" }, // CORE-103: Step 1a's entry-context check exited 3 (check-entry-context.mjs)
   { id: "S16", blocked: "grill-escalation" }, // 7.7.0: triage escalated; since 7.9.0, and the supervisor decided stop
@@ -2025,7 +2026,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 23, "the stuck-point table is S1–S18 plus S6b, S6c, S9b, S14b and S15b");
+  assert.equal(STUCK_POINTS.length, 24, "the stuck-point table is S1–S18 plus S6b, S6c, S9b, S14b, S14c and S15b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -6930,4 +6931,61 @@ test("✧ CORE-103 — /pharn-ship runs the line after its run-start, never stop
     after,
     /It never stops the run\. When its line starts `entry-context: over` \(exit `3`\) or `entry-context: unknown`, quote the\s+line verbatim in the GATE-1 message/
   );
+});
+
+// ── CORE-86 gate-evidence-cache: the cached-red stop's wiring in /pharn-loop, its quick and close parts and /pharn-ship ──
+// HONEST SCOPE (P0): command PROSE only — the two start lines, their choice, the exit-4 mapping and the quote rules are
+// PRESENT. That a run picks the right line, stops on exit 4 or quotes the start's line is advisory.
+const ENTRY_START_LINE = "node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000";
+const ENTRY_REFRESH_LINE = "node pharn/floor/entry-gates.mjs --start --refresh --feature '<name>' --timeout-ms 540000";
+
+/** null when the loop's entry-start block is wired as planned; else why. Pure over the body, so a mutant can test it. */
+function cachedRedLoopReason(body) {
+  const lines = body.split("\n").map((l) => l.trim());
+  const s = lines.indexOf(ENTRY_START_LINE);
+  const r = lines.indexOf(ENTRY_REFRESH_LINE);
+  if (s === -1 || r === -1) return "a start line is missing";
+  if (lines.filter((l) => l === ENTRY_START_LINE || l === ENTRY_REFRESH_LINE).length !== 2) return "expected each start line once";
+  if (r !== s + 1) return "the refresh line must follow the plain line in the same block";
+  const block = body.slice(body.indexOf(ENTRY_START_LINE) - 200, body.indexOf(ENTRY_REFRESH_LINE) + 600);
+  if (!/when the person typed `--allow-red-entry` or `--refresh-entry`, run the second instead/.test(block)) {
+    return "the choice between the two lines is missing";
+  }
+  if (!/exit `4` → \*\*S14c\*\* \(`blocked: gates-red-cached`\)/.test(block)) return "the exit mapping (4 → S14c) is missing";
+  if (!/so there is no record and the run goes straight to the Step 7 summary/.test(block)) return "the no-record rule is missing";
+  return null;
+}
+
+test("✧ CORE-86 — /pharn-loop's Step 1a starts the entry gates with the plain or the refresh line and stops S14c on 4", () => {
+  const body = commandBody(LOOP_FILE);
+  assert.equal(cachedRedLoopReason(body), null);
+  assert.match(body, /`\/pharn-loop \[--allow-red-entry\] \[--refresh-entry\] \[--accept-host-execution\]/);
+  assert.match(
+    body,
+    /`--refresh-entry` \(7\.14\.0\)\s+measures the entry gates again instead of stopping on an earlier run's red \(S14c\)/
+  );
+  const row = body.split("\n").find((l) => /^\|\s*S14c\s*\|/.test(l));
+  assert.ok(row && row.includes("`--refresh-entry`") && row.includes("`--allow-red-entry`"), "S14c's row names both ways out");
+});
+
+test("✧ CORE-86 — the rule DISCRIMINATES — a dropped refresh line, a dropped mapping or a dropped choice fails (L4)", () => {
+  const real = commandBody(LOOP_FILE);
+  assert.match(cachedRedLoopReason(real.replace(`   ${ENTRY_REFRESH_LINE}\n`, "")), /missing/);
+  assert.match(cachedRedLoopReason(real.replace("**S14c**", "**S14**")), /exit mapping/);
+  assert.match(cachedRedLoopReason(real.replace("run the second instead", "run either")), /choice/);
+});
+
+test("✧ CORE-86 — the quick part takes --refresh-entry, the close part quotes the start's line on S14c, /pharn-ship asks Stop/Continue on 4", () => {
+  assert.match(commandBody("pharn-loop-quick.md"), /`\/pharn-loop --quick \[--allow-red-entry\] \[--refresh-entry\]/);
+  assert.match(
+    commandBody("pharn-loop-close.md"),
+    /on S14c, quote the `entry-gates: red on cached evidence …` line Step 1a's start\s+printed — the red gates, the earlier run and its age — as DATA/
+  );
+  const stages = commandBody("pharn-ship-stages.md");
+  const plain = stages.indexOf(ENTRY_START_LINE);
+  const refresh = stages.indexOf(ENTRY_REFRESH_LINE);
+  assert.ok(plain !== -1 && refresh > plain, "ship's refresh line follows its plain start line");
+  const between = stages.slice(plain, refresh);
+  assert.match(between, /Exit `4` \(7\.14\.0\)/);
+  assert.match(between, /\*\*Stop\*\* \(a STOP, through Steps 3 and 3a\) or \*\*Continue\*\* — which measures again/);
 });

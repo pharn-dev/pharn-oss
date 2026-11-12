@@ -72,6 +72,8 @@ equality is required, and 7.5.0's spec peek already stops some of them one stage
 - `pharn/floor/entry-gates-core.mjs` — `cached-red` joins REASON_CODES (the result a hit leaves) — layer product floor
 - `pharn/floor/entry-gates.test.mjs` — CLI: hit, each miss through the CLI, refresh, AC2's regress miss — layer product
   floor (tests)
+- `pharn/floor/entry-base-evidence.test.mjs` — BUILD AMENDMENT: its offer test starts a second run on the tree a red
+  run just measured, which now hits the cache; that start is `--refresh` — layer product floor (tests)
 - `pharn/floor/worktree-fingerprint.mjs` — `fingerprint(…, {alsoExclude})`: a second feature directory excluded at the
   entry stage only; every existing digest byte-identical — layer product floor
 - `pharn/floor/worktree-fingerprint.test.mjs` — the golden digest unchanged; `alsoExclude` equal to `feature` or absent
@@ -273,6 +275,16 @@ Three build-time checks the decision named: (a) exit `4` is not taken by any `en
 mapping of `--start` before it is pinned; (b) a missing or unwritable git common dir is the `inputs-unavailable` miss at
 the lookup and a best-effort stderr note at the write, never a crash or a stop; (c) the `pharn-loop.md` byte ceiling —
 text moves to the close part rather than the ceiling rising without a stated reason.
+
+## Build amendment (recorded)
+
+The first full `npm test` of the build found one test outside `## Files` that the feature changes by design:
+`pharn/floor/entry-base-evidence.test.mjs` ("the offer is published only after a validated … --wait") runs a red entry,
+then a second `--start` on the same tree to show that a start removes the offer — and that start is now a cached-red hit
+(exit 4; the offer is still removed). The test's subject is the offer, not the cache, so its second start becomes the
+`--refresh` line and the assertion is kept. The path was added to `## Files` and the build's Step 0 (setter, then
+anchor) was run again, so reconcile judges the amended scope. No other file was added. A model decision under the
+maintainer's delegation, recorded in SHIP.md.
 
 ## Open questions (HALT)
 

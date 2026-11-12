@@ -825,6 +825,166 @@ test("CLI: usage — no default for --timeout-ms or --budget-ms (L41), one mode,
   }
 });
 
+// ── gate-evidence-cache (Linear CORE-86): a measured red stops the next run on the same tree at --start ───────────────
+const CACHE_FILE = (dir) => join(dir, ".git", "pharn-entry-gate-cache.json");
+const startAs = (dir, feature, ...extra) => cli(dir, "--start", ...extra, "--feature", feature, "--timeout-ms", GATE_TIMEOUT_MS);
+function waitAs(dir, feature) {
+  const r = cli(dir, "--wait", "--feature", feature, "--budget-ms", WAIT_BUDGET_MS);
+  const doc = JSON.parse(r.stdout);
+  assert.equal(documentDefect(doc), null, r.stdout);
+  return { status: r.status, doc, stderr: r.stderr };
+}
+/** A red recorded by feature `demo`, its feature directory left behind as a stopped run leaves it. */
+function recordedRed(gates = { lint: {}, test: { exit: 1 } }) {
+  const dir = sandbox({ gates });
+  assert.equal(start(dir).status, 0);
+  const w = wait(dir);
+  assert.equal(w.status, 4, JSON.stringify(w.doc));
+  assert.ok(existsSync(CACHE_FILE(dir)), "the red was recorded");
+  mkdirSync(join(dir, "pharn", "features", FEATURE), { recursive: true });
+  writeFileSync(join(dir, "pharn", "features", FEATURE, "SPEC.md"), "# left behind by the stopped run\n");
+  return dir;
+}
+
+test("CLI cache (L84, AC4): a red recorded by one run stops the next run's --start on the same tree — exit 4, no runner, the source run and its age named", () => {
+  const dir = sandbox({ gates: { lint: {}, test: { exit: 1 } } });
+  try {
+    const s = start(dir);
+    assert.match(s.stdout, /cached evidence — miss no-record/);
+    const w = waitAs(dir, FEATURE);
+    assert.equal(w.status, 4);
+    assert.equal(w.stderr, "", "a successful record is silent, like the offer");
+    const rec = JSON.parse(readFileSync(CACHE_FILE(dir), "utf8"));
+    assert.deepEqual(rec.red, ["test"]);
+    assert.equal(rec.source.feature, FEATURE);
+    mkdirSync(join(dir, "pharn", "features", FEATURE), { recursive: true });
+    writeFileSync(join(dir, "pharn", "features", FEATURE, "SPEC.md"), "# left behind by the stopped run\n");
+
+    const hit = startAs(dir, "demo-2");
+    assert.equal(hit.status, EXIT.red, hit.stdout + hit.stderr);
+    assert.match(
+      hit.stdout,
+      /red on cached evidence for 'demo-2' — test red on this tree in run 'demo' \(its gates started \S+Z, < 1 min ago\); no gate was run/
+    );
+    assert.match(hit.stdout, /--refresh/);
+    const runner = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.runner), "utf8"));
+    assert.equal(runner.pid, null, "no runner was spawned");
+    const res = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.result), "utf8"));
+    assert.equal(res.status, "unusable");
+    assert.equal(res.reason_code, "cached-red");
+    assert.equal(resultRecordDefect(res), null);
+    // What a stray read or the stop's cleanup meets: an unusable document, never a takeover; an abort with nothing to stop.
+    const w2 = waitAs(dir, "demo-2");
+    assert.equal(w2.status, EXIT.unusable);
+    assert.equal(w2.doc.reason_code, "cached-red");
+    const p = cli(dir, "--peek", "--feature", "demo-2");
+    assert.equal(JSON.parse(p.stdout).reason_code, "cached-red");
+    const a = cli(dir, "--abort", "--feature", "demo-2");
+    assert.equal(a.status, 0);
+    assert.match(a.stdout, /no runner process was recorded/);
+    assert.ok(!existsSync(join(dir, ENTRY_PATHS.stamp)), "no gate ran");
+
+    // --refresh measures again (the loops' --refresh-entry / --allow-red-entry, /pharn-ship's Continue) and re-records.
+    const again = startAs(dir, "demo-2", "--refresh");
+    assert.equal(again.status, 0, again.stderr);
+    assert.match(again.stdout, /cached evidence — miss refresh/);
+    assert.match(again.stdout, /started 2 gate\(s\)/);
+    const w3 = waitAs(dir, "demo-2");
+    assert.equal(w3.status, 4);
+    assert.equal(JSON.parse(readFileSync(CACHE_FILE(dir), "utf8")).source.feature, "demo-2", "the slot holds the latest measurement");
+    // --refresh belongs to --start only.
+    assert.equal(cli(dir, "--abort", "--refresh", "--feature", "demo-2").status, 2);
+  } finally {
+    cli(dir, "--abort", "--feature", "demo-2");
+    cleanup(dir);
+  }
+});
+
+test("CLI cache (AC1, AC6): each changed input is its named miss, and the gates then run exactly as before", () => {
+  const dir = recordedRed();
+  const missOf = (...extra) => {
+    const r = startAs(dir, "demo-2", ...extra);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /started 2 gate\(s\)/, "a miss starts the runner as before");
+    const m = /cached evidence — miss ([a-z-]+)/.exec(r.stdout);
+    cli(dir, "--abort", "--feature", "demo-2");
+    return m && m[1];
+  };
+  try {
+    writeFileSync(join(dir, "package-lock.json"), '{"lockfileVersion":3}\n');
+    assert.equal(missOf(), "install-changed", "a lockfile change (it moves the tree too)");
+    rmSync(join(dir, "package-lock.json"));
+    writeFileSync(join(dir, "pharn.config.json"), JSON.stringify({ gates: { exclude: ["e2e"] } }));
+    assert.equal(missOf(), "exclude-changed", "a gates.exclude change that removes no discovered gate");
+    rmSync(join(dir, "pharn.config.json"));
+    writeFileSync(join(dir, "a.txt"), "changed\n");
+    assert.equal(missOf(), "tree-changed");
+    writeFileSync(join(dir, "a.txt"), "a\n");
+    assert.equal(cli(dir, "--start", "--feature", "demo-2", "--timeout-ms", "240000").stdout.match(/miss ([a-z-]+)/)[1], "timeout-changed");
+    cli(dir, "--abort", "--feature", "demo-2");
+    // The production age limit (L41): the same record, dated 25 h ago, through the real CLI.
+    const rec = JSON.parse(readFileSync(CACHE_FILE(dir), "utf8"));
+    rec.source.measured_at = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
+    writeFileSync(CACHE_FILE(dir), JSON.stringify(rec));
+    assert.equal(missOf(), "expired");
+    writeFileSync(CACHE_FILE(dir), "{nope");
+    assert.equal(missOf(), "record-unusable");
+  } finally {
+    cli(dir, "--abort", "--feature", "demo-2");
+    cleanup(dir);
+  }
+});
+
+test("CLI cache (AC3): a green clears the slot; a timed-out, a style-only or a peeked red is never recorded", () => {
+  const dir = recordedRed();
+  try {
+    writeFileSync(join(dir, "gates", "test.cjs"), gateSource({ exit: 0 }));
+    assert.match(startAs(dir, "demo-2").stdout, /miss tree-changed/);
+    const g = waitAs(dir, "demo-2");
+    assert.equal(g.status, 0);
+    assert.equal(g.stderr, "", "a successful clear is silent");
+    assert.ok(!existsSync(CACHE_FILE(dir)), "a re-measured green removes the stale red");
+  } finally {
+    cli(dir, "--abort", "--feature", "demo-2");
+    cleanup(dir);
+  }
+  const slow = sandbox({ gates: { test: { exit: 1 }, build: { sleepMs: 30000 } } });
+  try {
+    assert.equal(start(slow, "1000").status, 0);
+    const w = wait(slow);
+    assert.equal(w.status, 4, "red with an unmeasured gate beside it");
+    assert.deepEqual(
+      w.doc.unmeasured.map((u) => u.id),
+      ["build"]
+    );
+    assert.ok(!existsSync(CACHE_FILE(slow)), "a run with a timed-out gate is never cached");
+  } finally {
+    cleanup(slow);
+  }
+  const style = sandbox({ gates: { lint: { exit: 1 }, test: {} } });
+  try {
+    assert.equal(start(style).status, 0);
+    const w = wait(style);
+    assert.equal(w.status, 4);
+    assert.deepEqual(w.doc.red, ["lint"]);
+    assert.ok(!existsSync(CACHE_FILE(style)), "a style-only red is never cached");
+  } finally {
+    cleanup(style);
+  }
+  const peeked = sandbox({ gates: { test: { exit: 1 } } });
+  try {
+    assert.equal(start(peeked).status, 0);
+    waitForFile(join(peeked, ENTRY_PATHS.result));
+    const p = cli(peeked, "--peek", "--feature", FEATURE);
+    assert.equal(p.status, 4);
+    assert.ok(!existsSync(CACHE_FILE(peeked)), "--peek writes nothing, the cache included");
+    assert.equal(wait(peeked).status, 4);
+    assert.ok(existsSync(CACHE_FILE(peeked)), "control: the --wait after it records");
+  } finally {
+    cleanup(peeked);
+  }
+});
+
 // ── 7.5.0 (entry-verdict-early-read): --peek — one read, no wait, no takeover, no write; red is its only partial verdict ──
 function peek(dir) {
   const r = cli(dir, "--peek", "--feature", FEATURE);
@@ -1293,9 +1453,17 @@ test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part o
     /^\| S14b\s+\| an entry read \(a peek after Step 3 or after the plan, or Step 4's final read\) exits `6`/m,
     "6.75.0: the unmeasured stop row, on exit 6"
   );
-  // 7.1.0: `--accept-host-execution` joins both entry grammars, before the description.
-  assert.ok(loop.includes("`/pharn-loop [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`"));
-  assert.ok(loop.includes("`/pharn-loop --quick [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`"));
+  // 7.1.0: `--accept-host-execution` joins both entry grammars, before the description; gate-evidence-cache adds
+  // `--refresh-entry` beside `--allow-red-entry`.
+  assert.ok(
+    loop.includes("`/pharn-loop [--allow-red-entry] [--refresh-entry] [--accept-host-execution] [--max-iter N] <increment description>`")
+  );
+  assert.ok(
+    loop.includes(
+      "`/pharn-loop --quick [--allow-red-entry] [--refresh-entry] [--accept-host-execution] [--max-iter N] <increment description>`"
+    )
+  );
+  assert.match(loop, /^\| S14c\s+\| Step 1a's entry start exits `4`/m, "gate-evidence-cache: the cached-red stop row, on --start's exit 4");
 });
 
 test("✧ the isolation opt-in is a leading operator flag, never read from the description or any file (prose pin)", () => {

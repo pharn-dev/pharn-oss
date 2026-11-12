@@ -493,6 +493,36 @@ test("ENTRY: the default digest and ALGO are unchanged by the option's existence
   }
 });
 
+test("ENTRY alsoExclude (gate-evidence-cache): a second feature's directories are left out; absent or equal to the feature it is the plain entry digest; entry stage and a slug only", () => {
+  const { dir } = repo();
+  try {
+    const plain = fingerprint(dir, { feature: FEATURE, stage: "entry" });
+    assert.deepEqual(fingerprint(dir, { feature: FEATURE, stage: "entry", alsoExclude: FEATURE }), plain, "equal to feature: identity");
+    assert.deepEqual(fingerprint(dir, { feature: FEATURE, stage: "entry", alsoExclude: null }), plain, "null: identity");
+    mkdirSync(join(dir, "pharn", "features", "src"), { recursive: true });
+    writeFileSync(join(dir, "pharn", "features", "src", "SPEC.md"), "left behind\n");
+    mkdirSync(join(dir, ".dev", "features", "src"), { recursive: true });
+    writeFileSync(join(dir, ".dev", "features", "src", "VERIFY.md"), "an excluded artifact name\n");
+    const moved = fingerprint(dir, { feature: FEATURE, stage: "entry" });
+    assert.notEqual(moved.digest, plain.digest, "control: the second feature's files move the plain digest");
+    const also = fingerprint(dir, { feature: FEATURE, stage: "entry", alsoExclude: "src" });
+    assert.equal(also.digest, plain.digest);
+    assert.equal(also.algo, ENTRY_ALGO);
+    writeFileSync(join(dir, ".dev", "features", "src", "notes.md"), "not an excluded artifact name\n");
+    assert.notEqual(
+      fingerprint(dir, { feature: FEATURE, stage: "entry", alsoExclude: "src" }).digest,
+      plain.digest,
+      "only its artifact names"
+    );
+    assert.equal(fingerprint(dir, { feature: FEATURE, alsoExclude: "src" }).ok, false, "never outside the entry stage");
+    for (const bad of ["../x", "A", ""]) {
+      assert.equal(fingerprint(dir, { feature: FEATURE, stage: "entry", alsoExclude: bad }).ok, false, JSON.stringify(bad));
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("ENTRY: an entry fingerprint with no usable slug is REFUSED, never computed over an unnarrowed set", () => {
   const { dir } = repo();
   try {

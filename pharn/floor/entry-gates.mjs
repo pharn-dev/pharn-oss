@@ -5,7 +5,7 @@
 // — is entry-gates-core.mjs's header; this file reads and writes the disk and runs the processes (P3).
 //
 // ================================ THE CLI — four pinned lines ================================
-//   node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
+//   node pharn/floor/entry-gates.mjs --start [--refresh] --feature <name> --timeout-ms <N>
 //   node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
 //   node pharn/floor/entry-gates.mjs --peek --feature <name>
 //   node pharn/floor/entry-gates.mjs --abort --feature <name>
@@ -20,7 +20,8 @@
 //          `run-gates.mjs init --stage entry` synchronously, then spawns the runner (`detached`, so `setsid`: it outlives
 //          the Bash call — measured — and has its own process group) and rewrites the record with its pid. Exit 0 started
 //          · 3 no gates (a `no-gates` result is recorded, no runner) · 2 refused (`entry-gates: refused <reason> — …` on
-//          stderr; a runner refusal records an `unusable` result).
+//          stderr; a runner refusal records an `unusable` result) · 4 red on CACHED evidence (gate-evidence-cache, below:
+//          no runner, an `unusable` / `cached-red` result). `--refresh` skips the lookup.
 // --runner INTERNAL. Refuses unless `runner.json` names its nonce and feature. One `run-gates.mjs run --next` per gate,
 //          the feature-directory digest AND the changed-path listing (scope-inputs.mjs `changedPaths(HEAD)` minus the
 //          feature directory, each path through pre-run-snapshot.mjs `pathDigest`) before and after each, then
@@ -85,6 +86,12 @@
 //     `--wait` that decided green, red or unmeasured, after every check above, then PUBLISHES the offer /pharn-regress reads
 //     (entry-base-evidence.mjs `publishEntryOffer`, in the git dir); `--start` discards an earlier one. Publication is
 //     best-effort: a failure is one `note —` line on stderr and changes no document, exit or record.
+//   • CACHED RED EVIDENCE (gate-evidence-cache, Linear CORE-86): after `init`, `--start` keeps this run's inputs in the
+//     git dir and looks up the repository's one cached-red record (entry-gate-cache.mjs); when every bound input is equal
+//     it stops with exit 4, spawning nothing. Every miss is a closed member, printed as one line, and the run goes on
+//     exactly as before. A `--wait` that decided a verdict then records a cacheable red, or clears the record — after the
+//     offer, best-effort like it. A cached red is never offered to /pharn-regress and never stands in for a green. The
+//     rule, the key and every bound: entry-gate-cache-core.mjs's header.
 //   • OBSERVATIONS (6.48.0, entry-gates-ledger-row): `--start`, the runner, a `--wait` call (and its takeover) and
 //     `--abort` each append one line per boundary they already have to `pharn/.run/cost/<name>/entry.jsonl` for the cost
 //     ledger — schema, binding and view in entry-observations.mjs's header. Each is written AFTER the control record it
@@ -136,6 +143,17 @@ import { badPath } from "./ac-tests-core.mjs";
 import { REGRESS_PATHS } from "./stage-regress-core.mjs";
 import { publishEntryOffer, discardEntryOffer } from "./entry-base-evidence.mjs";
 import { pathDigest, recordEntryChanges, clearEntryChanges } from "./pre-run-snapshot.mjs";
+import { cacheableRed, buildRecord, decideCache, gateSet, formatAge } from "./entry-gate-cache-core.mjs";
+import {
+  captureInputs,
+  writeInputs,
+  readInputs,
+  discardInputs,
+  readCache,
+  writeCache,
+  clearCache,
+  treeExcluding,
+} from "./entry-gate-cache.mjs";
 import { OBS_SCHEMA, recordEntryEvent, currentRunStart, sessionFromEnv } from "./entry-observations.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -151,7 +169,7 @@ const FEATURE_DIR_MAX_ENTRIES = 10000;
 const BASE_TESTS_MAX_ARGV_BYTES = 64 * 1024;
 
 const USAGE =
-  "usage: entry-gates.mjs --start --feature <name> --timeout-ms <N> | --wait --feature <name> --budget-ms <B> | --peek --feature <name> | --abort --feature <name>";
+  "usage: entry-gates.mjs --start [--refresh] --feature <name> --timeout-ms <N> | --wait --feature <name> --budget-ms <B> | --peek --feature <name> | --abort --feature <name>";
 
 /** ---------------------------------------------------------------------------------------------------------------
  *  Small I/O helpers.
@@ -386,7 +404,7 @@ function parseJson(s) {
 const MODES = ["--start", "--wait", "--peek", "--abort", "--runner"];
 const VALUE_FLAGS = new Set(["--feature", "--timeout-ms", "--budget-ms", "--nonce"]);
 const ALLOWED = {
-  "--start": ["--feature", "--timeout-ms"],
+  "--start": ["--feature", "--timeout-ms", "--refresh"],
   "--wait": ["--feature", "--budget-ms"],
   "--peek": ["--feature"],
   "--abort": ["--feature"],
@@ -401,7 +419,9 @@ function parseArgv(args) {
   const known = new Set(ALLOWED[mode]);
   const scan = scanFlags(rest, known, VALUE_FLAGS);
   if (!scan.ok) return { ok: false, detail: `${scan.detail}; ${USAGE}` };
-  for (const f of known) if (has(rest, f) && flag(rest, f) === undefined) return { ok: false, detail: `${f} requires a value` };
+  for (const f of known) {
+    if (VALUE_FLAGS.has(f) && has(rest, f) && flag(rest, f) === undefined) return { ok: false, detail: `${f} requires a value` };
+  }
   const feature = flag(rest, "--feature");
   if (feature === undefined || !FEATURE_SLUG_RE.test(feature)) return { ok: false, detail: "--feature must be a plain slug" };
   const out = { ok: true, mode, feature };
@@ -410,6 +430,7 @@ function parseArgv(args) {
     if (!t.ok) return { ok: false, detail: t.detail };
     out.timeoutMs = t.value;
   }
+  if (mode === "--start") out.refresh = has(rest, "--refresh");
   if (mode === "--wait") {
     const b = parseBudgetMs(rest);
     if (!b.ok || b.value === null) return { ok: false, detail: b.ok ? "--budget-ms is required" : b.detail };
@@ -454,7 +475,7 @@ function start(args) {
   return code;
 }
 
-function startRun({ feature, timeoutMs }, obs) {
+function startRun({ feature, timeoutMs, refresh = false }, obs) {
   const contained = rootContained();
   if (!contained.ok) return refuse("path-containment", contained.detail);
   const prior = readRecord(ENTRY_PATHS.runner);
@@ -475,7 +496,10 @@ function startRun({ feature, timeoutMs }, obs) {
     return refuse("path-containment", "an earlier run's entry-gate changes record in the git dir could not be removed");
   // 6.49.0: an earlier run's offer names that run's marker and stamp, so a leftover can only MISS; removed anyway (L66).
   discardEntryOffer();
+  // gate-evidence-cache: an earlier run's start-time inputs name that run's nonce, so a leftover can only fail to bind.
+  discardInputs();
 
+  const measuredAt = nowIso();
   const nonce = randomBytes(16).toString("hex");
   const rec = { schema: RUNNER_SCHEMA, feature, nonce, pid: null, timeout_ms: timeoutMs, d0: featureDirDigest(feature) };
   writeAtomic(ENTRY_PATHS.runner, rec);
@@ -500,6 +524,23 @@ function startRun({ feature, timeoutMs }, obs) {
     obs.outcome = "init-refused";
     return refuse("child-refused", detail);
   }
+
+  // gate-evidence-cache: this run's inputs go to the git dir whatever happens next (a `--refresh` run still records its
+  // result), then the lookup. A hit stops here — no runner, no gate, no offer (discarded above).
+  const cached = cacheLookup({ feature, nonce, timeoutMs, refresh, measuredAt });
+  if (cached.hit) {
+    const detail =
+      `${cached.red.join(", ")} red on this tree in run '${cached.source.feature}' ` +
+      `(its gates started ${cached.source.measured_at}, ${formatAge(cached.ageMs)} ago)`;
+    writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "cached-red", detail));
+    obs.outcome = "cached-red";
+    process.stdout.write(
+      `entry-gates: red on cached evidence for '${feature}' — ${shown(detail)}; no gate was run. ` +
+        "Fix the gate (a changed tree measures again), or re-run with --refresh to measure again\n"
+    );
+    return EXIT.red;
+  }
+  process.stdout.write(`entry-gates: cached evidence — miss ${cached.miss}\n`);
 
   let child;
   let fd;
@@ -553,6 +594,78 @@ function writeBaseTests() {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** ---------------------------------------------------------------------------------------------------------------
+ *  Cached red evidence (gate-evidence-cache) — the rule is entry-gate-cache-core.mjs's header.
+ *  ------------------------------------------------------------------------------------------------------------- */
+/** `--start`'s lookup, after `init` wrote its state: capture and store this run's inputs, then decide. Returns
+ *  `{hit: true, source, ageMs, red}` or `{hit: false, miss}`. Never throws: anything that cannot be read or computed is
+ *  a miss, so the gates run exactly as before. */
+function cacheLookup({ feature, nonce, timeoutMs, refresh, measuredAt }) {
+  try {
+    const inputs = captureInputs({ feature, nonce, timeoutMs, measuredAt });
+    if (inputs !== null) {
+      const w = writeInputs(inputs);
+      if (!w.ok) process.stderr.write(`entry-gates: note — this run's inputs could not be kept for the cached evidence (${w.why})\n`);
+    }
+    if (refresh) return { hit: false, miss: "refresh" };
+    const read = readCache();
+    const state = readRecord(ENTRY_PATHS.state, STAMP_MAX_BYTES);
+    const gates = state.state === "ok" ? gateSet(state.value.entries) : null;
+    const head = state.state === "ok" ? state.value.head : null;
+    const initTree =
+      state.state === "ok" && state.value.fingerprint && typeof state.value.fingerprint === "object"
+        ? { algo: state.value.fingerprint.algo, digest: state.value.fingerprint.init }
+        : null;
+    const live =
+      inputs === null || gates === null || initTree === null
+        ? null
+        : {
+            node: inputs.node,
+            prefix: inputs.prefix,
+            timeout_ms: timeoutMs,
+            exclude: inputs.exclude,
+            install: inputs.install,
+            gates,
+            head,
+          };
+    return decideCache({
+      refresh: false,
+      read,
+      live,
+      treeFor: (src) => (src === feature ? initTree : treeExcluding(feature, src)),
+      nowMs: Date.now(),
+    });
+  } catch {
+    return { hit: false, miss: "inputs-unavailable" };
+  }
+}
+
+/** `--wait`'s step after a decided verdict: record a cacheable red, or clear the slot. Best-effort and silent on success,
+ *  exactly as the offer is (a test pins that a successful `--wait` prints nothing on stderr): a failure is one `note —`
+ *  line, never a change to the document, the exit or any record. The next `--start` names the hit or its miss. A clear
+ *  only ever removes a hit. Returns what it did — `{done: "recorded" | "cleared" | "failed", why}` — for its tests. */
+function cacheAfterVerdict(feature, runnerRec, verdict, stamp) {
+  try {
+    const read = readInputs();
+    const inputs = read.state === "ok" ? read.value : null;
+    const c = cacheableRed({ verdict, stamp, inputs, nonce: runnerRec.nonce, feature });
+    const record = c.cacheable ? buildRecord({ inputs, stamp, red: c.red }) : null;
+    if (record !== null) {
+      const w = writeCache(record);
+      if (w.ok) return { done: "recorded", why: null };
+      process.stderr.write(`entry-gates: note — the red could not be cached for later runs (${w.why})\n`);
+      return { done: "failed", why: w.why };
+    }
+    const r = clearCache();
+    if (r.ok) return { done: "cleared", why: c.cacheable ? "gates-unbound" : c.why };
+    process.stderr.write(`entry-gates: note — the cached evidence could not be cleared (${r.why})\n`);
+    return { done: "failed", why: r.why };
+  } catch {
+    process.stderr.write("entry-gates: note — the cached evidence could not be updated (crashed)\n");
+    return { done: "failed", why: "crashed" };
   }
 }
 
@@ -752,6 +865,8 @@ function decideDone(feature, runnerRec, res) {
   if (!offered.published && offered.why !== "no-delivery-run") {
     process.stderr.write(`entry-gates: note — the entry evidence could not be offered to /pharn-regress (${offered.why})\n`);
   }
+  // gate-evidence-cache: a cacheable red is kept for later runs on this tree; any other decided verdict clears the slot.
+  cacheAfterVerdict(feature, runnerRec, verdict, stamp.value);
   return emitDoc({ status: verdict.status, feature, verdict, changesRecord });
 }
 

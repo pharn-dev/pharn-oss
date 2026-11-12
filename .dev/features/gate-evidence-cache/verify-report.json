@@ -1,0 +1,23 @@
+{
+  "feature": "gate-evidence-cache",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "6fe07ba3d9fed47ef386f71276208d5acf20b890a8e8d07d4024f324b03f3db7",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "4a83bad33c8d9efb4504b847ed9de81da3b4a7b6af740c33ebe7fb2977347eaa"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}
