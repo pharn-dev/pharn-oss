@@ -1923,6 +1923,7 @@ const STUCK_POINTS = [
   { id: "S14", blocked: "gates-red-at-entry" }, // 6.42.0: a gate was red on the tree the run started from (entry-gates.mjs)
   { id: "S14b", blocked: "gates-unmeasured-at-entry" }, // 6.75.0: no red, but a gate the entry runner did not measure
   { id: "S15", blocked: "not-isolated" }, // 7.1.0: Step 1a's isolation check refused (check-run-isolation.mjs)
+  { id: "S15b", blocked: "context-too-large" }, // CORE-103: Step 1a's entry-context check exited 3 (check-entry-context.mjs)
   { id: "S16", blocked: "grill-escalation" }, // 7.7.0: triage escalated; since 7.9.0, and the supervisor decided stop
   { id: "S17", blocked: "supervisor-red" }, // 7.9.0: no supervisor decision passed supervisor.mjs check
   { id: "S18", blocked: "spec-amend-red" }, // 7.10.0: a line of the amend-spec branch exited non-zero
@@ -2024,7 +2025,7 @@ function forbiddenGitOffenders(body) {
 }
 
 test("✧ L34 — the /pharn-loop sets are non-empty and well-formed (the rules below cannot pass vacuously)", () => {
-  assert.equal(STUCK_POINTS.length, 22, "the stuck-point table is S1–S18 plus S6b, S6c, S9b and S14b");
+  assert.equal(STUCK_POINTS.length, 23, "the stuck-point table is S1–S18 plus S6b, S6c, S9b, S14b and S15b");
   assert.equal(new Set(STUCK_POINTS.map((s) => s.id)).size, STUCK_POINTS.length, "duplicate stuck-point id");
   assert.ok(COMMIT_OUTCOMES.length > 0, "the commit-outcome set is empty");
   assert.ok(fencedLines(commandBody(LOOP_FILE)).length > 0, `found no fenced lines in ${LOOP_FILE} — the fence scan broke`);
@@ -6834,5 +6835,84 @@ test("✧ 7.10.1 (L29, L36) — every `finish`-read routing sentence in the /pha
   assert.ok(
     finishReadSentences(mutant).some((h) => !h.excepted),
     "the rule must catch a `finish` read routed without the exit-6 exception"
+  );
+});
+
+// ── CORE-103 entry-context-guard: the S15b check's wiring in /pharn-loop, its close part and /pharn-ship ────────────
+// HONEST SCOPE (P0): command PROSE only — the line, its place, its exit mapping and the quote rules are PRESENT. That a
+// run executes the line, stops on exit 3, writes no record or quotes the witness is advisory.
+
+const ENTRY_CONTEXT_LOOP_LINE =
+  "node pharn/floor/check-entry-context.mjs --feature '<name>' > pharn/.run/pharn-loop/<name>/entry-context.txt";
+const ENTRY_CONTEXT_SHIP_LINE = "node pharn/floor/check-entry-context.mjs --feature '<name>'";
+
+/** null when the loop's entry-context block is wired as planned; else why. Pure over the body, so a mutant can test it. */
+function entryContextLoopReason(body) {
+  const lines = body.split("\n").map((l) => l.trim());
+  const at = (text) => lines.findIndex((l) => l === text);
+  const check = lines.filter((l) => l === ENTRY_CONTEXT_LOOP_LINE).length;
+  if (check !== 1) return `expected ONE entry-context line, found ${check}`;
+  const c = at(ENTRY_CONTEXT_LOOP_LINE);
+  const start = at("node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start");
+  const report = at("node pharn/floor/check-instruction-files.mjs --report > pharn/.run/pharn-loop/<name>/instruction-files.json");
+  const gates = at("node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000");
+  if (start === -1 || report === -1 || gates === -1) return "a neighbouring Step 1a line is missing";
+  if (!(start < c && c < report && c < gates))
+    return "the entry-context line must follow the run-start line and precede the report and the entry gates";
+  const block = body.slice(body.indexOf(ENTRY_CONTEXT_LOOP_LINE), body.indexOf("check-instruction-files.mjs --report >"));
+  if (
+    !/Exit `3` → \*\*STOP, S15b\*\* \(`blocked: context-too-large`\): no feature directory exists yet, so no record is written;\s+read the close part and go to the Step 7 summary\. Any other exit → go on/.test(
+      block
+    )
+  ) {
+    return "the exit mapping (3 → S15b, no record, close part, any other exit → go on) is missing";
+  }
+  const before = body.slice(0, body.indexOf(ENTRY_CONTEXT_LOOP_LINE));
+  if (!/as its own Bash call, once the run-start line's result\s+is back, never in one batch with it/.test(before.slice(-600))) {
+    return "the sentence ordering the check after the run-start line's result is missing";
+  }
+  return null;
+}
+
+test("✧ CORE-103 — /pharn-loop runs the entry-context line after run-start, before the report and the entry gates, and stops S15b on 3", () => {
+  assert.equal(entryContextLoopReason(commandBody(LOOP_FILE)), null);
+});
+
+test("✧ CORE-103 — the entry-context rule DISCRIMINATES — a dropped, moved or unmapped line fails (L4)", () => {
+  const real = commandBody(LOOP_FILE);
+  assert.ok(real.includes(ENTRY_CONTEXT_LOOP_LINE), "precondition: the line exists (L34)");
+  assert.match(entryContextLoopReason(real.replace(ENTRY_CONTEXT_LOOP_LINE, "")), /expected ONE/);
+  const moved = real
+    .replace(`   ${ENTRY_CONTEXT_LOOP_LINE}\n`, "")
+    .replace(
+      "   node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start\n",
+      `   ${ENTRY_CONTEXT_LOOP_LINE}\n   node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start\n`
+    );
+  assert.notEqual(moved, real);
+  assert.match(entryContextLoopReason(moved), /must follow the run-start line/);
+  assert.match(entryContextLoopReason(real.replace("**STOP, S15b**", "**STOP, S9**")), /exit mapping/);
+});
+
+test("✧ CORE-103 — the close part quotes an `over` or `unknown` witness line, and its Final step closes a stop before the feature directory", () => {
+  const close = commandBody("pharn-loop-close.md");
+  assert.match(
+    close,
+    /the witness `pharn\/\.run\/pharn-loop\/<name>\/entry-context\.txt` exists and\s+its line starts `entry-context: over` \(the S15b stop[^)]*\) or\s+`entry-context: unknown` \([^)]*malformed `budget\.entryContextTokens`[^)]*\), quote that\s+line verbatim/
+  );
+  const final = close.slice(close.indexOf("## Final step"));
+  assert.match(final, /and a stop before\s+`pharn\/features\/<name>\/` exists\./);
+  assert.match(final, /node \.claude\/hooks\/require-loop-record\.cjs --close '<name>'/);
+});
+
+test("✧ CORE-103 — /pharn-ship runs the line after its run-start, never stops on it, and quotes `over` or `unknown` at GATE 1", () => {
+  const ship = commandBody("pharn-ship.md");
+  const start = ship.indexOf("node pharn/floor/mark-phase.mjs --name '<name>' --kind run-start --adopt-pending");
+  const check = ship.indexOf(ENTRY_CONTEXT_SHIP_LINE);
+  assert.ok(start !== -1 && check > start, "the check follows ship's run-start line");
+  assert.equal(ship.split(ENTRY_CONTEXT_SHIP_LINE).length, 2, "one entry-context line");
+  const after = ship.slice(check, check + 700);
+  assert.match(
+    after,
+    /It never stops the run\. When its line starts `entry-context: over` \(exit `3`\) or `entry-context: unknown`, quote the\s+line verbatim in the GATE-1 message/
   );
 });

@@ -133,6 +133,7 @@ command's stuck-point table equal both ways:
 - `gates-red-at-entry`
 - `gates-unmeasured-at-entry`
 - `not-isolated`
+- `context-too-large`
 - `grill-escalation`
 - `supervisor-red`
 - `spec-amend-red`

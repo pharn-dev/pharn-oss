@@ -634,6 +634,44 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 node pharn/floor/check-run-isolation.mjs [--accept-host-execution] --feature <name>
 ```
 
+## `check-entry-context.mjs` — the entry-context guard
+
+```bash
+# THE ENTRY-CONTEXT GUARD (7.11.0, entry-context-guard, Linear CORE-103) — /pharn-loop stops at entry when the context
+# running it already holds more tokens than `budget.entryContextTokens` (pharn.config.json; default 320,000), because
+# every later request of the run re-sends that context. THE TRIGGER (P7): .dev/measurements/loop-baseline-2026-11-11.md
+# §4 — the 12 of 36 runs started in a main session entered at a median 484k tokens (210k–905k) on their first
+# orchestrator request and carried 505k per request; the 24 started inside an agent entered at 163k–280k.
+# /pharn-loop Step 1a item 5 runs it right after `mark-phase.mjs --kind run-start`, as its own Bash call once that line's
+# result is back, stdout redirected to the witness `pharn/.run/pharn-loop/<name>/entry-context.txt`; exit 3 is S15b
+# (`blocked: context-too-large`), a Step 1a stop: no feature directory, no record, the close part's Step 7 quotes the
+# witness and the Final step closes the marker. Step 7 also quotes an `unknown` witness line, so a malformed key is
+# never silent. /pharn-ship runs it at Step 1 after its run-start and only warns at GATE 1 (`over` or `unknown`).
+# THE RULE (entry-context-core.mjs, the one owner): bind the run to the ONE context whose tool results carry this
+# run's marker lines — the cost ledger's rule 6, through the same imports (runWindow, bindingMarkers, markerLine,
+# sessionScan, bindRun) — then the LAST request of that context in walk order (one context is one append-only file),
+# size = input + cache_creation + cache_read tokens; size > threshold → exit 3. A subagent's Bash sees its parent's
+# session id, so reading the session's main thread alone would have refused the 24 agent runs whose parent session
+# was large. UNKNOWN ALWAYS MEANS GO ON (exit 0), closed reasons: no-session, no-transcript, several-transcripts,
+# window-unknown, no-holder, several-holders, no-request, usage-unreadable, threshold-malformed, crashed.
+# THE THRESHOLD (GATE 1): a safe integer in [1, 1,000,000], own-property reads; absent → 320,000 (no shipped config
+# carries the key, so no MIN_CLI change; whether pharn-cli refuses an unknown `budget` key is unchecked). On the 36
+# baseline runs (first orchestrator request of the ledger's own context):
+#   stopped        main 10 of 12: 344,983 · 384,284 · 458,441 · 461,657 · 507,209 · 600,657 · 654,507 · 797,162 ·
+#                  798,271 · 904,823
+#   let through    main 2 of 12: 210,150 (github-login) · 217,278 (pricing-plan-catalog); agent 24 of 24: 162,620–280,210
+#   margins        39,790 above the largest agent run (14%); 24,983 below the smallest main run it stops. 320k sits
+#                  above the midpoint (312.6k) because orchestrators inside an agent grow with pharn-loop.md.
+# BOUNDS (P0): FLOOR is the compare and the exit over the transcript's counts; ADVISORY is that those counts are this
+# context's size (an undocumented, agent-writable format: a forged line trips the stop or lifts it), that the run-start
+# result is on disk by the next Bash call (probed once, one client, one Claude Code version), that the last request is
+# the one issuing the check, and that a run obeys the exit. The witness is run-writable state (Bash reaches it), so the
+# Step 7 quote repeats whatever it holds. Writes nothing itself. The projects-dir default is a fourth inline copy
+# (follow-up `projects-dir-default-one-owner`). Exit: 0 within or unknown · 3 over · 2 usage · node's 1 on a module
+# that cannot load (the loop goes on: only 3 stops).
+node pharn/floor/check-entry-context.mjs --feature <name> [--session <id>] [--projects-dir <dir>] [--markers-base <dir>] [--root <dir>]
+```
+
 ## `entry-gates.mjs` — the entry gates
 
 ```bash

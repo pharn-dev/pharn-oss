@@ -23,8 +23,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.11.0] - 2026-11-12
+
 ### Added
 
+- **`/pharn-loop` stops at entry when its own context is already large (S15b, `blocked: context-too-large`).** Right
+  after the run-start marker, `pharn/floor/check-entry-context.mjs` measures the context running the command and exits
+  3 when it holds more tokens than `budget.entryContextTokens` in `pharn.config.json` (default 320,000). Every later
+  request of a run re-sends that context: in the 36 measured runs, the 12 started in a main session entered at a median
+  484k tokens (210k–905k), the 24 started inside an agent at 163k–280k. On those runs the default stops 10 of the 12
+  main-session runs (every one from 345k up), lets through the other 2 (210k and 217k) and all 24 agent runs (largest
+  280k): 39,790 tokens of margin above the largest agent run, 24,983 below the smallest main run it stops. The check
+  binds the run to the context whose tool result holds the run-start line, by the cost ledger's own rule, so a loop
+  inside an agent is measured in that agent and never by its parent session's main thread. When it cannot measure, it
+  prints `unknown <reason>` (a closed set) and the run goes on; the run summary quotes that line, so a malformed key is
+  visible. The stop writes no feature directory and no record; the Final step closes the run marker. `/pharn-ship`
+  runs the same line at Step 1 and only warns at GATE 1. The key is optional, so no shipped config needs it and
+  `MIN_CLI` does not change. FLOOR: the compare and the exit code. ADVISORY: that the transcript's counts are this
+  context's size (an undocumented, agent-writable format), and that a run obeys the exit. `pharn-loop.md` grows from
+  86,865 to about 88.2 KB, inside its 93,184-byte ceiling, so no ceiling moves. Linear CORE-103.
 - 2026-11-12: **Measured: the `/pharn-loop` baseline over 36 runs on 7.1.4 and 7.3.0 in a user project.** One run
   ended green. 16 stopped at the entry check, and 11 of the 12 unmeasured ones name `test` killed at the 540 s per-gate
   timeout. 9 ended `STOP_TERMINAL`: 6 on the same gate timed out later, 3 on `reconcile`. Main-session runs carried a
