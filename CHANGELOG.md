@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.10.3] - 2026-11-12
+
+### Fixed
+
+- **The APPEND-ONLY header comment in `pharn/floor/spec-amend-core.mjs` fits the file's comment width again.** 7.10.2's
+  edit left one line at 152 characters. The paragraph is rewrapped to at most 120 columns, with the same words in the
+  same order and no code change. From the 7.10.2 review's minor advisory finding.
+
 ## [7.10.2] - 2026-11-12
 
 ### Fixed

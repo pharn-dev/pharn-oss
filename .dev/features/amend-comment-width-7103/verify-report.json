@@ -1,0 +1,23 @@
+{
+  "feature": "amend-comment-width-7103",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "01845828be80574a05ebf8871852f0612ce05deccc43e73ab401e8bdb9691a71",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "76d06f54d88a40fe1a4f88b95da2270701e48576e29abb3af8886ab9a84869d8"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}
