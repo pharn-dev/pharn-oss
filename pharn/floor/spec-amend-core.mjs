@@ -16,11 +16,12 @@
 // ONCE (L35): "amended" is SPEC.a1.md on disk, never a counter file. supervisor-core.mjs refuses a second `amend-spec`
 // (`amend-used`) and `begin` refuses an existing archive.
 //
-// APPEND-ONLY (L36): the amended SPEC's `## Intent` and `## Scope` are identical, line for line, to the archive's, trailing
-// blank lines dropped (both absent counts as identical; 7.10.2: a re-written SPEC may move the blank lines before the
-// next heading, and LIMITS.md §1d already set them aside); the archive's `## Acceptance Criteria` lines, trailing blank lines dropped, are a prefix of
-// the new section's lines; every archived criterion keeps its id, position, text and verify level; and at least one
-// criterion is added (L34: a re-pin of the same criteria is not an amend).
+// APPEND-ONLY (L36): the amended SPEC's `## Intent` and `## Scope` are identical, line for line, to the archive's,
+// trailing blank lines dropped (both absent counts as identical; 7.10.2: a re-written SPEC may move the blank lines
+// before the next heading, and LIMITS.md §1d already set them aside); the archive's `## Acceptance Criteria` lines,
+// trailing blank lines dropped, are a prefix of the new section's lines; every archived criterion keeps its id,
+// position, text and verify level; and at least one criterion is added (L34: a re-pin of the same criteria is not an
+// amend).
 //
 // REFUSALS NAME CODES AND AC IDS, NEVER TEXT (P2, L62): criterion lines are untrusted SPEC text a model wrote from
 // untrusted findings. A defect carries a code and at most an AC id; the commit line carries ids that match AC_ID_RE.
