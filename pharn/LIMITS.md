@@ -257,6 +257,14 @@ orchestrator's whole context so far. Neither depends on the size of the change.
   each branches on the exit code of the one before, so each is a model request that re-sends the orchestrator's
   context. Later releases that folded pinned lines may have moved both figures. The run measured in depth made 52
   orchestrator requests before it stopped in verify; the first carried 434,842 tokens.
+- **The orchestrator's context at entry, measured, and the stop on it.** In 36 `/pharn-loop` runs on 7.1.4 and
+  7.3.0 in one user project, the first orchestrator request of the 12 runs started in a main session carried
+  210,150–904,823 tokens (median 484k), and of the 24 started inside an agent 162,620–280,210
+  (`.dev/measurements/loop-baseline-2026-11-11.md` §4). Since 7.13.0 `/pharn-loop` stops at entry (S15b,
+  `blocked: context-too-large`) when its own context holds more than `budget.entryContextTokens` (default 320,000),
+  and `/pharn-ship` warns. The compare and the exit code are floor; that the counts read are this context's size is
+  not: they come from an undocumented transcript the agent can write, bound to the context by the run-start line's
+  tool result, and a context that cannot be measured lets the run go on.
 - **What this does not say.** Which of the two dominates a run is not established; of the prefix's composition only
   the instruction-file share above is measured; no figure here is priced; and every token figure is the ledgers'
   count, while a bytes-to-tokens conversion is an estimate (§1c).

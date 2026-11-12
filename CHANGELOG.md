@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.13.1] - 2026-11-12
+
+### Changed
+
+- **`pharn/LIMITS.md` §3g records the orchestrator's context at entry and the 7.13.0 stop on it.** A new bullet gives
+  the measured first-request sizes from the 36-run baseline (main session 210,150–904,823 tokens, median 484k; inside
+  an agent 162,620–280,210) and states the S15b stop at `budget.entryContextTokens` (default 320,000) with its P0
+  bound: the compare and the exit code are floor, but that the counts read are this context's size is not, and an
+  unmeasurable context lets the run go on. A maintainer edit of a trusted doc (CORE-103), so the `/pharn-dev-ship`
+  record it would otherwise need does not apply.
+
 ## [7.13.0] - 2026-11-12
 
 ### Added
