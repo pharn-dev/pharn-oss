@@ -294,6 +294,8 @@ test("★ entry HIT — a run that began clean at BASE takes its BASE from the e
     assert.equal(wk.base.reused, 3);
     assert.equal(wk.install, null);
     assert.equal(wk.head.executed, hit.counts.head);
+    assert.deepEqual(wk.base.durations, [], "gate-durations: the entry's processes are timed in the entry facts, not here");
+    assert.equal(wk.head.durations.length, wk.head.executed);
     assert.equal(readFileSync(join(fx.dir, COST_BASE, FEATURE, "entry.jsonl"), "utf8"), entryLog, "regress writes no entry observation");
   } finally {
     drop(fx);

@@ -23,8 +23,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.11.0] - 2026-11-12
+
 ### Added
 
+- **Each gate's wall time is recorded, in the gate-run stamp and in the cost ledger.** Until now no record held one
+  gate's time, so nobody could rank the gates or tell a slow suite from a hung one: 16 of 36 measured `/pharn-loop` runs
+  stopped at the entry check, and no ledger said which gate cost what. `run-gates.mjs` now takes one monotonic interval
+  around each gate it spawns and writes it as `duration_ms` on that run (a `no-files` or reused run carries none, and
+  `validateStamp` refuses one that does); `run --next` prints it too. The kill timer re-arms until the full
+  `--timeout-ms` has passed on that clock, so a timed-out run's duration is at least the timeout. The stamp is cleared
+  at each stage's fresh start, so the value is copied at the moment of the act: `/pharn-regress` and `/pharn-verify`
+  write `pharn-stage-work/2` work rows whose `head`, `base` and `gates` sides list `{seq, id, duration_ms}` per
+  executed gate (`/1` rows are still read, since `work.jsonl` is never pruned), and the entry runner appends one `gate`
+  observation per gate it ran to `entry.jsonl`. So `cost.json` carries per-gate milliseconds for every regress and
+  verify iteration (`work[]`) and for the entry gates (`entry_events[]`). A gate id reaches the ledger only when it is a
+  known gate name, a reserved id or `structural:` plus a relative path; any other id, such as a `--gates` command
+  line, is written as `null`. The value is an observation: it is outside the execution identity and the BASE
+  requirement, and `pharn/floor/gate-durations.test.mjs` pins that no verdict, reuse decision or route reads it. The
+  entry view is unchanged (`entry-observations/1`); showing the durations on screen or in `RUN-REPORT.md` is a
+  follow-up. The `gate-process-duration` residual is retired. Contracts: `gate-run-record.md` ("Gate duration") and
+  `cost-ledger.md`. No `MIN_CLI` change: the CLI reads none of these records. One tightening comes with it: a work
+  row's `head` and `gates` key sets are now closed for `/1` too (only `base`'s was tested before), so a hand-edited
+  `/1` line with an extra key on either side is dropped; no PHARN writer ever wrote one.
 - 2026-11-12: **Measured: the `/pharn-loop` baseline over 36 runs on 7.1.4 and 7.3.0 in a user project.** One run
   ended green. 16 stopped at the entry check, and 11 of the 12 unmeasured ones name `test` killed at the 540 s per-gate
   timeout. 9 ended `STOP_TERMINAL`: 6 on the same gate timed out later, 3 on `reconcile`. Main-session runs carried a

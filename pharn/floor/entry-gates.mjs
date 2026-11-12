@@ -90,7 +90,9 @@
 //     ledger — schema, binding and view in entry-observations.mjs's header. Each is written AFTER the control record it
 //     describes, best-effort (a failure is one `note —` line on stderr), and read by nothing here: no exit, document,
 //     verdict, takeover or abort depends on one. `--peek` appends none, so the ledger cannot tell an early-read stop
-//     from a final-read stop; the run's record names the stop either way.
+//     from a final-read stop; the run's record names the stop either way. Since gate-durations the drain also appends
+//     one `gate` line per gate it ran, carrying the duration `run --next` printed, so a killed runner still leaves the
+//     time of every gate that finished.
 //
 // TRUST (P2): gate output is never read (run-gates.mjs reduces it to a sha256). Every value quoted into a detail goes
 // through entry-gates-core.mjs `shown` (L62). `ps` output is parsed as integer columns only.
@@ -594,8 +596,10 @@ function upsert(list, entry) {
 /** The ONE drain the runner and a `--wait` takeover share: one `run-gates.mjs run --next` per gate; around each, the
  *  feature directory's digest and the changed-path listing; both persisted to progress.json after every gate (a takeover
  *  keeps them). `budget.may()` gates every gate. Returns `{kind: done, featureDir, gateChanges}` · `{kind: budget}` ·
- *  `{kind: refused, detail, runnerReason}`. */
-function drainEntry({ feature, nonce, timeoutMs, budget, counter = { ran: 0 } }) {
+ *  `{kind: refused, detail, runnerReason}`. After each gate that ran, one `gate` observation for the cost ledger names
+ *  `segment` (the calling process's) and the duration `run --next` printed — best-effort, after progress.json, read by
+ *  nothing here; a printed value that is not an integer writes no event. */
+function drainEntry({ feature, nonce, segment, timeoutMs, budget, counter = { ran: 0 } }) {
   const { featureDir, gateChanges } = readProgress(feature, nonce);
   const head = headSha();
   for (;;) {
@@ -623,6 +627,9 @@ function drainEntry({ feature, nonce, timeoutMs, budget, counter = { ran: 0 } })
       const paths = listBefore !== null && listAfter !== null ? listingDiff(listBefore, listAfter, (p) => pathDigest(p)) : [];
       upsert(gateChanges, { id: parsed.ran, paths });
       writeAtomic(ENTRY_PATHS.progress, { schema: PROGRESS_SCHEMA, feature, nonce, feature_dir: featureDir, gate_changes: gateChanges });
+      if (Number.isSafeInteger(parsed.duration_ms)) {
+        observe(feature, () => ({ event: "gate", nonce, segment, id: parsed.ran, ts: nowIso(), duration_ms: parsed.duration_ms }));
+      }
     }
     if (parsed.finalized || parsed.remaining === 0) return { kind: "done", featureDir, gateChanges };
   }
@@ -669,7 +676,7 @@ function runner({ feature, timeoutMs, nonce }) {
       gates: counter.ran,
     }));
   try {
-    const d = drainEntry({ feature, nonce, timeoutMs, budget: { may: () => true, spent: () => {} }, counter });
+    const d = drainEntry({ feature, nonce, segment, timeoutMs, budget: { may: () => true, spent: () => {} }, counter });
     if (d.kind === "refused") {
       writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "child-refused", d.detail, d.runnerReason));
       ended("refused");
@@ -829,7 +836,7 @@ function wait({ feature, budgetMs }, ctx = null) {
           end,
           gates: counter.ran,
         }));
-      const d = drainEntry({ feature, nonce: rr.value.nonce, timeoutMs: rr.value.timeout_ms, budget, counter });
+      const d = drainEntry({ feature, nonce: rr.value.nonce, segment, timeoutMs: rr.value.timeout_ms, budget, counter });
       if (d.kind === "budget") {
         ended("budget");
         return emitDoc({ status: "continue", feature, detail: "the background runner is gone; this line is running the gates itself" });

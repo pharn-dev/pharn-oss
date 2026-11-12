@@ -2555,6 +2555,25 @@ test("6.35.0 — every ledger carries `executions` (a view over markers) and `wo
   assert.deepEqual(checkLedger(led).reds, []);
 });
 
+test("gate-durations — the emitter copies a /2 work row (per-gate milliseconds) and a /1 row from one work.jsonl, and stays GREEN", () => {
+  const v2 = {
+    ...VERIFY_WORK,
+    schema: "pharn-stage-work/2",
+    gates: {
+      ...VERIFY_WORK.gates,
+      durations: [
+        { seq: 0, id: "test", duration_ms: 95000 },
+        { seq: 3, id: "reconcile", duration_ms: 1100 },
+      ],
+    },
+  };
+  const { projectsDir, markersBase } = perfRun({ work: [REGRESS_WORK, v2] });
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir, markersBase });
+  assert.deepEqual(led.work, [REGRESS_WORK, v2]);
+  assert.deepEqual(led.dropped, []);
+  assert.deepEqual(checkLedger(led).reds, []);
+});
+
 test("✧ 6.35.0 does not move model accounting: requests, every view and membership are identical with and without work.jsonl", () => {
   const a = perfRun();
   const b = perfRun({ work: [REGRESS_WORK, VERIFY_WORK, "not json"] });

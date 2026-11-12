@@ -536,6 +536,8 @@ test("a TIMEOUT records 124 + timed_out, and the whole PROCESS GROUP is dead aft
       assert.equal(r.code, 0);
       assert.equal(r.json.exit, 124, "a timeout must record 124");
       assert.equal(r.json.timed_out, true);
+      // gate-durations AC-4: the kill never comes before the timeout on the duration's own clock.
+      assert.ok(r.json.duration_ms >= 10000, `a timed-out run lasted at least --timeout-ms (got ${r.json.duration_ms})`);
 
       const pid = Number(readFileSync(marker, "utf8").trim());
       assert.ok(Number.isInteger(pid) && pid > 0, "the fixture never recorded a grandchild pid");
@@ -555,6 +557,56 @@ test("a TIMEOUT records 124 + timed_out, and the whole PROCESS GROUP is dead aft
     },
     { scripts: { test: "true" } }
   );
+});
+
+// ── gate-durations: the runner times every process it spawns ─────────────────────────────────────────────────────────
+import { killDelayMs } from "./run-gates.mjs";
+
+test("gate-durations AC-1 — every spawned run of a real verify records an integer duration_ms, printed by the same call", () => {
+  withRepo(
+    (dir) => {
+      assert.equal(cli(dir, initArgs()).code, 0);
+      const calls = drain(dir).filter((c) => c.code === 0);
+      const runs = stamp(dir).runs;
+      assert.deepEqual(
+        runs.map((r) => r.id),
+        ["test", "lint", "instruction-growth", "reconcile"]
+      );
+      for (const r of runs) {
+        assert.equal(r.ran, true, r.id);
+        assert.ok(Number.isSafeInteger(r.duration_ms) && r.duration_ms >= 0, `${r.id}: ${r.duration_ms}`);
+        assert.equal(calls.find((c) => c.json.ran === r.id).json.duration_ms, r.duration_ms, `${r.id}: stdout carries the stamp's value`);
+      }
+      // the sleeping gate's duration covers its sleep: the value measures the process, not a constant
+      assert.ok(runs.find((r) => r.id === "test").duration_ms >= 300);
+    },
+    { scripts: { test: 'node -e "setTimeout(() => {}, 300)"', lint: "true" } }
+  );
+});
+
+test("gate-durations AC-4 — a gate killed at --timeout-ms 300 records timed_out and a duration of at least 300 ms", () => {
+  withRepo(
+    (dir) => {
+      cli(dir, ["init", "--stage", "verify", "--feature", FEATURE, "--out", OUT, "--gates", "sleep 30::slow"]);
+      const r = cli(dir, runArgs(300));
+      assert.equal(r.code, 0, r.raw);
+      assert.equal(r.json.timed_out, true);
+      assert.ok(r.json.duration_ms >= 300, `got ${r.json.duration_ms}`);
+      drain(dir);
+      const slow = stamp(dir).runs.find((x) => x.id === "slow");
+      assert.equal(slow.timed_out, true);
+      assert.equal(slow.duration_ms, r.json.duration_ms);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
+test("gate-durations — killDelayMs: the kill timer waits out any remainder, rounded UP, and never lands short", () => {
+  assert.equal(killDelayMs(300, 300), 0);
+  assert.equal(killDelayMs(300, 301.5), 0);
+  assert.equal(killDelayMs(300, 299.2), 1, "a timer that fired 0.8 ms early re-arms for 1 ms");
+  assert.equal(killDelayMs(300, 0), 300);
+  assert.equal(killDelayMs(300, 250.0001), 50);
 });
 
 test("argv entries never reach a shell: `;` and `$(…)` are LITERAL arguments", () => {
@@ -626,10 +678,14 @@ test("a file-addressable gate with NO files records 0 / ran:false / reason no-fi
         "scope.json",
       ]);
       drain(dir);
-      const t = stamp(dir).runs.find((r) => r.id === "test");
+      const runs = stamp(dir).runs;
+      const t = runs.find((r) => r.id === "test");
       assert.equal(t.exit, 0);
       assert.equal(t.ran, false);
       assert.equal(t.reason, "no-files");
+      // gate-durations AC-1: nothing was spawned for it, so it carries no duration; every spawned run carries one.
+      assert.equal(Object.hasOwn(t, "duration_ms"), false, "a no-files run records no duration");
+      for (const r of runs.filter((x) => x.ran === true)) assert.ok(Number.isSafeInteger(r.duration_ms) && r.duration_ms >= 0, r.id);
     },
     { scripts: { test: 'node -e "process.exit(3)"' } }
   );
@@ -1754,6 +1810,10 @@ test("REUSE HIT (A/G) — typecheck and build are recorded from the HEAD run and
       const src = head.stamp.runs.find((x) => x.id === gate);
       assert.equal(r.ran, false, "VERIFY did not run it — the truthful value");
       assert.equal(r.reason, "reused");
+      // gate-durations AC-1: the source run has a duration, the reused record does not inherit it.
+      assert.ok(Number.isSafeInteger(src.duration_ms), `${gate}: the HEAD run that ran records its duration`);
+      assert.equal(Object.hasOwn(r, "duration_ms"), false, `${gate}: a reused run records none`);
+      assert.equal(byId[gate].duration_ms, null, `${gate}: run --next prints null when nothing was spawned`);
       assert.deepEqual(r.reused, { stage: "regress", side: "head", seq: src.seq, stamp_sha256: head.sha });
       assert.equal(r.identity_sha256, src.identity_sha256);
       assert.equal(r.exit, src.exit);

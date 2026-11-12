@@ -1798,6 +1798,15 @@ test("★ HIT — a second regress of the same run, after a new build, runs HEAD
     assert.equal(w2.base.reused, w2.base.required - w2.base.no_files);
     assert.equal(w2.install, null, "no install");
     assert.equal(w2.head.executed, second.counts.head, "HEAD ran in full");
+    // gate-durations (L84, realistic input): every executed process has its integer duration; a reused BASE has none.
+    for (const w of records) {
+      assert.equal(w.schema, "pharn-stage-work/2");
+      assert.equal(w.head.durations.length, w.head.executed);
+      assert.equal(w.base.durations.length, w.base.executed);
+      for (const d of [...w.head.durations, ...w.base.durations]) assert.ok(Number.isSafeInteger(d.duration_ms) && d.duration_ms >= 0);
+    }
+    assert.ok(w1.base.durations.length > 0, "non-vacuity: the fresh BASE timed its processes");
+    assert.deepEqual(w2.base.durations, []);
   } finally {
     dropReuseRepo(fx);
   }

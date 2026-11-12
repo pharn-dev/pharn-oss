@@ -117,6 +117,17 @@ const ev = {
     session_id: null,
     ...o,
   }),
+  gate: (o = {}) => ({
+    schema: OBS_SCHEMA,
+    event: "gate",
+    nonce: N1,
+    segment: S1,
+    id: "lint",
+    ts: T("10:01:00"),
+    duration_ms: 59000,
+    session_id: null,
+    ...o,
+  }),
 };
 
 const view = (events, markers = runMarkers()) => buildEntryView(markers, events, buildExecutions(markers, []));
@@ -127,7 +138,14 @@ const only = (v) => {
 
 // ── the record ───────────────────────────────────────────────────────────────────────────────────────────────────────
 test("validateEntryEvent: one valid sample per event kind; the kinds and their key sets are CLOSED (L36)", () => {
-  const samples = { start: ev.start(), "segment-begin": ev.begin(), "segment-end": ev.end(), wait: ev.wait(), abort: ev.abort() };
+  const samples = {
+    start: ev.start(),
+    "segment-begin": ev.begin(),
+    "segment-end": ev.end(),
+    wait: ev.wait(),
+    abort: ev.abort(),
+    gate: ev.gate(),
+  };
   assert.deepEqual(Object.keys(samples).sort(), [...EVENT_KINDS].sort(), "a sample for every kind, and no other");
   assert.deepEqual(Object.keys(EVENT_KEYS).sort(), [...EVENT_KINDS].sort());
   for (const [kind, s] of Object.entries(samples)) {
@@ -586,4 +604,50 @@ test("REVIEW F6 — the READ side refuses a linked directory chain: a symlinked 
   } finally {
     process.chdir(prev);
   }
+});
+
+// ── gate-durations: the `gate` event — a FACT the view never reads ───────────────────────────────────────────────────
+import { FACT_ONLY_EVENTS } from "./entry-observations.mjs";
+
+test("gate-durations — a `gate` event: its fields refuse what they must, and its id is a ledger gate id, never a command line", () => {
+  assert.deepEqual([...FACT_ONLY_EVENTS], ["gate"]);
+  assert.deepEqual(validateEntryEvent(ev.gate()), { ok: true });
+  assert.deepEqual(validateEntryEvent(ev.gate({ id: "base:test", duration_ms: 0 })), { ok: true });
+  const hostile = JSON.parse('{"toString":1}');
+  for (const bad of [
+    ev.gate({ segment: "123" }),
+    ev.gate({ id: "npm run test -- --token=s3cret" }),
+    ev.gate({ id: null }),
+    ev.gate({ id: hostile }),
+    ev.gate({ duration_ms: -1 }),
+    ev.gate({ duration_ms: 1.5 }),
+    ev.gate({ duration_ms: 10_000_000_001 }),
+    ev.gate({ duration_ms: hostile }),
+  ]) {
+    const r = validateEntryEvent(bad);
+    assert.equal(r.ok, false, JSON.stringify(bad.id === hostile ? "hostile id" : bad));
+    assert.doesNotMatch(r.reason, /s3cret|toString/);
+  }
+  assert.equal(identityKey(ev.gate()), `${N1}|gate|lint`);
+});
+
+test("gate-durations — the view DROPS gate events: every view is byte-identical with and without them, bound or not, duplicated or not", () => {
+  const base = [ev.start(), ev.begin(), ev.end(), ev.wait()];
+  const gates = [
+    ev.gate(),
+    ev.gate({ id: "test", duration_ms: 120000 }),
+    ev.gate({ id: "test", duration_ms: 1 }), // two DIFFERENT lines of one identity: would be a conflict if read
+    ev.gate({ nonce: N2 }), // an unbound nonce: would count in unbound_events if read
+    ev.gate(), // an exact duplicate
+  ];
+  const without = view(base);
+  const withGates = view([...base, ...gates]);
+  assert.equal(JSON.stringify(withGates), JSON.stringify(without));
+  // control: the same kinds of line, as a non-fact event, DO move the view (so the comparison can fail)
+  assert.notEqual(
+    JSON.stringify(view([...base, ev.wait({ call: C2, ts: T("10:11:00"), end_ts: T("10:11:00", 100) })])),
+    JSON.stringify(without)
+  );
+  assert.notEqual(JSON.stringify(view([...base, ev.start({ nonce: N2 })])), JSON.stringify(without));
+  assert.equal(only(withGates).lifetime.status, "measured", "a conflicting pair of gate lines leaves the lifetime measured");
 });

@@ -1,6 +1,6 @@
-// pharn/floor/stage-work.test.mjs — the deterministic-work record (`pharn-stage-work/1`): derivation from gate-run
-// stamp shapes, the invariants, hostile lines, and the best-effort append's refusals. Expectations are independent
-// literals (L43).
+// pharn/floor/stage-work.test.mjs — the deterministic-work record (`pharn-stage-work/2`, `/1` still read): derivation
+// from gate-run stamp shapes, the per-gate durations, the invariants, hostile lines, and the best-effort append's
+// refusals. Expectations are independent literals (L43).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -65,8 +65,28 @@ test("regress, FRESH BASE: the base stamp's own counts, the miss code, and the i
     stage: "pharn-regress",
     ts: TS,
     session_id: S,
-    head: { required: 3, executed: 2, reused: 0, no_files: 1 },
-    base: { evidence: "fresh", miss: "no-record", required: 3, executed: 2, reused: 0, no_files: 1 },
+    head: {
+      required: 3,
+      executed: 2,
+      reused: 0,
+      no_files: 1,
+      durations: [
+        { seq: 0, id: "lint", duration_ms: null },
+        { seq: 2, id: "build", duration_ms: null },
+      ],
+    },
+    base: {
+      evidence: "fresh",
+      miss: "no-record",
+      required: 3,
+      executed: 2,
+      reused: 0,
+      no_files: 1,
+      durations: [
+        { seq: 0, id: "lint", duration_ms: null },
+        { seq: 2, id: "build", duration_ms: null },
+      ],
+    },
     install: { exit: 0, timed_out: false, ms: 41234 },
   });
 });
@@ -79,7 +99,7 @@ test("regress, REUSED BASE: 0 base processes, every result from earlier evidence
     installResult: null,
     ts: TS,
   });
-  assert.deepEqual(rec.base, { evidence: "reused", miss: null, required: 2, executed: 0, reused: 2, no_files: 0 });
+  assert.deepEqual(rec.base, { evidence: "reused", miss: null, required: 2, executed: 0, reused: 2, no_files: 0, durations: [] });
   assert.equal(rec.install, null);
   assert.equal(rec.session_id, null);
 });
@@ -97,9 +117,24 @@ test("regress: an install with no measured interval (a record persisted before 6
 
 test("verify: fresh gates vs partially reused gates", () => {
   const fresh = verifyWork({ stamp: stamp([ran("test"), ran("lint"), ran("build"), ran("reconcile")]), ts: TS, sessionId: S });
-  assert.deepEqual(fresh.gates, { required: 4, executed: 4, reused: 0, no_files: 0 });
+  assert.deepEqual(fresh.gates, {
+    required: 4,
+    executed: 4,
+    reused: 0,
+    no_files: 0,
+    durations: ["test", "lint", "build", "reconcile"].map((id, seq) => ({ seq, id, duration_ms: null })),
+  });
   const partial = verifyWork({ stamp: stamp([ran("test"), reusedRun("lint"), reusedRun("build"), ran("reconcile")]), ts: TS });
-  assert.deepEqual(partial.gates, { required: 4, executed: 2, reused: 2, no_files: 0 });
+  assert.deepEqual(partial.gates, {
+    required: 4,
+    executed: 2,
+    reused: 2,
+    no_files: 0,
+    durations: [
+      { seq: 0, id: "test", duration_ms: null },
+      { seq: 3, id: "reconcile", duration_ms: null },
+    ],
+  });
   assert.equal(verifyWork({ stamp: null, ts: TS }), null, "an uncountable stamp yields no record, never a zero record");
 });
 
@@ -161,14 +196,22 @@ test("validateWork: closed keys, enums and the count invariant — each broken o
   );
   assert.equal(
     mut((c) => {
-      c.base = { evidence: "reused", miss: null, required: 1, executed: 1, reused: 0, no_files: 0 };
+      c.base = {
+        evidence: "reused",
+        miss: null,
+        required: 1,
+        executed: 1,
+        reused: 0,
+        no_files: 0,
+        durations: [{ seq: 0, id: null, duration_ms: 1 }],
+      };
     }),
     false,
     "a reused BASE executes nothing"
   );
   assert.equal(
     mut((c) => {
-      c.base = { evidence: "reused", miss: null, required: 1, executed: 0, reused: 1, no_files: 0 };
+      c.base = { evidence: "reused", miss: null, required: 1, executed: 0, reused: 1, no_files: 0, durations: [] };
       c.install = { exit: 0, timed_out: false, ms: 1 };
     }),
     false,
@@ -379,7 +422,7 @@ test("regress, ENTRY-derived BASE (6.49.0): evidence entry, the retained miss, 0
     installResult: null,
     ts: TS,
   });
-  assert.deepEqual(rec.base, { evidence: "entry", miss: "no-record", required: 3, executed: 0, reused: 2, no_files: 1 });
+  assert.deepEqual(rec.base, { evidence: "entry", miss: "no-record", required: 3, executed: 0, reused: 2, no_files: 1, durations: [] });
   assert.equal(rec.install, null, "no BASE install ran, and no duration is synthesized");
   assert.deepEqual(validateWorkEntry(rec), { ok: true });
   const bad = [
@@ -401,4 +444,139 @@ test("regress, ENTRY-derived BASE (6.49.0): evidence entry, the retained miss, 0
     }),
     null
   );
+});
+
+// ── gate-durations: per-gate durations (`pharn-stage-work/2`), `/1` still read ─────────────────────────────────────────
+import { gateDurations, ledgerGateId, WORK_SCHEMA_V1, WORK_SCHEMAS } from "./stage-work.mjs";
+
+const timed = (id, ms) => ({ ...ran(id), duration_ms: ms });
+
+test("gate-durations — the schema the emitter writes is /2, and exactly /1 and /2 are read", () => {
+  assert.equal(WORK_SCHEMA, "pharn-stage-work/2");
+  assert.equal(WORK_SCHEMA_V1, "pharn-stage-work/1");
+  assert.deepEqual([...WORK_SCHEMAS], ["pharn-stage-work/1", "pharn-stage-work/2"]);
+});
+
+test("gate-durations — gateDurations: one entry per ran:true run, in run order, the stamp's milliseconds or null", () => {
+  const s = stamp([timed("lint", 1200), noFiles("test"), reusedRun("build"), timed("reconcile", 0), ran("typecheck")]);
+  assert.deepEqual(gateDurations(s), [
+    { seq: 0, id: "lint", duration_ms: 1200 },
+    { seq: 3, id: "reconcile", duration_ms: 0 },
+    { seq: 4, id: "typecheck", duration_ms: null },
+  ]);
+  for (const ms of [-1, 1.5, "5", null, { toString: 1 }]) {
+    assert.deepEqual(gateDurations(stamp([timed("lint", ms)])), [{ seq: 0, id: "lint", duration_ms: null }], typeof ms);
+  }
+});
+
+test("gate-durations — ledgerGateId is a MEMBERSHIP test: a --gates command line (its default id) never reaches the ledger", () => {
+  for (const id of ["test", "lint", "format:check", "e2e", "reconcile", "base:test", "instruction-growth"])
+    assert.equal(ledgerGateId(id), id);
+  assert.equal(ledgerGateId("structural:pharn/x/evals/expected/a.json"), "structural:pharn/x/evals/expected/a.json");
+  const refused = [
+    "curl -H 'Authorization: Bearer s3cret' https://example.test", // a command line a --gates token defaults to
+    "my-gate",
+    "structural:",
+    "structural:/Users/someone/a.json", // an absolute path
+    `structural:${"a".repeat(200)}`, // longer than an identity token
+    "structural:a\nb",
+    null,
+    5,
+    { toString: 1 },
+  ];
+  refused.forEach((id, i) => assert.equal(ledgerGateId(id), null, `refused[${i}]`));
+  const rec = verifyWork({ stamp: stamp([timed("npm run my-script", 7), timed("test", 9)]), ts: TS });
+  assert.deepEqual(rec.gates.durations, [
+    { seq: 0, id: null, duration_ms: 7 },
+    { seq: 1, id: "test", duration_ms: 9 },
+  ]);
+});
+
+test("gate-durations — a REUSED or ENTRY BASE lists no durations even when its stamp's runs carry them (they ran elsewhere)", () => {
+  const head = stamp([timed("lint", 10), timed("build", 20)]);
+  const base = stamp([timed("lint", 30), timed("build", 40)]);
+  const reused = regressWork({ headStamp: head, baseStamp: base, baseReuse: { reused: true, miss: null }, installResult: null, ts: TS });
+  assert.deepEqual(reused.base.durations, []);
+  assert.deepEqual(reused.head.durations, [
+    { seq: 0, id: "lint", duration_ms: 10 },
+    { seq: 1, id: "build", duration_ms: 20 },
+  ]);
+  const fresh = regressWork({ headStamp: head, baseStamp: base, baseReuse: { reused: false, miss: null }, installResult: null, ts: TS });
+  assert.deepEqual(fresh.base.durations, [
+    { seq: 0, id: "lint", duration_ms: 30 },
+    { seq: 1, id: "build", duration_ms: 40 },
+  ]);
+  assert.deepEqual(validateWork(fresh), { ok: true });
+});
+
+test("gate-durations — validateWork admits a /1 line exactly as before (work.jsonl is never pruned)", () => {
+  const v1Verify = {
+    schema: WORK_SCHEMA_V1,
+    stage: "pharn-verify",
+    ts: TS,
+    session_id: null,
+    gates: { required: 2, executed: 2, reused: 0, no_files: 0 },
+  };
+  const v1Regress = {
+    schema: WORK_SCHEMA_V1,
+    stage: "pharn-regress",
+    ts: TS,
+    session_id: S,
+    head: { required: 1, executed: 1, reused: 0, no_files: 0 },
+    base: { evidence: "fresh", miss: null, required: 1, executed: 1, reused: 0, no_files: 0 },
+    install: null,
+  };
+  assert.deepEqual(validateWork(v1Verify), { ok: true });
+  assert.deepEqual(validateWork(v1Regress), { ok: true });
+  // a /1 line carrying the /2 key is neither shape — on any side (every side's key set is closed)
+  assert.equal(validateWork({ ...v1Regress, base: { ...v1Regress.base, durations: [] } }).ok, false);
+  assert.equal(validateWork({ ...v1Regress, head: { ...v1Regress.head, durations: [] } }).ok, false);
+  assert.equal(validateWork({ ...v1Verify, gates: { ...v1Verify.gates, durations: [] } }).ok, false);
+  // a /2 line without it is refused on every side
+  assert.equal(validateWork({ ...v1Verify, schema: WORK_SCHEMA }).ok, false);
+  assert.equal(validateWork({ ...v1Regress, schema: WORK_SCHEMA }).ok, false);
+  assert.equal(validateWork({ ...v1Verify, schema: "pharn-stage-work/3" }).ok, false);
+});
+
+test("gate-durations — validateWork refuses every malformed durations list, quoting no value (L62)", () => {
+  const good = verifyWork({ stamp: stamp([timed("test", 5), timed("lint", 6)]), ts: TS });
+  assert.deepEqual(validateWork(good), { ok: true });
+  const [d0, d1] = good.gates.durations;
+  const withDurations = (d) => ({ ...good, gates: { ...good.gates, durations: d } });
+  const cases = {
+    "not an array": { toString: 1 },
+    "too short": [d0],
+    "too long": [d0, d1, { seq: 1, id: "lint", duration_ms: 6 }],
+    "extra key": [{ ...d0, x: 1 }, d1],
+    "missing key": [{ seq: 0, id: "test" }, d1],
+    "seq out of order": [d1, d0],
+    "seq repeated": [d0, { ...d1, seq: 0 }],
+    "seq beyond required": [d0, { ...d1, seq: 2 }],
+    "seq not a count": [{ ...d0, seq: "0" }, d1],
+    "id a ledger may not carry": [{ ...d0, id: "npm run x" }, d1],
+    "id hostile": [{ ...d0, id: { toString: 1 } }, d1],
+    "negative ms": [{ ...d0, duration_ms: -1 }, d1],
+    "fractional ms": [{ ...d0, duration_ms: 1.5 }, d1],
+    "hostile ms": [{ ...d0, duration_ms: { toString: 1 } }, d1],
+    "entry not an object": [null, d1],
+  };
+  for (const [why, d] of Object.entries(cases)) {
+    const r = validateWork(withDurations(d));
+    assert.equal(r.ok, false, why);
+    assert.doesNotMatch(r.reason, /npm run x|toString/, `${why}: the refusal quotes no value`);
+  }
+  // control: a null id and a null duration are the honest unknowns, admitted
+  assert.deepEqual(validateWork(withDurations([d0, d1].map((e) => ({ ...e, id: null, duration_ms: null })))), { ok: true });
+  // the /2 key sets are closed on every side
+  const reg = regressWork({
+    headStamp: stamp([timed("lint", 1)]),
+    baseStamp: stamp([timed("lint", 1)]),
+    baseReuse: { reused: false, miss: null },
+    installResult: null,
+    ts: TS,
+  });
+  assert.deepEqual(validateWork(reg), { ok: true });
+  assert.equal(validateWork({ ...reg, head: { ...reg.head, x: 1 } }).ok, false);
+  assert.equal(validateWork({ ...reg, head: "x" }).ok, false);
+  assert.equal(validateWork({ ...reg, base: { ...reg.base, durations: [] } }).ok, false, "a fresh BASE lists one entry per executed run");
 });

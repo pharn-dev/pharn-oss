@@ -1674,12 +1674,22 @@ function perfFixture() {
         base: { evidence: "fresh", miss: "no-record", required: 2, executed: 2, reused: 0, no_files: 0 },
         install: { exit: 0, timed_out: false, ms: 5000 },
       },
+      // gate-durations: a `/2` row beside the `/1` one above — work.jsonl is never pruned, so both are read
       {
-        schema: "pharn-stage-work/1",
+        schema: "pharn-stage-work/2",
         stage: "pharn-verify",
         ts: "2026-09-21T10:05:59.000Z",
         session_id: RS,
-        gates: { required: 3, executed: 2, reused: 1, no_files: 0 },
+        gates: {
+          required: 3,
+          executed: 2,
+          reused: 1,
+          no_files: 0,
+          durations: [
+            { seq: 0, id: "test", duration_ms: 61000 },
+            { seq: 2, id: "reconcile", duration_ms: 900 },
+          ],
+        },
       },
     ]
       .map((w) => JSON.stringify(w))
@@ -1700,6 +1710,31 @@ test("RULE 9 — a ledger with executions and work is GREEN, and its view is the
     ]
   );
   assert.deepEqual(redsOf(led), []);
+});
+
+test("gate-durations — RULE 9 admits a /1 and a /2 work row in one ledger; cost.json carries the /2 row's per-gate milliseconds", () => {
+  const { led } = perfFixture();
+  assert.deepEqual(
+    led.work.map((w) => w.schema),
+    ["pharn-stage-work/1", "pharn-stage-work/2"]
+  );
+  assert.deepEqual(led.work[1].gates.durations, [
+    { seq: 0, id: "test", duration_ms: 61000 },
+    { seq: 2, id: "reconcile", duration_ms: 900 },
+  ]);
+  assert.deepEqual(redsOf(led), []);
+  // an edited durations list is not a valid work row — RED, never silently dropped from the file
+  for (const edit of [
+    (l) => l.work[1].gates.durations.pop(),
+    (l) => (l.work[1].gates.durations[0].id = "npm run whatever"),
+    (l) => (l.work[1].gates.durations[0].duration_ms = -5),
+    (l) => delete l.work[1].gates.durations,
+    (l) => (l.work[0].head.durations = []),
+  ]) {
+    const l = clone(led);
+    edit(l);
+    assert.ok(redsOf(l).length > 0, edit.toString());
+  }
 });
 
 test("RULE 9 — an edited view is RED: elapsed, run number, pairing, work index, method, status", () => {
@@ -1882,6 +1917,31 @@ test("RULE 10 — two DIFFERENT lines of one identity are a conflict the view re
   assert.deepEqual(redsOf(led), []);
   assert.equal(led.entry.conflicting_events, 2);
   assert.equal(led.entry.invocations[0].lifetime.reason, "conflicting-records");
+});
+
+test("gate-durations — RULE 10 admits `gate` facts beside the view they never change; a malformed one is RED", () => {
+  const led = entryFixture();
+  const gate = (id, ms) => ({
+    schema: OBS_SCHEMA,
+    event: "gate",
+    nonce: "f".repeat(32),
+    segment: "7".repeat(16),
+    id,
+    ts: "2026-09-21T10:02:00.000Z",
+    duration_ms: ms,
+    session_id: RS,
+  });
+  const before = clone(led.entry);
+  led.entry_events.push(gate("lint", 4000), gate("test", 170000));
+  led.entry = buildEntryView(normalizeMarkers(led.markers), led.entry_events, led.executions);
+  assert.deepEqual(led.entry, before, "the view is the same with the gate facts");
+  assert.deepEqual(redsOf(led), []);
+  const bad = clone(led);
+  bad.entry_events[4].id = "sh -c 'curl example.test'";
+  assert.ok(redsOf(bad).some((r) => /not valid entry observations, at index 4/.test(r)));
+  const late = clone(led);
+  late.entry_events[5].ts = "2026-09-21T11:00:00.000Z";
+  assert.ok(redsOf(late).some((r) => /OUTSIDE the recorded run window, at index 5/.test(r)));
 });
 
 test("REVIEW F2 — RULE 10 holds every timestamp to the window: a fact whose end_ts is past the run-stop is RED", () => {

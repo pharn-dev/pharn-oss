@@ -300,6 +300,15 @@ test("reusedRunRecord: the record a HIT writes validates inside a verify stamp, 
   assert.deepEqual(validateStamp(verify, { stage: "verify", feature: FEATURE }), { ok: true });
 });
 
+test("gate-durations — a reused record never carries the source run's duration_ms (VERIFY spawned nothing)", () => {
+  const src = headStamp();
+  const cand = { ...src.runs[1], duration_ms: 4321 };
+  const args = { entry: { ...entry("typecheck"), seq: 1 }, sourceSha256: H("5"), liveFp: H("1"), liveIdentity: live("typecheck") };
+  const rec = reusedRunRecord({ ...args, candidate: cand });
+  assert.equal(Object.hasOwn(rec, "duration_ms"), false);
+  assert.deepEqual(rec, reusedRunRecord({ ...args, candidate: src.runs[1] }), "the record is the same with or without it");
+});
+
 // ── THE OFFER ──────────────────────────────────────────────────────────────────────────────────────
 const NOW = 1_800_000_000_000;
 const MARKER = Buffer.from('{"schema":"pharn-loop-active/1"}\n');

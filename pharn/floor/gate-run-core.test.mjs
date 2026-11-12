@@ -1608,3 +1608,122 @@ test("★ excludedFacts — no block reads null; a block reads its ALLOWLIST ids
   const hostile = JSON.parse('{"declared_in":{"toString":1},"ids":[{"toString":1},["e2e"]]}');
   assert.deepEqual(excludedFacts(hostile), { count: 2, ids: [], unlisted: 2, declaredHere: false });
 });
+
+// ── gate-durations: `runs[].duration_ms` — optional, additive, only on a run that ran ─────────────────────────────────
+
+/** The entry-derived BASE fixture the reuse-matrix test builds, rebuilt here (it is local to that test). */
+function entryDerivedBaseStamp() {
+  const H = "a".repeat(64);
+  return {
+    schema: SCHEMA,
+    stage: "regress",
+    side: "base",
+    feature: "demo",
+    head: "b".repeat(40),
+    source: "discover",
+    source_raw: null,
+    style_skipped: false,
+    finalized: true,
+    fingerprint: { algo: "x", init: H, final: H },
+    required: ["build", "test"],
+    runs: [
+      {
+        seq: 0,
+        id: "build",
+        exit: 0,
+        ran: false,
+        timed_out: false,
+        mutated: false,
+        reason: "reused",
+        argv: ["npm", "run", "build"],
+        shell: null,
+        files: [],
+        fp_before: H,
+        fp_after: H,
+        stdout_sha256: H,
+        stderr_sha256: H,
+        results_sha256: null,
+        reused: { stage: "entry", side: null, seq: 0, stamp_sha256: H },
+      },
+      {
+        seq: 1,
+        id: "test",
+        exit: 0,
+        ran: false,
+        timed_out: false,
+        mutated: false,
+        reason: "no-files",
+        argv: ["npm", "run", "test"],
+        shell: null,
+        files: [],
+        fp_before: H,
+        fp_after: H,
+        stdout_sha256: H,
+        stderr_sha256: H,
+        results_sha256: null,
+      },
+    ],
+    aux: { completeness: null },
+  };
+}
+
+test("gate-durations AC-2 — every stamp fixture this suite already builds carries no duration_ms and still validates", () => {
+  const fixtures = {
+    goodStamp: goodStamp(),
+    reusedStamp: reusedStamp(),
+    excludedStamp: excludedStamp(),
+    entryDerivedBaseStamp: entryDerivedBaseStamp(),
+  };
+  for (const [name, s] of Object.entries(fixtures)) {
+    assert.ok(
+      s.runs.every((r) => !Object.hasOwn(r, "duration_ms")),
+      `${name}: a stamp written before the field`
+    );
+    assert.deepEqual(validateStamp(s), { ok: true }, name);
+  }
+});
+
+test("gate-durations AC-1 — a ran:true run admits a non-negative integer duration_ms, and refuses every other value (L62)", () => {
+  const withMs = (ms) => {
+    const s = goodStamp();
+    s.runs[0].duration_ms = ms;
+    s.runs[1].duration_ms = 0;
+    return s;
+  };
+  assert.deepEqual(validateStamp(withMs(1234)), { ok: true });
+  assert.deepEqual(validateStamp(withMs(0)), { ok: true });
+  const hostile = JSON.parse('{"toString":1}');
+  for (const ms of [-1, 1.5, "5", null, true, 2 ** 60, hostile, [1]]) {
+    const r = validateStamp(withMs(ms));
+    assert.equal(r.reason_code, "stamp-malformed", JSON.stringify(typeof ms));
+    assert.match(r.reason, /duration_ms must be a non-negative integer/);
+  }
+});
+
+test("gate-durations AC-1 — a no-files, a reused verify and an entry-derived BASE run carrying duration_ms are stamp-malformed", () => {
+  const noFiles = goodStamp();
+  noFiles.runs[0] = { ...noFiles.runs[0], ran: false, reason: "no-files", duration_ms: 5 };
+  const reused = reusedStamp((_s, typecheck) => (typecheck.duration_ms = 5));
+  const derived = entryDerivedBaseStamp();
+  derived.runs[0].duration_ms = 5;
+  const derivedNoFiles = entryDerivedBaseStamp();
+  derivedNoFiles.runs[1].duration_ms = 0;
+  for (const [name, s] of Object.entries({ noFiles, reused, derived, derivedNoFiles })) {
+    const r = validateStamp(s);
+    assert.equal(r.reason_code, "stamp-malformed", name);
+    assert.match(r.reason, /duration_ms is recorded only on a run with ran: true/, name);
+  }
+  // control: the same four without the key are valid, so the key is what each refusal is about
+  delete noFiles.runs[0].duration_ms;
+  assert.deepEqual(validateStamp(noFiles), { ok: true });
+  assert.deepEqual(validateStamp(reusedStamp()), { ok: true });
+  assert.deepEqual(validateStamp(entryDerivedBaseStamp()), { ok: true });
+});
+
+test("gate-durations — baseSpecFrom drops duration_ms with every other run-only field: a BASE spec is the same with and without it", () => {
+  const runs = (ms) => [{ seq: 0, id: "t", shell: null, argv: ["npm", "run", "t"], files: [], exit: 1, ran: true, ...ms }];
+  const without = baseSpecFrom(headRecordFor({ entries: undefined, runs: runs({}) }), "demo");
+  const withField = baseSpecFrom(headRecordFor({ entries: undefined, runs: runs({ duration_ms: 99999 }) }), "demo");
+  assert.equal(without.ok, true);
+  assert.equal(JSON.stringify(withField), JSON.stringify(without));
+});

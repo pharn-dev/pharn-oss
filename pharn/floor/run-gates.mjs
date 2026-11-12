@@ -12,8 +12,8 @@
 //   init      resolves the set ONCE, wipes and recreates <out>, writes the in-progress record, prints the
 //             ordered ids. Exits 3 — writing no state — iff the SOURCE set is empty; injected entries
 //             never make a set non-empty (gate-run-core computes that refusal before injection, L34).
-//   run --next runs exactly the next unrun entry in spec order, prints {ran, exit, timed_out, remaining},
-//             and exits 0. A FAILING GATE IS DATA, NOT A RUNNER ERROR — exit 0 with a non-zero `exit`.
+//   run --next runs exactly the next unrun entry in spec order, prints {ran, exit, timed_out, duration_ms,
+//             remaining, …}, and exits 0. A FAILING GATE IS DATA, NOT A RUNNER ERROR — exit 0 with a non-zero `exit`.
 //             Exit 3 when nothing remains; exit 2 on a runner error, carrying a closed `reason_code`.
 //             The call that runs the LAST entry also finalizes.
 //
@@ -102,6 +102,18 @@
 // `init --discover <m>` (no `--gates`) reads the project's `gates.exclude` from the `pharn.config.json` beside `<m>`
 // (gate-exclusion-core.mjs) and hands it to resolveSet; a bad declaration is `bad-gate-exclusion`, nothing written. The
 // record (and so the stamp) carries the `excluded` block only when discovery removed an id; `init` prints its ids.
+//
+// ================================ GATE DURATION (gate-durations) ================================
+// `spawnGate` reads `performance.now()` immediately before `spawn()` and again when it settles (the child's `close`, or
+// a spawn `error`), and returns `duration_ms` = the floor of the difference: ONE monotonic interval in this process,
+// process start-up and teardown included. `run --next` records it on a run it SPAWNED and on no other (a `no-files`
+// run and a reused run carry none — gate-run-core.mjs validateStamp refuses one that does), and prints it (`null` when
+// nothing was spawned) so the entry drain can record it. The kill timer re-arms while less than `--timeout-ms` has
+// passed on that same clock (Node's millisecond timer can fire a fraction early), so SIGTERM is never sent before
+// `t0 + timeoutMs` and a timed-out run's `duration_ms` is at least the timeout — tested behaviour, not a floor claim.
+// OBSERVATIONAL ONLY: the value is outside the execution identity (computed before the spawn) and the BASE requirement
+// (regress-base-reuse-core.mjs projects runs to id/shell/argv/files), and no verdict, reuse decision or route reads it
+// (gate-durations.test.mjs pins both). Under machine load it measures the machine as much as the gate.
 //
 // TRUST (P2): every operand is a path, an integer or a hex digest. Untrusted inputs — a `--gates`
 // string, a `--extra` array, a scope JSON — are shape-gated by gate-run-core.mjs before use and are
@@ -975,6 +987,13 @@ function gateEnv(id, resultsFile) {
   return env;
 }
 
+/** How many more whole milliseconds the kill timer must wait so that `elapsedMs` (read on the spawn's own monotonic
+ *  clock) reaches `timeoutMs`: 0 once it has, else the remainder rounded UP — never a delay that lands short. */
+function killDelayMs(timeoutMs, elapsedMs) {
+  const left = timeoutMs - elapsedMs;
+  return left > 0 ? Math.ceil(left) : 0;
+}
+
 /** `hooks` (optional): `onSpawn(pgid)` right after the group exists; `onInterrupted(signal)` after a forwarded
  *  SIGTERM/SIGINT/SIGHUP has ended the gate's leader, just before this process re-raises the signal on itself and dies
  *  by it. An interrupted gate is never a result: the caller records nothing for it. */
@@ -1028,6 +1047,8 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs, hooks =
     // text; an argv program is a bare PATH-looked-up name (the regex above); the shell is the fixed `/bin/sh`. #17's
     // traced source is a test passing `process.execPath`, which that regex refuses. Restructuring cannot remove the
     // flow without removing `--gates`, so the alerts are left to a reviewed dismissal, never suppressed here.
+    // The gate's duration (header, GATE DURATION): one monotonic interval from just before the spawn to the settle.
+    const t0 = performance.now();
     const child = spawn(cmd, argv, { cwd, env, detached: true, stdio: ["ignore", fdOut, fdErr] });
 
     // Forward a harness's SIGTERM / SIGINT / SIGHUP to the gate's GROUP (audit P3-P): without this the runner died and
@@ -1058,9 +1079,10 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs, hooks =
       }
     }
 
-    const finish = (result) => {
+    const finish = (settledWith) => {
       if (settled) return;
       settled = true;
+      const result = { ...settledWith, duration_ms: Math.floor(performance.now() - t0) };
       for (const s of FORWARDED_SIGNALS) process.removeListener(s, onSignal);
       if (killTimer) clearTimeout(killTimer);
       if (graceTimer) clearTimeout(graceTimer);
@@ -1108,7 +1130,11 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs, hooks =
       finish({ exit: code === null ? 2 : code, timed_out: timedOut, spawnError: null });
     });
 
-    killTimer = setTimeout(() => {
+    // A millisecond timer can fire a fraction before `timeoutMs` has passed on the clock `t0` was read from; re-arm for
+    // the rest, so the kill (and so a timed-out run's duration) never comes before `t0 + timeoutMs`.
+    const onTimeout = () => {
+      const left = killDelayMs(timeoutMs, performance.now() - t0);
+      if (left > 0) return void (killTimer = setTimeout(onTimeout, left));
       timedOut = true;
       try {
         process.kill(-child.pid, "SIGTERM");
@@ -1122,7 +1148,8 @@ function spawnGate(entry, cwd, outFile, errFile, resultsFile, timeoutMs, hooks =
           /* group already gone */
         }
       }, KILL_GRACE_MS);
-    }, timeoutMs);
+    };
+    killTimer = setTimeout(onTimeout, timeoutMs);
   });
 }
 
@@ -1200,6 +1227,8 @@ async function runNext(args) {
     let timed_out = false;
     let ran = true;
     let reason = null;
+    // Set only when this call SPAWNED the gate (header, GATE DURATION); a no-files or reused run records none.
+    let duration_ms = null;
 
     // A file-addressable gate with NO files is recorded as 0 / ran:false — never SKIPPED silently, and
     // never run with an empty list, which for several runners means "everything" (lessons-learned L16).
@@ -1266,6 +1295,7 @@ async function runNext(args) {
         if (res.spawnError) fail("usage-error", `gate ${next.id} could not be started: ${res.spawnError}`);
         exit = res.exit;
         timed_out = res.timed_out;
+        duration_ms = res.duration_ms;
       }
 
       fpAfter = fingerprint(cwd, { feature: rec.feature, stage: rec.stage });
@@ -1291,6 +1321,7 @@ async function runNext(args) {
         results_sha256: sha256RegularFile(resultsFile),
       };
       if (liveIdentity !== null) run.identity_sha256 = liveIdentity;
+      if (duration_ms !== null) run.duration_ms = duration_ms;
       rec.runs.push(run);
     }
     // What this call did about reuse — stdout only (the stamp's run entry is the evidence): `reused` true when it
@@ -1335,11 +1366,24 @@ async function runNext(args) {
       } catch {
         /* nothing to remove */
       }
-      emit({ ok: true, ran: next.id, exit, timed_out, remaining: 0, finalized: true, stamp: join(out, "stamp.json"), ...reuseOut }, 0);
+      emit(
+        {
+          ok: true,
+          ran: next.id,
+          exit,
+          timed_out,
+          duration_ms,
+          remaining: 0,
+          finalized: true,
+          stamp: join(out, "stamp.json"),
+          ...reuseOut,
+        },
+        0
+      );
     }
 
     writeAtomic(statePath, JSON.stringify(rec, null, 2));
-    emit({ ok: true, ran: next.id, exit, timed_out, remaining, finalized: false, ...reuseOut }, 0);
+    emit({ ok: true, ran: next.id, exit, timed_out, duration_ms, remaining, finalized: false, ...reuseOut }, 0);
   }
 }
 
@@ -1370,4 +1414,4 @@ if (import.meta.main) {
   });
 }
 
-export { assertContained, isStaleLock, signalExit, readScopeJson, spawnGate, sha256RegularFile, CI_GATE_IDS };
+export { assertContained, isStaleLock, signalExit, killDelayMs, readScopeJson, spawnGate, sha256RegularFile, CI_GATE_IDS };
