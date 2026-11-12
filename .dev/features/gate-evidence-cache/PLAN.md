@@ -256,18 +256,24 @@ installed path moves and no existing frontmatter or contract shape breaks, so `M
 (`pharn/LIMITS.md` §5's reuse sentence is about verify reusing regress within one run, which this does not touch);
 an optional LIMITS sentence naming the cross-run stop goes into the PR body as a proposal.
 
+## GATE 1 — decision (recorded)
+
+Approved as written by the orchestrator: **a model decision made under the maintainer's delegation, not a human
+approval**. Every open question was answered as recommended:
+
+1. Style reds — **non-style reds only**; a style-only red is `style-only`, not cached.
+2. Working directory — **the repo-relative prefix** is bound; the absolute path is unbound and labeled advisory.
+3. Age limit — **24 h, fixed**, no config key.
+4. The loop's stop — **a new row S14c** (`blocked: gates-red-cached`).
+5. **One record per repository, last writer wins**; the contract says that a clear only ever removes a hit, never adds a
+   stop.
+6. A red run with an unmeasured gate beside it — **not cached**.
+
+Three build-time checks the decision named: (a) exit `4` is not taken by any `entry-gates.mjs` mode or by a caller's
+mapping of `--start` before it is pinned; (b) a missing or unwritable git common dir is the `inputs-unavailable` miss at
+the lookup and a best-effort stderr note at the write, never a crash or a stop; (c) the `pharn-loop.md` byte ceiling —
+text moves to the close part rather than the ceiling rising without a stated reason.
+
 ## Open questions (HALT)
 
-1. Style reds: cache only non-style reds (a style-only red is `style-only`, not cached)? A style red can come from
-   markdown in a feature directory the feature-neutral key excludes. **Recommended: yes, non-style only.**
-2. Working directory: bind the repo-relative prefix (`git rev-parse --show-prefix`), not the absolute path — binding the
-   absolute path makes every fresh worktree a miss, against the ticket's own reason for the common dir; the absolute
-   path is then an advisory unbound input. **Recommended: the prefix.**
-3. Age limit: a fixed 24 h constant, no `pharn.config.json` key (no config surface, no MIN_CLI question).
-   **Recommended: 24 h, fixed.**
-4. The loop's stop: a new row S14c `blocked: gates-red-cached` (a Step 1a stop with no record, as S4 and S15b), rather
-   than reusing S14 (a post-S2 stop that writes a record). **Recommended: S14c.**
-5. One slot per repository, replaced or cleared by every decided `--wait`, rather than a keyed set. **Recommended:
-   single slot.**
-6. A red run with an unmeasured gate beside it: not cached (AC3's "non-timed-out runs" read over the whole run).
-   **Recommended: not cached.**
+None — resolved at GATE 1 (above).
