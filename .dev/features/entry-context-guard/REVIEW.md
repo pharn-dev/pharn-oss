@@ -49,6 +49,17 @@ sibling reference: the new modules import floor modules in `pharn/floor/`, as th
 - Finding 4 (config text in the quoted line) — accepted as stated; the trusted prefix already fences quoted text as
   DATA, and the line gates nothing.
 
+## Iteration 2 — the fixes, two merges of `origin/main`, the renumber
+
+Re-read: the fix diff (`readThreshold` in `check-entry-context.mjs` with two tests; one `reads:` line in
+`pharn-ship.md`), the two merge commits (CORE-105 at 7.11.0 edited `pharn-loop.md`, `stage-agent*.mjs` and the hygiene
+test; CORE-75 at 7.12.0 edited the gate runner and the cost ledger, including `render-cost-ledger.mjs`, whose
+`readMarkers` this CLI imports), and the renumber to 7.13.0 (every added `7.11.0` / `7.12.0` found by diffing the added
+lines against `origin/main`). No new finding: `pharn-loop.md`'s S15b row, grant and Step 1a block survived the
+CORE-105 merge unchanged (87,901 B against the 93,184 B row), `readMarkers` keeps its signature, and the released
+`[7.11.0]` and `[7.12.0]` CHANGELOG sections are byte-identical to main's. Regress (base `f47b94e1`) and verify were
+re-run on the final tree: `no-regressions`, PASS.
+
 ## Proposed lesson candidate
 
 None. No finding shows a recurring mechanism failure (L20's bar): the four are one-off precision slips.
