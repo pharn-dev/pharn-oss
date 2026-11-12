@@ -20,8 +20,15 @@ Linear CORE-86 (epic CORE-13). Gated `/pharn-dev-ship`, not `--loop`.
 6. `/pharn-dev-review` → `REVIEW.md`: 0 floor-gate findings; 2 cheap P2/P5 fixes found (gate ids must be ALLOWLIST
    members, so a forged record cannot put free text in the stop line; a live tree with no HEAD is
    `inputs-unavailable`).
-7. Iteration 2 (GATE 2's fix rule): both fixes applied inside `## Files`, then regress and verify re-run on the final
-   tree. The verdicts below are iteration 2's; iteration 1 was `no-regressions` / `PASS` as well.
+7. Iteration 2 (GATE 2's fix rule): both fixes applied inside `## Files`, then regress and verify re-run; both
+   `no-regressions` / `PASS`, as iteration 1 was.
+8. Iteration 3 (a red CI check on the pull request): pharn-ci's diff-coverage gate measured 97.75% (608 of 622 added
+   lines) against its 100% threshold. The uncovered lines were four catch blocks that no input reaches (every callee
+   already returns its failure; a thrown defect would be `main`'s `crashed`, exit 2, which callers go on past) and two
+   failure notes. The catches were removed and the notes tested (a record that cannot be written; a clear that fails
+   in a read-only git dir), inside `## Files`; nothing was excluded and the gate was not touched. A local coverage run
+   over the changed files estimates 618 of 618 added lines covered. Regress (base `ae310f3e`) and verify were re-run on
+   the final tree; the verdicts below are iteration 3's.
 
 ## The gates' decisions (delegated, never human approvals)
 
@@ -39,7 +46,10 @@ Linear CORE-86 (epic CORE-13). Gated `/pharn-dev-ship`, not `--loop`.
   **proceed to the pull request**, made by the orchestrating model under that delegation. The two advisory findings
   left are follow-ups: `entry-cache-install-records` (package managers whose install state is not one of the four
   named records) and `entry-cache-forgery-detection` (a Bash-forged record is undetected; bounded: it can only stop a
-  run).
+  run). An automated PR reviewer (CodeRabbit) suggested stripping `GIT_DIR`-style variables from the new test
+  fixtures' environment; not applied, because the sibling suites (`entry-gates.test.mjs`, `entry-base-evidence.test.mjs`)
+  inherit the environment the same way and CI sets none of them; named as follow-up `test-fixture-git-env` for all of
+  them at once.
 
 ## Verdicts
 

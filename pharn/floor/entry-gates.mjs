@@ -601,72 +601,60 @@ function writeBaseTests() {
  *  Cached red evidence (gate-evidence-cache) — the rule is entry-gate-cache-core.mjs's header.
  *  ------------------------------------------------------------------------------------------------------------- */
 /** `--start`'s lookup, after `init` wrote its state: capture and store this run's inputs, then decide. Returns
- *  `{hit: true, source, ageMs, red}` or `{hit: false, miss}`. Never throws: anything that cannot be read or computed is
- *  a miss, so the gates run exactly as before. */
+ *  `{hit: true, source, ageMs, red}` or `{hit: false, miss}`. Anything that cannot be read or computed is a miss, so the
+ *  gates run exactly as before. Total by its callees (each returns its failure) and by the guarded reads of init's
+ *  state below — no catch; a defect that threw anyway is `main`'s `crashed` (exit 2), which every caller goes on past. */
 function cacheLookup({ feature, nonce, timeoutMs, refresh, measuredAt }) {
-  try {
-    const inputs = captureInputs({ feature, nonce, timeoutMs, measuredAt });
-    if (inputs !== null) {
-      const w = writeInputs(inputs);
-      if (!w.ok) process.stderr.write(`entry-gates: note — this run's inputs could not be kept for the cached evidence (${w.why})\n`);
-    }
-    if (refresh) return { hit: false, miss: "refresh" };
-    const read = readCache();
-    const state = readRecord(ENTRY_PATHS.state, STAMP_MAX_BYTES);
-    const gates = state.state === "ok" ? gateSet(state.value.entries) : null;
-    const head = state.state === "ok" ? state.value.head : null;
-    const initTree =
-      state.state === "ok" && state.value.fingerprint && typeof state.value.fingerprint === "object"
-        ? { algo: state.value.fingerprint.algo, digest: state.value.fingerprint.init }
-        : null;
-    const live =
-      inputs === null || gates === null || initTree === null
-        ? null
-        : {
-            node: inputs.node,
-            prefix: inputs.prefix,
-            timeout_ms: timeoutMs,
-            exclude: inputs.exclude,
-            install: inputs.install,
-            gates,
-            head,
-          };
-    return decideCache({
-      refresh: false,
-      read,
-      live,
-      treeFor: (src) => (src === feature ? initTree : treeExcluding(feature, src)),
-      nowMs: Date.now(),
-    });
-  } catch {
-    return { hit: false, miss: "inputs-unavailable" };
+  const inputs = captureInputs({ feature, nonce, timeoutMs, measuredAt });
+  if (inputs !== null) {
+    const w = writeInputs(inputs);
+    if (!w.ok) process.stderr.write(`entry-gates: note — this run's inputs could not be kept for the cached evidence (${w.why})\n`);
   }
+  if (refresh) return { hit: false, miss: "refresh" };
+  const read = readCache();
+  const state = readRecord(ENTRY_PATHS.state, STAMP_MAX_BYTES);
+  const sv = state.state === "ok" && state.value !== null && typeof state.value === "object" ? state.value : {};
+  const fp = sv.fingerprint !== null && typeof sv.fingerprint === "object" ? sv.fingerprint : null;
+  const gates = gateSet(sv.entries);
+  const initTree = fp !== null && typeof fp.algo === "string" && typeof fp.init === "string" ? { algo: fp.algo, digest: fp.init } : null;
+  const live =
+    inputs === null || gates === null || initTree === null
+      ? null
+      : {
+          node: inputs.node,
+          prefix: inputs.prefix,
+          timeout_ms: timeoutMs,
+          exclude: inputs.exclude,
+          install: inputs.install,
+          gates,
+          head: sv.head,
+        };
+  return decideCache({
+    refresh: false,
+    read,
+    live,
+    treeFor: (src) => (src === feature ? initTree : treeExcluding(feature, src)),
+    nowMs: Date.now(),
+  });
 }
 
 /** `--wait`'s step after a decided verdict: record a cacheable red, or clear the slot. Best-effort and silent on success,
  *  exactly as the offer is (a test pins that a successful `--wait` prints nothing on stderr): a failure is one `note —`
  *  line, never a change to the document, the exit or any record. The next `--start` names the hit or its miss. A clear
- *  only ever removes a hit. Returns what it did — `{done: "recorded" | "cleared" | "failed", why}` — for its tests. */
+ *  only ever removes a hit. Total by its callees: the inputs read, the two pure rules over a VALIDATED stamp and verdict,
+ *  and the write and clear, which return their failure. */
 function cacheAfterVerdict(feature, runnerRec, verdict, stamp) {
-  try {
-    const read = readInputs();
-    const inputs = read.state === "ok" ? read.value : null;
-    const c = cacheableRed({ verdict, stamp, inputs, nonce: runnerRec.nonce, feature });
-    const record = c.cacheable ? buildRecord({ inputs, stamp, red: c.red }) : null;
-    if (record !== null) {
-      const w = writeCache(record);
-      if (w.ok) return { done: "recorded", why: null };
-      process.stderr.write(`entry-gates: note — the red could not be cached for later runs (${w.why})\n`);
-      return { done: "failed", why: w.why };
-    }
-    const r = clearCache();
-    if (r.ok) return { done: "cleared", why: c.cacheable ? "gates-unbound" : c.why };
-    process.stderr.write(`entry-gates: note — the cached evidence could not be cleared (${r.why})\n`);
-    return { done: "failed", why: r.why };
-  } catch {
-    process.stderr.write("entry-gates: note — the cached evidence could not be updated (crashed)\n");
-    return { done: "failed", why: "crashed" };
+  const read = readInputs();
+  const inputs = read.state === "ok" ? read.value : null;
+  const c = cacheableRed({ verdict, stamp, inputs, nonce: runnerRec.nonce, feature });
+  const record = c.cacheable ? buildRecord({ inputs, stamp, red: c.red }) : null;
+  if (record !== null) {
+    const w = writeCache(record);
+    if (!w.ok) process.stderr.write(`entry-gates: note — the red could not be cached for later runs (${w.why})\n`);
+    return;
   }
+  const r = clearCache();
+  if (!r.ok) process.stderr.write(`entry-gates: note — the cached evidence could not be cleared (${r.why})\n`);
 }
 
 /** ---------------------------------------------------------------------------------------------------------------

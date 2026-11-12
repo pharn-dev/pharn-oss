@@ -7,7 +7,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -186,6 +197,28 @@ test("an unwritable git dir is a returned write-failed, never a throw (GATE 1 ch
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test(
+  "a record in a read-only git dir is a returned remove-failed, never a throw (GATE 1 check b)",
+  { skip: process.getuid?.() === 0 },
+  () => {
+    const dir = repo();
+    try {
+      inDir(dir, () => {
+        assert.deepEqual(writeCache(record(dir)), { ok: true });
+        chmodSync(join(dir, ".git"), 0o555);
+        try {
+          assert.deepEqual(clearCache(), { ok: false, why: "remove-failed" });
+          assert.equal(readCache().state, "ok", "control: the record is still there");
+        } finally {
+          chmodSync(join(dir, ".git"), 0o755);
+        }
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+);
 
 test("captureInputs reads the running node, the repo-relative prefix, the declared exclusion and the install files (AC6)", () => {
   const dir = repo();

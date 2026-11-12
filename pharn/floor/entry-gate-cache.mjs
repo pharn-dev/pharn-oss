@@ -13,8 +13,10 @@
 // a `.git` segment; a linked worktree: enforce-writes-scope.cjs, a path inside another git tree — L65). A Bash writer
 // reaches both (L19); a forged record can only STOP a run (entry-gate-cache-core.mjs, "WHAT IT DOES NOT CLAIM").
 //
-// NEVER A NEW FAILURE MODE: every function here RETURNS a failure (null, a `why`), never throws. A lookup that cannot
-// read or compute something is a miss, and a write that fails is one stderr note in the caller.
+// NEVER A NEW STOP: every function here RETURNS a failure (null, a `why`) — the writes through their own catch, the reads
+// and the capture because each callee returns its failure. A lookup that cannot read or compute something is a miss, and
+// a write that fails is one stderr note in the caller. Were a defect to throw anyway, `entry-gates.mjs` `main` reports
+// `crashed` (exit 2 at `--start` or `--wait`), which every caller reads as "go on" — never as a stop.
 //
 // READS are lstat-first and never followed: regress-base-reuse.mjs `readRegularFile` (O_NOFOLLOW, fstat regular, capped).
 
@@ -140,37 +142,31 @@ export function installState(cwd = process.cwd()) {
 
 /**
  * This run's inputs at `--start`, or null when any of them cannot be computed (no prefix, an exclusion that refuses).
- * Never throws: a throw is null, which the lookup reads as `inputs-unavailable` and the record step as not cacheable.
+ * Total by its callees, not by a catch: `gitSync`, `loadGateExclusion` (a non-empty dir) and `hashFile` each RETURN their
+ * failure. null is read as `inputs-unavailable` at the lookup and as not cacheable at the record step.
  */
 export function captureInputs({ feature, nonce, timeoutMs, measuredAt }) {
-  try {
-    const p = gitSync(["rev-parse", "--show-prefix"]);
-    if (!p.ok) return null;
-    const x = loadGateExclusion(process.cwd());
-    if (!x.ok) return null;
-    const inputs = {
-      schema: INPUTS_SCHEMA,
-      feature,
-      nonce,
-      measured_at: measuredAt,
-      node: nodeIdentity(),
-      prefix: p.stdout.trim(),
-      timeout_ms: timeoutMs,
-      exclude: [...new Set(x.exclude)].sort(),
-      install: installState(),
-    };
-    return inputsDefect(inputs) === null ? inputs : null;
-  } catch {
-    return null;
-  }
+  const p = gitSync(["rev-parse", "--show-prefix"]);
+  if (!p.ok) return null;
+  const x = loadGateExclusion(process.cwd());
+  if (!x.ok) return null;
+  const inputs = {
+    schema: INPUTS_SCHEMA,
+    feature,
+    nonce,
+    measured_at: measuredAt,
+    node: nodeIdentity(),
+    prefix: p.stdout.trim(),
+    timeout_ms: timeoutMs,
+    exclude: [...new Set(x.exclude)].sort(),
+    install: installState(),
+  };
+  return inputsDefect(inputs) === null ? inputs : null;
 }
 
-/** This tree's entry fingerprint with the source run's feature directory excluded too: `{algo, digest}` or null. */
+/** This tree's entry fingerprint with the source run's feature directory excluded too: `{algo, digest}` or null.
+ *  `fingerprint` returns `{ok: false}` on any enumeration it cannot trust, so no catch is needed. */
 export function treeExcluding(feature, sourceFeature) {
-  try {
-    const fp = fingerprint(".", { feature, stage: "entry", alsoExclude: sourceFeature });
-    return fp.ok ? { algo: fp.algo, digest: fp.digest } : null;
-  } catch {
-    return null;
-  }
+  const fp = fingerprint(".", { feature, stage: "entry", alsoExclude: sourceFeature });
+  return fp.ok ? { algo: fp.algo, digest: fp.digest } : null;
 }

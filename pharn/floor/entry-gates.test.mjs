@@ -8,7 +8,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -982,6 +993,40 @@ test("CLI cache (AC3): a green clears the slot; a timed-out, a style-only or a p
     assert.ok(existsSync(CACHE_FILE(peeked)), "control: the --wait after it records");
   } finally {
     cleanup(peeked);
+  }
+});
+
+test("CLI cache: a record that cannot be written or cleared is one stderr note — the document and the exit stay the verdict's", () => {
+  // A red whose record cannot be written: a non-empty directory stands at the record's path, so the rename fails.
+  const red = sandbox({ gates: { test: { exit: 1 } } });
+  try {
+    mkdirSync(join(CACHE_FILE(red), "blocker"), { recursive: true });
+    assert.equal(start(red).status, 0);
+    const w = waitAs(red, FEATURE);
+    assert.equal(w.status, 4, "still the red verdict");
+    assert.deepEqual(w.doc.red, ["test"]);
+    assert.match(w.stderr, /entry-gates: note — the red could not be cached for later runs \(write-failed\)/);
+  } finally {
+    cleanup(red);
+  }
+  // A green whose clear fails: the git dir is read-only, so the earlier red's record cannot be removed (not as root).
+  if (process.getuid?.() === 0) return;
+  const dir = recordedRed();
+  const gitDir = join(dir, ".git");
+  try {
+    writeFileSync(join(dir, "gates", "test.cjs"), gateSource({ exit: 0 }));
+    assert.equal(startAs(dir, "demo-2").status, 0);
+    // let the runner finish before the git dir turns read-only (it never writes there; the read-only window is --wait's)
+    waitForFile(join(dir, ENTRY_PATHS.result));
+    chmodSync(gitDir, 0o555);
+    const g = waitAs(dir, "demo-2");
+    assert.equal(g.status, 0, "still the green verdict");
+    assert.match(g.stderr, /entry-gates: note — the cached evidence could not be cleared \(remove-failed\)/);
+    assert.ok(existsSync(CACHE_FILE(dir)), "control: the record really was not removed");
+  } finally {
+    chmodSync(gitDir, 0o755);
+    cli(dir, "--abort", "--feature", "demo-2");
+    cleanup(dir);
   }
 });
 
