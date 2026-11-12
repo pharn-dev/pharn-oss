@@ -143,6 +143,39 @@ test("a freshly emitted ledger is GREEN — the control that makes every RED bel
   assert.deepEqual(redsOf(led), [], "the emitter must satisfy its own checker");
 });
 
+// inline-fallback-stop: `inline:no-foreground-agent` is retired (no `start` records it now), but a run from before the
+// change wrote it on its stage-start markers. The ledger emitted from such a markers file keeps the route and is GREEN.
+test("a ledger from before the retired route is GREEN, and keeps `inline:no-foreground-agent` on its marker", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-cl-retired-"));
+  const proj = join(root, "projects", "p");
+  mkdirSync(proj, { recursive: true });
+  copyFileSync(join(FIXTURES, "single-session.jsonl"), join(proj, `${REAL_SESSION}.jsonl`));
+  const markers = join(root, "cost", "feat");
+  mkdirSync(markers, { recursive: true });
+  const route = "inline:no-foreground-agent";
+  writeFileSync(
+    join(markers, "markers.jsonl"),
+    [
+      JSON.stringify({ seq: 1, kind: "run-start", stage: null, iteration: null, ts: "2026-09-21T08:00:00.000Z", session_id: null }),
+      JSON.stringify({
+        seq: 2,
+        kind: "stage-start",
+        stage: "pharn-build",
+        iteration: 1,
+        ts: "2026-09-21T08:30:00.000Z",
+        session_id: null,
+        route,
+      }),
+      JSON.stringify({ seq: 3, kind: "run-stop", stage: null, iteration: null, ts: "2026-09-21T09:59:00.000Z", session_id: null }),
+    ].join("\n") + "\n"
+  );
+  const led = renderLedger({ name: "feat", sessionId: REAL_SESSION, projectsDir: join(root, "projects"), markersBase: join(root, "cost") });
+  assert.ok(led.requests.length > 0, "NON-VACUITY: the fixture's rows are in the run window");
+  assert.equal(led.markers.find((m) => m.kind === "stage-start").route, route, "the retired route survives into markers[]");
+  assert.deepEqual(redsOf(led), []);
+  assert.deepEqual(redsOf(clone(led)), [], "and the stored JSON form, as a ledger file holds it");
+});
+
 // ── quick (6.25.0): a `--quick` ship ledger (a `mode` marker key, a `gate2-quick` decision) is GREEN ─────
 // under the UNCHANGED checker — no schema bump, exactly as the design states: rule 5 checks
 // `outcome.decision` as a bounded token, never a closed vocabulary, and markers carry no closed key set.

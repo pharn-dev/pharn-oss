@@ -5142,14 +5142,13 @@ for (const cmd of STAGE_AGENT_WIRING) {
     // no-agent-tool flag, and the inline return line pinned in this section (the start line's exit-3 branch runs it).
     assert.match(s, /^## Running a stage \(6\.27\.0\) — a routed stage runs as a stage agent, requested on its configured model$/m);
     assert.match(s, /append\s+`--no-agent-tool`\s+to\s+the\s+start\s+line:\s+it\s+records\s+`inline:no-agent-tool`\s+and\s+exits\s+`3`/);
-    // 6.73.2: only the loop takes --no-foreground-agent (it cannot wait for a background agent; ship waits). The grant
-    // test below pins that a start line carrying it stays inside the loop's allowed-tools.
+    // inline-fallback-stop: the loop's --no-foreground-agent rule (6.73.2) is removed — finish --budget-ms waits for a
+    // background launch on disk, so a routed stage needs no schema exception. Ship never had the flag. The family-wide
+    // closure sits beside the loop-no-prompts grant test; here, the loop's Agent call says it has no schema exception.
+    assert.doesNotMatch(s, /no-foreground-agent/, "no orchestrator is told to send the retired flag");
     if (cmd.command === "pharn-loop")
-      assert.match(
-        s,
-        /append\s+`--no-foreground-agent`\s+to\s+the\s+start\s+line:\s+it\s+records\s+`inline:no-foreground-agent`\s+and\s+exits\s+`3`/
-      );
-    else assert.doesNotMatch(s, /--no-foreground-agent/, "ship waits for a background agent, so it is given no such flag");
+      assert.match(s, /\*\*On start exit `0` only, the Agent call, whatever parameters your Agent tool lists:\*\*/);
+    else assert.doesNotMatch(s, /whatever parameters your Agent tool lists/, "ship's Agent call is unchanged");
     assert.equal(
       fencedLines(s).filter((l) => l.text.trim() === "node pharn/floor/mark-phase.mjs --name '<name>' --kind orchestrator").length,
       1,
@@ -6456,10 +6455,26 @@ const LOOP_UNGRANTED_LINES = Object.freeze([
 /** The exact grant set the pinned lines derive (see grantFor). */
 const derivedLoopGrants = (lines) => [...new Set(lines.flatMap((l) => subcommands(l.text).map(grantFor)))].sort();
 
-test("✧ loop-no-prompts (6.73.2): a start line carrying either bare flag, or both, stays inside a grant", () => {
-  // stage-agent-background-fix: the loop appends --no-foreground-agent (or --no-agent-tool) to a pinned start line. Every
-  // start grant ends its name position in `*`, which bashGrantRe reads as any text, spaces included, so the flags are
-  // covered wherever they sit (REVIEW A1 — the plan's "right after --name" placement was never load-bearing). This guard
+test("✧ inline-fallback-stop: no file of either orchestrator family names the retired --no-foreground-agent", () => {
+  // The rule is removed from /pharn-loop (finish --budget-ms waits for a background launch on disk); stage-agent.mjs
+  // still accepts and ignores the flag for older command bytes, so its absence here is what keeps it out of new runs.
+  const family = readdirSync(COMMANDS_DIR).filter((f) => /^pharn-(?:loop|ship)(?:-[a-z]+)?\.md$/.test(f));
+  // Non-vacuity (L34): both commands and their parts are read, and the loop family still names the flag that stays.
+  for (const f of ["pharn-loop.md", "pharn-loop-quick.md", "pharn-loop-close.md", "pharn-ship.md", "pharn-ship-stages.md"])
+    assert.ok(family.includes(f), `${f} is in the scanned family`);
+  const texts = family.map((f) => [f, readFileSync(join(COMMANDS_DIR, f), "utf8")]);
+  for (const [f, t] of texts) assert.ok(t.length > 1000, `${f} was read`);
+  assert.match(texts.find(([f]) => f === "pharn-loop.md")[1], /`--no-agent-tool`/, "control: the kept bare flag is still named");
+  assert.deepEqual(
+    texts.filter(([, t]) => /no-foreground-agent/.test(t)).map(([f]) => f),
+    []
+  );
+});
+
+test("✧ loop-no-prompts (6.73.2): a start line carrying the bare --no-agent-tool flag stays inside a grant", () => {
+  // stage-agent-background-fix: the loop appends --no-agent-tool to a pinned start line (and appended the retired
+  // --no-foreground-agent until inline-fallback-stop). Every start grant ends its name position in `*`, which
+  // bashGrantRe reads as any text, spaces included, so the flag is covered wherever it sits (REVIEW A1). This guard
   // fails only if a start grant stops covering the rest of its line, e.g. an exact grant with no trailing `*`.
   const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
   const res = grants.filter((g) => g.startsWith("Bash(")).map(bashGrantRe);
@@ -6469,8 +6484,8 @@ test("✧ loop-no-prompts (6.73.2): a start line carrying either bare flag, or b
   const offenders = [];
   for (const l of starts) {
     const line = l.text.replace(/'<name>'/g, "'demo-feature'").replace(/<N>/g, "1");
-    for (const tail of [" --no-foreground-agent", " --no-agent-tool", " --no-agent-tool --no-foreground-agent"])
-      if (!res.some((re) => re.test(line + tail))) offenders.push(`${l.file}:${l.line}: ${line + tail}`);
+    const tail = " --no-agent-tool";
+    if (!res.some((re) => re.test(line + tail))) offenders.push(`${l.file}:${l.line}: ${line + tail}`);
   }
   assert.deepEqual(offenders, []);
   // Non-vacuity of the regex itself: a line no grant names is refused.

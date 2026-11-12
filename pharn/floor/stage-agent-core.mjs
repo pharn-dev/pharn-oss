@@ -69,9 +69,11 @@
 //                                                 run check-model-config.mjs resolve <stage> by hand
 //   no-agent-tool     the orchestrating model (ADVISORY): no Agent tool, not even a deferred one — since 6.43.0
 //                     passed to `start` as `--no-agent-tool`      allow the Agent tool
-//   no-foreground-agent the orchestrating model (ADVISORY): an Agent tool that offers no `run_in_background`
-//                     parameter — since 6.73.2 passed to `start` as `--no-foreground-agent` (residual
-//                     `stage-agent-background`)  run /pharn-loop where the Agent tool takes `run_in_background`
+//   no-foreground-agent RETIRED (inline-fallback-stop): no `start` or `route` records it now; it stays a member so
+//                     the markers and ledgers written before still validate. It recorded the orchestrating model's
+//                     reading (ADVISORY) of an Agent tool with no `run_in_background` parameter, passed to `start`
+//                     as `--no-foreground-agent` from 6.73.2; `start` now accepts and ignores that flag
+//                                                 none needed: a record from an earlier version
 //   route-unavailable `start`: a `route` refusal or a leftover result it cannot clear, its reason after the
 //                     remedy (before 6.43.0, the orchestrating model when `route` exited outside 0/3)
 //                                                 run the route line by hand
@@ -208,6 +210,22 @@
 //                             session ended while the build agent ran, and the first `finish` a day later was past
 //                             the cap. 7.2.0 leaves such a stage open (`CAPPED_EXIT`) and /pharn-loop stops S9b
 //                             (stop the agent, set its work aside, re-run); resuming a stage agent is not built.
+//                             RULE REMOVED 2026-11-12 (inline-fallback-stop; a decision of the orchestrating model
+//                             under the maintainer's delegation, citing the baseline below): /pharn-loop no longer
+//                             appends `--no-foreground-agent`, so a routed stage runs as a stage agent and is waited
+//                             out on disk whatever the Agent tool lists; `start` accepts and ignores the flag. WHY:
+//                             .dev/measurements/loop-baseline-2026-11-11.md §4 — 11 of 12 runs started in a main
+//                             session recorded `inline:no-foreground-agent` (37 stages), and the 8 that reached build
+//                             carried a median of 643k tokens per orchestrator request, against 267k for the 8 routed
+//                             runs started inside an agent that reached build. MEASURED: 7.1.2's six background
+//                             launches waited out (above); the baseline's 24 runs started inside an agent ran 66 stages
+//                             as `agent:<alias>` with no S9b stop — their orchestrator was itself a subagent. NOT
+//                             MEASURED: the wait in a MAIN session whose Agent tool lists no `run_in_background`, the
+//                             setting of those 11 runs (Claude Code 2.1.309 and 2.1.317; the client is not recorded).
+//                             Until it is, such a session that fails the wait stops S9b at a routed stage with no
+//                             inline fallback, the failure 6.73.2 had fixed. And an edited 6.73.2 `pharn-loop.md`
+//                             (the one version with the flag and no wait) kept through every update would now route
+//                             and could stop S9 on a background launch.
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
 //   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
@@ -376,7 +394,7 @@ export const INLINE_REMEDIES = Object.freeze({
   "resolve-failed": "run `node pharn/floor/check-model-config.mjs resolve <stage key>` by hand and read what it prints",
   "no-agent-tool": "allow the Agent tool in this session",
   "no-foreground-agent":
-    "run the command in a Claude Code session whose Agent tool takes `run_in_background` (Claude Code 2.1.309's terminal CLI did); as this session read its Agent tool, it takes no such parameter",
+    "none needed: no current start records this reason; a marker or ledger carrying it was written by an earlier version, whose /pharn-loop ran the stage inline when its Agent tool listed no background parameter",
   "route-unavailable": "run the route line by hand and read its refusal",
 });
 

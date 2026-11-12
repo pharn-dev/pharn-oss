@@ -1,0 +1,23 @@
+{
+  "feature": "inline-fallback-stop",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "9b0b9ff2eb26a03d58cf7c83ff14f57577c84ec61ec66311e4f13379cf3a1dac",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "ea6ccb6cbbd28299b1685488a6661bae3fa7ba59bf33e9f11066cee7fa8050b8"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}
