@@ -1,0 +1,26 @@
+{
+  "feature": "loop-baseline-2026-11-11",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "1f90521112302d902da7e8bfc11f7130e236b4287fc53933799bbdcdf2ba42bb",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "ad984a194d7ca3d4ee0b0fd35c8581ff111c5ef3edf1cc8c021ce518ca377b81"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
