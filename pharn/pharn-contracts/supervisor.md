@@ -101,7 +101,8 @@ At most once per run, and only in a full `/pharn-loop`. `pharn/floor/spec-amend.
 - Then the front runs again from `/pharn-plan`. The green commit names the added ids
   (`spec amended once on the supervisor's decision: added AC-7 — see pharn/features/<name>/SPEC.a1.md`), and
   `RUN-REPORT.md`'s `## SPEC amendment` lists their lines, fenced. Any non-zero exit in the branch is `/pharn-loop` S18
-  (`blocked: spec-amend-red`).
+  (`blocked: spec-amend-red`), except the re-run spec stage's `stage-agent.mjs finish` exit `6`, which is S9b
+  (`blocked: stage-outlived-wait`) as at every routed stage (7.10.1).
 - Refusals print codes and AC ids, never criterion or finding text.
 
 ## What holds, and what does not

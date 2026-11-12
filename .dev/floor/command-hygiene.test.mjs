@@ -2921,6 +2921,14 @@ test("✧ LOOP GRILL + TRIAGE: pharn-loop.md's front reads the grill stops, gril
     "the amend branch runs in order"
   );
   assert.match(amend, /\*\*Every other exit in this branch\*\*[\s\S]*→ \*\*S18\*\* \(`blocked: spec-amend-red`\)/);
+  // 7.10.1: the re-run spec stage's `finish` exit 6 is S9b, as at every routed stage — never S18.
+  assert.match(amend, /its `finish` read \(its exit `6` alone excepted: \*\*S9b\*\*[\s\S]*→ \*\*S18\*\*/);
+  // 7.10.1 (REVIEW finding 1): S18 replaces only S9's destination; the TaskStop before it still applies.
+  assert.match(
+    amend,
+    /On a `finish` exit `2` or a crash after a background-launch notice, stop the spec agent with TaskStop first,\s+as `## Running a stage`'s finish line says, then S18\./
+  );
+  assert.match(body, /^\| S18 .*the re-run spec stage \(`finish` exit 6: S9b\)/m);
   assert.match(amend, /Step 3's S6 and\s+S6b do not apply here/);
   assert.match(body, /`0` \(`proceed-at-risk`\) → go on: the entry gates, then the test stage\./);
   assert.match(body, /- `3` \(`replan`\) → \*\*a re-plan round \(7\.8\.0\)\*\*/);
@@ -6790,4 +6798,41 @@ test("✧ 7.10.0 (L65) — no command's writes: names an `.a1` amend name; only 
   // CONTROL (L60): an archive name spliced into /pharn-spec's real writes: line is caught.
   const mutant = commandBody("pharn-spec.md").replace(/^writes:.*$/m, (l) => l.replace(/\]\s*$/, ', "pharn/features/<name>/SPEC.a1.md"]'));
   assert.ok(writesEntries(mutant).some(isAmend), "the rule must catch a spliced archive name");
+});
+
+// ── 7.10.1 (loop-amend-exit6, L29/L36): every sentence that routes a `finish` read excepts its exit 6 (S9b) ──
+// The rule "exit 6 is S9b at every routed stage" is quantified over a set, so this ranges over the set: every
+// occurrence, in the three /pharn-loop files, of the two stems below must name `exit `6`` within the next 160
+// characters, whitespace folded (one correct sentence wraps "exit\n`6`"). Bound (P0): it collects these two stems
+// only; a sentence that routes a `finish` read in other words is not seen.
+const FINISH_READ_STEMS = Object.freeze(["`finish` printed", "its `finish` read"]);
+const LOOP_PART_FILES = Object.freeze([LOOP_FILE, "pharn-loop-quick.md", "pharn-loop-close.md"]);
+
+function finishReadSentences(text) {
+  const flat = String(text).replace(/\s+/g, " ");
+  const hits = [];
+  for (const stem of FINISH_READ_STEMS) {
+    for (let i = flat.indexOf(stem); i !== -1; i = flat.indexOf(stem, i + stem.length)) {
+      hits.push({ at: flat.slice(Math.max(0, i - 40), i + 80), excepted: flat.slice(i, i + 160).includes("exit `6`") });
+    }
+  }
+  return hits;
+}
+
+test("✧ 7.10.1 (L29, L36) — every `finish`-read routing sentence in the /pharn-loop files excepts exit 6 (S9b)", () => {
+  const hits = LOOP_PART_FILES.flatMap((f) => finishReadSentences(commandBody(f)).map((h) => ({ ...h, file: f })));
+  assert.ok(hits.length >= 6, `non-vacuity (L34): ${hits.length} routing sentence(s) found`);
+  assert.deepEqual(
+    hits.filter((h) => !h.excepted).map((h) => `${h.file}: …${h.at}…`),
+    []
+  );
+  // CONTROL (L60): the 7.10.0 amend sentence, spliced back in, is caught.
+  const body = commandBody(LOOP_FILE);
+  const fixed = /its `finish` read \(its exit `6` alone excepted: \*\*S9b\*\*, `## Running a stage` — stop the\s+agent with TaskStop\)/;
+  assert.match(body, fixed, "fixture sanity: the 7.10.1 sentence is present");
+  const mutant = body.replace(fixed, "its `finish` read");
+  assert.ok(
+    finishReadSentences(mutant).some((h) => !h.excepted),
+    "the rule must catch a `finish` read routed without the exit-6 exception"
+  );
 });
