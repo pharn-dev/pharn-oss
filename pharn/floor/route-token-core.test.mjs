@@ -28,7 +28,10 @@ const ALL_TOKENS = [...AGENT_MODELS.map((m) => `${AGENT_PREFIX}${m}`), ...INLINE
 
 test("L34 — both sets are non-empty and duplicate-free, so the rules below cannot pass vacuously", () => {
   assert.equal(AGENT_MODELS.length, 4, "the Agent tool's four aliases, read in Claude Code 2.1.281");
-  assert.equal(INLINE_REASONS.length, 11, "the ten inline reasons of the plan's Design §4 table, plus no-foreground-agent (6.73.2)");
+  assert.equal(INLINE_REASONS.length, 11, "the ten inline reasons of the plan's Design §4 table, plus the retired no-foreground-agent");
+  // inline-fallback-stop: no start records it now, but the markers and ledgers written before must still validate.
+  assert.ok(INLINE_REASONS.includes("no-foreground-agent"), "the retired reason stays a member");
+  assert.equal(isRouteToken("inline:no-foreground-agent"), true);
   assert.equal(new Set(AGENT_MODELS).size, AGENT_MODELS.length);
   assert.equal(new Set(INLINE_REASONS).size, INLINE_REASONS.length);
   assert.ok(Object.isFrozen(AGENT_MODELS) && Object.isFrozen(INLINE_REASONS), "the sets are frozen");

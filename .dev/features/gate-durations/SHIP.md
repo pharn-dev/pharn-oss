@@ -23,6 +23,12 @@ records that the chain ran and its floor verdicts. It is not a "shipped" claim, 
 9. `/pharn-dev-regress` (iteration 2) → `no-regressions` (base 5984 / head 5992 tests passed, `new_failures: []`).
 10. `/pharn-dev-verify` (iteration 2) → `PASS` (7 gates, each exit 0).
 11. Re-review of the change → GREEN, 0 floor-gate findings.
+12. `origin/main` moved to `c5552daa` (CORE-105, #438, released 7.11.0). It was merged into this branch (no
+    force-push), main's released `[7.11.0]` section kept byte for byte, and this increment renumbered to **7.12.0**:
+    `SKILLS_VERSION`, the README badge, the CHANGELOG heading, and the version strings in `gate-run-record.md`,
+    `cost-ledger.md` and the two guides (found by diffing the added lines against `origin/main`). The records above
+    (`PLAN.md`, `REVIEW.md`, steps 1–11) keep the number they were written with. `npm run check` and the three per-PR
+    gates were re-run on the merged tree.
 
 ## Decisions, and whose
 
@@ -56,7 +62,8 @@ deferred: none
 ## Follow-ups (named, not built)
 
 - Show the per-gate durations on the cost ledger's screen table and in `RUN-REPORT.md` (GATE-1 Q2).
-- The contracts and the CHANGELOG name 7.11.0; if a sibling PR takes that version first, renumber them (REVIEW minor).
+- The contracts and the CHANGELOG name the release (now 7.12.0); if a sibling PR takes it first, renumber again
+  (REVIEW minor).
 - `identityKey`'s `gate` branch is reached only by a direct call (REVIEW minor).
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is

@@ -243,7 +243,7 @@ satisfied by a variant spelling of any member; closure is what makes a variant f
 | every `requests[]` row                                              | a MEMBER of that recomputed window, and (`run-window/2`) its context one of `contexts`                                                                                                                       | FLOOR (ordering test + set membership)                                               |
 | `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                                                                                                                                                    | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6)                |
 | `executions`                                                        | (6.35.0) `{method, status, reason, rows}`, equal to `buildExecutions` recomputed from `markers[]` and `work[]`                                                                                               | FLOOR (recompute + equality, rule 9); what an interval MEANS **ADVISORY**            |
-| `work[]`                                                            | (6.35.0) `pharn-stage-work/1` or (7.11.0) `/2` records: closed keys, enums, `executed + reused + no_files = required`, `/2`'s `durations` exactly `executed` entries; each a MEMBER of the recomputed window | FLOOR (enum + integer compare, rule 9); that the record is true **ADVISORY**         |
+| `work[]`                                                            | (6.35.0) `pharn-stage-work/1` or (7.12.0) `/2` records: closed keys, enums, `executed + reused + no_files = required`, `/2`'s `durations` exactly `executed` entries; each a MEMBER of the recomputed window | FLOOR (enum + integer compare, rule 9); that the record is true **ADVISORY**         |
 
 **One row per request, and which of its transcript lines each value comes from (6.24.1).** `dedup_key` names
 the grouping. The platform writes one API request to the transcript as several lines, sometimes in more than one
@@ -1023,7 +1023,7 @@ record's one owner, whose header is its spec) from the stamp the verdict just us
 - verify: `gates` (`reconcile` included).
 - `install.ms` is `performance.now()` around the install process, integer milliseconds, carried through a budget
   `continue` by the progress record.
-- **Per-gate durations (`pharn-stage-work/2`, 7.11.0).** Every side object (`head`, `base`, `gates`) carries
+- **Per-gate durations (`pharn-stage-work/2`, 7.12.0).** Every side object (`head`, `base`, `gates`) carries
   `durations`: one `{seq, id, duration_ms}` per stamp run with `ran: true`, in run order, so its length is `executed`.
   `duration_ms` is the gate-run stamp's (`gate-run-record.md`, "Gate duration"), copied at `done` because the stamp is
   cleared at the next fresh start; it is `null` when the stamp carries none, never `0`. `id` is the stamp's gate id only
@@ -1055,7 +1055,7 @@ transcript-derived. A per-gate duration is an OBSERVATION by the gate runner —
 process start-up and teardown included, not CPU time, and under machine load a measure of the machine as much as the
 gate. What it still does not cover: the regress install (timed separately as `install.ms`), `/pharn-build`'s project
 gate and `/pharn-test`'s red run, neither of which writes a work row, and every gate of an execution that did not reach
-`done`. The residual `gate-process-duration` (named at 6.35.0: "no gate process is timed") is retired by 7.11.0.
+`done`. The residual `gate-process-duration` (named at 6.35.0: "no gate process is timed") is retired by 7.12.0.
 
 ## Entry gate observations (6.48.0)
 
@@ -1088,7 +1088,7 @@ Each process appends one line per lifecycle boundary it already has to `<pharn/.
   fresh `call`, wall-clock `ts` / `end_ts`, a monotonic `elapsed_ms`, the document's `status`, and `takeover` (the
   segment it ran, or null).
 - `abort`, one per `--abort` that read this invocation's runner record: `stopped`, `wrote_result`.
-- `gate` (7.11.0), one per gate a runner or takeover segment ran to completion, written after its `run --next`
+- `gate` (7.12.0), one per gate a runner or takeover segment ran to completion, written after its `run --next`
   returned: the `segment` that ran it, the gate `id` (a `stage-work.mjs ledgerGateId` member, never a command line),
   `ts` when written, and `duration_ms`, the runner's monotonic wall time for that process (`gate-run-record.md`, "Gate
   duration"). An interrupted gate records nothing and runs again, so only the run that completed writes one. A runner
@@ -1168,7 +1168,7 @@ invocation stays as it was recorded. An event whose session id matches no curren
 window member and stays out (a resumed session with a new id is the case). The file is never pruned. `pharn/.run/` is
 Bash-reachable (pharn/LIMITS.md §6): the checker certifies agreement between the facts and the view, never that the events
 describe what ran (L43); a self-consistent fabricated file passes. Per-gate durations are recorded as `gate` facts
-(7.11.0) and appear in no view; showing them on the screen table or in `RUN-REPORT.md` is not done yet.
+(7.12.0) and appear in no view; showing them on the screen table or in `RUN-REPORT.md` is not done yet.
 
 ## Size, disclosed rather than discovered
 

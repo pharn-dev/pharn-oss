@@ -1982,7 +1982,15 @@ function routedMarkers(stageStartTs = "2026-09-26T10:01:00.000Z", route = "agent
 
 test("normalizeMarkers: route is KEPT as a valid token, and DROPPED as anything else", () => {
   const base = { seq: 1, kind: "stage-start", stage: "pharn-plan", iteration: null, ts: "2026-01-01T00:00:00.000Z", session_id: null };
-  for (const good of ["agent:opus", "agent:sonnet", "inline:no-config", "inline:floor-only", "inline:route-unavailable"]) {
+  // inline:no-foreground-agent is retired (no start records it now) and still kept: markers written before carry it.
+  for (const good of [
+    "agent:opus",
+    "agent:sonnet",
+    "inline:no-config",
+    "inline:floor-only",
+    "inline:route-unavailable",
+    "inline:no-foreground-agent",
+  ]) {
     assert.equal(normalizeMarkers([{ ...base, route: good }])[0].route, good, good);
   }
   for (const bad of [

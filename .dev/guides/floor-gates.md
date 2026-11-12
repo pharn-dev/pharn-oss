@@ -74,7 +74,7 @@ come from the single code block this text was moved from, so the entry they name
 # moved the same way in 6.26.0, into pharn/floor/stage-verify.mjs, whose ★ WIRING test executes pharn-verify.md's
 # pinned line). Contract:
 # pharn/pharn-contracts/gate-run-record.md. Ships: bumps SKILLS_VERSION.
-# GATE DURATION (7.11.0, gate-durations): every run the runner SPAWNED records `duration_ms` — one performance.now()
+# GATE DURATION (7.12.0, gate-durations): every run the runner SPAWNED records `duration_ms` — one performance.now()
 # interval from just before the spawn to the settle; `run --next` prints it (null when nothing was spawned). A no-files or
 # reused run carries none and validateStamp refuses one that does. The kill timer re-arms until --timeout-ms has passed on
 # that clock, so a timed-out run lasts at least the timeout (tested behaviour, not floor). OBSERVATIONAL: outside the

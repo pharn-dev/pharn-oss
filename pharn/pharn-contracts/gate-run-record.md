@@ -93,7 +93,7 @@ initialize at all.
 | `runs[].results_sha256`  | Optional (6.15.0). The sha256 of the gate's results file, or `null`. See below.                                                   |
 | `runs[].identity_sha256` | Optional (6.34.0). The entry's execution identity (`gate-reuse-core.mjs`). See "Reused entries".                                  |
 | `runs[].reused`          | Only on a reused entry (6.34.0): `{stage, side, seq, stamp_sha256}` naming the source execution.                                  |
-| `runs[].duration_ms`     | Optional (7.11.0). The runner's monotonic wall time for a process it spawned; only on `ran: true`. See "Gate duration".           |
+| `runs[].duration_ms`     | Optional (7.12.0). The runner's monotonic wall time for a process it spawned; only on `ran: true`. See "Gate duration".           |
 | `excluded`               | Optional (6.36.0): `{declared_in, ids}` — the discovered gates the project's `gates.exclude` removed. See below.                  |
 
 ## Per-test results (`results_sha256`, 6.15.0)
@@ -119,7 +119,7 @@ The field is **optional and additive**. `SCHEMA` is unchanged: `validateStamp` c
 only by a forged or corrupted stamp, never by one the runner wrote. What the file means, and when it can be
 read, is `test-results-record.md`'s contract, not this one.
 
-## Gate duration (`duration_ms`, 7.11.0)
+## Gate duration (`duration_ms`, 7.12.0)
 
 `run-gates.mjs` reads `performance.now()` immediately before it spawns a gate and again when the gate settles (the
 child's `close`, or a spawn error), and records `duration_ms`, the floor of the difference in milliseconds, on every run

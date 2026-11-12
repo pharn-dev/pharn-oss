@@ -288,7 +288,7 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # stage-regress.mjs / stage-verify.mjs append one `pharn-stage-work/1` line to `pharn/.run/cost/<feature>/work.jsonl`
 # (pharn/floor/stage-work.mjs, the one owner), counted from the stamp the verdict used — executed / reused / no_files /
 # required, BASE `fresh|reused|entry` (6.49.0: `entry` = taken from this run's entry gates — executed 0, install null,
-# its work counted once, in the `entry` view), the install's exit and ms. Since 7.11.0 (gate-durations) the emitter writes
+# its work counted once, in the `entry` view), the install's exit and ms. Since 7.12.0 (gate-durations) the emitter writes
 # `pharn-stage-work/2`: each side adds `durations` [{seq, id, duration_ms}] per executed gate, copied from the stamp
 # (`id` only when stage-work.mjs ledgerGateId admits it, else null); `/1` lines are still read. Best-effort and OBSERVATIONAL (no
 # exit, verdict, reuse, route or commit reads it); only a `done` exit writes one. check-cost-ledger rule 9 validates
@@ -302,7 +302,7 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # wait calls (monotonic), interval UNIONS never sums, overlap with measured `executions` rows (placement, not a saving);
 # unknown is null, never 0; admission by the run window, so a line after run-stop stays out. check-cost-ledger RULE 10
 # validates the rows and recomputes the view; /2 now admits exactly THREE key sets. Contract: cost-ledger.md "Entry gate
-# observations". Best-effort and OBSERVATIONAL: nothing reads an event to decide anything. Since 7.11.0 the drain also
+# observations". Best-effort and OBSERVATIONAL: nothing reads an event to decide anything. Since 7.12.0 the drain also
 # appends one `gate` event per gate it ran (segment, id, duration_ms) — a FACT the view drops, so its method stays /1.
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
@@ -514,9 +514,11 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # after a `question`. Each prints its closed line, then the marker line (or `marker: not written` — a marker never fails
 # a run). C1's own pre-registered bar (orchestrator-role requests >= 20%) was met in 1 of 3 real runs; adopted at the
 # user's request and to take the route token out of shell lines. `--no-foreground-agent` (6.73.2, stage-agent-background-fix)
-# records inline:no-foreground-agent the same way: an Agent tool with no run_in_background parameter launches every agent
-# in the background, which /pharn-loop cannot wait for (ADVISORY: the model's reading of the tool's schema; residual
-# stage-agent-background in stage-agent-core.mjs). THE WAIT (6.74.0, stage-agent-background-wait): `finish --budget-ms
+# recorded inline:no-foreground-agent when the Agent tool listed no run_in_background parameter; RETIRED by
+# inline-fallback-stop: /pharn-loop no longer sends it (THE WAIT below covers a background launch), and `start` accepts
+# it at most once and IGNORES it (route decided without it, one stderr note, NO_FOREGROUND_AGENT_IGNORED), so older
+# command bytes still route; the token stays in INLINE_REASONS for records written before (residual
+# stage-agent-background in stage-agent-core.mjs states what is and is not measured). THE WAIT (6.74.0, stage-agent-background-wait): `finish --budget-ms
 # <B>` (B 1..570000) polls for the result inside node (POLL_MS 250, presence through the same lstat walk — a link or a
 # non-directory ends the wait and is refused), then consumes it as before; budget spent with no result → exit 5
 # (`waiting …`, `marker: deferred (waiting)`, no return marker); FINISH_WAIT_CAP_MS 3_600_000 from the stage's own
@@ -532,7 +534,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # pharn/.run/ state — a marker rewritten before each call lengthens the wait (named residual). Exit: start = route's 0/3 (2
 # refused, nothing written); finish = read's 0/2/3/4, plus 5 and 6 with --budget-ms. An inline-run stage closes with
 # `mark-phase.mjs --kind orchestrator` (the inline return line).
-node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool] [--no-foreground-agent]
+node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>] [--budget-ms <B>]
 ```
 
