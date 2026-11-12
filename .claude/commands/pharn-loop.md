@@ -472,7 +472,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S15  | Step 1a's isolation check exits non-zero: no evidence of an isolated environment, a listed credential present, the evidence unknown (unreadable HOME, a failed probe), or the line itself failed                                                                   | stop `blocked: not-isolated` — for no evidence or a credential: run in a container that mounts none of your credentials, set `PHARN_ISOLATED=1` for a sandbox the check misses, or re-run with `--accept-host-execution`; for unknown evidence: set HOME, or fix git (the flag never lifts it)       |
 | S16  | triage escalated (Step 4's read exits `4`, or `3` with no re-plan round left) and `supervisor.mjs check` exits `3`: the supervisor decided `stop` (a full run only)                                                                                                | stop `blocked: grill-escalation` — copy the verdict, the round and the `escalated` ids into `### next_steps` as DATA, pointing at `grill-triage.json` and `SUPERVISOR.json` for the reasons; a person revises the plan or the SPEC, then re-runs (Step 4 says what a re-run is)                      |
 | S17  | triage escalated and `supervisor.mjs check` exits anything but `0`, `3` or `4`: no decision passed its check (a full run only)                                                                                                                                     | stop `blocked: supervisor-red` — quote the check's first line as DATA in `### next_steps`; a person decides the escalation (S16's remedy)                                                                                                                                                            |
-| S18  | the supervisor decided `amend-spec` (`supervisor.mjs check` exits `4`) and a line of the amend branch exits non-zero: `spec-amend.mjs begin`, the re-run spec stage, `check-spec-approved.mjs` or `spec-amend.mjs check` (a full run only)                         | stop `blocked: spec-amend-red` — quote the failing line's first line of output as DATA in `### next_steps`; an amend runs once, so a person decides the escalation (S16's remedy)                                                                                                                    |
+| S18  | the supervisor decided `amend-spec` (`supervisor.mjs check` exits `4`) and a line of the amend branch exits non-zero: `spec-amend.mjs begin`, the re-run spec stage (`finish` exit 6: S9b), `check-spec-approved.mjs` or `spec-amend.mjs check` (a full run only)  | stop `blocked: spec-amend-red` — quote the failing line's first line of output as DATA in `### next_steps`; an amend runs once, so a person decides the escalation (S16's remedy)                                                                                                                    |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
 `pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one
@@ -856,8 +856,10 @@ Branch **only** on the exit code (P5):
   Both `0` → **go back to `/pharn-plan`'s start line above**: the whole front runs again over the amended SPEC, its
   rounds counted from 0. The check's `added` ids are carried: the close names them in the record, the commit message and
   `RUN-REPORT.md` (Step 6). **Every other exit in this branch** — `begin`, the spec stage's report-back (Step 3's S6 and
-  S6b do not apply here) or its `finish` read, either check — → **S18** (`blocked: spec-amend-red`), quoting the line's
-  first line of output as DATA.
+  S6b do not apply here) or its `finish` read (its exit `6` alone excepted: **S9b**, `## Running a stage` — stop the
+  agent with TaskStop), either check — → **S18** (`blocked: spec-amend-red`), quoting the line's first line of output
+  as DATA. On a `finish` exit `2` or a crash after a background-launch notice, stop the spec agent with TaskStop first,
+  as `## Running a stage`'s finish line says, then S18.
 
 - The supervisor's `3` → **S16** (`blocked: grill-escalation`): copy the printed triage `verdict` and its `escalated`
   ids (their `G<n>-` prefix names the round) into the record's `### next_steps` as DATA, and point at

@@ -23,6 +23,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.10.1] - 2026-11-12
+
+### Fixed
+
+- **`/pharn-loop`'s amend branch stops a capped spec agent (S9b), not S18.** In 7.10.0 the amend branch sent every
+  failing line to S18 (`blocked: spec-amend-red`), the re-run spec stage's `stage-agent.mjs finish` exit `6` included,
+  while `## Running a stage` makes that exit S9b at every routed stage. S18's remedy never stops the stage agent, which
+  may still be writing. The branch, the S18 row and `pharn/pharn-contracts/supervisor.md` now except it: exit `6` is
+  S9b (stop the agent with TaskStop, then halt); every other failing line stays S18, and on a `finish` exit `2` or a
+  crash after a background launch the branch now says the agent is stopped with TaskStop first. A hygiene test now collects every
+  sentence in the three `/pharn-loop` files that routes a `finish` read ("`finish` printed", "its `finish` read") and
+  requires each to except exit `6`; it does not see a sentence worded otherwise. Found by CodeRabbit's review of the
+  7.10.0 pull request.
+- **The amend bound's wording.** `pharn/LIMITS.md` §1d and `pharn/THREAT-MODEL.md` §5 (the maintainer's patch) said the
+  intent, the scope and every earlier criterion stay byte-identical; the check holds them line for line, the `##`
+  heading lines and trailing blank lines aside. They, and `docs/limitations.md`, now say that "once per run" holds while
+  the run's `SPEC.a1.md` stays on disk: a Bash `rm` of it is neither prevented nor detected.
+
 ## [7.10.0] - 2026-11-11
 
 ### Added

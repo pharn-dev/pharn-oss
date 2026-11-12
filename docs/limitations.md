@@ -189,7 +189,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   more plan, grill and triage rounds, and since 7.9.0 an escalation costs one supervisor agent, whose
   `proceed-at-risk` decision is a model's and carries the escalated findings into the commit as KNOWN RISK; since
   7.10.0 its `amend-spec` decision costs one more spec agent and a second whole front — up to six plans, grills and
-  triages and two supervisors per run — and the criteria it adds are written and approved by a model, named in the
+  triages and two supervisors per run; it is refused once the run's `SPEC.a1.md` exists, so "once per run" holds only
+  while that file stays on disk — and the criteria it adds are written and approved by a model, named in the
   commit but not checked for being right). There is no automatic proportionality — nothing measures whether a change is "small" — the flag is a person's choice (under
   `/pharn-loop --quick` the model then writes and approves the quick SPEC), and a change too large for it stops (S6c,
   under `/pharn-loop --quick`) or takes the full pipeline.
