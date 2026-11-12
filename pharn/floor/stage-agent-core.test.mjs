@@ -210,11 +210,14 @@ test("INLINE_REMEDIES names a remedy for EVERY inline reason, and for nothing el
   for (const [r, text] of Object.entries(INLINE_REMEDIES)) assert.ok(typeof text === "string" && text.length > 10, `${r} has a remedy`);
 });
 
-test("no-foreground-agent's remedy is reachable from THAT reason — never no-agent-tool's (L27, 6.73.2)", () => {
-  // The Agent tool IS present in this case, so "allow the Agent tool" could not help; the remedy names the parameter.
-  assert.match(INLINE_REMEDIES["no-foreground-agent"], /run_in_background/);
+test("no-foreground-agent is RETIRED (inline-fallback-stop): its remedy names no action, and no-agent-tool's is unchanged (L27)", () => {
+  // No current start records the reason, so its remedy must not send the reader to another session (the advice that
+  // made sense only while the flag decided); it says where such a record comes from.
+  assert.match(INLINE_REMEDIES["no-foreground-agent"], /^none needed: /);
+  assert.match(INLINE_REMEDIES["no-foreground-agent"], /earlier version/);
+  assert.doesNotMatch(INLINE_REMEDIES["no-foreground-agent"], /run_in_background|session whose Agent tool/);
   assert.doesNotMatch(INLINE_REMEDIES["no-foreground-agent"], /allow the Agent tool/);
-  assert.doesNotMatch(INLINE_REMEDIES["no-agent-tool"], /run_in_background/);
+  assert.equal(INLINE_REMEDIES["no-agent-tool"], "allow the Agent tool in this session");
 });
 
 // ── decideRoute — the truth table ─────────────────────────────────────────────────────────────────────

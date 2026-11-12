@@ -511,9 +511,11 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # after a `question`. Each prints its closed line, then the marker line (or `marker: not written` — a marker never fails
 # a run). C1's own pre-registered bar (orchestrator-role requests >= 20%) was met in 1 of 3 real runs; adopted at the
 # user's request and to take the route token out of shell lines. `--no-foreground-agent` (6.73.2, stage-agent-background-fix)
-# records inline:no-foreground-agent the same way: an Agent tool with no run_in_background parameter launches every agent
-# in the background, which /pharn-loop cannot wait for (ADVISORY: the model's reading of the tool's schema; residual
-# stage-agent-background in stage-agent-core.mjs). THE WAIT (6.74.0, stage-agent-background-wait): `finish --budget-ms
+# recorded inline:no-foreground-agent when the Agent tool listed no run_in_background parameter; RETIRED by
+# inline-fallback-stop: /pharn-loop no longer sends it (THE WAIT below covers a background launch), and `start` accepts
+# it at most once and IGNORES it (route decided without it, one stderr note, NO_FOREGROUND_AGENT_IGNORED), so older
+# command bytes still route; the token stays in INLINE_REASONS for records written before (residual
+# stage-agent-background in stage-agent-core.mjs states what is and is not measured). THE WAIT (6.74.0, stage-agent-background-wait): `finish --budget-ms
 # <B>` (B 1..570000) polls for the result inside node (POLL_MS 250, presence through the same lstat walk — a link or a
 # non-directory ends the wait and is refused), then consumes it as before; budget spent with no result → exit 5
 # (`waiting …`, `marker: deferred (waiting)`, no return marker); FINISH_WAIT_CAP_MS 3_600_000 from the stage's own
@@ -529,7 +531,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # pharn/.run/ state — a marker rewritten before each call lengthens the wait (named residual). Exit: start = route's 0/3 (2
 # refused, nothing written); finish = read's 0/2/3/4, plus 5 and 6 with --budget-ms. An inline-run stage closes with
 # `mark-phase.mjs --kind orchestrator` (the inline return line).
-node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool] [--no-foreground-agent]
+node pharn/floor/stage-agent.mjs start --command <c> --stage <stage> --name '<name>' [--iteration <N>] [--mode quick] [--no-agent-tool]
 node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <stage> [--iteration <N>] [--budget-ms <B>]
 ```
 
