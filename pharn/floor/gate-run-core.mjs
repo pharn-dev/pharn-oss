@@ -1079,6 +1079,15 @@ export function validateStamp(stamp, expect = {}) {
     if (Object.hasOwn(r, "identity_sha256") && !(isCleanToken(r.identity_sha256, 64) && HEX64_RE.test(r.identity_sha256))) {
       return err("stamp-malformed", `stamp.runs[${i}].identity_sha256 must be a sha256 hex digest`);
     }
+    // OPTIONAL and additive (gate-durations): the runner's monotonic wall time for a process it SPAWNED (run-gates.mjs,
+    // GATE DURATION). An observation, read by no verdict, reuse decision or route; present only on a `ran: true` run,
+    // so a `no-files` or reused run that carries it is malformed. Fixed text: the value is never quoted (L62).
+    if (Object.hasOwn(r, "duration_ms")) {
+      if (r.ran !== true) return err("stamp-malformed", `stamp.runs[${i}].duration_ms is recorded only on a run with ran: true`);
+      if (!Number.isSafeInteger(r.duration_ms) || r.duration_ms < 0) {
+        return err("stamp-malformed", `stamp.runs[${i}].duration_ms must be a non-negative integer`);
+      }
+    }
     // A REUSED entry (6.34.0) — its whole shape, before the not-run rule below admits it.
     if (r.reason === REUSED_REASON || Object.hasOwn(r, "reused")) {
       const bad = reusedRunDefect(stamp, r);

@@ -22,6 +22,14 @@
 //   wait           one `--wait` call, after its document is printed: `call` a fresh id, `ts`/`end_ts` wall clock,
 //                  `elapsed_ms` monotonic, `status` its document's status, `takeover` the segment it ran (or null).
 //   abort          one `--abort` call that read this invocation's runner record: `stopped`, `wrote_result`.
+//   gate           (gate-durations) one gate a runner or takeover segment ran to completion, written after its
+//                  `run-gates.mjs run --next` returned: `segment`, `id` (a `stage-work.mjs ledgerGateId` value — a gate
+//                  name, never a command line), `ts` when written, `duration_ms` the runner's monotonic wall time for
+//                  that process (gate-run-record.md, "Gate duration"). An interrupted gate records nothing and runs
+//                  again, so only the run that completed writes one. A FACT only: the view below drops every `gate`
+//                  event before it groups anything, so no view rule changes and its method stays `entry-observations/1`.
+//                  Added under the same schema — no existing event's keys or meaning change; a reader older than it
+//                  refuses the line as an unknown event and drops it into `dropped[]`.
 // Every event carries the invocation's `nonce` (`entry-gates.mjs` creates it at `--start`) and the session id from the
 // environment (an identity token or null). Nothing else: no gate output, argv, environment value, prompt or path.
 //
@@ -72,7 +80,7 @@ import { isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 import { currentRunMarkers, isMember, runWindow, tsMs } from "./run-window-core.mjs";
 import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { STATUSES as WAIT_STATUSES } from "./entry-gates-core.mjs";
-import { appendJsonLine, readJsonLines, MAX_GATES } from "./stage-work.mjs";
+import { appendJsonLine, readJsonLines, ledgerGateId, MAX_GATES } from "./stage-work.mjs";
 
 export const OBS_SCHEMA = "pharn-entry-observation/1";
 /** The file, under `<DEFAULT_BASE>/<feature>/`, beside `markers.jsonl` and `work.jsonl`. Never wiped by `--start`. */
@@ -80,7 +88,9 @@ export const ENTRY_FILE = "entry.jsonl";
 /** The view's method name. Versioned: a change to a rule below is a new method. */
 export const ENTRY_VIEW_METHOD = "entry-observations/1";
 
-export const EVENT_KINDS = Object.freeze(["start", "segment-begin", "segment-end", "wait", "abort"]);
+export const EVENT_KINDS = Object.freeze(["start", "segment-begin", "segment-end", "wait", "abort", "gate"]);
+/** The one event kind the view does not read (header: a fact only). */
+export const FACT_ONLY_EVENTS = Object.freeze(["gate"]);
 export const START_OUTCOMES = Object.freeze(["started", "no-gates", "init-refused", "spawn-failed"]);
 export const SEGMENT_KINDS = Object.freeze(["runner", "takeover"]);
 export const SEGMENT_ENDS = Object.freeze(["done", "refused", "crashed", "budget"]);
@@ -94,6 +104,7 @@ const KEYS = Object.freeze({
   "segment-end": ["schema", "event", "nonce", "segment", "kind", "ts", "elapsed_ms", "end", "gates", "session_id"],
   wait: ["schema", "event", "nonce", "call", "ts", "end_ts", "elapsed_ms", "status", "takeover", "session_id"],
   abort: ["schema", "event", "nonce", "call", "ts", "stopped", "wrote_result", "session_id"],
+  gate: ["schema", "event", "nonce", "segment", "id", "ts", "duration_ms", "session_id"],
 });
 export const EVENT_KEYS = Object.freeze(Object.fromEntries(Object.entries(KEYS).map(([k, v]) => [k, Object.freeze([...v])])));
 
@@ -183,6 +194,11 @@ export function validateEntryEvent(e) {
       if (!WAIT_STATUSES.includes(e.status)) return bad("status");
       if (e.takeover !== null && (typeof e.takeover !== "string" || !ID16_RE.test(e.takeover))) return bad("takeover");
       return { ok: true };
+    case "gate":
+      if (typeof e.segment !== "string" || !ID16_RE.test(e.segment)) return bad("segment");
+      if (ledgerGateId(e.id) !== e.id || e.id === null) return bad("id");
+      if (!isElapsed(e.duration_ms)) return bad("duration_ms");
+      return { ok: true };
     default: // abort
       if (typeof e.call !== "string" || !ID16_RE.test(e.call)) return bad("call");
       if (typeof e.stopped !== "boolean" || typeof e.wrote_result !== "boolean") return bad("stopped/wrote_result");
@@ -190,10 +206,12 @@ export function validateEntryEvent(e) {
   }
 }
 
-/** The identity key of a VALID event (see the header). */
+/** The identity key of a VALID event (see the header). A `gate` event's key decides nothing today — the view drops gate
+ *  events and the checker's duplicate rule is exact-canonical — and is defined so the function stays total. */
 export function identityKey(e) {
   if (e.event === "start") return `${e.nonce}|start`;
   if (e.event === "segment-begin" || e.event === "segment-end") return `${e.nonce}|${e.event}|${e.segment}`;
+  if (e.event === "gate") return `${e.nonce}|gate|${e.id}`;
   return `${e.nonce}|${e.event}|${e.call}`;
 }
 
@@ -462,7 +480,8 @@ export function buildEntryView(markers, events = [], executions = null) {
   const current = currentRunMarkers(markers) ?? [];
   const runStart = current[0];
   const run = { seq: runStart.seq, ts: runStart.ts };
-  const list = (Array.isArray(events) ? events : []).filter((e) => validateEntryEvent(e).ok);
+  // A fact-only event (`gate`) is dropped first, so the view over every other event is exactly what it was before.
+  const list = (Array.isArray(events) ? events : []).filter((e) => validateEntryEvent(e).ok && !FACT_ONLY_EVENTS.includes(e.event));
 
   // Identity groups: exact duplicates collapse; distinct contents under one key are a conflict.
   const groups = new Map();

@@ -288,7 +288,9 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # stage-regress.mjs / stage-verify.mjs append one `pharn-stage-work/1` line to `pharn/.run/cost/<feature>/work.jsonl`
 # (pharn/floor/stage-work.mjs, the one owner), counted from the stamp the verdict used — executed / reused / no_files /
 # required, BASE `fresh|reused|entry` (6.49.0: `entry` = taken from this run's entry gates — executed 0, install null,
-# its work counted once, in the `entry` view), the install's exit and ms (the ONE new timer). Best-effort and OBSERVATIONAL (no
+# its work counted once, in the `entry` view), the install's exit and ms. Since 7.12.0 (gate-durations) the emitter writes
+# `pharn-stage-work/2`: each side adds `durations` [{seq, id, duration_ms}] per executed gate, copied from the stamp
+# (`id` only when stage-work.mjs ledgerGateId admits it, else null); `/1` lines are still read. Best-effort and OBSERVATIONAL (no
 # exit, verdict, reuse, route or commit reads it); only a `done` exit writes one. check-cost-ledger rule 9 validates
 # the rows and recomputes `executions`; /2 admits exactly the current key set or the pre-6.35.0 one. Contract:
 # cost-ledger.md "Stage executions and deterministic work".
@@ -300,7 +302,8 @@ node pharn/floor/ship-closeout.mjs --feature <name>
 # wait calls (monotonic), interval UNIONS never sums, overlap with measured `executions` rows (placement, not a saving);
 # unknown is null, never 0; admission by the run window, so a line after run-stop stays out. check-cost-ledger RULE 10
 # validates the rows and recomputes the view; /2 now admits exactly THREE key sets. Contract: cost-ledger.md "Entry gate
-# observations". Best-effort and OBSERVATIONAL: nothing reads an event to decide anything.
+# observations". Best-effort and OBSERVATIONAL: nothing reads an event to decide anything. Since 7.12.0 the drain also
+# appends one `gate` event per gate it ran (segment, id, duration_ms) — a FACT the view drops, so its method stays /1.
 # Exit: mark-phase 0 ok · 2 bad usage (nothing written) | render 0 (incl. an honest `unavailable`) · 2 bad
 # usage | check 0 GREEN (WARNs possible) · 1 RED · 2 unusable input.
 node pharn/floor/mark-phase.mjs --name <slug> --kind <run-start|stage-start|orchestrator|run-stop> [--stage <s>] [--iteration <n>] [--base <dir>] [--mode <m>] [--route <token>]

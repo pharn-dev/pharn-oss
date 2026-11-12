@@ -10,12 +10,19 @@
 // ledger is emitted. The stage script therefore appends ONE compact line at its `done` exit, derived from the evidence
 // it just finished with, to `<pharn/.run/cost>/<feature>/work.jsonl` — beside the markers the ledger already reads.
 //
-// ── WHAT A RECORD SAYS (schema `pharn-stage-work/1`) ─────────────────────────────────────────────────────────────
+// ── WHAT A RECORD SAYS (schema `pharn-stage-work/2`; `/1` is still READ) ─────────────────────────────────────────
 //   {"schema","stage":"pharn-regress","ts","session_id",
-//    "head":{"required","executed","reused","no_files"},
-//    "base":{"evidence":"fresh"|"reused"|"entry","miss","required","executed","reused","no_files"},
+//    "head":{"required","executed","reused","no_files","durations"},
+//    "base":{"evidence":"fresh"|"reused"|"entry","miss","required","executed","reused","no_files","durations"},
 //    "install":null | {"exit","timed_out","ms"}}
-//   {"schema","stage":"pharn-verify","ts","session_id","gates":{"required","executed","reused","no_files"}}
+//   {"schema","stage":"pharn-verify","ts","session_id","gates":{"required","executed","reused","no_files","durations"}}
+// `durations` (gate-durations) lists, in run order, one `{seq, id, duration_ms}` per stamp run with `ran: true` — so its
+// length is `executed`, and a BASE whose evidence is `reused` or `entry` has `[]` (those processes ran elsewhere).
+// `seq` is the stamp's; `id` the stamp id when `ledgerGateId` admits it (a member of ALLOWLIST or RESERVED_IDS, or
+// `structural:` + an identity token), else null — a `--gates` id defaults to its COMMAND, which must not reach a
+// committed ledger; `duration_ms` the stamp's (run-gates.mjs, GATE DURATION), else null: unknown is never zero.
+// The emitter writes `/2` only. `work.jsonl` is never pruned, so `validateWork` admits EXACTLY two closed shapes, by
+// `schema`: `/1` (no `durations`) and `/2`. A reader older than `/2` drops a `/2` line into `dropped[]`.
 // Counts come from a gate-run stamp's `runs[]` (`countRuns`): `executed` = entries with `ran: true` (a process ran),
 // `reused` = `reason: "reused"` (a VERIFY result taken from the REGRESS/HEAD execution), `no_files` = `reason:
 // "no-files"` (nothing to run), `required` = every entry. For a BASE HIT the base stamp is the earlier execution's, so
@@ -35,7 +42,8 @@
 //   crashed or `continue` exit writes none, so gates a stage ran before refusing are NOT recorded); that the file
 //   was not edited afterwards (`pharn/.run/` is Bash-reachable, pharn/LIMITS.md §6 — agreement, never provenance, [[L43]]).
 //   `install.ms` is ONE `performance.now()` interval around the install process, integer milliseconds — monotonic
-//   within that one process, and nothing more; a killed-and-resumed install records the run that completed.
+//   within that one process, and nothing more; a killed-and-resumed install records the run that completed. A
+//   `durations` value is the runner's observation copied from the stamp, with the same bound (gate-run-record.md).
 // OBSERVATIONAL ONLY: nothing reads a record to decide a verdict, an exit, a reuse, a route or a commit. The append is
 //   best-effort — `appendWork` never throws; a stage whose append fails prints one note and exits exactly as before.
 
@@ -44,10 +52,14 @@ import { join } from "node:path";
 import { DEFAULT_BASE, cleanScalar } from "./mark-phase.mjs";
 import { isIdentityToken, isTokenCount } from "./cost-value-core.mjs";
 import { tsMs } from "./run-window-core.mjs";
-import { FEATURE_SLUG_RE, REUSED_REASON } from "./gate-run-core.mjs";
+import { ALLOWLIST, FEATURE_SLUG_RE, RESERVED_IDS, REUSED_REASON, STRUCTURAL_PREFIX } from "./gate-run-core.mjs";
 import { BASE_REUSE_MISSES } from "./stage-regress-core.mjs";
 
-export const WORK_SCHEMA = "pharn-stage-work/1";
+/** The schema the emitter writes. */
+export const WORK_SCHEMA = "pharn-stage-work/2";
+/** The schema written before per-gate durations; still READ (`work.jsonl` is never pruned). */
+export const WORK_SCHEMA_V1 = "pharn-stage-work/1";
+export const WORK_SCHEMAS = Object.freeze([WORK_SCHEMA_V1, WORK_SCHEMA]);
 /** The file, under `<DEFAULT_BASE>/<feature>/`, beside `markers.jsonl`. */
 export const WORK_FILE = "work.jsonl";
 /** The two stage labels a record may carry — the `--stage` labels the orchestrators mark these stages with. */
@@ -58,6 +70,9 @@ export const BASE_EVIDENCE = Object.freeze(["fresh", "reused", "entry"]);
 
 export const SIDE_KEYS = Object.freeze(["required", "executed", "reused", "no_files"]);
 export const BASE_KEYS = Object.freeze(["evidence", "miss", ...SIDE_KEYS]);
+/** `/2` adds exactly one key to every side object. */
+export const DURATIONS_KEY = "durations";
+export const DURATION_KEYS = Object.freeze(["seq", "id", "duration_ms"]);
 export const INSTALL_KEYS = Object.freeze(["exit", "timed_out", "ms"]);
 export const REGRESS_KEYS = Object.freeze(["schema", "stage", "ts", "session_id", "head", "base", "install"]);
 export const VERIFY_KEYS = Object.freeze(["schema", "stage", "ts", "session_id", "gates"]);
@@ -92,6 +107,29 @@ export function countRuns(stamp) {
   return { required: stamp.runs.length, executed, reused, no_files: noFiles };
 }
 
+/** The gate id a ledger may carry: a member of ALLOWLIST or RESERVED_IDS, or `structural:` followed by an identity
+ *  token (a relative eval path), else null. A membership test (P5), not a shape test: a `--gates` id defaults to its
+ *  command line, and a command line must not reach a committed `cost.json`. TOTAL over any value. */
+export function ledgerGateId(id) {
+  if (typeof id !== "string") return null;
+  if (ALLOWLIST.includes(id) || RESERVED_IDS.includes(id)) return id;
+  // The path after the prefix is tested on its own as well: the absolute-path pattern anchors at a delimiter, and `:`
+  // is not one, so `structural:/Users/…` passes a test of the whole id.
+  const rest = id.startsWith(STRUCTURAL_PREFIX) ? id.slice(STRUCTURAL_PREFIX.length) : "";
+  return isIdentityToken(rest) && isIdentityToken(id) ? id : null;
+}
+
+/** `[{seq, id, duration_ms}]` for every run of a COUNTABLE stamp with `ran: true`, in run order — one per `executed`.
+ *  `seq` is the run's position (which `validateStamp` requires the stamp's own `seq` to equal); `duration_ms` is null
+ *  when the run carries none. */
+export function gateDurations(stamp) {
+  const out = [];
+  stamp.runs.forEach((r, seq) => {
+    if (r.ran === true) out.push({ seq, id: ledgerGateId(r.id), duration_ms: isTokenCount(r.duration_ms) ? r.duration_ms : null });
+  });
+  return out;
+}
+
 /** The regress record, from the finished HEAD and BASE stamps and the stage's final reuse decision. Null when a stamp
  *  cannot be counted. `baseReuse` is `{reused, miss}`; `installResult` is null or `{exit, timedOut, ms?}`. TOTAL: it
  *  never throws (a stage script evaluates it before its `done` exit, which must not depend on it). */
@@ -114,7 +152,7 @@ function regressWorkUnsafe({ headStamp, baseStamp, baseReuse, entryUsed = false,
     stage: REGRESS_STAGE,
     ts,
     session_id: sessionOrNull(sessionId),
-    head,
+    head: { ...head, durations: gateDurations(headStamp) },
     base: reused
       ? {
           evidence: "reused",
@@ -123,6 +161,7 @@ function regressWorkUnsafe({ headStamp, baseStamp, baseReuse, entryUsed = false,
           executed: 0,
           reused: base.required - base.no_files,
           no_files: base.no_files,
+          durations: [],
         }
       : fromEntry
         ? {
@@ -132,8 +171,9 @@ function regressWorkUnsafe({ headStamp, baseStamp, baseReuse, entryUsed = false,
             executed: 0,
             reused: base.required - base.no_files,
             no_files: base.no_files,
+            durations: [],
           }
-        : { evidence: "fresh", miss: baseReuse.miss ?? null, ...base },
+        : { evidence: "fresh", miss: baseReuse.miss ?? null, ...base, durations: gateDurations(baseStamp) },
     install:
       reused || fromEntry || installResult === null || installResult === undefined
         ? null
@@ -152,7 +192,13 @@ export function verifyWork(input) {
     const { stamp, ts, sessionId = null } = input;
     const gates = countRuns(stamp);
     if (gates === null) return null;
-    const rec = { schema: WORK_SCHEMA, stage: VERIFY_STAGE, ts, session_id: sessionOrNull(sessionId), gates };
+    const rec = {
+      schema: WORK_SCHEMA,
+      stage: VERIFY_STAGE,
+      ts,
+      session_id: sessionOrNull(sessionId),
+      gates: { ...gates, durations: gateDurations(stamp) },
+    };
     return validateWork(rec).ok ? rec : null;
   } catch {
     return null;
@@ -168,6 +214,23 @@ function sideDefect(s, path) {
   return null;
 }
 
+/** Why a `/2` side's `durations` is not the list `gateDurations` writes, or null: an array of exactly `executed` entries,
+ *  each exactly {seq, id, duration_ms}; `seq` a count below `required`, strictly increasing; `id` a `ledgerGateId` value
+ *  or null; `duration_ms` a count or null. Fixed text — no value is quoted ([[L62]]). */
+function durationsDefect(s, path) {
+  const d = s[DURATIONS_KEY];
+  if (!Array.isArray(d) || d.length !== s.executed) return `${path}.durations is not a list of exactly \`executed\` entries`;
+  let last = -1;
+  for (const e of d) {
+    if (!isPlain(e) || !exactKeys(e, DURATION_KEYS)) return `${path}.durations holds an entry without its closed key set`;
+    if (!isTokenCount(e.seq) || e.seq <= last || e.seq >= s.required) return `${path}.durations holds a seq out of order or range`;
+    last = e.seq;
+    if (e.id !== null && ledgerGateId(e.id) !== e.id) return `${path}.durations holds an id a ledger may not carry`;
+    if (e.duration_ms !== null && !isTokenCount(e.duration_ms)) return `${path}.durations holds a duration_ms that is not a count`;
+  }
+  return null;
+}
+
 /**
  * Validate one record. Total over any parsed JSON value ([[L62]]): every value is type-tested before it is read as
  * anything, and no refusal quotes the value. Returns `{ok: true}` or `{ok: false, reason}`.
@@ -175,20 +238,27 @@ function sideDefect(s, path) {
 export function validateWork(rec) {
   const bad = (reason) => ({ ok: false, reason });
   if (!isPlain(rec)) return bad("not an object");
-  if (rec.schema !== WORK_SCHEMA) return bad("schema");
+  if (!WORK_SCHEMAS.includes(rec.schema)) return bad("schema");
   if (!WORK_STAGES.includes(rec.stage)) return bad("stage");
   if (!exactKeys(rec, rec.stage === REGRESS_STAGE ? REGRESS_KEYS : VERIFY_KEYS)) return bad("key set");
   if (!cleanScalar(rec.ts, 64) || tsMs(rec.ts) === null) return bad("ts");
   if (rec.session_id !== null && !isIdentityToken(rec.session_id)) return bad("session_id");
+  // Every side's key set is closed — `/1`'s without `durations`, `/2`'s with it. (Until `/2` only the BASE side was
+  // tested for its exact keys, so a `/1` line could carry an extra key on `head` or `gates`; no writer ever wrote one.)
+  const v2 = rec.schema === WORK_SCHEMA;
+  const side = (s, path, keys) => {
+    if (!(isPlain(s) && exactKeys(s, v2 ? [...keys, DURATIONS_KEY] : keys))) return `${path} key set`;
+    return sideDefect(s, path) ?? (v2 ? durationsDefect(s, path) : null);
+  };
   if (rec.stage === VERIFY_STAGE) {
-    const d = sideDefect(rec.gates, "gates");
+    const d = side(rec.gates, "gates", SIDE_KEYS);
     return d === null ? { ok: true } : bad(d);
   }
-  const h = sideDefect(rec.head, "head");
+  const h = side(rec.head, "head", SIDE_KEYS);
   if (h !== null) return bad(h);
   const b = rec.base;
-  if (!isPlain(b) || !exactKeys(b, BASE_KEYS)) return bad("base key set");
-  const bd = sideDefect(b, "base");
+  if (!isPlain(b) || !exactKeys(b, v2 ? [...BASE_KEYS, DURATIONS_KEY] : BASE_KEYS)) return bad("base key set");
+  const bd = side(b, "base", BASE_KEYS);
   if (bd !== null) return bad(bd);
   if (!BASE_EVIDENCE.includes(b.evidence)) return bad("base.evidence");
   if (b.evidence === "reused") {

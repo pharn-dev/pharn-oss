@@ -1381,8 +1381,26 @@ test("OBSERVED: finished before the first wait — start bound to THIS run-start
     const end = ev.find((e) => e.event === "segment-end");
     assert.deepEqual([end.kind, end.end, end.gates], ["runner", "done", 3]);
     assert.ok(Number.isInteger(end.elapsed_ms) && end.elapsed_ms >= 0);
+    // gate-durations (L84, realistic input): one `gate` fact per gate the runner ran, named by its segment, each an
+    // integer duration — and the stamp the runner finalized carries the same value on the same gate.
+    const gateEvents = ev.filter((e) => e.event === "gate");
+    assert.deepEqual(gateEvents.map((e) => e.id).sort(), ["build", "lint", "test"]);
+    const stampRuns = JSON.parse(readFileSync(join(dir, ENTRY_PATHS.stamp), "utf8")).runs;
+    for (const g of gateEvents) {
+      assert.equal(g.segment, end.segment, `${g.id}: the runner's own segment`);
+      assert.ok(Number.isSafeInteger(g.duration_ms) && g.duration_ms >= 0, g.id);
+      assert.equal(stampRuns.find((r) => r.id === g.id).duration_ms, g.duration_ms, `${g.id}: the stamp's value`);
+    }
     const led = ledgerOf(dir);
     assert.deepEqual(checkLedger(led).reds, []);
+    assert.deepEqual(
+      led.entry_events
+        .filter((e) => e.event === "gate")
+        .map((e) => e.id)
+        .sort(),
+      ["build", "lint", "test"],
+      "cost.json carries every entry gate's milliseconds as entry_events[] facts"
+    );
     assert.equal(led.entry.invocations.length, 1);
     const x = led.entry.invocations[0];
     assert.equal(x.lifetime.status, "measured");
@@ -1452,6 +1470,19 @@ test("OBSERVED: TAKEOVER — the killed runner's segment stays incomplete; each 
     );
     assert.equal(x.lifetime.end_by, "takeover");
     assert.equal(x.segment_coverage, "partial");
+    // gate-durations: the gates a takeover ran carry ITS segment; the runner, killed mid-gate, left one for each gate it
+    // finished (here `lint`) — the record that separates a slow gate from a hung runner.
+    const gateFacts = led.entry_events.filter((e) => e.event === "gate");
+    const takeoverIds = new Set(takeovers.map((s) => s.segment));
+    assert.ok(
+      gateFacts.some((e) => takeoverIds.has(e.segment)),
+      "a takeover segment names the gates it ran"
+    );
+    assert.ok(
+      gateFacts.some((e) => e.segment === runnerSeg.segment && e.id === "lint"),
+      "the killed runner's finished gate"
+    );
+    assert.equal(new Set(gateFacts.map((e) => e.id)).size, gateFacts.length, "each gate recorded once");
   } finally {
     cleanup(dir);
     rmSync(dirname(pidFile), { recursive: true, force: true });
