@@ -55,6 +55,7 @@ reads:
     "pharn/floor/quick-scope-core.mjs",
     "pharn/floor/pre-run-snapshot.mjs",
     "pharn/floor/check-run-isolation.mjs",
+    "pharn/floor/check-entry-context.mjs",
     "pharn/floor/entry-gates.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
@@ -88,6 +89,7 @@ allowed-tools:
     "Bash(node pharn/floor/check-run-isolation.mjs --feature * > pharn/.run/pharn-loop/*/isolation.json)",
     "Bash(node pharn/floor/pre-run-snapshot.mjs --capture *)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind run-start)",
+    "Bash(node pharn/floor/check-entry-context.mjs --feature * > pharn/.run/pharn-loop/*/entry-context.txt)",
     "Bash(node pharn/floor/check-instruction-files.mjs --report > pharn/.run/pharn-loop/*/instruction-files.json)",
     "Bash(node pharn/floor/entry-gates.mjs --start --feature * --timeout-ms 540000)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage * --route 'inline:route-unavailable')",
@@ -408,6 +410,17 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    membership", which states its bounds). **A stop BEFORE S2 records nothing** and goes straight to the Step 7
    summary.
 
+   **Then measure the context running this command** (7.13.0) — as its own Bash call, once the run-start line's result
+   is back, never in one batch with it: the check finds that line in this context's tool result
+   (`pharn/floor/entry-context-core.mjs`, header):
+
+   ```bash
+   node pharn/floor/check-entry-context.mjs --feature '<name>' > pharn/.run/pharn-loop/<name>/entry-context.txt
+   ```
+
+   Exit `3` → **STOP, S15b** (`blocked: context-too-large`): no feature directory exists yet, so no record is written;
+   read the close part and go to the Step 7 summary. Any other exit → go on; the witness's line is quoted at Step 7.
+
    Then record the always-loaded instruction set's size estimate, which `RUN-REPORT.md`'s `## Tokens` shows (6.65.0):
 
    ```bash
@@ -470,6 +483,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S14  | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `4`: a gate was red on the tree the run started from, and `--allow-red-entry` was not given                                                                                    | stop `blocked: gates-red-at-entry` — fix the gate first; if it cannot run on this machine, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded); or re-run with `--allow-red-entry` when fixing it is the feature |
 | S14b | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `6`: no gate was red, but a gate was not measured on the tree the run started from (killed at the per-gate timeout, or could not start), and `--allow-red-entry` was not given | stop `blocked: gates-unmeasured-at-entry` — make the gate finish in time or start, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded), or re-run with `--allow-red-entry`                                       |
 | S15  | Step 1a's isolation check exits non-zero: no evidence of an isolated environment, a listed credential present, the evidence unknown (unreadable HOME, a failed probe), or the line itself failed                                                                   | stop `blocked: not-isolated` — for no evidence or a credential: run in a container that mounts none of your credentials, set `PHARN_ISOLATED=1` for a sandbox the check misses, or re-run with `--accept-host-execution`; for unknown evidence: set HOME, or fix git (the flag never lifts it)       |
+| S15b | Step 1a's entry-context check exits `3`: the context running this command already holds more tokens than `budget.entryContextTokens` (default 320,000)                                                                                                             | stop `blocked: context-too-large` — every later request would re-send it: start a fresh session (or run the loop inside an agent) and re-run, or raise `budget.entryContextTokens` in `pharn.config.json`                                                                                            |
 | S16  | triage escalated (Step 4's read exits `4`, or `3` with no re-plan round left) and `supervisor.mjs check` exits `3`: the supervisor decided `stop` (a full run only)                                                                                                | stop `blocked: grill-escalation` — copy the verdict, the round and the `escalated` ids into `### next_steps` as DATA, pointing at `grill-triage.json` and `SUPERVISOR.json` for the reasons; a person revises the plan or the SPEC, then re-runs (Step 4 says what a re-run is)                      |
 | S17  | triage escalated and `supervisor.mjs check` exits anything but `0`, `3` or `4`: no decision passed its check (a full run only)                                                                                                                                     | stop `blocked: supervisor-red` — quote the check's first line as DATA in `### next_steps`; a person decides the escalation (S16's remedy)                                                                                                                                                            |
 | S18  | the supervisor decided `amend-spec` (`supervisor.mjs check` exits `4`) and a line of the amend branch exits non-zero: `spec-amend.mjs begin`, the re-run spec stage (`finish` exit 6: S9b), `check-spec-approved.mjs` or `spec-amend.mjs check` (a full run only)  | stop `blocked: spec-amend-red` — quote the failing line's first line of output as DATA in `### next_steps`; an amend runs once, so a person decides the escalation (S16's remedy)                                                                                                                    |

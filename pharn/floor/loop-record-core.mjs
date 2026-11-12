@@ -66,6 +66,7 @@ export const BLOCKED_IDS = Object.freeze([
   "gates-red-at-entry",
   "gates-unmeasured-at-entry",
   "not-isolated",
+  "context-too-large",
   "grill-escalation",
   "supervisor-red",
   "spec-amend-red",

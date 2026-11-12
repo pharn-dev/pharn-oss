@@ -8,7 +8,9 @@
 // here so a third one is a deliberate addition:
 //   * render-cost-record.mjs — the `pharn-cost-record/1` block embedded in `ship-record.json` (`sessionRequests`);
 //   * render-cost-ledger.mjs — `cost.json` (`sessionScan`), and through the ledger's `deriveLedger`,
-//     check-cost-ledger.mjs --verify-transcript.
+//     check-cost-ledger.mjs --verify-transcript;
+//   * entry-context-core.mjs — /pharn-loop's entry-context guard (`findTranscriptDirs`, `sessionScan`): the size of
+//     the context the run-start line was printed into, bound by the ledger's own rule.
 // It was split out of render-cost-record.mjs in 6.24.1, when the per-request rule below gained its second
 // consumer. A renderer that also served as the transcript library had two reasons to change, and this is
 // the plan-files-core.mjs / ship-outcome-core.mjs precedent: two reasons, two files. No other module

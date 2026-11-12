@@ -232,6 +232,10 @@ Report, plainly and without asking anything:
   check's stderr reason code instead (or that it printed none) and the way out that reason's stderr line names. This
   screen line is advisory; the run report and the commit message carry the same line from code, read from a witness
   the run itself can rewrite;
+- **the entry-context line** (7.13.0): when the witness `pharn/.run/pharn-loop/<name>/entry-context.txt` exists and
+  its line starts `entry-context: over` (the S15b stop, with the two ways out S15b's row names) or
+  `entry-context: unknown` (the guard did not measure, a malformed `budget.entryContextTokens` included), quote that
+  line verbatim; a `within` line or no witness → nothing;
 - **each stage's route** (6.27.0), one line per stage start — per iteration, and per re-plan round for the plan, grill
   and triage (7.8.0), and the supervisor's on an escalation (7.9.0), in the order they ran: the token its stage-start marker recorded
   (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for

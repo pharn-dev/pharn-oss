@@ -1,0 +1,61 @@
+{
+  "base": "f47b94e1526630c240e08a729d1ff3cc260e6856",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship.md",
+    ".dev/features/entry-context-guard/GRILL.md",
+    ".dev/features/entry-context-guard/PLAN.md",
+    ".dev/features/entry-context-guard/REGRESSION.md",
+    ".dev/features/entry-context-guard/REVIEW.md",
+    ".dev/features/entry-context-guard/VERIFY.md",
+    ".dev/features/entry-context-guard/regression-report.json",
+    ".dev/features/entry-context-guard/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/check-entry-context.mjs",
+    "pharn/floor/check-entry-context.test.mjs",
+    "pharn/floor/entry-context-core.mjs",
+    "pharn/floor/entry-context-core.test.mjs",
+    "pharn/floor/loop-record-core.mjs",
+    "pharn/floor/transcript-core.mjs",
+    "pharn/pharn-contracts/loop-record.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6326,
+      "failed": 0,
+      "skipped": 7,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6332,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

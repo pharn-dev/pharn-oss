@@ -27,6 +27,7 @@ reads:
     "pharn/floor/quick-scope-core.mjs",
     "pharn/floor/pre-run-snapshot.mjs",
     "pharn/floor/entry-gates.mjs",
+    "pharn/floor/check-entry-context.mjs",
     "pharn/floor/feature-name.mjs",
     "pharn/floor/validate.mjs",
     "pharn/floor/check-attestation.mjs",
@@ -138,6 +139,17 @@ passes it to `/pharn-spec`. The chain starts at **intent**, not at an existing s
   `--adopt-pending` adopts the pending start recorded above (the same contract section). A run that never
   reaches a `<name>` records nothing; a skipped `run-start` does not fail the run, but its ledger then reports no
   run usage (`pharn/pharn-contracts/cost-ledger.md`, "Run membership").
+
+- **Then measure the context running this command** (7.13.0) — as its own Bash call, once the run-start line's result
+  is back (`pharn/floor/entry-context-core.mjs`, header):
+
+  ```bash
+  node pharn/floor/check-entry-context.mjs --feature '<name>'
+  ```
+
+  It never stops the run. When its line starts `entry-context: over` (exit `3`) or `entry-context: unknown`, quote the
+  line verbatim in the GATE-1 message; on `over`, add that every later request of this run re-sends this context, so
+  the person may stop and re-run in a fresh session. A `within` line → say nothing.
 
 ## Quick mode — `/pharn-ship --quick` (6.25.0)
 
