@@ -23,6 +23,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.10.2] - 2026-11-12
+
+### Fixed
+
+- **The amend check sets trailing blank lines aside in `## Intent` and `## Scope` too.** 7.10.1's wording (`pharn/LIMITS.md`
+  §1d, `pharn/THREAT-MODEL.md` §5, and its own CHANGELOG entry) said the intent, the scope and every earlier criterion
+  are held "line for line, the `##` heading lines and trailing blank lines aside", but `spec-amend.mjs check` dropped
+  trailing blank lines from the criteria only: an amended SPEC that moved the blank lines before the next heading read
+  as `intent-changed` or `scope-changed`. `checkAmend` now drops them from Intent and Scope as well, so the docs hold;
+  any added text, and a blank line inside a section, is still refused (a test pins both directions and the controls).
+  `pharn/pharn-contracts/supervisor.md`'s `check` line says so.
+- **The amend deletion bound, narrowed.** 7.10.1 said a Bash `rm` of `SPEC.a1.md` "is neither prevented nor
+  detected". Removing it while `SUPERVISOR.a1.json` or another `.a1` name stays reads as `partial-archive` at
+  `spec-amend.mjs status`, `begin` and `check`; only removing every `.a1` file the amend left goes undetected.
+  `pharn/LIMITS.md` §1d (the maintainer's patch) and the supervisor contract's `Bounded` line now say that. Both points
+  are from CodeRabbit's review of the 7.10.1 pull request; the 7.10.1 entry below is merged and stays as it was.
+
 ## [7.10.1] - 2026-11-12
 
 ### Fixed

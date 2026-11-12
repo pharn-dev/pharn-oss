@@ -16,8 +16,9 @@
 // ONCE (L35): "amended" is SPEC.a1.md on disk, never a counter file. supervisor-core.mjs refuses a second `amend-spec`
 // (`amend-used`) and `begin` refuses an existing archive.
 //
-// APPEND-ONLY (L36): the amended SPEC's `## Intent` and `## Scope` are identical, line for line, to the archive's (both
-// absent counts as identical); the archive's `## Acceptance Criteria` lines, trailing blank lines dropped, are a prefix of
+// APPEND-ONLY (L36): the amended SPEC's `## Intent` and `## Scope` are identical, line for line, to the archive's, trailing
+// blank lines dropped (both absent counts as identical; 7.10.2: a re-written SPEC may move the blank lines before the
+// next heading, and LIMITS.md §1d already set them aside); the archive's `## Acceptance Criteria` lines, trailing blank lines dropped, are a prefix of
 // the new section's lines; every archived criterion keeps its id, position, text and verify level; and at least one
 // criterion is added (L34: a re-pin of the same criteria is not an amend).
 //
@@ -125,6 +126,14 @@ function sameLines(a, b) {
   return a.length === b.length && a.every((l, i) => l === b[i]);
 }
 
+/** Is section `name` the same in both SPECs, trailing blank lines dropped? Both absent (or unreadable) is the same; one is not. */
+function sameSection(a, b, name) {
+  const x = specSectionLines(a, name);
+  const y = specSectionLines(b, name);
+  if (x === null || y === null) return x === y;
+  return sameLines(trimTrailingBlank(x), trimTrailingBlank(y));
+}
+
 function trimTrailingBlank(lines) {
   let n = lines.length;
   while (n > 0 && lines[n - 1].trim() === "") n--;
@@ -148,8 +157,8 @@ function criteriaOf(text) {
  */
 export function checkAmend(archiveText, specText) {
   const defects = [];
-  if (!sameLines(specSectionLines(archiveText, "intent"), specSectionLines(specText, "intent"))) defects.push(defect("intent-changed"));
-  if (!sameLines(specSectionLines(archiveText, "scope"), specSectionLines(specText, "scope"))) defects.push(defect("scope-changed"));
+  if (!sameSection(archiveText, specText, "intent")) defects.push(defect("intent-changed"));
+  if (!sameSection(archiveText, specText, "scope")) defects.push(defect("scope-changed"));
   const before = criteriaOf(archiveText);
   const after = criteriaOf(specText);
   const beforeLines = specSectionLines(archiveText, "acceptance criteria");
