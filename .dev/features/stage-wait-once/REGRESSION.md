@@ -1,8 +1,10 @@
 # REGRESSION — stage-wait-once
 
-- base: `0ff6552708a335e0e1cf2304e1fa7cd7d76a1509` (working-tree build, `git status --porcelain` non-empty → `base = HEAD`)
-- measured: 2026-11-13, re-run after the review-fix round, finished 10:40 CET; base in a detached `git worktree`,
-  head in the working tree (the first run, 09:29–09:45, measured the tree before the fixes and is superseded)
+- base: `0ff6552708a335e0e1cf2304e1fa7cd7d76a1509` (the first run's `base = HEAD` on a working-tree build; after the
+  PR commit it is passed as `--base`, the branch's fork point from `main`)
+- measured: 2026-11-13, re-run after the PR's CI round (coverage tests, three review fixes), finished 12:17 CET; base
+  in a detached `git worktree`, head in the working tree. Earlier runs (09:29–09:45, before the review fixes; 10:40,
+  before the CI round) are superseded; the verdict JSON is byte-identical across the last two.
 - machine report: `regression-report.json` (the `check-regress.mjs verdict` output verbatim, `cmp`-checked; exit 0)
 
 ## Partition (`check-regress.mjs scope --feature stage-wait-once`, exit 0)

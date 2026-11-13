@@ -116,6 +116,73 @@ refuse `lock-unusable`. That last edit was not re-reviewed by an agent; it is co
 
 Verdict after the fix round: GREEN — 0 floor-gate findings, 0 open advisory findings.
 
+## PR round (CI and CodeRabbit on #443)
+
+CI's `check` job failed for two reasons: pharn-ci's diff coverage was 80.88% against a threshold of 100%, and its
+test-integrity check blocked on 13 base test names that are gone at head (TI02). CodeRabbit posted 5 inline findings,
+quoted below as DATA (third-party model output):
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: minor
+  file: "pharn/floor/stage-direct.mjs:594"
+  problem: "On ENOBUFS, spawnSync can return more stdout than SCRIPT_STDOUT_MAX; it is stored as is, both parsers reject it, and the call reports record-unusable instead of a crash."
+  evidence: "comment 4562131235"
+- type: FINDING
+  rule_id: "P0"
+  severity: minor
+  file: "pharn/floor/stage-direct.mjs:840"
+  problem: "takeover does not re-read runner.json after taking the lock, so a newer run finishing in that gap can be overwritten under the old nonce."
+  evidence: "comment 4562131245"
+- type: FINDING
+  rule_id: "P0"
+  severity: important
+  file: "pharn/floor/stage-direct.mjs:848"
+  problem: "A takeover's script runs in the caller's process group; if only the caller dies and the script survives, the next call can start a second script."
+  evidence: "comment 4562131264"
+- type: FINDING
+  rule_id: "P0"
+  severity: important
+  file: "pharn/floor/stage-direct.mjs:929"
+  problem: "Gates run in their own process groups, so after a runner SIGKILL they can outlive the runner's group, and the orphan check does not see them."
+  evidence: "comment 4562131272"
+- type: FINDING
+  rule_id: "P0"
+  severity: minor
+  file: "pharn/floor/stage-direct.mjs:1013"
+  problem: "An async spawn error (EAGAIN) is an 'error' event with no listener, so it can end the CLI after the spawn-failed refusal."
+  evidence: "comment 4562131280"
+```
+
+What was done:
+
+- **Fixed**:
+  - ENOBUFS: stdout is cut to `SCRIPT_STDOUT_MAX` before any record holds it.
+  - Takeover: `runner.json` is re-read under the lock, refusing `mismatch` when it names another run.
+  - Spawn: an `'error'` listener goes on the runner child right after `spawn`.
+- **Named as bounds, not built** (header BOUNDS and the CHANGELOG):
+  - The gate groups are already handled one layer down: `run-gates.mjs`'s stale-lock recovery stops a leftover gate
+    group (SIGTERM, then SIGKILL, or `lock-busy`) before that gate re-runs, so two gates never overlap.
+  - The takeover's script group was already a named bound. It now also says what follows: a second script is possible,
+    while `run-gates.mjs`'s lock keeps their gates apart. `spawnSync` gives no pid until the script ends, and no failure
+    has been observed (P7).
+- **Coverage**:
+  - A build agent added 35 tests. They drive `runDirect`, `runRunner`, `acquireLock` and `releaseLock` in-process,
+    because Node 24's test-coverage merge drops lines that run only in child processes (measured: raw V8 shows the
+    takeover at count 1, while lcov shows 0).
+  - The orchestrator then removed the unreachable catch blocks, as CORE-86 did, and added one test:
+    - an I/O error inside `readFileBounded` now throws (exit 1);
+    - `createLock` throws `EEXIST` to `acquireLock`;
+    - four identical best-effort cleanups became `quietly()`, reached by a lock replaced with a directory.
+  - 83 tests pass, and 0 of the 1009 added lines are uncovered in a local run of the file.
+- **TI02**: all 13 names are restored byte for byte, as in-process `runDirect` tests that keep the base tests'
+  assertions, adapted where the approved design changed them (the runner absorbs the script's exit 5; a resume line
+  waits rather than refusing).
+
+Re-run after this round: regress `no-regressions`, verify `PASS`, stamp `c0e06e88…`. Nobody re-reviewed this round's
+code changes; they are covered by the suite and both re-runs.
+
 ## Lesson candidate
 
 None proposed: the important finding is a single occurrence, not a recurring failure (P7).

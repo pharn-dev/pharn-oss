@@ -48,9 +48,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   resume line at exit 5 until a person stops the runner's process group, as a hung script under the per-call path did;
   a torn, foreign or pre-upgrade lock refuses `in-flight` in a takeover as in a fresh call; three calls clearing one
   stale lock at once can lose a live record; the lock is created by a hard link, so on a filesystem without them
-  (FAT/exFAT, some network mounts) every call refuses `lock-unusable`. TESTED, not floor: the in-flight refusal (an exclusive lock created whole
-  by `link`, pid liveness and a
-  `ps` nonce check in unauthenticated `pharn/.run/`), the byte identity of the final stdout, reports and stamps against
+  (FAT/exFAT, some network mounts) every call refuses `lock-unusable`; a gate `run-gates.mjs` started in its own process
+  group is outside the runner's group, so after a runner death it is `run-gates.mjs`'s stale-lock recovery that stops
+  it before the gate re-runs, never a wait for it; and a takeover's script runs in the calling process's group, so when
+  only that process is killed and the script survives, the next resume line can start a second script beside it
+  (`run-gates.mjs`'s lock still keeps their gates apart). TESTED, not floor: the in-flight refusal (an exclusive lock
+  created whole by `link`, pid liveness and a `ps` nonce check in unauthenticated `pharn/.run/`), the byte identity of
+  the final stdout, reports and stamps against
   the old per-call path, and the single return marker. `pharn-loop.md` grows from 89,079 to 90,139 bytes and
   `pharn-ship-stages.md` from 31,863 to 32,666, inside their ceilings. Linear CORE-76.
 

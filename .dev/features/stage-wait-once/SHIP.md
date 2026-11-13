@@ -24,8 +24,19 @@ committed, merged or pushed by this run.
 9. `/pharn-dev-regress` re-run on the final tree → `no-regressions` (6375 tests pass at head, 0 new failures).
 10. `/pharn-dev-verify` re-run on the final tree → `PASS` (7 gates, stamp `2588449f…`, `reconcile` exit 0).
 11. `REVIEW.md` updated with the fix round and re-review.
+12. GATE 2, second pass: the human chose **merge**; the increment was committed (`08a84fed`) and PR #443 opened, with
+    Auto-fix on.
+13. PR round: CI's `check` failed (pharn-ci diff coverage 80.88% < 100%, and test-integrity TI02 on 13 renamed tests)
+    and CodeRabbit posted 5 findings. Fixed under a fresh build epoch (setter from the plan's `## Files`, then the
+    anchor `--by pharn-dev-build`):
+    - three review fixes, and the other two named as bounds;
+    - 36 tests added, so 0 of 1009 added lines are uncovered in a local run;
+    - the 13 base test names restored;
+    - unreachable catch blocks removed.
+14. `/pharn-dev-regress` re-run → `no-regressions` (report byte-identical); `/pharn-dev-verify` re-run → `PASS` (stamp
+    `c0e06e88…`, `test` 6811 pass / 0 fail).
 
-Run ended at GATE 2 (second pass).
+Run ended at the PR round (the merge decision stands; CI re-runs on the push).
 
 ## Verdicts
 
@@ -56,7 +67,9 @@ deferred: none
 - The grill interrogation, the build, the fix-round build and both reviews each ran in a separate agent; their
   reports are model output and were presented as DATA.
 - The orchestrator's own fix of the re-review's two minors was not re-reviewed by an agent; it is covered by the
-  re-run regress and verify above.
+  re-run regress and verify above. The same holds for the PR round's code changes.
+- Nobody judged the CodeRabbit findings' merit beyond reading the code: two were declined as bounds (P7), and that is
+  the human's to overrule.
 
 chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate.

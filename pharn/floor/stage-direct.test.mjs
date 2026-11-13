@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   copyFileSync,
   cpSync,
   existsSync,
@@ -26,11 +27,12 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   DIRECT_STAGES,
@@ -65,7 +67,7 @@ import {
   takeoverStep,
   waitStep,
 } from "./stage-direct-core.mjs";
-import { HANDOFF_MAX_MS, runDirect } from "./stage-direct.mjs";
+import { HANDOFF_MAX_MS, RELEASE_WAIT_MS, acquireLock, releaseLock, runDirect, runRunner } from "./stage-direct.mjs";
 import { REGRESS_PATHS } from "./stage-regress-core.mjs";
 import { VERIFY_PATHS } from "./stage-verify-core.mjs";
 import { REGISTRY, EXIT_CODE } from "./stage-exit-core.mjs";
@@ -1554,5 +1556,1359 @@ test("the CLI — the real stage-verify.mjs refuses in a scratch tree, and the c
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── (d) IN-PROCESS: runDirect / runRunner / acquireLock / releaseLock driven in THIS process ───────────
+// Node's coverage merge keeps what this process runs and drops what a CLI child runs, so the call's own paths — the
+// wait, the takeover, the runner, the lock — are driven here too. In-process there is nothing to inject (L41): the
+// scripts are the REAL stage scripts beside stage-direct.mjs and the setter is the scratch root's own, so every verdict
+// below is a real script's (regress over `regressRepo`, verify refusing in a scratch root) and every fault is built in
+// the tree — a directory at a tmp path, a mode bit, a probe gate, or a fake `ps` on PATH that plants a change at one
+// exact step. The tests named `runDirect — …`, `parseLock — …` and `★ two PROCESSES — …` keep their 6.43.0 names: each
+// still checks what its name says, in the 7.15.0 form (a fresh call starts a runner and waits for it; exit 5 is the
+// runner's; the lock is schema /2).
+
+const SESSION_KEYS = ["NODE_TEST_CONTEXT", "CLAUDE_PROJECT_DIR", "CLAUDE_CODE_SESSION_ID"];
+/** Run `fn` with process.env as an orchestrator's call sees it, plus `set`: node:test's coordination env and the
+ *  session's ids removed — the runner, the setter and every script inherit process.env at their spawn. */
+function bare(fn, set = {}) {
+  const keys = [...SESSION_KEYS, ...Object.keys(set)];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  for (const k of SESSION_KEYS) delete process.env[k];
+  Object.assign(process.env, set);
+  try {
+    return fn();
+  } finally {
+    for (const k of keys) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+}
+/** One direct call in THIS process: its result, the stdout pieces as emitted, the replayed tail and its own lines. */
+function direct(root, argv, set = {}) {
+  const pieces = [];
+  const tail = [];
+  const r = bare(() => runDirect(argv, { root, write: (s) => pieces.push(s), writeErr: (s) => tail.push(s) }), set);
+  return { ...r, pieces, tail: tail.join(""), errText: r.err.join("\n") };
+}
+/** `runRunner` in THIS process; what it writes to stderr (its log) is captured. */
+function runnerIn(root, nonce) {
+  let log = "";
+  const write = process.stderr.write;
+  process.stderr.write = (s) => {
+    log += String(s);
+    return true;
+  };
+  try {
+    return { exit: bare(() => runRunner(nonce, { root })), log };
+  } finally {
+    process.stderr.write = write;
+  }
+}
+const DONE_FLAGS = ["--no-tests", "--no-install"]; // regress over regressRepo: no question, a `done` exit 0
+const SCOPE = (root) => join(root, "pharn", ".run", "writes-scope.json");
+const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const syncSleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+/** The lock as a start call hands it to the runner — here, to THIS process (runRunner checks its own pid). */
+const handed = (stage = "pharn-regress") => ({
+  pid: process.pid,
+  startedAt: "2026-11-13T00:00:00.000Z",
+  stage,
+  name: "demo",
+  nonce: NONCE_A,
+  holder: "runner",
+});
+const readState = (root) => parseState(readFileSync(join(root, STATE_FILE), "utf8"));
+const readResult = (root) => parseResult(readFileSync(join(root, RESULT_FILE), "utf8"));
+/** Wait (bounded, never failing) until no lock is left — a detached runner finishing after a failed assertion. */
+async function settle(root) {
+  for (const end = Date.now() + 20_000; Date.now() < end && existsSync(join(root, LOCK_FILE));) await sleep(50);
+}
+const psShows = (pid, nonce) =>
+  spawnSync("ps", ["-ww", "-p", String(pid), "-o", "args="], { encoding: "utf8" }).stdout.includes(`--runner ${nonce}`);
+/** A live process whose argv carries `--runner <nonce>` — what `ps` shows for that run's runner — for `lifeMs`. */
+function fakeRunner(nonce, lifeMs = 60_000) {
+  const c = spawn(process.execPath, ["-e", `setTimeout(() => {}, ${lifeMs})`, "--", "--runner", nonce], { stdio: "ignore" });
+  for (const end = Date.now() + 10_000; Date.now() < end; syncSleep(10)) if (psShows(c.pid, nonce)) return c;
+  c.kill("SIGKILL");
+  assert.fail("the fake runner's argv never showed in ps");
+}
+
+/** A gate for the REAL stage-regress.mjs (`--gates "<node> <probe> <ctl>::probe"`, run at the base and at HEAD). It logs
+ *  what it sees to `<ctl>/probe.log` — its cwd, the root's scope, and with `guard` the live guard's verdicts inside and
+ *  outside pharn/.run/** — then, as `<ctl>/probe.json` says: `swapLock` (write that text over the lock), `hold` (once:
+ *  write `<ctl>/.holding`, wait for `<ctl>/.release`), `kill` (once: SIGKILL its stage script, found up its ppid chain). */
+const PROBE_SRC = `
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { join } from "node:path";
+const ctl = process.argv[2];
+const fx = JSON.parse(readFileSync(join(ctl, "probe.json"), "utf8"));
+const once = (tag) => { const f = join(ctl, "." + tag + "-once"); if (existsSync(f)) return false; writeFileSync(f, "1"); return true; };
+const scopeFile = join(fx.root, "pharn", ".run", "writes-scope.json");
+const seen = { cwd: process.cwd(), scope: existsSync(scopeFile) ? JSON.parse(readFileSync(scopeFile, "utf8")).scope : null };
+if (fx.guard) {
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  const g = (p) => spawnSync(process.execPath, [fx.guard], { cwd: fx.root, input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: p } }), encoding: "utf8", env }).status;
+  seen.inside = g("pharn/.run/pharn-regress/other.json");
+  seen.outside = g("pharn/features/demo/REGRESSION.md");
+}
+appendFileSync(join(ctl, "probe.log"), JSON.stringify(seen) + "\\n");
+if (fx.swapLock !== undefined) writeFileSync(join(fx.root, "pharn", ".run", "stage-direct", "in-flight.json"), fx.swapLock);
+if (fx.hold && once("hold")) {
+  writeFileSync(join(ctl, ".holding"), "1");
+  const sab = new Int32Array(new SharedArrayBuffer(4));
+  while (!existsSync(join(ctl, ".release"))) Atomics.wait(sab, 0, 0, 20);
+}
+if (fx.kill && once("kill")) {
+  for (let pid = process.ppid; pid > 1; ) {
+    const r = spawnSync("ps", ["-ww", "-o", "ppid=,args=", "-p", String(pid)], { encoding: "utf8" });
+    const m = /^\\s*(\\d+)\\s+(.*)$/s.exec(r.stdout ?? "");
+    if (!m) break;
+    if (/stage-(regress|verify)\\.mjs/.test(m[2])) {
+      process.kill(pid, "SIGKILL");
+      break;
+    }
+    pid = Number(m[1]);
+  }
+}
+`;
+const PROBE = join(FLOOR_ROOT, "probe-gate.mjs");
+writeFileSync(PROBE, PROBE_SRC);
+function probeGate(root, fx = {}) {
+  const ctl = mkdtempSync(join(FLOOR_ROOT, "probe-"));
+  writeFileSync(join(ctl, "probe.json"), JSON.stringify({ root, ...fx }));
+  const log = () =>
+    existsSync(join(ctl, "probe.log"))
+      ? readFileSync(join(ctl, "probe.log"), "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+      : [];
+  return { ctl, gates: ["--gates", `${process.execPath} ${PROBE} ${ctl}::probe`], log };
+}
+
+/** A fake `ps` — a shell script, so a call costs milliseconds, not a node start. Each call bumps a counter per kind (`A`:
+ *  the group listing, `ww`: the nonce check), then sources `<steps>/<kind>-<n>.sh` and `<steps>/<kind>-all.sh` when
+ *  present: a step the test writes (plant a record, print a runner's argv). Nothing else is printed; exit 0. */
+const FAKE_PS_BIN = join(FLOOR_ROOT, "fake-ps-bin");
+mkdirSync(FAKE_PS_BIN);
+writeFileSync(
+  join(FAKE_PS_BIN, "ps"),
+  [
+    "#!/bin/sh",
+    'd="$FAKE_PS_STEPS"',
+    'case " $* " in *" -A "*) k=A ;; *) k=ww ;; esac',
+    'n=$(( $(cat "$d/n-$k" 2>/dev/null || echo 0) + 1 ))',
+    'echo "$n" > "$d/n-$k"',
+    'if [ -f "$d/$k-$n.sh" ]; then . "$d/$k-$n.sh"; fi',
+    'if [ -f "$d/$k-all.sh" ]; then . "$d/$k-all.sh"; fi',
+    "exit 0",
+    "",
+  ].join("\n")
+);
+chmodSync(join(FAKE_PS_BIN, "ps"), 0o755);
+/** A PATH with no `ps` at all (the header's "no ps on PATH" bound). */
+const NO_PS = { PATH: join(FLOOR_ROOT, "no-ps-bin") };
+mkdirSync(NO_PS.PATH);
+/** The env for a call that sees the fake ps, with `steps` (`<kind>-<n>` or `<kind>-all` → shell lines). */
+function fakePs(steps) {
+  const d = mkdtempSync(join(FLOOR_ROOT, "ps-"));
+  for (const [k, lines] of Object.entries(steps)) writeFileSync(join(d, `${k}.sh`), `${lines}\n`);
+  return { PATH: `${FAKE_PS_BIN}${delimiter}${process.env.PATH}`, FAKE_PS_STEPS: d };
+}
+const shq = (s) => `'${s.replaceAll("'", `'\\''`)}'`;
+/** A fake-ps step that writes `text` to `file`, or removes it (null). */
+const plantStep = (file, text) => (text === null ? `rm -f ${shq(file)}` : `printf '%s' ${shq(text)} > ${shq(file)}`);
+
+// ── the 13 names of 6.43.0, in-process ────────────────────────────────────────────────────────────────
+
+test("runDirect — the scope is the thin caller's WHILE the script runs (the live guard denies outside pharn/.run/**), and released after", () => {
+  // The REAL stage-regress.mjs runs under the call's runner; its two gates (base, HEAD) are a probe that reads the scope
+  // and asks the live guard — what the script's own children see while it runs. Verify reaches no gate without a full
+  // SPEC/PLAN chain; its scope parity is pinned by "the CLI — the scope is the thin caller's WHILE …" above.
+  const { dir, base } = regressRepo();
+  const p = probeGate(dir, { guard: join(dir, ".claude", "hooks", "enforce-writes-scope.cjs") });
+  try {
+    const r = direct(dir, fresh("pharn-regress", { extra: ["--base", base, ...DONE_FLAGS, ...p.gates] }));
+    assert.equal(r.exit, 0, `${r.tail}${r.errText}`);
+    const seen = p.log();
+    assert.equal(seen.length, 2, "one probe at the base, one at HEAD");
+    // What the thin caller's own pinned setter line writes, run in another scratch root (the parity, L31).
+    const ref = project();
+    try {
+      const s = spawnSync(process.execPath, [REAL_SETTER, ...setterArgv("pharn-regress")], { cwd: ref, encoding: "utf8", env: ENV });
+      assert.equal(s.status, 0, s.stderr);
+      for (const x of seen) assert.deepEqual(x.scope, readJson(ref, "pharn/.run/writes-scope.json").scope, x.cwd);
+    } finally {
+      rmSync(ref, { recursive: true, force: true });
+    }
+    for (const x of seen) {
+      assert.equal(x.outside, 2, `${x.cwd}: a Write outside pharn/.run/** is DENIED while the script runs`);
+      assert.equal(x.inside, 0, `${x.cwd}: pharn/.run/** stays writable`);
+    }
+    assert.equal(existsSync(SCOPE(dir)), false, "released after");
+    // CONTROL: with the scope released, the same probe is allowed by the default — so the deny above was the scope's.
+    const after = spawnSync(process.execPath, [join(dir, ".claude", "hooks", "enforce-writes-scope.cjs")], {
+      cwd: dir,
+      input: JSON.stringify({ tool_name: "Write", tool_input: { file_path: "pharn/features/demo/REGRESSION.md" } }),
+      env: ENV,
+      encoding: "utf8",
+    });
+    assert.equal(after.status, 0, after.stderr);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — EVERY exit code passes through; the start marker precedes the script, the return marker follows every exit but 5", async () => {
+  // The REAL scripts' own codes (in-process nothing is injected): regress 0 (done) and 4 (question); verify 2 (no
+  // feature), 3 (`missing-artifact`) and 1 (a crash: a directory where it removes its earlier report).
+  const STATUS = { 0: "done", 2: "unusable", 3: "refused", 4: "question" };
+  for (const c of [
+    { code: 0, stage: "pharn-regress", extra: DONE_FLAGS },
+    { code: 4, stage: "pharn-regress", extra: [] },
+    { code: 2, stage: "pharn-verify" },
+    { code: 3, stage: "pharn-verify", plant: "pharn/features/demo" },
+    { code: 1, stage: "pharn-verify", plant: "pharn/features/demo/verify-report.json/x" },
+  ]) {
+    const repo = c.stage === "pharn-regress" ? regressRepo() : null;
+    const root = repo ? repo.dir : project();
+    try {
+      if (c.plant) mkdirSync(join(root, c.plant), { recursive: true });
+      const r = direct(root, fresh(c.stage, { extra: repo ? ["--base", repo.base, ...c.extra] : [] }));
+      assert.equal(r.exit, c.code, `exit ${c.code} passes through\n${r.tail}${r.errText}`);
+      const m = markersIn(root);
+      assert.deepEqual(
+        m.map((x) => x.kind),
+        ["stage-start", "orchestrator"],
+        `exit ${c.code}`
+      );
+      assert.deepEqual([m[0].stage, m[0].iteration, "route" in m[0]], [c.stage, 1, false], "byte-identical to the old marker line");
+      assert.equal(r.pieces[0], `${markerLine(m[0])}\n`, "the start line is emitted FIRST, before the script's output");
+      if (c.code === 1) assert.equal(r.pieces.length, 2, "a crash prints no object: the start line, then the return line");
+      else assert.deepEqual([JSON.parse(r.pieces[1]).schema, JSON.parse(r.pieces[1]).status], ["pharn-stage-exit/1", STATUS[c.code]]);
+      assert.equal(r.pieces.at(-1), `${markerLine(m[1])}\n`, `exit ${c.code}: the return marker`);
+      assert.equal(r.out, r.pieces.join(""), "out is exactly the emitted pieces");
+      assert.equal(existsSync(SCOPE(root)), false, "released on every exit");
+      assert.equal(existsSync(join(root, LOCK_FILE)), false, "the lock released");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // 7.15.0 — the SCRIPT's 5 is the runner's: with T = B the real regress continues after its first slow step, the runner
+  // resumes it, and the call prints only the final object, between one marker pair.
+  const a = regressRepo();
+  try {
+    const r = direct(a.dir, fresh("pharn-regress", { t: 20_000, b: 20_000, extra: ["--base", a.base, ...DONE_FLAGS] }));
+    assert.equal(r.exit, 0, `${r.tail}${r.errText}`);
+    assert.doesNotMatch(r.out, /"status": "continue"/, "the script's continue never reaches the call");
+    assert.ok(readState(a.dir).continues >= 1, "the script did continue — inside the runner");
+    assert.deepEqual(kinds(a.dir), ["stage-start", "orchestrator"]);
+    assert.equal(r.pieces.at(-1), `${markerLine(markersIn(a.dir)[1])}\n`);
+  } finally {
+    rmSync(a.dir, { recursive: true, force: true });
+  }
+  // The CALL's 5 is a wait that ran out: the deferred line last and no return marker; the resume line prints the end.
+  const b = regressRepo();
+  const p = probeGate(b.dir, { hold: true });
+  try {
+    const r = direct(b.dir, fresh("pharn-regress", { t: 120_000, b: 1500, extra: ["--base", b.base, ...DONE_FLAGS, ...p.gates] }));
+    assert.equal(r.exit, 5, `${r.tail}${r.errText}`);
+    assert.equal(r.pieces.at(-1), `${MARKER_DEFERRED_CONTINUE}\n`);
+    assert.match(r.errText, /^waiting \(runner pid \d+ alive\)$/);
+    assert.ok(!kinds(b.dir).includes("orchestrator"), "continue: the stage is not over");
+    await until(() => existsSync(join(p.ctl, ".holding")), "the held gate");
+    writeFileSync(join(p.ctl, ".release"), "1");
+    const end = direct(b.dir, resume("pharn-regress"));
+    assert.equal(end.exit, 0, `${end.tail}${end.errText}`);
+    const m = markersIn(b.dir);
+    assert.deepEqual(
+      m.map((x) => x.kind),
+      ["stage-start", "orchestrator"]
+    );
+    assert.equal(JSON.parse(end.pieces[0]).status, "done", "a resume prints no start line");
+    assert.equal(end.pieces.at(-1), `${markerLine(m[1])}\n`);
+  } finally {
+    writeFileSync(join(p.ctl, ".release"), "1");
+    await settle(b.dir);
+    rmSync(b.dir, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a signal is exit 1 (a crash, never a verdict), named on stderr, and the stage still closes", () => {
+  // The probe gate SIGKILLs the real stage-regress.mjs that runs it; the name is in the replayed stderr tail (7.15.0).
+  const { dir, base } = regressRepo();
+  const p = probeGate(dir, { kill: true });
+  try {
+    const r = direct(dir, fresh("pharn-regress", { extra: ["--base", base, ...DONE_FLAGS, ...p.gates] }));
+    assert.equal(r.exit, 1, `${r.tail}${r.errText}`);
+    assert.match(r.tail, /stage-direct: stage-regress\.mjs ended on a signal \(SIGKILL\) — a crash, never a verdict/);
+    assert.equal(markersIn(dir).at(-1).kind, "orchestrator");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a resume writes no start marker, passes only --resume --budget-ms, and closes the stage", () => {
+  // 7.15.0: a resume line runs a script only as a TAKEOVER. The run's first invocation is the real script's (T = B: one
+  // gate, then its own continue); its runner is dead. The resume takes over and runs the script's own --resume.
+  const { dir, base } = regressRepo();
+  const p = probeGate(dir, {});
+  try {
+    const argv = fresh("pharn-regress", { t: 20_000, b: 20_000, extra: ["--base", base, ...DONE_FLAGS, ...p.gates] });
+    const first = bare(() =>
+      spawnSync(process.execPath, [join(HERE, "stage-regress.mjs"), ...scriptArgv(parseDirectArgs(argv).opts)], {
+        cwd: dir,
+        encoding: "utf8",
+      })
+    );
+    assert.equal(first.status, 5, `${first.stdout}${first.stderr}`);
+    assert.equal(p.log().length, 1, "the first invocation ran one gate");
+    const dead = deadPid();
+    plantRun(dir, {
+      argv,
+      state: stateOf({
+        pid: dead,
+        runnerPid: dead,
+        invocations: 1,
+        continues: 1,
+        startMarker: { line: markerLine(startMarkerRec), seq: 1 },
+      }),
+      markers: [startMarkerRec],
+    });
+    const r = direct(dir, resume("pharn-regress"));
+    assert.equal(r.exit, 0, `${r.tail}${r.errText}`);
+    assert.match(r.tail, /took over pharn-regress for demo \(resume\)/);
+    assert.equal(r.pieces.length, 2, "the object and the return line — no start line");
+    assert.equal(JSON.parse(r.pieces[0]).status, "done");
+    assert.deepEqual(kinds(dir), ["stage-start", "orchestrator"], "no second start marker");
+    assert.equal(r.pieces[1], `${markerLine(markersIn(dir)[1])}\n`);
+    assert.equal(p.log().length, 2, "the script resumed with only the gate left — a fresh argv would have re-run the first");
+    const st = readState(dir);
+    assert.deepEqual([st.invocations, st.continues, st.phase], [2, 1, "script-exited"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a setter that fails (no thin-caller command file) refuses with exit 2: nothing runs, nothing is marked (GRILL G2)", () => {
+  const { dir, base } = regressRepo();
+  try {
+    rmSync(join(dir, ".claude", "commands"), { recursive: true });
+    const argv = fresh("pharn-regress", { extra: ["--base", base, ...DONE_FLAGS] });
+    const r = direct(dir, argv);
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(
+      r.tail,
+      /^stage-direct: refused — the writes-scope for pharn-regress could not be set \(setter exit \d+\); nothing was run$/m
+    );
+    assert.equal(existsSync(join(dir, "pharn", ".run", "pharn-regress")), false, "the script never ran");
+    assert.deepEqual(markersIn(dir), []);
+    // CONTROL: the same root WITH the command file runs.
+    mkdirSync(join(dir, ".claude", "commands"), { recursive: true });
+    copyFileSync(join(REPO, ".claude/commands/pharn-regress.md"), join(dir, ".claude/commands/pharn-regress.md"));
+    const ok = direct(dir, argv);
+    assert.equal(ok.exit, 0, `${ok.tail}${ok.errText}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — an unwritable marker prints MARKER_NOT_WRITTEN and the stage still runs with its own exit; a refused argv runs nothing", () => {
+  const root = project();
+  try {
+    mkdirSync(join(root, "pharn", "features", "demo"), { recursive: true }); // verify refuses `missing-artifact`: exit 3
+    mkdirSync(join(root, "pharn", ".run"), { recursive: true });
+    writeFileSync(join(root, "pharn", ".run", "cost"), "a file where the marker directory belongs\n");
+    const r = direct(root, fresh("pharn-verify"));
+    assert.equal(r.exit, 3, `${r.tail}${r.errText}`);
+    assert.equal(r.pieces[0], `${MARKER_NOT_WRITTEN}\n`);
+    assert.equal(r.pieces.at(-1), `${MARKER_NOT_WRITTEN}\n`);
+    assert.equal(JSON.parse(r.pieces[1]).status, "refused", "the script ran: its object between the two lines");
+    assert.match(r.tail, /stage-start marker was not written/);
+    const bad = direct(root, fresh("pharn-verify", { extra: ["--base", "x"] }));
+    assert.deepEqual([bad.exit, bad.out], [2, ""]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("parseLock — a well-formed record of this schema, else null (torn, foreign, a bad pid/stage/name)", () => {
+  // "This schema" is /2 since 7.15.0: the nonce and the holder ride in the record.
+  const rec = { pid: 42, startedAt: "2026-10-05T00:00:00.000Z", stage: "pharn-verify", name: "demo", nonce: NONCE_A, holder: "call" };
+  const good = lockRecord(rec);
+  assert.deepEqual(parseLock(good), rec);
+  const o = JSON.parse(good);
+  for (const [why, bad] of [
+    ["empty (a torn record)", ""],
+    ["not JSON", "{"],
+    ["an array", "[]"],
+    ["another schema", JSON.stringify({ ...o, schema: "x/1" })],
+    ["pid 0", JSON.stringify({ ...o, pid: 0 })],
+    ["pid as a string", JSON.stringify({ ...o, pid: "42" })],
+    ["a stage outside DIRECT_STAGES", JSON.stringify({ ...o, stage: "pharn-build" })],
+    ["a non-slug name", JSON.stringify({ ...o, name: "../x" })],
+  ])
+    assert.equal(parseLock(bad), null, why);
+  assert.deepEqual(LOCK_REFUSALS, ["in-flight", "lock-unusable"], "the closed refusal set");
+});
+
+test("runDirect — a lock held by a LIVE pid refuses `in-flight` (exit 2): no scope set, nothing run or marked, the lock untouched", () => {
+  const root = project();
+  const s = sleeper();
+  try {
+    const held = lockOf(s.pid);
+    plantLock(root, held);
+    const r = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(r.errText, new RegExp(`^refused \\(in-flight\\) — another call \\(pid ${s.pid}, pharn-regress for demo, `));
+    assert.equal(existsSync(join(root, RUNNER_FILE)), false, "no run was started");
+    assert.equal(existsSync(SCOPE(root)), false, "no scope was set");
+    assert.deepEqual(markersIn(root), [], "no marker");
+    assert.equal(readFileSync(lockPath(root), "utf8"), held, "the holder's lock is left alone");
+    // 7.15.0: the resume line of that holder's run WAITS for a live holder (exit 5) where it refused before — still
+    // nothing set, run, marked or moved.
+    plantRun(root, {});
+    const before = hashes(root);
+    const w = direct(root, resume("pharn-regress", 800));
+    assert.deepEqual([w.exit, w.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`]);
+    assert.match(w.errText, new RegExp(`^waiting \\(call pid ${s.pid} alive\\)$`));
+    assert.deepEqual(hashes(root), before);
+    assert.equal(existsSync(SCOPE(root)), false);
+    assert.deepEqual(markersIn(root), []);
+    // CONTROL (the mutant "the lock is ignored"): the same root with no lock runs, and the lock is released.
+    rmSync(lockPath(root));
+    const ok = direct(root, fresh("pharn-verify"));
+    assert.equal(ok.exit, 2, `the real script's own exit (no feature here)\n${ok.tail}${ok.errText}`);
+    assert.equal(JSON.parse(ok.pieces[1]).reason_code, "no-feature");
+    assert.equal(existsSync(lockPath(root)), false, "released");
+  } finally {
+    s.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a DEAD holder's lock is stale: cleared, taken and released; a torn record is never guessed stale", () => {
+  const root = project();
+  try {
+    plantLock(root, lockOf(deadPid()));
+    const r = direct(root, fresh("pharn-verify"));
+    assert.equal(r.exit, 2, `the real script's own exit\n${r.tail}${r.errText}`);
+    assert.deepEqual(kinds(root), ["stage-start", "orchestrator"], "the stage ran");
+    assert.equal(existsSync(lockPath(root)), false);
+    plantLock(root, "");
+    const torn = direct(root, fresh("pharn-verify"));
+    assert.equal(torn.exit, 2);
+    assert.match(
+      torn.errText,
+      /^refused \(in-flight\) — pharn\/\.run\/stage-direct\/in-flight\.json holds no readable lock record; if no stage-direct call is running in this tree, remove it/
+    );
+    assert.equal(readFileSync(lockPath(root), "utf8"), "", "a torn record is left for a person");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runDirect — a lock directory that is a link or a file refuses `lock-unusable`, and nothing is written through it", () => {
+  for (const plant of ["link", "file"]) {
+    const root = project();
+    const elsewhere = mkdtempSync(join(tmpdir(), "stage-direct-elsewhere-"));
+    try {
+      mkdirSync(join(root, "pharn", ".run"), { recursive: true });
+      if (plant === "link") symlinkSync(elsewhere, join(root, LOCK_DIR));
+      else writeFileSync(join(root, LOCK_DIR), "x");
+      const r = direct(root, fresh("pharn-verify"));
+      assert.deepEqual([r.exit, r.out], [2, ""], plant);
+      assert.match(r.errText, /^refused \(lock-unusable\) — pharn\/\.run\/stage-direct is not a directory/, plant);
+      assert.deepEqual(readdirSync(elsewhere), [], `${plant}: nothing through the link`);
+      assert.deepEqual(markersIn(root), [], "nothing ran");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
+  }
+});
+
+test("runDirect — the lock is released on every exit and a signal, but never while it holds ANOTHER call's record", () => {
+  const runs = [
+    ["verify, exit 2", () => ({ root: project(), argv: fresh("pharn-verify") })],
+    ["regress, exit 4", (repo = regressRepo()) => ({ root: repo.dir, argv: fresh("pharn-regress", { extra: ["--base", repo.base] }) })],
+    [
+      "regress, a signal",
+      (repo = regressRepo()) => ({
+        root: repo.dir,
+        argv: fresh("pharn-regress", { extra: ["--base", repo.base, ...DONE_FLAGS, ...probeGate(repo.dir, { kill: true }).gates] }),
+      }),
+    ],
+  ];
+  for (const [why, make] of runs) {
+    const { root, argv } = make();
+    try {
+      direct(root, argv);
+      assert.equal(existsSync(lockPath(root)), false, `${why}: released`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // A gate writes another call's record over the lock mid-run: the runner's release leaves it (it no longer names it).
+  const other = lockOf(process.pid);
+  const { dir, base } = regressRepo();
+  try {
+    const r = direct(dir, fresh("pharn-regress", { extra: ["--base", base, ...DONE_FLAGS, ...probeGate(dir, { swapLock: other }).gates] }));
+    assert.equal(r.exit, 0, `${r.tail}${r.errText}`);
+    assert.equal(readFileSync(lockPath(dir), "utf8"), other, "another call's record is not deleted");
+    // releaseLock, the call's own release: only while the lock holds ITS record.
+    const mine = { file: lockPath(dir), record: lockOf(deadPid()) };
+    assert.equal(releaseLock(mine), "the in-flight lock no longer holds this call's record; left in place");
+    assert.equal(readFileSync(lockPath(dir), "utf8"), other);
+    assert.equal(releaseLock({ file: lockPath(dir), record: other }), null, "its own record: released");
+    assert.equal(existsSync(lockPath(dir)), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ two PROCESSES — a call still running (as a call the Bash tool moved to the background is) refuses a second call, even the resume line; it ends with its own release", async () => {
+  // The first call is another PROCESS (the real CLI); its runner's script holds in a probe gate. 7.15.0: a second fresh
+  // call refuses `in-flight`; the resume line of the same run waits (exit 5) instead of refusing — neither starts a
+  // second script, and neither touches the first run's scope, records or markers.
+  const { dir, base } = regressRepo();
+  const p = probeGate(dir, { hold: true });
+  const child = spawn(
+    process.execPath,
+    [REAL_CLI, ...fresh("pharn-regress", { b: 120_000, extra: ["--base", base, ...DONE_FLAGS, ...p.gates] })],
+    {
+      cwd: dir,
+      env: ENV,
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
+  let out = "";
+  let err = "";
+  child.stdout.on("data", (d) => (out += d));
+  child.stderr.on("data", (d) => (err += d));
+  const ended = new Promise((res) => child.on("close", (code) => res(code)));
+  try {
+    await until(() => existsSync(join(p.ctl, ".holding")), "the first call's script is running");
+    const scopeWhileHeld = readFileSync(SCOPE(dir), "utf8");
+    const before = hashes(dir);
+    const second = direct(dir, fresh("pharn-verify"));
+    assert.deepEqual([second.exit, second.out], [2, ""]);
+    assert.match(
+      second.errText,
+      /^refused \(in-flight\) — a runner \(pid \d+\) is still running a stage in this tree; run that stage's resume line/
+    );
+    const w = direct(dir, resume("pharn-regress", 800));
+    assert.deepEqual([w.exit, w.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`]);
+    assert.match(w.errText, /^waiting \(runner pid \d+ alive\)$/);
+    assert.equal(readFileSync(SCOPE(dir), "utf8"), scopeWhileHeld, "the first call's scope is untouched");
+    assert.deepEqual(hashes(dir), before, "and its records");
+    assert.deepEqual(kinds(dir), ["stage-start"], "no second marker");
+    assert.equal(p.log().length, 1, "one script, never a second");
+    writeFileSync(join(p.ctl, ".release"), "1");
+    assert.equal(await ended, 0, `${out}\n${err}`);
+    assert.deepEqual(kinds(dir), ["stage-start", "orchestrator"], "the first call closes its own stage");
+    assert.equal(existsSync(lockPath(dir)), false, "and releases the lock");
+    assert.equal(existsSync(SCOPE(dir)), false, "and the scope");
+    // CONTROL: the call refused above now runs.
+    const ok = direct(dir, fresh("pharn-regress", { extra: ["--base", base, ...DONE_FLAGS] }));
+    assert.equal(ok.exit, 0, `${ok.tail}${ok.errText}`);
+  } finally {
+    writeFileSync(join(p.ctl, ".release"), "1");
+    await Promise.race([ended, sleep(15_000)]);
+    await settle(dir);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runDirect (7.0.0) — a link at `pharn`, above the lock's state root, refuses `lock-unusable`; nothing runs", () => {
+  const root = project();
+  try {
+    const real = join(root, "pharn-real");
+    mkdirSync(real);
+    symlinkSync(real, join(root, "pharn"));
+    const r = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(r.errText, /^refused \(lock-unusable\) — pharn is not a directory/);
+    assert.deepEqual(readdirSync(real), [], "nothing through the link");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── the runner, in-process ────────────────────────────────────────────────────────────────────────────
+
+test("runRunner (in-process) — the fresh argv, then `--resume --budget-ms <B>` on each exit 5 until another exit: one marker pair, the result written, the scope and the handed lock released", () => {
+  const { dir, base } = regressRepo();
+  try {
+    plantRun(dir, { argv: fresh("pharn-regress", { t: 20_000, b: 20_000, extra: ["--base", base, ...DONE_FLAGS] }), lock: handed() });
+    const r = runnerIn(dir, NONCE_A);
+    assert.equal(r.exit, 0, r.log);
+    const res = readResult(dir);
+    assert.deepEqual([res.nonce, res.exit, JSON.parse(res.stdout).status], [NONCE_A, 0, "done"]);
+    const st = readState(dir);
+    assert.ok(st.continues >= 1, "T = B: the script continued at least once, and the runner resumed it");
+    assert.equal(st.invocations, st.continues + 1, "one invocation per continue, plus the last");
+    assert.deepEqual([st.holder, st.pid, st.runnerPid, st.phase, st.exit], ["runner", process.pid, process.pid, "script-exited", 0]);
+    const m = markersIn(dir);
+    assert.deepEqual(
+      m.map((x) => x.kind),
+      ["stage-start", "orchestrator"]
+    );
+    assert.deepEqual([res.startLine, res.returnLine], [markerLine(m[0]), markerLine(m[1])]);
+    assert.equal(existsSync(lockPath(dir)), false, "the lock it was handed is released");
+    assert.equal(existsSync(SCOPE(dir)), false, "the scope it set is released");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("runRunner (in-process) — runner.json naming another nonce refuses at once; a lock never handed to it refuses after HANDOFF_MAX_MS; neither runs or writes anything", () => {
+  const root = project();
+  try {
+    plantRun(root, {}); // runner.json for NONCE_A, and no lock
+    const wrong = runnerIn(root, NONCE_B);
+    assert.equal(wrong.exit, 2);
+    assert.match(wrong.log, /^stage-direct runner: refused — runner\.json does not name this runner's nonce; nothing was run$/m);
+    // The handoff deadline crossed without waiting it out: the clock the runner reads advances 2 s per read.
+    const realNow = Date.now;
+    let skew = 0;
+    Date.now = () => realNow() + (skew += 2000);
+    let never;
+    try {
+      never = runnerIn(root, NONCE_A);
+    } finally {
+      Date.now = realNow;
+    }
+    assert.equal(never.exit, 2);
+    assert.match(never.log, /^stage-direct runner: refused — the in-flight lock was never handed to this runner; nothing was run$/m);
+    assert.ok(skew > HANDOFF_MAX_MS, "it waited past the deadline, on its own clock");
+    for (const rel of [STATE_FILE, RESULT_FILE, LOCK_FILE]) assert.equal(existsSync(join(root, rel)), false, rel);
+    assert.deepEqual(markersIn(root), []);
+    assert.equal(existsSync(SCOPE(root)), false, "no scope was set");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runRunner (in-process) — it waits for a late handoff; then a setter that fails is today's refusal as the result (exit 2, no object, no marker), and a result it cannot write is a log line", () => {
+  const root = project({ commands: false });
+  try {
+    plantRun(root, {});
+    const text = lockRecord(handed());
+    // Another process hands the lock over 300 ms after the runner starts waiting for it.
+    spawn(
+      process.execPath,
+      ["-e", `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(lockPath(root))}, ${JSON.stringify(text)}), 300)`],
+      {
+        stdio: "ignore",
+      }
+    );
+    const t0 = Date.now();
+    const r = runnerIn(root, NONCE_A);
+    assert.ok(Date.now() - t0 >= 250, "it waited for the handoff");
+    assert.equal(r.exit, 2, r.log);
+    const res = readResult(root);
+    assert.deepEqual([res.exit, res.stdout, res.returnLine], [2, "", null]);
+    assert.match(
+      res.stderrTail,
+      /^stage-direct: refused — the writes-scope for pharn-regress could not be set \(setter exit \d+\); nothing was run$/m
+    );
+    assert.deepEqual(markersIn(root), [], "no marker");
+    assert.equal(existsSync(lockPath(root)), false, "the handed lock released");
+    // A directory at result.json's tmp path: the write fails, and the runner says so on its log.
+    rmSync(join(root, RESULT_FILE));
+    mkdirSync(join(root, `${RESULT_FILE}.tmp-${process.pid}`));
+    plantLock(root, text);
+    const r2 = runnerIn(root, NONCE_A);
+    assert.equal(r2.exit, 2);
+    assert.match(r2.log, /^stage-direct: result\.json was not written \(\w+\)$/m);
+    assert.equal(existsSync(join(root, RESULT_FILE)), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("runRunner (in-process) — a script killed by a signal is exit 1 in its result, named in its tail (a crash, never a verdict), and the stage still closes", () => {
+  const { dir, base } = regressRepo();
+  try {
+    const p = probeGate(dir, { kill: true });
+    plantRun(dir, { argv: fresh("pharn-regress", { extra: ["--base", base, ...DONE_FLAGS, ...p.gates] }), lock: handed() });
+    const r = runnerIn(dir, NONCE_A);
+    assert.equal(r.exit, 0, r.log);
+    const res = readResult(dir);
+    assert.equal(res.exit, 1);
+    assert.match(res.stderrTail, /stage-direct: stage-regress\.mjs ended on a signal \(SIGKILL\) — a crash, never a verdict/);
+    assert.deepEqual(kinds(dir), ["stage-start", "orchestrator"]);
+    assert.equal(res.returnLine, markerLine(markersIn(dir)[1]));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── the takeover, in-process ──────────────────────────────────────────────────────────────────────────
+
+const exited = (dead, over = {}) =>
+  stateOf({
+    pid: dead,
+    runnerPid: dead,
+    startMarker: { line: markerLine(startMarkerRec), seq: 1 },
+    phase: "script-exited",
+    exit: 3,
+    stdout: '{"from":"state"}',
+    invocations: 1,
+    ...over,
+  });
+
+test("TAKEOVER (in-process) — finish: the exited script is never re-run; the return marker is written once (none after one already written, one when markers.jsonl is gone); the recorded stdout and exit print", () => {
+  const ret = { seq: 2, kind: "orchestrator", stage: null, iteration: null, ts: "2026-11-13T00:00:01.000Z", session_id: null };
+  for (const marks of ["start", "both", "none"]) {
+    const root = project();
+    try {
+      plantRun(root, { state: exited(deadPid()), markers: { start: [startMarkerRec], both: [startMarkerRec, ret], none: [] }[marks] });
+      const r = direct(root, resume("pharn-regress"));
+      assert.equal(r.exit, 3, `${marks}: ${r.tail}${r.errText}`);
+      assert.match(r.tail, /took over pharn-regress for demo \(finish\): the runner is gone/);
+      const m = markersIn(root);
+      assert.deepEqual(
+        m.map((x) => x.kind),
+        marks === "none" ? ["orchestrator"] : ["stage-start", "orchestrator"],
+        `${marks}: exactly one return marker`
+      );
+      if (marks === "both") assert.deepEqual(m[1], ret, "the marker written before the kill is the one");
+      assert.equal(r.out, `{"from":"state"}\n${markerLine(m.at(-1))}\n`);
+      assert.equal(readResult(root).exit, 3, "the result is written");
+      assert.equal(existsSync(lockPath(root)), false, "the takeover's lock released");
+      assert.equal(existsSync(join(root, "pharn", ".run", "pharn-regress")), false, "no script ran");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("TAKEOVER (in-process) — the scope it recorded is released only while the file still holds those bytes: another scope is left (a note), a --clear that fails is a note; the exit never changes", () => {
+  const bytes = `${JSON.stringify({ scope: ["other/**"] })}\n`;
+  for (const c of ["another", "clear-fails", "own"]) {
+    const root = project();
+    try {
+      mkdirSync(join(root, "pharn", ".run"), { recursive: true });
+      writeFileSync(SCOPE(root), bytes);
+      if (c === "clear-fails")
+        writeFileSync(
+          join(root, SETTER),
+          `const r = require("node:child_process").spawnSync(process.execPath, [${JSON.stringify(REAL_SETTER)}, ...process.argv.slice(2)], { stdio: "inherit" });\n` +
+            `process.exitCode = process.argv[2] === "--clear" ? 9 : r.status;\n`
+        );
+      plantRun(root, { state: exited(deadPid(), { scopeSha: sha(c === "another" ? "x" : bytes) }), markers: [startMarkerRec] });
+      const r = direct(root, resume("pharn-regress"));
+      assert.equal(r.exit, 3, `${c}: ${r.tail}${r.errText}`);
+      if (c === "another") {
+        assert.match(r.tail, /stage-direct: the writes-scope file holds another scope now \(a later step set it\); left in place/);
+        assert.equal(readFileSync(SCOPE(root), "utf8"), bytes, "a later step's scope is left in place");
+      } else if (c === "clear-fails") {
+        assert.match(r.tail, /stage-direct: the writes-scope was not released \(setter exit 9\); the next scoped step overwrites it/);
+      } else {
+        assert.doesNotMatch(r.tail, /writes-scope/);
+        assert.equal(existsSync(SCOPE(root)), false, "its own scope: released");
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("TAKEOVER (in-process) — start: no state recorded beside a dead runner's lock — the lock is cleared, the start line written and PRINTED first, the fresh argv run (the real script's exit)", () => {
+  const root = project();
+  try {
+    const dead = deadPid();
+    plantRun(root, { stage: "pharn-verify", lock: { ...handed("pharn-verify"), pid: dead } });
+    const r = direct(root, resume("pharn-verify"));
+    assert.equal(r.exit, 2, `${r.tail}${r.errText}`);
+    assert.match(r.tail, /took over pharn-verify for demo \(start\)/);
+    const m = markersIn(root);
+    assert.deepEqual(
+      m.map((x) => x.kind),
+      ["stage-start", "orchestrator"]
+    );
+    assert.equal(m[0].stage, "pharn-verify");
+    assert.equal(r.pieces[0], `${markerLine(m[0])}\n`, "rule 6: the start line reaches an orchestrator tool result");
+    assert.equal(JSON.parse(r.pieces[1]).reason_code, "no-feature", "the real verify ran the fresh argv");
+    assert.equal(r.pieces.at(-1), `${markerLine(m[1])}\n`);
+    const st = readState(root);
+    assert.deepEqual([st.holder, st.runnerPid, st.phase, st.exit], ["takeover", dead, "script-exited", 2], "the cleared runner's pid");
+    assert.equal(existsSync(lockPath(root)), false);
+    assert.equal(existsSync(SCOPE(root)), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("TAKEOVER (in-process) — fresh after a kill before the first checkpoint; its own continue (exit 5) is recorded with the scope and lock released; resume lines then close the stage once", () => {
+  const { dir, base } = regressRepo();
+  try {
+    const dead = deadPid();
+    plantRun(dir, {
+      argv: fresh("pharn-regress", { t: 20_000, b: 20_000, extra: ["--base", base, ...DONE_FLAGS] }),
+      state: stateOf({ pid: dead, runnerPid: dead, startMarker: { line: markerLine(startMarkerRec), seq: 1 } }),
+      markers: [startMarkerRec],
+    });
+    const r1 = direct(dir, resume("pharn-regress", 20_000));
+    assert.deepEqual([r1.exit, r1.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`], `${r1.tail}${r1.errText}`);
+    assert.match(r1.errText, /^the takeover's script run continues \(exit 5\); run the resume line again — it takes over again$/m);
+    assert.match(readFileSync(join(dir, RUNNER_LOG), "utf8"), /took over pharn-regress for demo \(fresh\)/);
+    const st = readState(dir);
+    assert.deepEqual([st.holder, st.invocations, st.continues, st.phase], ["takeover", 1, 1, "running"], "the continue is recorded");
+    assert.equal(existsSync(lockPath(dir)), false, "the lock is released");
+    assert.equal(existsSync(SCOPE(dir)), false, "the scope is released");
+    assert.deepEqual(kinds(dir), ["stage-start"], "no return marker on a continue");
+    let r;
+    for (let i = 0; i < 10; i++) {
+      r = direct(dir, resume("pharn-regress", 20_000));
+      if (r.exit !== 5) break;
+      assert.match(r.errText, /the takeover's script run continues \(exit 5\)/);
+    }
+    assert.equal(r.exit, 0, `${r.tail}${r.errText}`);
+    assert.match(r.tail, /took over pharn-regress for demo \(resume\)/);
+    assert.equal(JSON.parse(r.pieces[0]).status, "done");
+    assert.deepEqual(kinds(dir), ["stage-start", "orchestrator"], "one return marker");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("TAKEOVER (in-process) — a setter that fails prints today's refusal (exit 2, no object, no marker); a state.json or result.json it cannot write, or a runner.log it cannot append, is a note — never a changed exit", () => {
+  const a = project({ commands: false });
+  try {
+    plantRun(a, { state: stateOf({ pid: deadPid(), runnerPid: null }) });
+    mkdirSync(join(a, `${RESULT_FILE}.tmp-${process.pid}`));
+    const r = direct(a, resume("pharn-regress"));
+    assert.deepEqual([r.exit, r.out], [2, ""], `${r.tail}${r.errText}`);
+    assert.match(
+      r.tail,
+      /^stage-direct: refused — the writes-scope for pharn-regress could not be set \(setter exit \d+\); nothing was run$/m
+    );
+    assert.deepEqual(markersIn(a), []);
+    assert.match(readFileSync(join(a, RUNNER_LOG), "utf8"), /stage-direct: result\.json was not written \(\w+\)/);
+    assert.equal(existsSync(join(a, RESULT_FILE)), false);
+  } finally {
+    rmSync(a, { recursive: true, force: true });
+  }
+  const b = project();
+  try {
+    plantRun(b, { state: exited(deadPid()), markers: [startMarkerRec] });
+    mkdirSync(join(b, `${STATE_FILE}.tmp-${process.pid}`));
+    const r = direct(b, resume("pharn-regress"));
+    assert.equal(r.exit, 3, `${r.tail}${r.errText}`);
+    assert.match(r.tail, /stage-direct: state\.json was not written \(\w+\)/);
+    assert.equal(readResult(b).exit, 3, "the result is still written");
+  } finally {
+    rmSync(b, { recursive: true, force: true });
+  }
+  const d = project();
+  try {
+    plantRun(d, { state: exited(deadPid()), markers: [startMarkerRec] });
+    mkdirSync(join(d, `${RESULT_FILE}.tmp-${process.pid}`));
+    const r = direct(d, resume("pharn-regress"));
+    assert.equal(r.exit, 3, `the result this call holds is printed\n${r.tail}${r.errText}`);
+    assert.equal(r.out, `{"from":"state"}\n${markerLine(markersIn(d)[1])}\n`);
+    assert.match(readFileSync(join(d, RUNNER_LOG), "utf8"), /stage-direct: result\.json was not written \(\w+\)/);
+    assert.equal(existsSync(join(d, RESULT_FILE)), false);
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+  const c = project();
+  try {
+    plantRun(c, { state: exited(deadPid()), markers: [startMarkerRec] });
+    writeFileSync(join(c, RUNNER_LOG), "");
+    chmodSync(join(c, RUNNER_LOG), 0o444);
+    const r = direct(c, resume("pharn-regress"));
+    assert.equal(r.exit, 3, `${r.tail}${r.errText}`);
+    assert.match(r.tail, /took over pharn-regress for demo \(finish\)/, "the record's tail still holds the note");
+    assert.equal(readFileSync(join(c, RUNNER_LOG), "utf8"), "", "nothing reached the log");
+  } finally {
+    rmSync(c, { recursive: true, force: true });
+  }
+});
+
+// ── the wait and the start, in-process ────────────────────────────────────────────────────────────────
+
+test("WAIT (in-process) — a live holder is waited for until the budget: one `waiting (<who> pid <p> alive)` line, the deferred line, exit 5 — a runner by the lock (its argv names the nonce), a takeover by state.json — nothing moves", () => {
+  const fr = fakeRunner(NONCE_A);
+  const s = sleeper();
+  const a = project();
+  const b = project();
+  try {
+    plantRun(a, { lock: { ...handed(), pid: fr.pid } });
+    const before = hashes(a);
+    const r = direct(a, resume("pharn-regress", 700));
+    assert.deepEqual([r.exit, r.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`]);
+    assert.match(r.errText, new RegExp(`^waiting \\(runner pid ${fr.pid} alive\\)$`));
+    assert.deepEqual(hashes(a), before);
+    plantRun(b, { state: stateOf({ holder: "takeover", pid: s.pid, runnerPid: null }) });
+    const t = direct(b, resume("pharn-regress", 700));
+    assert.deepEqual([t.exit, t.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`]);
+    assert.match(t.errText, new RegExp(`^waiting \\(takeover pid ${s.pid} alive\\)$`));
+    assert.deepEqual(markersIn(b), []);
+  } finally {
+    fr.kill("SIGKILL");
+    s.kill("SIGKILL");
+    rmSync(a, { recursive: true, force: true });
+    rmSync(b, { recursive: true, force: true });
+  }
+});
+
+test("WAIT / FRESH (in-process) — the holder dead, its process group still populated: the resume line refuses `orphaned` naming the group, a fresh call `in-flight`; nothing runs", () => {
+  const g = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { detached: true, stdio: "ignore" }); // a group leader
+  const root = project();
+  try {
+    plantRun(root, { state: stateOf({ pid: deadPid(), runnerPid: g.pid }) });
+    const before = hashes(root);
+    const r = direct(root, resume("pharn-regress"));
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(
+      r.errText,
+      new RegExp(
+        `^refused \\(orphaned\\) — the runner \\(pid ${g.pid}\\) is gone with no result, but its process group ${g.pid} still runs.*kill -TERM -- -${g.pid}`
+      )
+    );
+    const f = direct(root, fresh("pharn-regress"));
+    assert.deepEqual([f.exit, f.out], [2, ""]);
+    assert.match(f.errText, new RegExp(`^refused \\(in-flight\\) — an earlier runner's process group ${g.pid} still runs`));
+    assert.deepEqual(hashes(root), before, "nothing moved");
+    assert.deepEqual(markersIn(root), []);
+  } finally {
+    killGroup(g.pid);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("WAIT (in-process) — a holder that dies after the call's first poll: the takeover is deferred (exit 5); the next resume line takes over", () => {
+  const root = project();
+  const fr = fakeRunner(NONCE_A, 800);
+  try {
+    plantRun(root, { stage: "pharn-verify", lock: { ...handed("pharn-verify"), pid: fr.pid } });
+    const r = direct(root, resume("pharn-verify", 60_000));
+    assert.deepEqual([r.exit, r.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`], r.errText);
+    assert.match(
+      r.errText,
+      /^takeover deferred — the runner is gone with no result; the next resume line takes over with its whole budget$/
+    );
+    assert.deepEqual(markersIn(root), [], "nothing was taken over");
+    const t = direct(root, resume("pharn-verify"));
+    assert.equal(t.exit, 2, `${t.tail}${t.errText}`);
+    assert.match(t.tail, /took over pharn-verify for demo \(start\)/);
+    assert.deepEqual(kinds(root), ["stage-start", "orchestrator"]);
+  } finally {
+    fr.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("WAIT (in-process) — a bound result prints at once (its tail replayed, its stdout with a final newline, its return line); the call then waits for the runner's release", () => {
+  const root = project();
+  const fr = fakeRunner(NONCE_A, 1200);
+  try {
+    const res = {
+      nonce: NONCE_A,
+      stage: "pharn-regress",
+      name: "demo",
+      exit: 3,
+      stdout: '{"x":1}',
+      stderrTail: "TAIL\n",
+      startLine: null,
+      returnLine: "marker 2: orchestrator t",
+    };
+    plantRun(root, { result: res, lock: { ...handed(), pid: fr.pid } });
+    const t0 = Date.now();
+    const r = direct(root, resume("pharn-regress"));
+    assert.deepEqual([r.exit, r.out, r.tail], [3, '{"x":1}\nmarker 2: orchestrator t\n', "TAIL\n"]);
+    assert.equal(psShows(fr.pid, NONCE_A), false, "it returned once the runner was gone");
+    assert.ok(Date.now() - t0 < RELEASE_WAIT_MS, "not by waiting out its bound");
+  } finally {
+    fr.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("RESUME (in-process) — no runner.json is `no-run`; another stage's run `mismatch`; an unreadable runner/state/result record `record-unusable`; a torn lock beside a dead runner `in-flight` — each exit 2, nothing written", () => {
+  const root = project();
+  try {
+    const none = direct(root, resume("pharn-regress"));
+    assert.deepEqual([none.exit, none.out], [2, ""]);
+    assert.match(none.errText, /^refused \(no-run\) — no run was started in this tree \(no pharn\/\.run\/stage-direct\/runner\.json\)/);
+    plantRun(root, {});
+    const before = hashes(root);
+    const mm = direct(root, resume("pharn-verify"));
+    assert.deepEqual([mm.exit, mm.out], [2, ""]);
+    assert.match(mm.errText, /^refused \(mismatch\) — the run in this tree is pharn-regress for demo, not pharn-verify for demo/);
+    assert.deepEqual(hashes(root), before);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  for (const [rel, text, what] of [
+    [RUNNER_FILE, "{", "runner"],
+    [STATE_FILE, '{"toString":1}', "state"],
+    [RESULT_FILE, '{"toString":1}', "result"],
+  ]) {
+    const r0 = project();
+    try {
+      plantRun(r0, {});
+      writeFileSync(join(r0, rel), text);
+      const r = direct(r0, resume("pharn-regress"));
+      assert.deepEqual([r.exit, r.out], [2, ""], rel);
+      assert.match(
+        r.errText,
+        new RegExp(`^refused \\(record-unusable\\) — ${rel.replaceAll(".", "\\.")} holds no readable ${what} record`),
+        rel
+      );
+    } finally {
+      rmSync(r0, { recursive: true, force: true });
+    }
+  }
+  const t = project();
+  try {
+    plantRun(t, { state: stateOf({ pid: deadPid(), runnerPid: null }) });
+    plantLock(t, "");
+    const r = direct(t, resume("pharn-regress"));
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(r.errText, /^refused \(in-flight\) — pharn\/\.run\/stage-direct\/in-flight\.json holds no readable lock record/);
+    assert.equal(readFileSync(lockPath(t), "utf8"), "", "left for a person");
+  } finally {
+    rmSync(t, { recursive: true, force: true });
+  }
+});
+
+test("the call (in-process) — a record that is a link, or one it cannot even lstat, refuses `record-unusable` before anything is taken or written", () => {
+  const root = project();
+  const elsewhere = mkdtempSync(join(tmpdir(), "stage-direct-elsewhere-"));
+  try {
+    plantRun(root, {});
+    symlinkSync(join(elsewhere, "target"), join(root, STATE_FILE));
+    for (const argv of [fresh("pharn-regress"), resume("pharn-regress")]) {
+      const r = direct(root, argv);
+      assert.deepEqual([r.exit, r.out], [2, ""]);
+      assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/state\.json is not a regular file/);
+    }
+    assert.deepEqual(readdirSync(elsewhere), []);
+    rmSync(join(root, STATE_FILE));
+    chmodSync(join(root, LOCK_DIR), 0o600); // no search permission: every record's lstat is EACCES
+    try {
+      const r = direct(root, fresh("pharn-regress"));
+      assert.deepEqual([r.exit, r.out], [2, ""]);
+      assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/[\w.-]+: EACCES; nothing was run$/);
+    } finally {
+      chmodSync(join(root, LOCK_DIR), 0o755);
+    }
+    assert.equal(existsSync(lockPath(root)), false, "no lock was taken");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("FRESH (in-process) — an earlier state.json that is unreadable refuses `record-unusable`, one whose writer lives `in-flight`; one whose result is written is over, whatever its pids read", () => {
+  const s = sleeper();
+  const root = project();
+  try {
+    mkdirSync(join(root, LOCK_DIR), { recursive: true });
+    writeFileSync(join(root, STATE_FILE), '{"toString":1}');
+    const u = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([u.exit, u.out], [2, ""]);
+    assert.match(u.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/state\.json holds no readable state record/);
+    const live = stateOf({ holder: "takeover", pid: s.pid, runnerPid: null });
+    plantRun(root, { state: live });
+    const f = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([f.exit, f.out], [2, ""]);
+    assert.match(f.errText, new RegExp(`^refused \\(in-flight\\) — a takeover \\(pid ${s.pid}\\) is still running a stage in this tree`));
+    // The same state beside its run's written result: that run is over — the fresh call starts and runs.
+    plantRun(root, {
+      state: live,
+      result: {
+        nonce: NONCE_A,
+        stage: "pharn-regress",
+        name: "demo",
+        exit: 0,
+        stdout: "{}",
+        stderrTail: "",
+        startLine: null,
+        returnLine: null,
+      },
+    });
+    const ok = direct(root, fresh("pharn-verify"));
+    assert.equal(ok.exit, 2, `the real verify's own exit\n${ok.tail}${ok.errText}`);
+    assert.deepEqual(kinds(root), ["stage-start", "orchestrator"]);
+  } finally {
+    s.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("FRESH (in-process) — a runner.json it cannot write refuses `record-unusable`, a runner.log it cannot open `spawn-failed`; each removes what it wrote and releases the lock — nothing runs", () => {
+  const root = project();
+  try {
+    mkdirSync(join(root, `${RUNNER_FILE}.tmp-${process.pid}`), { recursive: true });
+    const r = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([r.exit, r.out], [2, ""]);
+    assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/runner\.json: \w+; nothing was run$/);
+    assert.equal(existsSync(join(root, RUNNER_FILE)), false);
+    assert.equal(existsSync(lockPath(root)), false, "the lock released");
+    rmSync(join(root, `${RUNNER_FILE}.tmp-${process.pid}`), { recursive: true });
+    writeFileSync(join(root, RUNNER_LOG), "");
+    chmodSync(join(root, RUNNER_LOG), 0o444);
+    const s = direct(root, fresh("pharn-verify"));
+    assert.deepEqual([s.exit, s.out], [2, ""]);
+    assert.match(s.errText, /^refused \(spawn-failed\) — the runner could not be started \(EACCES\); nothing was run$/);
+    assert.equal(existsSync(join(root, RUNNER_FILE)), false, "runner.json removed: no resume line takes the refused start over");
+    assert.equal(existsSync(lockPath(root)), false, "the lock released");
+    assert.match(direct(root, resume("pharn-verify")).errText, /^refused \(no-run\) — /);
+    assert.deepEqual(markersIn(root), [], "nothing ran");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── the lock and `ps`, in-process ─────────────────────────────────────────────────────────────────────
+
+test("acquireLock / releaseLock (in-process) — a live call or runner holds it (`in-flight`, live, naming which); a dead one is cleared and returned; an unwritable lock directory is `lock-unusable`; release leaves another's record", () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-direct-lock-"));
+  const s = sleeper();
+  const fr = fakeRunner(NONCE_A);
+  const opts = { stage: "pharn-verify", name: "demo", nonce: NONCE_B };
+  try {
+    plantLock(root, lockOf(s.pid));
+    const call = acquireLock(root, opts);
+    assert.deepEqual([call.ok, call.reason, call.live], [false, "in-flight", true]);
+    assert.match(
+      call.detail,
+      new RegExp(`^another call \\(pid ${s.pid}, pharn-regress for demo, started "2026-10-05T00:00:00\\.000Z"\\) is still running`)
+    );
+    plantLock(root, lockOf(fr.pid, "runner"));
+    const run = acquireLock(root, opts);
+    assert.deepEqual([run.ok, run.reason, run.live], [false, "in-flight", true]);
+    assert.match(
+      run.detail,
+      new RegExp(`^a runner \\(pid ${fr.pid}, pharn-regress for demo, .*run that stage's resume line to wait for it`)
+    );
+    const dead = lockOf(deadPid(), "runner");
+    plantLock(root, dead);
+    const took = acquireLock(root, opts);
+    assert.equal(took.ok, true, took.detail);
+    assert.deepEqual(took.cleared, parseLock(dead), "the stale record it cleared");
+    assert.equal(readFileSync(lockPath(root), "utf8"), took.record);
+    assert.deepEqual([parseLock(took.record).holder, parseLock(took.record).nonce], ["call", NONCE_B]);
+    writeFileSync(lockPath(root), lockOf(s.pid));
+    assert.equal(releaseLock(took), "the in-flight lock no longer holds this call's record; left in place");
+    assert.equal(readFileSync(lockPath(root), "utf8"), lockOf(s.pid));
+    rmSync(lockPath(root));
+    chmodSync(join(root, LOCK_DIR), 0o500);
+    try {
+      const u = acquireLock(root, opts);
+      assert.deepEqual(
+        [u.ok, u.reason, u.live, u.detail],
+        [false, "lock-unusable", false, "pharn/.run/stage-direct/in-flight.json: EACCES"]
+      );
+    } finally {
+      chmodSync(join(root, LOCK_DIR), 0o755);
+    }
+  } finally {
+    s.kill("SIGKILL");
+    fr.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("acquireLock (in-process) — a lock that vanishes before its clearing is taken without clearing; one replaced at every attempt is given up `in-flight` after three, the replacement put back (a fake `ps` makes each change at that exact step)", () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-direct-lock-"));
+  const s = sleeper(); // a live pid that the fake ps says is no runner
+  const opts = { stage: "pharn-verify", name: "demo", nonce: NONCE_B };
+  const at = (i) =>
+    lockRecord({
+      pid: s.pid,
+      startedAt: `2026-10-05T00:00:0${i}.000Z`,
+      stage: "pharn-regress",
+      name: "demo",
+      nonce: NONCE_A,
+      holder: "runner",
+    });
+  try {
+    plantLock(root, at(0));
+    const gone = bare(() => acquireLock(root, opts), fakePs({ "ww-1": plantStep(lockPath(root), null) }));
+    assert.equal(gone.ok, true, gone.detail);
+    assert.equal(gone.cleared, null, "it vanished: nothing was cleared by this call");
+    rmSync(lockPath(root));
+    plantLock(root, at(0));
+    const steps = {
+      "ww-1": plantStep(lockPath(root), at(1)),
+      "ww-2": plantStep(lockPath(root), at(2)),
+      "ww-3": plantStep(lockPath(root), at(1)),
+    };
+    const lost = bare(() => acquireLock(root, opts), fakePs(steps));
+    assert.deepEqual(lost, {
+      ok: false,
+      reason: "in-flight",
+      detail: "another call took the lock while this one cleared a stale one",
+      live: true,
+    });
+    assert.equal(readFileSync(lockPath(root), "utf8"), at(1), "the last replacement is put back, never deleted");
+    assert.deepEqual(
+      readdirSync(join(root, LOCK_DIR)).filter((f) => f !== "in-flight.json"),
+      [],
+      "no aside or tmp file left"
+    );
+  } finally {
+    s.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("acquireLock (in-process) — a stale lock replaced by a DIRECTORY just before its clearing: the put-back link and the removal fail quietly (never a throw), the call takes the freed slot, and the directory is left aside", () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-direct-lock-"));
+  const s = sleeper(); // a live pid that the fake ps says is no runner
+  const opts = { stage: "pharn-verify", name: "demo", nonce: NONCE_B };
+  const stale = lockRecord({
+    pid: s.pid,
+    startedAt: "2026-10-05T00:00:00.000Z",
+    stage: "pharn-regress",
+    name: "demo",
+    nonce: NONCE_A,
+    holder: "runner",
+  });
+  try {
+    plantLock(root, stale);
+    // The nonce check (ps) is the last step before clearStale: there the lock becomes a directory, which a hard link
+    // cannot point at and unlink cannot remove — both best-effort steps fail.
+    const swap = `rm -f ${shq(lockPath(root))} && mkdir ${shq(lockPath(root))}`;
+    const r = bare(() => acquireLock(root, opts), fakePs({ "ww-1": swap }));
+    assert.equal(r.ok, true, r.detail);
+    assert.equal(r.cleared, null, "what was moved aside was not the stale record, so nothing was cleared");
+    assert.equal(parseLock(readFileSync(lockPath(root), "utf8"))?.nonce, NONCE_B, "the lock is this call's");
+    const left = readdirSync(join(root, LOCK_DIR)).filter((f) => f !== "in-flight.json");
+    assert.equal(left.length, 1, `one entry left aside: ${left}`);
+    assert.match(left[0], /^in-flight\.json\.stale-/);
+    assert.equal(statSync(join(root, LOCK_DIR, left[0])).isDirectory(), true, "the directory, neither linked back nor removed");
+  } finally {
+    s.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("with no `ps` on PATH (in-process) — a live pid reads alive (fail-closed): a runner lock ps would call stale refuses `in-flight`; a populated group reads alive by kill(-pgid, 0), an empty one does not", () => {
+  const s = sleeper();
+  const g = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { detached: true, stdio: "ignore" });
+  const root = mkdtempSync(join(tmpdir(), "stage-direct-lock-"));
+  const a = project();
+  const b = project();
+  try {
+    const opts = { stage: "pharn-verify", name: "demo", nonce: NONCE_B };
+    plantLock(root, lockOf(s.pid, "runner"));
+    const blind = bare(() => acquireLock(root, opts), NO_PS);
+    assert.deepEqual([blind.ok, blind.reason, blind.live], [false, "in-flight", true]);
+    assert.equal(readFileSync(lockPath(root), "utf8"), lockOf(s.pid, "runner"), "the lock untouched");
+    // CONTROL: with ps, the same pid is no runner of that nonce — stale, cleared.
+    assert.equal(acquireLock(root, opts).ok, true);
+    plantRun(a, { state: stateOf({ pid: deadPid(), runnerPid: g.pid }) });
+    const o = direct(a, resume("pharn-regress"), NO_PS);
+    assert.equal(o.exit, 2);
+    assert.match(o.errText, new RegExp(`^refused \\(orphaned\\) — the runner \\(pid ${g.pid}\\)`));
+    plantRun(b, { state: exited(deadPid()), markers: [startMarkerRec] });
+    const f = direct(b, resume("pharn-regress"), NO_PS);
+    assert.equal(f.exit, 3, `an empty group: taken over and finished\n${f.tail}${f.errText}`);
+    assert.match(f.tail, /took over pharn-regress for demo \(finish\)/);
+  } finally {
+    s.kill("SIGKILL");
+    killGroup(g.pid);
+    for (const d of [root, a, b]) rmSync(d, { recursive: true, force: true });
+  }
+});
+
+test("TAKEOVER (in-process) — a run that changes between the wait's read and the takeover's (a fake `ps` plants it at that exact step): another run's runner.json refuses `mismatch`, an unreadable result or state `record-unusable`", () => {
+  const other = runnerRecord({ nonce: NONCE_B, stage: "pharn-regress", name: "demo", iteration: 1, argv: fresh("pharn-regress") });
+  for (const [rel, text, want] of [
+    [
+      RUNNER_FILE,
+      other,
+      /^refused \(mismatch\) — pharn\/\.run\/stage-direct\/runner\.json no longer names the run this call selected; nothing was run$/,
+    ],
+    [
+      RESULT_FILE,
+      "{",
+      /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/result\.json holds no readable result record; nothing was run$/,
+    ],
+    [
+      STATE_FILE,
+      "{",
+      /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/state\.json holds no readable state record; nothing was run$/,
+    ],
+  ]) {
+    const root = project();
+    try {
+      plantRun(root, { state: stateOf({ pid: deadPid(), runnerPid: deadPid() }) });
+      // The wait's group check (`ps -A`) is the step between its reads and the takeover's.
+      const r = direct(root, resume("pharn-regress"), fakePs({ "A-1": plantStep(join(root, rel), text) }));
+      assert.deepEqual([r.exit, r.out], [2, ""], `${rel}: ${r.tail}${r.errText}`);
+      assert.match(r.errText, want);
+      assert.equal(existsSync(lockPath(root)), false, `${rel}: the takeover's lock released`);
+      assert.deepEqual(markersIn(root), [], `${rel}: nothing ran`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("WAIT (in-process) — a result written while the call decides is printed, never taken over; a holder that turns live at the takeover's lock is waited for (a fake `ps` makes each change at that exact step)", () => {
+  const s = sleeper();
+  const late = resultRecord({
+    nonce: NONCE_A,
+    stage: "pharn-regress",
+    name: "demo",
+    exit: 3,
+    stdout: '{"late":1}',
+    stderrTail: "",
+    startLine: null,
+    returnLine: "marker 9: orchestrator t",
+  });
+  const lock = { ...handed(), pid: s.pid };
+  try {
+    // (1) written between the wait's first read and its re-read before a takeover (at its group check).
+    const a = project();
+    try {
+      plantRun(a, { state: stateOf({ pid: deadPid(), runnerPid: deadPid() }) });
+      const r = direct(a, resume("pharn-regress"), fakePs({ "A-1": plantStep(join(a, RESULT_FILE), late) }));
+      assert.deepEqual([r.exit, r.out], [3, '{"late":1}\nmarker 9: orchestrator t\n'], `${r.tail}${r.errText}`);
+      assert.equal(existsSync(lockPath(a)), false, "no takeover took the lock");
+    } finally {
+      rmSync(a, { recursive: true, force: true });
+    }
+    // (2) written after that re-read, while the takeover clears a dead holder's lock: the takeover reads it, and the
+    // wait prints it.
+    const b = project();
+    try {
+      plantRun(b, { lock });
+      const r = direct(b, resume("pharn-regress"), fakePs({ "ww-2": plantStep(join(b, RESULT_FILE), late) }));
+      assert.deepEqual([r.exit, r.out], [3, '{"late":1}\nmarker 9: orchestrator t\n'], `${r.tail}${r.errText}`);
+      assert.doesNotMatch(r.tail, /took over/);
+      assert.equal(existsSync(lockPath(b)), false, "the takeover's own lock released");
+    } finally {
+      rmSync(b, { recursive: true, force: true });
+    }
+    // (3) the holder reads dead to the wait, then live to the takeover's lock: the call reads again and waits it out.
+    const c = project();
+    try {
+      plantRun(c, { lock });
+      const before = hashes(c);
+      const steps = { "ww-all": `if [ "$n" -ge 2 ]; then echo "node stage-direct.mjs --runner ${NONCE_A}"; fi` };
+      const r = direct(c, resume("pharn-regress", 700), fakePs(steps));
+      assert.deepEqual([r.exit, r.out], [5, `${MARKER_DEFERRED_CONTINUE}\n`], `${r.tail}${r.errText}`);
+      assert.match(r.errText, new RegExp(`^waiting \\(runner pid ${s.pid} alive\\)$`));
+      assert.deepEqual(hashes(c), before, "the live holder's lock untouched");
+    } finally {
+      rmSync(c, { recursive: true, force: true });
+    }
+  } finally {
+    s.kill("SIGKILL");
   }
 });

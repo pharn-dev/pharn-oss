@@ -12,11 +12,11 @@
   "verdict": "PASS",
   "failing_gates": [],
   "gate_run": {
-    "stamp_sha256": "2588449f7c0125e79f8f04d4eb388790884daaacc45ad72b1d10e5c8c7901c72",
+    "stamp_sha256": "c0e06e887c577d257ba397083a79fc4678cd35645f13c89d35779f97b07711f4",
     "source": "explicit",
     "fingerprint": {
       "algo": "worktree-fingerprint/3+sha256",
-      "final": "c09ba1b624de0108b077a387b9a0060686324d2b8e9cfd16a5623b2d63d59bd6"
+      "final": "5a8b8da558b4f27f668b4b7c4ad489bb0b8c8a9dc06d91c02cdc8bc91709d34c"
     }
   },
   "verifiers": {

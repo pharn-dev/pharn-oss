@@ -146,7 +146,14 @@
 //     empty). On a filesystem without hard links (FAT/exFAT, some network mounts) `link` fails, and every call refuses
 //     `lock-unusable` — a stop with a named reason, never a lock taken half-way.
 //   * A process a gate double-forks out of the runner's group escapes both the liveness and the orphan check — the
-//     same class as entry-gates.mjs's named bound. A takeover's script runs in the calling process's group, unchecked.
+//     same class as entry-gates.mjs's named bound. A gate run-gates.mjs starts in its OWN group is outside the runner's
+//     group too: after a runner death this file's checks do not see it, and run-gates.mjs's stale-lock recovery is what
+//     stops it (SIGTERM, then SIGKILL) before the takeover's script re-runs that gate, or refuses `lock-busy` when it
+//     will not die — so two gates never overlap, but the leftover gate's work is discarded, not waited for.
+//   * A takeover's script runs in the CALLING process's group, unchecked: when only the calling process is killed and
+//     its script survives, the next resume line can take over and start a second script beside it. run-gates.mjs's
+//     lock still keeps their gates from overlapping; the two scripts' own progress records are not guarded. No group is
+//     recorded for it: spawnSync gives no pid until the script ends, and the case has no observed failure (P7).
 //   * A runner killed between its stage-start marker's append and its state.json write gets a second start marker
 //     from the takeover; a takeover with no recorded start `seq` (the marker was not written) writes the return marker
 //     without the check.
@@ -310,8 +317,19 @@ function groupAlive(pgid) {
 
 // ── records: bounded, never following a link ──────────────────────────────────────────────────────────
 
+/** A best-effort removal or put-back whose failure leaves nothing to undo: a leftover file blocks nothing, and a lost
+ *  put-back is the header's three-call bound. */
+function quietly(step) {
+  try {
+    step();
+  } catch {
+    // nothing to undo
+  }
+}
+
 /** The bytes of the regular file at `file`, never following a link, never blocking: `{state: absent}`, `{state:
- *  unusable}` (a link, not a regular file, larger than `max`, unreadable) or `{state: ok, bytes}`. */
+ *  unusable}` (a link, not a regular file, larger than `max`, unopenable) or `{state: ok, bytes}`. An I/O error on the
+ *  open file (EIO) throws: the call's crash, exit 1, never a verdict. */
 function readFileBounded(file, max) {
   let fd;
   try {
@@ -330,8 +348,6 @@ function readFileBounded(file, max) {
       off += n;
     }
     return { state: "ok", bytes: buf.subarray(0, off) };
-  } catch {
-    return { state: "unusable" };
   } finally {
     closeSync(fd);
   }
@@ -456,24 +472,14 @@ function clearStale(file, staleText) {
     return e?.code === "ENOENT" ? "changed" : errCode(e);
   }
   if (readLockText(aside) === staleText) {
-    try {
-      unlinkSync(aside);
-    } catch {
-      // aside is not the lock; a leftover there blocks nothing
-    }
+    quietly(() => unlinkSync(aside)); // aside is not the lock; a leftover there blocks nothing
     return "cleared";
   }
-  try {
-    linkSync(aside, file); // put another call's lock back — never over a third one (link refuses an existing path)
-  } catch {
-    // a third call took the slot meanwhile: the record put aside is lost, and two calls may each believe they hold the
-    // lock — the header's named bound (three calls clearing one stale lock at once)
-  }
-  try {
-    unlinkSync(aside);
-  } catch {
-    // as above
-  }
+  // Put another call's lock back — never over a third one (link refuses an existing path). When a third call took the
+  // slot meanwhile, the record put aside is lost and two calls may each believe they hold the lock: the header's named
+  // bound (three calls clearing one stale lock at once).
+  quietly(() => linkSync(aside, file));
+  quietly(() => unlinkSync(aside));
   return "changed";
 }
 
@@ -487,7 +493,7 @@ function heldDetail(held) {
 /** Create the lock holding `record`, whole or not at all: the record is written to a fresh tmp file, which is then
  *  LINKED into place (link refuses an existing path, a link included, as O_EXCL|O_NOFOLLOW does). So no call of ours
  *  ever leaves an empty lock behind, even for a moment: an unreadable lock is a foreign, torn or pre-upgrade one.
- *  Returns true (created), false (a lock is there), or throws. */
+ *  Returns once created, or throws: `EEXIST` when a lock is there, any other code when the lock cannot be made. */
 function createLock(file, record) {
   const tmp = `${file}.new-${process.pid}-${randomBytes(4).toString("hex")}`;
   const fd = openSync(tmp, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
@@ -498,16 +504,8 @@ function createLock(file, record) {
       closeSync(fd);
     }
     linkSync(tmp, file);
-    return true;
-  } catch (e) {
-    if (e?.code === "EEXIST") return false;
-    throw e;
   } finally {
-    try {
-      unlinkSync(tmp);
-    } catch {
-      // a leftover tmp blocks nothing
-    }
+    quietly(() => unlinkSync(tmp)); // a leftover tmp blocks nothing
   }
 }
 
@@ -526,13 +524,12 @@ export function acquireLock(root, { stage, name, nonce, holder = "call", now = D
   const record = lockRecord({ pid, startedAt: new Date(now).toISOString(), stage, name, nonce, holder });
   let cleared = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    let created;
     try {
-      created = createLock(file, record);
+      createLock(file, record);
+      return { ok: true, file, record, cleared };
     } catch (e) {
-      return { ok: false, reason: "lock-unusable", detail: `${LOCK_FILE}: ${errCode(e)}`, live: false };
+      if (e?.code !== "EEXIST") return { ok: false, reason: "lock-unusable", detail: `${LOCK_FILE}: ${errCode(e)}`, live: false };
     }
-    if (created) return { ok: true, file, record, cleared };
     // ONE read decides absent vs present: a second lstat could see a lock a racing call linked in after the read, and
     // would call that live lock unreadable (re-review R1).
     const r = readFileBounded(file, LOCK_READ_MAX);
@@ -591,7 +588,10 @@ function runScript(root, stage, args) {
   if (r.error) stderr += `stage-direct: the ${table.script} run failed (${errCode(r.error)}) — a crash, never a verdict\n`;
   else if (r.status === null)
     stderr += `stage-direct: ${table.script} ended on a signal (${r.signal ?? "unknown"}) — a crash, never a verdict\n`;
-  return { exit, stdout: typeof r.stdout === "string" ? r.stdout : "", stderr };
+  // A run that overflows maxBuffer (ENOBUFS) can hand back MORE than the bound, and the records' parsers refuse a longer
+  // stdout: keep it within the bound, so the crash stays exit 1 rather than a later `record-unusable` (PR #443 review).
+  const stdout = typeof r.stdout === "string" ? r.stdout.slice(0, SCRIPT_STDOUT_MAX) : "";
+  return { exit, stdout, stderr };
 }
 
 /** The first `orchestrator` marker after `seq` in this name's markers.jsonl, or null (L58: never a count). */
@@ -837,6 +837,12 @@ function takeover(ctx, rec) {
   const lock = acquireLock(ctx.root, { stage: rec.stage, name: rec.name, nonce: rec.nonce, holder: "call" });
   if (!lock.ok) return lock.live ? { again: true } : refuse(ctx, lock.reason, lock.detail);
   try {
+    // runner.json was read before the lock was taken; a fresh call writes it only while holding the lock, so re-read it
+    // now that this call holds it. A newer run in between is not this takeover's to finish (PR #443 review).
+    const raw = readFileBounded(join(ctx.root, RUNNER_FILE), RUNNER_READ_MAX);
+    const now = raw.state === "ok" ? parseRunner(raw.bytes.toString("utf8")) : null;
+    if (now === null || now.nonce !== rec.nonce)
+      return refuse(ctx, "mismatch", `${RUNNER_FILE} no longer names the run this call selected`);
     const res = readBound(ctx.root, RESULT_FILE, parseResult, rec.nonce);
     if (res.unusable) return refuse(ctx, "record-unusable", `${RESULT_FILE} holds no readable result record`);
     if (res.value) return { again: true }; // finished between the two reads
@@ -1011,6 +1017,9 @@ function startCall(ctx) {
     try {
       fd = openSync(join(root, RUNNER_LOG), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW, 0o644);
       child = spawn(process.execPath, [SELF, RUNNER_FLAG, nonce], { cwd: root, detached: true, stdio: ["ignore", fd, fd] });
+      // A failure such as EAGAIN is an 'error' EVENT, not a throw: consume it, so it cannot end this call after the
+      // missing-pid refusal below (PR #443 review).
+      child.on("error", () => {});
     } catch (e) {
       child = { pid: undefined, error: e };
     } finally {
@@ -1038,11 +1047,7 @@ function startCall(ctx) {
       // A start that never handed off ran nothing: remove its runner.json, so no later resume line takes it over and
       // runs the fresh argv of a refused start (spawn-failed and a failed handoff alike).
       if (wroteRunner) {
-        try {
-          unlinkSync(join(root, RUNNER_FILE));
-        } catch {
-          // the refusal names the run as not started either way
-        }
+        quietly(() => unlinkSync(join(root, RUNNER_FILE))); // the refusal names the run as not started either way
       }
       const n = releaseLock(lock);
       if (n) ctx.err.push(n);
