@@ -4199,9 +4199,10 @@ const DIRECT_STAGE_WIRING = [
     answerRule: true,
   },
 ];
-/** Rule 7: the backgrounded-call paragraph (words matched across line breaks). */
+/** Rule 7: the backgrounded-call paragraph (words matched across line breaks). 7.15.0 (stage-wait-once): a second
+ *  FRESH call refuses `in-flight`; a second resume line only waits beside the first (the runner holds the lock). */
 const BACKGROUND_RULE =
-  /\*\*A call the Bash tool reports as moved to the background is STILL RUNNING\*\*[\s\S]{0,600}?Never\s+start\s+its\s+resume\s+line,\s+or\s+any\s+other\s+`stage-direct\.mjs`\s+call,\s+while\s+it\s+runs:\s+a\s+second\s+call\s+refuses\s+`in-flight`/;
+  /\*\*A call the Bash tool reports as moved to the background is STILL RUNNING\*\*[\s\S]{0,600}?Never\s+start\s+its\s+resume\s+line,\s+or\s+any\s+other\s+`stage-direct\.mjs`\s+call,\s+while\s+it\s+runs:\s+a\s+second\s+fresh\s+call\s+refuses\s+`in-flight`/;
 /** Rule 7's closed-out claim: "resume once when the Bash tool timed out". */
 const TIMEOUT_RESUME = /Bash\s+tool\s+itself\s+timed\s+out/;
 /** Rule 8: ship's answer line. */
@@ -4277,6 +4278,18 @@ test("✧ DIRECT_STAGE_WIRING — CLOSURE: the commands calling stage-direct.mjs
     .filter((f) => /node pharn\/floor\/stage-direct\.mjs/.test(commandBody(f)))
     .sort();
   assert.deepEqual(live, DIRECT_STAGE_WIRING.map((w) => w.file).sort());
+});
+
+// 7.15.0 (stage-wait-once): `stage-direct.mjs --runner <nonce>` is the call's INTERNAL mode — the fresh line starts it
+// with a nonce only it knows. A command naming it would start a second runner by hand, beside the lock's handoff.
+// HONEST SCOPE: presence of the token in committed command text, never what a run typed (P0).
+const RUNNER_MODE = /--runner\b/;
+test("✧ DIRECT_STAGE_WIRING — no command, part included, names stage-direct.mjs's internal `--runner` mode", () => {
+  const offenders = commandAndPartFiles().filter((f) => RUNNER_MODE.test(readFileSync(join(COMMANDS_DIR, f), "utf8")));
+  assert.deepEqual(offenders, []);
+  // CONTROL (L60): a line naming it is caught by the same predicate.
+  assert.ok(RUNNER_MODE.test("node pharn/floor/stage-direct.mjs --runner 0123456789abcdef0123456789abcdef"));
+  assert.ok(commandAndPartFiles().length > 20, "L34: the whole commands directory is read");
 });
 
 test("✧ DIRECT_STAGE_WIRING (1) — the setter argv the call runs IS the thin caller's pinned setter line, per stage", () => {
@@ -4395,13 +4408,31 @@ test("✧ THIN_CALLER_BACKGROUND — each assertion fails on its own mutant (L60
   }
 });
 
+// 7.15.0 (stage-wait-once): a FRESH line starts the detached runner and waits for it; a RESUME line only waits, so in a
+// tree where no run was started it refuses `no-run` (exit 2, nothing written), and after its stage's fresh line it
+// replays that run's result — the script's object and the return-marker line, its exit — writing no marker of its own.
 test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real script refuses: its exit passes through, its markers, its release", () => {
   const env = { ...process.env };
   delete env.CLAUDE_PROJECT_DIR;
   delete env.CLAUDE_CODE_SESSION_ID;
+  const sub = (t) =>
+    t
+      .replaceAll("'<name>'", "'demo'")
+      .replaceAll("<N>", "1")
+      .replaceAll("'<base sha>'", `'${"a".repeat(40)}'`);
+  const markersOf = (dir) => {
+    const f = join(dir, "pharn", ".run", "cost", "demo", "markers.jsonl");
+    return existsSync(f)
+      ? readFileSync(f, "utf8")
+          .trim()
+          .split("\n")
+          .map((l) => JSON.parse(l))
+      : [];
+  };
   let ran = 0;
   for (const w of DIRECT_STAGE_WIRING) {
-    for (const t of fencedLines(commandBody(w.file)).map((l) => l.text.trim())) {
+    const lines = fencedLines(commandBody(w.file)).map((l) => l.text.trim());
+    for (const t of lines) {
       if (!t.startsWith("node pharn/floor/stage-direct.mjs")) continue;
       const dir = mkdtempSync(join(tmpdir(), "hyg-direct-"));
       try {
@@ -4414,29 +4445,40 @@ test("★ DIRECT_STAGE_WIRING — every COMMITTED line, run where the real scrip
         mkdirSync(join(dir, ".claude"));
         symlinkSync(join(REPO_ROOT, ".claude", "hooks"), join(dir, ".claude", "hooks"));
         symlinkSync(join(REPO_ROOT, ".claude", "commands"), join(dir, ".claude", "commands"));
-        const line = t
-          .replaceAll("'<name>'", "'demo'")
-          .replaceAll("<N>", "1")
-          .replaceAll("'<base sha>'", `'${"a".repeat(40)}'`);
-        const r = spawnSync("sh", ["-c", line], { cwd: dir, env, encoding: "utf8" });
-        assert.equal(r.status, 2, `${w.file}: ${t}\n${r.stdout}${r.stderr}`);
-        assert.match(r.stdout, /"schema": "pharn-stage-exit\/1"/, "the script's own object, passed through");
-        const markers = readFileSync(join(dir, "pharn", ".run", "cost", "demo", "markers.jsonl"), "utf8")
-          .trim()
-          .split("\n")
-          .map((l) => JSON.parse(l));
+        const line = sub(t);
         const isResume = / --resume /.test(t);
-        assert.deepEqual(
-          markers.map((m) => m.kind),
-          isResume ? ["orchestrator"] : ["stage-start", "orchestrator"],
-          `${w.file}: ${t}`
-        );
-        if (!isResume)
-          assert.deepEqual(
-            [markers[0].stage, markers[0].iteration],
-            [t.match(/--stage (\S+)/)[1], Number(line.match(/--iteration (\d+)/)[1])]
+        const stage = t.match(/--stage (\S+)/)[1];
+        if (isResume) {
+          const none = spawnSync("sh", ["-c", line], { cwd: dir, env, encoding: "utf8" });
+          assert.deepEqual([none.status, none.stdout], [2, ""], `${w.file}: ${t}\n${none.stderr}`);
+          assert.match(none.stderr, /^stage-direct: refused \(no-run\) — /, "no run started: the resume line has nothing to wait for");
+          assert.deepEqual(markersOf(dir), [], "and writes no marker");
+          // The same stage's committed fresh line, then this resume line: it replays that run's result.
+          const freshLine = sub(
+            lines.find((l) => l.startsWith(`node pharn/floor/stage-direct.mjs --stage ${stage} `) && !/ --resume /.test(l))
           );
+          const fresh = spawnSync("sh", ["-c", freshLine], { cwd: dir, env, encoding: "utf8" });
+          assert.equal(fresh.status, 2, `${freshLine}\n${fresh.stdout}${fresh.stderr}`);
+          const before = markersOf(dir);
+          const r = spawnSync("sh", ["-c", line], { cwd: dir, env, encoding: "utf8" });
+          assert.equal(r.status, 2, `${w.file}: ${t}\n${r.stdout}${r.stderr}`);
+          assert.match(r.stdout, /"schema": "pharn-stage-exit\/1"/, "the script's own object, passed through");
+          assert.equal(r.stdout, fresh.stdout.slice(fresh.stdout.indexOf("\n") + 1), "the fresh call's output minus its start line");
+          assert.deepEqual(markersOf(dir), before, `${w.file}: ${t} — a replay writes no marker`);
+        } else {
+          const r = spawnSync("sh", ["-c", line], { cwd: dir, env, encoding: "utf8" });
+          assert.equal(r.status, 2, `${w.file}: ${t}\n${r.stdout}${r.stderr}`);
+          assert.match(r.stdout, /"schema": "pharn-stage-exit\/1"/, "the script's own object, passed through");
+          const markers = markersOf(dir);
+          assert.deepEqual(
+            markers.map((m) => m.kind),
+            ["stage-start", "orchestrator"],
+            `${w.file}: ${t}`
+          );
+          assert.deepEqual([markers[0].stage, markers[0].iteration], [stage, Number(line.match(/--iteration (\d+)/)[1])]);
+        }
         assert.equal(existsSync(join(dir, "pharn", ".run", "writes-scope.json")), false, "the scope is released");
+        assert.equal(existsSync(join(dir, "pharn", ".run", "stage-direct", "in-flight.json")), false, "and the lock");
         ran++;
       } finally {
         rmSync(dir, { recursive: true, force: true });

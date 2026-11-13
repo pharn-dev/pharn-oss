@@ -498,8 +498,9 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
 `pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one
-`pharn-stage-exit/1` object (`pharn/pharn-contracts/stage-exit.md`) and exits with its code. It maps onto the table
-above by a fixed rule:
+`pharn-stage-exit/1` object (`pharn/pharn-contracts/stage-exit.md`) and exits with its code — except a `5` of the
+call's own (its wait ran out, or a takeover was deferred, 7.15.0), which prints no object, only a `stage-direct:` line
+on stderr: branch on `5` by the exit code alone. It maps onto the table above by a fixed rule:
 
 - `done` (`0`) → on to `/pharn-verify`; its verdict is read by `check-loop.mjs` (Step 5);
 - `question no-gates` → **S4**;
@@ -507,14 +508,20 @@ above by a fixed rule:
   is pre-answered by the project's `pharn.config.json` `regress.install` (6.66.0; `pharn/pharn-contracts/stage-exit.md`),
   so name that in `### next_steps`;
 - `refused` and `unusable` → **S9** — the call's own refusal too (exit `2`, a `stage-direct:` line, no object: the
-  stage's writes-scope or the in-flight lock could not be taken);
+  stage's writes-scope or the in-flight lock could not be taken, the runner could not start, or — 7.15.0 — the run on
+  disk is another stage's, a dead runner's process group still runs, or no run was started);
 - a crash (an exit outside `{0, 2, 3, 4, 5}`) → **S9**;
-- `continue` (`5`) is no stuck point: run the stage's resume line (Step 5) until another exit.
+- `continue` (`5`) is no stuck point: run the stage's resume line (Step 5) until another exit. Since 7.15.0 a `5`
+  means the call's wait ran out while the stage's detached runner works on; the resume line waits again, or takes
+  over a runner that died. Each gate is bounded by `--timeout-ms`, the script run is not: a script hung outside a
+  gate keeps every resume line at `5` until a person stops the runner's process group.
 
 **A call the Bash tool reports as moved to the background is STILL RUNNING** — it finishes the stage itself. Wait for
 it inside this turn (a blocking read of that background task's output until it completes) and branch on the exit code
-and object it reports. Never start its resume line, or any other `stage-direct.mjs` call, while it runs: a second call
-refuses `in-flight` (exit `2`, S9). No way to wait → **S9**, and the summary says the call may still be running. The
+and object it reports. Never start its resume line, or any other `stage-direct.mjs` call, while it runs: a second fresh call
+refuses `in-flight` (exit `2`, S9). Since 7.15.0 a call waits at most `--budget-ms`, so it nears the cap only when its
+start-up, final print and release wait overrun the last 30 s, or when a takeover's one script run (its first slow step
+allowed up to `--timeout-ms`) runs long. No way to wait → **S9**, and the summary says the call may still be running. The
 same holds for a `stage-agent.mjs finish` call moved to the background: wait for it and branch on what it prints —
 never start a second `finish` while it runs, because the first may consume the result and close the stage, and the
 second would then read `no-result` (S9) over a stage that reported.
@@ -1012,8 +1019,9 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
    `## Running a stage` says.
 
 2. **`/pharn-regress`, then `/pharn-verify` — one call each** (`pharn/floor/stage-direct.mjs`, 6.43.0, its header):
-   it sets that stage's writes-scope, runs its stage script, releases the scope and writes the stage's stage-start and
-   return markers, printing the script's object and exiting with its code. Run each with the Bash tool's timeout at
+   it starts a detached runner that sets that stage's writes-scope, runs its stage script (resuming it itself on each
+   `continue`, 7.15.0), releases the scope and writes the stage's stage-start and return markers, and waits for it
+   inside node up to `--budget-ms`, printing the script's final object and exiting with its code. Run each with the Bash tool's timeout at
    600000, and branch by Step 2's two stage-exit mappings. _(`/pharn-regress` and its two markers are
    SKIPPED in Quick mode: the scope check runs instead — `## Quick mode` item 5.)_
 

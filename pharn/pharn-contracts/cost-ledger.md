@@ -552,7 +552,10 @@ outside the stage.
 
 **The floor-only stages' bracket (6.43.0).** `/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as
 one `stage-direct.mjs` call each, which writes the stage-start marker right before the stage script runs and the
-`orchestrator` marker right after it ends (not after a `continue`, which a resume call closes). So such a stage's
+`orchestrator` marker right after it ends (not after a `continue`). Since 7.15.0 both are written by the call's
+detached runner, which resumes the script itself on a `continue`, right before its first invocation and right after
+its last; only a call that takes over from a dead runner writes either instead (the return marker only when none
+follows the recorded start). So such a stage's
 `executions` row spans the script's run plus the scope release (the scope is set before the start marker is written, so
 the set is outside it), no longer the orchestrator's requests between
 its pinned lines, and its bucket holds only the requests that issue a resume. An answered `question` is a second call,
