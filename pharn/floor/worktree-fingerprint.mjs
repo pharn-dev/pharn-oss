@@ -234,17 +234,28 @@ export function isExcluded(file, feature) {
  * Returns `{ok: true, digest, algo, paths}` or `{ok: false, reason}`; the caller maps the failure onto a
  * closed reason_code. Fail-closed: an enumeration this module cannot trust is never hashed partially.
  */
-export function fingerprint(baseDir, { feature = null, stage = null } = {}) {
+export function fingerprint(baseDir, { feature = null, stage = null, alsoExclude = null } = {}) {
   // The entry exclusion needs a slug the shape gate accepts; without one there is no directory to exclude, and an
   // entry fingerprint is refused rather than computed over a set it could not narrow (fail-closed).
   const entry = stage === FEATURE_DIR_EXCLUDED_STAGE;
   if (entry && !(typeof feature === "string" && FEATURE_SLUG_RE.test(feature))) {
     return { ok: false, reason: "an entry fingerprint requires a feature slug" };
   }
+  // gate-evidence-cache: `alsoExclude` names a SECOND feature whose directories the entry digest leaves out the same way
+  // — the source run of a cached red (entry-gate-cache-core.mjs, "FEATURE-NEUTRAL"). Entry stage only, slug-gated; equal
+  // to `feature` or null it changes nothing, so every existing digest is byte-identical (the golden test pins it).
+  if (alsoExclude !== null && !(entry && typeof alsoExclude === "string" && FEATURE_SLUG_RE.test(alsoExclude))) {
+    return { ok: false, reason: "alsoExclude requires the entry stage and a feature slug" };
+  }
   const e = enumerate(baseDir);
   if (!e.ok) return { ok: false, reason: e.reason };
   const dir = entry ? productFeatureDir(feature) : null;
-  const kept = e.paths.filter((p) => !isExcluded(p, feature) && !(dir !== null && p.startsWith(dir))).sort();
+  const also = alsoExclude !== null && alsoExclude !== feature ? alsoExclude : null;
+  const alsoDir = also !== null ? productFeatureDir(also) : null;
+  const kept = e.paths
+    .filter((p) => !isExcluded(p, feature) && !(dir !== null && p.startsWith(dir)))
+    .filter((p) => also === null || !(isExcluded(p, also) || p.startsWith(alsoDir)))
+    .sort();
   const h = createHash("sha256");
   for (const rel of kept) {
     // The length-prefixed field separator is load-bearing: without it the pairs

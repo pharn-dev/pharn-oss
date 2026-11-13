@@ -92,6 +92,7 @@ allowed-tools:
     "Bash(node pharn/floor/check-entry-context.mjs --feature * > pharn/.run/pharn-loop/*/entry-context.txt)",
     "Bash(node pharn/floor/check-instruction-files.mjs --report > pharn/.run/pharn-loop/*/instruction-files.json)",
     "Bash(node pharn/floor/entry-gates.mjs --start --feature * --timeout-ms 540000)",
+    "Bash(node pharn/floor/entry-gates.mjs --start --refresh --feature * --timeout-ms 540000)",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage * --route 'inline:route-unavailable')",
     "Bash(node pharn/floor/mark-phase.mjs --name * --kind orchestrator)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name *)",
@@ -278,9 +279,10 @@ node pharn/floor/command-section.mjs .claude/commands/pharn-loop.md '<heading>'
 
 ## Step 1 — Entry
 
-`/pharn-loop [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`. `--max-iter N` sets the cap `M` (a positive
+`/pharn-loop [--allow-red-entry] [--refresh-entry] [--accept-host-execution] [--max-iter N] <increment description>`. `--max-iter N` sets the cap `M` (a positive
 integer; absent ⇒ `M = 3`). `--allow-red-entry` (6.42.0) says the feature's purpose is to fix a gate already red:
-every entry read (the two peeks and Step 4's final read) then goes on past a red or unmeasured gate instead of stopping at S14 or S14b. It counts only among the leading flags
+every entry read (the two peeks and Step 4's final read) then goes on past a red or unmeasured gate instead of stopping at S14 or S14b. `--refresh-entry` (7.14.0)
+measures the entry gates again instead of stopping on an earlier run's red (S14c). Both count only among the leading flags
 (after `--quick`), never inside the description — ADVISORY, an instruction to you, like `--quick`'s rule.
 `--accept-host-execution` (7.1.0) is the operator accepting an unattended run outside an isolated environment: Step
 1a's isolation check then lets `HOST` and `ISOLATED_WITH_CREDENTIALS` through, and the record, the run report and the
@@ -434,12 +436,17 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    from, in the background, while the spec, plan and grill stages work; it is peeked at after the spec and plan stages and read before `/pharn-test`
    (`pharn/floor/entry-gates.mjs`, header):
 
+   Run the first line; when the person typed `--allow-red-entry` or `--refresh-entry`, run the second instead:
+
    ```bash
    node pharn/floor/entry-gates.mjs --start --feature '<name>' --timeout-ms 540000
+   node pharn/floor/entry-gates.mjs --start --refresh --feature '<name>' --timeout-ms 540000
    ```
 
-   Exit `3` → **S4** (`blocked: no-gates`); it precedes `pharn/features/<name>/`, so there is no record and the run goes
-   straight to the Step 7 summary. Any other exit → go on (Step 4's read reports a start that failed).
+   Exit `3` → **S4** (`blocked: no-gates`); exit `4` → **S14c** (`blocked: gates-red-cached`): an earlier run measured
+   a gate red on this same tree, and no gate ran (`pharn/floor/entry-gate-cache-core.mjs`, header). Both precede
+   `pharn/features/<name>/`, so there is no record and the run goes straight to the Step 7 summary. Any other exit → go
+   on (Step 4's read reports a start that failed).
 
 ### Step 1b — read the most recent prior record, if one exists (context only; it gates NOTHING)
 
@@ -482,6 +489,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S13  | the AC evidence changed or is missing after `/pharn-test` — decided by `check-loop-fresh.mjs` `reason_code` `ac-evidence-invalid` or `check-loop.mjs` `terminal_cause` `ac-evidence` (Step 5), never by relayed text                                               | stop `blocked: ac-evidence-invalid` — a rebuild cannot restore it; a person sets the build aside and re-runs `/pharn-test`, or re-plans                                                                                                                                                              |
 | S14  | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `4`: a gate was red on the tree the run started from, and `--allow-red-entry` was not given                                                                                    | stop `blocked: gates-red-at-entry` — fix the gate first; if it cannot run on this machine, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded); or re-run with `--allow-red-entry` when fixing it is the feature |
 | S14b | an entry read (a peek after Step 3 or after the plan, or Step 4's final read) exits `6`: no gate was red, but a gate was not measured on the tree the run started from (killed at the per-gate timeout, or could not start), and `--allow-red-entry` was not given | stop `blocked: gates-unmeasured-at-entry` — make the gate finish in time or start, list it in `pharn.config.json` `gates.exclude`, committed before the re-run (an excluded gate does not run and is reported as excluded), or re-run with `--allow-red-entry`                                       |
+| S14c | Step 1a's entry start exits `4`: an earlier run measured a gate red on this same tree (every bound input equal, under 24 h old), so no gate ran                                                                                                                    | stop `blocked: gates-red-cached` — fix the gate and re-run (a changed tree measures again); re-run with `--refresh-entry` when the red may not repeat (a flaky test, an environment the key cannot see); or `--allow-red-entry` when fixing it is the feature                                        |
 | S15  | Step 1a's isolation check exits non-zero: no evidence of an isolated environment, a listed credential present, the evidence unknown (unreadable HOME, a failed probe), or the line itself failed                                                                   | stop `blocked: not-isolated` — for no evidence or a credential: run in a container that mounts none of your credentials, set `PHARN_ISOLATED=1` for a sandbox the check misses, or re-run with `--accept-host-execution`; for unknown evidence: set HOME, or fix git (the flag never lifts it)       |
 | S15b | Step 1a's entry-context check exits `3`: the context running this command already holds more tokens than `budget.entryContextTokens` (default 320,000)                                                                                                             | stop `blocked: context-too-large` — every later request would re-send it: start a fresh session (or run the loop inside an agent) and re-run, or raise `budget.entryContextTokens` in `pharn.config.json`                                                                                            |
 | S16  | triage escalated (Step 4's read exits `4`, or `3` with no re-plan round left) and `supervisor.mjs check` exits `3`: the supervisor decided `stop` (a full run only)                                                                                                | stop `blocked: grill-escalation` — copy the verdict, the round and the `escalated` ids into `### next_steps` as DATA, pointing at `grill-triage.json` and `SUPERVISOR.json` for the reasons; a person revises the plan or the SPEC, then re-runs (Step 4 says what a re-run is)                      |

@@ -1079,8 +1079,9 @@ Each process appends one line per lifecycle boundary it already has to `<pharn/.
 
 - `start`, once per `--start` that created an invocation. `run` is the current run-start `{seq, ts}` read from
   `markers.jsonl` AT `--start` (null when there is none); `ts` / `end_ts` are the call's wall-clock bounds and
-  `elapsed_ms` is its monotonic duration. `outcome` is `started`, `no-gates`, `init-refused` or `spawn-failed`. A
-  refusal before the nonce exists (`usage-error`, `path-containment`, `runner-unverifiable`) writes nothing.
+  `elapsed_ms` is its monotonic duration. `outcome` is `started`, `no-gates`, `init-refused`, `spawn-failed` or (7.14.0)
+  `cached-red` — the start stopped on an earlier run's red and spawned no runner. Every outcome but `started` ends the
+  invocation at the start. A refusal before the nonce exists (`usage-error`, `path-containment`, `runner-unverifiable`) writes nothing.
 - `segment-begin` / `segment-end`, one pair per runner or `--wait` takeover process, sharing a fresh 16-hex
   `segment`. The end is written AFTER `result.json`, with `elapsed_ms` monotonic in that process, `end` (`done`,
   `refused`, `crashed` or `budget`) and `gates` (the gate entries that process ran).

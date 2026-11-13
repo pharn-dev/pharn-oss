@@ -130,6 +130,8 @@ export const REASON_CODES = Object.freeze([
   "spawn-failed",
   "runner-unverifiable",
   "crashed",
+  // gate-evidence-cache: the result a `--start` leaves when it stopped on cached red evidence (no runner was spawned).
+  "cached-red",
 ]);
 
 /** What `--wait` did with the gates' own writes (review R1): `none` (no `mutated` gate changed a listed path), `recorded`

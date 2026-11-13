@@ -57,7 +57,8 @@ function pinned(commandFile, re) {
     .slice(1) // "node"
     .map((tok, i) => (i === 0 ? join(ROOT, tok) : tok));
 }
-const START = pinned("pharn-loop.md", /^\s*node pharn\/floor\/entry-gates\.mjs --start /);
+const START = pinned("pharn-loop.md", /^\s*node pharn\/floor\/entry-gates\.mjs --start --feature /);
+const START_REFRESH = pinned("pharn-loop.md", /^\s*node pharn\/floor\/entry-gates\.mjs --start --refresh /);
 const WAIT = pinned("pharn-loop.md", /^\s*node pharn\/floor\/entry-gates\.mjs --wait /);
 const SNAPSHOT = pinned("pharn-loop.md", /^\s*node pharn\/floor\/pre-run-snapshot\.mjs --capture /);
 const REGRESS = pinned("pharn-regress.md", /^node pharn\/floor\/stage-regress\.mjs --feature <name> --timeout-ms \d+ --budget-ms \d+\s*$/);
@@ -645,8 +646,10 @@ test("the offer is published only after a validated green, red or unmeasured --w
     assert.equal(offer.base, fx.base);
     assert.equal(offer.stamp_sha256, sha256(readFileSync(join(fx.dir, ENTRY_PATHS.stamp))));
     assert.equal(e.wait.stderr, "", "a successful publication prints nothing");
-    // a new --start discards it (and every later run's offer is its own)
-    assert.equal(node(fx, START).code, 0);
+    // a new --start discards it (and every later run's offer is its own). gate-evidence-cache: on this same tree a plain
+    // start is now a cached-red hit (exit 4, which discards the offer too — entry-gate-cache.test.mjs AC2), so the start
+    // here measures again, as /pharn-loop's `--refresh-entry` does.
+    assert.equal(node(fx, START_REFRESH).code, 0);
     assert.ok(!existsSync(offerFile(fx)), "--start removed the earlier offer");
   } finally {
     drop(fx);

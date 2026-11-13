@@ -29,7 +29,7 @@ reads.
 **The deltas below, in step order — every other line of Steps 1–7 and the Final step runs exactly as written for a
 `--quick` invocation too; only what is listed here changes.**
 
-1. **Entry.** `/pharn-loop --quick [--allow-red-entry] [--accept-host-execution] [--max-iter N] <increment description>`. Step 1a runs unchanged
+1. **Entry.** `/pharn-loop --quick [--allow-red-entry] [--refresh-entry] [--accept-host-execution] [--max-iter N] <increment description>`. Step 1a runs unchanged
    (its entry gates included), with `quick` as its marker line's `<mode>` (7.3.0). The marker is the one copy of the
    invocation written before any SPEC exists: the closeout's decision check REDs a record whose mode differs from it
    (`MODE_UNWITNESSED`, `pharn/pharn-contracts/loop-record.md`), so a quick-table green is committed only for a run

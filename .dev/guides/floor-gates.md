@@ -695,8 +695,36 @@ node pharn/floor/check-entry-context.mjs --feature <name> [--session <id>] [--pr
 # finished so far (entry-gates-core.mjs `inProgressStampView`); anything else is `continue`, left to the final --wait.
 # Exit (--wait): 0 green · 4 red · 6 unmeasured · 3 no-gates · 5 continue (run again) · 2 unusable; --peek the same
 # codes (5 = not decided yet, never re-run); --start 0 · 3 · 2; --abort 0.
-node pharn/floor/entry-gates.mjs --start --feature <name> --timeout-ms <N>
+node pharn/floor/entry-gates.mjs --start [--refresh] --feature <name> --timeout-ms <N>
 node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
 node pharn/floor/entry-gates.mjs --peek --feature <name>
 node pharn/floor/entry-gates.mjs --abort --feature <name>
+```
+
+## `entry-gate-cache.mjs` — cached red evidence at entry
+
+```bash
+# CACHED RED EVIDENCE (7.14.0, gate-evidence-cache, Linear CORE-86) — no CLI: pharn/floor/entry-gate-cache-core.mjs (pure;
+# its header IS the spec — the key, the 14 closed MISSES in decision order, NOT_CACHED, every bound) + entry-gate-cache.mjs
+# (the two git-dir files and the input capture). THE TRIGGER (P7), stated as an upper bound:
+# .dev/measurements/loop-baseline-2026-11-11.md §6 — 5 of the 16 entry stops reused an earlier run's base commit, tree
+# equality unverifiable then; §12 rated it needs-evidence, and the orchestrator (maintainer's delegation) scoped it to REDS
+# ONLY. FLOW: `entry-gates.mjs --start`, after `run-gates.mjs init`, writes this run's inputs to
+# <git rev-parse --absolute-git-dir>/pharn-entry-cache-inputs.json, then reads <git rev-parse --git-common-dir>/
+# pharn-entry-gate-cache.json (ONE per repository, so another worktree hits); all inputs equal → exit 4, an `unusable`
+# `cached-red` result, the start observation `cached-red`, no runner, no offer (discarded before init, as before). Every
+# miss prints `entry-gates: cached evidence — miss <member>` and the run goes on unchanged. `--wait`, after a decided
+# verdict and after the offer, records a cacheable red (completed; no unmeasured or mutated run, base:test included; a
+# HEAD; at least one non-style red — only those ids are kept) or CLEARS the slot; silent on success (an existing test pins
+# a successful --wait's empty stderr), a failure is one `note —` line. `--peek` writes nothing. /pharn-loop S14c
+# (`blocked: gates-red-cached`, a Step 1a stop with no record); `--refresh-entry` and `--allow-red-entry` run the
+# `--refresh` line; /pharn-ship asks Stop/Continue on 4 (Continue = the `--refresh` line). FEATURE-NEUTRAL: the lookup's
+# tree digest is worktree-fingerprint.mjs `fingerprint(…, {alsoExclude: <source feature>})` — with one directory excluded
+# it is the ENTRY_ALGO digest itself, so the record carries the source stamp's `fingerprint.init`. BOUNDS (P0): FLOOR is
+# the hit decision (sha256/JSON equality, closed enums) and the ★ HOOK deny of both git-dir files (protect-trusted-paths:
+# a `.git` segment in a main checkout; enforce-writes-scope: another git tree from a linked worktree). ADVISORY: that a
+# cached red equals a fresh run — env, machine load, flaky tests, ignored files outside INSTALL_FILES and the ABSOLUTE
+# cwd are unbound (the repo-relative prefix is bound, GATE 1, so fresh worktrees can hit); the 24 h age limit (fixed, no
+# config key, no MIN_CLI change) bounds the drift. A Bash writer can forge the record; a forged record can only STOP a
+# run, and --refresh lifts it. One slot, last writer wins across worktrees; a clear only removes a hit.
 ```

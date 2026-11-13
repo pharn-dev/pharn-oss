@@ -198,7 +198,7 @@ test("validateEntryEvent: enums, ids, timestamps and ranges refuse; L62 — a va
     SEGMENT_ENDS.filter((e) => e !== "budget"),
     "budget is the one non-terminal end"
   );
-  assert.deepEqual([...START_OUTCOMES], ["started", "no-gates", "init-refused", "spawn-failed"]);
+  assert.deepEqual([...START_OUTCOMES], ["started", "no-gates", "init-refused", "spawn-failed", "cached-red"]);
 });
 
 test("identityKey / canonical / dedupeExact: one key per (nonce, event, id); key order never makes two lines different", () => {
@@ -275,8 +275,8 @@ test("STILL RUNNING AT THE WAIT + BUDGET CONTINUATIONS + TAKEOVER: each process 
   assert.equal(x.segments_overlap_marked_stages_ms, 0, "both takeovers ran after the last marked stage ended");
 });
 
-test("NO-GATES and INIT-FAILURE: no runner ever existed — a KNOWN zero (union 0, coverage all), lifetime ended by the start", () => {
-  for (const outcome of ["no-gates", "init-refused", "spawn-failed"]) {
+test("NO-GATES, INIT-FAILURE and CACHED-RED: no runner ever existed — a KNOWN zero (union 0, coverage all), lifetime ended by the start", () => {
+  for (const outcome of ["no-gates", "init-refused", "spawn-failed", "cached-red"]) {
     const x = only(view([ev.start({ outcome, end_ts: T("10:00:01", 100) })]));
     assert.deepEqual(
       x.lifetime,

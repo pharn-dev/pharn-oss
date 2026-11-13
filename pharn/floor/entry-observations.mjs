@@ -91,7 +91,9 @@ export const ENTRY_VIEW_METHOD = "entry-observations/1";
 export const EVENT_KINDS = Object.freeze(["start", "segment-begin", "segment-end", "wait", "abort", "gate"]);
 /** The one event kind the view does not read (header: a fact only). */
 export const FACT_ONLY_EVENTS = Object.freeze(["gate"]);
-export const START_OUTCOMES = Object.freeze(["started", "no-gates", "init-refused", "spawn-failed"]);
+/** `cached-red` (gate-evidence-cache): `--start` stopped on cached red evidence and spawned no runner — terminal, like
+ *  every outcome but `started`. */
+export const START_OUTCOMES = Object.freeze(["started", "no-gates", "init-refused", "spawn-failed", "cached-red"]);
 export const SEGMENT_KINDS = Object.freeze(["runner", "takeover"]);
 export const SEGMENT_ENDS = Object.freeze(["done", "refused", "crashed", "budget"]);
 /** A segment end after which that process had written `result.json` — the invocation is over. `budget` is not. */

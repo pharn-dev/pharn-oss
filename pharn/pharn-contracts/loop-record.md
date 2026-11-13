@@ -132,6 +132,7 @@ command's stuck-point table equal both ways:
 - `ac-evidence-invalid`
 - `gates-red-at-entry`
 - `gates-unmeasured-at-entry`
+- `gates-red-cached`
 - `not-isolated`
 - `context-too-large`
 - `grill-escalation`
