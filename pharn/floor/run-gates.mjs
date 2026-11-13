@@ -882,6 +882,12 @@ function runInit(args) {
 }
 
 function startRecord(spec, outAbs, cwd, args, opts = {}) {
+  // A gate a crashed run left running (its group in `lock.child`) is stopped BEFORE the wipe deletes that record:
+  // otherwise a fresh re-run — /pharn-loop's takeover after a runner killed during its first gate — starts a gate beside
+  // it, with nothing left to see the survivor (PR #443 review). Refuses `lock-busy` when it will not die. Only under an
+  // absent or STALE lock, as the stale-lock recovery does: a LIVE run's gate is never signalled.
+  const held = readJson(lockPath(outAbs));
+  if (!held.ok || isStaleLock(held.value, Date.now())) reapOrphanGroup(outAbs);
   // Recreate <out>: `init`'s wipe is what guarantees no STALE injected entry, log or stamp survives from
   // an earlier run of this stage. Containment was asserted before this point.
   rmSync(outAbs, { recursive: true, force: true });

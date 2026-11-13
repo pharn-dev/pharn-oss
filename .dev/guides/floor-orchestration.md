@@ -558,6 +558,30 @@ node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <s
 # stage scope between two calls around a `continue`; its node start-up and setter spawns are outside the script's
 # budget clock. Ships: bumps SKILLS_VERSION. Exit: the script's 0/2/3/4/5; 2 also for its own refusal (bad argv, a scope
 # it could not set, `in-flight` / `lock-unusable`); 1 crash.
+# THE RUNNER AND THE WAIT (7.15.0, stage-wait-once — CORE-76): a FRESH line now starts a DETACHED runner
+# (`stage-direct.mjs --runner <nonce>`, its own process group, stdio to pharn/.run/stage-direct/runner.log), HANDS IT THE
+# LOCK (the lock record names its holder — `call` or `runner` — and the run's nonce), and WAITS inside node (an
+# Atomics.wait poll every 250 ms) for what is left of --budget-ms. The runner sets the scope, writes the stage-start
+# marker, makes TODAY'S script calls (the fresh argv, then `--resume --budget-ms <B>` on every exit 5) until another exit,
+# releases the scope only if the file still holds the bytes it set, writes the return marker and result.json LAST, then
+# releases the lock. The RESUME line only waits: a bound result → its stdout byte for byte + the return-marker line, its
+# exit; budget spent → `stage-direct: waiting (…)`, exit 5; holder dead but its group populated → `refused (orphaned)`;
+# holder dead, group empty → TAKEOVER at the start of a call (later in a call: exit 5, `takeover deferred`), deciding
+# from state.json: script exited → close the stage only (return marker once, checked after the recorded start seq);
+# no start marker → write it, run the fresh argv; no `continue` yet → the fresh argv; else the script's `--resume`.
+# Records (one writer each): runner.json (the start call, once), state.json + result.json (the current holder), each a
+# total parser in stage-direct-core.mjs, read only under runner.json's nonce. "Alive" is one definition: kill(pid, 0),
+# and for a runner `ps -ww -p <pid> -o args=` showing `--runner <nonce>` (a copy of entry-gates.mjs's psShowsNonce).
+# New refusals: spawn-failed, mismatch, orphaned, no-run, record-unusable (CALL_REFUSALS). The pinned lines, their
+# grants and the stage scripts are unchanged; tested with a copy of the floor whose two stage scripts are fakes.
+# The lock is created whole (a tmp file LINKED into place), so an unreadable lock is foreign, torn or pre-upgrade: a
+# fresh call AND a takeover refuse it `in-flight` (a takeover waits only for a live holder). A failed handoff removes
+# runner.json, as spawn-failed does.
+# BOUNDS: agreement, never provenance (nonce equality in pharn/.run/); the scope release is compare-then-clear; stderr
+# reaches the orchestrator only as a replayed tail; a gate that double-forks out of the runner's group is not seen; the
+# script run has no timeout of its own (its gates do), so a script hung outside a gate keeps every resume line at 5
+# until a person stops the runner's group; three calls clearing one stale lock at once can lose a live record; a
+# takeover's one foreground invocation stays tied to the 600 s cap; the call count ⌈W / B⌉ is advisory orchestration.
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --iteration <N> --timeout-ms <T> --budget-ms <B> [stage flags]
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --resume --budget-ms <B>
 ```

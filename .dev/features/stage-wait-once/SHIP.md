@@ -1,0 +1,83 @@
+# SHIP — stage-wait-once (Linear CORE-76)
+
+Branch `przemek/core-76-run-regress-and-verify-through-a-detached`, from `main` at `0ff65527` (7.14.0). Nothing is
+committed, merged or pushed by this run.
+
+## Stages run, in order
+
+1. `/pharn-dev-plan` → `PLAN.md` v1; GATE 1 approved as written (Q1 keep both pinned lines, Q2 thin callers
+   unchanged, Q3 mask clock fields).
+2. `/pharn-dev-grill` → `GRILL.md`; `check-plan-lessons.mjs` exit 0. The interrogation (an independent agent) raised
+   24 advisory concerns, 2 at blocking severity. The orchestrator put a re-plan to the human, who chose "amend and
+   re-approve": `PLAN.md` v2, approved; `check-plan-lessons.mjs` re-run on v2, exit 0. `GRILL.md` cites v1 line
+   numbers.
+3. `/pharn-dev-build` (a build agent in this checkout) → 12 files, the plan's `## Files` exactly; setter then anchor;
+   `validate.mjs` exit 0.
+4. `/pharn-dev-regress` → `regression-report.json`, `REGRESSION.md` (base `0ff65527`, 192 outside test files,
+   6375 tests pass at head).
+5. `/pharn-dev-verify` → `verify-report.json`, `VERIFY.md` (7 gates through `run-gates.mjs`, all exit 0).
+6. `/pharn-dev-review` → `REVIEW.md` (an independent reviewer agent).
+7. GATE 2, first pass: the human chose **"Fix review findings"**.
+8. Fix round (build scope from the plan's `## Files`, a fresh reconcile anchor `--by pharn-dev-build`): a build agent
+   fixed all 8 review findings; a second reviewer agent confirmed them and raised 2 new minors, which the orchestrator
+   fixed. stage-direct suite 47/47, `validate.mjs` exit 0.
+9. `/pharn-dev-regress` re-run on the final tree → `no-regressions` (6375 tests pass at head, 0 new failures).
+10. `/pharn-dev-verify` re-run on the final tree → `PASS` (7 gates, stamp `2588449f…`, `reconcile` exit 0).
+11. `REVIEW.md` updated with the fix round and re-review.
+12. GATE 2, second pass: the human chose **merge**; the increment was committed (`08a84fed`) and PR #443 opened, with
+    Auto-fix on.
+13. PR round: CI's `check` failed (pharn-ci diff coverage 80.88% < 100%, and test-integrity TI02 on 13 renamed tests)
+    and CodeRabbit posted 5 findings. Fixed under a fresh build epoch (setter from the plan's `## Files`, then the
+    anchor `--by pharn-dev-build`):
+    - three review fixes, and the other two named as bounds;
+    - 36 tests added, so 0 of 1009 added lines are uncovered in a local run;
+    - the 13 base test names restored;
+    - unreachable catch blocks removed.
+14. `/pharn-dev-regress` re-run → `no-regressions` (report byte-identical); `/pharn-dev-verify` re-run → `PASS` (stamp
+    `c0e06e88…`, `test` 6811 pass / 0 fail).
+
+15. PR round 2: CodeRabbit raised two more real findings on `7d5ffcd6`. One is fixed in scope: a cleared dead
+    runner's group is checked before records are reset. The other needed `run-gates.mjs`, so the human chose "Amend
+    plan, fix it". Plan v3 adds `run-gates.mjs` and its test, re-checked with `check-plan-lessons` (exit 0) and the
+    setter's `--check`. A fresh build epoch was anchored after the plan change. Now `init` stops a leftover gate group
+    before its wipe.
+16. `/pharn-dev-regress` re-run → `no-regressions` (191 outside test files, 6286 pass at head); `/pharn-dev-verify`
+    re-run → `PASS` (stamp `787e2e2c…`, `test` 6813 pass / 0 fail).
+
+Run ended at PR round 2 (the merge decision stands; CI re-runs on the push).
+
+## Verdicts
+
+verdict-grill: exit 0
+verdict-build: exit 0
+verdict-regress: no-regressions
+verdict-verify: PASS
+run-ended: GATE 2
+
+## Pointers
+
+- Review: `.dev/features/stage-wait-once/REVIEW.md` — 0 floor-gate findings; the first review's 8 advisory (1
+  important) and the re-review's 2 minors are all fixed; 0 open.
+- Grill: `.dev/features/stage-wait-once/GRILL.md` (advisory).
+
+changelog-entry: exit 0
+
+lesson: none — the grill's two blocking design flaws and the review's important finding are each a first occurrence
+in this run, not a recurring failure of a mechanism (L20's bar is not met).
+
+deferred: none
+
+## Process notes (recorded, not hidden)
+
+- The GATE 1 answers were first written into `PLAN.md` by a Bash `python3` write instead of Edit. The write was
+  under the plan stage's own scope and before the build's reconcile anchor, so no checker saw it; it is recorded here
+  as a discipline lapse. Every later artifact write went through Write/Edit.
+- The grill interrogation, the build, the fix-round build and both reviews each ran in a separate agent; their
+  reports are model output and were presented as DATA.
+- The orchestrator's own fix of the re-review's two minors was not re-reviewed by an agent; it is covered by the
+  re-run regress and verify above. The same holds for the PR round's code changes.
+- Nobody judged the CodeRabbit findings' merit beyond reading the code: two were declined as bounds (P7), and that is
+  the human's to overrule.
+
+chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
+the human's call at the post-review gate.

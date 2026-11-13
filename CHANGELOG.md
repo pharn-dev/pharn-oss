@@ -23,6 +23,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.15.0] - 2026-11-13
+
+### Added
+
+- **`/pharn-regress` and `/pharn-verify` run through a detached stage runner, and the orchestrator's call waits for it
+  inside node.** `pharn/floor/stage-direct.mjs`'s fresh line now starts `stage-direct.mjs --runner <nonce>` in its own
+  process group, hands it the in-flight lock and waits up to `--budget-ms`; the runner sets the stage's writes-scope,
+  writes the stage-start marker, makes the same script calls the orchestrator made before (the fresh argv, then
+  `--resume --budget-ms <B>` on every exit 5) until another exit, releases the scope only if the scope file still holds
+  the bytes it set, writes the return marker and a nonce-bound `result.json`, and releases the lock. The resume line
+  only waits: it prints a bound result's stdout byte for byte with the return-marker line and the script's exit code,
+  exits 5 with a `waiting` line when its budget runs out, refuses `orphaned` when a dead runner's process group still
+  runs, and otherwise takes over at the start of a call, deciding from `state.json` whether to close the stage, re-run
+  the fresh argv or run the script's own `--resume` — one invocation per call. New call refusals: `spawn-failed`,
+  `mismatch`, `orphaned`, `no-run`, `record-unusable`. The pinned lines, their `allowed-tools` grants and the stage
+  scripts are unchanged. Before, every gate or install longer than about 30 s ended one call with exit 5, so a regress
+  cost the orchestrator a median of 18 requests in the 6 agent-started runs of the 2026-11-11 baseline; a stage of wall
+  time W now costs about ⌈W / 570 s⌉ calls (advisory: tested with fake stage scripts, not measured in a real run). The
+  direct saving is small (regress and verify are 3.3% of weighted cost in that baseline); the change is what CORE-87
+  needs to lift the 540 s per-gate timeout, bounded: a takeover's one invocation still runs in the foreground of a
+  call, where its first slow step is always permitted up to `--timeout-ms`, so it stays tied to the 600 s Bash cap.
+  Named bounds: the script run has no timeout of its own (its gates do), so a script hung outside a gate keeps every
+  resume line at exit 5 until a person stops the runner's process group, as a hung script under the per-call path did;
+  a torn, foreign or pre-upgrade lock refuses `in-flight` in a takeover as in a fresh call; three calls clearing one
+  stale lock at once can lose a live record; the lock is created by a hard link, so on a filesystem without them
+  (FAT/exFAT, some network mounts) every call refuses `lock-unusable`; a gate `run-gates.mjs` started in its own process
+  group is outside the runner's group, so after a runner death it is `run-gates.mjs` that stops it before the gate runs
+  again, never a wait for it (its stale-lock recovery on a resumed run, and now its `init` too: a fresh `init` under an
+  absent or stale lock stops a group `lock.child` names before deleting `<out>`, where it used to delete the record
+  with the gate still running); and a takeover's script runs in the calling process's group, so when
+  only that process is killed and the script survives, the next resume line can start a second script beside it
+  (`run-gates.mjs`'s lock still keeps their gates apart). TESTED, not floor: the in-flight refusal (an exclusive lock
+  created whole by `link`, pid liveness and a `ps` nonce check in unauthenticated `pharn/.run/`), the byte identity of
+  the final stdout, reports and stamps against
+  the old per-call path, and the single return marker. `pharn-loop.md` grows from 89,079 to 90,139 bytes and
+  `pharn-ship-stages.md` from 31,863 to 32,666, inside their ceilings. Linear CORE-76.
+
 ## [7.14.0] - 2026-11-12
 
 ### Added

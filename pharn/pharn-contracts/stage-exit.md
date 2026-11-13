@@ -265,7 +265,10 @@ round 2 the clock started after head init, and that work went uncharged. Two bou
 
 So the pinned `--timeout-ms 540000 --budget-ms 570000` keeps a run under the 600 s Bash cap only while
 that uncounted work fits the remaining 30 s. A second or later slow step ends by budget time 570 s. When
-the first slow step is the long one, it starts after the opening work and runs up to 540 s.
+the first slow step is the long one, it starts after the opening work and runs up to 540 s. Since 7.15.0 the
+orchestrators' call (`pharn/floor/stage-direct.mjs`) runs these invocations in a detached runner, outside any Bash
+call, with the same argv; the 600 s tie binds the call's in-node wait (at most `--budget-ms`) and a takeover's one
+invocation, which runs in the foreground of a call.
 
 For `verify` the clock is the same (`stage-runtime.mjs`'s `makeBudget`, one owner for both stages), the opening
 work is argv, containment, the removal, the chain check, the eval-pair listing, the verifier count and the
@@ -297,10 +300,13 @@ later (that notice says "failed" for every non-zero code, `continue`'s `5` inclu
 notice and branches on the exit code it reports; it runs `--resume` only for a call that is gone without one. A
 `--resume` (or a second fresh invocation) started while the first still runs would put two scripts on one progress
 record, and nothing refuses it: when either script is called directly it takes no in-flight lock. That guard exists
-only around `pharn/floor/stage-direct.mjs`, the orchestrators' call, whose own lock is held while it spawns the
-script. Giving the scripts their own is the named follow-up `stage-script-in-flight-guard` (it needs a parent
-pass-through and a new code in both stages' closed `unusable` sets); until then the thin callers' text is the only
-thing that prevents it, and that text is advisory.
+only around `pharn/floor/stage-direct.mjs`, the orchestrators' call, whose own lock is held — since 7.15.0 by the
+detached runner it hands the lock to, or by a call that took over from a dead one — while a script runs. There a
+`continue` is consumed by the runner, which runs `--resume` itself, so the orchestrator's resume line waits for that
+runner (or takes over a dead one) instead of starting a script beside a live one. Giving the scripts their own guard
+is the named follow-up `stage-script-in-flight-guard` (it needs a parent pass-through and a new code in both stages'
+closed `unusable` sets); until then the thin callers' text is the only thing that prevents it, and that text is
+advisory.
 
 ## Guarantee audit (P0)
 

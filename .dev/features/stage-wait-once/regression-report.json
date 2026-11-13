@@ -1,0 +1,61 @@
+{
+  "base": "0ff6552708a335e0e1cf2304e1fa7cd7d76a1509",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-stages.md",
+    ".dev/features/stage-wait-once/GRILL.md",
+    ".dev/features/stage-wait-once/PLAN.md",
+    ".dev/features/stage-wait-once/REGRESSION.md",
+    ".dev/features/stage-wait-once/REVIEW.md",
+    ".dev/features/stage-wait-once/SHIP.md",
+    ".dev/features/stage-wait-once/VERIFY.md",
+    ".dev/features/stage-wait-once/regression-report.json",
+    ".dev/features/stage-wait-once/verify-report.json",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/guides/floor-orchestration.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
+    "pharn/floor/stage-direct-core.mjs",
+    "pharn/floor/stage-direct.mjs",
+    "pharn/floor/stage-direct.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md",
+    "pharn/pharn-contracts/stage-exit.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6280,
+      "failed": 0,
+      "skipped": 7,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6286,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
