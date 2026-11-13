@@ -36,7 +36,15 @@ committed, merged or pushed by this run.
 14. `/pharn-dev-regress` re-run → `no-regressions` (report byte-identical); `/pharn-dev-verify` re-run → `PASS` (stamp
     `c0e06e88…`, `test` 6811 pass / 0 fail).
 
-Run ended at the PR round (the merge decision stands; CI re-runs on the push).
+15. PR round 2: CodeRabbit raised two more real findings on `7d5ffcd6`. One is fixed in scope: a cleared dead
+    runner's group is checked before records are reset. The other needed `run-gates.mjs`, so the human chose "Amend
+    plan, fix it". Plan v3 adds `run-gates.mjs` and its test, re-checked with `check-plan-lessons` (exit 0) and the
+    setter's `--check`. A fresh build epoch was anchored after the plan change. Now `init` stops a leftover gate group
+    before its wipe.
+16. `/pharn-dev-regress` re-run → `no-regressions` (191 outside test files, 6286 pass at head); `/pharn-dev-verify`
+    re-run → `PASS` (stamp `787e2e2c…`, `test` 6813 pass / 0 fail).
+
+Run ended at PR round 2 (the merge decision stands; CI re-runs on the push).
 
 ## Verdicts
 

@@ -12,8 +12,9 @@
   (`stage-exit.md`, `cost-ledger.md` — a paragraph each), build apparatus (`.dev/floor/command-hygiene.test.mjs`,
   `.dev/guides/floor-orchestration.md`, this feature folder).
 - constitution_refs: [P0, P2, P3, P5, P6, P7]
-- revision: v2, after `/pharn-dev-grill` (`GRILL.md`: 2 blocking, 15 important, 7 minor); the human chose "amend and
-  re-approve" on 2026-11-13. v1 is kept in the session scratchpad only.
+- revision: v3. v2 came after `/pharn-dev-grill` (`GRILL.md`: 2 blocking, 15 important, 7 minor), when the human chose
+  "amend and re-approve" on 2026-11-13. v3 adds `run-gates.mjs` and its test during PR #443's review, approved by the
+  human on 2026-11-13 ("Amend plan, fix it"). v1 is kept in the session scratchpad only.
 
 ## Why (P7) — the recorded evidence
 
@@ -163,6 +164,14 @@ Every record is parsed by a total parser with a closed schema (null, never a thr
 - `SKILLS_VERSION` — 7.14.0 → 7.15.0 (minor: a new mode of a shipped checker) — layer repo meta
 - `CHANGELOG.md` — one new 7.15.0 entry — layer repo meta
 - `README.md` — the version badge only — layer repo meta
+- `pharn/floor/run-gates.mjs` — (v3) `init` stops a gate group a crashed run left running (`lock.child`, the existing
+  `reapOrphanGroup`) before it deletes `<out>`. A takeover after a runner killed during the first gate re-runs the
+  fresh line, and that wipe used to delete `lock.child` with the gate still alive, so two gates could overlap (PR #443,
+  CodeRabbit) — layer product floor
+- `pharn/floor/run-gates.test.mjs` — (v3) the init reap: after a SIGKILLed runner, a fresh `init` stops the recorded
+  group before the wipe, and under a live lock it leaves the gate alone. A group that survives SIGKILL is not
+  reproducible, so the `lock-busy` refusal is the existing `reapOrphanGroup` path, untested here — layer product floor
+  (test, not shipped)
 
 ### Not touched, on purpose
 
@@ -260,8 +269,10 @@ record) for a person — never a guess.
 - Q1 — CLI shape: **keep the two pinned line shapes** (fresh = start + wait, `--resume` = wait/takeover).
 - Q2 — the thin callers `pharn-regress.md` / `pharn-verify.md`: **leave unchanged**.
 - Q3 — criterion 2's byte identity: **compare with the clock-derived fields masked**, each named in the test.
-- Re-plan after the grill: **amend and re-approve** (this v2) — v2 **approved** by the human, 2026-11-13.
+- Re-plan after the grill: **amend and re-approve** (v2) — v2 **approved** by the human, 2026-11-13.
+- PR #443 review, the gate overlap after a first-gate runner death: **"Amend plan, fix it"** (this v3) — the human,
+  2026-11-13.
 
 ## Open questions (HALT)
 
-- none — Q1–Q3 resolved at GATE 1; v2 approved.
+- none — Q1–Q3 resolved at GATE 1; v2 approved; v3 approved.

@@ -183,6 +183,39 @@ What was done:
 Re-run after this round: regress `no-regressions`, verify `PASS`, stamp `c0e06e88…`. Nobody re-reviewed this round's
 code changes; they are covered by the suite and both re-runs.
 
+## PR round 2 (CodeRabbit on `7d5ffcd6`)
+
+CodeRabbit raised two more findings, quoted below as DATA (third-party model output):
+
+```yaml
+- type: FINDING
+  rule_id: "P0"
+  severity: important
+  file: "pharn/floor/stage-direct.mjs:1002"
+  problem: "When a dead runner's state writes had failed (no state.json) but its script survives in its group, a fresh call clears the runner's lock and resets the records, starting a second script."
+  evidence: "review 5890353355, outside-diff comment"
+- type: FINDING
+  rule_id: "P0"
+  severity: important
+  file: "pharn/floor/stage-direct.mjs:935"
+  problem: "After a runner killed during its FIRST gate, the takeover re-runs the fresh argv; the stage script's run-gates init wipes <out> with lock.child, so the surviving gate is never reaped and a new gate overlaps it."
+  evidence: "comment 4562872796, a reply to the earlier gate-group thread"
+```
+
+Both are real; the code was read to confirm each.
+
+- **Cleared runner's group:** `startCall` now checks the group of the runner whose lock it just cleared, before any
+  record is reset, and refuses `in-flight` while that group is alive. There is a test for the no-`state.json` case.
+- **The init wipe:** the clean fix lives in `run-gates.mjs`, outside plan v2. The human chose "Amend plan, fix it":
+  - plan v3 adds `run-gates.mjs` and its test;
+  - `startRecord` now runs the existing `reapOrphanGroup` under an absent or stale lock before deleting `<out>`;
+  - its test SIGKILLs a runner during a gate and checks that a fresh `init` stops the gate group;
+  - a control checks that a live run's gate is left alone.
+- The header bound and the CHANGELOG say so too.
+
+Re-run after this round: regress `no-regressions`, verify `PASS`, stamp `787e2e2c…`. No added line is uncovered in
+`stage-direct.mjs` or `run-gates.mjs` (local run of both files, 174 tests). Nobody re-reviewed these changes.
+
 ## Lesson candidate
 
 None proposed: the important finding is a single occurrence, not a recurring failure (P7).

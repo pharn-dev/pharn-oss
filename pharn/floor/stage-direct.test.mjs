@@ -1110,6 +1110,31 @@ test("NEGATIVE — the runner dead, its process group ALIVE (an orphaned script)
   }
 });
 
+test("NEGATIVE (PR #443 review) — a dead runner's lock with NO state.json (its writes failed) and its group ALIVE: a fresh call clears the lock but refuses `in-flight` naming that group; no record is reset, no second script", async () => {
+  const root = project({ fx: { hold: "fresh", steps: [10] } });
+  const first = cliAsync(root, fresh("pharn-regress", { b: 120_000 }));
+  let pgid = null;
+  try {
+    await until(() => existsSync(join(root, ".holding")) && existsSync(join(root, STATE_FILE)), "the held script and the runner's state");
+    pgid = readJson(root, STATE_FILE).runner_pid;
+    process.kill(pgid, "SIGKILL"); // the runner alone; its script lives on in the group
+    await first.done;
+    rmSync(join(root, STATE_FILE)); // as if the runner's state writes had failed: only the lock still names it
+    const runnerBefore = readFileSync(join(root, RUNNER_FILE), "utf8");
+    const again = direct(root, fresh("pharn-regress")); // in-process, so its lines are measured
+    assert.equal(again.exit, 2, again.errText);
+    assert.match(again.errText, new RegExp(`^refused \\(in-flight\\) — an earlier runner's process group ${pgid} still runs`));
+    assert.equal(readFileSync(join(root, RUNNER_FILE), "utf8"), runnerBefore, "runner.json is not reset");
+    assert.equal(existsSync(join(root, LOCK_FILE)), false, "this call's lock released (the dead runner's was cleared)");
+    assert.equal(callsIn(root).length, 1, "one script, never a second");
+  } finally {
+    writeFileSync(join(root, ".release"), "1");
+    if (pgid) killGroup(pgid);
+    await Promise.race([first.done, sleep(15_000)]);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("NEGATIVE — runner.json for the other stage → `mismatch`; no runner.json → `no-run`; each exit 2, nothing written", () => {
   const root = project();
   try {

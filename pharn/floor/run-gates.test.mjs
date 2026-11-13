@@ -2477,6 +2477,42 @@ test("audit P3-P — a SIGKILLed runner's gate group is stopped by the next run'
   }
 });
 
+test("PR #443 — a fresh `init` after a SIGKILLed runner stops the gate group it left running BEFORE the wipe deletes its record; a live run's gate is never signalled", async () => {
+  // A fresh re-run (/pharn-loop's takeover after a runner killed during its first gate) inits the same <out>: the wipe
+  // used to delete lock.child with the gate still alive, so the new run's gate overlapped it.
+  const dir = repo();
+  let gate = null;
+  try {
+    const run = await startSlowRun(dir);
+    gate = run.gate;
+    run.runner.kill("SIGKILL");
+    await run.exited;
+    assert.ok(alive(gate), "fixture: a SIGKILL of the runner must leave its gate running");
+    const init = cli(dir, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", "node slow.cjs::slow"]);
+    assert.equal(init.code, 0, init.raw);
+    assert.equal(alive(gate), false, "the orphaned gate was still running after the fresh init (a new run would overlap it)");
+    assert.ok(!existsSync(join(dir, OUT, "lock.child")), "the sidecar survived the init");
+  } finally {
+    if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // CONTROL (L34): under a LIVE lock, init leaves the running gate alone (the reap acts on a stale lock only).
+  const live = repo();
+  let liveGate = null;
+  try {
+    const run = await startSlowRun(live);
+    liveGate = run.gate;
+    const init = cli(live, ["init", "--stage", "build", "--feature", FEATURE, "--out", OUT, "--gates", "node slow.cjs::slow"]);
+    assert.equal(init.code, 0, init.raw);
+    assert.ok(alive(liveGate), "a live runner's gate was stopped by an init");
+    run.runner.kill("SIGTERM");
+    await run.exited;
+  } finally {
+    if (liveGate !== null && alive(liveGate)) process.kill(liveGate, "SIGKILL");
+    rmSync(live, { recursive: true, force: true });
+  }
+});
+
 test("audit P3-P — a LIVE lock's running group is never touched: the second runner refuses lock-busy and the gate keeps running", async () => {
   // Control (L34) for the reap: the sidecar is acted on only when the lock is STALE.
   const dir = repo();

@@ -1,18 +1,18 @@
 # VERIFY — stage-wait-once
 
-- measured: 2026-11-13, 12:19–12:40 CET, re-run after the PR's CI round (coverage tests, three review fixes), at the
-  working tree (the PR commit `08a84fed` plus that round's uncommitted changes). Earlier runs (stamp `170cdb7a…`,
-  before the review fixes; `2588449f…`, before the CI round) are superseded
+- measured: 2026-11-13, 13:24–13:50 CET, re-run after plan v3 (the `run-gates.mjs` init reap, the cleared-runner
+  check), at the working tree (`7d5ffcd6` plus that round's uncommitted changes). Earlier runs (stamps `170cdb7a…`,
+  `2588449f…`, `c0e06e88…`) measured earlier trees and are superseded
 - runner: `pharn/floor/run-gates.mjs` (`init --stage verify`, then `run --next` per gate, each in a background call)
 - verdict: `check-verify.mjs --stamp pharn/.run/pharn-dev-verify/gates/stamp.json --feature stage-wait-once`, exit 0
-- stamp sha256: `c0e06e887c577d257ba397083a79fc4678cd35645f13c89d35779f97b07711f4`; fingerprint
-  `worktree-fingerprint/3+sha256` `5a8b8da5…09d34c`
+- stamp sha256: `787e2e2c09075ed0b9f5a92959ea24d646100225333c7eeda7ad96776bdacd77`; fingerprint
+  `worktree-fingerprint/3+sha256` `223e6f6d…67c9e3`
 
 ## Floor gates
 
 | gate                 | exit | note                                                         |
 | -------------------- | ---- | ------------------------------------------------------------ |
-| `test`               | 0    | `npm test`, 529.0 s, 6811 pass / 0 fail                      |
+| `test`               | 0    | `npm test`, 702.4 s, 6813 pass / 0 fail                      |
 | `validate`           | 0    | `node pharn/floor/validate.mjs .`                            |
 | `lint`               | 0    | `npm run lint`                                               |
 | `format:check`       | 0    | `npm run format:check`                                       |

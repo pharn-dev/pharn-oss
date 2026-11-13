@@ -147,9 +147,10 @@
 //     `lock-unusable` — a stop with a named reason, never a lock taken half-way.
 //   * A process a gate double-forks out of the runner's group escapes both the liveness and the orphan check — the
 //     same class as entry-gates.mjs's named bound. A gate run-gates.mjs starts in its OWN group is outside the runner's
-//     group too: after a runner death this file's checks do not see it, and run-gates.mjs's stale-lock recovery is what
-//     stops it (SIGTERM, then SIGKILL) before the takeover's script re-runs that gate, or refuses `lock-busy` when it
-//     will not die — so two gates never overlap, but the leftover gate's work is discarded, not waited for.
+//     group too: after a runner death this file's checks do not see it. run-gates.mjs stops it (SIGTERM, then SIGKILL)
+//     before a gate runs again — its stale-lock recovery on a resumed run, its `init` on a takeover's fresh re-run —
+//     or refuses `lock-busy` when it will not die. So two gates never overlap, but the leftover gate's work is
+//     discarded, not waited for.
 //   * A takeover's script runs in the CALLING process's group, unchecked: when only the calling process is killed and
 //     its script survives, the next resume line can take over and start a second script beside it. run-gates.mjs's
 //     lock still keeps their gates from overlapping; the two scripts' own progress records are not guarded. No group is
@@ -999,6 +1000,14 @@ function startCall(ctx) {
   let handedOff = false;
   let wroteRunner = false;
   try {
+    // A dead RUNNER's lock was just cleared. With no state.json (its writes failed), the check above saw no earlier
+    // run, yet its script may still run in its group: check that group before the records are reset (PR #443 review).
+    if (lock.cleared?.holder === "runner" && groupAlive(lock.cleared.pid))
+      return refuse(
+        ctx,
+        "in-flight",
+        `an earlier runner's process group ${lock.cleared.pid} still runs (an orphaned script or gate); stop it (kill -TERM -- -${lock.cleared.pid}), then start again`
+      );
     for (const rel of RUN_RECORDS) {
       try {
         unlinkSync(join(root, rel));

@@ -49,8 +49,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a torn, foreign or pre-upgrade lock refuses `in-flight` in a takeover as in a fresh call; three calls clearing one
   stale lock at once can lose a live record; the lock is created by a hard link, so on a filesystem without them
   (FAT/exFAT, some network mounts) every call refuses `lock-unusable`; a gate `run-gates.mjs` started in its own process
-  group is outside the runner's group, so after a runner death it is `run-gates.mjs`'s stale-lock recovery that stops
-  it before the gate re-runs, never a wait for it; and a takeover's script runs in the calling process's group, so when
+  group is outside the runner's group, so after a runner death it is `run-gates.mjs` that stops it before the gate runs
+  again, never a wait for it (its stale-lock recovery on a resumed run, and now its `init` too: a fresh `init` under an
+  absent or stale lock stops a group `lock.child` names before deleting `<out>`, where it used to delete the record
+  with the gate still running); and a takeover's script runs in the calling process's group, so when
   only that process is killed and the script survives, the next resume line can start a second script beside it
   (`run-gates.mjs`'s lock still keeps their gates apart). TESTED, not floor: the in-flight refusal (an exclusive lock
   created whole by `link`, pid liveness and a `ps` nonce check in unauthenticated `pharn/.run/`), the byte identity of

@@ -16,6 +16,8 @@
     "CHANGELOG.md",
     "README.md",
     "SKILLS_VERSION",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/run-gates.test.mjs",
     "pharn/floor/stage-direct-core.mjs",
     "pharn/floor/stage-direct.mjs",
     "pharn/floor/stage-direct.test.mjs",
@@ -42,13 +44,13 @@
   "per_test": {
     "gate": "tests",
     "base": {
-      "passed": 6369,
+      "passed": 6280,
       "failed": 0,
       "skipped": 7,
       "suite_errors": 0
     },
     "head": {
-      "passed": 6375,
+      "passed": 6286,
       "failed": 0,
       "skipped": 1,
       "suite_errors": 0
