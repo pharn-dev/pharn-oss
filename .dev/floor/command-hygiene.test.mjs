@@ -2048,6 +2048,65 @@ for (const s of STUCK_POINTS) {
   });
 }
 
+// ── The stuck-point table stays COMPACT (loop-command-sections, 7.18.1, Linear CORE-109) ─────────────────────────
+// WHY. pharn-loop.md is sent with every orchestrator request of a run. Prettier pads every column of a table it formats
+// to its widest cell (under this repo's `proseWrap: preserve`), so the 26 lines of this table were 564 characters each:
+// 14,738 B, about 6.9 KB of it spaces, and one longer cell re-padded every line (the 7.5.0 and 7.9.0 ceiling comments).
+// The compact form is 7,133 B and only survives `format:check` behind Prettier's own `<!-- prettier-ignore -->` line
+// directly above the header. Without this pin, deleting that line and running `prettier --write` re-pads the table and
+// stays under the file's byte ceiling. Each property below has its own negative control (L60).
+// HONEST SCOPE (P0): string equality over the table's lines — the layout, never the rows' meaning (the pins above hold
+// the rows' ids and spellings).
+const STUCK_TABLE_HEADING = "## Step 2 — The stuck-point table";
+const PRETTIER_IGNORE_LINE = "<!-- prettier-ignore -->";
+const COMPACT_SEPARATOR = "| --- | --- | --- |";
+
+/** Offenders when the stuck-point table in a pharn-loop.md text is not in the compact, prettier-ignored form. */
+function compactTableOffenders(text) {
+  const lines = text.split("\n");
+  const h = lines.findIndex((l) => l.startsWith(STUCK_TABLE_HEADING));
+  if (h < 0) return [`no line starts with "${STUCK_TABLE_HEADING}"`];
+  const start = lines.findIndex((l, i) => i > h && l.startsWith("|"));
+  if (start < 0) return ["no table line after the stuck-point heading"];
+  let end = start;
+  while (end + 1 < lines.length && lines[end + 1].startsWith("|")) end++;
+  const table = lines.slice(start, end + 1);
+  const out = [];
+  if (table.length !== STUCK_POINTS.length + 2) out.push(`the table has ${table.length} lines, expected ${STUCK_POINTS.length + 2}`);
+  if (lines[start - 1] !== PRETTIER_IGNORE_LINE)
+    out.push(`the line above the table header is not ${PRETTIER_IGNORE_LINE} — without it Prettier re-pads every column`);
+  if (table[1] !== COMPACT_SEPARATOR) out.push(`the separator is not "${COMPACT_SEPARATOR}"`);
+  table.forEach((row, i) => {
+    if (i === 1) return;
+    const cells = row
+      .split("|")
+      .slice(1, -1)
+      .map((c) => c.trim());
+    if (cells.length !== 3) out.push(`table line ${i + 1} has ${cells.length} cells, expected 3`);
+    else if (row !== `| ${cells.join(" | ")} |`) out.push(`table line ${i + 1} carries column padding: ${row.slice(0, 40)}…`);
+  });
+  return out;
+}
+
+test("✧ 7.18.1 — /pharn-loop's stuck-point table is compact, behind one prettier-ignore line; each property has a control (L60)", () => {
+  const live = readFileSync(join(COMMANDS_DIR, LOOP_FILE), "utf8");
+  assert.deepEqual(compactTableOffenders(live), []);
+  const noIgnore = live.replace(`${PRETTIER_IGNORE_LINE}\n`, "");
+  assert.notEqual(noIgnore, live, "anchor (L60): the ignore line was found");
+  assert.match(compactTableOffenders(noIgnore).join("\n"), /the line above the table header is not <!-- prettier-ignore -->/);
+  const paddedSeparator = live.replace(`\n${COMPACT_SEPARATOR}\n`, "\n| ---- | --- | --- |\n");
+  assert.notEqual(paddedSeparator, live, "anchor (L60): the separator was found");
+  assert.match(compactTableOffenders(paddedSeparator).join("\n"), /the separator is not/);
+  const paddedRow = live.replace("\n| S7 | ", "\n| S7   | ");
+  assert.notEqual(paddedRow, live, "anchor (L60): the S7 row was found");
+  assert.match(compactTableOffenders(paddedRow).join("\n"), /table line 11 carries column padding: \| S7 {3}\|/);
+  const droppedRow = live.replace(/\n\| S8 \|[^\n]*/, "");
+  assert.notEqual(droppedRow, live, "anchor (L60): the S8 row was found");
+  assert.match(compactTableOffenders(droppedRow).join("\n"), /the table has 25 lines, expected 26/);
+  const renamed = live.replace(STUCK_TABLE_HEADING, "## Step 2 — The table");
+  assert.deepEqual(compactTableOffenders(renamed), [`no line starts with "${STUCK_TABLE_HEADING}"`]);
+});
+
 for (const o of COMMIT_OUTCOMES) {
   test(`✧ /pharn-loop spells the commit outcome \`${o}\``, () => {
     assert.ok(commandBody(LOOP_FILE).includes(`\`${o}\``), `${LOOP_FILE} never spells the commit outcome \`${o}\``);
@@ -5597,7 +5656,9 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // loop-supervisor (7.9.0): the supervisor's routed lines and its decision read in Step 4's escalation branch, the S16
   // row's new trigger and the S17 row (which widened the stuck-point table's padding), and five grants — 84,570 bytes
   // measured, 1,626 over 82,944; raised by the rule (+10%, up to a multiple of 512).
-  "pharn-loop.md": 93184,
+  // loop-command-sections (7.18.1): the stuck-point table lost its column padding — 82,785 bytes measured (was 90,340);
+  // the row went DOWN by the rule (+10%, up to a multiple of 512).
+  "pharn-loop.md": 91136,
   // loop-isolation-stop (7.1.0): Step 6b's `isolation` capture rule, the Step 7 line and one claims bullet — 35,042
   // bytes measured, 226 over 34,816; raised by the rule (+10%, up to a multiple of 512).
   // loop-supervisor (7.9.0): Step 6b's Known risk section, the Step 7 known-risk bullet, the supervised honest line and

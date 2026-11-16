@@ -23,6 +23,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.18.1] - 2026-11-16
+
+### Changed
+
+- **`/pharn-loop`'s stuck-point table no longer carries column padding, so the command file is 7,555 bytes smaller**
+  (Linear CORE-109, step 1). `pharn-loop.md` is sent with every orchestrator request of a run, and Prettier padded
+  every column of the Step 2 table to its widest cell: 26 lines of 564 characters, 14,738 bytes. The table is now in
+  Prettier's compact form behind one `<!-- prettier-ignore -->` line, 7,158 bytes. Every row's three cells have the
+  same text, in the same order (checked cell by cell against 7.18.0 in
+  `.dev/features/loop-command-sections/BUILD.md`). The file went from 90,340 to 82,785 bytes, and the loop family
+  (with its quick and close parts) from 143,389 to 135,834. The saving in tokens is smaller than bytes ÷ 4, because
+  runs of spaces tokenize densely, and it is not measured.
+  - **Why the ignore line.** Under this repo's `proseWrap: preserve`, Prettier 3.9.10 re-pads a compact table. It
+    prints the compact form only under `proseWrap: never`, which would also re-flow every wrapped paragraph of the
+    file. A new row now costs only its own bytes; a long cell no longer widens every line.
+  - **Held by tests.** The file's command-budget ceiling went down from 93,184 to 91,136 (measured + 10%, up to a
+    multiple of 512). A new test in `.dev/floor/command-hygiene.test.mjs` keeps the table compact and the ignore line
+    in place. Without it, deleting the line and running `prettier --write` would re-pad the table and still fit under
+    the ceiling.
+  - **Not done: step 2 of the ticket**, moving the per-iteration steps (Steps 4 and 5) into a new part file. The
+    baseline rates it no-go (`.dev/measurements/loop-baseline-2026-11-11.md` §12: about 5.6k tokens, 2.4% of a 231k
+    orchestrator request). The command's parts are unchanged (`quick` and `close`). That decision was a model
+    orchestrator's, made under the maintainer's delegation.
+  - **Bound.** This shows that the instruction text is unchanged. It does not measure whether a model reads a compact
+    table the way it reads a padded one.
+
 ## [7.18.0] - 2026-11-16
 
 ### Added
