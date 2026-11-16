@@ -6,7 +6,8 @@
 # Creates <root>/base-repo: a no-hardlinks clone of the project, detached at the lg3-remove-files benchmark base,
 # with its `origin` remote removed (no run can push), PHARN updated to the latest release, `pharn-stage.md` copied
 # from the pharn-oss checkout, and `gates.timeoutMs: 1800000` declared — all in ONE local commit on a branch named
-# `measure-base`. Also writes <root>/intent.md, the shared increment description, extracted from the project's own
+# `measure-base`; the PreToolUse and Stop hook entries of .claude/settings.json are taken from the pharn-oss
+# checkout (see below). Also writes <root>/intent.md, the shared increment description, extracted from the project's own
 # lg3-remove-files SPEC (its `## Intent` and `## Scope` sections; the project's text, kept out of pharn-oss).
 # The project checkout is only read. Nothing here starts a model session.
 set -euo pipefail
@@ -38,6 +39,19 @@ git remote remove origin
 git checkout -q -b measure-base "$BASE_SHA"
 
 npx --yes @pharn-dev/pharn@latest update --yes
+
+# `pharn update` never edits .claude/settings.json, and the base's file (from 7e48564d) wires both PreToolUse guards by
+# relative path and has no Stop hook. The comparison loop's Stop guard must be 7.19.0 as shipped, so the PreToolUse
+# and Stop entries are copied byte for byte from the pharn-oss checkout's settings; every other key (the project's own
+# PostToolUse hook) is kept as it is.
+node -e '
+const fs = require("fs");
+const oss = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const own = JSON.parse(fs.readFileSync(".claude/settings.json", "utf8"));
+own.hooks = { ...(own.hooks || {}), PreToolUse: oss.hooks.PreToolUse, Stop: oss.hooks.Stop };
+fs.writeFileSync(".claude/settings.json", JSON.stringify(own, null, 2) + "\n");
+console.log("settings hooks:", Object.keys(own.hooks).join(", "));
+' "$OSS/.claude/settings.json"
 
 mkdir -p .claude/agents
 cp "$OSS/.claude/agents/pharn-stage.md" .claude/agents/pharn-stage.md
