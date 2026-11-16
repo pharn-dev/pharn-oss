@@ -95,6 +95,7 @@ initialize at all.
 | `runs[].reused`          | Only on a reused entry (6.34.0): `{stage, side, seq, stamp_sha256}` naming the source execution.                                  |
 | `runs[].duration_ms`     | Optional (7.12.0). The runner's monotonic wall time for a process it spawned; only on `ran: true`. See "Gate duration".           |
 | `excluded`               | Optional (6.36.0): `{declared_in, ids}` — the discovered gates the project's `gates.exclude` removed. See below.                  |
+| `runs[].compare_files`   | Optional (7.18.0): on a regress/head `test` run that ran the WHOLE suite, the outside test files it is compared over. See below.  |
 
 ## Per-test results (`results_sha256`, 6.15.0)
 
@@ -166,13 +167,45 @@ the runner recorded its result and spawned nothing. The entry is:
 `validateStamp` admits exactly that shape — with an `exit` in 0..125, a completed process exit — only in a `verify`
 stamp, and never for an id in `NON_REUSABLE_IDS` (every
 AC level gate, every style gate, `reconcile`, `instruction-growth`; the reasons are that constant's comment in
-`gate-run-core.mjs`). `test` could not be reused from regress HEAD even outside that set: regress HEAD runs it over the
-test files not changed since the base, never this feature's own AC tests, so its file list differs from verify's
-whole-suite run and the execution identity misses it (6.72.2, audit LOOP-8, closed won't-fix). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
+`gate-run-core.mjs`), with the one exception below for `test`. A `test` run over a SUBSET could not be reused from
+regress HEAD even outside that set: such a run covers the test files not changed since the base, never this feature's
+own AC tests, so its file list differs from verify's whole-suite run and the execution identity misses it (6.72.2, audit
+LOOP-8, closed won't-fix then; reopened in 7.18.0, below). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
 without them validates as before, and a floor older than 6.34.0 reads a reused entry as `entry-not-run` (a LAPSE code,
 so a re-run — the fail-closed direction). The in-progress record's `reuse` binding (the offered path and digest) is
 dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `pharn/.run/` state
 the write tools reach, as the in-progress `runs` already are — the named residual `verify-paused-chain-integrity`.
+
+### One execution of `test` for regress and verify (`compare_files`, 7.18.0)
+
+Audit LOOP-8 (reuse the regress HEAD `test` run at verify) was closed won't-fix at 6.72.2 for the two reasons above. It
+was reopened in 7.18.0 (head-test-single-run, Linear CORE-89) on measured gate durations: on the measured project `test`
+took 286.3 s of a 346.7 s gate sum (`.dev/features/head-test-single-run/PLAN.md`). The decision was made by a model
+orchestrator under the maintainer's delegation.
+
+- **The whole-suite HEAD run.** When `pharn.config.json` declares `testResults.test` (and `--no-tests` was not given),
+  `/pharn-regress` initializes its HEAD side with `run-gates.mjs init --test-whole-suite`. The `test` entry then has
+  `files: []` and `compare_files`: the outside tests it used to run. The runner's `no-files` rule skips such an entry, so
+  it runs as the plain command `/pharn-verify` runs. The run records `compare_files` beside `files: []`. `validateStamp`
+  admits the field only on the `test` run of a `regress`/`head` stamp, as a list of file paths beside `files: []`
+  (`gate-run-core.mjs` `wholeSuiteTestRun`, the one owner). Anywhere else it is `stamp-malformed`. `baseSpecFrom` hands
+  the BASE side `compare_files` as the files to run, so the BASE spec, the retained-BASE requirement and the entry-derived
+  mapping keep their pre-7.18.0 bytes. Not declared: the subset run as before, byte-identical.
+- **The reuse.** `test` stays in `NON_REUSABLE_IDS`, with exactly one exception: a whole-suite source run that recorded a
+  results file (`gate-reuse-core.mjs` `findReusable`; a whole-suite run without one is the miss `results-absent`). The
+  runner copies that results file into verify's `<out>` under verify's own `resultsFileName`. The copy is the last step,
+  verified against the source's `results_sha256` before and after the write. A copy that does not verify is removed again
+  (the miss `log-unverified`, and the gate runs). The reused `test` entry records the source's digest: `validateStamp`
+  requires one on a reused `test` and refuses one on any other reused verify run. The AC gate
+  (`per-test-results-core.mjs` `gateResults`) and `check-loop-fresh.mjs` J then bind the copy to the verify stamp
+  exactly as they bind a fresh run's file.
+- **Bounds (P0).** The copy is bound to the source run's digest only when the decision is made. Afterwards it is bound to
+  the verify stamp's own digest, and a verify stamp's reused `test` cannot show that its source was a whole-suite run
+  (`verify-reuse-rederive`). Verify has no independent second sample of `test` (`pharn/LIMITS.md` §9; `VERIFY.md` says so
+  when it happens). A suite that reads the feature's fingerprint-excluded artifacts (`REGRESSION.md` is written after the
+  HEAD drain) saw other bytes than verify would. A standalone `/pharn-regress`, or a verify that misses, pays the whole
+  suite at HEAD with nothing reused. The time saved per iteration is the outside-subset run that HEAD no longer makes,
+  roughly the whole suite minus the inside tests.
 
 ### The closed reuse matrix, and the entry-derived BASE stamp (6.49.0)
 

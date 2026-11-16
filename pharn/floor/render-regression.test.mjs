@@ -814,3 +814,63 @@ test("renderDone (7.17.0): a suite-error-only per-test regression is named as su
   assert.match(md, /^head: passed 4, failed 1, skipped 0, suite errors 2$/m);
   assert.match(md, /new failures at head \(0\)/);
 });
+
+// ── 7.18.0 (head-test-single-run) — the whole-suite HEAD run's section and its ok-outside row ─────────────────────────
+test("renderDone (7.18.0): a whole-suite HEAD red owned by inside tests renders 'ok outside the feature', never REGRESSION", () => {
+  const report = baseReport({
+    verdict: "no-regressions",
+    regressions: [],
+    pre_existing: [],
+    outside_gates: { test: { base: 0, head: 1 } },
+    per_test: {
+      gate: "test",
+      head_run: "whole-suite",
+      base: null,
+      head: { passed: 4, failed: 0, skipped: 0, suite_errors: 0 },
+      new_failures: [],
+      still_failing: 0,
+      ignored: { base: 0, head: 2 },
+    },
+  });
+  const md = renderDone({ feature: "demo", base: "a".repeat(40), report, scope: baseScope(), progress: baseProgress() });
+  assert.match(md, /base exit 0 -> head exit 1 — ok outside the feature \(head ran the whole suite/);
+  assert.doesNotMatch(md, /— REGRESSION —/);
+  assert.match(md, /HEAD ran the WHOLE suite \(one execution \/pharn-verify can reuse\)/);
+  assert.match(md, /^base: \(not read — no compared test failed at head/m);
+  // Control: the same row IN `regressions` (an outside failure) still renders REGRESSION, and a both-red block keeps 7.17.0's line.
+  const reg = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: { ...report, verdict: "regressions", regressions: ["test"] },
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(reg, /base exit 0 -> head exit 1 — REGRESSION — id/);
+  // Control (CodeRabbit, PR #448): the same green-base row OUT of `regressions` but with no whole-suite block (an
+  // inconclusive report, say) never earns "ok outside the feature".
+  const noBlock = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: { ...report, verdict: "inconclusive", per_test: undefined },
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.doesNotMatch(noBlock, /ok outside the feature/);
+  const both = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: perTestReport([]),
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(both, /compared test by test because it is red at both base and head/);
+  // A whole-suite block whose BASE record was read renders its counts.
+  const read = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: { ...report, per_test: { ...report.per_test, base: { passed: 3, failed: 0, skipped: 0, suite_errors: 0 } } },
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(read, /^base: passed 3, failed 0, skipped 0, suite errors 0$/m);
+});

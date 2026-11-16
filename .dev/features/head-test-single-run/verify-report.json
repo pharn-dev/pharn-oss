@@ -1,0 +1,26 @@
+{
+  "feature": "head-test-single-run",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "e94ac751e8bb65f78130bbcf92780116e5edf453acd66a936541c41f54f21072",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "cf05b95ee9e402a614c9dae2d43fdf8d2a2232a490865448bbdec4366d5df0a5"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

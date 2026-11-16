@@ -74,6 +74,9 @@
 // is red on both sides (regress-per-test-product). This script passes nothing new: each side's results file is already
 // beside its stamp — run-gates.mjs writes it to `<out>` (PHARN_TEST_RESULTS) and records its `results_sha256` — and an
 // entry-derived BASE stamp carries the entry `base:test` run's file, copied and verified (entry-base-evidence.mjs).
+// Since 7.18.0 (head-test-single-run) the declaration also makes head-init pass `run-gates.mjs --test-whole-suite`
+// (unless --no-tests): HEAD runs `test` as the WHOLE suite, with the outside tests recorded as `compare_files`, so the
+// offer below can hand /pharn-verify that one execution of `test` too; the BASE side still runs the outside tests.
 //
 // ==================================== THE HEAD OFFER (6.34.0) ====================================
 // /pharn-verify may record a gate result from a completed HEAD execution of THIS delivery run instead of spawning the
@@ -181,6 +184,7 @@ import { discardOffer, publishOffer } from "./head-reuse-offer.mjs";
 import { decideEntryFromDisk, materializeEntryBase } from "./entry-base-evidence.mjs";
 import { entryEvidenceBlock } from "./entry-base-evidence-core.mjs";
 import { regressWork, recordWork } from "./stage-work.mjs";
+import { formatFor, loadResultsConfig } from "./per-test-results-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -779,6 +783,10 @@ function phaseHeadInit(cfg, base, scope, tests) {
     args.push("--discover", "package.json");
   }
   if (skipStyle) args.push("--skip-style");
+  // 7.18.0 (head-test-single-run) — with `testResults.test` declared, HEAD runs `test` as the whole suite (one execution
+  // /pharn-verify can reuse), its outside tests kept as the comparison set. Not declared, unreadable, or --no-tests: the
+  // flag is absent and the run is the outside subset, byte-identical to before.
+  if (!cfg.noTests && formatFor(loadResultsConfig("."), "test").ok) args.push("--test-whole-suite");
 
   const r = runGatesInit(args);
   let parsed;

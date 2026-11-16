@@ -337,15 +337,18 @@ export const REUSED_BLOCK_KEYS = Object.freeze(["stage", "side", "seq", "stamp_s
 /** The largest exit a COMPLETED process reports as itself: 126/127 are the runner's spawn-failure codes, >= 128 a signal
  *  (run-gates.mjs `signalExit`), and 124-by-timeout is excluded by `timed_out`. Only 0..this is ever reused. */
 export const MAX_REUSABLE_EXIT = 125;
-/** Never reused, whatever a source says — DERIVED from the sets below, never re-listed (L29/L35):
+/** Never reused, whatever a source says — DERIVED from the sets below, never re-listed (L29/L35) — with ONE exception,
+ *  `test` from a WHOLE-SUITE regress HEAD run (7.18.0, head-test-single-run; `wholeSuiteTestRun` below):
  *    • every AC level gate (LEVEL_GATES) — the AC gate reads their per-test records from VERIFY's OWN `<out>` and requires
- *      their pinned run. That is not the only reason `test` is never reused (6.72.2, audit LOOP-8, closed won't-fix):
- *      regress HEAD runs `test` over `outside_tests` alone (run-gates.mjs, regress/head), the test files NOT changed
- *      since the base, so it never runs this feature's own AC tests, and its ordered `files` differ from verify's
- *      whole-suite `npm run test` — the execution identity already MISSes it (gate-reuse-core.test.mjs, "files differ
- *      (a test subset)"). Copying its per-test results file into verify's `<out>` would hand the AC gate a record with
- *      none of the AC tests in it. Since 7.17.0 regress judges outside tests per test
- *      (regress-per-test-product), but still over a subset run; reuse also needs regress to run the whole suite;
+ *      their pinned run. A second reason held for `test` too (6.72.2, audit LOOP-8, closed won't-fix then): regress HEAD
+ *      ran `test` over `outside_tests` alone, the test files NOT changed since the base, so never this feature's own AC
+ *      tests, and its ordered `files` differ from verify's whole-suite `npm run test` — the execution identity MISSes
+ *      it (gate-reuse-core.test.mjs, "files differ (a test subset)"). Both reasons still hold for such a SUBSET run.
+ *      LOOP-8 was REOPENED in 7.18.0 on measured gate durations (.dev/features/head-test-single-run/PLAN.md): when the
+ *      project declares `testResults.test`, regress HEAD runs the WHOLE suite (`files: []`, its comparison set in
+ *      `compare_files`), so the identity can equal verify's, and the reuse copies that run's results file into verify's
+ *      `<out>` bound by its `results_sha256`, so the AC gate reads a record that holds the AC tests. Only that source is
+ *      reusable (gate-reuse-core.mjs findReusable); `test:e2e` / `e2e` never run at regress;
  *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
  *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
  *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);
@@ -355,6 +358,25 @@ export const MAX_REUSABLE_EXIT = 125;
 export const NON_REUSABLE_IDS = Object.freeze(
   [...new Set([...Object.values(LEVEL_GATES).flat(), ...STYLE_SET, "reconcile", INSTRUCTION_GROWTH_ID])].sort()
 );
+
+/** The one gate a regress HEAD side may run as the WHOLE suite (7.18.0, head-test-single-run). */
+export const WHOLE_SUITE_TEST_ID = "test";
+
+/** Is `run` (a spec entry or a stamp run) a WHOLE-SUITE regress HEAD execution of `test` — `files: []` with its comparison
+ *  set in `compare_files`? The ONE owner of that predicate (L35): run-gates.mjs (the no-files exception), validateStamp
+ *  (where the field may appear), gate-reuse-core.mjs (the only reusable `test` source) and check-regress.mjs (the
+ *  whole-suite verdict mode) all read it. TOTAL over parsed JSON (L62). */
+export function wholeSuiteTestRun(run) {
+  return (
+    run !== null &&
+    typeof run === "object" &&
+    !Array.isArray(run) &&
+    run.id === WHOLE_SUITE_TEST_ID &&
+    Array.isArray(run.compare_files) &&
+    Array.isArray(run.files) &&
+    run.files.length === 0
+  );
+}
 
 /** A feature slug: one path segment, no traversal, no separators.
  *  The floor's one export of this grammar: check-regress, feature-name, run-marker, ac-tests-lock and check-test-stage
@@ -916,7 +938,16 @@ export function baseSpecFrom(head, feature) {
       source_raw: head.source_raw ?? null,
       style_skipped: head.style_skipped === true,
       required: [...head.required],
-      entries: source.map((r, i) => ({ id: r.id, shell: r.shell ?? null, argv: r.argv ?? null, files: r.files ?? [], seq: i })),
+      // 7.18.0 — a WHOLE-SUITE HEAD `test` hands the BASE side its comparison set as the files to run, so the BASE side
+      // runs exactly what it ran before 7.18.0 (the outside tests) and every reader of this spec (base-init, the retained
+      // BASE requirement, the entry-derived mapping) keeps its bytes.
+      entries: source.map((r, i) => ({
+        id: r.id,
+        shell: r.shell ?? null,
+        argv: r.argv ?? null,
+        files: wholeSuiteTestRun(r) ? [...r.compare_files] : (r.files ?? []),
+        seq: i,
+      })),
     },
   };
 }
@@ -987,7 +1018,10 @@ function derivedBaseDefect(stamp) {
 function verifyReusedRunDefect(stamp, r) {
   if (stamp.stage !== REUSE_TARGET_STAGE) return `only a ${REUSE_TARGET_STAGE} stamp may carry a reused entry`;
   if (r.reason !== REUSED_REASON || r.ran !== false) return `a reused entry is ran:false with reason ${JSON.stringify(REUSED_REASON)}`;
-  if (NON_REUSABLE_IDS.includes(r.id)) return `${NON_REUSABLE_IDS.join(", ")} are never reused`;
+  // 7.18.0 — `test` is the one member a verify stamp may record as reused (from a whole-suite HEAD run, which this shape
+  // cannot see: the decision is gate-reuse-core.mjs's, at the moment it is made); every other member never.
+  if (NON_REUSABLE_IDS.includes(r.id) && r.id !== WHOLE_SUITE_TEST_ID)
+    return `${NON_REUSABLE_IDS.filter((id) => id !== WHOLE_SUITE_TEST_ID).join(", ")} are never reused`;
   if (!isInt(r.exit) || r.exit < 0 || r.exit > MAX_REUSABLE_EXIT)
     return `a reused exit is a completed process exit, 0..${MAX_REUSABLE_EXIT}`;
   const b = r.reused;
@@ -1002,7 +1036,12 @@ function verifyReusedRunDefect(stamp, r) {
   if (!Object.hasOwn(r, "identity_sha256")) return "a reused entry must record its identity_sha256";
   if (r.timed_out !== false || r.mutated !== false || r.fp_before !== r.fp_after)
     return "a reused entry neither times out nor moves the tree";
-  if (!Object.hasOwn(r, "results_sha256") || r.results_sha256 !== null) return "a reused entry records results_sha256: null";
+  // 7.18.0 — a reused `test` carries the source's results digest (its file is copied into this stage's `<out>`, which the
+  // AC gate reads); every other reused entry carries none.
+  if (r.id === WHOLE_SUITE_TEST_ID) {
+    if (!(isCleanToken(r.results_sha256, 64) && HEX64_RE.test(r.results_sha256)))
+      return `a reused ${WHOLE_SUITE_TEST_ID} entry records the source's results_sha256 digest`;
+  } else if (!Object.hasOwn(r, "results_sha256") || r.results_sha256 !== null) return "a reused entry records results_sha256: null";
   return null;
 }
 
@@ -1092,6 +1131,19 @@ export function validateStamp(stamp, expect = {}) {
     // OPTIONAL and additive (6.34.0): the execution identity the runner computed for this entry (gate-reuse-core.mjs).
     if (Object.hasOwn(r, "identity_sha256") && !(isCleanToken(r.identity_sha256, 64) && HEX64_RE.test(r.identity_sha256))) {
       return err("stamp-malformed", `stamp.runs[${i}].identity_sha256 must be a sha256 hex digest`);
+    }
+    // OPTIONAL and additive (7.18.0, head-test-single-run): the comparison set of a WHOLE-SUITE regress HEAD `test` run —
+    // only there, only as a list of file paths, only beside `files: []` (wholeSuiteTestRun's shape). Fixed text (L62).
+    if (Object.hasOwn(r, "compare_files")) {
+      if (stamp.stage !== "regress" || stamp.side !== "head" || r.id !== WHOLE_SUITE_TEST_ID) {
+        return err(
+          "stamp-malformed",
+          `stamp.runs[${i}].compare_files appears only on the ${WHOLE_SUITE_TEST_ID} run of a regress/head stamp`
+        );
+      }
+      if (!wholeSuiteTestRun(r) || !r.compare_files.every((f) => isCleanToken(f, 4096))) {
+        return err("stamp-malformed", `stamp.runs[${i}].compare_files must be a list of file paths on a run whose files is []`);
+      }
     }
     // OPTIONAL and additive (gate-durations): the runner's monotonic wall time for a process it SPAWNED (run-gates.mjs,
     // GATE DURATION). An observation, read by no verdict, reuse decision or route; present only on a `ran: true` run,

@@ -125,7 +125,9 @@ test that fails at head and did not fail at base makes `test` a regression inste
 inside the feature are ignored. A side whose record is missing, changed or unreadable makes the verdict `inconclusive`,
 never `pre_existing`. Under machine load a test red at head only reads as a regression — a false red, never a false
 green. The report's `per_test` block and `REGRESSION.md`'s "Per-test comparison" section show it
-(`pharn/pharn-contracts/regression-report.md`). Without the opt-in nothing changes.
+(`pharn/pharn-contracts/regression-report.md`). Without the opt-in nothing changes. Since 7.18.0 the opt-in also makes
+the HEAD side run the whole `test` suite once, so `/pharn-verify` can reuse it; a HEAD red is then compared whenever it
+occurs, and one caused only by tests inside the feature is not a regression.
 
 Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code only**:
 

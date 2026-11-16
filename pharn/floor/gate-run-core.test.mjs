@@ -1117,7 +1117,10 @@ test("reused entry: EVERY never-reused id is refused, whatever its shape (grill 
     const v = validateStamp(s);
     assert.equal(v.ok, false, gate);
     assert.equal(v.reason_code, "stamp-malformed", `${gate}: ${v.reason}`);
-    assert.match(v.reason, /are never reused/, `${gate} is refused by the never-reused rule, not another (L60): ${v.reason}`);
+    // 7.18.0 — `test` is the one member a verify stamp may record as reused (from a whole-suite HEAD run), and only with
+    // the source's results digest: without one (this construction's `null`) it is refused by that rule.
+    const rule = gate === "test" ? /records the source's results_sha256 digest/ : /are never reused/;
+    assert.match(v.reason, rule, `${gate} is refused by its own rule, not another (L60): ${v.reason}`);
   }
   // Control: the same construction with a reusable id validates, so the refusals above are the rule's.
   assert.equal(validateStamp(reusedStamp()).ok, true);
@@ -1735,4 +1738,122 @@ test("gate-durations — baseSpecFrom drops duration_ms with every other run-onl
   const withField = baseSpecFrom(headRecordFor({ entries: undefined, runs: runs({ duration_ms: 99999 }) }), "demo");
   assert.equal(without.ok, true);
   assert.equal(JSON.stringify(withField), JSON.stringify(without));
+});
+
+// ── 7.18.0 (head-test-single-run, CORE-89) — the whole-suite HEAD `test` run and its reuse at verify ──────────────────
+import { wholeSuiteTestRun, WHOLE_SUITE_TEST_ID } from "./gate-run-core.mjs";
+
+/** A finalized regress/head stamp whose `test` run is a whole-suite execution with comparison set `cmp`. */
+function wholeSuiteHeadStamp(cmp = ["src/a.test.js"], over = {}) {
+  const s = goodStamp({ stage: "regress", side: "head", required: ["test"] });
+  s.runs = [{ ...s.runs[0], argv: ["npm", "run", "test"], shell: null, files: [], compare_files: cmp, results_sha256: "e".repeat(64) }];
+  s.fingerprint.final = s.runs[0].fp_after;
+  Object.assign(s.runs[0], over);
+  return s;
+}
+
+test("wholeSuiteTestRun: `test` with files [] and a compare_files list — nothing else (TOTAL over parsed JSON, L62)", () => {
+  assert.equal(WHOLE_SUITE_TEST_ID, "test");
+  assert.equal(wholeSuiteTestRun({ id: "test", files: [], compare_files: [] }), true, "an empty comparison set is still the mode");
+  assert.equal(wholeSuiteTestRun({ id: "test", files: [], compare_files: ["a.test.js"] }), true);
+  for (const r of [
+    { id: "test", files: ["a.test.js"], compare_files: ["a.test.js"] },
+    { id: "test", files: [] },
+    { id: "test", compare_files: [] },
+    { id: "lint", files: [], compare_files: [] },
+    { id: "test", files: [], compare_files: "a.test.js" },
+    null,
+    undefined,
+    [],
+    "test",
+    { toString: 1 },
+  ]) {
+    assert.equal(wholeSuiteTestRun(r), false, JSON.stringify(r));
+  }
+});
+
+test("baseSpecFrom: a whole-suite HEAD `test` hands the BASE side its compare_files to RUN (today's BASE bytes)", () => {
+  const head = headRecordFor({
+    source: "discover",
+    source_raw: null,
+    required: ["test"],
+    entries: [{ id: "test", shell: null, argv: ["npm", "run", "test"], files: [], compare_files: ["a.test.js", "b.test.js"], seq: 0 }],
+  });
+  const subset = headRecordFor({
+    source: "discover",
+    source_raw: null,
+    required: ["test"],
+    entries: [{ id: "test", shell: null, argv: ["npm", "run", "test"], files: ["a.test.js", "b.test.js"], seq: 0 }],
+  });
+  const a = baseSpecFrom(head, "demo");
+  const b = baseSpecFrom(subset, "demo");
+  assert.equal(a.ok, true);
+  assert.deepEqual(a.spec.entries, [{ id: "test", shell: null, argv: ["npm", "run", "test"], files: ["a.test.js", "b.test.js"], seq: 0 }]);
+  assert.equal(JSON.stringify(a), JSON.stringify(b), "byte-identical to the pre-7.18.0 subset head's BASE spec");
+  // From a FINALIZED head stamp too (runs, no entries), and the copy is a copy, not an alias.
+  const fin = baseSpecFrom(headRecordFor({ entries: undefined, runs: wholeSuiteHeadStamp(["x.test.js"]).runs }), "demo");
+  assert.deepEqual(fin.spec.entries[0].files, ["x.test.js"]);
+  assert.equal(Object.hasOwn(fin.spec.entries[0], "compare_files"), false, "the BASE side never carries the field");
+});
+
+test("validateStamp: compare_files validates on the whole-suite `test` run of a regress/head stamp", () => {
+  assert.deepEqual(validateStamp(wholeSuiteHeadStamp()), { ok: true });
+  assert.deepEqual(validateStamp(wholeSuiteHeadStamp([])), { ok: true });
+});
+
+// BOUND (review): "cannot widen" holds for a MISPLACED field only. A forged compare_files on the regress/head `test` run
+// itself still moves that run's per-test domain — the unauthenticated-stamp posture every stamp field has (L19, L43).
+test("validateStamp: compare_files anywhere else, or malformed, is stamp-malformed (a forged field cannot widen a verdict)", () => {
+  const cases = {
+    "a verify stamp": (s) => Object.assign(s, { stage: "verify", side: null }),
+    "a regress/base stamp": (s) => Object.assign(s, { side: "base" }),
+    "another gate": (s) => {
+      s.runs[0].id = "lint";
+      s.required = ["lint"];
+    },
+    "beside a non-empty files": (s) => (s.runs[0].files = ["src/a.test.js"]),
+    "not a list": (s) => (s.runs[0].compare_files = "src/a.test.js"),
+    "a non-string member": (s) => (s.runs[0].compare_files = [{ toString: 1 }]),
+    "a control character": (s) => (s.runs[0].compare_files = ["a\nb"]),
+  };
+  for (const [name, mutate] of Object.entries(cases)) {
+    const s = wholeSuiteHeadStamp();
+    mutate(s);
+    const v = validateStamp(s);
+    assert.equal(v.reason_code, "stamp-malformed", `${name}: ${JSON.stringify(v)}`);
+    assert.match(v.reason, /compare_files/, name);
+  }
+});
+
+test("reused entry: a reused `test` in a verify stamp validates WITH the source's results digest, never without", () => {
+  const withDigest = reusedStamp((st, r) => {
+    r.id = "test";
+    r.argv = ["npm", "run", "test"];
+    r.results_sha256 = "e".repeat(64);
+    st.runs[0].id = "lint-other";
+    st.required = ["lint-other", "test"];
+  });
+  assert.deepEqual(validateStamp(withDigest), { ok: true });
+  for (const bad of [null, "E".repeat(64), "e".repeat(63), { toString: 1 }]) {
+    const s = structuredClone(withDigest);
+    s.runs[1].results_sha256 = bad;
+    const v = validateStamp(s);
+    assert.equal(v.reason_code, "stamp-malformed", JSON.stringify(bad));
+    // `null` reaches the reused-entry rule; a malformed digest is refused earlier by the field's own shape rule.
+    assert.match(v.reason, bad === null ? /records the source's results_sha256 digest/ : /results_sha256/);
+  }
+  const absent = structuredClone(withDigest);
+  delete absent.runs[1].results_sha256;
+  assert.match(validateStamp(absent).reason, /records the source's results_sha256 digest/);
+  // Control: any OTHER reused id with a digest is still refused (null only).
+  const other = reusedStamp((st, r) => (r.results_sha256 = "e".repeat(64)));
+  assert.match(validateStamp(other).reason, /records results_sha256: null/);
+  // The other never-reused members stay never reused, digest or not.
+  const e2e = reusedStamp((st, r) => {
+    r.id = "test:e2e";
+    r.results_sha256 = "e".repeat(64);
+    st.required = ["test", "test:e2e"];
+  });
+  assert.match(validateStamp(e2e).reason, /are never reused/);
+  assert.doesNotMatch(validateStamp(e2e).reason, /\btest,/, "the message lists the members that are never reused, not `test`");
 });

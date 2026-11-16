@@ -134,6 +134,20 @@
 // false RED in place of a false GREEN. BOUNDS (P0, L43): agreement between record and stamp, never what ran; "failed" is
 // the reporter's word, the reporter config and pharn.config.json are project files a build can edit, and the verdict
 // depends on that config staying unchanged until check E re-reads it (as the AC gate does).
+//
+// THE WHOLE-SUITE MODE (7.18.0, head-test-single-run — CORE-89). When the project declares `testResults.test`,
+// /pharn-regress runs `test` at HEAD as the WHOLE suite (so /pharn-verify can reuse that one execution) and records the
+// outside tests as the run's `compare_files` (gate-run-core.mjs wholeSuiteTestRun); the BASE side still runs exactly those
+// files. The HEAD exit then counts inside tests too, so the per-test step (`wholeSuitePerTest`) applies whenever HEAD
+// `test` is red, over the domain `compare_files`, decided from the HEAD STAMP alone (check E re-derives it): (1) the HEAD
+// record's L34 is judged over the WHOLE record; (2) a HEAD red with no failed test in a compared file and no suite error
+// is NOT a regression — every failure is in a file inside the feature, which /pharn-verify judges — and the BASE record is
+// not read (`per_test.base: null`); (3) otherwise the BASE record is read (a `no-files` BASE run as an empty record) and
+// `comparePerTest` decides, as above. A base-green row that is not a regression leaves both lists; the block gains
+// `head_run: "whole-suite"`. Refusals: `per-test-record-refused` (also when the stamp is whole-suite and the declaration is
+// off or unreadable — never the raw exit table), `per-test-unaccounted-red` (a red with no failed test in any file and no
+// suite error). TRADE: suite errors carry no file, and HEAD counts them over every file while BASE ran only the compared
+// ones, so an inside-file suite error reads as a regression — a false RED, stated.
 
 // A FIFTH BOUND ON THE SCOPE RULE, for its two callers (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop`
 // or `/pharn-ship` run, `stage-regress.mjs` and `quick-scope-core.mjs` pass `partitionScope` the changed paths the run's
@@ -146,7 +160,7 @@ import "./runtime-floor.mjs";
 import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute } from "node:path";
 import { createHash } from "node:crypto";
-import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
+import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, wholeSuiteTestRun, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { isConcrete } from "./plan-files-core.mjs";
 import { buildRecord, readResultsFile, gateResults, loadResultsConfig, formatFor } from "./per-test-results-core.mjs";
 import { parseResults, RECORD_STATUSES } from "./per-test-results-formats.mjs";
@@ -731,7 +745,7 @@ function stampPerTestDeclared(root) {
  *  (one id rule), then the two refusals only a comparison needs: an anomaly in a `domain` file, and a red no failed test in
  *  a `domain` file and no suite error accounts for (L34 — a comparison over zero failed tests is never a classification). Reasons
  *  name the side and a closed code, never a path (REGRESSION.md is committed). */
-function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain }) {
+function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain, wholeRecord = false }) {
   const g = gateResults({ stamp, outDir: dirname(stampPath), gateId: STAMP_PER_TEST_GATE, root });
   if (!g.ok)
     return {
@@ -759,16 +773,61 @@ function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain })
   }
   // L34 over the COMPARED files (review F2): this run was given the domain files only, so a red owned by no compared test
   // — every failure in an ignored file, or reporter paths that never match the stamp's `files` — would compare nothing
-  // and read `pre_existing` for free. A whole-gate run (files: []) that must accept inside-only failures is the next
-  // increment's to decide, with its own domain.
-  if (record.exit !== 0 && !record.tests.some((t) => t.status === "failed" && domain.has(t.file)) && record.suite_errors === 0) {
+  // and read `pre_existing` for free. A WHOLE-SUITE HEAD run (7.18.0, `wholeRecord`) was given every file, so a failed
+  // test in ANY file accounts for its red — an inside-only red is accounted for (and is not a regression); a red with no
+  // failed test anywhere and no suite error still refuses.
+  const accounts = (t) => t.status === "failed" && (wholeRecord || domain.has(t.file));
+  if (record.exit !== 0 && !record.tests.some(accounts) && record.suite_errors === 0) {
     return {
       ok: false,
       reason_code: "per-test-unaccounted-red",
-      reason: `gate "test" exited ${record.exit} on the ${side} side, but its record holds no failed test in a compared file and no suite error — that red is not accounted for, so no per-test comparison can classify it`,
+      reason: wholeRecord
+        ? `gate "test" ran the whole suite and exited ${record.exit} on the ${side} side, but its record holds no failed test in any file and no suite error — that red is not accounted for, so no per-test comparison can classify it`
+        : `gate "test" exited ${record.exit} on the ${side} side, but its record holds no failed test in a compared file and no suite error — that red is not accounted for, so no per-test comparison can classify it`,
     };
   }
   return { ok: true, record };
+}
+
+/** The record of a BASE `test` run that ran nothing (`no-files`: an empty comparison set) — truthfully empty, so a
+ *  comparison against it needs no file that was never written (7.18.0, grill L107). */
+function emptyTestsRecord() {
+  return { tests: [], counts: Object.fromEntries(RECORD_STATUSES.map((s) => [s, 0])), suite_errors: 0, anomalies: [] };
+}
+
+/** THE WHOLE-SUITE MODE (7.18.0, head-test-single-run) — the HEAD stamp's `test` run is a whole-suite execution
+ *  (gate-run-core.mjs wholeSuiteTestRun), so its exit counts inside tests too. Read only when HEAD `test` is red. The
+ *  domain is its `compare_files` (the outside tests, what the BASE side ran). The HEAD record is read first, its L34
+ *  judged over the WHOLE record. When it holds no failed test in a compared file and no suite error, nothing at HEAD can
+ *  be new, so the BASE record is not read and the result is a comparison with no new failure (`base: null`): an
+ *  inside-only red is NOT a regression. Otherwise the BASE record is read as in CORE-77's rule — a `no-files` BASE run
+ *  as an empty record — and the same `comparePerTest` decides. A whole-suite stamp whose project no longer declares
+ *  `testResults.test` (or whose declaration cannot be read) cannot have its red attributed: `per-test-record-refused`,
+ *  never the raw exit table. */
+function wholeSuitePerTest({ baseStamp, headStamp, baseStampPath, headStampPath, headRun, headMap, root }) {
+  const id = STAMP_PER_TEST_GATE;
+  if (headMap[id] === 0) return { state: "off" };
+  const declared = stampPerTestDeclared(root);
+  if (declared.state !== "on") {
+    const reason =
+      declared.state === "off"
+        ? `the HEAD side ran "test" as the whole suite, but pharn.config.json no longer declares testResults.test — its record cannot be read, so its red cannot be attributed to an outside test`
+        : declared.reason;
+    return { state: "refused", reason_code: "per-test-record-refused", reason };
+  }
+  const domain = new Set(headRun.compare_files);
+  const common = { root, projectReal: realpathSync(root), domain };
+  const h = stampTestsRecord({ ...common, stamp: headStamp, stampPath: headStampPath, side: "head", wholeRecord: true });
+  if (!h.ok) return { state: "refused", reason_code: h.reason_code, reason: h.reason };
+  const canBeNew = h.record.suite_errors > 0 || h.record.tests.some((t) => t.status === "failed" && domain.has(t.file));
+  if (!canBeNew) return { state: "compared", cmp: { ...comparePerTest(emptyTestsRecord(), h.record, domain), base: null } };
+  const baseRun = baseStamp.runs.find((r) => r.id === id);
+  const baseRanNothing = baseRun.ran === false && baseRun.reason === "no-files";
+  const base = baseRanNothing
+    ? { ok: true, record: emptyTestsRecord() }
+    : stampTestsRecord({ ...common, stamp: baseStamp, stampPath: baseStampPath, side: "base" });
+  if (!base.ok) return { state: "refused", reason_code: base.reason_code, reason: base.reason };
+  return { state: "compared", cmp: comparePerTest(base.record, h.record, domain) };
 }
 
 /** The stamp path's per-test step for two validated stamps and the two maps. Returns `{state: "off"}` when it does not
@@ -776,11 +835,16 @@ function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain })
  *  or `{state: "compared", cmp}`. The domain is the HEAD stamp's `test` run `files` (the outside tests). */
 export function stampPerTest({ baseStamp, headStamp, baseStampPath, headStampPath, baseMap, headMap, root }) {
   const id = STAMP_PER_TEST_GATE;
-  if (!Object.hasOwn(baseMap, id) || !Object.hasOwn(headMap, id) || baseMap[id] === 0 || headMap[id] === 0) return { state: "off" };
+  if (!Object.hasOwn(baseMap, id) || !Object.hasOwn(headMap, id)) return { state: "off" };
+  const headRun = headStamp.runs.find((r) => r.id === id);
+  // 7.18.0 — a whole-suite HEAD run has its own mode (above), decided from the stamp alone.
+  if (wholeSuiteTestRun(headRun)) {
+    return wholeSuitePerTest({ baseStamp, headStamp, baseStampPath, headStampPath, headRun, headMap, root });
+  }
+  if (baseMap[id] === 0 || headMap[id] === 0) return { state: "off" };
   const declared = stampPerTestDeclared(root);
   if (declared.state === "off") return declared;
   if (declared.state === "refused") return { state: "refused", reason_code: "per-test-record-refused", reason: declared.reason };
-  const headRun = headStamp.runs.find((r) => r.id === id);
   const domain = new Set(headRun && Array.isArray(headRun.files) ? headRun.files : []);
   // The working directory exists (the checker runs in it), so its realpath does too — base-worktree.mjs names a base
   // checkout by the project's realpath, exactly as stage-regress.mjs computes it.
@@ -1070,20 +1134,28 @@ function runVerdict(positional, args) {
       );
     }
     if (pt.state === "compared") {
+      const wholeSuite = wholeSuiteTestRun(stamps.head.runs.find((r) => r.id === STAMP_PER_TEST_GATE));
       perTestBlock = {
         gate: STAMP_PER_TEST_GATE,
+        ...(wholeSuite ? { head_run: "whole-suite" } : {}),
         base: pt.cmp.base,
         head: pt.cmp.head,
         new_failures: pt.cmp.new_failures,
         still_failing: pt.cmp.still_failing,
         ignored: pt.cmp.ignored,
       };
-      if (pt.cmp.new_failures.length || pt.cmp.suite_errors_added) {
-        // red at both sides, but a compared test failed at head that did not fail at base — never masked
-        preExisting.splice(preExisting.indexOf(STAMP_PER_TEST_GATE), 1);
-        regressions.push(STAMP_PER_TEST_GATE);
-        regressions.sort();
+      // The per-test result REPLACES the exit-code row for `test`: a regression when a compared test failed at head that
+      // did not fail at base (or head has more suite errors) — never masked; otherwise `pre_existing` when base was red,
+      // and (whole-suite mode, 7.18.0) neither when base was green: every head failure is in a file inside the feature.
+      const isRegression = pt.cmp.new_failures.length > 0 || pt.cmp.suite_errors_added;
+      for (const list of [preExisting, regressions]) {
+        const at = list.indexOf(STAMP_PER_TEST_GATE);
+        if (at !== -1) list.splice(at, 1);
       }
+      if (isRegression) regressions.push(STAMP_PER_TEST_GATE);
+      else if (base.value[STAMP_PER_TEST_GATE] !== 0) preExisting.push(STAMP_PER_TEST_GATE);
+      regressions.sort();
+      preExisting.sort();
     }
   }
 

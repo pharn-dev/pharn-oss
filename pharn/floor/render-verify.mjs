@@ -217,6 +217,15 @@ function reuseLines(report) {
       reused.map((r) => `${dataText(r.id)}  regress/head seq ${dataText(r.seq)}`).join("\n")
     ),
     "",
+    // 7.18.0 (head-test-single-run) — the reused `test` is the WHOLE suite run once at regress HEAD; say what that costs.
+    ...(reused.some((r) => r.id === "test")
+      ? [
+          "`test` was NOT re-executed: this verify has no independent second sample of the suite (a flaky test that passed " +
+            "once reads as passed), and the acceptance-criteria gate reads its per-test record, if any AC maps to `test`, from " +
+            "the results file copied from the regress HEAD run, bound to its sha256 (pharn/LIMITS.md §9).",
+          "",
+        ]
+      : []),
   ];
 }
 

@@ -23,6 +23,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.18.0] - 2026-11-16
+
+### Added
+
+- **One HEAD execution of `test` now serves both `/pharn-regress` and `/pharn-verify` when the project declares
+  `testResults.test`** (Linear CORE-89; audit LOOP-8 reopened). LOOP-8 was closed won't-fix at 6.72.2 because the
+  regress HEAD run covered only the outside tests and the AC gate needs verify's own record. It was reopened on measured
+  gate durations: on the measured project `test` took 286.3 s of a 346.7 s gate sum, 82.6%
+  (`.dev/measurements/gates-within-side-parallel-2026-11-16.md`). The reopening was a model orchestrator's decision under
+  the maintainer's delegation, not a human approval.
+  - **Regress HEAD runs the whole suite.** `stage-regress.mjs` now passes the new
+    `run-gates.mjs init --test-whole-suite` (not under `--no-tests`). The HEAD `test` run is the gate's own command with no
+    file arguments (`npm run test` when discovered), the command verify runs, and it records the outside tests as
+    `compare_files`.
+  - **The BASE side is unchanged.** `baseSpecFrom` hands it those files to run, so the retained and entry-derived BASE
+    evidence keep their bytes.
+  - **Verify reuses that run.** Inside one `/pharn-loop` or `/pharn-ship` run, `/pharn-verify` records that execution
+    as reused. `test` is the one `NON_REUSABLE_IDS` member with an exception: a whole-suite source that recorded a
+    results file (new miss `results-absent`).
+  - **The results file is copied and bound.** The runner copies the results file into verify's `<out>`, verified
+    against the source's `results_sha256` before and after the write, and the reused entry records that digest. The AC
+    gate and `check-loop-fresh` J read and bind it as they would a fresh run's. `VERIFY.md` says "reused, not
+    re-executed".
+  - **What one execution saves.** The outside-subset run HEAD used to make: roughly the whole suite minus the inside
+    tests, per loop iteration, and one of the two chances per iteration to hit the per-gate timeout.
+- **The regress verdict over a whole-suite HEAD run.** `check-regress.mjs` reads the mode from the HEAD stamp (so check E
+  re-derives it) and compares `test` whenever HEAD `test` is red, over `compare_files`.
+  - **A HEAD red caused only by tests inside the feature is not a regression.** Its L34 refusal is judged over the
+    whole HEAD record, the BASE record is not read (`per_test.base: null`), and `/pharn-verify`, which reuses that run,
+    judges those failures.
+  - **A red with no failed test in any file and no suite error is still refused** (`per-test-unaccounted-red`).
+  - **Otherwise the BASE record is read.** A `no-files` BASE run reads as an empty record. A missing BASE record, or a
+    declaration that is gone or unreadable at verdict time, is `per-test-record-refused`.
+  - **The report.** The block gains `head_run: "whole-suite"`. `REGRESSION.md` renders such a row as "ok outside the
+    feature".
+
+### Changed
+
+- **What the reuse costs, stated.** Verify loses its independent second sample of `test`: a flaky test that passed once
+  reads as passed. `pharn/LIMITS.md` §9 now says so (a human edit), as does `VERIFY.md` whenever `test` is reused.
+  Further trades:
+  - A suite error in a file inside the feature reads as a regression, since suite errors carry no file.
+  - A whole-suite HEAD red over a base with no results file is now inconclusive in the base-green row too, whenever a
+    compared test failed or a suite error was reported.
+  - A standalone `/pharn-regress`, or a verify that misses, pays the whole suite at HEAD with nothing saved.
+  - A suite that reads the feature's fingerprint-excluded artifacts (`REGRESSION.md`) saw other bytes at regress than
+    verify would.
+  - Without `testResults.test` nothing changes.
+
+Contracts: `gate-run-record.md` ("One execution of `test` for regress and verify"), `regression-report.md` ("The
+whole-suite HEAD run"), `verify-report.md`, `test-results-record.md`. `MIN_CLI` is unchanged.
+
 ## [7.17.0] - 2026-11-16
 
 ### Added

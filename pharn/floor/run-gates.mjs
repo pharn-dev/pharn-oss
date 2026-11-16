@@ -182,6 +182,8 @@ import {
   actualForExpected,
   logBasename,
   resultsFileName,
+  WHOLE_SUITE_TEST_ID,
+  wholeSuiteTestRun,
 } from "./gate-run-core.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
 import { acRowsOf, badPath } from "./ac-tests-core.mjs";
@@ -422,8 +424,11 @@ function cwdForIdentity(cwd) {
 
 /** Try to stand a completed source execution in for `next`. Returns `{hit: true, run}` after BOTH logs were copied into
  *  `<out>` byte-for-byte as the source recorded them, or `{hit: false, miss}`. Writes nothing but the two log files, and
- *  only on the path to a HIT (a miss after a partial copy leaves logs spawnGate then truncates with "w"). */
-function tryReuse({ rec, next, liveFp, liveIdentity, outFile, errFile }) {
+ *  only on the path to a HIT (a miss after a partial copy leaves logs spawnGate then truncates with "w"). 7.18.0: a
+ *  WHOLE-SUITE `test` source also has its results file copied to this entry's own results path, LAST (after both logs
+ *  verified), verified against the source's digest before and after the write; a copy that does not verify is removed
+ *  again before the miss returns, so the gate that then runs can never record the regress copy's digest as its own. */
+function tryReuse({ rec, next, liveFp, liveIdentity, outFile, errFile, resultsFile }) {
   const bytes = readReuseSource(rec.reuse.stamp);
   if (bytes === null || createHash("sha256").update(bytes).digest("hex") !== rec.reuse.stamp_sha256) {
     return { hit: false, miss: "source-changed" };
@@ -448,6 +453,17 @@ function tryReuse({ rec, next, liveFp, liveIdentity, outFile, errFile }) {
     if (log === null || createHash("sha256").update(log).digest("hex") !== expected) return { hit: false, miss: "log-unverified" };
     writeFileSync(to, log);
     if (sha256File(to) !== expected) return { hit: false, miss: "log-unverified" };
+  }
+  if (wholeSuiteTestRun(found.run)) {
+    const from = join(srcDir, resultsFileName(found.run.seq, found.run.id));
+    const bytes = noLinkInside(process.cwd(), from) ? readRegularCapped(resolve(from)) : null;
+    if (bytes === null || createHash("sha256").update(bytes).digest("hex") !== found.run.results_sha256) {
+      return { hit: false, miss: "log-unverified" };
+    }
+    writeFileSync(resultsFile, bytes);
+    const copied = sha256RegularFile(resultsFile) === found.run.results_sha256;
+    if (!copied) clearResultsPath(resultsFile);
+    if (!copied) return { hit: false, miss: "log-unverified" };
   }
   return {
     hit: true,
@@ -784,6 +800,14 @@ function runInit(args) {
   const feature = flag(args, "--feature");
   const featureBase = flag(args, "--base") ?? "pharn/features";
   const specFrom = flag(args, "--spec-from");
+  // 7.18.0 (head-test-single-run) — regress HEAD runs `test` as the WHOLE suite, its outside tests kept as the comparison
+  // set (`compare_files`); /pharn-regress passes it when the project declares `testResults.test`. Refused by presence on
+  // any other stage/side. On regress/head it changes nothing when the resolved set holds no `test` gate (an explicit
+  // --gates without one, or gates.exclude naming it): accepted, and no entry carries the field.
+  const wholeSuiteTest = has(args, "--test-whole-suite");
+  if (wholeSuiteTest && !(stage === "regress" && side === "head")) {
+    fail("usage-error", "--test-whole-suite applies to --stage regress --side head only");
+  }
 
   // 6.34.0 — an OFFERED source, verify only, named with the sha256 of the exact bytes the caller's offer bound. A path
   // outside the state root or a missing digest is the caller's error (usage-error); a source that cannot be read, or
@@ -918,7 +942,13 @@ function runInit(args) {
     const s = readScopeJson(resolve(sj));
     if (!s.ok) fail("bad-scope-json", s.reason);
     for (const e of spec.entries) {
-      if (e.id === "test") e.files = s.tests;
+      if (e.id !== WHOLE_SUITE_TEST_ID) continue;
+      if (wholeSuiteTest) {
+        // The whole suite runs (the argv /pharn-verify runs, so the execution identity can match); the outside tests
+        // are what check-regress.mjs compares, and what baseSpecFrom hands the BASE side to run.
+        e.files = [];
+        e.compare_files = s.tests;
+      } else e.files = s.tests;
     }
     const pairEntries = [];
     for (const p of s.pairs) {
@@ -1307,7 +1337,9 @@ async function runNext(args) {
 
     // A file-addressable gate with NO files is recorded as 0 / ran:false — never SKIPPED silently, and
     // never run with an empty list, which for several runners means "everything" (lessons-learned L16).
-    const needsFiles = next.id === "test" && Array.isArray(next.files);
+    // 7.18.0 — except a WHOLE-SUITE regress HEAD `test` (gate-run-core.mjs wholeSuiteTestRun), whose empty list is the
+    // intended input: it runs the whole suite, and its comparison set travels in `compare_files`.
+    const needsFiles = next.id === "test" && Array.isArray(next.files) && !wholeSuiteTestRun(next);
     const glob = (next.files ?? []).find((f) => typeof f === "string" && f.includes("*"));
     if (glob !== undefined)
       fail("bad-scope-json", `gate ${next.id} carries a glob-shaped file entry ${JSON.stringify(glob)}; expand it first`);
@@ -1334,7 +1366,7 @@ async function runNext(args) {
     let reused = null;
     let reuseMiss = null;
     if (rec.stage === REUSE_TARGET_STAGE && rec.reuse && liveIdentity !== null) {
-      const r = tryReuse({ rec, next, liveFp: fpBefore.digest, liveIdentity, outFile, errFile });
+      const r = tryReuse({ rec, next, liveFp: fpBefore.digest, liveIdentity, outFile, errFile, resultsFile });
       if (r.hit) reused = r.run;
       else reuseMiss = r.miss;
     }
@@ -1396,6 +1428,7 @@ async function runNext(args) {
         results_sha256: sha256RegularFile(resultsFile),
       };
       if (liveIdentity !== null) run.identity_sha256 = liveIdentity;
+      if (wholeSuiteTestRun(next)) run.compare_files = [...next.compare_files];
       if (duration_ms !== null) run.duration_ms = duration_ms;
       rec.runs.push(run);
     }

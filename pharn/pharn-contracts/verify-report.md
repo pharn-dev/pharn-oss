@@ -377,7 +377,8 @@ restated, P4):
 Inside one `/pharn-loop` or `/pharn-ship` run, `/pharn-verify` may record a gate's result from a COMPLETED execution
 of that run's `/pharn-regress` HEAD side instead of spawning the gate again — only when the execution identity
 (command, files, cwd, timeout, git HEAD, the PHARN-added environment variable and the tree fingerprint) is equal, and
-never for an AC level gate, a style gate, `instruction-growth` or `reconcile` (`pharn/floor/gate-reuse-core.mjs`, whose header is the rule;
+never for an AC level gate, a style gate, `instruction-growth` or `reconcile` — except `test` from a whole-suite HEAD
+run since 7.18.0, below (`pharn/floor/gate-reuse-core.mjs`, whose header is the rule;
 the stamp shape is `gate-run-record.md`, "Reused entries" — cited, not restated, P4). The report names every such
 result:
 
@@ -400,6 +401,14 @@ result:
   deterministic for one identity; nothing unbound — the inherited environment, the git index, ignored files — moved),
   and verify gives up its independent second sample of a flaky gate for the ids it reuses.
 - **Trust (P2):** a gate id is attacker-nameable (a `--gates` token, a `structural:` path), so renderers fence it.
+- **`test` may be listed (7.18.0, head-test-single-run).** When the project declares `testResults.test`,
+  `/pharn-regress` runs the whole `test` suite once at HEAD, and verify may record that execution as reused
+  (`gate-run-record.md`, "One execution of `test` for regress and verify"). The AC gate then reads the per-test results
+  file copied from the regress run into verify's `<out>`, which the reused entry binds by its `results_sha256`. Its
+  verdict is the one a fresh run with the same results would give. The block has no new shape. `VERIFY.md` adds one fixed
+  line when `test` is among the reused ids: verify has no independent second sample of the suite, so a flaky test that
+  passed once reads as passed (`pharn/LIMITS.md` §9). A suite that reads the feature's fingerprint-excluded artifacts saw
+  other bytes than verify would (`REGRESSION.md` is written after the HEAD drain).
 
 ## The additive `head_install` block (6.40.0)
 

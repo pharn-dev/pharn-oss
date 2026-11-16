@@ -39,6 +39,16 @@
 // recorded no regular per-test results file (`results_sha256: null`, the field present), and must not be a
 // NON_REUSABLE_IDS member (gate-run-core.mjs owns the set; validateStamp refuses a reused member too).
 //
+// THE ONE EXCEPTION (7.18.0, head-test-single-run — audit LOOP-8 reopened on measured durations): `test` from a WHOLE-SUITE
+// regress HEAD run (gate-run-core.mjs wholeSuiteTestRun: `files: []`, its comparison set in `compare_files`, which
+// /pharn-regress runs when the project declares `testResults.test`). For that candidate the results rule flips: it must
+// have recorded a results digest (`results-absent` otherwise), because its results file is the record /pharn-verify's AC
+// gate reads; run-gates.mjs copies it into verify's `<out>` under verify's own name, verified against that digest before
+// and after the write, and `reusedRunRecord` records the digest, so per-test-results-core.mjs gateResults and
+// check-loop-fresh J bind the copy to the verify stamp exactly as they bind a fresh run's file. A SUBSET `test` run (no
+// `compare_files`) stays `not-reusable-id`. BOUND: after the decision, nothing re-binds the copy to the source run
+// (`verify-reuse-rederive`), and a verify stamp's reused `test` cannot show which kind of source it came from.
+//
 // ============================ THE SOURCE — only this run's offer ============================
 // A regress/head stamp reaches the runner only as `--reuse-stamp` + `--reuse-sha256`, which `stage-verify.mjs` passes
 // only when `head-reuse-offer.mjs`'s git-dir offer names THIS run and THOSE bytes (grill B2) — see that module.
@@ -47,13 +57,23 @@
 // the logs and the live identity agree, i.e. the BOUND inputs are equal — never that the two executions are the same,
 // and never PROVENANCE (L43): a Bash writer can forge the offer and the stamp together (L19). That the reused result equals what a fresh run would produce NOW is ADVISORY: it assumes the gate is
 // deterministic for one identity and that nothing unbound changed; verify also loses its independent second sample of a
-// flaky gate. Every miss runs the gate exactly as before 6.34.0.
+// flaky gate — of the whole `test` suite when `test` is reused (pharn/LIMITS.md §9) — and a suite that reads the
+// feature's fingerprint-excluded artifacts (REGRESSION.md is written after the HEAD drain) saw other bytes than verify
+// would. Every miss runs the gate exactly as before 6.34.0.
 //
 // TRUST (P2): every operand is deterministic-tool JSON (stamps, the offer) or raw bytes, compared as strings, integers and
 // hex digests; nothing is evaluated. TOTAL (L62): every function returns for any parsed-JSON input.
 
 import { createHash } from "node:crypto";
-import { validateStamp, RESULTS_ENV, REUSE_SOURCE, REUSED_REASON, NON_REUSABLE_IDS, MAX_REUSABLE_EXIT } from "./gate-run-core.mjs";
+import {
+  validateStamp,
+  RESULTS_ENV,
+  REUSE_SOURCE,
+  REUSED_REASON,
+  NON_REUSABLE_IDS,
+  MAX_REUSABLE_EXIT,
+  wholeSuiteTestRun,
+} from "./gate-run-core.mjs";
 
 export { NON_REUSABLE_IDS, MAX_REUSABLE_EXIT };
 
@@ -74,9 +94,11 @@ export const IDENTITY_SCHEMA = "gate-execution-identity/1";
  *    not-completed     the candidate did not run, is a reused or no-files entry, timed out, or is not a process exit;
  *    mutated           the candidate moved the tree;
  *    results-written   the candidate recorded a regular per-test results file (or predates the field);
+ *    results-absent    (7.18.0) a whole-suite `test` candidate recorded NO results file — the AC gate needs its record;
  *    identity-missing  the candidate records no execution identity (a pre-6.34.0 stamp);
  *    identity-mismatch the candidate's shell/argv/files or identity differ from the entry's live identity;
- *    log-unverified    the candidate's logs are not the bytes it recorded, or exceed the copy cap (the runner's check).
+ *    log-unverified    the candidate's logs (or, for a whole-suite `test`, its results file) are not the bytes it recorded,
+ *                      or exceed the copy cap (the runner's check).
  *  The first seven are head-reuse-offer.mjs's (is a source offered at all); the rest the runner's, per entry. */
 export const REUSE_MISSES = Object.freeze([
   "no-delivery-run",
@@ -93,6 +115,7 @@ export const REUSE_MISSES = Object.freeze([
   "not-completed",
   "mutated",
   "results-written",
+  "results-absent",
   "identity-missing",
   "identity-mismatch",
   "log-unverified",
@@ -160,8 +183,10 @@ function sameJson(a, b) {
 export function findReusable({ source, feature, entry, liveIdentity }) {
   if (!validateStamp(source, { stage: REUSE_SOURCE.stage, side: REUSE_SOURCE.side, feature }).ok) return miss("source-invalid");
   if (!isPlainObject(entry) || typeof entry.id !== "string") return miss("no-candidate");
-  if (NON_REUSABLE_IDS.includes(entry.id)) return miss("not-reusable-id");
   const run = source.runs.find((r) => r.id === entry.id);
+  // 7.18.0 — the one exception to NON_REUSABLE_IDS: `test` from a WHOLE-SUITE regress HEAD run (gate-run-core.mjs).
+  const wholeSuite = wholeSuiteTestRun(run);
+  if (NON_REUSABLE_IDS.includes(entry.id) && !wholeSuite) return miss("not-reusable-id");
   if (run === undefined) return miss("no-candidate");
   if (
     run.ran !== true ||
@@ -174,7 +199,10 @@ export function findReusable({ source, feature, entry, liveIdentity }) {
     return miss("not-completed");
   }
   if (run.mutated !== false || run.fp_before !== run.fp_after) return miss("mutated");
-  if (!Object.hasOwn(run, "results_sha256") || run.results_sha256 !== null) return miss("results-written");
+  if (wholeSuite) {
+    // Its results file IS the evidence the AC gate reads, so it must exist; the runner copies it and verifies the digest.
+    if (typeof run.results_sha256 !== "string" || !HEX64_RE.test(run.results_sha256)) return miss("results-absent");
+  } else if (!Object.hasOwn(run, "results_sha256") || run.results_sha256 !== null) return miss("results-written");
   if (typeof run.identity_sha256 !== "string" || !HEX64_RE.test(run.identity_sha256)) return miss("identity-missing");
   if (
     run.identity_sha256 !== liveIdentity ||
@@ -210,7 +238,8 @@ export function reusedRunRecord({ entry, candidate, sourceSha256, liveFp, liveId
     fp_after: liveFp,
     stdout_sha256: candidate.stdout_sha256,
     stderr_sha256: candidate.stderr_sha256,
-    results_sha256: null,
+    // 7.18.0 — a whole-suite `test` carries the source's digest: its results file is copied into this stage's `<out>`.
+    results_sha256: wholeSuiteTestRun(candidate) ? candidate.results_sha256 : null,
     identity_sha256: liveIdentity,
     reused: { stage: REUSE_SOURCE.stage, side: REUSE_SOURCE.side, seq: candidate.seq, stamp_sha256: sourceSha256 },
   };

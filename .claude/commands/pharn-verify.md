@@ -69,7 +69,8 @@ test-infra` SPEC gets only the weaker BOOTSTRAP evidence (each level's gate ran 
 - **The reuse residual (6.34.0):** inside a `/pharn-loop` or `/pharn-ship` run, a gate's result may be REUSED from that
   run's `/pharn-regress` HEAD execution over the same tree and execution identity, not re-run here; the report's
   `gate_reuse` block names each. That the result equals a fresh run is advisory, and this verify then gives no second
-  sample of a flaky gate (`pharn/floor/gate-reuse-core.mjs`).
+  sample of a flaky gate (`pharn/floor/gate-reuse-core.mjs`). Since 7.18.0 that can be `test` itself, when the project
+  declares `testResults.test`: the AC gate then reads the results file copied from that run (`pharn/LIMITS.md` §9).
 
 ## Step 0 — Resolve `<name>`, then set the writes-scope (fix #7, fail-closed)
 

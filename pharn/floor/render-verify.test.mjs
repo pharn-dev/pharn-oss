@@ -659,3 +659,27 @@ test("★ 6.59.0 — a cause outside its closed set is not rendered; a hostile g
   assert.match(md, /\(cause not a member of its closed set\)/);
   assert.doesNotMatch(md, /pwned/, "an out-of-set cause is never rendered, fenced or not");
 });
+
+// ── 7.18.0 (head-test-single-run) — a reused `test` states the lost second sample ──────────────────────────────────────
+test("gate reuse (7.18.0): a reused `test` adds the lost-second-sample line; any other reused id does not", () => {
+  const withTest = renderDone(
+    report({
+      gates: { reconcile: 0, test: 0, typecheck: 0 },
+      gate_reuse: {
+        reused: [
+          { id: "typecheck", stage: "regress", side: "head", seq: 1 },
+          { id: "test", stage: "regress", side: "head", seq: 2 },
+        ],
+      },
+    })
+  );
+  assert.match(withTest, /`test` was NOT re-executed: this verify has no independent second sample of the suite/);
+  assert.match(withTest, /copied from the regress HEAD run, bound to its sha256 \(pharn\/LIMITS\.md §9\)/);
+  const without = renderDone(
+    report({
+      gates: { reconcile: 0, test: 0, typecheck: 0 },
+      gate_reuse: { reused: [{ id: "typecheck", stage: "regress", side: "head", seq: 1 }] },
+    })
+  );
+  assert.doesNotMatch(without, /no independent second sample/);
+});
