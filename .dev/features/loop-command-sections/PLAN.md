@@ -132,12 +132,16 @@ table …`: a header, a separator and 24 rows (S1–S18, S6b, S6c, S9b, S14b, S1
 
 - No new branch in any shipped code. The test is string equality over fixed lines.
 
-## Open questions (HALT)
+## Open questions (HALT) — resolved at GATE 1
 
-- Q1 — The ceiling row lives in `command-hygiene.test.mjs` (`COMMAND_BYTE_CEILINGS`), not `command-family.test.mjs` as
-  the ticket says. Recommended: edit `command-hygiene.test.mjs` only.
-- Q2 — Add the compact-form pin test? Recommended: yes. Without it, removing the ignore line and running
-  `prettier --write` re-pads the table (≈ 90.4 KB) silently under the new 91,136 ceiling. Trigger (P7): the padding grew
-  twice already (7.5.0, 7.9.0 ceiling comments).
-- Q3 — Lower `STAGE_LOAD_CEILINGS["pharn-loop"]` too? Recommended: no (the ticket names the command row; a falling
-  total needs no row change, and it keeps the sibling CORE-107 conflict surface small).
+GATE 1: the plan was approved as written on 2026-11-16 by the batch orchestrator (a model) under the user's delegation
+("You make all decisions"). It is not a human approval.
+
+- Q1 — The ceiling row lives in `command-hygiene.test.mjs` (`COMMAND_BYTE_CEILINGS`), not in `command-family.test.mjs`
+  as the ticket text says (the ticket names the wrong file). **Resolved: edit `command-hygiene.test.mjs` only.**
+- Q2 — Add the compact-form pin test? **Resolved: yes, with its three negative controls.** Without it, removing the
+  ignore line and running `prettier --write` re-pads the table (≈ 90.4 KB) silently under the new 91,136 ceiling.
+  Trigger (P7): the padding grew twice already (7.5.0, 7.9.0 ceiling comments).
+- Q3 — Lower `STAGE_LOAD_CEILINGS["pharn-loop"]` too? **Resolved: no.** Reason: the ticket names the command row only; a
+  total that falls stays inside its existing ceiling, so the row needs no change; and leaving it keeps the conflict
+  surface with the sibling CORE-107 PR, which may move ceiling rows, small.
