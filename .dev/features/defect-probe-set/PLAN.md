@@ -11,9 +11,13 @@
   linter ignore lists, `CHANGELOG.md` `[Unreleased]`). Nothing under `pharn/` or `.claude/`. No `SKILLS_VERSION` bump.
 - constitution_refs: [P0, P2, P3, P5, P6, P7]
 
-## Open questions (HALT) — for GATE 1
+## Open questions — RESOLVED at GATE 1 (2026-11-16)
 
-Each carries my recommended answer first.
+None open. GATE 1 was decided by the orchestrator as a model decision under the user's delegation ("You make all
+decisions"), not by a human: Q1–Q7 below all took the first (recommended) option, with three conditions: commit this
+PLAN at once (done, `5347ed43`); prove from the configuration whether unloaded fixture source counts against the 100%
+diff-coverage gate (it does not — see "Amendments after the grill"); and check every `claude` flag against
+`claude --help` of the installed 2.1.323 before writing `commands.txt` (all exist — same section). The questions as asked:
 
 1. **Target project for the probes.** Recommended: **a small fixture project committed with the probes** (a zero-dependency
    Node service, about 600 lines: invoices, API keys, an integer-cents money module, a versioned JSON store, an audit
@@ -47,6 +51,37 @@ Each carries my recommended answer first.
 7. **The kit builder in the repository.** Recommended: **commit it** (`.dev/floor/defect-probe-kit.mjs`, tested), because
    CORE-112 reuses the probe set with other models per stage. The alternative is a script in the batch scratch directory,
    which does not survive the session.
+
+## Amendments after the grill (2026-11-16, before the build)
+
+`/pharn-dev-grill` raised one blocking-severity and three important concerns (`GRILL.md`). They change the scorer and
+the kit, not `## Files`:
+
+- **Token anchors for SPEC probes (GRILL finding 1).** The product grill is told to cite `PLAN.md:<line>` in every
+  `file`, so SPEC.md line anchors alone would score p5 and p6 as misses by construction. A SPEC probe's manifest entry
+  therefore also carries `plan_tokens` (the planted criterion ids, e.g. `AC-5`): a finding matches when its `file`
+  cites the run's own `PLAN.md` at a line holding one of those tokens as a whole word (a set-membership test over that
+  line), or cites the SPEC anchors as before. The scorer reads a third file for those probes only — the run's
+  `PLAN.md`, which the kit copies out beside the two JSON files — and `score` takes `--plan <PLAN.md>` for them. So
+  AC 2 ("from the two JSON files alone") holds literally for PLAN probes; for SPEC probes it holds with that one stated
+  extension, and the plan text is scanned only for fixed tokens, never read as instructions (P2). Bound: a plan that
+  names a token on many lines widens the anchor.
+- **The omission anchor (finding 2).** Kept as planned and its miss stated: an absence finding that cites the plan's
+  first line is not matched, because the first line also receives every other whole-plan absence (error handling,
+  observability), and matching it would count noise as a catch.
+- **A per-session spend cap and a fixed environment (findings 3 and 4).** Every session gets `--max-budget-usd`
+  (default 12, a runaway bound above the measured USD 3.11 grill), `--strict-mcp-config` (no MCP servers) and
+  `--setting-sources project` (the run project's own settings, which wire the hooks; no user or local settings), so a
+  later arm runs in the same tool environment. All three exist in `claude --help` 2.1.323, as do `--effort` (low,
+  medium, high, xhigh, max), `--output-format` (`json`), `--allowedTools`, `--model` and `--permission-mode`
+  (`acceptEdits`).
+- **Coverage (finding 5, and GATE 1 condition 2).** Proved, not assumed: pharn-ci reads `coverage/lcov.info` from
+  `npm run test:coverage` (`node --test --experimental-test-coverage`, no c8); pharn-ci's own reference
+  (`NO_COVERABLE_CHANGES`) says a file absent from the report adds nothing to the denominator and that Node's runner
+  reports only files a test loaded; and a local run of that runner over a probe-shaped tree listed the test file and the
+  module it imports, and not a `.js` file the test only read as bytes. So the fixture's source adds no coverable line
+  as long as no test imports it. The same run listed the TEST file too, so every line of the two new test files must
+  execute: no untaken branch in a test helper.
 
 ## Applied lessons
 
@@ -180,7 +215,8 @@ archive` extraction); `--out` must not exist or be empty. It verifies the manife
   project; then, after the sessions exit, a `cp` of the two run files from the project into `runs/<probe>/r<n>/`, the
   layout `tally` reads), `score.txt` (the `tally` line, with the manifest's sha256 pinned) and `KIT.md` (arm, models, efforts, run
   count, cost estimate). Stages: a PLAN probe runs `grill`, `triage`; a SPEC probe runs `plan`, `grill`, `triage`.
-  Defaults equal today's routing: plan opus, grill opus, triage sonnet; effort high. Exit 0 · 1 a hash mismatch or a
+  Defaults equal today's routing: plan opus, grill opus, triage sonnet; effort high; `--max-budget-usd 12`,
+  `--strict-mcp-config`, `--setting-sources project` on every session (amendments). Exit 0 · 1 a hash mismatch or a
   non-empty `--out` · 2 usage.
 - The kit never runs `claude`. The user runs `commands.txt`.
 
