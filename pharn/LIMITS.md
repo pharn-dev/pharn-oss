@@ -750,6 +750,11 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
   configuration read from the environment, a chain through another runner (`npm-run-all`, `turbo`), npm
   configuration outside the project root or the runner's version (`pharn/floor/ac-test-infra-core.mjs` states
   the full list).
+- **One run of `test` can serve both stages (7.18.0).** When `pharn.config.json` declares `testResults.test`,
+  `/pharn-regress` runs the whole `test` suite once at HEAD, and inside one `/pharn-loop` or `/pharn-ship` run
+  `/pharn-verify` can record that run as reused instead of running `test` again. The AC gate then reads the per-test
+  results file copied from the regress run and bound to its `results_sha256`. Verify has no independent second sample
+  of `test` in that case: a flaky test that passed once reads as passed. `VERIFY.md` says when it happened.
 - **Those commands run with your environment.** The project's gate scripts and `/pharn-regress`'s base install
   (`npm ci` or the lockfile's equivalent, unless `--no-install`) run with your full process environment
   (`pharn/floor/run-gates.mjs` passes `process.env` through), so any secret in it reaches the project's scripts.
