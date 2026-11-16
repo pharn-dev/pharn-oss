@@ -566,6 +566,10 @@ function checkJ(ctx) {
       }
       // The per-test results file (6.15.0) is evidence the AC gate reads (6.20.0): a recorded digest must still be the
       // file's, or E's re-derivation would read a verdict mismatch where the truth is an edited results file (grill G6).
+      // Since 7.18.0 (head-test-single-run) that includes a REUSED verify `test`: its digest is the regress HEAD run's,
+      // and its file is the copy run-gates.mjs wrote into verify's `<out>` — this binds the copy to the verify stamp, never
+      // back to the source run (verify-reuse-rederive). E's check-regress re-run reads the whole-suite mode and its
+      // `compare_files` from the HEAD stamp itself, so it needs no new input.
       if (typeof run.results_sha256 === "string") {
         const file = resultsFileName(run.seq, run.id);
         // Read as the runner and per-test-results-core read it — O_NOFOLLOW|O_NONBLOCK, a regular file only (REVIEW

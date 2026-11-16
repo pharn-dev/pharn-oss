@@ -223,6 +223,35 @@ opt-in gets exactly the report it got before (no read, no key, the same bytes).
   `per-test-unaccounted-red` (fail-closed). An entry-derived BASE names project-relative paths, so `TMPDIR` does not
   touch it.
 
+### The whole-suite HEAD run (7.18.0, head-test-single-run)
+
+When `testResults.test` is declared, `/pharn-regress` runs `test` at HEAD as the **whole suite**, so that
+`/pharn-verify` can reuse that one execution (`gate-run-record.md`, "One execution of `test` for regress and verify").
+The HEAD run's `compare_files` (the outside tests) is the domain, and the BASE side still runs exactly those files. The
+HEAD exit then counts inside tests too, so `check-regress.mjs` reads the HEAD stamp and switches to a whole-suite mode.
+The stamp alone decides the mode, so check E re-derives it.
+
+- **When:** whenever HEAD `test` is red, whatever the base exit. A green HEAD reads no record and adds no block.
+- **A HEAD red caused only by tests inside the feature is NOT a regression.** The HEAD record's L34 refusal is judged
+  over the WHOLE record, because this run was given every file: a failed test in any file accounts for the red. When no
+  compared test failed at head and head reported no suite error, nothing at head can be new. The BASE record is then not
+  read (`base: null`), `test` is in neither `regressions` nor `pre_existing` (a red base keeps it `pre_existing`), and
+  `ignored.head` counts the inside tests left out. `/pharn-verify`, which reuses that run, judges the inside failures.
+  A red whose record holds no failed test in any file and no suite error is still `per-test-unaccounted-red`.
+- **Otherwise** the BASE record is read and the rule above decides. A BASE `test` run recorded `no-files` (an empty
+  comparison set) reads as an empty record, never as a missing one. A BASE record that should exist and does not is
+  `per-test-record-refused`, in the base-green row too.
+- **The declaration must still hold at verdict time.** A whole-suite HEAD red whose project no longer declares
+  `testResults.test`, or whose declaration cannot be read, is `per-test-record-refused`. It is never read through the raw
+  exit table.
+- The block gains `head_run: "whole-suite"`. Without it the block is the 7.17.0 one, byte-identical.
+- **Trades (P0).**
+  - Suite errors carry no file in any supported format. HEAD counts them over every file, while BASE ran only the
+    compared ones, so a suite error in a file inside the feature (an AC test file that fails to import) reads as a
+    regression. That is a false RED, and the common case when it happens.
+  - A test in a file outside the test universe is ignored, as the subset run never executed it either.
+  - A regress `test` red caused only by inside tests no longer shows as a regression: verify judges it.
+
 ## Extra keys are IGNORED (deliberately not a closed-key object)
 
 Additional keys are **ignored, not RED** — the `pharn/pharn-contracts/loop-record.md` posture, for the

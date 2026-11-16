@@ -69,9 +69,14 @@ function perTestLines(pt) {
       ? `passed ${dataText(s.passed)}, failed ${dataText(s.failed)}, skipped ${dataText(s.skipped)}, suite errors ${dataText(s.suite_errors)}`
       : "(not recorded)";
   const fails = Array.isArray(pt.new_failures) ? pt.new_failures : [];
+  // 7.18.0 — a whole-suite HEAD run (head_run) is compared whenever it is red; its BASE record is not read (null) when no
+  // compared test failed at head and head reported no suite error, since nothing at head could then be new.
+  const whole = pt.head_run === "whole-suite";
   const lines = [
-    `gate (quoted, untrusted): ${dataText(pt.gate)} — compared test by test because it is red at both base and head.`,
-    `base: ${side(pt.base)}`,
+    whole
+      ? `gate (quoted, untrusted): ${dataText(pt.gate)} — HEAD ran the WHOLE suite (one execution /pharn-verify can reuse) and is red there, so its outside tests are compared test by test; inside tests are ignored.`
+      : `gate (quoted, untrusted): ${dataText(pt.gate)} — compared test by test because it is red at both base and head.`,
+    `base: ${whole && pt.base === null ? "(not read — no compared test failed at head and head reported no suite error, so nothing at head can be new)" : side(pt.base)}`,
     `head: ${side(pt.head)}`,
     `still failing (failed at base and head): ${dataText(pt.still_failing)}`,
   ];
@@ -347,13 +352,18 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
     const g = report.outside_gates[id];
     // 7.17.0 — a gate red at base that the per-test comparison classified a regression says so, never "pre-existing".
     const perTestRegression = g.base !== 0 && Array.isArray(report.regressions) && report.regressions.includes(id);
+    // 7.18.0 — a gate green at base and red at head that is NOT a regression exists only in the whole-suite mode: every
+    // head failure is in a file inside the feature (Per-test comparison, below), which /pharn-verify judges.
+    const insideOnly = g.base === 0 && g.head !== 0 && Array.isArray(report.regressions) && !report.regressions.includes(id);
     const cls = perTestRegression
       ? "REGRESSION (red at base too; a test failed at head that did not fail at base, or head has more suite errors than base — Per-test comparison, below)"
       : g.base !== 0
         ? "pre-existing (already red at base)"
-        : g.head !== 0
-          ? "REGRESSION"
-          : "ok";
+        : insideOnly
+          ? "ok outside the feature (head ran the whole suite; every head failure is in a file inside the feature — Per-test comparison, below; /pharn-verify judges it)"
+          : g.head !== 0
+            ? "REGRESSION"
+            : "ok";
     return `gate: base exit ${dataText(g.base)} -> head exit ${dataText(g.head)} — ${cls} — id (quoted, untrusted): ${dataText(id)}`;
   });
   out.push(

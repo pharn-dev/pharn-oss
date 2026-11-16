@@ -84,7 +84,7 @@ come from the single code block this text was moved from, so the entry they name
 # Exit: init 0 ok | 2 runner error (closed reason_code) | 3 EMPTY SOURCE SET (nothing written; routes to the
 # existing no-gates HALT, and to /pharn-loop's unattended S4 `blocked: no-gates`) ·
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
-node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] [--base-tests <json-array-file>]   # --base-tests: entry only (6.49.0)
+node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] [--base-tests <json-array-file>] [--test-whole-suite]   # --base-tests: entry only (6.49.0); --test-whole-suite: regress/head only (7.18.0)
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
@@ -224,6 +224,14 @@ node pharn/floor/check-regress.mjs verdict <base.json> <head.json> --base <ref> 
 # entry base:test results file on its `test` slot (entry-base-evidence-core.mjs resultsPlan; validateStamp admits a digest
 # there only). Not declared → byte-identical. Trade (PR #381's): under load a head-only red reads as a regression.
 # CORE-89 (one HEAD `test` run for regress and verify) must supply its own domain (the inside complement): files: [].
+# 7.18.0 (head-test-single-run, CORE-89) — THE WHOLE-SUITE MODE: with testResults.test declared (and no --no-tests),
+# stage-regress passes run-gates `--test-whole-suite`, so the HEAD `test` run is `files: []` + `compare_files` (the outside
+# tests; gate-run-core.mjs wholeSuiteTestRun, the one owner; validateStamp admits the field on a regress/head `test` run
+# only) and baseSpecFrom hands the BASE side those files to run (BASE bytes unchanged). check-regress reads the mode from
+# the HEAD stamp: whenever HEAD `test` is red, over compare_files, HEAD L34 over the WHOLE record; a red with no compared
+# failure and no suite error is NOT a regression (BASE not read, per_test.base null) — inside failures are verify's; else
+# the BASE record is read (no-files BASE = empty record). Declaration gone at verdict time → per-test-record-refused.
+# Block: head_run "whole-suite". Trade: an inside-file suite error reads as a regression.
 node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex>
 ```
 
@@ -402,6 +410,14 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # verify's whole-suite run and the identity misses it; a copied results file would hold no AC test. Prerequisite for any
 # reuse: regress running the whole suite (CORE-89); since 7.17.0 it judges outside tests per test (regress-per-test-product).
 # Record: .dev/features/verify-test-reuse/PLAN.md.
+# LOOP-8 REOPENED (7.18.0, head-test-single-run — CORE-89) on measured durations (`test` 286.3 s of 346.7 s on the
+# measured project, .dev/measurements/gates-within-side-parallel-2026-11-16.md), a model orchestrator's decision under the
+# maintainer's delegation: a WHOLE-SUITE regress HEAD `test` (above) is the one reusable `test` source. findReusable needs
+# its results digest (miss `results-absent`); tryReuse copies the results file LAST into verify's resultsFileName, verified
+# before/after (a failed copy is removed, miss log-unverified); the reused entry records the digest (validateStamp requires
+# it on a reused `test` only). AC gate + check-loop-fresh J bind the copy; VERIFY.md states the lost second sample
+# (pharn/LIMITS.md §9). Bound: nothing re-binds the copy to the source afterwards (verify-reuse-rederive). Record:
+# .dev/features/head-test-single-run/.
 ```
 
 ## `stage-verify.mjs` — the /pharn-verify stage script

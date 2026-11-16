@@ -1420,10 +1420,10 @@ test("★ L60 NEGATIVE CONTROL — without the stamp-path reclassification the m
     }
     for (const m of seen) writeFileSync(join(dir, m), readFileSync(join(here, m)));
     const src = readFileSync(join(here, "check-regress.mjs"), "utf8");
-    const anchor = "regressions.push(STAMP_PER_TEST_GATE);";
-    const splice = "preExisting.splice(preExisting.indexOf(STAMP_PER_TEST_GATE), 1);";
-    assert.ok(src.includes(anchor) && src.includes(splice), "mutation anchors not found");
-    writeFileSync(join(dir, "check-regress.mjs"), src.replace(splice, "").replace(anchor, ""));
+    // 7.18.0: the reclassification is one decision, `isRegression`; the mutant makes it never fire.
+    const anchor = "const isRegression = pt.cmp.new_failures.length > 0 || pt.cmp.suite_errors_added;";
+    assert.ok(src.includes(anchor), "mutation anchors not found");
+    writeFileSync(join(dir, "check-regress.mjs"), src.replace(anchor, "const isRegression = false;"));
     const fx = mkdtempSync(join(tmpdir(), "cr-stamp-pt-mut-"));
     try {
       writeFileSync(join(fx, "pharn.config.json"), PT_CONFIG);
@@ -1459,4 +1459,154 @@ test("comparePerTest: with no domain the result is the positional shape (no `ign
   assert.deepEqual(scoped.ignored, { base: 0, head: 1 });
   assert.deepEqual(scoped.head, { passed: 0, failed: 2, skipped: 0, suite_errors: 0 });
   assert.deepEqual(comparePerTest(b, h, new Set()).new_failures, [], "an empty domain compares nothing");
+});
+
+// ── THE WHOLE-SUITE MODE (7.18.0, head-test-single-run — CORE-89) ──────────────────────────────────────────────────────
+// With testResults.test declared, /pharn-regress runs `test` at HEAD as the WHOLE suite (files [], the outside tests in
+// compare_files) so /pharn-verify can reuse that one execution. Its exit then counts inside tests too.
+const IN_RED = ["t/new.test.mjs", "n1", "failed"]; // a test in a file INSIDE the feature (not in compare_files)
+const IN_RED_SAME_TITLE = ["t/new.test.mjs", "b1", "failed"]; // the same title as an outside test, in an inside file
+const IN_OK = ["t/new.test.mjs", "n1", "passed"];
+/** overHead: make the HEAD `test` run a whole-suite execution comparing `cmp`. */
+const wholeSuite =
+  (cmp = DOMAIN) =>
+  (s) => {
+    const t = s.runs.find((r) => r.id === "test");
+    t.files = [];
+    t.compare_files = [...cmp];
+  };
+/** overBase: the BASE `test` run ran nothing (an empty comparison set), as run-gates.mjs records it. */
+const baseNoFiles = (s) => {
+  const t = s.runs.find((r) => r.id === "test");
+  Object.assign(t, { exit: 0, ran: false, reason: "no-files", files: [], results_sha256: null });
+};
+
+test("★ whole-suite (Q3): a HEAD red owned ONLY by inside tests over a green base is NOT a regression — no BASE record read", () => {
+  const r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([A_OK, PT_B_OK, IN_RED]), overHead: wholeSuite() });
+  assert.equal(r.status, 0, r.stdout);
+  const o = json(r);
+  assert.equal(o.verdict, "no-regressions");
+  assert.deepEqual(o.regressions, []);
+  assert.deepEqual(o.pre_existing, [], "green at base, so not pre_existing either");
+  assert.deepEqual(o.outside_gates.test, { base: 0, head: 1 }, "the raw exits stay reported");
+  assert.equal(o.per_test.head_run, "whole-suite");
+  assert.equal(o.per_test.base, null, "the BASE record was not read (none exists here)");
+  assert.deepEqual(o.per_test.new_failures, []);
+  assert.deepEqual(o.per_test.ignored, { base: 0, head: 1 }, "the inside failure is counted as ignored");
+  assert.deepEqual(o.per_test.head, { passed: 2, failed: 0, skipped: 0, suite_errors: 0 });
+});
+
+test("★ whole-suite (Q3): a HEAD red with ZERO failed tests in ANY file and no suite error is refused (L34 over the whole record)", () => {
+  const r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([A_OK, PT_B_OK, IN_OK]), overHead: wholeSuite() });
+  assert.equal(r.status, 2, r.stdout);
+  const o = json(r);
+  assert.equal(o.verdict, "inconclusive");
+  assert.equal(o.reason_code, "per-test-unaccounted-red");
+  assert.match(o.reason, /ran the whole suite/);
+  assert.match(o.reason, /no failed test in any file/);
+});
+
+test("whole-suite (AC 4): an OUTSIDE test red at head and passed at base is a regression, the BASE record read", () => {
+  const r = stampPT({ base: { test: 0 }, baseDoc: doc([A_OK, PT_B_OK]), headDoc: doc([A_OK, PT_B_RED, IN_RED]), overHead: wholeSuite() });
+  assert.equal(r.status, 1, r.stdout);
+  const o = json(r);
+  assert.deepEqual(o.regressions, ["test"]);
+  assert.deepEqual(o.per_test.new_failures, [{ id: "t/b.test.mjs::b1", base: "passed" }]);
+  assert.deepEqual(o.per_test.base, { passed: 2, failed: 0, skipped: 0, suite_errors: 0 });
+  assert.deepEqual(o.per_test.ignored, { base: 0, head: 1 });
+});
+
+test("whole-suite (AC 4): an outside test failing at BOTH sides stays pre_existing; the inside failure is ignored", () => {
+  const r = stampPT({ base: { test: 1 }, baseDoc: doc([A_OK, PT_B_RED]), headDoc: doc([A_OK, PT_B_RED, IN_RED]), overHead: wholeSuite() });
+  assert.equal(r.status, 0, r.stdout);
+  const o = json(r);
+  assert.deepEqual(o.pre_existing, ["test"]);
+  assert.deepEqual(o.regressions, []);
+  assert.equal(o.per_test.still_failing, 1);
+});
+
+test("whole-suite (AC 4): inside tests are ignored by FILE, never by name — an inside test titled like an outside one", () => {
+  const r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([A_OK, PT_B_OK, IN_RED_SAME_TITLE]), overHead: wholeSuite() });
+  assert.equal(json(r).verdict, "no-regressions", r.stdout);
+  // Control: the same title in an OUTSIDE file is a regression.
+  const c = stampPT({ base: { test: 0 }, baseDoc: doc([A_OK, PT_B_OK]), headDoc: doc([A_OK, PT_B_RED]), overHead: wholeSuite() });
+  assert.equal(json(c).verdict, "regressions", c.stdout);
+});
+
+test("whole-suite (Q2): an outside failure over a base with NO record is refused, never guessed", () => {
+  const r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([A_OK, PT_B_RED]), overHead: wholeSuite() });
+  assert.equal(r.status, 2, r.stdout);
+  assert.equal(json(r).reason_code, "per-test-record-refused");
+  assert.match(json(r).reason, /the base record of "test" is refused/);
+});
+
+test("whole-suite (grill L107): an EMPTY comparison set — the BASE `test` ran nothing — reads its record as empty", () => {
+  // Inside-only red: no regression, nothing read at base.
+  let r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([IN_RED]), overHead: wholeSuite([]), overBase: baseNoFiles });
+  assert.equal(r.status, 0, r.stdout);
+  assert.deepEqual(json(r).per_test.ignored, { base: 0, head: 1 });
+  // A suite error at head: no file to attribute it to, the no-files BASE reads as empty, so it is a regression (the stated
+  // false RED), never a refusal for the record the BASE side never wrote.
+  r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([IN_RED], 1), overHead: wholeSuite([]), overBase: baseNoFiles });
+  assert.equal(r.status, 1, r.stdout);
+  const o = json(r);
+  assert.deepEqual(o.regressions, ["test"]);
+  assert.deepEqual(o.per_test.base, { passed: 0, failed: 0, skipped: 0, suite_errors: 0 });
+});
+
+test("whole-suite (grill L93): a whole-suite HEAD red whose project no longer declares testResults.test is refused, never the exit table", () => {
+  for (const config of [null, JSON.stringify({}), "{not json"]) {
+    const r = stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([IN_RED]), config, overHead: wholeSuite() });
+    assert.equal(r.status, 2, `${config}: ${r.stdout}`);
+    assert.equal(json(r).reason_code, "per-test-record-refused", config);
+  }
+  const off = json(stampPT({ base: { test: 0 }, baseDoc: null, headDoc: doc([IN_RED]), config: null, overHead: wholeSuite() }));
+  assert.match(off.reason, /no longer declares testResults\.test/);
+});
+
+test("whole-suite: a GREEN whole-suite HEAD reads no record at all (base red stays pre_existing; no per_test block)", () => {
+  for (const base of [0, 1]) {
+    const r = stampPT({ base: { test: base }, head: { test: 0 }, baseDoc: null, headDoc: null, overHead: wholeSuite() });
+    assert.equal(r.status, 0, r.stdout);
+    const o = json(r);
+    assert.deepEqual(o.pre_existing, base ? ["test"] : []);
+    assert.equal(Object.hasOwn(o, "per_test"), false);
+  }
+});
+
+test("★ L60 NEGATIVE CONTROL (7.18.0) — with the domain taken from the run's `files` instead of compare_files, the outside regression is lost", () => {
+  const dir = mkdtempSync(join(tmpdir(), "regress-ws-mut-"));
+  try {
+    const seen = new Set();
+    const queue = ["check-regress.mjs"];
+    while (queue.length) {
+      const m = queue.shift();
+      if (seen.has(m)) continue;
+      seen.add(m);
+      for (const [, from, bare] of readFileSync(join(here, m), "utf8").matchAll(
+        /from "\.\/([a-z0-9-]+\.mjs)"|import "\.\/([a-z0-9-]+\.mjs)"/g
+      ))
+        queue.push(from ?? bare);
+    }
+    for (const m of seen) writeFileSync(join(dir, m), readFileSync(join(here, m)));
+    const src = readFileSync(join(here, "check-regress.mjs"), "utf8");
+    const anchor = "const domain = new Set(headRun.compare_files);";
+    assert.ok(src.includes(anchor), "mutation anchor not found");
+    writeFileSync(join(dir, "check-regress.mjs"), src.replace(anchor, "const domain = new Set(headRun.files);"));
+    const fx = mkdtempSync(join(tmpdir(), "cr-ws-mut-"));
+    try {
+      writeFileSync(join(fx, "pharn.config.json"), PT_CONFIG);
+      const bp = writeSide(fx, "base", { test: 0 }, JSON.stringify(doc([A_OK, PT_B_OK])));
+      const hp = writeSide(fx, "head", { test: 1 }, JSON.stringify(doc([A_OK, PT_B_RED])), wholeSuite());
+      const argv = ["verdict", "--base-stamp", bp, "--head-stamp", hp, "--base", SHA];
+      const mutant = spawnSync(process.execPath, [join(dir, "check-regress.mjs"), ...argv], { cwd: fx, encoding: "utf8" });
+      assert.equal(JSON.parse(mutant.stdout).verdict, "no-regressions", "the mutant compares nothing and loses the regression");
+      const real = spawnSync(process.execPath, [CR, ...argv], { cwd: fx, encoding: "utf8" });
+      assert.equal(JSON.parse(real.stdout).verdict, "regressions", "the real checker does not");
+    } finally {
+      rmSync(fx, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

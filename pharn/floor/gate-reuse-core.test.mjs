@@ -422,12 +422,62 @@ test("TOTAL (L62) — hostile parsed JSON never throws", () => {
 // ── LOAD GRAPH (GATE-2 review, P3) — the runner's reuse core carries no regress-stage module ───────────
 test("★ LOAD GRAPH — gate-reuse-core.mjs imports only gate-run-core.mjs (and node:crypto); the offer rule lives elsewhere", () => {
   const src = readFileSync(join(HERE, "gate-reuse-core.mjs"), "utf8");
-  const imports = [...src.matchAll(/^import\s+.*?from\s+["']([^"']+)["'];?\s*$/gm)].map((m) => m[1]);
+  // [^;] (7.18.0): the gate-run-core import is wrapped over several lines by the formatter once it names one more export.
+  const imports = [...src.matchAll(/^import\s+[^;]*?from\s+["']([^"']+)["'];?\s*$/gm)].map((m) => m[1]);
   assert.deepEqual(imports, ["node:crypto", "./gate-run-core.mjs"]);
   const mutant = `${src}\nimport { DELIVERY_COMMANDS } from "./stage-regress-core.mjs";\n`;
   assert.notDeepEqual(
-    [...mutant.matchAll(/^import\s+.*?from\s+["']([^"']+)["'];?\s*$/gm)].map((m) => m[1]),
+    [...mutant.matchAll(/^import\s+[^;]*?from\s+["']([^"']+)["'];?\s*$/gm)].map((m) => m[1]),
     imports,
     "the scan can fail (L60)"
   );
+});
+
+// ── 7.18.0 (head-test-single-run, CORE-89) — `test` from a WHOLE-SUITE regress HEAD run is the one reusable member ──────
+/** A whole-suite HEAD `test` run: files [], its comparison set in compare_files, a results file recorded. */
+const wholeTest = (extra = {}) => run(0, "test", { compare_files: ["src/a.test.js"], results_sha256: H("9"), ...extra });
+
+test("findReusable HIT (7.18.0) — `test` from a whole-suite HEAD run with a results file", () => {
+  const src = headStamp([wholeTest(), run(1, "typecheck")]);
+  assert.ok(validateStamp(src, { stage: "regress", side: "head", feature: FEATURE }).ok, "the fixture is a valid head stamp");
+  const r = findReusable({ source: src, feature: FEATURE, entry: entry("test"), liveIdentity: live("test") });
+  assert.equal(r.hit, true, JSON.stringify(r));
+  assert.equal(r.run.id, "test");
+  // The record carries the source's digest (its file is copied into verify's <out>) and no compare_files.
+  const rec = reusedRunRecord({ entry: entry("test"), candidate: r.run, sourceSha256: H("d"), liveFp: H("1"), liveIdentity: live("test") });
+  assert.equal(rec.results_sha256, H("9"));
+  assert.equal(Object.hasOwn(rec, "compare_files"), false);
+  assert.deepEqual(rec.files, []);
+});
+
+test("findReusable (7.18.0) — LOOP-8's two causes under negation (L40): a SUBSET `test` and a results-less whole-suite `test` both miss", () => {
+  // A subset run (the 6.72.2 shape): never reusable, whatever its results file — the not-reusable-id rule, not another.
+  for (const results of [null, H("9")]) {
+    const src = headStamp([run(0, "test", { files: ["src/a.test.js"], results_sha256: results })]);
+    assert.deepEqual(findReusable({ source: src, feature: FEATURE, entry: entry("test"), liveIdentity: live("test") }), {
+      hit: false,
+      miss: "not-reusable-id",
+    });
+  }
+  // A whole-suite run that wrote no results file: the AC gate would have nothing to read.
+  const none = headStamp([wholeTest({ results_sha256: null })]);
+  assert.deepEqual(findReusable({ source: none, feature: FEATURE, entry: entry("test"), liveIdentity: live("test") }), {
+    hit: false,
+    miss: "results-absent",
+  });
+  // The other eligibility rules still bind it: a timed-out, a tree-moving, a different-identity whole-suite run miss.
+  for (const [o, miss] of [
+    [{ timed_out: true, exit: 124 }, "not-completed"],
+    [{ mutated: true, fp_after: H("2") }, "mutated"],
+    [{ identity_sha256: H("7") }, "identity-mismatch"],
+  ]) {
+    const src = headStamp([wholeTest(o)]);
+    assert.deepEqual(findReusable({ source: src, feature: FEATURE, entry: entry("test"), liveIdentity: live("test") }), {
+      hit: false,
+      miss,
+    });
+  }
+  // The other level gates stay never reused even if a source forged the field on them (validateStamp refuses that stamp).
+  const e2e = headStamp([run(0, "test:e2e", { compare_files: [], results_sha256: H("9") })]);
+  assert.equal(findReusable({ source: e2e, feature: FEATURE, entry: entry("test:e2e"), liveIdentity: live("test:e2e") }).hit, false);
 });

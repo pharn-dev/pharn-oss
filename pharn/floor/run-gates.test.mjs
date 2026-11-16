@@ -2603,3 +2603,97 @@ test("CONTAINMENT (7.0.0): a symlink at `pharn`, the state root's parent, is ref
     { scripts: { test: "true" } }
   );
 });
+
+// ── 7.18.0 (head-test-single-run, CORE-89) — the whole-suite HEAD `test` run and its reuse at verify ──────────────────
+const WRITE_RESULTS =
+  ";require('fs').writeFileSync(process.env.PHARN_TEST_RESULTS, JSON.stringify({schema:'pharn-test-results/1',suite_errors:0,tests:[]}))";
+const WHOLE_SCRIPTS = Object.freeze({ ...REUSE_SCRIPTS, test: COUNT("test", WRITE_RESULTS) });
+
+/** A reuse repo whose scope names one outside test file, so a subset HEAD run would hand `test` that file. */
+function wholeSuiteRepo(scripts = WHOLE_SCRIPTS) {
+  const fx = reuseRepo(scripts);
+  writeFileSync(
+    join(fx.dir, "pharn/.run/scope.json"),
+    JSON.stringify({ inside: [], declared: [], escaped: [], outside_tests: ["src/a.test.js"], outside_eval_pairs: [] })
+  );
+  return fx;
+}
+
+test("★ 7.18.0 — --test-whole-suite: HEAD runs `test` with NO file arguments, records compare_files, and verify REUSES it with its results file", () => {
+  const fx = wholeSuiteRepo();
+  try {
+    const head = runHead(fx, { extra: ["--skip-style", "--test-whole-suite"] });
+    const ht = head.stamp.runs.find((r) => r.id === "test");
+    assert.equal(ht.ran, true, "the whole suite RAN (never the no-files rule)");
+    assert.deepEqual(ht.files, []);
+    assert.deepEqual(ht.compare_files, ["src/a.test.js"]);
+    assert.match(ht.results_sha256, /^[0-9a-f]{64}$/);
+    assert.ok(counted(fx).includes("test"));
+    writeFileSync(fx.counter, "");
+
+    const v = verifyWithReuse(fx, head.sha);
+    assert.equal(v.init.code, 0, v.init.raw);
+    const byId = Object.fromEntries(v.calls.map((c) => [c.json.ran, c.json]));
+    assert.equal(byId.test.reused, true, JSON.stringify(byId.test));
+    assert.ok(!counted(fx).includes("test"), "verify did not spawn test");
+    const s = stamp(fx.dir);
+    const t = s.runs.find((x) => x.id === "test");
+    assert.equal(t.reason, "reused");
+    assert.equal(t.results_sha256, ht.results_sha256, "the source's digest");
+    assert.equal(Object.hasOwn(t, "compare_files"), false);
+    // The copy sits at VERIFY's own results name, and hashes to the digest the stamp records.
+    const copy = readFileSync(join(fx.dir, OUT, resultsFileName(t.seq, "test")));
+    assert.equal(createHash("sha256").update(copy).digest("hex"), t.results_sha256);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("7.18.0 — a whole-suite source whose results file was edited after the HEAD run is a MISS: the copy is removed and test RUNS", () => {
+  const fx = wholeSuiteRepo();
+  try {
+    const head = runHead(fx, { extra: ["--skip-style", "--test-whole-suite"] });
+    const ht = head.stamp.runs.find((r) => r.id === "test");
+    writeFileSync(join(fx.dir, HEAD_OUT, resultsFileName(ht.seq, "test")), '{"edited":true}');
+    writeFileSync(fx.counter, "");
+    const v = verifyWithReuse(fx, head.sha);
+    const byId = Object.fromEntries(v.calls.map((c) => [c.json.ran, c.json]));
+    assert.equal(byId.test.reused, false);
+    assert.equal(byId.test.reuse_miss, "log-unverified");
+    assert.ok(counted(fx).includes("test"), "the gate ran");
+    const t = stamp(fx.dir).runs.find((x) => x.id === "test");
+    assert.equal(t.ran, true);
+    // The fresh run wrote its own file; the recorded digest is that file's, never the edited source's.
+    const own = readFileSync(join(fx.dir, OUT, resultsFileName(t.seq, "test")));
+    assert.equal(createHash("sha256").update(own).digest("hex"), t.results_sha256);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("7.18.0 — without --test-whole-suite the HEAD `test` keeps today's subset run, and verify never reuses it (not-reusable-id)", () => {
+  const fx = wholeSuiteRepo();
+  try {
+    const head = runHead(fx, { extra: ["--skip-style"] });
+    const ht = head.stamp.runs.find((r) => r.id === "test");
+    assert.deepEqual(ht.files, ["src/a.test.js"]);
+    assert.equal(Object.hasOwn(ht, "compare_files"), false);
+    const v = verifyWithReuse(fx, head.sha);
+    const byId = Object.fromEntries(v.calls.map((c) => [c.json.ran, c.json]));
+    assert.equal(byId.test.reuse_miss, "not-reusable-id");
+  } finally {
+    dropReuseRepo(fx);
+  }
+});
+
+test("7.18.0 — --test-whole-suite is refused on any stage/side but regress/head", () => {
+  const fx = wholeSuiteRepo();
+  try {
+    const r = cli(fx.dir, initArgs(["--test-whole-suite"]), { env: fx.env });
+    assert.equal(r.code, 2, r.raw);
+    assert.equal(r.json.reason_code, "usage-error");
+    assert.match(r.json.reason, /--test-whole-suite applies to --stage regress --side head only/);
+  } finally {
+    dropReuseRepo(fx);
+  }
+});

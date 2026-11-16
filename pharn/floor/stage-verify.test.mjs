@@ -1566,3 +1566,91 @@ test("the virtual-clock preload refuses a configuration it cannot honour, so a b
     assert.match(r.stderr, /virtual-clock preload: needs \?git=/, query);
   }
 });
+
+// ── 7.18.0 (head-test-single-run, CORE-89) — ONE execution of `test` serves regress and verify ─────────────────────────
+// The project declares testResults.test (pharn-json); its `test` script counts its spawn and writes a results record to
+// PHARN_TEST_RESULTS: the outside test `src/index.test.js` passes, and a test in a file INSIDE the feature passes or (with
+// SV_RED=1) fails, exiting 1. Through the REAL stage scripts, nothing passed by hand (L41): stage-regress decides the
+// whole-suite run from the config itself.
+const RESULTS_WRITER =
+  "const fs=require('fs');const red=process.env.SV_RED==='1';fs.writeFileSync(process.env.PHARN_TEST_RESULTS," +
+  "JSON.stringify({schema:'pharn-test-results/1',suite_errors:0,tests:[{file:'src/index.test.js',path:['add'],status:'passed'}," +
+  "{file:'src/new.test.js',path:['AC-1: new behaviour'],status:red?'failed':'passed'}]}));process.exit(red?1:0);\n";
+const WHOLE_SUITE_OPTS = (extra = {}) => ({
+  scripts: { ...REUSE_FIXTURE_SCRIPTS, test: `${COUNTED("test")} && node results.cjs` },
+  committed: { "results.cjs": RESULTS_WRITER, "pharn.config.json": JSON.stringify({ testResults: { test: "pharn-json" } }) + "\n" },
+  ...extra,
+});
+const regressHeadStamp = (fx) => JSON.parse(readFileSync(join(fx.dir, DEFAULT_STAMPS.regressHead), "utf8"));
+
+test("★ CORE-89 (AC 2) — with testResults.test declared, `test` runs ONCE at HEAD across regress and verify; verify says reused", () => {
+  withReuseFixture(WHOLE_SUITE_OPTS(), (fx) => {
+    const d = deliver(fx);
+    assert.deepEqual(
+      spawned(fx, "head").filter((g) => g === "test"),
+      ["test"],
+      "one HEAD execution of test"
+    );
+    assert.ok(!d.verifySpawned.includes("test"), `verify did not execute test: ${d.verifySpawned}`);
+    // The HEAD run was the whole suite, its comparison set recorded beside it.
+    const head = regressHeadStamp(fx).runs.find((r) => r.id === "test");
+    assert.deepEqual(head.files, []);
+    assert.deepEqual(head.compare_files, ["src/index.test.js"]);
+    assert.equal(typeof head.results_sha256, "string");
+    // Verify recorded it as reused, with the source's digest, and the copied file is the one the stamp binds.
+    assert.ok(
+      d.report.gate_reuse.reused.some((r) => r.id === "test"),
+      JSON.stringify(d.report.gate_reuse)
+    );
+    const vt = d.stamp.runs.find((r) => r.id === "test");
+    assert.equal(vt.reason, "reused");
+    assert.equal(vt.ran, false);
+    assert.equal(vt.results_sha256, head.results_sha256);
+    assert.deepEqual(validateStamp(d.stamp, { stage: "verify", feature: FEATURE, side: null }), { ok: true });
+    assert.equal(d.report.verdict, "PASS");
+    assert.match(d.render, /REUSED, NOT RE-EXECUTED by this verify run/);
+    assert.match(d.render, /`test` was NOT re-executed: this verify has no independent second sample of the suite/);
+    // AC 6 — check-loop-fresh re-derives both verdicts over this delivery (E) and binds the copied results file (J).
+    assert.equal(d.fresh.verdict, "FRESH", JSON.stringify(d.fresh));
+  });
+});
+
+test("★ CORE-89 (AC 3) — FRESH-vs-REUSE: the verdict, gates and AC gate are equal, green and with a RED test inside the feature", () => {
+  for (const red of [false, true]) {
+    const run = (withRun) =>
+      withReuseFixture(WHOLE_SUITE_OPTS(), (fx) => deliver({ ...fx, env: { ...fx.env, SV_RED: red ? "1" : "0" } }, { run: withRun }));
+    const freshPath = run(false); // no delivery run: nothing offered, verify executes test itself
+    const reusePath = run(true);
+    assert.ok(freshPath.verifySpawned.includes("test"), "the control really executed test at verify");
+    assert.ok(!reusePath.verifySpawned.includes("test"), "the reuse path did not");
+    for (const k of ["gates", "verdict", "failing_gates", "completeness", "ac_gate"]) {
+      assert.deepEqual(reusePath.report[k], freshPath.report[k], `red=${red}: report.${k}`);
+    }
+    assert.equal(reusePath.report.verdict, red ? "FAIL" : "PASS");
+    if (red) assert.deepEqual(reusePath.report.failing_gates, ["test"]);
+    assert.equal(reusePath.fresh.verdict, freshPath.fresh.verdict, `red=${red}: freshness`);
+  }
+});
+
+test("CORE-89 (Q3) — a HEAD red owned only by a test INSIDE the feature is not a regression: regress is clean, verify FAILs it", () => {
+  withReuseFixture(WHOLE_SUITE_OPTS(), (fx) => {
+    const d = deliver({ ...fx, env: { ...fx.env, SV_RED: "1" } });
+    const rr = JSON.parse(readFileSync(join(fx.dir, FEATURE_DIR, "regression-report.json"), "utf8"));
+    assert.equal(rr.verdict, "no-regressions", JSON.stringify(rr));
+    assert.equal(rr.per_test.head_run, "whole-suite");
+    assert.deepEqual(rr.per_test.ignored.head, 1);
+    assert.equal(d.report.verdict, "FAIL");
+  });
+});
+
+test("CORE-89 (AC 5) — without testResults, HEAD runs the outside subset (no compare_files) and verify executes test itself", () => {
+  withReuseFixture({}, (fx) => {
+    const d = deliver(fx);
+    const head = regressHeadStamp(fx).runs.find((r) => r.id === "test");
+    assert.deepEqual(head.files, ["src/index.test.js"]);
+    assert.equal(Object.hasOwn(head, "compare_files"), false);
+    assert.ok(d.verifySpawned.includes("test"));
+    assert.ok(!d.report.gate_reuse.reused.some((r) => r.id === "test"));
+    assert.doesNotMatch(d.render, /no independent second sample/);
+  });
+});
