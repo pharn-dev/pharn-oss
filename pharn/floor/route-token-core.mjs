@@ -1,5 +1,7 @@
-// pharn/floor/route-token-core.mjs — the ROUTE TOKEN grammar, and nothing else (added 6.27.0,
-// stage-model-routing). Pure: no filesystem, no child_process, no network, no clock, and ZERO imports.
+// pharn/floor/route-token-core.mjs — what a routed stage is REQUESTED with: the ROUTE TOKEN grammar (added 6.27.0,
+// stage-model-routing) and, beside it, the EFFORT line's (7.20.0, stage-effort-routing). One reason to change: the
+// Agent tool's parameter sets, or the token's shape. Pure: no filesystem, no child_process, no network, no clock, and
+// ZERO imports.
 //
 // ── What a route token is ────────────────────────────────────────────────────────────────────────────
 // `/pharn-ship` and `/pharn-loop` decide, per pipeline stage, whether that stage runs as a Claude Code
@@ -40,6 +42,24 @@
 
 /** The Agent tool's model aliases a stage can be routed to. Frozen; a membership test is `.includes()`. */
 export const AGENT_MODELS = Object.freeze(["sonnet", "opus", "haiku", "fable"]);
+
+// ── AGENT_EFFORTS is a copy of a platform fact too, pinned the same way (7.20.0, stage-effort-routing) ───────────
+// The Agent tool's optional `effort` parameter, as read on 2026-11-16 (`.dev/features/stage-effort-routing/
+// EFFORT-PROBE.md`): the desktop app's Agent tool schema and the terminal CLI 2.1.323's embedded schema both take
+// `low`, `medium`, `high`, `xhigh` and `max`. `check-model-config.mjs`'s `EFFORT_ENUM` is the same five; a parity test
+// (`route-token-core.test.mjs`) reads the checker's SOURCE and requires the two to be equal, so a config effort cannot
+// ship without a routing decision. `stage-agent.mjs start` prints the resolved effort as ONE line, `effort:<level>`
+// (`effortLine`), after the token and the marker line; the orchestrator passes the level as the Agent call's `effort`.
+// ADVISORY, and the bound that matters: the line records what is REQUESTED. Whether the Agent call carried it is the
+// orchestrating model's act, and the effort a request was SENT with is visible, at most, in a transcript format the
+// platform does not document — never proof. Named residuals (`stage-agent-core.mjs`): a harness whose tool takes a
+// different set (`agent-effort-set-drift`), and one whose tool lists no `effort` at all (`agent-effort-param-absent`).
+
+/** The Agent tool's effort levels a routed stage can be requested at. Frozen; a membership test is `.includes()`. */
+export const AGENT_EFFORTS = Object.freeze(["low", "medium", "high", "xhigh", "max"]);
+
+/** The effort line's prefix. */
+export const EFFORT_PREFIX = "effort:";
 
 /**
  * Every reason a stage with a route line can run inline. The first two are POLICY (`ROUTE_POLICY` in
@@ -98,4 +118,9 @@ export function agentToken(alias) {
 /** The token for an inline stage, or null when `reason` is not an inline reason. */
 export function inlineToken(reason) {
   return typeof reason === "string" && INLINE_REASONS.includes(reason) ? `${INLINE_PREFIX}${reason}` : null;
+}
+
+/** The effort line `start` prints for a routed stage, or null when `level` is not an agent effort. */
+export function effortLine(level) {
+  return typeof level === "string" && AGENT_EFFORTS.includes(level) ? `${EFFORT_PREFIX}${level}` : null;
 }

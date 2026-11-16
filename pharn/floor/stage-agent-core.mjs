@@ -156,8 +156,15 @@
 // NEVER A GUARANTEE: "a routed stage ran on its configured model". The platform applies the model (and a
 //   declined model's behaviour is undocumented); `cost.json`'s served `requests[].model` is evidence from
 //   an undocumented transcript format, agreement with the marker's requested route and never proof (L43).
-// STRUCK: "effort is routed". The Agent tool takes no effort; a routed stage runs at the effort it
-//   inherits (observed: the parent session's). Effort still applies when a person runs a stage directly.
+// EFFORT, REQUESTED (7.20.0, stage-effort-routing): `routeFromResolved` keeps the resolved effort beside the alias
+//   (an effort outside AGENT_EFFORTS, which the checker cannot print, is `resolve-failed`), and `stage-agent.mjs start`
+//   prints it as its third line, `effort:<level>`; the orchestrator passes it as the Agent call's `effort`. FLOOR: the
+//   printed level is a member of AGENT_EFFORTS, the checker's EFFORT_ENUM (parity-tested). ADVISORY: that the call
+//   carries it. Where the Agent tool lists no `effort` parameter, or refuses the value without starting an agent, the
+//   call goes without it, the stage still routes at the effort it inherits (observed before 7.20.0: the parent
+//   session's), and the run's summary says `effort not applied`. NEVER A GUARANTEE: "a routed stage ran at its
+//   configured effort" — the transcript's `output_config.effort` is evidence from an undocumented format, read once
+//   for a direct Agent call (.dev/features/stage-effort-routing/EFFORT-PROBE.md), never for a routed stage yet.
 //
 // ================================ RESIDUALS (named, not built) ================================
 //   stage-agent-hang        — a hung foreground stage agent hangs the run; only a person's interrupt recovers it.
@@ -228,7 +235,13 @@
 //                             and could stop S9 on a background launch.
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
-//   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
+//   agent-effort-set-drift  — AGENT_EFFORTS is the Agent tool's `effort` enum read in two clients on 2026-11-16; a
+//                             harness taking a different set refuses the value, and the orchestrator makes the call
+//                             once more without `effort` (`effort not applied`), never a silent swap.
+//   agent-effort-param-absent — a harness whose Agent tool lists no `effort` (the terminal CLI 2.1.323's embedded
+//                             schema omits it when CLAUDE_CODE_EFFORT_LEVEL is set — read from the binary, not run): the
+//                             stage routes at the inherited effort, and the summary says so. Replaces the 6.27.0
+//                             residual `stage-agent-effort` (it assumed an agent definition was the only way).
 //   pharn-cli's vendored check-model-config.mjs — pinned there by sha256; a header-only edit here makes that
 //                             copy lag until it is refreshed in pharn-cli (no rule or output changes).
 //
@@ -238,7 +251,7 @@
 // orchestrator's context — `pharn/THREAT-MODEL.md §5`'s free-text residual, in a new place. That the orchestrator's
 // control flow never uses it is the orchestrator's discipline, not something this module can enforce.
 
-import { agentToken, inlineToken } from "./route-token-core.mjs";
+import { agentToken, inlineToken, AGENT_EFFORTS } from "./route-token-core.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
 
 /** The two orchestrators that spawn stage agents. */
@@ -521,9 +534,10 @@ export function modesOf(command) {
 }
 
 /**
- * Map a resolved `{model, effort}` stdout to a route. Only an AGENT_MODELS alias routes; `inherit` and a
- * `claude-*` id are valid config values that go inline, each with its own reason; anything else — which a
- * checker that validated the config cannot print — is `resolve-failed` (fail-closed).
+ * Map a resolved `{model, effort}` stdout to a route. Only an AGENT_MODELS alias routes, and its route carries the
+ * effort (7.20.0); `inherit` and a `claude-*` id are valid config values that go inline, each with its own reason;
+ * anything else — an effort outside AGENT_EFFORTS included, which a checker that validated the config cannot print —
+ * is `resolve-failed` (fail-closed).
  */
 function routeFromResolved(stdout) {
   let parsed;
@@ -535,7 +549,10 @@ function routeFromResolved(stdout) {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return inline("resolve-failed");
   if (typeof parsed.model !== "string" || typeof parsed.effort !== "string") return inline("resolve-failed");
   const agent = agentToken(parsed.model);
-  if (agent !== null) return { token: agent, exit: 0, model: parsed.model };
+  if (agent !== null) {
+    if (!AGENT_EFFORTS.includes(parsed.effort)) return inline("resolve-failed");
+    return { token: agent, exit: 0, model: parsed.model, effort: parsed.effort };
+  }
   if (parsed.model === "inherit") return inline("inherit");
   if (/^claude-[a-z0-9][a-z0-9-]*$/.test(parsed.model)) return inline("model-id");
   return inline("resolve-failed");
@@ -560,7 +577,8 @@ function spawnResult(obs) {
  * cannot load included — is a crash, which is `resolve-failed`, never `config-red` (GATE-2 review A4).
  * When an observation the decision needs is missing it returns `{need: "config" | "resolve" | "validate"}`
  * and the CLI gathers exactly that one — so a routed stage costs one checker spawn, and `validate` runs only
- * after a `resolve` RED. Returns `{token, exit}` (0 agent, 3 inline) or `{refuse: "skipped" | "unknown-cell"}`.
+ * after a `resolve` RED. Returns `{token, exit}` (0 agent, with its `model` and `effort`; 3 inline) or
+ * `{refuse: "skipped" | "unknown-cell"}`.
  * POLICY PRECEDENCE: a policy-inline cell returns before reading `obs` at all.
  */
 export function decideRoute(cell, obs = {}) {

@@ -11,7 +11,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AGENT_MODELS, INLINE_REASONS, isRouteToken } from "./route-token-core.mjs";
+import { AGENT_MODELS, AGENT_EFFORTS, INLINE_REASONS, isRouteToken } from "./route-token-core.mjs";
 import { EXIT_CODE } from "./stage-exit-core.mjs";
 import {
   STAGE_AGENT_COMMANDS,
@@ -287,6 +287,20 @@ test("decideRoute — every agent alias routes to itself, and only those four", 
     const d = decideRoute(AGENT, { configPresent: true, resolve: resolved(alias) });
     assert.deepEqual([d.token, d.exit], [`agent:${alias}`, 0]);
   }
+});
+
+test("decideRoute — a routed stage carries its resolved effort; an effort outside AGENT_EFFORTS is resolve-failed (7.20.0)", () => {
+  for (const effort of AGENT_EFFORTS) {
+    const d = decideRoute(AGENT, { configPresent: true, resolve: resolved("opus", effort) });
+    assert.deepEqual(d, { token: "agent:opus", exit: 0, model: "opus", effort });
+  }
+  // Mutant: dropping the membership test routes these with a level the Agent tool would refuse.
+  for (const bad of ["turbo", "High", "", "toString"]) {
+    const d = decideRoute(AGENT, { configPresent: true, resolve: resolved("sonnet", bad) });
+    assert.deepEqual([d.token, d.exit], ["inline:resolve-failed", 3], JSON.stringify(bad));
+  }
+  // An inline value keeps its own reason whatever the effort says: the effort is read for a routed stage only.
+  assert.equal(decideRoute(AGENT, { configPresent: true, resolve: resolved("inherit", "turbo") }).token, "inline:inherit");
 });
 
 test("decideRoute — A CRASH IS NO VERDICT (GATE-2 review A4): exit 1 without its RED line is resolve-failed, never config-red", () => {
