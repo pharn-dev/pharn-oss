@@ -66,3 +66,7 @@ corrected in a follow-up, or by the maintainer at merge; neither changes a figur
 
 Lesson candidate: none. The two wording findings are instances of the already-promoted L37 and L40 (a quantifier and
 an attribution that go beyond the evidence). This run had no new mechanism failure.
+
+Addressed, 2026-11-16 (after GATE 2, on the orchestrator's request): both §6 findings were reworded in
+`MEASUREMENTS.md`. The quantifier is now limited to the two types probed, and `advisor` is stated as observed with "the
+probe did not test why". This is a wording fix to an apparatus record; the pipeline was not re-run.

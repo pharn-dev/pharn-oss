@@ -81,13 +81,14 @@ are for the definition that ships. The equality was observed once, by the reader
 standing check is the test's pin of the committed file, which fails if a byte of `pharn-stage.md` changes. A changed
 byte means re-running this probe and re-pinning.
 
-## 6. Tools the definition names that this Claude Code does not offer (observed)
+## 6. Tools the definition names that the probe session did not offer (observed)
 
 `pharn-stage.md` lists eight tools: Read, Glob, Grep, Bash, Write, Edit, MultiEdit, NotebookEdit. The session offered
 `pharn-stage` six, and Glob, Grep and MultiEdit were absent from **both** types' lists, so Claude Code `2.1.323` in this
-session does not offer them to any subagent type. A definition naming a tool the build lacks is harmless (the agent
-starts with the rest), and the definition is unchanged. `advisor` was offered to both types and is not in the
-definition: Claude Code adds it.
+session offered them to neither of the two subagent types probed; no other type was observed. The `pharn-stage` agent
+started with the other six, and the definition is unchanged. `advisor` was offered to both types although
+`pharn-stage.md` does not name it (`general-purpose` is built in, with no definition file here); the probe did not test
+why.
 
 ## 7. Bounds (P0)
 
