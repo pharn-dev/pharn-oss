@@ -221,8 +221,8 @@ function reuseLines(report) {
     ...(reused.some((r) => r.id === "test")
       ? [
           "`test` was NOT re-executed: this verify has no independent second sample of the suite (a flaky test that passed " +
-            "once reads as passed), and the acceptance-criteria gate read the per-test results file copied from the regress " +
-            "HEAD run, bound to its sha256 (pharn/LIMITS.md §9).",
+            "once reads as passed), and the acceptance-criteria gate reads its per-test record, if any AC maps to `test`, from " +
+            "the results file copied from the regress HEAD run, bound to its sha256 (pharn/LIMITS.md §9).",
           "",
         ]
       : []),

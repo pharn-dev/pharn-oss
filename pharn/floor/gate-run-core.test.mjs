@@ -1801,6 +1801,8 @@ test("validateStamp: compare_files validates on the whole-suite `test` run of a 
   assert.deepEqual(validateStamp(wholeSuiteHeadStamp([])), { ok: true });
 });
 
+// BOUND (review): "cannot widen" holds for a MISPLACED field only. A forged compare_files on the regress/head `test` run
+// itself still moves that run's per-test domain — the unauthenticated-stamp posture every stamp field has (L19, L43).
 test("validateStamp: compare_files anywhere else, or malformed, is stamp-malformed (a forged field cannot widen a verdict)", () => {
   const cases = {
     "a verify stamp": (s) => Object.assign(s, { stage: "verify", side: null }),

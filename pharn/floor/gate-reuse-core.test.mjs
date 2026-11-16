@@ -477,7 +477,16 @@ test("findReusable (7.18.0) — LOOP-8's two causes under negation (L40): a SUBS
       miss,
     });
   }
-  // The other level gates stay never reused even if a source forged the field on them (validateStamp refuses that stamp).
+  // The other level gates stay never reused even if a source forged the field on them: validateStamp refuses that
+  // stamp first (source-invalid), and without the field the never-reused rule refuses it (not-reusable-id).
   const e2e = headStamp([run(0, "test:e2e", { compare_files: [], results_sha256: H("9") })]);
-  assert.equal(findReusable({ source: e2e, feature: FEATURE, entry: entry("test:e2e"), liveIdentity: live("test:e2e") }).hit, false);
+  assert.deepEqual(findReusable({ source: e2e, feature: FEATURE, entry: entry("test:e2e"), liveIdentity: live("test:e2e") }), {
+    hit: false,
+    miss: "source-invalid",
+  });
+  const plain = headStamp([run(0, "test:e2e", { results_sha256: null })]);
+  assert.deepEqual(findReusable({ source: plain, feature: FEATURE, entry: entry("test:e2e"), liveIdentity: live("test:e2e") }), {
+    hit: false,
+    miss: "not-reusable-id",
+  });
 });

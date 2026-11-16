@@ -802,7 +802,8 @@ function runInit(args) {
   const specFrom = flag(args, "--spec-from");
   // 7.18.0 (head-test-single-run) — regress HEAD runs `test` as the WHOLE suite, its outside tests kept as the comparison
   // set (`compare_files`); /pharn-regress passes it when the project declares `testResults.test`. Refused by presence on
-  // any other stage/side, so a flag that would change nothing is never silently accepted.
+  // any other stage/side. On regress/head it changes nothing when the resolved set holds no `test` gate (an explicit
+  // --gates without one, or gates.exclude naming it): accepted, and no entry carries the field.
   const wholeSuiteTest = has(args, "--test-whole-suite");
   if (wholeSuiteTest && !(stage === "regress" && side === "head")) {
     fail("usage-error", "--test-whole-suite applies to --stage regress --side head only");

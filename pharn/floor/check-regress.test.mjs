@@ -1610,3 +1610,31 @@ test("★ L60 NEGATIVE CONTROL (7.18.0) — with the domain taken from the run's
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("per-test classification keeps pre_existing SORTED when `test` stays there beside a gate that sorts after it (7.17.0 bytes)", () => {
+  // Both-red `test` with no new failure plus a red `typecheck`: the reclassification removes and re-adds `test`, so the
+  // list is re-sorted — without the sort it would read ["typecheck", "test"].
+  let o = json(stampPT({ base: { test: 1, typecheck: 1 }, head: { test: 1, typecheck: 1 }, baseDoc: doc([A_RED]), headDoc: doc([A_RED]) }));
+  assert.deepEqual(o.pre_existing, ["test", "typecheck"], JSON.stringify(o));
+  // The same in the whole-suite mode, and `regressions` stays sorted when `test` joins a red `typecheck` there.
+  o = json(
+    stampPT({
+      base: { test: 1, typecheck: 1 },
+      head: { test: 1, typecheck: 1 },
+      baseDoc: doc([PT_B_RED]),
+      headDoc: doc([PT_B_RED, IN_RED]),
+      overHead: wholeSuite(),
+    })
+  );
+  assert.deepEqual(o.pre_existing, ["test", "typecheck"], JSON.stringify(o));
+  o = json(
+    stampPT({
+      base: { test: 0, typecheck: 0 },
+      head: { test: 1, typecheck: 1 },
+      baseDoc: doc([A_OK, PT_B_OK]),
+      headDoc: doc([A_OK, PT_B_RED]),
+      overHead: wholeSuite(),
+    })
+  );
+  assert.deepEqual(o.regressions, ["test", "typecheck"], JSON.stringify(o));
+});

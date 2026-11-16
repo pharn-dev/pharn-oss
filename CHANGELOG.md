@@ -34,8 +34,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`.dev/measurements/gates-within-side-parallel-2026-11-16.md`). The reopening was a model orchestrator's decision under
   the maintainer's delegation, not a human approval.
   - **Regress HEAD runs the whole suite.** `stage-regress.mjs` now passes the new
-    `run-gates.mjs init --test-whole-suite` (not under `--no-tests`). The HEAD `test` run is `npm run test` with no file
-    arguments, the command verify runs, and it records the outside tests as `compare_files`.
+    `run-gates.mjs init --test-whole-suite` (not under `--no-tests`). The HEAD `test` run is the gate's own command with no
+    file arguments (`npm run test` when discovered), the command verify runs, and it records the outside tests as
+    `compare_files`.
   - **The BASE side is unchanged.** `baseSpecFrom` hands it those files to run, so the retained and entry-derived BASE
     evidence keep their bytes.
   - **Verify reuses that run.** Inside one `/pharn-loop` or `/pharn-ship` run, `/pharn-verify` records that execution
