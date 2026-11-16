@@ -549,7 +549,9 @@ export function buildProgram() {
         sessionArgv(ctx, {
           model: ctx.loopModel.alias,
           effortArgs: ctx.loopModel.effortArgs,
-          agentArgs: ctx.agentArgs,
+          // a plain session: the round trip under test is the transport, and a stage-agent definition could decline
+          // a task that is not a pipeline stage
+          agentArgs: [],
           sessionId,
           prompt: QUESTION_PROMPT,
         }),

@@ -70,7 +70,7 @@ comparable.
 --permission-mode auto` session. The quick grill runs as one `claude -p "/pharn-grill <name> --quick"` session on
   the config's `loop` model. Between the test stage and the first build, two probes run:
   - a session asked to write `loop-driver-probe.txt` at the project root, which the write guard should deny;
-  - a session asked to put one question, then resumed with your answer word and asked to write it to
+  - a plain session (no `--agent`) asked to put one question, then resumed with your answer word and asked to write it to
     `pharn/.run/loop-driver/<name>/answer.txt`.
 
   The probes are excluded from the cost comparison.
