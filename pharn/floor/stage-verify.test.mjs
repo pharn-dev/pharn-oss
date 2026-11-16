@@ -1662,7 +1662,8 @@ test("CORE-89 (AC 6) — check-loop-fresh J binds the COPIED results file of a r
     const vt = d.stamp.runs.find((r) => r.id === "test");
     assert.equal(vt.reason, "reused");
     const copy = join(fx.dir, VERIFY_PATHS.gates, `${vt.seq}-test.test-results.json`);
-    assert.ok(existsSync(copy), "the copy sits under verify's own results name");
+    // The copy sits under verify's own results name and hashes to the digest the reused entry records.
+    assert.equal(createHash("sha256").update(readFileSync(copy)).digest("hex"), vt.results_sha256);
     writeFileSync(copy, '{"edited":true}');
     const after = loopFresh(fx);
     assert.equal(after.verdict, "STOP", JSON.stringify(after));
