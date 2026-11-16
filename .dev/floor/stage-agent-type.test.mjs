@@ -16,9 +16,10 @@
 //     (pharn/floor/stage-agent-core.mjs renderBrief: the constitution read, the write-tool rule, the report line) and no
 //     stage command (L35: the brief is the one copy of the task, so the `general-purpose` fallback receives the same).
 //   ★ WIRING: item 2 of `## Running a stage` in both orchestrators names the type, its definition, the fallback and its
-//     condition, the never-twice rule and the route-line note; the subagent type equals the definition's `name:`; both
-//     close parts' route bullet carries the note and their claims block the container bullet. Every anchor is asserted
-//     found before slicing on it (L60).
+//     condition, the never-twice rule and the route-line note — and, since 7.20.0 (stage-effort-routing), the `effort`
+//     parameter, the no-effort rule, its `effort not applied` note and the three-call order; the subagent type equals the
+//     definition's `name:`; both close parts' route bullet carries the fallback note and the effort note, and their claims
+//     block the container bullet. Every anchor is asserted found before slicing on it (L60).
 //
 // HONEST SCOPE (P0). Presence, bytes and set membership over committed text. NOT: that Claude Code parses the
 // frontmatter as intended, applies the tool list, or keeps the instruction files in a run (only the probe can show
