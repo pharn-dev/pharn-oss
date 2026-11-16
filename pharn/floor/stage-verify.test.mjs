@@ -1654,3 +1654,18 @@ test("CORE-89 (AC 5) — without testResults, HEAD runs the outside subset (no c
     assert.doesNotMatch(d.render, /no independent second sample/);
   });
 });
+
+test("CORE-89 (AC 6) — check-loop-fresh J binds the COPIED results file of a reused `test`: editing it stops the loop", () => {
+  withReuseFixture(WHOLE_SUITE_OPTS(), (fx) => {
+    const d = deliver(fx);
+    assert.equal(d.fresh.verdict, "FRESH", JSON.stringify(d.fresh));
+    const vt = d.stamp.runs.find((r) => r.id === "test");
+    assert.equal(vt.reason, "reused");
+    const copy = join(fx.dir, VERIFY_PATHS.gates, `${vt.seq}-test.test-results.json`);
+    assert.ok(existsSync(copy), "the copy sits under verify's own results name");
+    writeFileSync(copy, '{"edited":true}');
+    const after = loopFresh(fx);
+    assert.equal(after.verdict, "STOP", JSON.stringify(after));
+    assert.ok(JSON.stringify(after).includes("output-hash-mismatch"), JSON.stringify(after));
+  });
+});
