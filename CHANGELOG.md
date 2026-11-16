@@ -23,6 +23,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.17.0] - 2026-11-16
+
+### Added
+
+- **`/pharn-regress` compares `test` test by test when the project declares `testResults.test` and `test` is red at both
+  base and head** (Linear CORE-77, the follow-up `regress-per-test-product` that 6.72.0 named). Until now the product
+  regress read `test` by its exit code alone, so a base already red for one test hid every new failure at head behind
+  `pre_existing`; one recorded run hid 11 real head failures that way
+  (`.dev/features/frontmatter-parser-parity/REGRESSION.md`), which is why the dev regress compares per test since
+  6.72.0. `pharn/floor/check-regress.mjs verdict` on the stamp path now reads each side's results file, the one the runner
+  already wrote beside that side's stamp and bound to it by `results_sha256`, and applies the 6.72.0 rule: `test` is a
+  regression when a test failed at head that was passed, skipped or absent at base, or head has more suite errors.
+  Only the files the head stamp's `test` run was given (the outside tests) are compared, so a test in a file inside
+  the feature is ignored by file membership, never by name. The report gains `per_test` (with `ignored`, the tests each
+  side left out) and `REGRESSION.md` a "Per-test comparison" section whose test ids are fenced data.
+  - **The base side.** A base checkout's reporter writes absolute paths under the temp-root checkout, so
+    `pharn/floor/base-worktree.mjs` gains `baseCheckoutRelative`, which maps them back by the module's own naming rule.
+    An entry-derived base stamp (6.49.0) now carries the entry `base:test` run's results file on its `test` slot,
+    copied and verified like the logs (`entry-base-evidence-core.mjs` `resultsPlan`); `validateStamp` admits a results
+    digest on that one slot, and every other reused run still records `null`.
+  - **Fail-closed.** A side whose record is absent, unbound, changed after the runner hashed it, from a timed-out run,
+    malformed or holding an anomaly in a compared file, or a `pharn.config.json` that exists but cannot be read, is
+    `inconclusive` `per-test-record-refused`; a red side whose record holds no failure in a compared file is
+    `per-test-unaccounted-red`.
+    Both codes join `UNMEASURED_CODES`, so `/pharn-loop` stops `STOP_TERMINAL` / `unmeasured` on them, not S11.
+  - **Unchanged without the opt-in.** `check-regress.mjs` reads no record and the report keeps its bytes (tested).
+    The one change that does not wait for the opt-in: an entry-derived base stamp carries the entry results file
+    whenever the entry run wrote one, so a missing or oversized one now makes entry evidence a `log-unverified` miss
+    (the base side then runs). `check-loop-fresh.mjs` re-derives the verdict from the stored records with no new input
+    (tested).
+  - **The trade, stated.** Under machine load a test red at head only now reads as a regression where the exit code
+    read `pre_existing`: a false red in place of a false green. With the opt-in, a head that timed out over a red base,
+    `pre_existing` before, is now `inconclusive`, and so is a both-red `test` over a base commit that predates the
+    reporter setup. The records are the reporter's word, never proof of what ran. `run-gates.mjs` needed no change. One
+    HEAD `test` run serving regress and verify (CORE-89) is not built here.
+
+### Changed
+
 - 2026-11-16: **Decided: running one side's gates at the same time stays closed (CORE-88).** The reopen trigger set on
   2026-10-06 (verify's wall-clock as a top bucket on a run that otherwise ends green) is not met, and none of the three
   preconditions is. One sequential pass of the measured project's verify gates through the 7.16.0 runner, on a scratch

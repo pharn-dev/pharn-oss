@@ -119,6 +119,14 @@ records which rule chose the base (`base_source`), and a comparison with nothing
 changed is refused (`no-change-under-test`). So when the build, or any part of it, is committed, pass `--base <the
 commit the build started from>` — `/pharn-ship` and `/pharn-loop` pass the commit they captured before the build.
 
+**Per-test comparison (7.17.0, opt-in).** When `pharn.config.json` declares `testResults.test` and `test` is red at both
+base and head, the verdict compares the outside tests one by one from the results file each side's test run wrote: a
+test that fails at head and did not fail at base makes `test` a regression instead of `pre_existing`; tests in files
+inside the feature are ignored. A side whose record is missing, changed or unreadable makes the verdict `inconclusive`,
+never `pre_existing`. Under machine load a test red at head only reads as a regression — a false red, never a false
+green. The report's `per_test` block and `REGRESSION.md`'s "Per-test comparison" section show it
+(`pharn/pharn-contracts/regression-report.md`). Without the opt-in nothing changes.
+
 Read the printed `pharn-stage-exit/1` JSON object and branch on the **exit code only**:
 
 - **`0` done** — report the object's `verdict` and point at `pharn/features/<name>/REGRESSION.md`. Both

@@ -193,8 +193,8 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 ### `check-regress.mjs verdict --per-test` — one gate compared test by test (6.72.0)
 
 ```bash
-# POSITIONAL PATH ONLY: the stamp path refuses the flags (usage-error, naming the follow-up regress-per-test-product),
-# so /pharn-regress and every product report are unchanged. /pharn-dev-regress passes them for its outside `tests` gate:
+# POSITIONAL PATH ONLY: the stamp path refuses the flags (usage-error) and, since 7.17.0, reads its stamps' own records
+# instead (the next block). /pharn-dev-regress passes them for its outside `tests` gate:
 # Step 2 runs `node --test` through .dev/floor/node-test-results-reporter.mjs on each side (an ABSOLUTE path into the
 # working tree — the base checkout has no reporter of its own), Step 3 adds the three flags. The files are
 # pharn-test-results/1 documents, read by per-test-results-core.mjs's readResultsFile + parseResults + buildRecord (one
@@ -207,6 +207,24 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # under load a test red at head only now reads as a regression (a false RED instead of a false GREEN).
 node pharn/floor/check-regress.mjs verdict <base.json> <head.json> --base <ref> --inside <list> \
   --per-test tests --base-tests <base-tests.json> --head-tests <head-tests.json>
+```
+
+### The stamp path's per-test comparison of `test` (7.17.0, regress-per-test-product)
+
+```bash
+# /pharn-regress (product, stamp path): when pharn.config.json declares testResults.test AND `test` is red at BOTH sides
+# (the only row a per-test view can change), check-regress reads each side's results file beside its stamp — bound by
+# results_sha256 through per-test-results-core.mjs gateResults — maps a BASE checkout's absolute paths back with
+# base-worktree.mjs baseCheckoutRelative, and applies the 6.72.0 rule over a DOMAIN: the files the HEAD stamp's `test` run
+# was given (outside_tests), so inside tests are ignored by FILE MEMBERSHIP. Report: `per_test` (+ `ignored`). Refusals,
+# inconclusive exit 2: per-test-record-refused (config unreadable; a record absent, null, changed, timed out, malformed,
+# over a cap, an anomaly in a compared file), per-test-unaccounted-red (whole-record L34). Both are UNMEASURED_CODES now
+# (check-loop-fresh B passes, check-loop STOP_TERMINAL / unmeasured). After the timed-out rules (their bytes kept). No new
+# checker input, so check-loop-fresh E reproduces it; J binds the results files. The entry-derived BASE stamp carries the
+# entry base:test results file on its `test` slot (entry-base-evidence-core.mjs resultsPlan; validateStamp admits a digest
+# there only). Not declared → byte-identical. Trade (PR #381's): under load a head-only red reads as a regression.
+# CORE-89 (one HEAD `test` run for regress and verify) must supply its own domain (the inside complement): files: [].
+node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex>
 ```
 
 ## `stage-regress.mjs` — the /pharn-regress stage script
@@ -382,7 +400,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # `test` IS NEVER REUSED, AND NOT ONLY FOR THE AC GATE (6.72.2, audit LOOP-8 closed won't-fix): regress HEAD runs `test`
 # over outside_tests only (test files unchanged since the base — never the feature's AC tests), so its files differ from
 # verify's whole-suite run and the identity misses it; a copied results file would hold no AC test. Prerequisite for any
-# reuse: the follow-up regress-per-test-product (regress runs the whole suite and judges outside tests per test).
+# reuse: regress running the whole suite (CORE-89); since 7.17.0 it judges outside tests per test (regress-per-test-product).
 # Record: .dev/features/verify-test-reuse/PLAN.md.
 ```
 

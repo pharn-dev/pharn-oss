@@ -180,6 +180,21 @@ function vitestDoc(proj, status) {
   });
 }
 
+/** A vitest-json report of `rows` ([title, status]) in AC_TEST, as a function of the project (the reporter writes the
+ *  realpath its process saw) — a regress side's per-test record (7.17.0). */
+function ptDoc(rows) {
+  return (proj) =>
+    JSON.stringify({
+      testResults: [
+        {
+          name: join(realpathSync(proj), AC_TEST),
+          status: rows.some((row) => row[1] === "failed") ? "failed" : "passed",
+          assertionResults: rows.map(([title, status]) => ({ ancestorTitles: [], title, fullName: title, status })),
+        },
+      ],
+    });
+}
+
 function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, completeness = null }) {
   const out = join(proj, dirname(stampRel));
   rmSync(out, { recursive: true, force: true });
@@ -193,7 +208,12 @@ function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, comp
     // passed when the gate exited 0 unless a third element says otherwise; `malformed` is a hash-consistent file no
     // adapter can read — the AC gate's UNMEASURABLE reading (6.20.6 tests).
     let results_sha256 = null;
-    if (stage === "verify" && id === "test") {
+    const ownResults = typeof opts.results === "function" ? opts.results(proj) : opts.results;
+    if (typeof ownResults === "string") {
+      // 7.17.0 — a regress side's own results file (the per-test comparison on the stamp path reads it).
+      writeFileSync(join(out, resultsFileName(seq, id)), ownResults);
+      results_sha256 = sha256(Buffer.from(ownResults));
+    } else if (stage === "verify" && id === "test") {
       const doc = acStatus === "malformed" ? "{ not json" : vitestDoc(proj, acStatus ?? (exit === 0 ? "passed" : "failed"));
       writeFileSync(join(out, resultsFileName(seq, id)), doc);
       results_sha256 = sha256(Buffer.from(doc));
@@ -208,7 +228,7 @@ function writeStamp(proj, stampRel, { stage, side, head, init, final, runs, comp
       reason: null,
       argv: id === "reconcile" ? ["true"] : ["npm", "run", id],
       shell: null,
-      files: [],
+      files: Array.isArray(opts.files) ? [...opts.files] : [],
       fp_before: init,
       fp_after: final,
       stdout_sha256: sha256(readFileSync(join(out, `${b}.out`))),
@@ -485,6 +505,14 @@ test("★ B (6.59.0) — EVERY not-measured code passes B, and an honest run car
     },
     "base-timed-out": { stage: "regress", baseRuns: [["test", 1, undefined, { timed_out: true }]], regressRuns: [["test", 1]] },
     "head-timed-out": { stage: "regress", baseRuns: [["test", 0]], regressRuns: [["test", 124, undefined, { timed_out: true }]] },
+    // 7.17.0 — the fixture project declares testResults.test, so `test` red on both sides is compared per test: no
+    // regress results file is a refused record, and a red head whose record holds no failure is unaccounted for.
+    "per-test-record-refused": { stage: "regress", baseRuns: [["test", 1]], regressRuns: [["test", 1]] },
+    "per-test-unaccounted-red": {
+      stage: "regress",
+      baseRuns: [["test", 1, undefined, { results: ptDoc([["x", "failed"]]) }]],
+      regressRuns: [["test", 1, undefined, { results: ptDoc([["x", "passed"]]) }]],
+    },
   };
   assert.deepEqual(Object.keys(worlds).sort(), [...UNMEASURED_CODES], "one world per member (L29)");
   for (const code of UNMEASURED_CODES) {
@@ -501,6 +529,75 @@ test("★ B (6.59.0) — EVERY not-measured code passes B, and an honest run car
       expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "usage-error" });
     });
   }
+});
+
+test("★ E (7.17.0) — the per-test verdict on the stamp path is re-derived from the stored records; a forged one STOPS", () => {
+  // The fixture project declares testResults.test (vitest-json). `test` is red on both sides; AC_TEST is the file the
+  // gate was given. x failed at base and head, y passed at base and failed at head → a per-test regression.
+  const files = [AC_TEST];
+  const opts = {
+    baseRuns: [
+      [
+        "test",
+        1,
+        undefined,
+        {
+          files,
+          results: ptDoc([
+            ["x", "failed"],
+            ["y", "passed"],
+          ]),
+        },
+      ],
+    ],
+    regressRuns: [
+      [
+        "test",
+        1,
+        undefined,
+        {
+          files,
+          results: ptDoc([
+            ["x", "failed"],
+            ["y", "failed"],
+          ]),
+        },
+      ],
+    ],
+  };
+  withRepo((r) => {
+    iterate(r, opts);
+    const p = reportPath(r, "regression-report.json");
+    const rep = readJ(p);
+    assert.equal(rep.verdict, "regressions", `precondition: the checker compared per test (${JSON.stringify(rep)})`);
+    assert.deepEqual(rep.per_test.new_failures, [{ id: `${AC_TEST}::y`, base: "passed" }]);
+    expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
+    // The plain exit-code table's answer, written over the per-test one, is not what E re-derives from the records.
+    writeJ(p, { ...rep, verdict: "no-regressions", regressions: [], pre_existing: ["test"] });
+    expect(evaluate(args(r)), { code: EXIT.STOP, verdict: "STOP", reason_code: "report-verdict-mismatch" });
+  });
+  // CONTROL: the same failing set on both sides is pre_existing, and E reproduces that too.
+  withRepo((r) => {
+    iterate(r, {
+      ...opts,
+      regressRuns: [
+        [
+          "test",
+          1,
+          undefined,
+          {
+            files,
+            results: ptDoc([
+              ["x", "failed"],
+              ["y", "passed"],
+            ]),
+          },
+        ],
+      ],
+    });
+    assert.equal(readJ(reportPath(r, "regression-report.json")).verdict, "no-regressions");
+    expect(evaluate(args(r)), { code: EXIT.FRESH, verdict: "FRESH" });
+  });
 });
 
 test("B — a NON-lapse member stops with its own code; a non-member is a report-malformed re-run", () => {

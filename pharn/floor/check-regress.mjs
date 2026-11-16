@@ -71,7 +71,7 @@
 //        [--per-test <gate-id> --base-tests <file> --head-tests <file>]
 //   node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --base <40-hex> [--inside <list>]
 //     --per-test   : the positional path only (6.72.0; all three flags or none): compare one gate PER TEST, below.
-//                    Refused on the stamp path — /pharn-regress's wiring is the follow-up `regress-per-test-product`.
+//                    Refused on the stamp path, which reads its stamps' own records instead (7.17.0, below).
 //     <list>       : comma/whitespace-separated repo-relative paths
 //     <eval-pairs> : comma/whitespace-separated "EXPECTED::ACTUAL" tokens (the committed eval pairs)
 //     results.json : a flat { "<gate-id>": <exit-code int>, ... } map written by the command
@@ -111,6 +111,30 @@
 // comparison is floor over what they say, never proof of what ran. Test ids are repository text, carried in
 // `per_test.new_failures` as untrusted DATA that no floor op reads. Without `--per-test` the output is unchanged.
 //
+// THE PER-TEST COMPARISON ON THE STAMP PATH (7.17.0, regress-per-test-product — the named follow-up of 6.72.0). When the
+// project's `pharn.config.json` declares `testResults.test` (test-results-record.md's opt-in) and `test` is red at BOTH
+// sides, the stamp path compares `test` test by test, from the results file the runner wrote beside each stamp and bound
+// to it by `results_sha256` (per-test-results-core.mjs `gateResults` re-hashes it: absent, `null`, changed or from a
+// timed-out run is a refusal). Only that row, because it is the only one a per-test view can change: base 0 / head != 0
+// is a regression already, and base != 0 / head 0 is not. The rule is the positional one (`comparePerTest`), over a
+// DOMAIN: the files the HEAD stamp's `test` run was given (`outside_tests`), so a test whose file is inside the feature is
+// ignored by FILE MEMBERSHIP, never by name. A BASE checkout's absolute report paths are mapped back to repo-relative ones
+// by base-worktree.mjs `baseCheckoutRelative`. Refusals — inconclusive, exit 2: `per-test-record-refused` (a config that
+// exists but cannot be read, a record refused, an anomaly in a compared file) and `per-test-unaccounted-red` (a red side
+// whose record holds no failed test in a compared file and no suite error, L34); both are gate-run-core.mjs UNMEASURED_CODES, so
+// check-loop-fresh B passes them and check-loop.mjs stops STOP_TERMINAL / unmeasured. The step runs after both timed-out
+// rules, so their reports keep their bytes; a head that timed out over a measured-red base, `pre_existing` before, is now a
+// refusal (a killed run has no record). Not declared → nothing is read and the output is byte-identical to before. No new
+// argument: config from the working directory, records beside the stamps, the domain from the HEAD stamp, the temp root
+// from the process (base-worktree.mjs `tempRoot`) — so check-loop-fresh E's re-run, under the same TMPDIR, reproduces the
+// verdict, and its check J binds each results file. The import of base-worktree.mjs (which imports stage-runtime.mjs and
+// so node:child_process) is deliberate: the base-checkout naming rule keeps its one owner (L35); importing is not
+// spawning, and this file still spawns nothing. THE TRADE (PR #381's,
+// stated): under machine load a test red at head only reads as a regression where the exit code read `pre_existing` — a
+// false RED in place of a false GREEN. BOUNDS (P0, L43): agreement between record and stamp, never what ran; "failed" is
+// the reporter's word, the reporter config and pharn.config.json are project files a build can edit, and the verdict
+// depends on that config staying unchanged until check E re-reads it (as the AC gate does).
+
 // A FIFTH BOUND ON THE SCOPE RULE, for its two callers (6.37.0, regress-pre-run-snapshot). Inside an open `/pharn-loop`
 // or `/pharn-ship` run, `stage-regress.mjs` and `quick-scope-core.mjs` pass `partitionScope` the changed paths the run's
 // PRE-RUN SNAPSHOT recorded with the bytes they still hold (pre-run-snapshot-core.mjs). An undeclared one is REPORTED
@@ -119,12 +143,14 @@
 // out of the write tools' reach) can be forged through Bash. The `scope` CLI below passes no such list.
 
 import "./runtime-floor.mjs";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute } from "node:path";
 import { createHash } from "node:crypto";
 import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { isConcrete } from "./plan-files-core.mjs";
-import { buildRecord, readResultsFile } from "./per-test-results-core.mjs";
-import { parseResults } from "./per-test-results-formats.mjs";
+import { buildRecord, readResultsFile, gateResults, loadResultsConfig, formatFor } from "./per-test-results-core.mjs";
+import { parseResults, RECORD_STATUSES } from "./per-test-results-formats.mjs";
+import { baseCheckoutRelative } from "./base-worktree.mjs";
 
 // --- The ESCAPE-EXEMPT sets (the floor check for lessons-learned L17). -----------------------------
 // `scope` computes `escaped` over `git diff <base>`, which answers "what CHANGED since base" — but it is
@@ -655,25 +681,115 @@ function readTestsRecord(path, gate, exit, label) {
 
 /** The per-test comparison of two records of ONE gate (pure). `new_failures` = every test FAILED at head whose base
  *  status is not `failed` (`passed`, `skipped`, or `absent` from the base record), in head-record (id) order;
- *  `still_failing` counts the tests failed on both sides; `suite_errors_added` is head's count above base's. */
-export function comparePerTest(base, head) {
-  const baseStatus = new Map(base.tests.map((t) => [t.id, t.status]));
+ *  `still_failing` counts the tests failed on both sides; `suite_errors_added` is head's count above base's.
+ *  `domain` (7.17.0, regress-per-test-product): a Set of repo-relative test files, or null. With a Set, only tests whose
+ *  `file` is a member are compared or counted — FILE MEMBERSHIP, never a name match — and the result adds `ignored`,
+ *  the number of tests each side left out. The positional path passes none, so its result is unchanged. Suite errors
+ *  carry no file in any supported format, so they stay whole-record. */
+export function comparePerTest(base, head, domain = null) {
+  const inDomain = (t) => domain === null || domain.has(t.file);
+  const baseTests = base.tests.filter(inDomain);
+  const headTests = head.tests.filter(inDomain);
+  const baseStatus = new Map(baseTests.map((t) => [t.id, t.status]));
   const newFailures = [];
   let stillFailing = 0;
-  for (const t of head.tests) {
+  for (const t of headTests) {
     if (t.status !== "failed") continue;
     const was = baseStatus.has(t.id) ? baseStatus.get(t.id) : "absent";
     if (was === "failed") stillFailing++;
     else newFailures.push({ id: t.id, base: was });
   }
-  const side = (r) => ({ ...r.counts, suite_errors: r.suite_errors });
+  const countsOf = (tests) => Object.fromEntries(RECORD_STATUSES.map((s) => [s, tests.filter((t) => t.status === s).length]));
+  const side = (r, tests) => ({ ...(domain === null ? r.counts : countsOf(tests)), suite_errors: r.suite_errors });
   return {
-    base: side(base),
-    head: side(head),
+    base: side(base, baseTests),
+    head: side(head, headTests),
     new_failures: newFailures,
     still_failing: stillFailing,
     suite_errors_added: head.suite_errors > base.suite_errors,
+    ...(domain === null ? {} : { ignored: { base: base.tests.length - baseTests.length, head: head.tests.length - headTests.length } }),
   };
+}
+
+// --- THE STAMP-PATH PER-TEST COMPARISON (7.17.0) — see the header, THE PER-TEST COMPARISON ON THE STAMP PATH. ---------
+/** The gate the stamp path compares test by test: `test` alone (the e2e gates are not run at regress). */
+const STAMP_PER_TEST_GATE = "test";
+
+/** Is the stamp path's per-test comparison declared? `{state: "off"}` (no `pharn.config.json`, no `testResults`, or no
+ *  `testResults.test` — today's behaviour), `{state: "on"}`, or `{state: "refused", reason}` (a config that exists but
+ *  does not parse or validate — an attempted opt-in that cannot be read is never read as "off"). */
+function stampPerTestDeclared(root) {
+  const f = formatFor(loadResultsConfig(root), STAMP_PER_TEST_GATE);
+  if (f.ok) return { state: "on" };
+  if (f.reason_code === "not-configured") return { state: "off" };
+  return { state: "refused", reason: `pharn.config.json's testResults cannot be read (${f.reason_code}): ${f.reason}` };
+}
+
+/** One side's per-test record of `test`, from the results file beside its stamp: per-test-results-core.mjs `gateResults`
+ *  (the stamp's `results_sha256` binding, the configured format, the timed-out and no-file refusals), every file still
+ *  absolute mapped out of this project's BASE checkout (base-worktree.mjs `baseCheckoutRelative`), then `buildRecord`
+ *  (one id rule), then the two refusals only a comparison needs: an anomaly in a `domain` file, and a red no failed test in
+ *  a `domain` file and no suite error accounts for (L34 — a comparison over zero failed tests is never a classification). Reasons
+ *  name the side and a closed code, never a path (REGRESSION.md is committed). */
+function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain }) {
+  const g = gateResults({ stamp, outDir: dirname(stampPath), gateId: STAMP_PER_TEST_GATE, root });
+  if (!g.ok)
+    return {
+      ok: false,
+      reason_code: "per-test-record-refused",
+      reason: `the ${side} record of "test" is refused (${g.reason_code}): ${g.reason}`,
+    };
+  const entries = g.parsed.entries.map((e) =>
+    typeof e.file === "string" && isAbsolute(e.file) ? { ...e, file: baseCheckoutRelative(e.file, projectReal) } : e
+  );
+  const record = buildRecord({ gate: STAMP_PER_TEST_GATE, format: g.format, exit: g.exit, sha: g.sha, parsed: { ...g.parsed, entries } });
+  if (!record.ok)
+    return {
+      ok: false,
+      reason_code: "per-test-record-refused",
+      reason: `the ${side} record of "test" is refused (${record.reason_code}): ${record.reason}`,
+    };
+  const anomalies = record.anomalies.filter((a) => domain.has(a.file));
+  if (anomalies.length) {
+    return {
+      ok: false,
+      reason_code: "per-test-record-refused",
+      reason: `the ${side} record of "test" holds ${anomalies.length} test(s) in a compared file whose identity or status is ambiguous (first: ${anomalies[0].reason_code}) — a per-test comparison needs every compared test given plainly`,
+    };
+  }
+  // L34 over the COMPARED files (review F2): this run was given the domain files only, so a red owned by no compared test
+  // — every failure in an ignored file, or reporter paths that never match the stamp's `files` — would compare nothing
+  // and read `pre_existing` for free. A whole-gate run (files: []) that must accept inside-only failures is the next
+  // increment's to decide, with its own domain.
+  if (record.exit !== 0 && !record.tests.some((t) => t.status === "failed" && domain.has(t.file)) && record.suite_errors === 0) {
+    return {
+      ok: false,
+      reason_code: "per-test-unaccounted-red",
+      reason: `gate "test" exited ${record.exit} on the ${side} side, but its record holds no failed test in a compared file and no suite error — that red is not accounted for, so no per-test comparison can classify it`,
+    };
+  }
+  return { ok: true, record };
+}
+
+/** The stamp path's per-test step for two validated stamps and the two maps. Returns `{state: "off"}` when it does not
+ *  apply (`test` is not red at BOTH sides, or the comparison is not declared), `{state: "refused", reason_code, reason}`,
+ *  or `{state: "compared", cmp}`. The domain is the HEAD stamp's `test` run `files` (the outside tests). */
+export function stampPerTest({ baseStamp, headStamp, baseStampPath, headStampPath, baseMap, headMap, root }) {
+  const id = STAMP_PER_TEST_GATE;
+  if (!Object.hasOwn(baseMap, id) || !Object.hasOwn(headMap, id) || baseMap[id] === 0 || headMap[id] === 0) return { state: "off" };
+  const declared = stampPerTestDeclared(root);
+  if (declared.state === "off") return declared;
+  if (declared.state === "refused") return { state: "refused", reason_code: "per-test-record-refused", reason: declared.reason };
+  const headRun = headStamp.runs.find((r) => r.id === id);
+  const domain = new Set(headRun && Array.isArray(headRun.files) ? headRun.files : []);
+  // The working directory exists (the checker runs in it), so its realpath does too — base-worktree.mjs names a base
+  // checkout by the project's realpath, exactly as stage-regress.mjs computes it.
+  const common = { root, projectReal: realpathSync(root), domain };
+  const b = stampTestsRecord({ ...common, stamp: baseStamp, stampPath: baseStampPath, side: "base" });
+  if (!b.ok) return { state: "refused", reason_code: b.reason_code, reason: b.reason };
+  const h = stampTestsRecord({ ...common, stamp: headStamp, stampPath: headStampPath, side: "head" });
+  if (!h.ok) return { state: "refused", reason_code: h.reason_code, reason: h.reason };
+  return { state: "compared", cmp: comparePerTest(b.record, h.record, domain) };
 }
 
 function runVerdict(positional, args) {
@@ -704,7 +820,7 @@ function runVerdict(positional, args) {
         {
           verdict: "inconclusive",
           reason:
-            "--per-test compares the positional results maps only; the stamp path has no per-test wiring yet (follow-up regress-per-test-product)",
+            "--per-test compares the positional results maps only; the stamp path reads each stamp's own per-test record when pharn.config.json declares testResults.test (regress-per-test-product, 7.17.0)",
           reason_code: "usage-error",
         },
         2
@@ -715,6 +831,7 @@ function runVerdict(positional, args) {
   let base;
   let head;
   let gate_run = null;
+  let stamps = null; // stamp path only: {base, head} parsed stamps, for the per-test step (7.17.0)
   let baseTimedOut = []; // stamp path only: the positional maps carry exits alone
   let headTimedOut = []; // the same, for the HEAD side (6.59.0)
 
@@ -787,6 +904,7 @@ function runVerdict(positional, args) {
     baseTimedOut = timedOutRunIds(b.stamp);
     headTimedOut = timedOutRunIds(h.stamp);
     gate_run = { base: gateRunBlock(b.stamp, b.sha256), head: gateRunBlock(h.stamp, h.sha256) };
+    stamps = { base: b.stamp, head: h.stamp };
   } else {
     base = readResultsMap(basePath, "base-results.json");
     head = readResultsMap(headPath, "head-results.json");
@@ -920,6 +1038,53 @@ function runVerdict(positional, args) {
       },
       2
     );
+  }
+
+  // THE PER-TEST STEP ON THE STAMP PATH (7.17.0, regress-per-test-product) — the header's section of that name. After
+  // both timed-out rules, so their reports keep their bytes; only `test` red at BOTH sides, only when declared.
+  if (stamps) {
+    const pt = stampPerTest({
+      baseStamp: stamps.base,
+      headStamp: stamps.head,
+      baseStampPath,
+      headStampPath,
+      baseMap: base.value,
+      headMap: head.value,
+      root: process.cwd(),
+    });
+    if (pt.state === "refused") {
+      emit(
+        {
+          base: baseRef !== undefined ? baseRef : null,
+          inside,
+          outside_gates: outsideGates,
+          regressions,
+          pre_existing: preExisting,
+          ...timedOutBlock,
+          verdict: "inconclusive",
+          reason: pt.reason,
+          reason_code: pt.reason_code,
+          ...(gate_run ? { gate_run } : {}),
+        },
+        2
+      );
+    }
+    if (pt.state === "compared") {
+      perTestBlock = {
+        gate: STAMP_PER_TEST_GATE,
+        base: pt.cmp.base,
+        head: pt.cmp.head,
+        new_failures: pt.cmp.new_failures,
+        still_failing: pt.cmp.still_failing,
+        ignored: pt.cmp.ignored,
+      };
+      if (pt.cmp.new_failures.length || pt.cmp.suite_errors_added) {
+        // red at both sides, but a compared test failed at head that did not fail at base — never masked
+        preExisting.splice(preExisting.indexOf(STAMP_PER_TEST_GATE), 1);
+        regressions.push(STAMP_PER_TEST_GATE);
+        regressions.sort();
+      }
+    }
   }
 
   const verdict = regressions.length ? "regressions" : "no-regressions";

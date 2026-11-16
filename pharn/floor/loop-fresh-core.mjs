@@ -436,7 +436,9 @@ function checkB(ctx) {
     // is a verdict the checker computed, not a refusal and not stale evidence: B lets it through, the remaining checks
     // run as for any report (so a stale one is still re-run at F/G, once, inside the budget), and check-loop.mjs stops
     // on the inconclusive verdict — STOP_TERMINAL / unmeasured. Before 6.59.0 `base-timed-out` fell to the STOP below,
-    // which /pharn-loop recorded as S11 "stale-evidence".
+    // which /pharn-loop recorded as S11 "stale-evidence". Since 7.17.0 the set also holds the two per-test refusals of
+    // check-regress.mjs's stamp path (`per-test-record-refused`, `per-test-unaccounted-red`): verdicts over accepted stamps
+    // too, so E re-derives them like any report.
     if (UNMEASURED_SET.has(code)) continue;
     if (LAPSE_SET.has(code)) {
       return failure({

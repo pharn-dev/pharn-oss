@@ -1150,3 +1150,313 @@ test("an unknown subcommand is inconclusive exit 2, and its usage text names the
   assert.equal(o.verdict, "inconclusive");
   assert.match(o.reason, /--per-test <gate-id> --base-tests <file> --head-tests <file>/);
 });
+
+// ===================================================================================================
+// THE PER-TEST COMPARISON ON THE STAMP PATH (7.17.0, regress-per-test-product). When pharn.config.json declares
+// `testResults.test` and `test` is red at both sides, the stamp path reads each stamp's own results file (bound by
+// `results_sha256`) and compares the files the HEAD `test` run was given, test by test. Every case runs the CLI with
+// cwd = a scratch project, so the config it reads is the fixture's own.
+// ===================================================================================================
+
+const { resultsFileName } = await import("./gate-run-core.mjs");
+const { namePrefix, tempRoot } = await import("./base-worktree.mjs");
+const { createHash } = await import("node:crypto");
+const { mkdirSync, realpathSync } = await import("node:fs");
+const sha256Hex = (b) => createHash("sha256").update(b).digest("hex");
+
+const DOMAIN = ["t/a.test.mjs", "t/b.test.mjs"];
+const PT_CONFIG = JSON.stringify({ testResults: { test: "pharn-json" } });
+
+/** A stamp for one side whose `test` run (seq 0) carries `files` = DOMAIN and, when `docBytes` is a string, a results
+ *  file under `<dir>/<side>/` bound by its sha256. `over(stamp)` may edit the stamp after the binding. */
+function writeSide(dir, side, exits, docBytes, over = null) {
+  const sideDir = join(dir, side);
+  mkdirSync(sideDir, { recursive: true });
+  const s = mkRegressStamp(exits, side);
+  const t = s.runs.find((r) => r.id === "test");
+  if (t) {
+    t.files = [...DOMAIN];
+    t.results_sha256 = null;
+    if (typeof docBytes === "string") {
+      writeFileSync(join(sideDir, resultsFileName(t.seq, t.id)), docBytes);
+      t.results_sha256 = sha256Hex(docBytes);
+    }
+  }
+  if (over) over(s, sideDir);
+  const p = join(sideDir, "stamp.json");
+  writeFileSync(p, JSON.stringify(s, null, 2));
+  return p;
+}
+
+/** One stamp-path run over a scratch project. `config` null = no pharn.config.json. Docs are objects (JSON), raw
+ *  strings, or null (no results file). */
+function stampPT({
+  base = { test: 1 },
+  head = { test: 1 },
+  baseDoc,
+  headDoc,
+  config = PT_CONFIG,
+  overBase = null,
+  overHead = null,
+  before = null,
+}) {
+  const dir = mkdtempSync(join(tmpdir(), "cr-stamp-pt-"));
+  try {
+    if (config !== null) writeFileSync(join(dir, "pharn.config.json"), config);
+    const enc = (d) => (d === null || d === undefined ? null : typeof d === "string" ? d : JSON.stringify(d));
+    const bp = writeSide(dir, "base", base, enc(baseDoc), overBase);
+    const hp = writeSide(dir, "head", head, enc(headDoc), overHead);
+    if (before) before(dir);
+    return spawnSync(process.execPath, [CR, "verdict", "--base-stamp", bp, "--head-stamp", hp, "--base", SHA], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const A_OK = ["t/a.test.mjs", "a1", "passed"];
+const A_RED = ["t/a.test.mjs", "a1", "failed"];
+const PT_B_OK = ["t/b.test.mjs", "b1", "passed"];
+const PT_B_RED = ["t/b.test.mjs", "b1", "failed"];
+
+test("★ stamp per-test (AC 1): a compared test red at head and passed at base makes `test` a REGRESSION, exit 1", () => {
+  const r = stampPT({ baseDoc: doc([A_RED, PT_B_OK]), headDoc: doc([A_RED, PT_B_RED]) });
+  assert.equal(r.status, 1, r.stdout);
+  const o = json(r);
+  assert.equal(o.verdict, "regressions");
+  assert.deepEqual(o.regressions, ["test"]);
+  assert.deepEqual(o.pre_existing, []);
+  assert.deepEqual(o.per_test.new_failures, [{ id: "t/b.test.mjs::b1", base: "passed" }]);
+  assert.equal(o.per_test.still_failing, 1);
+  assert.equal(o.per_test.gate, "test");
+  assert.deepEqual(o.per_test.ignored, { base: 0, head: 0 });
+  assert.ok(o.gate_run, "the provenance block stays");
+});
+
+test("stamp per-test (AC 1): the same failing set on both sides stays pre_existing, exit 0, the block reported", () => {
+  const r = stampPT({ baseDoc: doc([A_RED, PT_B_OK]), headDoc: doc([A_RED, PT_B_OK]) });
+  assert.equal(r.status, 0, r.stdout);
+  const o = json(r);
+  assert.equal(o.verdict, "no-regressions");
+  assert.deepEqual(o.pre_existing, ["test"]);
+  assert.deepEqual(o.per_test.new_failures, []);
+  assert.deepEqual(o.per_test.head, { passed: 1, failed: 1, skipped: 0, suite_errors: 0 });
+});
+
+test("stamp per-test (AC 1): a head failure ABSENT or SKIPPED at base is new; more head suite errors are a regression", () => {
+  let o = json(stampPT({ baseDoc: doc([A_RED]), headDoc: doc([A_RED, PT_B_RED]) }));
+  assert.deepEqual(o.per_test.new_failures, [{ id: "t/b.test.mjs::b1", base: "absent" }]);
+  assert.deepEqual(o.regressions, ["test"]);
+  o = json(stampPT({ baseDoc: doc([A_RED, ["t/b.test.mjs", "b1", "skipped"]]), headDoc: doc([A_RED, PT_B_RED]) }));
+  assert.deepEqual(o.per_test.new_failures, [{ id: "t/b.test.mjs::b1", base: "skipped" }]);
+  o = json(stampPT({ baseDoc: doc([A_RED], 0), headDoc: doc([A_RED], 1) }));
+  assert.deepEqual(o.regressions, ["test"], "suite errors added");
+  o = json(stampPT({ baseDoc: doc([A_RED], 1), headDoc: doc([A_RED], 1) }));
+  assert.deepEqual(o.pre_existing, ["test"], "the same suite-error count is not");
+});
+
+test("stamp per-test (AC 1): base green / head red is a regression WITHOUT reading any record (none exists here)", () => {
+  const r = stampPT({ base: { test: 0 }, head: { test: 1 }, baseDoc: null, headDoc: null });
+  assert.equal(r.status, 1, r.stdout);
+  const o = json(r);
+  assert.deepEqual(o.regressions, ["test"]);
+  assert.equal(Object.hasOwn(o, "per_test"), false, "no per-test step outside the both-red row");
+});
+
+test("★ stamp per-test (AC 2): a test in a file the gate was NOT given is ignored by file membership, never by name", () => {
+  // The inside file holds a test whose TITLE equals a compared test's (`b1`): a name match would make it count.
+  const inside = ["src/feature.test.mjs", "b1", "failed"];
+  const r = stampPT({ baseDoc: doc([A_RED, PT_B_OK]), headDoc: doc([A_RED, PT_B_OK, inside]) });
+  assert.equal(r.status, 0, r.stdout);
+  const o = json(r);
+  assert.deepEqual(o.pre_existing, ["test"]);
+  assert.deepEqual(o.per_test.new_failures, []);
+  assert.deepEqual(o.per_test.ignored, { base: 0, head: 1 });
+  assert.deepEqual(o.per_test.head, { passed: 1, failed: 1, skipped: 0, suite_errors: 0 }, "counts range over the compared files");
+  // CONTROL: the same failure in a compared file IS new — so the membership, not the status, decided above.
+  const c = json(stampPT({ baseDoc: doc([A_RED, PT_B_OK]), headDoc: doc([A_RED, PT_B_RED]) }));
+  assert.deepEqual(c.regressions, ["test"]);
+});
+
+test("★ stamp per-test (AC 3): without testResults.test the output is byte-identical to the plain table, records ignored", () => {
+  const docs = { baseDoc: doc([A_RED, PT_B_OK]), headDoc: doc([A_RED, PT_B_RED]) };
+  const none = stampPT({ ...docs, config: null });
+  const noKey = stampPT({ ...docs, config: JSON.stringify({ gates: { exclude: [] } }) });
+  const e2eOnly = stampPT({ ...docs, config: JSON.stringify({ testResults: { e2e: "pharn-json" } }) });
+  assert.equal(none.status, 0, none.stdout);
+  const o = json(none);
+  assert.deepEqual(o.pre_existing, ["test"]);
+  assert.equal(Object.hasOwn(o, "per_test"), false);
+  assert.equal(noKey.stdout, none.stdout, "a config with no testResults key: byte-identical");
+  assert.equal(e2eOnly.stdout, none.stdout, "a testResults that does not name test: byte-identical");
+  // And the plain table is the one the positional maps give (gate_run aside) — today's report.
+  const dir = mkdtempSync(join(tmpdir(), "cr-pt-plain-"));
+  try {
+    writeFileSync(join(dir, "b.json"), JSON.stringify({ test: 1 }));
+    writeFileSync(join(dir, "h.json"), JSON.stringify({ test: 1 }));
+    const plain = json(run(["verdict", join(dir, "b.json"), join(dir, "h.json"), "--base", SHA]));
+    delete o.gate_run;
+    assert.deepEqual(o, plain);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("★ stamp per-test (AC 5): a missing, unbound or changed results file is a REFUSAL, never pre_existing", () => {
+  const good = { baseDoc: doc([A_RED, PT_B_OK]), headDoc: doc([A_RED, PT_B_OK]) };
+  const cases = [
+    ["no base results file", { ...good, baseDoc: null }],
+    ["no head results file", { ...good, headDoc: null }],
+    [
+      "the base file deleted after the runner hashed it",
+      { ...good, before: (dir) => rmSync(join(dir, "base", resultsFileName(0, "test"))) },
+    ],
+    [
+      "the head file changed after the runner hashed it",
+      { ...good, before: (dir) => writeFileSync(join(dir, "head", resultsFileName(0, "test")), JSON.stringify(doc([A_RED]))) },
+    ],
+    ["the head run timed out over a measured-red base", { ...good, overHead: (s) => (s.runs[0].timed_out = true) }],
+    ["an unreadable config", { ...good, config: "{not json" }],
+    ["an invalid testResults block", { ...good, config: JSON.stringify({ testResults: { test: "junit" } }) }],
+    ["a malformed results document", { ...good, headDoc: "{oops" }],
+    ["an anomaly in a compared file", { ...good, headDoc: doc([A_RED, PT_B_OK, PT_B_RED]) }],
+  ];
+  for (const [name, c] of cases) {
+    const r = stampPT(c);
+    assert.equal(r.status, 2, `${name}: ${r.stdout}`);
+    const o = json(r);
+    assert.equal(o.verdict, "inconclusive", name);
+    assert.equal(o.reason_code, "per-test-record-refused", name);
+    assert.deepEqual(o.pre_existing, ["test"], `${name}: the table is reported, never read`);
+    assert.doesNotMatch(o.reason, /cr-stamp-pt-/, `${name}: the reason names no scratch path (REGRESSION.md is committed)`);
+  }
+});
+
+test("stamp per-test (L34): a red side whose record holds no failure and no suite error is per-test-unaccounted-red", () => {
+  const r = stampPT({ baseDoc: doc([A_OK, PT_B_OK]), headDoc: doc([A_RED]) });
+  assert.equal(r.status, 2, r.stdout);
+  assert.equal(json(r).reason_code, "per-test-unaccounted-red");
+  // A red owned only by tests OUTSIDE the compared files would compare zero failed tests — refused too (review F2), never
+  // a free `pre_existing`. That covers a reporter whose paths never match the gate's files.
+  const inside = ["src/feature.test.mjs", "f1", "failed"];
+  const unmatched = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([inside, A_OK]) });
+  assert.equal(unmatched.status, 2, unmatched.stdout);
+  assert.equal(json(unmatched).reason_code, "per-test-unaccounted-red");
+  assert.match(json(unmatched).reason, /on the head side/);
+  // CONTROL: one failed test in a compared file accounts for the red (and here it failed at base too).
+  const ok = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([inside, A_RED]) });
+  assert.equal(ok.status, 0, ok.stdout);
+  assert.deepEqual(json(ok).pre_existing, ["test"]);
+});
+
+test("stamp per-test: a record the builder refuses (an id over the cap) is per-test-record-refused", () => {
+  const longTitle = ["t/b.test.mjs", "x".repeat(4100), "failed"];
+  const r = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([A_RED, longTitle]) });
+  assert.equal(r.status, 2, r.stdout);
+  const o = json(r);
+  assert.equal(o.reason_code, "per-test-record-refused");
+  assert.match(o.reason, /the head record of "test" is refused \(over-cap\)/);
+});
+
+test("stamp per-test: an anomaly OUTSIDE the compared files is ignored, not a refusal", () => {
+  const dup = ["src/feature.test.mjs", "x", "failed"];
+  const r = stampPT({ baseDoc: doc([A_RED, dup, dup]), headDoc: doc([A_RED, dup, dup]) });
+  assert.equal(r.status, 0, r.stdout);
+  assert.deepEqual(json(r).pre_existing, ["test"]);
+});
+
+test("★ stamp per-test: a BASE checkout's absolute report paths map back to repo-relative ids (base-worktree.mjs)", () => {
+  let baseRootFor = null;
+  const r = stampPT({
+    baseDoc: null,
+    headDoc: doc([A_RED, PT_B_OK]),
+    before: (dir) => {
+      // The base checkout name this project's base-worktree.mjs would make (the 6 chars are arbitrary, the shape is not).
+      baseRootFor = join(tempRoot(), `${namePrefix(realpathSync(dir))}Ab3dE9`);
+      const bytes = JSON.stringify({
+        schema: "pharn-test-results/1",
+        suite_errors: 0,
+        tests: [
+          { file: join(baseRootFor, "t/a.test.mjs"), path: ["a1"], status: "failed" },
+          { file: join(baseRootFor, "t/b.test.mjs"), path: ["b1"], status: "passed" },
+        ],
+      });
+      writeFileSync(join(dir, "base", resultsFileName(0, "test")), bytes);
+      const sp = join(dir, "base", "stamp.json");
+      const s = JSON.parse(readFileSync(sp, "utf8"));
+      s.runs[0].results_sha256 = sha256Hex(bytes);
+      writeFileSync(sp, JSON.stringify(s, null, 2));
+    },
+  });
+  assert.ok(baseRootFor, "the fixture ran");
+  assert.equal(r.status, 0, r.stdout);
+  const o = json(r);
+  assert.deepEqual(o.per_test.new_failures, [], "a1 failed at base too, b1 passed on both — once the ids agree");
+  assert.equal(o.per_test.still_failing, 1);
+  assert.deepEqual(o.per_test.ignored, { base: 0, head: 0 });
+});
+
+test("stamp per-test: the timed-out rules still decide first — a timed-out base under a red head keeps base-timed-out", () => {
+  const r = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([A_RED, PT_B_RED]), overBase: (s) => (s.runs[0].timed_out = true) });
+  assert.equal(r.status, 2, r.stdout);
+  assert.equal(json(r).reason_code, "base-timed-out");
+});
+
+test("★ L60 NEGATIVE CONTROL — without the stamp-path reclassification the masked case reads no-regressions again", () => {
+  const dir = mkdtempSync(join(tmpdir(), "regress-spt-mut-"));
+  try {
+    const seen = new Set();
+    const queue = ["check-regress.mjs"];
+    while (queue.length) {
+      const m = queue.shift();
+      if (seen.has(m)) continue;
+      seen.add(m);
+      for (const [, from, bare] of readFileSync(join(here, m), "utf8").matchAll(
+        /from "\.\/([a-z0-9-]+\.mjs)"|import "\.\/([a-z0-9-]+\.mjs)"/g
+      ))
+        queue.push(from ?? bare);
+    }
+    for (const m of seen) writeFileSync(join(dir, m), readFileSync(join(here, m)));
+    const src = readFileSync(join(here, "check-regress.mjs"), "utf8");
+    const anchor = "regressions.push(STAMP_PER_TEST_GATE);";
+    const splice = "preExisting.splice(preExisting.indexOf(STAMP_PER_TEST_GATE), 1);";
+    assert.ok(src.includes(anchor) && src.includes(splice), "mutation anchors not found");
+    writeFileSync(join(dir, "check-regress.mjs"), src.replace(splice, "").replace(anchor, ""));
+    const fx = mkdtempSync(join(tmpdir(), "cr-stamp-pt-mut-"));
+    try {
+      writeFileSync(join(fx, "pharn.config.json"), PT_CONFIG);
+      const bp = writeSide(fx, "base", { test: 1 }, JSON.stringify(doc([A_RED, PT_B_OK])));
+      const hp = writeSide(fx, "head", { test: 1 }, JSON.stringify(doc([A_RED, PT_B_RED])));
+      const argv = ["verdict", "--base-stamp", bp, "--head-stamp", hp, "--base", SHA];
+      const mutant = spawnSync(process.execPath, [join(dir, "check-regress.mjs"), ...argv], { cwd: fx, encoding: "utf8" });
+      assert.equal(JSON.parse(mutant.stdout).verdict, "no-regressions", "the mutant masks the new failure");
+      const real = spawnSync(process.execPath, [CR, ...argv], { cwd: fx, encoding: "utf8" });
+      assert.equal(JSON.parse(real.stdout).verdict, "regressions", "the real checker does not");
+    } finally {
+      rmSync(fx, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("comparePerTest: with no domain the result is the positional shape (no `ignored`); with one, only its files count", async () => {
+  const { comparePerTest } = await import("./check-regress.mjs");
+  const rec = (tests) => ({
+    tests: tests.map(([file, title, status]) => ({ id: `${file}::${title}`, file, title, status })),
+    counts: { passed: 0, failed: 0, skipped: 0 },
+    suite_errors: 0,
+  });
+  const b = rec([A_RED, PT_B_OK]);
+  const h = rec([A_RED, PT_B_RED, ["x/in.test.mjs", "z", "failed"]]);
+  const plain = comparePerTest(b, h);
+  assert.equal(Object.hasOwn(plain, "ignored"), false);
+  assert.equal(plain.new_failures.length, 2);
+  const scoped = comparePerTest(b, h, new Set(DOMAIN));
+  assert.deepEqual(scoped.new_failures, [{ id: "t/b.test.mjs::b1", base: "passed" }]);
+  assert.deepEqual(scoped.ignored, { base: 0, head: 1 });
+  assert.deepEqual(scoped.head, { passed: 0, failed: 2, skipped: 0, suite_errors: 0 });
+  assert.deepEqual(comparePerTest(b, h, new Set()).new_failures, [], "an empty domain compares nothing");
+});

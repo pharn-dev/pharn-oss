@@ -69,6 +69,12 @@
 // runs exactly as before. No retained record is published over entry-derived evidence. The report's `base_evidence`
 // gains `source` (fresh | reused | entry) and `entry`.
 //
+// ==================================== PER-TEST RESULTS (7.17.0) ====================================
+// With `pharn.config.json` `testResults.test` declared, `check-regress.mjs verdict` compares `test` test by test when it
+// is red on both sides (regress-per-test-product). This script passes nothing new: each side's results file is already
+// beside its stamp — run-gates.mjs writes it to `<out>` (PHARN_TEST_RESULTS) and records its `results_sha256` — and an
+// entry-derived BASE stamp carries the entry `base:test` run's file, copied and verified (entry-base-evidence.mjs).
+//
 // ==================================== THE HEAD OFFER (6.34.0) ====================================
 // /pharn-verify may record a gate result from a completed HEAD execution of THIS delivery run instead of spawning the
 // gate again (gate-reuse-core.mjs). It does so only through the OFFER this stage keeps in the git dir

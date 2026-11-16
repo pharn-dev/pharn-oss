@@ -159,6 +159,8 @@ export const INSTRUCTION_GROWTH_ID = "instruction-growth";
  *  /pharn-regress's BASE side would run, built at entry by regress's own test-list rule (entry-gates.mjs). Reserved so no
  *  project gate can claim the name; never counted by the entry verdict (entry-gates-core.mjs `entryVerdict`). */
 export const ENTRY_BASE_TEST_ID = "base:test";
+/** The ONE regress slot an entry-derived BASE stamp may carry a results file on (7.17.0): the slot `base:test` maps to. */
+export const ENTRY_RESULTS_SLOT = "test";
 export const RESERVED_IDS = Object.freeze(["reconcile", "completeness", ...AC_RESERVED_IDS, INSTRUCTION_GROWTH_ID, ENTRY_BASE_TEST_ID]);
 
 /** The `structural:` prefix belongs to `--extra` entries alone. */
@@ -235,7 +237,15 @@ export const LAPSE_CODES = Object.freeze([
  *  remaining checks run as for any report) and `check-loop.mjs` reads the stop from the verdict, `STOP_TERMINAL` /
  *  `unmeasured`. Disjoint from LAPSE_CODES (a re-run would not change it). `base-timed-out` was routed to a freshness
  *  STOP until 6.59.0 (a `/pharn-loop` S11 "stale-evidence" record — a mislabel). */
-export const UNMEASURED_CODES = Object.freeze(["base-timed-out", "gate-not-measured", "head-timed-out"]);
+export const UNMEASURED_CODES = Object.freeze([
+  "base-timed-out",
+  "gate-not-measured",
+  "head-timed-out",
+  // 7.17.0 (regress-per-test-product): the per-test comparison could not be given — a record refused or a red it does not
+  // account for. Also a verdict over accepted stamps, never stale evidence; a re-run reproduces it.
+  "per-test-record-refused",
+  "per-test-unaccounted-red",
+]);
 
 /** Why a run in a stamp was NOT a measurement (6.59.0), a closed set: `timed-out` — the runner killed it at
  *  `--timeout-ms` (`timed_out: true`, whatever exit the kill left: 124, or a gate's own exit on the group signal, 0
@@ -334,8 +344,8 @@ export const MAX_REUSABLE_EXIT = 125;
  *      since the base, so it never runs this feature's own AC tests, and its ordered `files` differ from verify's
  *      whole-suite `npm run test` — the execution identity already MISSes it (gate-reuse-core.test.mjs, "files differ
  *      (a test subset)"). Copying its per-test results file into verify's `<out>` would hand the AC gate a record with
- *      none of the AC tests in it. Any reuse needs regress to run the whole suite and judge outside tests per test
- *      first — the follow-up `regress-per-test-product`;
+ *      none of the AC tests in it. Since 7.17.0 regress judges outside tests per test
+ *      (regress-per-test-product), but still over a subset run; reuse also needs regress to run the whole suite;
  *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
  *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
  *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);
@@ -932,10 +942,12 @@ function reusedRunDefect(stamp, r) {
 }
 
 /** The entry → regress/base row (6.49.0): the shape entry-base-evidence-core.mjs `derivedBaseStamp` writes. The regress
- *  invocation ran nothing in this slot (`ran: false`, nothing timed out or moved the tree, no results file, no execution
- *  identity of its own), the id is an ALLOWLIST gate (a `structural:` or reserved id is never entry evidence), the exit
- *  is a completed process exit, and the block names the entry source. Which entry run may stand in, and why, is that
- *  module's rule — this one holds the SHAPE. TOTAL (L62). */
+ *  invocation ran nothing in this slot (`ran: false`, nothing timed out or moved the tree, no execution identity of its
+ *  own), the id is an ALLOWLIST gate (a `structural:` or reserved id is never entry evidence), the exit is a completed
+ *  process exit, and the block names the entry source. `results_sha256` is `null` — except on the `test` slot (7.17.0,
+ *  regress-per-test-product), where it may be a sha256 digest: the entry `base:test` run's results file, CARRIED into the
+ *  derived stamp so /pharn-regress's per-test comparison can read it (copied and verified by entry-base-evidence.mjs).
+ *  Which entry run may stand in, and why, is that module's rule — this one holds the SHAPE. TOTAL (L62). */
 function entryReusedRunDefect(r) {
   if (r.reason !== REUSED_REASON || r.ran !== false) return `a reused entry is ran:false with reason ${JSON.stringify(REUSED_REASON)}`;
   if (!ALLOWLIST.includes(r.id)) return "an entry-derived BASE run is an allowlisted gate id";
@@ -954,7 +966,9 @@ function entryReusedRunDefect(r) {
   if (Object.hasOwn(r, "identity_sha256")) return "an entry-derived BASE run records no identity_sha256 (nothing ran here)";
   if (r.timed_out !== false || r.mutated !== false || r.fp_before !== r.fp_after)
     return "a reused entry neither times out nor moves the tree";
-  if (!Object.hasOwn(r, "results_sha256") || r.results_sha256 !== null) return "a reused entry records results_sha256: null";
+  if (!Object.hasOwn(r, "results_sha256")) return "a reused entry records results_sha256";
+  if (r.results_sha256 !== null && !(r.id === ENTRY_RESULTS_SLOT && isCleanToken(r.results_sha256, 64) && HEX64_RE.test(r.results_sha256)))
+    return `a reused entry records results_sha256: null, or a sha256 digest on the ${ENTRY_RESULTS_SLOT} slot only`;
   return null;
 }
 

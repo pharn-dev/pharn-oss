@@ -740,3 +740,77 @@ test("renderRefused: a failed cleanup passed with the refusal is reported; a cle
     assert.doesNotMatch(renderRefused({ feature: "demo", reasonCode: "x", detail: "x", cleanupResult }), /FAILED/, "CONTROL");
   }
 });
+
+// ── 7.17.0 (regress-per-test-product) — the per-test comparison's section ─────────────────────────────────────────────
+function perTestReport(newFailures, extra = {}) {
+  return baseReport({
+    verdict: newFailures.length ? "regressions" : "no-regressions",
+    regressions: newFailures.length ? ["test"] : [],
+    pre_existing: newFailures.length ? [] : ["test"],
+    outside_gates: { test: { base: 1, head: 1 } },
+    per_test: {
+      gate: "test",
+      base: { passed: 5, failed: 1, skipped: 0, suite_errors: 0 },
+      head: { passed: 4, failed: 2, skipped: 0, suite_errors: 0 },
+      new_failures: newFailures,
+      still_failing: 1,
+      ignored: { base: 0, head: 3 },
+      ...extra,
+    },
+  });
+}
+
+test("★ renderDone (7.17.0): the per-test section — counts, ignored-by-membership, and new-failure ids ONLY inside a fence", () => {
+  const hostile = "t/a.test.js::# HEADING\n- [x](https://evil.example) ```";
+  const md = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: perTestReport([{ id: hostile, base: "passed" }]),
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(md, /^## Per-test comparison$/m);
+  assert.match(md, /^base: passed 5, failed 1, skipped 0, suite errors 0$/m);
+  assert.match(md, /ignored by file membership .*: base 0, head 3$/m);
+  assert.match(md, /new failures at head \(1\)/);
+  // The id is JSON-escaped inside a fence: no line of the render starts with the injected heading.
+  assert.doesNotMatch(md, /^# HEADING/m);
+  const section = md.slice(md.indexOf("## Per-test comparison"));
+  const fence = section.match(/^(`{3,})text$/m);
+  assert.ok(fence, "the ids sit in a fenced block");
+  assert.match(section, /\\u0060\\u0060\\u0060/, "the backticks inside the id are escaped, so they cannot close the fence");
+  assert.match(section, /passed\tt\/a\.test\.js::# HEADING\\n- \[x\]/);
+  // The gate line says why a red-at-base gate is a regression, never "pre-existing".
+  assert.match(md, /REGRESSION \(red at base too; a test failed at head that did not fail at base/);
+  assert.doesNotMatch(md, ABS_PATH_RE);
+});
+
+test("renderDone (7.17.0): no new failures renders `(none …)`, and a report with no per_test renders no section", () => {
+  const md = renderDone({ feature: "demo", base: "a".repeat(40), report: perTestReport([]), scope: baseScope(), progress: baseProgress() });
+  assert.match(md, /new failures at head \(0\)/);
+  assert.match(md, /_\(none — the gate stays pre_existing/);
+  assert.match(md, /pre-existing \(already red at base\)/);
+  const plain = renderDone({ feature: "demo", base: "a".repeat(40), report: baseReport(), scope: baseScope(), progress: baseProgress() });
+  assert.doesNotMatch(plain, /Per-test comparison/);
+  // L62: a hostile block (wrong types everywhere) still renders, never throws.
+  const odd = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: perTestReport([null, { id: { toString: 1 }, base: 7 }], { base: null, head: "x", ignored: null }),
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.match(odd, /new failures at head \(2\)/);
+});
+
+test("renderDone (7.17.0): a suite-error-only per-test regression is named as such, never as a newly failed test alone", () => {
+  // The checker files `test` under regressions when head has more suite errors than base, with no new failed test.
+  const report = perTestReport([], { head: { passed: 4, failed: 1, skipped: 0, suite_errors: 2 } });
+  report.verdict = "regressions";
+  report.regressions = ["test"];
+  report.pre_existing = [];
+  const md = renderDone({ feature: "demo", base: "a".repeat(40), report, scope: baseScope(), progress: baseProgress() });
+  assert.match(md, /REGRESSION \(red at base too; .*or head has more suite errors than base/);
+  assert.match(md, /^head: passed 4, failed 1, skipped 0, suite errors 2$/m);
+  assert.match(md, /new failures at head \(0\)/);
+});

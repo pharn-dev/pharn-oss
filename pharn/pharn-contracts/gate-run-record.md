@@ -196,6 +196,16 @@ digests, and its logs are copied under the regress slot's own names, each verifi
 `check-regress.mjs` and `check-loop-fresh.mjs` read it unchanged. A historical `regress/base` stamp (no reused run)
 validates exactly as before.
 
+**The one exception to `results_sha256: null` (7.17.0, regress-per-test-product).** On the `test` slot alone
+(`ENTRY_RESULTS_SLOT` in `gate-run-core.mjs`), a reused run may record a sha256 digest: the entry `base:test` run's
+own `results_sha256`, its results file copied under the regress slot's name (`resultsFileName`) and verified before and
+after the write, exactly as the logs are (`entry-base-evidence-core.mjs` `resultsPlan`). It is carried only when the entry
+run recorded one; otherwise the slot records `null`, as before. `validateStamp` refuses a digest on any other reused run,
+and every `verify ← regress/head` reused run still records `null`. Why: `/pharn-regress`'s per-test comparison of `test`
+reads the BASE side's record (`regression-report.md`, "The `per_test` block on the product path"), and without the copy
+every both-red `test` over entry evidence would be `inconclusive`. The field stays optional and additive; `SCHEMA` is
+unchanged.
+
 ## Excluding a discovered gate (`gates.exclude`, `excluded`, 6.36.0)
 
 **Why (P7).** In a user's project the discovered `e2e` gate could not run on the user's machine, discovery offered no
@@ -381,9 +391,11 @@ a terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`)
   report or stamp carrying one of these is re-run, under `/pharn-loop`'s counted budget. Every other
   member but the `UNMEASURED_CODES` below is a stop: a stamp that exists and is **wrong** is evidence to stop on, never
   to paper over.
-- **`UNMEASURED_CODES`** (6.59.0) — `base-timed-out`, `gate-not-measured`, `head-timed-out`: an inconclusive VERDICT a
-  checker computed from stamps it accepted, because a run was not measured (killed at `--timeout-ms`, or, for
-  `gate-not-measured`, exit 126/127; `verify-report.md`, `regression-report.md`). Not a refusal and not stale evidence:
+- **`UNMEASURED_CODES`** (6.59.0) — `base-timed-out`, `gate-not-measured`, `head-timed-out`, and since 7.17.0
+  `per-test-record-refused`, `per-test-unaccounted-red`: an inconclusive VERDICT a checker computed from stamps it
+  accepted, because a run was not measured (killed at `--timeout-ms`, or, for `gate-not-measured`, exit 126/127;
+  `verify-report.md`, `regression-report.md`) or, for the two per-test codes, because the per-test comparison of `test`
+  could not be given (`regression-report.md`, "The `per_test` block on the product path"). Not a refusal and not stale evidence:
   check B lets a report carrying one through, the remaining checks run as for any report, and `check-loop.mjs` stops
   `STOP_TERMINAL` / `unmeasured`. A coded report that is also stale is still re-run at F/G, once, inside the budget —
   so a hang can cost one more stage timeout before the stop. Disjoint from `LAPSE_CODES`. Before 6.59.0

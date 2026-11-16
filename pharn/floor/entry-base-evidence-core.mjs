@@ -67,6 +67,8 @@ import {
   validateStamp,
   baseSpecFrom,
   logBasename,
+  resultsFileName,
+  ENTRY_RESULTS_SLOT,
   FEATURE_SLUG_RE,
   SHA_RE,
   SCHEMA as GATE_RUN_SCHEMA,
@@ -305,6 +307,29 @@ export function logPlan(detail) {
   return out;
 }
 
+/** The results-file copies a HIT needs (7.17.0, regress-per-test-product): `{from, to, sha256}` for the ONE reused slot a
+ *  derived stamp may carry a results file on (gate-run-core.mjs ENTRY_RESULTS_SLOT, `test` ← `base:test`), and only when
+ *  the entry run recorded a digest. Names are gate-run-core.mjs `resultsFileName`. Empty otherwise — a derived stamp then
+ *  records `results_sha256: null` on that slot, exactly as before. */
+export function resultsPlan(detail) {
+  const out = [];
+  for (const m of detail.mapping) {
+    if (!carriesResults(m)) continue;
+    out.push({ from: resultsFileName(m.source.seq, m.source.id), to: resultsFileName(m.seq, m.id), sha256: m.source.results_sha256 });
+  }
+  return out;
+}
+
+/** Does mapped slot `m` carry its entry run's results file? The ONE predicate resultsPlan and derivedBaseStamp share. */
+function carriesResults(m) {
+  return (
+    m.kind !== NO_FILES &&
+    m.id === ENTRY_RESULTS_SLOT &&
+    typeof m.source.results_sha256 === "string" &&
+    HEX64_RE.test(m.source.results_sha256)
+  );
+}
+
 /** The entry-derived `regress/base` stamp for a HIT's `detail`, `base` and the entry stamp's sha256. Every run is
  *  `ran: false`: this regress invocation spawned nothing. A reused run carries the entry run's exit and log digests and a
  *  `reused` block naming the entry stamp and its sequence; a `no-files` run is exactly what run-gates.mjs writes for
@@ -327,7 +352,8 @@ export function derivedBaseStamp({ feature, base, detail, entryStampSha256 }) {
       fp_after: init,
       stdout_sha256: m.kind === NO_FILES ? EMPTY_SHA256 : m.source.stdout_sha256,
       stderr_sha256: m.kind === NO_FILES ? EMPTY_SHA256 : m.source.stderr_sha256,
-      results_sha256: null,
+      // 7.17.0: the entry run's digest on the `test` slot, its file carried by resultsPlan; null everywhere else.
+      results_sha256: carriesResults(m) ? m.source.results_sha256 : null,
     };
     return m.kind === NO_FILES
       ? common

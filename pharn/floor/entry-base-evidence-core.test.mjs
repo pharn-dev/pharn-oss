@@ -13,6 +13,7 @@ import {
   validateOffer,
   mappedId,
   logPlan,
+  resultsPlan,
   entryEvidenceBlock,
   NO_FILES,
   EMPTY_SHA256,
@@ -518,4 +519,58 @@ test("TOTAL (L62): hostile parsed JSON in every input never throws", () => {
     const r = decide(m);
     assert.equal(typeof r.decision.reused, "boolean");
   }
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 7.17.0 (regress-per-test-product) — the entry `base:test` run's results file is CARRIED into the derived stamp, so the
+// stamp path's per-test comparison can read the BASE side over entry evidence.
+// ---------------------------------------------------------------------------------------------------
+
+test("★ derived stamp (7.17.0): the test slot carries the entry base:test run's results digest, and the plan copies its file", () => {
+  const RES = sha("results base:test");
+  const { r, stamp } = hit((w) => (w.entry.runs[1].results_sha256 = RES));
+  assert.deepEqual(validateStamp(stamp, { stage: "regress", side: "base", feature: FEATURE }), { ok: true });
+  const t = stamp.runs.find((x) => x.id === "test");
+  assert.equal(t.results_sha256, RES, "the digest is the entry run's, never re-computed");
+  assert.deepEqual(
+    stamp.runs.filter((x) => x.id !== "test").map((x) => x.results_sha256),
+    [null, null],
+    "every other slot still records null"
+  );
+  assert.deepEqual(resultsPlan(r.detail), [{ from: "1-base_test.test-results.json", to: "0-test.test-results.json", sha256: RES }]);
+});
+
+test("derived stamp (7.17.0): no entry digest, a no-files slot, or a digest on another slot carries nothing", () => {
+  // The entry run wrote no results file: null, and an empty plan — exactly the 6.49.0 stamp.
+  let { r, stamp } = hit();
+  assert.equal(stamp.runs.find((x) => x.id === "test").results_sha256, null);
+  assert.deepEqual(resultsPlan(r.detail), []);
+  // A no-files test slot takes no entry evidence at all.
+  ({ r, stamp } = hit((w) => {
+    w.head.runs[0].files = [];
+    w.entry.runs[1].results_sha256 = sha("x");
+  }));
+  assert.equal(stamp.runs[0].results_sha256, null);
+  assert.deepEqual(resultsPlan(r.detail), []);
+  // A digest on the entry typecheck run is never carried: only the test slot may hold one.
+  ({ r, stamp } = hit((w) => (w.entry.runs[3].results_sha256 = sha("y"))));
+  assert.equal(stamp.runs.find((x) => x.id === "typecheck").results_sha256, null);
+  assert.deepEqual(resultsPlan(r.detail), []);
+});
+
+test("derived stamp (7.17.0): validateStamp admits a digest on the test slot ONLY, and only a well-formed one (L60)", () => {
+  const RES = sha("results base:test");
+  const forged = [
+    ["a malformed digest on the test slot", (s) => (s.runs.find((x) => x.id === "test").results_sha256 = "x".repeat(64))],
+    ["an upper-case digest on the test slot", (s) => (s.runs.find((x) => x.id === "test").results_sha256 = RES.toUpperCase())],
+    ["a digest on the build slot", (s) => (s.runs.find((x) => x.id === "build").results_sha256 = RES)],
+    ["no results field on the test slot", (s) => delete s.runs.find((x) => x.id === "test").results_sha256],
+  ];
+  for (const [name, forge] of forged) {
+    const { stamp } = hit((w) => (w.entry.runs[1].results_sha256 = RES));
+    forge(stamp);
+    assert.equal(validateStamp(stamp).reason_code, "stamp-malformed", name);
+  }
+  const { stamp } = hit((w) => (w.entry.runs[1].results_sha256 = RES));
+  assert.equal(validateStamp(stamp).ok, true, "control: the carried digest validates");
 });

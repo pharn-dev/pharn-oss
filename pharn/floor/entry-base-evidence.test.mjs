@@ -825,3 +825,87 @@ test("★ HOOK — both real write guards deny the offer path in a main checkout
     drop(fx);
   }
 });
+
+// ── ★ 7.17.0 (regress-per-test-product) — the per-test comparison END TO END, over a fresh BASE worktree and over entry ──
+// A project reporter (report.mjs, the project's own code) writes `pharn-test-results/1` to PHARN_TEST_RESULTS, naming each
+// test file ABSOLUTELY under the directory it ran in — so the fresh BASE side's paths sit in the temp-root checkout, and
+// only base-worktree.mjs's mapping makes them comparable (L84: the branch taken on realistic input, with the real
+// tempRoot default, L41). `slow` fails on every side (the load-red test); `b1` fails only when src/index.js says BROKEN.
+const REPORT_JS =
+  "import { readFileSync, readdirSync, writeFileSync } from 'node:fs';\n" +
+  "import { join } from 'node:path';\n" +
+  "const files = process.argv.slice(2).length ? process.argv.slice(2) : readdirSync('src').filter((f) => f.endsWith('.test.js')).map((f) => `src/${f}`);\n" +
+  "const broken = readFileSync('src/index.js', 'utf8').includes('BROKEN');\n" +
+  "const tests = [];\n" +
+  "for (const f of files) for (const line of readFileSync(f, 'utf8').split('\\n')) {\n" +
+  "  const m = line.match(/^\\/\\/ (FAIL|CHECK) (\\w+)$/);\n" +
+  "  if (m) tests.push({ file: join(process.cwd(), f), path: [m[2]], status: m[1] === 'FAIL' || broken ? 'failed' : 'passed' });\n" +
+  "}\n" +
+  "if (process.env.PHARN_TEST_RESULTS) writeFileSync(process.env.PHARN_TEST_RESULTS, JSON.stringify({ schema: 'pharn-test-results/1', suite_errors: 0, tests }));\n" +
+  "process.exit(tests.some((t) => t.status === 'failed') ? 1 : 0);\n";
+
+function perTestFixture() {
+  return fixture({
+    scripts: { test: "node count.mjs test && node report.mjs" },
+    files: {
+      "report.mjs": REPORT_JS,
+      "pharn.config.json": JSON.stringify({ testResults: { test: "pharn-json" } }),
+      "src/a.test.js": "// FAIL slow\n// CHECK b1\n",
+    },
+  });
+}
+
+test("★ per-test (7.17.0) — a NEW outside failure under a red BASE is a regression over a fresh BASE worktree AND over entry evidence", () => {
+  const fx = perTestFixture();
+  try {
+    const e = enter(fx);
+    assert.equal(e.doc.status, "red", "`test` is red at entry: `slow` fails at BASE");
+    build(fx, { edits: { "src/index.js": "export function add(a, b) { return a + b; } // BROKEN\n" } });
+    const viaEntry = regress(fx);
+    assert.equal(viaEntry.code, 0, viaEntry.raw);
+    assert.equal(viaEntry.be.source, "entry", JSON.stringify(viaEntry.be));
+    const carried = JSON.parse(readFileSync(join(fx.dir, REGRESS_PATHS.baseGates, "stamp.json"), "utf8")).runs.find((r) => r.id === "test");
+    assert.match(String(carried.results_sha256), /^[0-9a-f]{64}$/, "the entry base:test results file was carried into the BASE stamp");
+    const copy = readFileSync(join(fx.dir, REGRESS_PATHS.baseGates, `${carried.seq}-test.test-results.json`));
+    assert.equal(sha256(copy), carried.results_sha256, "the copy beside the stamp is the bytes the digest names");
+    const fresh = withoutOffer(fx, () => regress(fx));
+    assert.equal(fresh.be.source, "fresh");
+    assert.equal(fresh.counts.worktree, 1, `L34: the control ran a BASE worktree: ${JSON.stringify(fresh.counts)}`);
+    for (const r of [viaEntry, fresh]) {
+      assert.equal(r.report.verdict, "regressions", `${r.be.source}: ${JSON.stringify(r.report)}`);
+      assert.deepEqual(r.report.regressions, ["test"], r.be.source);
+      assert.deepEqual(r.report.pre_existing, [], r.be.source);
+      // `base: "passed"`, not "absent": the BASE side's absolute paths were mapped to the same ids as HEAD's.
+      assert.deepEqual(r.report.per_test.new_failures, [{ id: "src/a.test.js::b1", base: "passed" }], r.be.source);
+      assert.equal(r.report.per_test.still_failing, 1, r.be.source);
+      const md = readFileSync(join(fx.dir, "pharn", "features", FEATURE, "REGRESSION.md"), "utf8");
+      assert.match(md, /## Per-test comparison/);
+      assert.doesNotMatch(md, new RegExp(tempRoot().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "REGRESSION.md names no temp-root path");
+    }
+  } finally {
+    drop(fx);
+  }
+});
+
+test("per-test (7.17.0) — the same failing set at BASE and HEAD stays pre_existing; without the opt-in the report has no per_test", () => {
+  const fx = perTestFixture();
+  try {
+    // src/index.js changes, but not to BROKEN: only `slow` fails, on both sides. The config is declared so the control
+    // below may edit it without a scope escape.
+    build(fx, { plan: ["src/index.js", "src/new.test.js", "pharn.config.json"] });
+    const r = regress(fx);
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(r.report.verdict, "no-regressions", JSON.stringify(r.report));
+    assert.deepEqual(r.report.pre_existing, ["test"]);
+    assert.deepEqual(r.report.per_test.new_failures, []);
+    assert.equal(r.report.per_test.still_failing, 1);
+    // The opt-in removed (the working tree's config, which the checker reads): today's report, no block.
+    writeFileSync(join(fx.dir, "pharn.config.json"), "{}\n");
+    const off = regress(fx);
+    assert.equal(off.code, 0, off.raw);
+    assert.equal(Object.hasOwn(off.report, "per_test"), false);
+    assert.deepEqual(off.report.pre_existing, ["test"]);
+  } finally {
+    drop(fx);
+  }
+});
