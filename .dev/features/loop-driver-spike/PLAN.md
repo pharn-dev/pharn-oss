@@ -175,6 +175,7 @@ never edited; and **go or no-go** with the comparison run's measured orchestrato
 - `.dev/features/loop-driver-spike/driver/loop-driver.test.mjs` — AC2 closure, interpreter walks, LOOP.md shape, measure — dev apparatus
 - `.dev/features/loop-driver-spike/kit/README.md` — the commands the maintainer runs — dev apparatus
 - `.dev/features/loop-driver-spike/kit/setup.sh` — the measure base in a scratch clone — dev apparatus
+- `.dev/features/loop-driver-spike/kit/preflight.sh` — one timed run of the project gates on the measure base, before any model run — dev apparatus
 - `.dev/features/loop-driver-spike/kit/run-driver.sh` — one driven run in its own directory — dev apparatus
 - `.dev/features/loop-driver-spike/kit/run-loop.sh` — one `/pharn-loop --quick` run in its own directory — dev apparatus
 - `.dev/features/loop-driver-spike/kit/intent.md` — the shared increment description — dev apparatus
@@ -238,24 +239,27 @@ apparatus's own check.
 - The terminal fallback of every table is a stop with a recorded row, never a guess; the go or no-go is the
   maintainer's to accept.
 
-## Open questions (HALT)
+## Decisions at GATE 1 (resolved — these were the open questions)
 
-1. **Benchmark feature.** Recommended: `lg3-remove-files` (the one §11 benchmark that ran quick; 3 criteria; base
-   `7e48564d`), with `gates.timeoutMs: 1800000` declared in the measure base so its ~9-minute `test` is measured.
-   Alternative: `actions-oidc-policy` (the green full run) narrowed to a quick intent — not recommended, because a
-   narrowed intent is no longer the benchmark.
-2. **Base.** Recommended: a scratch clone of `pharn-app` at the lg3 base plus one local commit (PHARN 7.19.0 via
-   `pharn update --yes`, `gates.timeoutMs`, `pharn-stage.md`), shared by both runs, each run cloning it afresh.
-   Alternative: run in a `git worktree` of `pharn-app` — not recommended, it writes `pharn-app`'s git metadata.
-3. **Probes.** Recommended: both probes inside the driven run between test and build, the question answered by a
-   word typed on the run command (`--answer`), probe sessions excluded from the comparison. Alternative: probes in a
-   separate driven mini-run after the loop — cleaner figures, but then the deny happens outside a loop stage's window.
-4. **`pharn-stage` in the measure base.** `pharn update` does not install `.claude/agents/` yet
-   (pharn-cli `cli-install-agents`). Recommended: copy this repo's 7.19.0 `pharn-stage.md` into the measure base so the
-   comparison reflects Epic 2 as shipped here, and the driven sessions run `--agent pharn-stage`; the record states it.
-   Alternative: leave it out (as a real install is today) — the loop then falls back to `general-purpose` and the
-   driver to a plain session.
-5. **Permission mode.** Recommended: `--permission-mode auto` for every driven session and for the comparison run (the
-   mode every earlier headless loop used), no skip flags, no `--allowedTools`. Alternative: `acceptEdits` plus an
-   allow list — not recommended, it changes the grant surface the comparison runs under.
-6. **Cap.** Recommended: `--cap 3` / `--max-iter` default 3 for both runs.
+Decided 2026-11-16 by the orchestrating agent under the user's delegation — an agent decision, not a human approval:
+
+1. Benchmark: `lg3-remove-files`, with `gates.timeoutMs: 1800000` in the measure base.
+2. Base: a scratch no-hardlinks clone of `pharn-app` at `7e48564d` plus one local measure-base commit
+   (`npx --yes @pharn-dev/pharn@latest update --yes` to 7.19.0, `gates.timeoutMs`, `pharn-stage.md`), under a stable
+   scratch directory outside both repositories (`/private/tmp/claude-501/core-113/`). The base clone's `origin` remote
+   is removed so no run can push. No `pharn-app` worktree.
+3. Probes: both inside the driven run between test and build 1, excluded from the comparison; the record states the
+   bound "the answer is typed in advance, so it measures the resume transport only".
+4. `pharn-stage.md` is copied into the measure base so the comparison reflects Epic 2 as shipped; the record states that
+   a real install today lacks it (pharn-cli `cli-install-agents`).
+5. `--permission-mode auto` everywhere; no skip flags, no `--allowedTools`.
+6. Cap 3 for both runs.
+7. Grill concerns 1–6 are handled in the build as GRILL.md proposes: a driver crash still writes a blocked record and
+   closes the marker; `finish` runs without `--budget-ms`; the driver's own unhooked writes go in the record's
+   contradiction list; `--accept-host-execution` comes only from the driver's argv; the record names the baseline
+   group the share is set beside; the conditional scan strips comments, strings and regex literals first.
+8. The runs go sequentially — the driven run first, then the comparison — never in parallel; the README says so.
+9. The timed gates run on the measure base is its own step (`kit/preflight.sh`, added to `## Files`), run first and
+   printing its exit and minutes, so the maintainer can stop before the model runs if `test` is red there.
+10. The test must run in CI: `npm test`'s first glob, `**/*.test.mjs`, reaches
+    `.dev/features/loop-driver-spike/driver/loop-driver.test.mjs`; the build confirms it with a listed run.
