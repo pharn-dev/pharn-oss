@@ -620,7 +620,9 @@ function waitGroupGone(pgid, ms) {
   return true;
 }
 
-function reapOrphanGroup(outAbs) {
+/** Stop the group `<out>/lock.child` names and remove the record. Emits nothing: `{ok: true}`, or `{ok: false, pgid}` when
+ *  the group is still alive after SIGKILL (the record is then kept). Every caller decides how to refuse. */
+function reapGroup(outAbs) {
   const r = readJson(childPath(outAbs));
   const pgid = r.ok && r.value !== null && typeof r.value === "object" ? r.value.pgid : null;
   if (Number.isInteger(pgid) && pgid > 1 && groupAlive(pgid)) {
@@ -632,11 +634,45 @@ function reapOrphanGroup(outAbs) {
       }
       if (waitGroupGone(pgid, KILL_GRACE_MS)) break;
     }
-    if (groupAlive(pgid)) {
-      fail("lock-busy", `the gate process group ${pgid} a crashed run left behind is still alive after SIGKILL; refusing to overlap it`);
-    }
+    if (groupAlive(pgid)) return { ok: false, pgid };
   }
   removeChildRecord(outAbs);
+  return { ok: true };
+}
+
+/** The refusal text for a group that would not die — one wording for run-gates' own `lock-busy` and the stage scripts'. */
+function survivorReason(pgid) {
+  return `the gate process group ${pgid} a crashed run left behind is still alive after SIGKILL; refusing to overlap it`;
+}
+
+function reapOrphanGroup(outAbs) {
+  const r = reapGroup(outAbs);
+  if (!r.ok) fail("lock-busy", survivorReason(r.pgid));
+}
+
+/** ------------------------------------------------------------------------------------------------
+ *  THE LEFTOVER GATE OF A KILLED RUN, before anything deletes `<out>` (PR #443 review; 7.15.1). Under an ABSENT,
+ *  unreadable or STALE `<out>/lock` — the stale-lock recovery's own rule — stop the group `<out>/lock.child` names; under a
+ *  LIVE lock nothing is signalled (`{ok: true}`). Returns reapGroup's result and emits nothing, so a caller that owns its
+ *  stdout can refuse in its own vocabulary: `init` below refuses `lock-busy`, and the stage scripts — which delete their
+ *  gate directories BEFORE they call `init`, so `init` would find no record — call it themselves first and refuse
+ *  `child-refused` (stage-verify.mjs `removeEarlierOutput`, stage-regress.mjs `phaseFreshLate`). The bounds are the
+ *  group's, above. `outDir` may be relative to the working directory, as the stage scripts' paths are.
+ *  ONLY A REAL DIRECTORY is read (lstat, L54): a link at `outDir` — or a file, or nothing — is never read through, so a
+ *  planted link cannot hand this a record to act on, and the caller's own removal deletes the link as before (the
+ *  regress suite's retained-`base-gates/`-became-a-symlink case). Its parents are the caller's containment walk.
+ *  ---------------------------------------------------------------------------------------------- */
+function reapLeftoverGate(outDir) {
+  let st;
+  try {
+    st = lstatSync(outDir);
+  } catch {
+    return { ok: true }; // absent (or unreadable): no record to read here
+  }
+  if (!st.isDirectory()) return { ok: true };
+  const held = readJson(lockPath(outDir));
+  if (held.ok && !isStaleLock(held.value, Date.now())) return { ok: true };
+  return reapGroup(outDir);
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -882,12 +918,13 @@ function runInit(args) {
 }
 
 function startRecord(spec, outAbs, cwd, args, opts = {}) {
-  // A gate a crashed run left running (its group in `lock.child`) is stopped BEFORE the wipe deletes that record:
-  // otherwise a fresh re-run — /pharn-loop's takeover after a runner killed during its first gate — starts a gate beside
-  // it, with nothing left to see the survivor (PR #443 review). Refuses `lock-busy` when it will not die. Only under an
-  // absent or STALE lock, as the stale-lock recovery does: a LIVE run's gate is never signalled.
-  const held = readJson(lockPath(outAbs));
-  if (!held.ok || isStaleLock(held.value, Date.now())) reapOrphanGroup(outAbs);
+  // A gate a crashed run left running (its group in `lock.child`) is stopped BEFORE the wipe deletes that record, or a
+  // re-run `init` over the same <out> starts a gate beside it with nothing left to see the survivor (PR #443 review).
+  // Refuses `lock-busy` when it will not die; only under an absent or STALE lock (reapLeftoverGate). This covers a caller
+  // that runs `init` over an existing <out>. It does NOT cover /pharn-loop's takeover after a runner killed during its
+  // first gate: the stage scripts delete their gate directory before `init`, so they reap first themselves (7.15.1).
+  const left = reapLeftoverGate(outAbs);
+  if (!left.ok) fail("lock-busy", survivorReason(left.pgid));
   // Recreate <out>: `init`'s wipe is what guarantees no STALE injected entry, log or stamp survives from
   // an earlier run of this stage. Containment was asserted before this point.
   rmSync(outAbs, { recursive: true, force: true });
@@ -1420,4 +1457,15 @@ if (import.meta.main) {
   });
 }
 
-export { assertContained, isStaleLock, signalExit, killDelayMs, readScopeJson, spawnGate, sha256RegularFile, CI_GATE_IDS };
+export {
+  assertContained,
+  isStaleLock,
+  signalExit,
+  killDelayMs,
+  readScopeJson,
+  spawnGate,
+  sha256RegularFile,
+  CI_GATE_IDS,
+  reapLeftoverGate,
+  survivorReason,
+};

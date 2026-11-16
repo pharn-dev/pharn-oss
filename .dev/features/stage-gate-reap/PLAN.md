@@ -11,7 +11,8 @@
 - layer(s): product floor `pharn/floor/` (`run-gates.mjs`, `stage-verify.mjs`, `stage-regress.mjs`, `stage-direct.mjs`
   header, tests), build apparatus (`.dev/guides/floor-gates.md`, this feature folder), repo meta.
 - constitution_refs: [P0, P3, P5, P6, P7]
-- revision: v1, approved at GATE 1 by the human on 2026-11-13 ("Approve, script route").
+- revision: v1, approved at GATE 1 by the human on 2026-11-13 ("Approve, script route"). After a relayed answer
+  briefly moved the build to a main-checkout session, the human confirmed on 2026-11-16 ("Yes, build here").
 - write route: this desktop worktree session's write hooks judge the main checkout, so every Write/Edit here is
   denied. The human chose the "script route" at GATE 1: every in-repo write goes through a scratchpad helper that
   first runs BOTH real hooks of this worktree (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`, cwd and

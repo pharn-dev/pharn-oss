@@ -2405,7 +2405,7 @@ test("TAKEOVER (in-process) — fresh after a kill before the first checkpoint; 
   }
 });
 
-test("TAKEOVER (in-process) — a setter that fails prints today's refusal (exit 2, no object, no marker); a state.json or result.json it cannot write, or a runner.log it cannot append, is a note — never a changed exit", () => {
+test("TAKEOVER (in-process) — a setter that fails prints today's refusal (exit 2, no object, no marker); a state.json or result.json it cannot write is a note — never a changed exit", () => {
   const a = project({ commands: false });
   try {
     plantRun(a, { state: stateOf({ pid: deadPid(), runnerPid: null }) });
@@ -2445,19 +2445,28 @@ test("TAKEOVER (in-process) — a setter that fails prints today's refusal (exit
   } finally {
     rmSync(d, { recursive: true, force: true });
   }
-  const c = project();
-  try {
-    plantRun(c, { state: exited(deadPid()), markers: [startMarkerRec] });
-    writeFileSync(join(c, RUNNER_LOG), "");
-    chmodSync(join(c, RUNNER_LOG), 0o444);
-    const r = direct(c, resume("pharn-regress"));
-    assert.equal(r.exit, 3, `${r.tail}${r.errText}`);
-    assert.match(r.tail, /took over pharn-regress for demo \(finish\)/, "the record's tail still holds the note");
-    assert.equal(readFileSync(join(c, RUNNER_LOG), "utf8"), "", "nothing reached the log");
-  } finally {
-    rmSync(c, { recursive: true, force: true });
-  }
 });
+
+// The EACCES cases below rely on a permission bit root ignores, so each is its own test, skipped as root (the
+// apply-plan-deletions.test.mjs pattern; PR #443 review).
+test(
+  "TAKEOVER (in-process) — a runner.log it cannot append (EACCES) is a note — never a changed exit",
+  { skip: process.getuid?.() === 0 },
+  () => {
+    const c = project();
+    try {
+      plantRun(c, { state: exited(deadPid()), markers: [startMarkerRec] });
+      writeFileSync(join(c, RUNNER_LOG), "");
+      chmodSync(join(c, RUNNER_LOG), 0o444);
+      const r = direct(c, resume("pharn-regress"));
+      assert.equal(r.exit, 3, `${r.tail}${r.errText}`);
+      assert.match(r.tail, /took over pharn-regress for demo \(finish\)/, "the record's tail still holds the note");
+      assert.equal(readFileSync(join(c, RUNNER_LOG), "utf8"), "", "nothing reached the log");
+    } finally {
+      rmSync(c, { recursive: true, force: true });
+    }
+  }
+);
 
 // ── the wait and the start, in-process ────────────────────────────────────────────────────────────────
 
@@ -2607,7 +2616,7 @@ test("RESUME (in-process) — no runner.json is `no-run`; another stage's run `m
   }
 });
 
-test("the call (in-process) — a record that is a link, or one it cannot even lstat, refuses `record-unusable` before anything is taken or written", () => {
+test("the call (in-process) — a record that is a link refuses `record-unusable` before anything is taken or written", () => {
   const root = project();
   const elsewhere = mkdtempSync(join(tmpdir(), "stage-direct-elsewhere-"));
   try {
@@ -2619,21 +2628,34 @@ test("the call (in-process) — a record that is a link, or one it cannot even l
       assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/state\.json is not a regular file/);
     }
     assert.deepEqual(readdirSync(elsewhere), []);
-    rmSync(join(root, STATE_FILE));
-    chmodSync(join(root, LOCK_DIR), 0o600); // no search permission: every record's lstat is EACCES
-    try {
-      const r = direct(root, fresh("pharn-regress"));
-      assert.deepEqual([r.exit, r.out], [2, ""]);
-      assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/[\w.-]+: EACCES; nothing was run$/);
-    } finally {
-      chmodSync(join(root, LOCK_DIR), 0o755);
-    }
     assert.equal(existsSync(lockPath(root)), false, "no lock was taken");
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(elsewhere, { recursive: true, force: true });
   }
 });
+
+test(
+  "the call (in-process) — a record it cannot even lstat (EACCES) refuses `record-unusable` before anything is taken",
+  { skip: process.getuid?.() === 0 },
+  () => {
+    const root = project();
+    try {
+      plantRun(root, {});
+      chmodSync(join(root, LOCK_DIR), 0o600); // no search permission: every record's lstat is EACCES
+      try {
+        const r = direct(root, fresh("pharn-regress"));
+        assert.deepEqual([r.exit, r.out], [2, ""]);
+        assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/[\w.-]+: EACCES; nothing was run$/);
+      } finally {
+        chmodSync(join(root, LOCK_DIR), 0o755);
+      }
+      assert.equal(existsSync(lockPath(root)), false, "no lock was taken");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
 
 test("FRESH (in-process) — an earlier state.json that is unreadable refuses `record-unusable`, one whose writer lives `in-flight`; one whose result is written is over, whatever its pids read", () => {
   const s = sleeper();
@@ -2672,7 +2694,7 @@ test("FRESH (in-process) — an earlier state.json that is unreadable refuses `r
   }
 });
 
-test("FRESH (in-process) — a runner.json it cannot write refuses `record-unusable`, a runner.log it cannot open `spawn-failed`; each removes what it wrote and releases the lock — nothing runs", () => {
+test("FRESH (in-process) — a runner.json it cannot write refuses `record-unusable`; it removes what it wrote and releases the lock — nothing runs", () => {
   const root = project();
   try {
     mkdirSync(join(root, `${RUNNER_FILE}.tmp-${process.pid}`), { recursive: true });
@@ -2681,24 +2703,36 @@ test("FRESH (in-process) — a runner.json it cannot write refuses `record-unusa
     assert.match(r.errText, /^refused \(record-unusable\) — pharn\/\.run\/stage-direct\/runner\.json: \w+; nothing was run$/);
     assert.equal(existsSync(join(root, RUNNER_FILE)), false);
     assert.equal(existsSync(lockPath(root)), false, "the lock released");
-    rmSync(join(root, `${RUNNER_FILE}.tmp-${process.pid}`), { recursive: true });
-    writeFileSync(join(root, RUNNER_LOG), "");
-    chmodSync(join(root, RUNNER_LOG), 0o444);
-    const s = direct(root, fresh("pharn-verify"));
-    assert.deepEqual([s.exit, s.out], [2, ""]);
-    assert.match(s.errText, /^refused \(spawn-failed\) — the runner could not be started \(EACCES\); nothing was run$/);
-    assert.equal(existsSync(join(root, RUNNER_FILE)), false, "runner.json removed: no resume line takes the refused start over");
-    assert.equal(existsSync(lockPath(root)), false, "the lock released");
-    assert.match(direct(root, resume("pharn-verify")).errText, /^refused \(no-run\) — /);
-    assert.deepEqual(markersIn(root), [], "nothing ran");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
+test(
+  "FRESH (in-process) — a runner.log it cannot open (EACCES) refuses `spawn-failed`; it removes runner.json and releases the lock — nothing runs",
+  { skip: process.getuid?.() === 0 },
+  () => {
+    const root = project();
+    try {
+      mkdirSync(join(root, LOCK_DIR), { recursive: true });
+      writeFileSync(join(root, RUNNER_LOG), "");
+      chmodSync(join(root, RUNNER_LOG), 0o444);
+      const s = direct(root, fresh("pharn-verify"));
+      assert.deepEqual([s.exit, s.out], [2, ""]);
+      assert.match(s.errText, /^refused \(spawn-failed\) — the runner could not be started \(EACCES\); nothing was run$/);
+      assert.equal(existsSync(join(root, RUNNER_FILE)), false, "runner.json removed: no resume line takes the refused start over");
+      assert.equal(existsSync(lockPath(root)), false, "the lock released");
+      assert.match(direct(root, resume("pharn-verify")).errText, /^refused \(no-run\) — /);
+      assert.deepEqual(markersIn(root), [], "nothing ran");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+);
+
 // ── the lock and `ps`, in-process ─────────────────────────────────────────────────────────────────────
 
-test("acquireLock / releaseLock (in-process) — a live call or runner holds it (`in-flight`, live, naming which); a dead one is cleared and returned; an unwritable lock directory is `lock-unusable`; release leaves another's record", () => {
+test("acquireLock / releaseLock (in-process) — a live call or runner holds it (`in-flight`, live, naming which); a dead one is cleared and returned; release leaves another's record", () => {
   const root = mkdtempSync(join(tmpdir(), "stage-direct-lock-"));
   const s = sleeper();
   const fr = fakeRunner(NONCE_A);
@@ -2728,10 +2762,20 @@ test("acquireLock / releaseLock (in-process) — a live call or runner holds it 
     writeFileSync(lockPath(root), lockOf(s.pid));
     assert.equal(releaseLock(took), "the in-flight lock no longer holds this call's record; left in place");
     assert.equal(readFileSync(lockPath(root), "utf8"), lockOf(s.pid));
-    rmSync(lockPath(root));
+  } finally {
+    s.kill("SIGKILL");
+    fr.kill("SIGKILL");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("acquireLock (in-process) — an unwritable lock directory (EACCES) is `lock-unusable`", { skip: process.getuid?.() === 0 }, () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-direct-lock-"));
+  try {
+    mkdirSync(join(root, LOCK_DIR), { recursive: true });
     chmodSync(join(root, LOCK_DIR), 0o500);
     try {
-      const u = acquireLock(root, opts);
+      const u = acquireLock(root, { stage: "pharn-verify", name: "demo", nonce: NONCE_B });
       assert.deepEqual(
         [u.ok, u.reason, u.live, u.detail],
         [false, "lock-unusable", false, "pharn/.run/stage-direct/in-flight.json: EACCES"]
@@ -2740,8 +2784,6 @@ test("acquireLock / releaseLock (in-process) — a live call or runner holds it 
       chmodSync(join(root, LOCK_DIR), 0o755);
     }
   } finally {
-    s.kill("SIGKILL");
-    fr.kill("SIGKILL");
     rmSync(root, { recursive: true, force: true });
   }
 });

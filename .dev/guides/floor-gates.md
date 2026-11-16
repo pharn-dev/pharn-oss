@@ -57,7 +57,9 @@ come from the single code block this text was moved from, so the entry they name
 # BOUNDS: POSIX only; gates assumed order-independent; a `setsid` descendant escapes the group kill; a
 # harness SIGTERM/SIGINT/SIGHUP before --timeout-ms is FORWARDED to the gate's group and the runner dies by it,
 # recording nothing (6.50.1); a harness SIGKILL orphans the group until the next `run --next` recovers the stale
-# lock, which first stops the group <out>/lock.child names (audit P3-P), so the Bash-tool timeout must still
+# lock, which first stops the group <out>/lock.child names (audit P3-P) — and since 7.15.1 a stage script's fresh
+# start stops it too, through the exported `reapLeftoverGate`, before deleting its gate directory (the record `init`'s
+# own reap would otherwise never see) — so the Bash-tool timeout must still
 # EXCEED it; test-level gates (CI_GATE_IDS) get CI=1 unless CI is already defined, so vitest/Jest refuse a new
 # snapshot (audit P2-F); validateStamp and finalize also refuse fingerprint.init != runs[0].fp_before as
 # tree-changed-between-gates (audit P3-J); --timeout-ms is REQUIRED (floor code carries no harness-specific default, so there is no default for a
