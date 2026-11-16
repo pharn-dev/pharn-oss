@@ -59,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     orchestrator's (neither hook reads the agent type). The `pharn-ship-stages.md` and `pharn-ship-close.md` byte
     ceilings and the `pharn-ship` stage-load ceiling are raised by the measured + 10% rule; the `pharn-loop` and
     `pharn-ship` load rows count the definition. `.dev/guides/product-commands.md` describes both definitions.
+
 ## [7.18.1] - 2026-11-16
 
 ### Changed
