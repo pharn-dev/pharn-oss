@@ -354,7 +354,13 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
     const perTestRegression = g.base !== 0 && Array.isArray(report.regressions) && report.regressions.includes(id);
     // 7.18.0 — a gate green at base and red at head that is NOT a regression exists only in the whole-suite mode: every
     // head failure is in a file inside the feature (Per-test comparison, below), which /pharn-verify judges.
-    const insideOnly = g.base === 0 && g.head !== 0 && Array.isArray(report.regressions) && !report.regressions.includes(id);
+    // Only when that comparison completed (CodeRabbit, PR #448): a report without its `head_run` never earns the label.
+    const insideOnly =
+      g.base === 0 &&
+      g.head !== 0 &&
+      report.per_test?.head_run === "whole-suite" &&
+      Array.isArray(report.regressions) &&
+      !report.regressions.includes(id);
     const cls = perTestRegression
       ? "REGRESSION (red at base too; a test failed at head that did not fail at base, or head has more suite errors than base — Per-test comparison, below)"
       : g.base !== 0

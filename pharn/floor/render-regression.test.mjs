@@ -846,6 +846,16 @@ test("renderDone (7.18.0): a whole-suite HEAD red owned by inside tests renders 
     progress: baseProgress(),
   });
   assert.match(reg, /base exit 0 -> head exit 1 — REGRESSION — id/);
+  // Control (CodeRabbit, PR #448): the same green-base row OUT of `regressions` but with no whole-suite block (an
+  // inconclusive report, say) never earns "ok outside the feature".
+  const noBlock = renderDone({
+    feature: "demo",
+    base: "a".repeat(40),
+    report: { ...report, verdict: "inconclusive", per_test: undefined },
+    scope: baseScope(),
+    progress: baseProgress(),
+  });
+  assert.doesNotMatch(noBlock, /ok outside the feature/);
   const both = renderDone({
     feature: "demo",
     base: "a".repeat(40),
