@@ -348,7 +348,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
     // 7.17.0 — a gate red at base that the per-test comparison classified a regression says so, never "pre-existing".
     const perTestRegression = g.base !== 0 && Array.isArray(report.regressions) && report.regressions.includes(id);
     const cls = perTestRegression
-      ? "REGRESSION (red at base too; a test failed at head that did not fail at base — Per-test comparison, below)"
+      ? "REGRESSION (red at base too; a test failed at head that did not fail at base, or head has more suite errors than base — Per-test comparison, below)"
       : g.base !== 0
         ? "pre-existing (already red at base)"
         : g.head !== 0

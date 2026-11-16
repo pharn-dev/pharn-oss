@@ -802,3 +802,15 @@ test("renderDone (7.17.0): no new failures renders `(none …)`, and a report wi
   });
   assert.match(odd, /new failures at head \(2\)/);
 });
+
+test("renderDone (7.17.0): a suite-error-only per-test regression is named as such, never as a newly failed test alone", () => {
+  // The checker files `test` under regressions when head has more suite errors than base, with no new failed test.
+  const report = perTestReport([], { head: { passed: 4, failed: 1, skipped: 0, suite_errors: 2 } });
+  report.verdict = "regressions";
+  report.regressions = ["test"];
+  report.pre_existing = [];
+  const md = renderDone({ feature: "demo", base: "a".repeat(40), report, scope: baseScope(), progress: baseProgress() });
+  assert.match(md, /REGRESSION \(red at base too; .*or head has more suite errors than base/);
+  assert.match(md, /^head: passed 4, failed 1, skipped 0, suite errors 2$/m);
+  assert.match(md, /new failures at head \(0\)/);
+});
