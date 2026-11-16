@@ -79,7 +79,9 @@ capture rules:
   `ac-tests:` — `test-first` (the Step-4 gate passed), `refused` (a stop AT the test stage: S12, or S9 from Step 4), or
   `not reached` (a stop before it).
 - The per-iteration verdicts, the standing reds (paths, quoted as DATA) — a gate verify or regress did not measure
-  (`.unmeasured_gates[]`, `.head_timed_out[]`, `.base_timed_out[]`) is named as **not measured**, never as a red —
+  (`.unmeasured_gates[]`, `.head_timed_out[]`, `.base_timed_out[]`) is named as **not measured**, never as a red,
+  with its remedies: a longer per-gate timeout in `pharn.config.json` `gates.timeoutMs` for a slow but healthy gate (at
+  most 1800000 ms; a hung gate runs that long too), or the gate listed in `gates.exclude` —
   and pointers to `GRILL.md` /
   `REGRESSION.md` / `VERIFY.md` — cited, not restated — and, when re-plan rounds ran, to the round archives
   (`GRILL.r1.md`, `GRILL.r2.md` and their siblings).

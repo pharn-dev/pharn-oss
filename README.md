@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.15.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.16.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -146,7 +146,9 @@ writes anything (`blocked: gates-red-at-entry`) — since 7.5.0 already after th
 has finished by then. If none is red but one did not finish inside the per-gate timeout or
 could not start, it stops there too, as `blocked: gates-unmeasured-at-entry` (6.75.0), since that gate was not measured. Pass
 `--allow-red-entry` to go on past either, when fixing that gate is the feature. A gate that cannot run on your machine
-can instead be listed in `pharn.config.json` `gates.exclude`; it then does not run, and runs report it as excluded.
+can instead be listed in `pharn.config.json` `gates.exclude`; it then does not run, and runs report it as excluded. A
+gate that is slow but healthy can get a longer per-gate timeout in `gates.timeoutMs` (7.16.0, at most 30 minutes; a
+hung gate then runs that long too).
 `/pharn-ship` runs the same check and asks you whether to stop or continue. When it reaches a point that needs a human decision, it stops and
 says what it needs instead of guessing. On any stop other than a committed green result it reverts its
 own spec approval — a procedural step, so an aborted run can skip it. Start it outside plan mode: in plan mode it stops
@@ -394,7 +396,7 @@ byte-for-byte by `npm run docs:check`, so it cannot quietly drift from what is a
 - **Product commands — 13** (`.claude/commands/`): `/pharn-build`, `/pharn-grill`, `/pharn-loop`, `/pharn-memory-promote`, `/pharn-plan`, `/pharn-regress`, `/pharn-review`, `/pharn-ship`, `/pharn-spec`, `/pharn-supervise`, `/pharn-test`, `/pharn-triage`, `/pharn-verify`.
 - **Dev-apparatus commands — 9** (`.claude/commands/`): `/pharn-dev-build`, `/pharn-dev-eval`, `/pharn-dev-grill`, `/pharn-dev-memory-promote`, `/pharn-dev-plan`, `/pharn-dev-regress`, `/pharn-dev-review`, `/pharn-dev-ship`, `/pharn-dev-verify`.
 - **Hook scripts — 4** (`.claude/hooks/`): `enforce-writes-scope.cjs`, `protect-trusted-paths.cjs`, `require-loop-record.cjs`, `set-writes-scope.cjs`.
-- **Floor checkers — 164** `.mjs` files under `pharn/floor/` (tests excluded).
+- **Floor checkers — 165** `.mjs` files under `pharn/floor/` (tests excluded).
 
 <!-- CURRENT-STATE:END -->
 

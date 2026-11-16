@@ -66,7 +66,9 @@ import {
   returnMarkerDue,
   takeoverStep,
   waitStep,
+  withTimeout,
 } from "./stage-direct-core.mjs";
+import { DIGEST_ABSENT, ENTRY_PATHS, RUNNER_SCHEMA as ENTRY_RUNNER_SCHEMA } from "./entry-gates-core.mjs";
 import { HANDOFF_MAX_MS, RELEASE_WAIT_MS, acquireLock, releaseLock, runDirect, runRunner } from "./stage-direct.mjs";
 import { REGRESS_PATHS } from "./stage-regress-core.mjs";
 import { VERIFY_PATHS } from "./stage-verify-core.mjs";
@@ -229,9 +231,34 @@ test("parseLock — a well-formed /2 record (nonce, holder), else null (torn, fo
   assert.deepEqual(LOCK_REFUSALS, ["in-flight", "lock-unusable"], "the lock's closed refusal set");
   assert.deepEqual(
     CALL_REFUSALS,
-    ["in-flight", "lock-unusable", "spawn-failed", "mismatch", "orphaned", "no-run", "record-unusable"],
-    "the call's closed refusal set (7.15.0)"
+    [
+      "in-flight",
+      "lock-unusable",
+      "spawn-failed",
+      "mismatch",
+      "orphaned",
+      "no-run",
+      "record-unusable",
+      "timeout-unusable",
+      "timeout-changed",
+    ],
+    "the call's closed refusal set (7.15.0; the two timeout refusals 7.16.0)"
   );
+});
+
+test("withTimeout (7.16.0) — only the --timeout-ms VALUE changes, in place; the input is untouched; a defect throws", () => {
+  const argv = fresh("pharn-regress", { extra: ["--base", "abc"] });
+  const out = withTimeout(argv, 900000);
+  assert.deepEqual(out, fresh("pharn-regress", { t: 900000, extra: ["--base", "abc"] }));
+  assert.deepEqual(argv, fresh("pharn-regress", { extra: ["--base", "abc"] }), "the input is not changed");
+  assert.notEqual(out, argv);
+  const p = parseDirectArgs(out);
+  assert.equal(p.ok && p.opts.timeoutMs, 900000, "the result is a fresh argv the parser accepts");
+  assert.throws(() => withTimeout(argv, 0), TypeError);
+  assert.throws(() => withTimeout(argv, 1.5), TypeError);
+  assert.throws(() => withTimeout(["--stage", "pharn-verify"], 900000), TypeError, "no --timeout-ms");
+  assert.throws(() => withTimeout(["--timeout-ms"], 900000), TypeError, "a flag with no value");
+  assert.throws(() => withTimeout(null, 900000), TypeError);
 });
 
 const stateOf = (over = {}) => ({
@@ -610,6 +637,188 @@ test("the CLI — EVERY final exit passes through with today's bytes: start line
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  }
+});
+
+// ── 7.16.0 (gate-timeout-above-bash-cap — CORE-87): the declared per-gate timeout and the run pin ────────────────
+const writeConfig = (root, cfg) => writeFileSync(join(root, "pharn.config.json"), JSON.stringify(cfg));
+function plantEntry(root, { feature = "demo", timeoutMs = 540000 } = {}) {
+  mkdirSync(join(root, dirname(ENTRY_PATHS.runner)), { recursive: true });
+  writeFileSync(
+    join(root, ENTRY_PATHS.runner),
+    JSON.stringify({ schema: ENTRY_RUNNER_SCHEMA, feature, nonce: NONCE_B, pid: null, timeout_ms: timeoutMs, d0: DIGEST_ABSENT })
+  );
+}
+const timeoutOf = (argv) => argv[argv.indexOf("--timeout-ms") + 1];
+
+test("timeout AC1 (L41) — no config, a config without `gates`, or an entry record at the pinned value: runner.json and the script get the call's argv BYTE FOR BYTE", () => {
+  const setups = [
+    ["no config", () => {}],
+    ["no gates key", (root) => writeConfig(root, { testResults: {} })],
+    ["gates without timeoutMs", (root) => writeConfig(root, { gates: { exclude: [] } })],
+    ["an entry record of this run at the pinned value", (root) => plantEntry(root)],
+  ];
+  for (const [why, setup] of setups) {
+    for (const stage of ["pharn-regress", "pharn-verify"]) {
+      const root = project({ fx: { steps: [10] } });
+      try {
+        setup(root);
+        const argv = fresh(stage);
+        const r = cli(root, argv);
+        assert.equal(r.status, 0, `${why} / ${stage}: ${r.stderr}`);
+        assert.deepEqual(readJson(root, RUNNER_FILE).argv, argv, `${why} / ${stage}: runner.json records the call's argv`);
+        assert.deepEqual(callsIn(root)[0].argv, scriptArgv(parseDirectArgs(argv).opts), `${why} / ${stage}: today's script argv`);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
+test("timeout — a declared gates.timeoutMs replaces the pinned value in runner.json and reaches BOTH stages' scripts", () => {
+  for (const stage of ["pharn-regress", "pharn-verify"]) {
+    const root = project({ fx: { steps: [10] } });
+    try {
+      writeConfig(root, { gates: { timeoutMs: 900000 } });
+      const r = cli(root, fresh(stage));
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(timeoutOf(readJson(root, RUNNER_FILE).argv), "900000", `${stage}: runner.json carries the declared value`);
+      assert.deepEqual(callsIn(root)[0].argv, scriptArgv(parseDirectArgs(fresh(stage, { t: 900000 })).opts));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  // a matching entry record of this run is no refusal (the pin holds)
+  const pinned = project({ fx: { steps: [10] } });
+  try {
+    writeConfig(pinned, { gates: { timeoutMs: 900000 } });
+    plantEntry(pinned, { timeoutMs: 900000 });
+    assert.equal(cli(pinned, fresh("pharn-verify")).status, 0);
+  } finally {
+    rmSync(pinned, { recursive: true, force: true });
+  }
+});
+
+test("timeout — THE RUN PIN: an entry record of THIS run with another value refuses `timeout-changed`, nothing run; another feature's record pins nothing", () => {
+  const cases = [
+    [
+      "declaration changed mid-run",
+      { gates: { timeoutMs: 900000 } },
+      { timeoutMs: 600000 },
+      /now 900000 ms \(declared in pharn\.config\.json `gates\.timeoutMs`\)/,
+    ],
+    [
+      "declaration removed mid-run",
+      null,
+      { timeoutMs: 900000 },
+      /now 540000 ms \(the pinned --timeout-ms; the gates block declares none or is refused\)/,
+    ],
+  ];
+  for (const [why, cfg, entry, source] of cases) {
+    const root = project({ fx: { steps: [10] } });
+    try {
+      if (cfg) writeConfig(root, cfg);
+      plantEntry(root, entry);
+      const r = cli(root, fresh("pharn-regress"));
+      assert.equal(r.status, 2, why);
+      assert.match(r.stderr, /refused \(timeout-changed\)/, why);
+      assert.match(r.stderr, new RegExp(`ran with a per-gate timeout of ${entry.timeoutMs} ms`), why);
+      assert.match(r.stderr, source, `${why}: the detail names where the value now comes from`);
+      assert.match(r.stderr, /restore the declaration the run started with, or start a new run; nothing was run/, why);
+      assert.deepEqual(callsIn(root), [], `${why}: no script ran`);
+      assert.equal(existsSync(join(root, RUNNER_FILE)), false, `${why}: no runner.json`);
+      assert.equal(existsSync(join(root, LOCK_FILE)), false, `${why}: no lock taken`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+  for (const [why, plant] of [
+    ["another feature's record", (root) => plantEntry(root, { feature: "other", timeoutMs: 600000 })],
+    [
+      "a malformed record",
+      (root) => {
+        mkdirSync(join(root, dirname(ENTRY_PATHS.runner)), { recursive: true });
+        writeFileSync(join(root, ENTRY_PATHS.runner), '{"toString":1}');
+      },
+    ],
+    [
+      "a record that is not JSON",
+      (root) => {
+        mkdirSync(join(root, dirname(ENTRY_PATHS.runner)), { recursive: true });
+        writeFileSync(join(root, ENTRY_PATHS.runner), "{");
+      },
+    ],
+  ]) {
+    const root = project({ fx: { steps: [10] } });
+    try {
+      writeConfig(root, { gates: { timeoutMs: 900000 } });
+      plant(root);
+      const r = cli(root, fresh("pharn-verify"));
+      assert.equal(r.status, 0, `${why}: ${r.stderr}`);
+      assert.equal(timeoutOf(callsIn(root)[0].argv), "900000", why);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test("timeout (review R4) — a declared value ABOVE --budget-ms: each script invocation runs one slow step and exits 5, the runner resumes on the one recorded value until done", () => {
+  // The fake's budget rule is stage-exit-core.mjs mayStartSlowStep's: a later step starts only while elapsed + timeout
+  // <= budget. Pinned 300 < budget 4000: the three steps fit one invocation. Declared 6000 > 4000: one step per invocation.
+  const steps = [200, 200, 200];
+  const run = (cfg) => {
+    const root = project({ fx: { steps } });
+    try {
+      if (cfg) writeConfig(root, cfg);
+      let r = cli(root, fresh("pharn-verify", { t: 300, b: 4000 }));
+      for (let i = 0; r.status === 5 && i < 10; i++) r = cli(root, resume("pharn-verify", 4000));
+      assert.equal(r.status, 0, r.stderr);
+      return { calls: callsIn(root), recorded: timeoutOf(readJson(root, RUNNER_FILE).argv) };
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+  const plain = run(null);
+  assert.deepEqual(
+    plain.calls.map((c) => c.mode),
+    ["fresh"],
+    "control: the pinned value lets every step run in one invocation"
+  );
+  assert.equal(plain.recorded, "300");
+  const declared = run({ gates: { timeoutMs: 6000 } });
+  assert.deepEqual(
+    declared.calls.map((c) => c.mode),
+    ["fresh", "resume", "resume"],
+    "one slow step per invocation, the rest by the runner's own resumes"
+  );
+  assert.equal(declared.recorded, "6000");
+  assert.equal(timeoutOf(declared.calls[0].argv), "6000", "the fresh invocation carries the declared value");
+  for (const c of declared.calls.slice(1))
+    assert.deepEqual(c.argv, ["--resume", "--budget-ms", "4000"], "a resume carries no value of its own");
+});
+
+test("timeout — a declaration below the pinned value refuses `timeout-unusable`; a MALFORMED one is left to the script (GRILL G2), the argv pinned", () => {
+  const low = project({ fx: { steps: [10] } });
+  try {
+    writeConfig(low, { gates: { timeoutMs: 1000 } });
+    const r = cli(low, fresh("pharn-verify"));
+    assert.equal(r.status, 2);
+    assert.match(
+      r.stderr,
+      /refused \(timeout-unusable\) — pharn\.config\.json `gates\.timeoutMs` "1000" is below the pinned per-gate timeout 540000 ms/
+    );
+    assert.deepEqual(callsIn(low), []);
+  } finally {
+    rmSync(low, { recursive: true, force: true });
+  }
+  const bad = project({ fx: { steps: [10] } });
+  try {
+    writeConfig(bad, { gates: { timeoutMs: "900000" } });
+    const r = cli(bad, fresh("pharn-verify"));
+    assert.equal(r.status, 0, "the fake script ignores the block; the real one refuses it, as before");
+    assert.equal(timeoutOf(callsIn(bad)[0].argv), "540000", "the pinned value is used");
+  } finally {
+    rmSync(bad, { recursive: true, force: true });
   }
 });
 
@@ -1460,14 +1669,18 @@ test("the lock — released after every exit and a signal, but never while it ho
 /** A git repo with an approved SPEC, a PLAN declaring src/index.js and NO test file anywhere (so regress asks
  *  `tests-unresolved`), the thin caller and the whole `.claude/hooks/` committed for the setter (L81), and src/index.js
  *  changed after the base. */
-function regressRepo() {
+function regressRepo({ build = null, config = null } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "stage-direct-rt-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
   git("init", "-q", ".");
   git("config", "user.email", "t@t");
   git("config", "user.name", "t");
   writeFileSync(join(dir, ".gitignore"), "pharn/.run/\n");
-  writeFileSync(join(dir, "package.json"), `${JSON.stringify({ name: "fx", version: "1.0.0", scripts: { test: "node --test" } })}\n`);
+  writeFileSync(
+    join(dir, "package.json"),
+    `${JSON.stringify({ name: "fx", version: "1.0.0", scripts: { test: "node --test", ...(build ? { build } : {}) } })}\n`
+  );
+  if (config) writeFileSync(join(dir, "pharn.config.json"), `${JSON.stringify(config)}\n`); // committed at the base
   mkdirSync(join(dir, "src"));
   writeFileSync(join(dir, "src", "index.js"), "export const add = (a, b) => a + b;\n");
   mkdirSync(join(dir, ".claude", "commands"), { recursive: true });
@@ -1550,6 +1763,55 @@ test("★ a question's answer line — the pinned line's own flags + resume.argv
     assert.equal(done.obj.status, "done");
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// 7.16.0 AC2 + AC4 through the REAL stage-regress.mjs (L84): a `build` gate of ~1.5 s against a pinned 800 ms timeout is
+// UNMEASURED on BOTH sides without a declaration and MEASURED on both with one — the one value both sides read.
+const SLOW_BUILD = `node -e "setTimeout(() => {}, 1500)"`;
+test("timeout AC2/AC4 (real stage-regress) — a slow gate is timed out on base AND head without gates.timeoutMs, measured on both with it", () => {
+  const regressLine = (base) => fresh("pharn-regress", { t: 800, extra: ["--base", base, ...DONE_FLAGS] });
+  const report = (dir) => JSON.parse(readFileSync(join(dir, "pharn", "features", "demo", "regression-report.json"), "utf8"));
+  const plain = regressRepo({ build: SLOW_BUILD });
+  try {
+    const r = realRegress(plain.dir, regressLine(plain.base));
+    assert.equal(r.exit, 0, `${r.err}\n${JSON.stringify(r.obj)}`);
+    const rep = report(plain.dir);
+    assert.ok(rep.base_timed_out?.includes("build"), `base timed out: ${JSON.stringify(rep)}`);
+    assert.ok(rep.head_timed_out?.includes("build"), "head timed out");
+  } finally {
+    rmSync(plain.dir, { recursive: true, force: true });
+  }
+  const declared = regressRepo({ build: SLOW_BUILD, config: { gates: { timeoutMs: 20000 } } });
+  try {
+    const r = realRegress(declared.dir, regressLine(declared.base));
+    assert.equal(r.exit, 0, `${r.err}\n${JSON.stringify(r.obj)}`);
+    assert.equal(timeoutOf(readJson(declared.dir, RUNNER_FILE).argv), "20000", "runner.json records the declared value");
+    const rep = report(declared.dir);
+    assert.equal(rep.base_timed_out, undefined, `nothing timed out at base: ${JSON.stringify(rep)}`);
+    assert.equal(rep.head_timed_out, undefined, "nothing timed out at head");
+    assert.equal(rep.verdict, "no-regressions");
+  } finally {
+    rmSync(declared.dir, { recursive: true, force: true });
+  }
+});
+
+test("timeout (in-process) — each refusal before the lock: below the pinned value, a changed run pin; nothing taken, nothing run", () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-direct-tm-"));
+  try {
+    writeConfig(root, { gates: { timeoutMs: 1000 } });
+    const low = direct(root, fresh("pharn-verify"));
+    assert.equal(low.exit, 2);
+    assert.match(low.errText, /refused \(timeout-unusable\)/);
+    writeConfig(root, { gates: { timeoutMs: 900000 } });
+    plantEntry(root, { timeoutMs: 600000 });
+    const changed = direct(root, fresh("pharn-verify"));
+    assert.equal(changed.exit, 2);
+    assert.match(changed.errText, /refused \(timeout-changed\)/);
+    assert.equal(existsSync(join(root, LOCK_FILE)), false, "no lock was taken");
+    assert.equal(existsSync(join(root, RUNNER_FILE)), false, "no runner.json was written");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

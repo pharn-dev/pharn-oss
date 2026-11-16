@@ -105,6 +105,13 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # run on their machine and --gates makes the AC gate read test-infra-changed — two of three real loops stopped on it.
 # BOUND: FLOOR when init resolves the set, never re-derived later (only the red run's bindStamp re-resolves); legacy and
 # bootstrap SPECs pin nothing; /pharn-test runs before the reconcile anchor. Contract: gate-run-record.md.
+# THE PER-GATE TIMEOUT (7.16.0, gate-timeout-above-bash-cap — CORE-87): `gates.timeoutMs` sits beside `exclude`
+# (GATES_KEYS), read by the same block reader (so every reader refuses a malformed value as `bad-gate-exclusion`); its
+# value rule — an integer 100..1800000 that may only LENGTHEN the pinned --timeout-ms — is pharn/floor/gate-timeout-core.mjs.
+# Only the two detached runners apply it: entry-gates.mjs --start (a value below the pinned one is `unusable
+# bad-gate-timeout`) and stage-direct.mjs (`timeout-unusable`; `timeout-changed` against this run's entry record). An
+# unknown `gates` key now names the update remedy. TRIGGER (P7): .dev/measurements/loop-baseline-2026-11-11.md §7/§12.
+# Contract: gate-run-record.md, "A longer per-gate timeout".
 ```
 
 ## Per-test results (`PHARN_TEST_RESULTS`)
@@ -695,6 +702,9 @@ node pharn/floor/check-entry-context.mjs --feature <name> [--session <id>] [--pr
 # Since 7.5.0 (entry-verdict-early-read) `--peek` reads once — no wait, no takeover, no write — after /pharn-loop's spec
 # and plan stages and /pharn-ship's plan stage: a finished result decided as --wait decides it, or a RED among the gates
 # finished so far (entry-gates-core.mjs `inProgressStampView`); anything else is `continue`, left to the final --wait.
+# Since 7.16.0 --start uses the project's `gates.timeoutMs` in place of the pinned --timeout-ms when one is declared
+# (runner.json `timeout_ms`, the runner's argv, the cache inputs); below the pinned value → `unusable bad-gate-timeout`,
+# exit 2 (observation `init-refused`). With no declaration every record is byte-identical.
 # Exit (--wait): 0 green · 4 red · 6 unmeasured · 3 no-gates · 5 continue (run again) · 2 unusable; --peek the same
 # codes (5 = not decided yet, never re-run); --start 0 · 3 · 2; --abort 0.
 node pharn/floor/entry-gates.mjs --start [--refresh] --feature <name> --timeout-ms <N>

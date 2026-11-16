@@ -23,6 +23,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.16.0] - 2026-11-16
+
+### Added
+
+- **A project can declare a longer per-gate timeout, `gates.timeoutMs` in `pharn.config.json`, which `/pharn-loop` and
+  `/pharn-ship` use for the entry check and for the regress and verify stages they run** (Linear CORE-87). In the
+  measured runs (`.dev/measurements/loop-baseline-2026-11-11.md` §7/§12) 11 of 36 runs stopped
+  `gates-unmeasured-at-entry` on `test` killed at the pinned 540 s timeout, and 6 of the 9 terminal stops were the same
+  gate timed out at regress or verify. The value is an integer of milliseconds from 100 to 1800000 (30 min) and may only
+  lengthen the pinned `--timeout-ms`; `pharn/floor/gate-timeout-core.mjs` (new) owns that rule, and
+  `pharn/floor/gate-exclusion-core.mjs` reads the key beside `exclude`, so every reader of the block refuses a malformed
+  value as it refuses a malformed `exclude` (`bad-gate-exclusion`). `entry-gates.mjs --start` puts the value in
+  `runner.json`, the runner's argv and the cached-evidence inputs (a value below the pinned one is
+  `unusable bad-gate-timeout`). `stage-direct.mjs` writes it into the fresh argv it records, so the runner, every resume,
+  a takeover and both sides of one regress comparison (and its base install) read one value; it refuses
+  `timeout-unusable` for a value below the pinned one and `timeout-changed` when this run's entry record holds another
+  value (both exit 2, nothing touched, the existing `unusable` mapping). With no declaration every pinned line, argv,
+  record and stamp is byte-identical to 7.15.0 (given the pinned lines' one value, 540000, at entry and at the stage). A
+  value below the pinned one is refused at entry, but `/pharn-loop` reads that exit as "go on", so such a run first
+  stops at regress, after the build (follow-up `entry-timeout-refusal-stop`); `/pharn-ship` asks at its entry read.
+  Both runners apply the value through one rule, `gate-timeout-core.mjs` `resolveRunTimeout`. **What it costs:** a gate that hangs now runs the whole declared time
+  before it is killed, at entry, on each side of regress and at verify, and a takeover's one foreground invocation can
+  outlast the 600 s Bash call by that much. It does not reach the gate runs that still happen inside one Bash call —
+  `/pharn-regress` and `/pharn-verify` run by a person, `/pharn-build`'s full gate and `/pharn-test`'s red run keep
+  540 s (named follow-ups `thin-caller-declared-timeout` and `build-gate-declared-timeout`). The not-measured stops —
+  `/pharn-loop` S14b and its Step 4 bullet, its close part's not-measured line, and `/pharn-ship` Step 2.3 — name the
+  declaration beside `gates.exclude`. Contract: `gate-run-record.md`, "A longer per-gate timeout"; `stage-exit.md`'s
+  takeover bound names the declared value. MIN_CLI is unchanged: pharn-cli carries the `gates` block through untouched.
+
+### Changed
+
+- **An unknown key in `pharn.config.json` `gates` now names its remedy.** The refusal reads "its keys are `exclude` and
+  `timeoutMs` — a key a newer PHARN added needs that PHARN (npx @pharn-dev/pharn@latest update); otherwise remove it".
+  A floor of 7.15.0 or earlier cannot be changed: reading a config that declares `gates.timeoutMs`, it refuses discovery
+  with `` pharn.config.json `gates` has the key "timeoutMs"; its only key is `exclude` ``. The remedy there is the same:
+  update PHARN (`npx @pharn-dev/pharn@latest update`), or remove the key.
+
 ## [7.15.1] - 2026-11-16
 
 ### Fixed

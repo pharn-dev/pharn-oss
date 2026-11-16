@@ -1,0 +1,23 @@
+{
+  "feature": "gate-timeout-above-bash-cap",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "b0c0b1975739291bcae886a7b1bc8c8e75c6315bcbebd76d384f102e79d7af81",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "d04dc6cbdcb422c00021e8703fa5c84c41744e2565c46e33cdb62f4fdc0754d2"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}

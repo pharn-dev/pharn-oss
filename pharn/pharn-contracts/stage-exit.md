@@ -268,7 +268,10 @@ that uncounted work fits the remaining 30 s. A second or later slow step ends by
 the first slow step is the long one, it starts after the opening work and runs up to 540 s. Since 7.15.0 the
 orchestrators' call (`pharn/floor/stage-direct.mjs`) runs these invocations in a detached runner, outside any Bash
 call, with the same argv; the 600 s tie binds the call's in-node wait (at most `--budget-ms`) and a takeover's one
-invocation, which runs in the foreground of a call.
+invocation, which runs in the foreground of a call. Since 7.16.0 that argv carries a project's declared
+`gates.timeoutMs` (up to 1800000) in place of the pinned 540000 (`gate-run-record.md`, "A longer per-gate timeout"):
+each invocation's first slow step may then run up to the declared value, so a takeover's invocation can outlast the
+600 s Bash call by that much, and the call is moved to the background as described below.
 
 For `verify` the clock is the same (`stage-runtime.mjs`'s `makeBudget`, one owner for both stages), the opening
 work is argv, containment, the removal, the chain check, the eval-pair listing, the verifier count and the

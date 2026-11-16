@@ -209,6 +209,31 @@ test("6.36.0 — a malformed declaration REFUSES (exit 2, bad-gate-exclusion, no
   );
 });
 
+test("7.16.0 — a malformed `gates.timeoutMs` REFUSES init as a malformed block (bad-gate-exclusion); a valid one changes nothing init does", () => {
+  withRepo(
+    (dir) => {
+      for (const bad of [{ timeoutMs: "900000" }, { timeoutMs: 1800001 }, { timeoutMs: 99 }, { exclude: [], retries: 1 }]) {
+        declare(dir, bad);
+        const r = cli(dir, initArgs());
+        assert.equal(r.code, 2, `${JSON.stringify(bad)}: ${r.raw}`);
+        assert.equal(r.json.reason_code, "bad-gate-exclusion");
+        assert.match(r.json.reason, /^pharn\.config\.json `gates/);
+        assert.ok(!existsSync(join(dir, OUT, "state.json")), "a refused init writes no state");
+      }
+      declare(dir, { retries: 1 });
+      const unknown = cli(dir, initArgs());
+      assert.match(unknown.json.reason, /npx @pharn-dev\/pharn@latest update/, "the unknown-key refusal names the remedy (AC5)");
+      // control: a valid declaration discovers exactly what no declaration discovers (init never applies the timeout)
+      declare(dir, { timeoutMs: 900000 });
+      const ok = cli(dir, initArgs());
+      assert.equal(ok.code, 0, ok.raw);
+      assert.deepEqual(ok.json.ids, ["test", "instruction-growth", "reconcile"]);
+      assert.equal(Object.hasOwn(ok.json, "excluded"), false);
+    },
+    { scripts: { test: "true" } }
+  );
+});
+
 test("6.36.0 (review R4) — a valueless trailing --gates is refused; before, it skipped the declaration and ran the excluded gate", () => {
   withRepo(
     (dir) => {

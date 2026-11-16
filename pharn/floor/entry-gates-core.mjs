@@ -132,6 +132,8 @@ export const REASON_CODES = Object.freeze([
   "crashed",
   // gate-evidence-cache: the result a `--start` leaves when it stopped on cached red evidence (no runner was spawned).
   "cached-red",
+  // 7.16.0 (gate-timeout-above-bash-cap): `pharn.config.json` `gates.timeoutMs` is below the pinned `--timeout-ms`.
+  "bad-gate-timeout",
 ]);
 
 /** What `--wait` did with the gates' own writes (review R1): `none` (no `mutated` gate changed a listed path), `recorded`

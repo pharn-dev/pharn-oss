@@ -582,6 +582,12 @@ node pharn/floor/stage-agent.mjs finish --command <c> --name '<name>' --stage <s
 # script run has no timeout of its own (its gates do), so a script hung outside a gate keeps every resume line at 5
 # until a person stops the runner's group; three calls clearing one stale lock at once can lose a live record; a
 # takeover's one foreground invocation stays tied to the 600 s cap; the call count ⌈W / B⌉ is advisory orchestration.
+# THE PER-GATE TIMEOUT (7.16.0, gate-timeout-above-bash-cap — CORE-87): a FRESH call, before the lock, resolves the
+# project's `gates.timeoutMs` (gate-exclusion-core.mjs reads it, gate-timeout-core.mjs owns the rule) and writes it into
+# the recorded fresh argv (core `withTimeout`), so the runner, every resume, a takeover and both sides of regress read one
+# value. Two new CALL_REFUSALS, exit 2, nothing touched: `timeout-unusable` (below the pinned value) and
+# `timeout-changed` (this run's pharn/.run/pharn-entry/runner.json holds another value — agreement, never provenance). A
+# block that refuses is left to the stage script. A longer value lengthens a hung gate and a takeover's foreground call.
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --iteration <N> --timeout-ms <T> --budget-ms <B> [stage flags]
 node pharn/floor/stage-direct.mjs --stage <pharn-regress|pharn-verify> --name '<name>' --resume --budget-ms <B>
 ```
