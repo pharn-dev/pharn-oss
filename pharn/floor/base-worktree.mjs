@@ -97,6 +97,23 @@ export function isOurBaseDir(p, projectReal, root = tempRoot()) {
   return name.startsWith(prefix) && SUFFIX_RE.test(name.slice(prefix.length));
 }
 
+/** `p` relative to the base checkout of `projectReal` it lies in, or `p` unchanged (7.17.0, regress-per-test-product).
+ *  A reporter run in the BASE checkout names its test files absolutely (vitest, Jest, Playwright), under
+ *  `<temp root>/<this project's prefix><6 chars>/`, so a per-test record from that side would never share an id with the
+ *  HEAD side's. When `p` is `<root>/<name>/<rest>` and `<root>/<name>` is exactly a directory this module would create
+ *  for this project (`isOurBaseDir`), the answer is `<rest>`. Pure string membership — the directory need not exist any
+ *  more (a retained BASE side's checkout is gone by the time its evidence is read). Anything else, a relative path
+ *  included, is returned as given. Bound: a TMPDIR changed between the base run and the read leaves `p` absolute. */
+export function baseCheckoutRelative(p, projectReal, root = tempRoot()) {
+  if (typeof p !== "string" || root === null || !isAbsolute(p)) return p;
+  const prefix = root.endsWith(sep) ? root : root + sep;
+  if (!p.startsWith(prefix)) return p;
+  const rest = p.slice(prefix.length);
+  const cut = rest.indexOf(sep);
+  if (cut <= 0 || cut === rest.length - 1) return p;
+  return isOurBaseDir(join(root, rest.slice(0, cut)), projectReal, root) ? rest.slice(cut + 1) : p;
+}
+
 /** The registered worktree paths (`git worktree list --porcelain`), or [] when git cannot list them. */
 function registeredWorktrees() {
   const r = gitSync(["worktree", "list", "--porcelain"]);

@@ -47,8 +47,10 @@ import {
   decideEntryBase,
   derivedBaseStamp,
   logPlan,
+  resultsPlan,
   sha256Hex,
 } from "./entry-base-evidence-core.mjs";
+import { MAX_RESULTS_BYTES } from "./per-test-results-core.mjs";
 
 /** The largest entry log copied into the derived evidence. A larger one is `log-unverified` (the BASE side then runs). */
 export const LOG_MAX_BYTES = 64 * 1024 * 1024;
@@ -150,7 +152,8 @@ export function decideEntryFromDisk({ feature, base, timeoutMs, installOverride 
 /**
  * Write the entry-derived BASE evidence for a HIT's `detail` into `pharn/.run/pharn-regress/base-gates/`, from scratch: each
  * log verified against the entry stamp's digest before the write and re-hashed after it, a `no-files` slot's empty logs,
- * then the stamp (tmp + rename) LAST. Returns `{ok: true, stampSha256}` or `{ok: false, miss: "log-unverified"}`; on a
+ * the `test` slot's results file the same way (7.17.0, `resultsPlan`, under the per-test record's own byte cap), then the
+ * stamp (tmp + rename) LAST. Returns `{ok: true, stampSha256}` or `{ok: false, miss: "log-unverified"}`; on a
  * failure the partial directory is removed, so no derived stamp is ever left without its logs.
  */
 export function materializeEntryBase({ feature, base, detail, entryStampSha256 }) {
@@ -161,11 +164,15 @@ export function materializeEntryBase({ feature, base, detail, entryStampSha256 }
   };
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  for (const c of logPlan(detail)) {
+  const copies = [
+    ...logPlan(detail).map((c) => ({ ...c, max: LOG_MAX_BYTES })),
+    ...resultsPlan(detail).map((c) => ({ ...c, max: MAX_RESULTS_BYTES })),
+  ];
+  for (const c of copies) {
     if (typeof c.sha256 !== "string") return fail();
     let bytes = Buffer.alloc(0);
     if (c.from !== null) {
-      const r = readInProject(`${ENTRY_PATHS.gates}/${c.from}`, LOG_MAX_BYTES);
+      const r = readInProject(`${ENTRY_PATHS.gates}/${c.from}`, c.max);
       if (r.state !== "ok" || sha256Hex(r.bytes) !== c.sha256) return fail();
       bytes = r.bytes;
     }

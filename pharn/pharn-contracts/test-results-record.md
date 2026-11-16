@@ -23,8 +23,9 @@ demonstrable on any project. In 6.15.0 no stage read the record. Since 6.18.0 `/
 (`check-red-run.mjs`, `ac-tests.md`), where a refused record is a RED by its own reason; since 6.20.0 `/pharn-verify`'s
 AC gate reads it too (`check-verify.mjs --ac-gate`, `ac-tests.md` "The AC gate"), so a verify verdict computed with
 that flag depends on the record — a refused one is `INCONCLUSIVE` over otherwise-green gates, and since 6.31.0 so is
-an AC whose mapped file holds an anomaly. The regress verdict,
-and a verify verdict computed without the flag, are unchanged for every stamp the runner writes; what also changed
+an AC whose mapped file holds an anomaly. Since 7.17.0 `/pharn-regress`'s verdict reads it too, for `test` red on both
+sides (`regression-report.md`). A verify verdict computed without the flag is unchanged for every stamp the runner
+writes; what also changed
 is that a stamp carrying a malformed `results_sha256` is refused (`gate-run-record.md`, "Per-test results"), and the
 runner refuses to run a gate whose results path it cannot clear.
 
@@ -286,8 +287,11 @@ pass it as an instruction. A raw value quoted inside a `reason` is cut to 64 cha
   entry names, exactly as it trusts the status an entry names.
 - **A live referent.** A detached process started by the gate can still write the file after the runner hashed
   it. The record never follows such a write: it is refused as `results-hash-mismatch`.
-- **Regress records are partial, and unread.** On `/pharn-regress`'s sides the `test` gate receives only the
-  test files outside the feature, so its record covers only those. The base commit may predate the reporter
-  setup. No consumer reads a regress record, and a base-side `results-unavailable` can never affect regress.
+- **Regress records are partial, and read only when `test` is red on both sides (7.17.0).** On `/pharn-regress`'s
+  sides the `test` gate receives only the test files outside the feature, so its record covers only those. Since
+  7.17.0 the regress verdict reads both sides' `test` records, and only when `test` is non-zero at base and at head
+  (`regression-report.md`, "The `per_test` block on the product path"); there a refused record — a base commit that
+  predates the reporter setup writes none — makes the verdict `inconclusive`, never `pre_existing`. In every other row a
+  regress record is not read.
 - **Only the configured gates mean anything.** `results_sha256` is recorded on every run; on a gate outside
   `RESULTS_GATES` it is never read.

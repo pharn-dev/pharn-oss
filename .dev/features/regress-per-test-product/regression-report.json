@@ -1,0 +1,64 @@
+{
+  "base": "31f8b691c8005b22fd5786bc6e6cf4ed79b375b3",
+  "inside": [
+    ".claude/commands/pharn-regress.md",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/base-worktree.mjs",
+    "pharn/floor/base-worktree.test.mjs",
+    "pharn/floor/check-loop-fresh.test.mjs",
+    "pharn/floor/check-regress.mjs",
+    "pharn/floor/check-regress.test.mjs",
+    "pharn/floor/entry-base-evidence-core.mjs",
+    "pharn/floor/entry-base-evidence-core.test.mjs",
+    "pharn/floor/entry-base-evidence.mjs",
+    "pharn/floor/entry-base-evidence.test.mjs",
+    "pharn/floor/gate-run-core.mjs",
+    "pharn/floor/gate-run-core.test.mjs",
+    "pharn/floor/loop-fresh-core.mjs",
+    "pharn/floor/render-regression.mjs",
+    "pharn/floor/render-regression.test.mjs",
+    "pharn/floor/stage-regress.mjs",
+    "pharn/pharn-contracts/gate-run-record.md",
+    "pharn/pharn-contracts/regression-report.md",
+    "pharn/pharn-contracts/test-results-record.md",
+    ".dev/features/regress-per-test-product/GRILL.md",
+    ".dev/features/regress-per-test-product/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6488,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6495,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

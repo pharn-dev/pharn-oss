@@ -154,3 +154,48 @@ test("clearBaseWorktrees never throws: no git repository, an absent root", () =>
     rmSync(notRepo, { recursive: true, force: true });
   }
 });
+
+test("★ baseCheckoutRelative (7.17.0): a captured vitest report's paths, re-rooted in this project's base checkout, read as repo-relative", async () => {
+  const { baseCheckoutRelative } = await import("./base-worktree.mjs");
+  const { parseResults } = await import("./per-test-results-formats.mjs");
+  const root = scratch("bwt-root-");
+  const project = "/work/proj";
+  try {
+    // vitest 5.0.1's own report (captured at /work/proj), its files moved under the base checkout name for `project`.
+    const checkout = join(root, `${namePrefix(project)}Zx81Qa`);
+    const raw = readFileSync(join(HERE, "test-fixtures", "test-results", "vitest-red.json"), "utf8").replaceAll(project, checkout);
+    const parsed = parseResults("vitest-json", JSON.parse(raw), [project]);
+    assert.ok(parsed.ok && parsed.entries.length > 0, "precondition: the capture parses and holds tests (L34)");
+    const files = [...new Set(parsed.entries.map((e) => e.file))];
+    assert.ok(
+      files.every((f) => f.startsWith(checkout)),
+      "precondition: the project root alone leaves them absolute"
+    );
+    assert.deepEqual(
+      files.map((f) => baseCheckoutRelative(f, project, root)),
+      ["tests/ac/demo.unit.test.js", "tests/ac/other.unit.test.js"]
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("baseCheckoutRelative (7.17.0): every near miss is returned unchanged — another project, a bad suffix, outside the root, relative", async () => {
+  const { baseCheckoutRelative } = await import("./base-worktree.mjs");
+  const root = "/tmp-root";
+  const mine = join(root, `${namePrefix("/work/a")}Ab3dE9`);
+  assert.equal(baseCheckoutRelative(join(mine, "src/x.test.js"), "/work/a", root), "src/x.test.js");
+  for (const p of [
+    join(root, `${namePrefix("/work/b")}Ab3dE9`, "src/x.test.js"), // another project's checkout
+    join(root, `${namePrefix("/work/a")}Ab3dE`, "src/x.test.js"), // a 5-char suffix
+    join(root, `${namePrefix("/work/a")}Ab3dE9x`, "src/x.test.js"), // a 7-char suffix
+    join("/elsewhere", `${namePrefix("/work/a")}Ab3dE9`, "src/x.test.js"), // not under the root
+    `${mine}/`, // the checkout itself, nothing under it
+    mine,
+    "src/x.test.js", // already relative
+  ]) {
+    assert.equal(baseCheckoutRelative(p, "/work/a", root), p, p);
+  }
+  assert.equal(baseCheckoutRelative(join(mine, "src/x.test.js"), "/work/a", null), join(mine, "src/x.test.js"), "no temp root");
+  assert.equal(baseCheckoutRelative(null, "/work/a", root), null, "a non-string is returned as given");
+});

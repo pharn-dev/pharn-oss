@@ -58,6 +58,42 @@ function idText(v) {
   }
 }
 
+/** The per-test comparison's section (7.17.0, regress-per-test-product) — `pt` is the report's `per_test` block, or
+ *  absent (nothing rendered, so every report without it keeps its bytes). Counts are integers from the record builder;
+ *  `new_failures` ids are repository test titles — untrusted DATA — so they are rendered ONLY inside a fence
+ *  (`quoteData`), one per line, each JSON-escaped so a newline in an id cannot forge a second entry. TOTAL (L62). */
+function perTestLines(pt) {
+  if (pt === null || typeof pt !== "object" || Array.isArray(pt)) return [];
+  const side = (s) =>
+    s && typeof s === "object"
+      ? `passed ${dataText(s.passed)}, failed ${dataText(s.failed)}, skipped ${dataText(s.skipped)}, suite errors ${dataText(s.suite_errors)}`
+      : "(not recorded)";
+  const fails = Array.isArray(pt.new_failures) ? pt.new_failures : [];
+  const lines = [
+    `gate (quoted, untrusted): ${dataText(pt.gate)} — compared test by test because it is red at both base and head.`,
+    `base: ${side(pt.base)}`,
+    `head: ${side(pt.head)}`,
+    `still failing (failed at base and head): ${dataText(pt.still_failing)}`,
+  ];
+  if (pt.ignored && typeof pt.ignored === "object") {
+    lines.push(
+      `ignored by file membership (a file the gate was not given — inside the feature): base ${dataText(pt.ignored.base)}, head ${dataText(pt.ignored.head)}`
+    );
+  }
+  lines.push("", `new failures at head (${fails.length}) — each failed at head and was passed, skipped or absent at base:`, "");
+  lines.push(
+    fails.length
+      ? quoteData(
+          "",
+          fails
+            .map((f) => `${idText(f && typeof f === "object" ? f.base : null)}\t${idText(f && typeof f === "object" ? f.id : null)}`)
+            .join("\n")
+        )
+      : "_(none — the gate stays pre_existing unless head has more suite errors than base)_"
+  );
+  return section("Per-test comparison", lines);
+}
+
 function section(title, lines) {
   return [`## ${title}`, "", ...lines, ""];
 }
@@ -309,7 +345,15 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
   const gateIds = Object.keys(report.outside_gates ?? {}).sort();
   const gateLines = gateIds.map((id) => {
     const g = report.outside_gates[id];
-    const cls = g.base !== 0 ? "pre-existing (already red at base)" : g.head !== 0 ? "REGRESSION" : "ok";
+    // 7.17.0 — a gate red at base that the per-test comparison classified a regression says so, never "pre-existing".
+    const perTestRegression = g.base !== 0 && Array.isArray(report.regressions) && report.regressions.includes(id);
+    const cls = perTestRegression
+      ? "REGRESSION (red at base too; a test failed at head that did not fail at base — Per-test comparison, below)"
+      : g.base !== 0
+        ? "pre-existing (already red at base)"
+        : g.head !== 0
+          ? "REGRESSION"
+          : "ok";
     return `gate: base exit ${dataText(g.base)} -> head exit ${dataText(g.head)} — ${cls} — id (quoted, untrusted): ${dataText(id)}`;
   });
   out.push(
@@ -328,6 +372,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
       `regressions (${(report.regressions ?? []).length}): ${(report.regressions ?? []).length ? report.regressions.map(dataText).join(", ") : "(none)"}`,
     ])
   );
+  out.push(...perTestLines(report.per_test));
 
   if (report.verdict === "inconclusive" && report.reason) {
     out.push(...section("Why inconclusive", [quoteData("reason, quoted as DATA:", dataText(report.reason))]));

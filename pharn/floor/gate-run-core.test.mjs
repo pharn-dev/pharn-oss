@@ -758,11 +758,20 @@ test("★ 6.59.0 UNMEASURED_CODES: a sorted subset of REASON_CODES, disjoint fro
     assert.ok(isReasonCode(c), `${c} is a member`);
     assert.ok(!LAPSE_CODES.includes(c), `${c} must not be a lapse — a re-run would not change it`);
   }
-  assert.deepEqual(UNMEASURED_CODES, ["base-timed-out", "gate-not-measured", "head-timed-out"]);
+  // 7.17.0 (regress-per-test-product): the two per-test refusals joined — a verdict over accepted stamps, not stale evidence.
+  assert.deepEqual(UNMEASURED_CODES, [
+    "base-timed-out",
+    "gate-not-measured",
+    "head-timed-out",
+    "per-test-record-refused",
+    "per-test-unaccounted-red",
+  ]);
   const emitters = {
     "base-timed-out": "check-regress.mjs",
     "head-timed-out": "check-regress.mjs",
     "gate-not-measured": "check-verify.mjs",
+    "per-test-record-refused": "check-regress.mjs",
+    "per-test-unaccounted-red": "check-regress.mjs",
   };
   for (const c of UNMEASURED_CODES) {
     assert.match(read(`pharn/floor/${emitters[c]}`), new RegExp(`reason_code: "${c}"`), `${emitters[c]} emits ${c}`);

@@ -48,7 +48,8 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
   `verdict: "no-regressions"` means _"no gate that was green at base is red at head"_, nothing wider.
 - **IS NOT** a report on the feature itself. Gates already red **at base** are classified `pre_existing`
   and deliberately **excluded** from the verdict (since 6.72.0, a dev report computed `--per-test` excepts a
-  gate red on both sides when a test failed at head that did not fail at base — `per_test`, below) — they are not the increment's fault, and blaming them
+  gate red on both sides when a test failed at head that did not fail at base — `per_test`, below; since 7.17.0 a
+  product report does the same for `test` when the project declares `testResults.test`) — they are not the increment's fault, and blaming them
   on it would train an operator to wave through the one signal that must never be waved through.
 
 ## The object
@@ -77,7 +78,7 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
 | `reason`         | a diagnostic sentence, present only on `inconclusive`                                                                                        | ADVISORY — no floor op reads it                             |
 | `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty                                                                  | ADVISORY — the verdict already reflects it                  |
 | `head_timed_out` | gate-ids whose HEAD run timed out (6.59.0) — stamp path, present only when non-empty                                                         | ADVISORY — the verdict already reflects it                  |
-| `per_test`       | the opt-in per-test comparison of one gate (6.72.0, dev path only) — below                                                                   | ADVISORY — no floor op reads it; its ids are untrusted DATA |
+| `per_test`       | the opt-in per-test comparison of one gate (6.72.0 dev path; 7.17.0 product path, `test`) — below                                            | ADVISORY — no floor op reads it; its ids are untrusted DATA |
 | `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)                                                                    | ADVISORY — no floor op reads it                             |
 
 **`regressions` being empty is not the guarantee — `verdict` is.** The two always agree in emitter
@@ -87,8 +88,8 @@ output, but only one of them is read, so a hand-edited report with `regressions:
 
 **Trust (P2).** Every field carries deterministic-tool output — gate-id strings, integer exit codes, and
 file paths from `git diff` and path-set membership: the enum-gated / floor-verifiable class. **This
-artifact contains no untrusted free text — with one exception since 6.72.0:** a dev report computed with
-`--per-test` carries test ids (test titles from the repository) in `per_test.new_failures`, below. They are
+artifact contains no untrusted free text — with one exception since 6.72.0:** a report with a `per_test` block (a
+dev report computed with `--per-test`, or since 7.17.0 a product report under the `testResults.test` opt-in) carries test ids (test titles from the repository) in `per_test.new_failures`, below. They are
 untrusted DATA, rendered fenced, read by no floor op. Otherwise this is a genuine difference from the verify-report and is
 why its residual section is narrower. The `scope` subcommand (below) _does_ emit `finding-shape` objects
 with free-text `problem` fields, but those go to the command's own output and `REGRESSION.md` — **not**
@@ -153,8 +154,8 @@ report reaches the same fail-closed state. Nothing anywhere reads an absent verd
 ## The opt-in `per_test` block (6.72.0, advisory shape — dev path)
 
 `check-regress.mjs verdict` adds it only when called with `--per-test <gate> --base-tests <b> --head-tests <h>`, on
-the positional path (`/pharn-dev-regress` passes it for its outside `tests` gate; the stamp path refuses the flags, so
-no product report carries it — the follow-up `regress-per-test-product`). The two files are `pharn-test-results/1`
+the positional path (`/pharn-dev-regress` passes it for its outside `tests` gate; the stamp path refuses the flags and
+reads its stamps' own records instead — the product path, below). The two files are `pharn-test-results/1`
 documents (`test-results-record.md`, the `pharn-json` format), read by the record builder that contract names.
 
 ```json
@@ -180,6 +181,42 @@ documents (`test-results-record.md`, the `pharn-json` format), read by the recor
 - **Trust:** `new_failures[].id` is repository test-title text — untrusted DATA, never read by a floor op. The
   records themselves are unauthenticated files the caller names; the comparison is floor over what they say, never
   proof of what ran.
+
+## The `per_test` block on the product path (7.17.0, regress-per-test-product)
+
+`/pharn-regress`'s verdict (`check-regress.mjs verdict --base-stamp … --head-stamp …`) adds the block when **all** of
+these hold: the project's `pharn.config.json` declares `testResults.test` (`test-results-record.md`, "Opting in"), and
+`test` is non-zero at **both** sides. That row is the only one a per-test view can change — base `0` / head non-zero is a
+regression already, base non-zero / head `0` is not — so no record is read anywhere else, and a project without the
+opt-in gets exactly the report it got before (no read, no key, the same bytes).
+
+- **The records.** Each side's results file is the one the runner wrote beside that side's stamp and bound to it by
+  `results_sha256` (`gate-run-record.md`, "Per-test results"); `per-test-results-core.mjs` `gateResults` re-hashes it.
+  An entry-derived BASE stamp carries the entry `base:test` run's file (`gate-run-record.md`, the reuse matrix). A BASE
+  checkout's absolute report paths are mapped back to repo-relative ones by `base-worktree.mjs` `baseCheckoutRelative`.
+- **File membership.** Only tests whose file is one of the files the HEAD stamp's `test` run was given (the outside
+  tests) are compared and counted; a test in a file inside the feature is ignored by membership, never matched by name.
+  The block adds `ignored: {base, head}`, the tests each side left out.
+- **The rule** is the positional one above: `test` is a regression when a compared test failed at head whose base status
+  is `passed`, `skipped` or `absent`, or head reports more suite errors than base (suite errors carry no file, so they
+  stay whole-record); otherwise `pre_existing`.
+- **Fail-closed** (`inconclusive`, exit 2, the table still reported): `per-test-record-refused` — a `pharn.config.json`
+  that exists but cannot be read, a side's record absent, unbound (`null` digest), changed after the runner hashed it,
+  from a timed-out run, malformed, over a cap, or holding an anomaly in a compared file — and `per-test-unaccounted-red`
+  — a red side whose whole record holds no failed test and no suite error. Both are `gate-run-core.mjs`
+  `UNMEASURED_CODES`: verdicts over accepted stamps, so `check-loop-fresh.mjs` check B passes them and `check-loop.mjs`
+  stops `STOP_TERMINAL` / `unmeasured`. The step runs after the two timed-out rules, so their reports keep their bytes.
+- **Re-derivable.** The checker reads nothing the stamps do not bind except the config, so `check-loop-fresh.mjs`
+  check E's re-run reproduces the verdict, and its check J binds each results file.
+- **The trade, stated (PR #381's).** Under machine load a test red at head only reads as a regression where the gate
+  exit read `pre_existing`: a false RED in place of a false GREEN. Two rows move the same way when the opt-in is
+  declared: a head that timed out over a measured-red base, `pre_existing` before, is now `per-test-record-refused` (a
+  killed run has no record); and a base commit whose reporter setup predates the opt-in writes no base record, so a
+  both-red `test` is `inconclusive` until the base carries the reporter.
+- **Bounds (P0).** The records are the reporter's word — project code, as is `pharn.config.json`, which no hook guards;
+  the check certifies agreement between record and stamp (L43), never what ran. The verdict depends on that config staying
+  unchanged until check E re-reads it, as the AC gate's does. A `TMPDIR` changed between the BASE run and the verdict
+  leaves BASE paths absolute, so every head failure reads as new — the false-RED direction.
 
 ## Extra keys are IGNORED (deliberately not a closed-key object)
 
@@ -234,7 +271,7 @@ reader can re-derive it, and it must **never** be read as an invariant the repo 
 ## Residual (named, not hidden — `pharn/LIMITS.md §2`)
 
 Narrower than the verify-report's, and narrower for a structural reason rather than by luck: this
-artifact carries **no untrusted free text** (outside a dev report's `per_test.new_failures` ids, which no floor op
+artifact carries **no untrusted free text** (outside a report's `per_test.new_failures` ids, which no floor op
 reads), so there is no injected-quote channel through it. The
 residual that remains is the honest one about the verdict itself — a `no-regressions` verdict is only as
 wide as the suite that produced it, and a reader who takes it as "the change is safe" has substituted a
