@@ -21,7 +21,8 @@ test("✧ L35 — the stamp's declared_in spells THIS module's file and key path
   assert.equal(TIMEOUT_KEY, "timeoutMs");
 });
 
-test("absent file, absent key, `{}` and `[]` exclude NOTHING and declare no timeout — the byte-for-byte no-change cases (L41)", () => {
+// 7.16.0: the result also carries `timeoutMs: null` here — no timeout is declared either (L41).
+test("absent file, absent key, `{}` and `[]` exclude NOTHING — the byte-for-byte no-change cases", () => {
   assert.deepEqual(readGateExclusion(null), none());
   assert.deepEqual(readGateExclusion(JSON.stringify({ testResults: { test: "vitest-json" } })), none());
   assert.deepEqual(readGateExclusion(doc({})), none());
@@ -94,7 +95,8 @@ test("AC5 — an unknown key names the remedy: the update that knows it, or its 
   assert.doesNotMatch(r.reason, /its only key is/, "the pre-7.16.0 wording is gone");
 });
 
-test("L15 — a prototype-named key is an UNKNOWN key, never an inherited member; `toString` is not a gate id or a timeout", () => {
+// 7.16.0: also a `timeoutMs` reached through `__proto__` is never read as a value.
+test("L15 — a prototype-named key is an UNKNOWN key, never an inherited member; `toString` is not a gate id", () => {
   const proto = readGateExclusion('{"gates": {"__proto__": ["e2e"]}}');
   assert.equal(proto.ok, false);
   assert.match(proto.reason, /has the key "__proto__"/);
@@ -108,7 +110,8 @@ test("L15 — a prototype-named key is an UNKNOWN key, never an inherited member
   assert.deepEqual(readGateExclusion('{"__proto__": {"gates": {"exclude": ["test"], "timeoutMs": 900000}}}'), none());
 });
 
-test('L62 — {"toString":1} as an id, a key value, the block or the timeout is refused and never throws (with the String() control)', () => {
+// 7.16.0: the same for `timeoutMs` — the hostile value, and an array holding one.
+test('L62 — {"toString":1} as an id, a key value or the block is refused and never throws (with the String() control)', () => {
   const hostile = JSON.parse('{"toString":1}');
   assert.throws(() => String(hostile), TypeError, "control: this value really does make String() throw");
   for (const text of [

@@ -33,6 +33,12 @@ time of this record nothing is committed, merged or pushed by the chain itself.
    exit 0).
 10. GATE 2: a **delegated model decision**, not a human one. The brief's condition (verify PASS ∧ regress clean ∧ zero
     floor-gate findings) holds, so the run proceeds to one pull request against `main`, which it does not merge.
+11. PR #445 round 1: CI's `check` failed only at the pharn-ci test-integrity check. It read three base test titles in
+    `gate-exclusion-core.test.mjs`, renamed by the build, as removed tests; diff coverage was 100%. The three titles
+    were restored byte-identical, with the new assertions kept inside them. This ran under a fresh build anchor
+    (setter from the plan's `## Files`, then `--anchor --by pharn-dev-build`). `/pharn-dev-verify` was re-run → `PASS`
+    (stamp `b0c0b197…`, `test` 6831 pass / 0 fail, `reconcile` exit 0). Regress was not re-run: the changed file is
+    inside the feature, not among the outside tests it compares.
 
 ## Verdicts
 

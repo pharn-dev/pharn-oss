@@ -4,8 +4,11 @@
   working-tree build (nothing committed yet), through `pharn/floor/run-gates.mjs` (the pinned `init` line, then one
   `run --next --timeout-ms 3600000` per gate; the `test` gate as a background call). The first run (stamp `e88393d5…`,
   PASS, before the fix round) is superseded.
-- stamp: `pharn/.run/pharn-dev-verify/gates/stamp.json`, sha256 `3ba8555212c6e5ebe1dfd1ee648680411245f734f8fabb8316c873afb0fde151`
-  (`worktree-fingerprint/3+sha256`, final `2db9196a…`)
+- PR round (2026-11-16): re-run after restoring three base test titles in `gate-exclusion-core.test.mjs` that CI's
+  test-integrity check read as removed tests, under a fresh build anchor. The fix-round stamp `3ba85552…` (PASS) is
+  superseded.
+- stamp: `pharn/.run/pharn-dev-verify/gates/stamp.json`, sha256 `b0c0b1975739291bcae886a7b1bc8c8e75c6315bcbebd76d384f102e79d7af81`
+  (`worktree-fingerprint/3+sha256`, final `d04dc6cb…`)
 - machine report: `verify-report.json` (the `check-verify.mjs --stamp` output verbatim, plus the advisory `verifiers`
   block)
 
@@ -21,7 +24,7 @@
 | `instruction-growth` | 0    |
 | `reconcile`          | 0    |
 
-`test`: 6839 tests, 6831 pass, 0 fail, 8 skipped (546 s). Build completeness (`stamp.aux.completeness`): 0 — every
+`test`: 6839 tests, 6831 pass, 0 fail, 8 skipped (824 s, on a host shared with another session's run). Build completeness (`stamp.aux.completeness`): 0 — every
 concrete `## Files` path is present.
 
 **VERDICT: PASS** (`check-verify.mjs` exit 0) — the named gates passed. That is the whole content of the verdict: it
