@@ -93,8 +93,9 @@ true`, `user-invocable: false` — documented keys; the one live probe was incon
   call is refused, and says so in its report (the lens agents block; the stage's route line).
 - **The bytes are the measured bytes.** `.dev/floor/review-lens-agent.test.mjs` pins the lens definition's SHA-256 to
   the file the prefix probe measured (`.dev/features/review-lens-grouping/MEASUREMENTS.md`), and
-  `.dev/floor/stage-agent-type.test.mjs` pins the stage definition's to the committed file the CORE-107 probe measures
-  (pending at 7.19.0: it needs a fresh session). Changing a byte means re-running that probe and re-pinning, never
+  `.dev/floor/stage-agent-type.test.mjs` pins the stage definition's to the committed file the CORE-107 probe measured
+  in a fresh session on 2026-11-16 (`.dev/features/lean-stage-agent/MEASUREMENTS.md`; its kit, to re-run, is
+  `.dev/features/lean-stage-agent/probe/`). Changing a byte means re-running that probe and re-pinning, never
   only the hash. `stage-agent-type.test.mjs` also closes `.claude/agents/` over the two files; a test mutant is never
   written there, because a file there is a live subagent type of this repo's sessions (L70).
 - **The container is whatever answers to the name.** By Claude Code's documentation (not probed), a subagent type is

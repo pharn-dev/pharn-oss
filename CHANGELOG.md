@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-16: **Measured: a `pharn-stage` subagent's first request is 44.6% of a `general-purpose` one's, in one
+  fresh-session probe (CORE-107 follow-up).** The 7.19.0 entry left this unmeasured. On 2026-11-16 the user ran the
+  probe in a fresh `claude -p` session, in a scratch worktree holding the shipped `pharn-stage.md` bytes. Both subagents
+  ran on `claude-opus-5-5` and loaded the same instruction files: 20,973 tokens against 47,017, all token classes, with
+  6 tool schemas (9,127 B) against 9 (16,295 B). An out-of-scope Write inside the type was denied by the writes-scope
+  guard, and nothing was written. The probed file's SHA-256 equals the pin in `stage-agent-type.test.mjs`. Glob, Grep
+  and MultiEdit, named in the definition, were offered to neither type by that Claude Code build. Bounds: n = 1 per
+  type and a one-line prompt, so the saving on a real stage is not measured, and the benchmark loop still waits on
+  pharn-cli's `cli-install-agents`. Record: `.dev/features/lean-stage-agent/MEASUREMENTS.md`, with the kit to re-run
+  it beside it (`probe/`). Dev apparatus only, so no `SKILLS_VERSION` bump.
+
 ## [7.19.0] - 2026-11-16
 
 ### Added

@@ -34,5 +34,10 @@ deferred: none
 Pending, outside this run: AC2 and the live half of AC3 wait on the probe kit (a fresh session). AC5 waits on
 pharn-cli's `cli-install-agents`.
 
+Follow-up, 2026-11-16 (`.dev/features/lean-stage-agent-probe/`): the probe ran in a fresh session. AC2 measured
+(`pharn-stage` first request 44.6% of `general-purpose`'s, n = 1 per type, the same instruction files), AC3 live
+observed (the Write was denied by the writes-scope guard), AC1's binding confirmed (probed SHA-256 = `PINNED_SHA256`):
+`.dev/features/lean-stage-agent/MEASUREMENTS.md`. AC5 is still pending on `cli-install-agents`.
+
 _Chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate._
