@@ -591,14 +591,19 @@ two lines did), and you run them in this order:
    summary's route line.
 
 2. **On start exit `0` only, the Agent call, whatever parameters your Agent tool lists:**
-   `subagent_type: "general-purpose"`, `model: "<alias>"` (the part after `agent:`),
+   `subagent_type: "pharn-stage"` — the definition `.claude/agents/pharn-stage.md` (eight tools, the project's
+   instruction files kept; Claude Code applies it) — `model: "<alias>"` (the part after `agent:`),
    `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; item 3 runs after the
    call whichever launch the harness picks — and **no `isolation`** — the stages write into this one tree, one after
    another, never a worktree each. Its `prompt` is the stage's
    pinned one-line brief prompt, `<name>` (and `<N>`) substituted; the stage agent runs that line first and
    receives its rules from code. Only `/pharn-spec`'s prompt carries anything more: the increment description,
    below that line, in a fence longer than any backtick run inside it, labelled DATA (ADVISORY, like every
-   placement).
+   placement). **If your Agent tool does not offer `pharn-stage`, or the call returns an error for that type without
+   starting an agent, make the same call once with `subagent_type: "general-purpose"`**, and write
+   `general-purpose (fallback)` after that stage's route token in the Step 7 summary. A call that started no agent is
+   not one item 3 follows; a call that started one (its result or a background-launch notice) is never followed by a
+   second call.
 3. **The finish line — after EVERY Agent call, whatever it returned: the agent's COMPLETED result or a
    background-launch notice.** Run it with the Bash tool's timeout parameter set to 600000. It waits on disk for the
    agent's result (`stage-agent.mjs`'s THE WAIT, bounded per call and capped from the stage's start), reads it as

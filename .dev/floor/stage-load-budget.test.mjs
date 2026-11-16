@@ -101,6 +101,7 @@ const STAGE_LOADS = Object.freeze({
   "pharn-loop": Object.freeze([
     CONSTITUTION,
     "pharn/pharn-contracts/loop-record.md", // close part: "Read the contract and follow its canonical template"
+    ".claude/agents/pharn-stage.md", // 7.19.0: `subagent_type: "pharn-stage"`, each routed stage agent's system prompt
   ]),
   "pharn-memory-promote": Object.freeze([
     CONSTITUTION,
@@ -117,7 +118,10 @@ const STAGE_LOADS = Object.freeze({
     ".claude/agents/pharn-review-lens.md", // Step 4: `subagent_type: pharn-review-lens`, each group's system prompt
     LENSES, // Step 4: one subagent per family group, each reading its lenses' files
   ]),
-  "pharn-ship": Object.freeze([CONSTITUTION]), // + /pharn-spec's set, inline by ROUTE_POLICY (`interactive`)
+  "pharn-ship": Object.freeze([
+    CONSTITUTION,
+    ".claude/agents/pharn-stage.md", // 7.19.0: `subagent_type: "pharn-stage"`, each routed stage agent's system prompt
+  ]), // + /pharn-spec's set, inline by ROUTE_POLICY (`interactive`)
   "pharn-spec": Object.freeze([
     CONSTITUTION,
     ARCHITECTURE, // trusted prefix: the §6 spec-stage row
@@ -139,7 +143,7 @@ const STAGE_LOAD_CEILINGS = Object.freeze({
   "pharn-plan": 61440, // 55,565
   "pharn-regress": 34304, // 30,738
   "pharn-review": 375808, // 341,324 — 22 lenses
-  "pharn-ship": 162816, // 147,718 — with /pharn-spec inline
+  "pharn-ship": 181248, // 164,502 — re-measured at 7.19.0 (lean-stage-agent: the pharn-stage definition, item 2's fallback)
   "pharn-spec": 77824, // 70,314 — re-measured at 7.10.0 (loop-amend-spec: the amend mode, Step 1a)
   "pharn-test": 31232, // 28,046
   "pharn-supervise": 17920, // 16,093 — measured at 7.9.0 (loop-supervisor)

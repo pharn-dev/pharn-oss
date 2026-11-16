@@ -106,6 +106,8 @@ cannot, so the gain here will be smaller and is measured by AC2's probe, not cla
   instruction files, its SHA bound to the probe kit (pending), the fallback rule covering both orchestrators. — dev
   apparatus
 - `SKILLS_VERSION` — 7.18.0 → 7.19.0 (minor: a newly shipped agent definition). — repo meta
+- `README.md` — the version badge only, 7.18.0 → 7.19.0 (`check:badge` binds it to `SKILLS_VERSION`). Added at build,
+  after the first anchor: see "Build deviation" below. — repo meta
 - `CHANGELOG.md` — a `## [7.19.0]` entry (CONTRIBUTING "CHANGELOG entries"): the type, the fallback, what is pending
   (AC2 probe, AC5 blocked by `cli-install-agents`), the human-applied trusted-doc edits. — repo meta
 
@@ -139,6 +141,16 @@ cannot, so the gain here will be smaller and is measured by AC2's probe, not cla
 Order: GATE 1 approval → the user runs `python3 <scratchpad>/core-107/patch.py <worktree>` → commit the two docs as a
 human-authored edit → this PLAN's `spec_content_hash` re-pinned to `node .dev/floor/hash-doc.mjs pharn/ARCHITECTURE.md`
 → `/pharn-dev-grill` → `/pharn-dev-build`.
+
+## Build deviation (recorded, 2026-11-16)
+
+The plan missed `README.md`: the version badge must equal `SKILLS_VERSION` (`check:badge`). Found during the build,
+after the first anchor (epoch `2026-11-16T17:38:34.867Z`). Before widening, a reconcile preview
+(`check-bash-reconcile.mjs --base . --require-baseline`) read `CLEAN`: 12 paths reconciled, no escapes, nothing exempted
+or merged. Every one of the 12 is in this plan's `## Files`. The plan's `## Files` then gained the one line above,
+and build Step 0 was run again (setter, then a new anchor). A path added after an anchor reads as
+`plan-widened-after-anchor`, and verify would read that as a FAIL. Re-anchoring here hides nothing, because the
+preview had just shown the old epoch clean. The model made this call under delegation; `SHIP.md` records it.
 
 ## Contracts satisfied
 

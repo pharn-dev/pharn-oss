@@ -242,7 +242,8 @@ Report, plainly and without asking anything:
   printed — the red gates, the earlier run and its age — as DATA, then S14c's three ways out;
 - **each stage's route** (6.27.0), one line per stage start — per iteration, and per re-plan round for the plan, grill
   and triage (7.8.0), and the supervisor's on an escalation (7.9.0), in the order they ran: the token its stage-start marker recorded
-  (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
+  (`agent:<alias>`, followed by `general-purpose (fallback)` when that stage's Agent call took the fallback, or
+  `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
   `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs` (a quick run's
   grill is `inline (policy)` too, and a quick run has no triage or supervisor line). A route
   records what was REQUESTED; never write that a stage ran on a model — what it was served is `cost.json`'s
@@ -406,6 +407,10 @@ last three feeds `check-loop.mjs`'s inputs.
   deterministic infrastructure but not a floor primitive — it makes an early, record-less ending **visible and
   costly**, never impossible, **cannot judge a record or tell a real one from a fabricated one** (`touch LOOP.md`
   satisfies it), runs only when Claude Code starts it (`pharn/LIMITS.md §7`), and fails **open**.
+- **Advisory, the stage agent's container (7.19.0):** a routed stage is requested as `pharn-stage`, whose tool list
+  and system prompt (the definition's body, in place of `general-purpose`'s) Claude Code applies. Any
+  `.claude/agents/*.md` named `pharn-stage`, in the project or at user scope, answers to that name, and nothing here
+  detects which one ran or what it carried. **Struck:** "a routed stage ran with only the `pharn-stage` tools".
 - **Advisory, the parts (6.32.0):** this command reads `pharn-loop-quick.md` only for a `--quick` run, before Step 1a,
   and this file once, at the run's first stop — each again after a compaction. That you read each there, in full, and
   follow it is your own discipline: nothing on the floor sees a Read. PHARN's own tests pin the TEXT — each part's file

@@ -23,6 +23,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.19.0] - 2026-11-16
+
+### Added
+
+- **Routed stage agents are now requested as a PHARN subagent type, `pharn-stage`, with a short tool list**
+  (Linear CORE-107). Before, `/pharn-loop` and `/pharn-ship` spawned every routed stage as `general-purpose`, which
+  carries 11 tool schemas (55,193 B in the 2026-11-11 baseline's transcripts) against 9.0 KB for a six-tool type, about
+  11.6k tokens per stage-agent request by a bytes/4 estimate (`.dev/measurements/loop-baseline-2026-11-11.md` §5, §12).
+  - **The definition.** `.claude/agents/pharn-stage.md`: eight tools (Read, Glob, Grep, Bash, Write, Edit, MultiEdit,
+    NotebookEdit), the project's instruction files kept (no `omitClaudeMd`, because a stage reads them), and no
+    `model`, which the Agent call routes. Its body says only that the prompt's first line is the
+    `stage-agent.mjs brief` line to run and follow. The brief and the stage command still carry the whole task, so the
+    fallback runs the same text.
+  - **The fallback, named and reported.** Item 2 of `## Running a stage` in both orchestrators requests
+    `pharn-stage`. If the Agent tool does not offer it, or the call returns an error for it without starting an agent,
+    the orchestrator makes the same call once as `general-purpose`, and writes `general-purpose (fallback)` after that
+    stage's route token (the loop's Step 7 summary, `SHIP.md`). A call that started an agent is never followed by a
+    second one. Each close part's claims block strikes "a routed stage ran with only the `pharn-stage` tools": Claude
+    Code applies the definition, and any `.claude/agents/*.md` named `pharn-stage`, in the project or at user scope,
+    answers to the name.
+  - **In an installed project this changes nothing yet.** pharn-cli does not copy `.claude/agents/` (follow-up
+    `cli-install-agents`), so every routed stage there takes the fallback, as before. `MIN_CLI` is unchanged.
+  - **Not measured yet.** How much smaller the type's first request is than `general-purpose`'s needs a probe in a
+    fresh session (Claude Code discovers a definition only in a session started after the file exists). The probe is
+    pending, as is a benchmark loop on the type, which waits on `cli-install-agents`.
+  - **Two trusted-doc sentences, edited by the maintainer outside the agent loop:** `pharn/ARCHITECTURE.md` §4 names
+    the second subagent type, and `pharn/LIMITS.md` §3g now counts six stage agents in a one-iteration full loop (spec,
+    plan, grill, triage, test and build; it said five, true before 7.7.0) and names the type.
+  - **Apparatus.** `.dev/floor/stage-agent-type.test.mjs` (new) closes `.claude/agents/` over the two definitions,
+    pins `pharn-stage.md`'s SHA-256, its frontmatter, closed tool set and body, and the wiring in both orchestrators and
+    both close parts, each pin with an in-memory negative control. `review-lens-agent.test.mjs`'s closure now judges
+    the directory without `pharn-stage.md` (its title is kept). `command-hygiene.test.mjs` pins the type and the
+    fallback in both Agent calls, and shows that both write guards judge a `pharn-stage` agent's write exactly as the
+    orchestrator's (neither hook reads the agent type). The `pharn-ship-stages.md` and `pharn-ship-close.md` byte
+    ceilings and the `pharn-ship` stage-load ceiling are raised by the measured + 10% rule; the `pharn-loop` and
+    `pharn-ship` load rows count the definition. `.dev/guides/product-commands.md` describes both definitions.
+
 ## [7.18.0] - 2026-11-16
 
 ### Added

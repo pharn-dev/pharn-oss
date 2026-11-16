@@ -77,25 +77,30 @@ true`, `user-invocable: false` — documented keys; the one live probe was incon
 
 ## A product subagent definition lives in `.claude/agents/pharn-*.md` (6.64.0)
 
-- **What exists.** One definition, `.claude/agents/pharn-review-lens.md`: the subagent type `/pharn-review` Step 4
-  spawns each lens group as (five tools, `omitClaudeMd: true`). Its frontmatter `name:` is its type, and the file name
-  takes the same `pharn-` / `pharn-dev-` split as the commands. It is product surface, so editing it bumps
-  `SKILLS_VERSION`.
-- **One copy of the task.** The definition's body says only its role, a scope guard, the P2 fence and its write rule;
-  it restates no command step. The command's prompt carries the whole task, so the `general-purpose` fallback runs the
-  same task text.
+- **What exists.** Two definitions. `.claude/agents/pharn-review-lens.md` is the subagent type `/pharn-review` Step 4
+  spawns each lens group as (five tools, `omitClaudeMd: true`). `.claude/agents/pharn-stage.md` (7.19.0) is the type
+  `/pharn-loop` and `/pharn-ship` request each routed stage agent as, item 2 of their `## Running a stage` (eight
+  tools, the project's instruction files kept, since a stage reads them; no `model`, which the Agent call routes). Each
+  one's frontmatter `name:` is its type, and the file name takes the same `pharn-` / `pharn-dev-` split as the
+  commands. They are product surface, so editing one bumps `SKILLS_VERSION`.
+- **One copy of the task.** A definition's body restates no command step. The lens type's says only its role, a scope
+  guard, the P2 fence and its write rule, and the command's prompt carries the whole task. The stage type's says only
+  that the prompt's first line is the `stage-agent.mjs brief` line to run and follow: the brief and the stage command
+  carry the task. So the `general-purpose` fallback runs the same task text either way.
 - **The fallback is a rule, not a choice.** Claude Code discovers `.claude/agents/` only in a session that started
   after the directory existed, and pharn-cli does not install it yet (follow-up `cli-install-agents`). So a command
   that names a product type also names `general-purpose` with the same prompt for when the type is not offered or a
-  call is refused, and says so in its report.
-- **The bytes are the measured bytes.** `.dev/floor/review-lens-agent.test.mjs` pins the definition's SHA-256 to the
-  file the prefix probe measured (`.dev/features/review-lens-grouping/MEASUREMENTS.md`). Changing a byte means
-  re-running that probe and re-pinning, never only the hash. The test also closes `.claude/agents/` over the one file;
-  a test mutant is never written there, because a file there is a live subagent type of this repo's sessions (L70).
+  call is refused, and says so in its report (the lens agents block; the stage's route line).
+- **The bytes are the measured bytes.** `.dev/floor/review-lens-agent.test.mjs` pins the lens definition's SHA-256 to
+  the file the prefix probe measured (`.dev/features/review-lens-grouping/MEASUREMENTS.md`), and
+  `.dev/floor/stage-agent-type.test.mjs` pins the stage definition's to the committed file the CORE-107 probe measures
+  (pending at 7.19.0: it needs a fresh session). Changing a byte means re-running that probe and re-pinning, never
+  only the hash. `stage-agent-type.test.mjs` also closes `.claude/agents/` over the two files; a test mutant is never
+  written there, because a file there is a live subagent type of this repo's sessions (L70).
 - **The container is whatever answers to the name.** By Claude Code's documentation (not probed), a subagent type is
-  its frontmatter `name:`, so any `.claude/agents/*.md` named `pharn-review-lens`, in the reviewed tree or at user
-  scope, sets the container its lenses run in; the reviewed tree's family map likewise decides which lenses share a
-  context. The command's claims block names both; nothing detects either.
+  its frontmatter `name:`, so any `.claude/agents/*.md` named `pharn-review-lens` or `pharn-stage`, in the project or
+  at user scope, sets the container those agents run in; the reviewed tree's family map likewise decides which lenses
+  share a context. Each command's claims block names its channel; nothing detects either.
 - **The family map and its helper.** `pharn/floor/lens-family-map.json` says which lenses share a subagent; the
   deterministic `pharn/floor/lens-groups.mjs` turns it and the assignment record into the groups Step 3 prints, and
   re-checks which grouped lenses wrote no `findings.json` this run: `absent`, or `stale` (not newer than the run's
