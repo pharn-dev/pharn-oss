@@ -187,8 +187,40 @@ reading of its schema (advisory, like `--no-agent-tool`), failing in the safe di
 | `.dev/floor/command-hygiene.test.mjs:5245`                    | edited (the pin)                                      |
 | `.dev/features/**`, `.dev/measurements/**` (dated records)    | still true at their date; not edited (L78)            |
 
-## Open questions (HALT)
+## Resolved at GATE 1
 
-- Q1: Where may the probe record live? Recommended: `.dev/features/stage-effort-routing/EFFORT-PROBE.md` (beside the feature, as CORE-107's MEASUREMENTS.md). Alternative: `.dev/measurements/agent-effort-2026-11-16.md`.
-- Q2: Edit `check-model-config.mjs`'s header (stale "takes no effort") although pharn-cli vendors it by sha256? Recommended: yes, header only, follow-up in pharn-cli; leaving a false sentence in a shipped checker is the worse drift.
-- Q3: LIMITS patch timing (L68)? Recommended: the user runs patch.py and commits it BEFORE build Step 0; else after verify.
+GATE 1 was approved as written by the orchestrator under the user's delegation ("You make all decisions"): a model
+decision, not a human approval. The three questions the plan raised were answered there:
+
+- Q1, the probe record's place: `.dev/features/stage-effort-routing/EFFORT-PROBE.md`.
+- Q2, `check-model-config.mjs`'s header: edit it, header only. pharn-cli's copy is a byte-pinned test fixture
+  (`tests/fixtures/pharn-oss/check-model-config.mjs`), so nothing in an install breaks; it lags (follow-up).
+- Q3, the LIMITS patch: the user runs `patch.py` before build Step 0, and the build commits it as a human-authored doc
+  edit before anchoring (L68).
+
+Added follow-up (orchestrator): pharn-cli's models label text (`modelsLabelLines`, models-label-truth) says effort is
+never routed, and goes stale with this increment.
+
+## Amended after grill
+
+`GRILL.md` raised five advisory concerns (2 important, 3 minor). Each is folded here; the sections above stay as written
+where this one supersedes them.
+
+- **G-P0 (AC5's measurement).** `EFFORT-PROBE.md` names its measurement for what it is: a direct Agent-tool probe
+  (general-purpose, haiku, `effort: "low"`) and its control, not a stage routed through `start` and a `pharn-stage`
+  agent. A routed stage's served effort is stated as not yet observed, and the first routed loop run after merge (or
+  CORE-112's pairs) is named as where it is read. AC5 is reported as met in its "records which effort was served" form,
+  for the Agent tool, with that bound.
+- **G-P7 (the retry's composition).** Item 2 states the order, once: (1) the call with `subagent_type: "pharn-stage"`,
+  `model`, `effort`; (2) if it returns an error without starting an agent and the error is about the type, the same call
+  with `general-purpose`; (3) if a call returns an error about `effort` without starting an agent, the same call without
+  `effort`. At most three calls, never a second call after one started an agent. Where the Agent tool lists no `effort`
+  parameter, step (1) already omits it. Each fallback taken is written after the route token (`general-purpose
+(fallback)`, `effort not applied`).
+- **G-P3 (route-token-core's axis).** Its header restates the one axis as "what a routed stage is REQUESTED with: the
+  route token's grammar and, beside it, the effort line's", one reason to change (a platform parameter set or the
+  token's shape).
+- **G-P7 (`isEffortLine`).** Dropped: no shipped code parses `start`'s stdout. The grammar is tested through
+  `effortLine` (members map, non-members are null) and through `start`'s printed third line.
+- **G-P7 (versions).** The record gives each client's version with its source: 2.1.323 (the orchestrator's reading of
+  the desktop app; the terminal CLI binary on disk) and 2.1.325 (the desktop probe transcript's `version`).
