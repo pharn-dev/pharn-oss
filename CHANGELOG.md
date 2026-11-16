@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-16: **Decided: running one side's gates at the same time stays closed (CORE-88).** The reopen trigger set on
+  2026-10-06 (verify's wall-clock as a top bucket on a run that otherwise ends green) is not met, and none of the three
+  preconditions is. One sequential pass of the measured project's verify gates through the 7.16.0 runner, on a scratch
+  copy: `test` 286.3 s, `lint` 23.7 s, `format:check` 14.6 s, `typecheck` 22.2 s, so `test` is 82.6% of 346.7 s. One
+  concurrent pass took 291.5 s of wall-clock (55.2 s saved), and each short gate ran 5 to 6 times slower beside `test`.
+  `typecheck` wrote its git-ignored incremental cache while its stamp row read `fp_before == fp_after`, so "these gates
+  may overlap" could only ever be advisory. The acceptance criterion's per-gate durations from a green run are not met:
+  no run on 7.12.0 or later exists, and the record names the step that would close that gap. The decision is the
+  orchestrator's under the user's delegation, not the maintainer's sign-off. Record:
+  `.dev/measurements/gates-within-side-parallel-2026-11-16.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
 ## [7.16.0] - 2026-11-16
 
 ### Added
