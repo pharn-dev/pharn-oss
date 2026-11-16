@@ -257,6 +257,52 @@ re-resolves the set. An excluded gate is not evidence either way: the map holds 
 agent-editable project input. `/pharn-test` pins it in the AC lock (`ac-tests.md`, "The test-infrastructure pin"),
 and that pin is agreement, never provenance (**L43**).
 
+## A longer per-gate timeout (`gates.timeoutMs`, 7.16.0)
+
+**The declaration** sits beside `exclude` in the same block:
+
+```json
+{ "gates": { "timeoutMs": 900000 } }
+```
+
+`pharn/floor/gate-exclusion-core.mjs` reads the block, and `pharn/floor/gate-timeout-core.mjs`'s header owns the
+value rule, its bounds and how it combines with the pinned `--timeout-ms` (cited, not restated — P4). Both runners
+apply it through that module's one `resolveRunTimeout`. A malformed value makes the block refuse, like a malformed `exclude`
+(`bad-gate-exclusion` at `init`). An unknown key in the block now names the remedy: a key a newer PHARN added needs
+that PHARN (`npx @pharn-dev/pharn@latest update`), otherwise remove it. A floor older than 7.16.0 refuses the key
+with its own message (its only key is `exclude`), which names the key but not the update.
+
+**Where it applies.** Only in the two runners that do not run their gates inside a Bash call:
+
+- the entry runner, `entry-gates.mjs --start`, which puts the value in `runner.json` `timeout_ms`, the runner's
+  argv and the cached-evidence inputs (a declaration below the pinned value is `unusable bad-gate-timeout`);
+- the regress/verify stage runner, `stage-direct.mjs`, which puts it in the fresh argv `runner.json` records, so
+  `stage-regress.mjs` keeps it in its progress record and reads it on the BASE and the HEAD side of one comparison,
+  and for its base-side install. When this run's entry record (`pharn/.run/pharn-entry/runner.json`, this feature)
+  holds another value, the call refuses `timeout-changed`; a value below the pinned one is `timeout-unusable`.
+
+Every other caller keeps its pinned value: the thin `/pharn-regress` and `/pharn-verify` a person runs, `/pharn-build`'s
+`build-gate.mjs` and `/pharn-test`'s red run. With no declaration every argv, record and stamp is byte-identical to
+before, given the same pinned `--timeout-ms` at entry and at the stage (every pinned line carries 540000; a stage call
+pinned to another value than its run's entry check refuses `timeout-changed`).
+
+A declaration below the pinned value is refused at entry, but `/pharn-loop` reads an entry exit 2 as "go on", so such a
+run first stops at regress, after the build (follow-up `entry-timeout-refusal-stop`); `/pharn-ship` asks at its entry
+read.
+
+**What it costs.** A longer timeout lengthens a HUNG gate too: a gate that hangs runs the declared time before it is
+killed, at entry, on each side of regress (and a hung base install) and at verify. A takeover — the entry check's
+`--wait` takeover or the stage runner's — always starts its first gate (L58), so its one foreground invocation can then
+run past the 600 s Bash call by up to the declared value (`stage-exit.md`).
+
+**What it proves, and what it does not (P0).** The range test on the value is FLOOR (an integer range and a closed key
+set, enum/regex class). That both runners apply the resolved value is tested runner behaviour, not a floor primitive.
+The value itself is chosen by whoever edits `pharn.config.json`,
+agent-editable project input: never proven to be the project owner's choice (**L43**). The run pin is integer
+equality between two `pharn/.run/` records a Bash writer reaches, so it narrows a mid-run change of the declaration and
+proves nothing about who wrote either record (**L65**); an entry record that is absent, unreadable or another
+feature's pins nothing.
+
 ## Build-completeness is NOT a gate
 
 The runner **captures** `check-build-complete.mjs`'s exit code — so it is not model-typed — and records it
@@ -405,7 +451,8 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   the spawn and that record is not covered, and a group that had already exited may have had its id reused, which
   nothing can tell apart. The invoking command's Bash timeout must still exceed `--timeout-ms`.
 - **`--timeout-ms` is required.** Floor code carries no harness-specific default, so there is no default
-  for a test to leave unexercised (**L41**).
+  for a test to leave unexercised (**L41**). Since 7.16.0 the entry and stage runners pass a project's declared
+  `gates.timeoutMs` in its place ("A longer per-gate timeout", above); the runner itself still takes only the flag.
 - Gate stdout/stderr are **untrusted free text** (P2): written by fd, only their sha256 reaches the
   record, and no verdict reads their content.
 - **Log growth** is bounded _within_ a stage by `init`'s recreate of `<out>`; across `/pharn-loop`

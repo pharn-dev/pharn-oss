@@ -311,6 +311,9 @@ Branch **only** on the exit code (P5): `5` → run it again; `0` or `3` → proc
 its `unmeasured` entries or its `reason_code` as DATA and ask, through the interactive form: **Stop** (a STOP, through Steps 3 and 3a) or
 **Continue** (fixing that gate is the feature, or the human accepts a red or unmeasured verify at GATE 2; keep the ids for
 `SHIP.md`). Never continue without the answer — the answer given at Step 2.2's peek, for a `4` or `6`, is that answer.
+With a `6`, name the remedies for the next run: a slow but healthy gate can get a longer per-gate timeout in
+`pharn.config.json` `gates.timeoutMs` (at most 1800000 ms; a hung gate then also runs that long), and a gate that
+cannot run can be listed in `gates.exclude` — either committed before the re-run.
 
 ### Step 2.4 — `/pharn-test`
 

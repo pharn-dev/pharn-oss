@@ -14,8 +14,16 @@
 //
 // CLOSED in both directions (L36), fail-closed:
 //   • no file, or no own `gates` key → nothing is excluded, and nothing anywhere changes (byte-for-byte);
-//   • `gates` must be a plain object whose only key is `exclude` (`{}` excludes nothing);
+//   • `gates` must be a plain object whose keys are among GATES_KEYS — `exclude`, and since 7.16.0 `timeoutMs`
+//     (`{}` excludes nothing and declares no timeout);
 //   • `exclude` must be an array of DISTINCT ALLOWLIST members (`[]` excludes nothing);
+//   • `timeoutMs` (7.16.0, gate-timeout-above-bash-cap) must pass gate-timeout-core.mjs `timeoutDeclarationError`, which
+//     owns its value rule; this file only carries it, as `timeoutMs` in the result (`null` when absent). Every reader of
+//     the block therefore refuses a malformed value, as it refuses a malformed `exclude`; only the two detached runners
+//     (entry-gates.mjs, stage-direct.mjs) APPLY it, through gate-timeout-core.mjs `effectiveTimeoutMs`;
+//   • an unknown key names the remedy (7.16.0): a key a newer PHARN added needs that PHARN (`npx @pharn-dev/pharn@latest
+//     update`), otherwise it is removed. A floor ≤ 7.15.0 cannot be changed to say so: it refuses `timeoutMs` with "its
+//     only key is `exclude`" (CHANGELOG [7.16.0]);
 //   • anything else REFUSES, loudly — including a file that exists but cannot be read or parsed, which is never read
 //     as "absent" (a project that declared nothing and whose pharn.config.json is not valid JSON now has discovery
 //     refused, where before 6.36.0 discovery never read the file: a stated behaviour change).
@@ -41,11 +49,15 @@ import { join } from "node:path";
 import { ALLOWLIST, exclusionError } from "./gate-run-core.mjs";
 import { CONFIG_FILE } from "./per-test-results-core.mjs";
 import { shown } from "./quote-core.mjs";
+import { TIMEOUT_KEY, timeoutDeclarationError } from "./gate-timeout-core.mjs";
 
 /** The top-level key of the declaration, and its closed key set. */
 export const GATES_KEY = "gates";
 export const EXCLUDE_KEY = "exclude";
-export const GATES_KEYS = Object.freeze([EXCLUDE_KEY]);
+export const GATES_KEYS = Object.freeze([EXCLUDE_KEY, TIMEOUT_KEY]);
+
+/** What an unknown `gates` key is told (7.16.0): the update that knows it, or its removal. */
+export const UNKNOWN_KEY_REMEDY = "a key a newer PHARN added needs that PHARN (npx @pharn-dev/pharn@latest update); otherwise remove it";
 
 function isPlainObject(v) {
   return v !== null && typeof v === "object" && !Array.isArray(v);
@@ -56,12 +68,13 @@ function refuse(reason) {
 }
 
 /**
- * Validate a `pharn.config.json` TEXT (`null` when the file is absent) and return the excluded ids in ALLOWLIST order.
+ * Validate a `pharn.config.json` TEXT (`null` when the file is absent) and return the excluded ids in ALLOWLIST order
+ * and the declared per-gate timeout (`null` when none is declared).
  * @param {string|null} text
- * @returns {{ok: true, exclude: string[]} | {ok: false, reason: string}}
+ * @returns {{ok: true, exclude: string[], timeoutMs: number|null} | {ok: false, reason: string}}
  */
 export function readGateExclusion(text) {
-  if (text === null) return { ok: true, exclude: [] };
+  if (text === null) return { ok: true, exclude: [], timeoutMs: null };
   let cfg;
   try {
     cfg = JSON.parse(text);
@@ -69,17 +82,32 @@ export function readGateExclusion(text) {
     return refuse(`is not valid JSON (${e.message}), so its \`${GATES_KEY}.${EXCLUDE_KEY}\` cannot be read`);
   }
   if (!isPlainObject(cfg)) return refuse("is not a JSON object");
-  if (!Object.hasOwn(cfg, GATES_KEY)) return { ok: true, exclude: [] };
+  if (!Object.hasOwn(cfg, GATES_KEY)) return { ok: true, exclude: [], timeoutMs: null };
   const block = cfg[GATES_KEY];
-  if (!isPlainObject(block)) return refuse(`\`${GATES_KEY}\` must be an object — {"${EXCLUDE_KEY}": [<gate id>, …]}`);
-  for (const k of Object.keys(block)) {
-    if (!GATES_KEYS.includes(k)) return refuse(`\`${GATES_KEY}\` has the key ${shown(k)}; its only key is \`${EXCLUDE_KEY}\``);
+  if (!isPlainObject(block)) {
+    return refuse(`\`${GATES_KEY}\` must be an object — {"${EXCLUDE_KEY}": [<gate id>, …], "${TIMEOUT_KEY}": <milliseconds>}`);
   }
-  if (!Object.hasOwn(block, EXCLUDE_KEY)) return { ok: true, exclude: [] };
-  const ids = block[EXCLUDE_KEY];
-  const bad = exclusionError(ids);
-  if (bad !== null) return refuse(`\`${GATES_KEY}.${EXCLUDE_KEY}\` ${bad}`);
-  return { ok: true, exclude: ALLOWLIST.filter((id) => ids.includes(id)) };
+  for (const k of Object.keys(block)) {
+    if (!GATES_KEYS.includes(k)) {
+      return refuse(
+        `\`${GATES_KEY}\` has the key ${shown(k)}; its keys are \`${EXCLUDE_KEY}\` and \`${TIMEOUT_KEY}\` — ${UNKNOWN_KEY_REMEDY}`
+      );
+    }
+  }
+  let exclude = [];
+  if (Object.hasOwn(block, EXCLUDE_KEY)) {
+    const ids = block[EXCLUDE_KEY];
+    const bad = exclusionError(ids);
+    if (bad !== null) return refuse(`\`${GATES_KEY}.${EXCLUDE_KEY}\` ${bad}`);
+    exclude = ALLOWLIST.filter((id) => ids.includes(id));
+  }
+  let timeoutMs = null;
+  if (Object.hasOwn(block, TIMEOUT_KEY)) {
+    const bad = timeoutDeclarationError(block[TIMEOUT_KEY]);
+    if (bad !== null) return refuse(`\`${GATES_KEY}.${TIMEOUT_KEY}\` ${bad}`);
+    timeoutMs = block[TIMEOUT_KEY];
+  }
+  return { ok: true, exclude, timeoutMs };
 }
 
 /**

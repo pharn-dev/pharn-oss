@@ -104,6 +104,28 @@
 //     takeover over a run whose script exited (checked against markers.jsonl after the recorded `seq`) or that it
 //     finished itself. A wait that reads a result never writes one.
 //
+// ── THE PER-GATE TIMEOUT (7.16.0, gate-timeout-above-bash-cap — CORE-87) ───────────────────────────────
+//   A FRESH call, after the in-flight check and before it takes the lock, resolves the per-gate timeout from the project
+//   root: `pharn.config.json` `gates.timeoutMs` (gate-exclusion-core.mjs reads it; gate-timeout-core.mjs owns the rule)
+//   in place of the pinned `--timeout-ms` when one is declared, else the pinned value. Then THE RUN PIN: when
+//   `pharn/.run/pharn-entry/runner.json` is a valid entry runner record (entry-gates-core.mjs `runnerRecordDefect`,
+//   imported) naming this `--name`, its `timeout_ms` must equal that value, or the call refuses `timeout-changed`. A
+//   declaration below the pinned value refuses `timeout-unusable`. Both are exit 2, nothing touched — the orchestrators'
+//   existing mapping of a stage-direct exit 2 (the stage's `unusable`). Otherwise the fresh argv's `--timeout-ms` value
+//   is replaced (core `withTimeout`) BEFORE runner.json is written, so the runner, every `--resume` and a takeover read
+//   the one recorded value — and stage-regress.mjs keeps it in its progress record for BOTH sides of the comparison
+//   (and its base-side install). With no declaration the argv is the call's own, byte for byte. The resolution rule is
+//   gate-timeout-core.mjs `resolveRunTimeout`, shared with entry-gates.mjs (L35). The pin applies with or without a
+//   declaration (a declaration REMOVED mid-run is a change too), so a fresh call whose pinned `--timeout-ms` differs
+//   from the one its run's entry check was given refuses `timeout-changed` — every pinned line carries 540000.
+//   BOUNDS: the pin is agreement between two `pharn/.run/` records a Bash writer reaches (L43, L65) — it narrows a
+//   mid-run change of the declaration and never proves who chose the value; an entry record that is absent, unreadable,
+//   malformed or another feature's pins nothing; a `gates` block that refuses is left to the stage script, which refuses
+//   it as before. A longer timeout lengthens a hung gate too: it runs the declared time before it is killed. With a
+//   declared value above `--budget-ms`, each script invocation still starts its first slow step (L58), so the runner
+//   makes one gate of progress per invocation; a TAKEOVER's one foreground invocation can then outlast the 600 s Bash
+//   call by up to the declared value (the failure mode below).
+//
 // ── FAILURE MODES (each stated) ───────────────────────────────────────────────────────────────────────
 //   * The setter fails — no thin-caller command file, an unusable `pharn/.run/`, the setter missing → exit 2, nothing
 //     run, no marker; the refusal line is replayed. The orchestrators map it as the stage's own `unusable` (S9 / STOP).
@@ -122,7 +144,8 @@
 //   * The Bash tool's 600 s limit does NOT kill a call: the tool moves it to the background (GATE-2 review R1). With the
 //     wait bounded by `--budget-ms` (570 s), a call ends before the cap unless node's start-up, the spawn, the final
 //     print and the ≤ RELEASE_WAIT_MS wait for the runner's release do not fit the last 30 s — or a TAKEOVER's one
-//     script invocation runs past it (its first slow step is always permitted, up to `--timeout-ms`, `stage-exit.md`).
+//     script invocation runs past it (its first slow step is always permitted, up to `--timeout-ms` — or, since 7.16.0,
+//     the declared `gates.timeoutMs`, up to 30 min — `stage-exit.md`).
 //     The orchestrators wait for a backgrounded call; a second call meanwhile refuses or waits.
 //
 // ── BOUNDS (P0) ───────────────────────────────────────────────────────────────────────────────────────
@@ -217,7 +240,12 @@ import {
   stdoutPiece,
   takeoverStep,
   waitStep,
+  withTimeout,
 } from "./stage-direct-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
+import { resolveRunTimeout } from "./gate-timeout-core.mjs";
+import { ENTRY_PATHS, runnerRecordDefect } from "./entry-gates-core.mjs";
+import { CONFIG_FILE } from "./per-test-results-core.mjs";
 
 export { SCRIPT_STDOUT_MAX };
 
@@ -965,6 +993,45 @@ function waitFor(ctx, rec) {
   }
 }
 
+/** The most bytes the entry runner record is read to (one record is ~200 B). */
+const ENTRY_RUNNER_READ_MAX = 4096;
+
+/**
+ * THE PER-GATE TIMEOUT (header, 7.16.0): the project's `gates.timeoutMs` when it declares one, else the pinned
+ * `--timeout-ms` — then the RUN PIN: when `pharn/.run/pharn-entry/runner.json` is a valid entry runner record of this
+ * `--name`, its `timeout_ms` must be that value. `{ok: true, value}` or `{ok: false, reason, detail}` (a CALL_REFUSALS
+ * member). A `gates` block that refuses is not a timeout refusal: the pinned value is used, and the stage script
+ * refuses the block as before. An entry record that is absent, unreadable, malformed or another feature's pins nothing.
+ */
+function resolveStageTimeout(root, o) {
+  const x = loadGateExclusion(root);
+  const eff = resolveRunTimeout(x, o.timeoutMs);
+  if (!eff.ok) return { ok: false, reason: "timeout-unusable", detail: eff.reason };
+  const from =
+    x.ok && x.timeoutMs !== null
+      ? `declared in ${CONFIG_FILE} \`gates.timeoutMs\``
+      : "the pinned --timeout-ms; the gates block declares none or is refused";
+  const raw = readFileBounded(join(root, ENTRY_PATHS.runner), ENTRY_RUNNER_READ_MAX);
+  if (raw.state === "ok") {
+    let rec;
+    try {
+      rec = JSON.parse(raw.bytes.toString("utf8"));
+    } catch {
+      rec = null; // not JSON: pins nothing
+    }
+    if (rec !== null && runnerRecordDefect(rec) === null && rec.feature === o.name && rec.timeout_ms !== eff.value) {
+      return {
+        ok: false,
+        reason: "timeout-changed",
+        detail:
+          `this run's entry gates ran with a per-gate timeout of ${rec.timeout_ms} ms (${ENTRY_PATHS.runner}), but ` +
+          `the per-gate timeout is now ${eff.value} ms (${from}); restore the declaration the run started with, or start a new run`,
+      };
+    }
+  }
+  return { ok: true, value: eff.value };
+}
+
 /** FRESH = START + WAIT (header). */
 function startCall(ctx) {
   const { root, o } = ctx;
@@ -993,6 +1060,12 @@ function startCall(ctx) {
       "in-flight",
       `an earlier runner's process group ${ps.runnerPid} still runs (an orphaned script or gate); stop it (kill -TERM -- -${ps.runnerPid}), then start again`
     );
+
+  // 7.16.0 (gate-timeout-above-bash-cap): the per-gate timeout this run records — before the lock, so a refusal
+  // touches nothing. With no declaration the argv is the call's own, byte for byte.
+  const tm = resolveStageTimeout(root, o);
+  if (!tm.ok) return refuse(ctx, tm.reason, tm.detail);
+  if (tm.value !== o.timeoutMs) ctx.argv = withTimeout(ctx.argv, tm.value);
 
   const nonce = randomBytes(16).toString("hex");
   const lock = acquireLock(root, { stage: o.stage, name: o.name, nonce, holder: "call" });

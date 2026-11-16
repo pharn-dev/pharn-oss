@@ -22,6 +22,16 @@
 //          · 3 no gates (a `no-gates` result is recorded, no runner) · 2 refused (`entry-gates: refused <reason> — …` on
 //          stderr; a runner refusal records an `unusable` result) · 4 red on CACHED evidence (gate-evidence-cache, below:
 //          no runner, an `unusable` / `cached-red` result). `--refresh` skips the lookup.
+//          THE PER-GATE TIMEOUT (7.16.0, gate-timeout-above-bash-cap): before `runner.json` is written, the project's
+//          `pharn.config.json` `gates.timeoutMs` (gate-exclusion-core.mjs reads it, gate-timeout-core.mjs owns its rule)
+//          replaces the pinned `--timeout-ms` when it declares one, so runner.json, the runner's argv, the cached-evidence
+//          inputs and a takeover all carry it; absent, the value IS the pinned one and every record is byte-identical. A
+//          declaration below the pinned value records an `unusable` / `bad-gate-timeout` result and refuses (exit 2; its
+//          observation is `init-refused`); a block that refuses is left to `init`, which refuses it as before. The rule is
+//          gate-timeout-core.mjs `resolveRunTimeout`, shared with stage-direct.mjs. BOUND: /pharn-loop reads a `--start`
+//          exit 2 as "go on" (Step 1a) and a `--wait` exit 2 the same way, so a below-pinned declaration first STOPS that
+//          run at regress (stage-direct.mjs `timeout-unusable`), after the build — the named follow-up
+//          `entry-timeout-refusal-stop`; /pharn-ship asks at its entry read.
 // --runner INTERNAL. Refuses unless `runner.json` names its nonce and feature. One `run-gates.mjs run --next` per gate,
 //          the feature-directory digest AND the changed-path listing (scope-inputs.mjs `changedPaths(HEAD)` minus the
 //          feature directory, each path through pre-run-snapshot.mjs `pathDigest`) before and after each, then
@@ -34,7 +44,10 @@
 //          or exit 5 when the budget is spent. No result + runner GONE (a harness that kills a Bash call's descendants,
 //          a crash) → TAKEOVER: it runs what is left in the foreground through the SAME drain (`drainEntry`; the digests
 //          so far come from progress.json), within its budget (stage-exit-core.mjs mayStartSlowStep), and exits 5 to be
-//          re-run when out of it; with no gate run in progress at all → `runner-died`. On a verdict it RECORDS the paths a
+//          re-run when out of it; with no gate run in progress at all → `runner-died`. The FIRST gate of a call is always
+//          permitted (L58), so with a declared `gates.timeoutMs` above `--budget-ms` (7.16.0) a takeover's gate can run up
+//          to the declared value — 30 min at most — in the foreground of the 600 s Bash call, which the Bash tool then
+//          moves to the background (stage-exit.md, "A Bash-tool timeout is not a kill"). On a verdict it RECORDS the paths a
 //          `mutated` gate changed beside the pre-run snapshot (pre-run-snapshot.mjs `recordEntryChanges`, review R1), so
 //          /pharn-regress and the quick scope check report them rather than count them as the build's escape. Prints ONE
 //          JSON document (entry-gates-core.mjs DOC_SCHEMA). Exit 0 green · 4 red · 6 unmeasured (6.75.0: no attributable
@@ -115,6 +128,8 @@ import { readInProject } from "./regress-base-reuse.mjs";
 import { hashFile } from "./reconcile-baseline.mjs";
 import { FEATURE_SLUG_RE, validateStamp, baseTestsError, REASON_CODES as RUNNER_REASON_CODES } from "./gate-run-core.mjs";
 import { ENTRY_ALGO, productFeatureDir } from "./worktree-fingerprint.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
+import { resolveRunTimeout } from "./gate-timeout-core.mjs";
 import { mayStartSlowStep } from "./stage-exit-core.mjs";
 import {
   ENTRY_PATHS,
@@ -475,7 +490,7 @@ function start(args) {
   return code;
 }
 
-function startRun({ feature, timeoutMs, refresh = false }, obs) {
+function startRun({ feature, timeoutMs: pinnedMs, refresh = false }, obs) {
   const contained = rootContained();
   if (!contained.ok) return refuse("path-containment", contained.detail);
   const prior = readRecord(ENTRY_PATHS.runner);
@@ -501,9 +516,18 @@ function startRun({ feature, timeoutMs, refresh = false }, obs) {
 
   const measuredAt = nowIso();
   const nonce = randomBytes(16).toString("hex");
+  // 7.16.0: every later use — runner.json's timeout_ms, the runner's argv, the cached-evidence inputs, a takeover —
+  // reads this one value. With no declaration it IS the pinned value, so every record is byte-identical.
+  const tm = resolveRunTimeout(loadGateExclusion("."), pinnedMs);
+  const timeoutMs = tm.ok ? tm.value : pinnedMs;
   const rec = { schema: RUNNER_SCHEMA, feature, nonce, pid: null, timeout_ms: timeoutMs, d0: featureDirDigest(feature) };
   writeAtomic(ENTRY_PATHS.runner, rec);
   obs.nonce = nonce;
+  if (!tm.ok) {
+    writeAtomic(ENTRY_PATHS.result, unusableResult(feature, nonce, "bad-gate-timeout", tm.reason));
+    obs.outcome = "init-refused"; // a refusal before any runner, as init's own is (START_OUTCOMES unchanged)
+    return refuse("bad-gate-timeout", tm.reason);
+  }
 
   const initArgs = ["init", "--stage", "entry", "--feature", feature, "--out", ENTRY_PATHS.gates];
   if (lstatSafe("package.json").stat) {

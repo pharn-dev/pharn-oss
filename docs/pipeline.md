@@ -127,7 +127,8 @@ For example:
 
 An e2e gate exists only when your `package.json` has a `test:e2e` or `e2e` script. `/pharn-verify` runs it after
 `build`, last among your project's gates; `/pharn-regress` never discovers it (a gate you name yourself with
-`--gates` still runs). It gets the same per-gate time limit as every other gate (540 s), and
+`--gates` still runs). It gets the same per-gate time limit as every other gate (540 s, or the longer
+`gates.timeoutMs` you declare — "Lengthening the per-gate timeout", below), and
 under `/pharn-loop` it runs on every iteration. Starting servers and installing browsers stay your script's job.
 
 Then have the reporter write to the path PHARN passes in `PHARN_TEST_RESULTS`. PHARN sets that variable only
@@ -217,6 +218,36 @@ Each id must be one of the gates PHARN discovers (`test`, `lint`, `format:check`
   verify. An uncommitted change also reads as the build writing outside its plan.
 - A criterion whose level only an excluded gate runs (an `e2e` criterion with `e2e` excluded) is refused at
   `/pharn-plan`. Re-specify it at another level, or keep the gate.
+
+### Lengthening the per-gate timeout (7.16.0)
+
+Every gate PHARN runs is killed after 540 s, and a killed gate is **not measured**, never a pass:
+`/pharn-loop` stops `blocked: gates-unmeasured-at-entry`, and a regress or verify run that loses a gate this way stops
+too. If a gate of yours is slow but healthy — a test suite that takes nine minutes, say — declare a longer limit beside
+`exclude` in `pharn.config.json`:
+
+```json
+{ "gates": { "timeoutMs": 900000 } }
+```
+
+- The value is milliseconds, from 100 to 1800000 (30 min), and it may only **lengthen** the 540 s limit. A smaller
+  value is refused: the start-of-run check reports it, `/pharn-ship` asks you there, and `/pharn-loop` goes on and
+  stops at `/pharn-regress`, after the build (`timeout-unusable`) — so fix it before you start. Anything that is not
+  such an integer stops discovery with an error, as a bad `exclude` list does.
+- **What it costs.** A gate that hangs now runs the whole declared time before it is killed: at the start of the run,
+  on both sides of `/pharn-regress` (and its base install) and at `/pharn-verify`. Declare the smallest value your
+  slowest healthy gate needs.
+- **Where it applies.** `/pharn-loop` and `/pharn-ship` use it for the entry check and for the regress and verify
+  stages they run, and both sides of one regress comparison use the same value. It does **not** apply where a gate
+  still runs inside one tool call: `/pharn-regress` and `/pharn-verify` run by hand, `/pharn-build`'s full gate and
+  `/pharn-test`'s red run keep 540 s.
+- **Declare it and commit it before the run.** The value the entry check used is pinned for the run: if the
+  declaration changes before regress or verify, that stage stops (`timeout-changed`). Restore the value or start a new
+  run.
+- **An older PHARN** (7.15.0 or earlier) does not know the key and stops discovery with
+  `` pharn.config.json `gates` has the key "timeoutMs"; its only key is `exclude` ``. Update PHARN
+  (`npx @pharn-dev/pharn@latest update`), or remove the key. From 7.16.0 an unknown key in `gates` names that remedy
+  itself.
 
 ### Declaring the base install (6.66.0)
 

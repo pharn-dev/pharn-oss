@@ -1476,6 +1476,78 @@ for (const w of PEEK_WIRING) {
   });
 }
 
+// ── 7.16.0 (gate-timeout-above-bash-cap — CORE-87): the declared per-gate timeout, `gates.timeoutMs` ───────────────
+const runnerRec = (dir) => JSON.parse(readFileSync(join(dir, ENTRY_PATHS.runner), "utf8"));
+
+test("CLI timeout AC1 (L41): with no config, and with a config that declares no timeout, runner.json carries the PINNED value", () => {
+  for (const config of [null, { testResults: {} }, { gates: { exclude: [] } }]) {
+    const dir = sandbox({ gates: { test: {} }, config });
+    try {
+      assert.equal(start(dir).status, 0, JSON.stringify(config));
+      assert.equal(runnerRec(dir).timeout_ms, Number(GATE_TIMEOUT_MS), "the pinned --timeout-ms, unchanged");
+      assert.equal(wait(dir).status, 0);
+    } finally {
+      cleanup(dir);
+    }
+  }
+});
+
+test("CLI timeout AC2 (L84): a gate longer than the pinned timeout is UNMEASURED without a declaration and MEASURED with one", () => {
+  const gates = { test: { sleepMs: 1500 } };
+  const plain = sandbox({ gates });
+  try {
+    assert.equal(start(plain, "800").status, 0);
+    const { status, doc } = wait(plain);
+    assert.equal(status, 6, JSON.stringify(doc));
+    assert.deepEqual(doc.unmeasured, [{ id: "test", cause: "timed-out" }]);
+  } finally {
+    cleanup(plain);
+  }
+  const declared = sandbox({ gates, config: { gates: { timeoutMs: 20000 } } });
+  try {
+    assert.equal(start(declared, "800").status, 0);
+    assert.equal(runnerRec(declared).timeout_ms, 20000, "runner.json carries the declared value, so a takeover uses it too");
+    const { status, doc } = wait(declared);
+    assert.equal(status, 0, JSON.stringify(doc));
+    assert.equal(doc.status, "green");
+    assert.deepEqual(doc.unmeasured, []);
+  } finally {
+    cleanup(declared);
+  }
+});
+
+test("CLI timeout: a declaration below the pinned value refuses at start (bad-gate-timeout), runs nothing, and --wait reports it", () => {
+  const dir = sandbox({ gates: { test: {} }, config: { gates: { timeoutMs: 500 } } });
+  try {
+    const s = start(dir, "800");
+    assert.equal(s.status, 2);
+    assert.match(s.stderr, /refused bad-gate-timeout/);
+    assert.match(s.stderr, /may only lengthen it/);
+    assert.equal(existsSync(join(dir, ENTRY_PATHS.gates)), false, "no gate run was initialised");
+    const { status, doc } = wait(dir);
+    assert.equal(status, 2);
+    assert.equal(doc.reason_code, "bad-gate-timeout");
+    assert.equal(runnerRec(dir).timeout_ms, 800, "the refused run records the pinned value, never the refused one");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("CLI timeout (GRILL G1): a malformed timeoutMs is refused by init as a malformed block — child-refused, bad-gate-exclusion, as before", () => {
+  const dir = sandbox({ gates: { test: {} }, config: { gates: { timeoutMs: "900000" } } });
+  try {
+    const s = start(dir);
+    assert.equal(s.status, 2);
+    assert.match(s.stderr, /refused child-refused/);
+    assert.match(s.stderr, /gates\.timeoutMs/);
+    const { doc } = wait(dir);
+    assert.equal(doc.reason_code, "child-refused");
+    assert.equal(doc.runner_reason, "bad-gate-exclusion");
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("★ /pharn-loop names the gates.exclude remedy, its cost and --allow-red-entry at every S14/S14b site (L29)", () => {
   const sites = entryStopSites(commandFamilyText(COMMANDS_DIR, "pharn-loop.md"));
   assert.equal(sites.length, 4);

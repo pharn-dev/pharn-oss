@@ -14,7 +14,8 @@
 //   * `parseDirectArgs` — closed in both directions per mode: a FRESH call takes `--stage --name --iteration
 //     --timeout-ms --budget-ms` and the stage's flags; a RESUME call takes `--stage --name --resume --budget-ms` and
 //     nothing else. No default for any number (L41): the pinned line carries them.
-//   * `scriptArgv`, `setterArgv`, `CLEAR_ARGV` — what each child is given.
+//   * `scriptArgv`, `setterArgv`, `CLEAR_ARGV` — what each child is given; `withTimeout` (7.16.0) — the fresh argv
+//     with the project's declared per-gate timeout in place of the pinned one (stage-direct.mjs resolves which).
 //   * `returnMarkerDue(exit)` — every exit closes the stage's execution but `continue` (5): a stage SCRIPT that asks
 //     a question has ENDED (nothing continues inside it, unlike a stage agent — `stage-agent.mjs finish`), so its
 //     return marker is written and an answered re-run is a second execution. Since 7.15.0 it is the runner's loop
@@ -172,6 +173,22 @@ export function parseDirectArgs(argv) {
   };
 }
 
+/**
+ * A FRESH argv with its `--timeout-ms` value replaced by `ms` (7.16.0, gate-timeout-above-bash-cap), every other token
+ * kept in place, so runner.json records the ONE value the runner, every `--resume` and a takeover read. A value never
+ * starts with `--` (`parseDirectArgs` refuses one), so the flag token is never a value. Pure; the input is not changed.
+ * @param {string[]} argv a fresh argv `parseDirectArgs` accepted
+ * @param {number} ms a positive safe integer
+ */
+export function withTimeout(argv, ms) {
+  if (!Number.isSafeInteger(ms) || ms <= 0) throw new TypeError("withTimeout: `ms` must be a positive integer");
+  const i = Array.isArray(argv) ? argv.indexOf("--timeout-ms") : -1;
+  if (i < 0 || i + 1 >= argv.length) throw new TypeError("withTimeout: the argv carries no --timeout-ms value");
+  const out = [...argv];
+  out[i + 1] = String(ms);
+  return out;
+}
+
 /** The stage script's argv for parsed `opts`. A resume carries no state of its own (L44). */
 export function scriptArgv(opts) {
   if (opts.mode === "resume") return [RESUME, "--budget-ms", String(opts.budgetMs)];
@@ -213,8 +230,20 @@ export const LOCK_REFUSALS = Object.freeze(["in-flight", "lock-unusable"]);
 
 /** Every reason a call refuses with (exit 2, a `stage-direct: refused (<reason>)` line, no object): the lock's two, then
  *  the runner protocol's (7.15.0) — the runner could not be started, the run on disk is another stage's or name's, a
- *  dead runner's process group still runs, the resume line found no run, a record is not a readable regular file. */
-export const CALL_REFUSALS = Object.freeze([...LOCK_REFUSALS, "spawn-failed", "mismatch", "orphaned", "no-run", "record-unusable"]);
+ *  dead runner's process group still runs, the resume line found no run, a record is not a readable regular file —
+ *  then the declared per-gate timeout's (7.16.0, gate-timeout-above-bash-cap): `pharn.config.json` `gates.timeoutMs` is
+ *  below the pinned `--timeout-ms` (`timeout-unusable`), or differs from the value this run's entry gates ran with
+ *  (`timeout-changed`). */
+export const CALL_REFUSALS = Object.freeze([
+  ...LOCK_REFUSALS,
+  "spawn-failed",
+  "mismatch",
+  "orphaned",
+  "no-run",
+  "record-unusable",
+  "timeout-unusable",
+  "timeout-changed",
+]);
 
 /** The most bytes a lock record is read to (one record is ~250 B). */
 export const LOCK_READ_MAX = 4096;

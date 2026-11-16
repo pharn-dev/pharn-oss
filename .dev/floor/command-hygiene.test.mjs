@@ -7031,3 +7031,60 @@ test("✧ CORE-86 — the quick part takes --refresh-entry, the close part quote
   assert.match(between, /Exit `4` \(7\.14\.0\)/);
   assert.match(between, /\*\*Stop\*\* \(a STOP, through Steps 3 and 3a\) or \*\*Continue\*\* — which measures again/);
 });
+
+// 7.16.0 (gate-timeout-above-bash-cap — CORE-87, AC6): every stop that reports a gate NOT MEASURED names the declared
+// per-gate timeout beside `gates.exclude` — the four sites, one enumeration (L29). Each long-form site also names the
+// cost the ticket requires: the 30-minute bound and that a hung gate runs that long. The pinned entry and stage lines
+// are unchanged (the existing ENTRY / DIRECT_STAGE_WIRING pins).
+const UNMEASURED_STOP_SITES = Object.freeze([
+  {
+    site: "/pharn-loop S14b row",
+    text: () =>
+      commandBody("pharn-loop.md")
+        .split("\n")
+        .find((l) => /^\| S14b\s+\|/.test(l)),
+    cost: false,
+  },
+  {
+    site: "/pharn-loop Step 4's exit-6 bullet",
+    text: () => {
+      const b = commandBody("pharn-loop.md");
+      const start = b.indexOf("- `6` → **S14b** (");
+      return start < 0 ? undefined : b.slice(start, b.indexOf("\n- ", start + 1));
+    },
+    cost: true,
+  },
+  {
+    site: "/pharn-loop close part's not-measured bullet",
+    text: () => {
+      const b = commandBody("pharn-loop-close.md");
+      const at = b.indexOf("is named as **not measured**");
+      return at < 0 ? undefined : b.slice(at, b.indexOf("\n- ", at));
+    },
+    cost: true,
+  },
+  {
+    site: "/pharn-ship Step 2.3's exit-6 remedy",
+    text: () => {
+      const b = commandBody("pharn-ship-stages.md");
+      const at = b.indexOf("With a `6`, name the remedies for the next run");
+      return at < 0 ? undefined : b.slice(at, b.indexOf("\n\n", at));
+    },
+    cost: true,
+  },
+]);
+
+test("AC6 (7.16.0) — every not-measured stop names gates.timeoutMs beside gates.exclude, and the long forms name its cost", () => {
+  assert.equal(UNMEASURED_STOP_SITES.length, 4, "NON-VACUITY (L34): four sites");
+  for (const { site, text, cost } of UNMEASURED_STOP_SITES) {
+    const t = text();
+    assert.ok(t, `${site}: not found`);
+    assert.ok(t.length < 1200, `${site}: the slice ran past its own site (${t.length} chars)`);
+    assert.match(t, /`gates\.timeoutMs`/, `${site}: names the declaration`);
+    assert.match(t, /`gates\.exclude`/, `${site}: beside the exclusion`);
+    if (cost) {
+      assert.match(t, /at\s+most\s+1800000\s+ms/, `${site}: names the bound`);
+      assert.match(t, /hung\s+gate/, `${site}: names what a longer timeout costs`);
+    }
+  }
+});
