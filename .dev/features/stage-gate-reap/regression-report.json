@@ -1,0 +1,50 @@
+{
+  "base": "e11a8ac6f519c0fdbd2b45e0c8846776bb0a7764",
+  "inside": [
+    ".dev/features/stage-gate-reap/PLAN.md",
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/run-gates.mjs",
+    "pharn/floor/stage-direct.mjs",
+    "pharn/floor/stage-direct.test.mjs",
+    "pharn/floor/stage-regress.mjs",
+    "pharn/floor/stage-verify.mjs",
+    "pharn/floor/stage-gate-reap.test.mjs"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6721,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6729,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

@@ -170,10 +170,13 @@
 //     `lock-unusable` — a stop with a named reason, never a lock taken half-way.
 //   * A process a gate double-forks out of the runner's group escapes both the liveness and the orphan check — the
 //     same class as entry-gates.mjs's named bound. A gate run-gates.mjs starts in its OWN group is outside the runner's
-//     group too: after a runner death this file's checks do not see it. run-gates.mjs stops it (SIGTERM, then SIGKILL)
-//     before a gate runs again — its stale-lock recovery on a resumed run, its `init` on a takeover's fresh re-run —
-//     or refuses `lock-busy` when it will not die. So two gates never overlap, but the leftover gate's work is
-//     discarded, not waited for.
+//     group too: after a runner death this file's checks do not see it. It is stopped (SIGTERM, then SIGKILL) before a
+//     gate runs again: on a resumed run by run-gates.mjs's stale-lock recovery, which refuses `lock-busy` when it will
+//     not die; on a takeover's FRESH re-run by the stage script itself, before its fresh start deletes the gate
+//     directory holding the group's record (7.15.1 — stage-verify.mjs `removeEarlierOutput`, stage-regress.mjs
+//     `phaseFreshLate`, through run-gates.mjs's `reapLeftoverGate`), which refuses `child-refused` when it will not die.
+//     7.15.0 said run-gates' `init` covered the fresh re-run; it could not, because the record was already deleted.
+//     So two gates never overlap, but the leftover gate's work is discarded, not waited for.
 //   * A takeover's script runs in the CALLING process's group, unchecked: when only the calling process is killed and
 //     its script survives, the next resume line can take over and start a second script beside it. run-gates.mjs's
 //     lock still keeps their gates from overlapping; the two scripts' own progress records are not guarded. No group is

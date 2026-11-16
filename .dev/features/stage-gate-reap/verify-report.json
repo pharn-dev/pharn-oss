@@ -1,0 +1,26 @@
+{
+  "feature": "stage-gate-reap",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "3684eb79d823d1c68c4f93ee04836ad6ed12d099ab54953563208ca215eb5258",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "7d129da6d9307c7421c22bbc3ab92aee44432b02ef829b7fbf2289107df1d17c"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
