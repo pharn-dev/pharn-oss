@@ -1,0 +1,53 @@
+{
+  "base": "b38cd31c6a5f86c429a8a8c1a35c317252612cd2",
+  "inside": [
+    ".claude/agents/pharn-stage.md",
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-close.md",
+    ".claude/commands/pharn-ship-stages.md",
+    ".dev/features/lean-stage-agent/PLAN.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/review-lens-agent.test.mjs",
+    ".dev/floor/stage-agent-type.test.mjs",
+    ".dev/floor/stage-load-budget.test.mjs",
+    ".dev/guides/product-commands.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6530,
+      "failed": 0,
+      "skipped": 7,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6531,
+      "failed": 0,
+      "skipped": 6,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

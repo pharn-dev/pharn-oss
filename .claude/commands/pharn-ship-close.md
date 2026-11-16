@@ -118,7 +118,8 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   `BRIEFING.md` or `RUN-REPORT.md` below with its own lines — the scope check's result, the
   `## Not checked in quick mode` list, and the line saying any such file predates this run;
 - **each stage's route** (6.27.0), one line per stage that ran: for a stage with a route line, the token its
-  stage-start marker recorded (`agent:<alias>`, or `inline:<reason>` with the remedy the route line printed),
+  stage-start marker recorded (`agent:<alias>`, followed by `general-purpose (fallback)` when that stage's Agent call
+  took the fallback, or `inline:<reason>` with the remedy the route line printed),
   and for `/pharn-spec`, `/pharn-regress` and `/pharn-verify` the words `inline (policy)`, citing `ROUTE_POLICY`
   in `pharn/floor/stage-agent-core.mjs`. A route records what was REQUESTED: never write that a stage ran on a
   model — what it was served is `cost.json`'s `requests[].model` (P0);
@@ -326,6 +327,10 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   agent obeying its brief are advisory. A route records a REQUEST: "a routed stage ran on its configured model" is
   never a guarantee (`cost.json`'s served `requests[].model` is evidence from an undocumented transcript format),
   and effort is not routed.
+- **Advisory, the stage agent's container (7.19.0):** a routed stage is requested as `pharn-stage`, whose tool list
+  and system prompt (the definition's body, in place of `general-purpose`'s) Claude Code applies. Any
+  `.claude/agents/*.md` named `pharn-stage`, in the project or at user scope, answers to that name, and nothing here
+  detects which one ran or what it carried. **Struck:** "a routed stage ran with only the `pharn-stage` tools".
 - **Floor: hook (fix #7):** this command's own Write-tool writes land only in `SHIP.md`, `ship-record.json` and
   `BRIEFING.md`, one `--target` per setter call. The **deny** is floor; that **the intended scope is active** at each
   write is advisory — it depends on this prose's ordering. **NARROWED:** the

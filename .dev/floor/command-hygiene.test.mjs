@@ -5202,6 +5202,10 @@ for (const cmd of STAGE_AGENT_WIRING) {
 
   test(`✧ STAGE_AGENT_WIRING (5) — ${cmd.file}: ## Running a stage names the Agent call's parameters and the read rules`, () => {
     const s = saSection(cmd);
+    // 7.19.0 (lean-stage-agent): the call names the `pharn-stage` type; `general-purpose` is now its named fallback,
+    // taken once when the type is not offered or the call starts no agent (stage-agent-type.test.mjs pins the rest).
+    assert.match(s, /`subagent_type: "pharn-stage"`/);
+    assert.match(s, /make the same call once with `subagent_type: "general-purpose"`/);
     assert.match(s, /`subagent_type: "general-purpose"`/);
     if (cmd.command === "pharn-ship") {
       // 6.73.2 (stage-agent-background-fix): the parameter's JSON type is named — a STRING "false" was launched in the
@@ -5408,8 +5412,12 @@ test("★ STAGE_AGENT_WIRING (7) — both guards judge a stage agent's write exa
           }).status;
         const plain = status({});
         const asAgent = status({ agent_id: "a0f1e2d3c4b5a6978", agent_type: "general-purpose" });
+        // 7.19.0 (lean-stage-agent, CORE-107 AC3): the `pharn-stage` type a routed stage is now requested as. Neither
+        // hook reads the agent type, so its out-of-scope write meets the same deny as the orchestrator's.
+        const asStageType = status({ agent_id: "a0f1e2d3c4b5a6979", agent_type: "pharn-stage" });
         assert.equal(plain, want[hook], `${hook} on ${file_path}: the expected verdict (non-vacuity)`);
         assert.equal(asAgent, plain, `${hook} on ${file_path}: a stage agent's payload must be judged the same`);
+        assert.equal(asStageType, plain, `${hook} on ${file_path}: a pharn-stage agent's payload must be judged the same`);
       }
     }
   } finally {
@@ -5683,9 +5691,14 @@ const COMMAND_BYTE_CEILINGS = Object.freeze({
   // ship-step2-part (6.70.0): `## Running a stage`, Step 2 after GATE 1 and Step 2b moved into the stages part, and the
   // compaction rule and the stages pointer came in — 16,037 bytes measured (was 42,422); the row went DOWN by the rule.
   "pharn-ship.md": 17920,
-  "pharn-ship-close.md": 31232,
+  // lean-stage-agent (7.19.0): the route line's `general-purpose (fallback)` note and the stage agent's container
+  // claims bullet — 31,344 bytes measured, 112 over 31,232; raised by the rule (+10%, up to a multiple of 512).
+  "pharn-ship-close.md": 34816,
   "pharn-ship-quick.md": 12800,
-  "pharn-ship-stages.md": 33280, // 6.70.0 ship-step2-part: 29,967 B measured + 10% → next 512
+  // 6.70.0 ship-step2-part: 29,967 B measured + 10% → next 512. lean-stage-agent (7.19.0): item 2 names the
+  // `pharn-stage` type, its definition and the `general-purpose` fallback — 33,448 bytes measured, 168 over 33,280;
+  // raised by the rule.
+  "pharn-ship-stages.md": 36864,
   // spec-unscopable-criteria (7.4.0): the unscopable-criteria check — one pinned line, the Step 4 gap, the Step 4a
   // move and one claims bullet — 29,472 bytes measured; 29,472 × 1.1 → 32,768.
   "pharn-spec.md": 32768,

@@ -8,7 +8,8 @@
 // WHAT IT PINS, each with an in-memory negative control (L60). No mutant is ever written under `.claude/agents/`:
 // Claude Code discovers that directory, so a file there is a live subagent type of this repo's sessions (L70).
 //   ★ CLOSURE: `.claude/agents/` holds exactly `pharn-review-lens.md` — `pharn-` prefixed, never `pharn-dev-` — closed
-//     both ways (L36).
+//     both ways (L36), besides `pharn-stage.md` (7.19.0, lean-stage-agent), whose bytes and the directory's two-file
+//     closure `.dev/floor/stage-agent-type.test.mjs` owns. The title is kept: a renamed test reads as a removed one.
 //   ★ BYTES: the committed file's SHA-256 equals the file the prefix probe MEASURED (PROBED_SHA256, recorded in
 //     .dev/features/review-lens-grouping/MEASUREMENTS.md), so the probe's go/no-go applies to the shipped bytes (grill
 //     finding 2). Then the frontmatter, byte for byte, and the closed tools set.
@@ -35,6 +36,8 @@ const REPO = fileURLToPath(new URL("../../", import.meta.url));
 const AGENTS_DIR = join(REPO, ".claude", "agents");
 const AGENT_FILE = "pharn-review-lens.md";
 const COMMAND = join(REPO, ".claude", "commands", "pharn-review.md");
+/** The other definition in the directory (7.19.0); stage-agent-type.test.mjs pins it and the two-file closure. */
+const STAGE_AGENT_FILE = "pharn-stage.md";
 
 /** SHA-256 of the definition the prefix probe measured (session 409ed2a0, 2026-10-18; MEASUREMENTS.md). */
 const PROBED_SHA256 = "a572c656f9fe8cddeedeea4c039d08f8e002cac53c5a6f8f0519ec26d7bcbf21";
@@ -80,7 +83,9 @@ function agentDirOffenders(entries) {
 }
 
 test("★ CLOSURE: .claude/agents/ holds exactly pharn-review-lens.md", () => {
-  assert.deepEqual(agentDirOffenders(readdirSync(AGENTS_DIR)), []);
+  assert.deepEqual(agentDirOffenders(readdirSync(AGENTS_DIR).filter((e) => e !== STAGE_AGENT_FILE)), []);
+  // The filter removes exactly that one name, so any other new file is still an offender here.
+  assert.ok(readdirSync(AGENTS_DIR).includes(STAGE_AGENT_FILE), "the filtered name exists (non-vacuity)");
   // CONTROLS, in memory (L70): an extra definition, a dev-prefixed one, and a missing one each turn red.
   assert.ok(agentDirOffenders([AGENT_FILE, "pharn-review-extra.md"]).some((o) => o.includes("unexpected entry")));
   assert.ok(agentDirOffenders([AGENT_FILE, "pharn-dev-x.md"]).some((o) => o.includes("not a product")));

@@ -1,0 +1,23 @@
+{
+  "feature": "lean-stage-agent",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "a3b4443633c027ed88e0b4c4d1a776e6fdd4df615a2b74f4647da45b938582e7",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "5c74cd22a96f702c14e87b11ef5c5483f2b2efa5064713fa7911c90fb41d2f10"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}

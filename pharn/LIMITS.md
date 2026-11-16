@@ -249,8 +249,11 @@ orchestrator's whole context so far. Neither depends on the size of the change.
   three real `/pharn-loop` runs in a user project on 6.35.0, every stage agent's first request carried
   288,489–304,974 tokens; in the run measured in depth, about half of that prefix was the project's own instruction
   files, by a bytes/4 estimate (`.dev/measurements/loop-wall-clock-2026-10-05.md` §3). The total scales with the
-  number of fresh contexts a run opens: five stage agents in a one-iteration full loop, one more per further
-  iteration.
+  number of fresh contexts a run opens: six stage agents in a one-iteration full loop (spec, plan, grill, triage,
+  test and build), one more per further iteration, and more on a re-plan round or an escalation. Since 7.19.0 each
+  is requested as the `pharn-stage` subagent type where the session offers it (eight tools, the project's
+  instruction files kept), else as `general-purpose`. How much smaller its first request is than
+  `general-purpose`'s is not measured in this document.
 - **The orchestrator's re-sends, estimated.** Counted on the code of 2026-09-29, a green one-iteration full
   `/pharn-loop` made at least 70 pinned or mandated orchestrator tool calls (a static lower bound, not the run's
   request count; the pipeline-performance audit §4). The 57 of them that run a pinned line run one per turn, because
