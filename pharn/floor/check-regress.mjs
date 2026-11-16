@@ -121,12 +121,15 @@
 // ignored by FILE MEMBERSHIP, never by name. A BASE checkout's absolute report paths are mapped back to repo-relative ones
 // by base-worktree.mjs `baseCheckoutRelative`. Refusals — inconclusive, exit 2: `per-test-record-refused` (a config that
 // exists but cannot be read, a record refused, an anomaly in a compared file) and `per-test-unaccounted-red` (a red side
-// whose whole record holds no failed test and no suite error, L34); both are gate-run-core.mjs UNMEASURED_CODES, so
+// whose record holds no failed test in a compared file and no suite error, L34); both are gate-run-core.mjs UNMEASURED_CODES, so
 // check-loop-fresh B passes them and check-loop.mjs stops STOP_TERMINAL / unmeasured. The step runs after both timed-out
 // rules, so their reports keep their bytes; a head that timed out over a measured-red base, `pre_existing` before, is now a
 // refusal (a killed run has no record). Not declared → nothing is read and the output is byte-identical to before. No new
-// input: config from the working directory, records beside the stamps, the domain from the HEAD stamp — so
-// check-loop-fresh E's re-run reproduces the verdict, and its check J binds each results file. THE TRADE (PR #381's,
+// argument: config from the working directory, records beside the stamps, the domain from the HEAD stamp, the temp root
+// from the process (base-worktree.mjs `tempRoot`) — so check-loop-fresh E's re-run, under the same TMPDIR, reproduces the
+// verdict, and its check J binds each results file. The import of base-worktree.mjs (which imports stage-runtime.mjs and
+// so node:child_process) is deliberate: the base-checkout naming rule keeps its one owner (L35); importing is not
+// spawning, and this file still spawns nothing. THE TRADE (PR #381's,
 // stated): under machine load a test red at head only reads as a regression where the exit code read `pre_existing` — a
 // false RED in place of a false GREEN. BOUNDS (P0, L43): agreement between record and stamp, never what ran; "failed" is
 // the reporter's word, the reporter config and pharn.config.json are project files a build can edit, and the verdict
@@ -725,8 +728,8 @@ function stampPerTestDeclared(root) {
 /** One side's per-test record of `test`, from the results file beside its stamp: per-test-results-core.mjs `gateResults`
  *  (the stamp's `results_sha256` binding, the configured format, the timed-out and no-file refusals), every file still
  *  absolute mapped out of this project's BASE checkout (base-worktree.mjs `baseCheckoutRelative`), then `buildRecord`
- *  (one id rule), then the two refusals only a comparison needs: an anomaly in a `domain` file, and a red the WHOLE
- *  record does not account for (L34 — whole, so a red owned by a test outside the domain is accounted for). Reasons
+ *  (one id rule), then the two refusals only a comparison needs: an anomaly in a `domain` file, and a red no failed test in
+ *  a `domain` file and no suite error accounts for (L34 — a comparison over zero failed tests is never a classification). Reasons
  *  name the side and a closed code, never a path (REGRESSION.md is committed). */
 function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain }) {
   const g = gateResults({ stamp, outDir: dirname(stampPath), gateId: STAMP_PER_TEST_GATE, root });
@@ -754,11 +757,15 @@ function stampTestsRecord({ stamp, stampPath, side, root, projectReal, domain })
       reason: `the ${side} record of "test" holds ${anomalies.length} test(s) in a compared file whose identity or status is ambiguous (first: ${anomalies[0].reason_code}) — a per-test comparison needs every compared test given plainly`,
     };
   }
-  if (record.exit !== 0 && record.counts.failed === 0 && record.suite_errors === 0) {
+  // L34 over the COMPARED files (review F2): this run was given the domain files only, so a red owned by no compared test
+  // — every failure in an ignored file, or reporter paths that never match the stamp's `files` — would compare nothing
+  // and read `pre_existing` for free. A whole-gate run (files: []) that must accept inside-only failures is the next
+  // increment's to decide, with its own domain.
+  if (record.exit !== 0 && !record.tests.some((t) => t.status === "failed" && domain.has(t.file)) && record.suite_errors === 0) {
     return {
       ok: false,
       reason_code: "per-test-unaccounted-red",
-      reason: `gate "test" exited ${record.exit} on the ${side} side, but its record holds no failed test and no suite error — that red is not accounted for, so no per-test comparison can classify it`,
+      reason: `gate "test" exited ${record.exit} on the ${side} side, but its record holds no failed test in a compared file and no suite error — that red is not accounted for, so no per-test comparison can classify it`,
     };
   }
   return { ok: true, record };

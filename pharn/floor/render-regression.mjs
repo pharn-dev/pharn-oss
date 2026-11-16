@@ -77,7 +77,7 @@ function perTestLines(pt) {
   ];
   if (pt.ignored && typeof pt.ignored === "object") {
     lines.push(
-      `ignored by file membership (a file the gate was not given — inside the feature): base ${dataText(pt.ignored.base)}, head ${dataText(pt.ignored.head)}`
+      `ignored by file membership (a file the gate was not given: inside the feature, or a path not mapped to one): base ${dataText(pt.ignored.base)}, head ${dataText(pt.ignored.head)}`
     );
   }
   lines.push("", `new failures at head (${fails.length}) — each failed at head and was passed, skipped or absent at base:`, "");

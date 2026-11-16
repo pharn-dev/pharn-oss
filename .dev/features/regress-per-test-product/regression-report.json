@@ -1,7 +1,11 @@
 {
-  "base": "31f8b691c8005b22fd5786bc6e6cf4ed79b375b3",
+  "base": "0da70efa55b62d3285659aeff4fe5a019a22fae2",
   "inside": [
     ".claude/commands/pharn-regress.md",
+    ".dev/features/regress-per-test-product/GRILL.md",
+    ".dev/features/regress-per-test-product/PLAN.md",
+    ".dev/features/regress-per-test-product/REGRESSION.md",
+    ".dev/features/regress-per-test-product/regression-report.json",
     ".dev/guides/floor-gates.md",
     "CHANGELOG.md",
     "README.md",
@@ -23,9 +27,7 @@
     "pharn/floor/stage-regress.mjs",
     "pharn/pharn-contracts/gate-run-record.md",
     "pharn/pharn-contracts/regression-report.md",
-    "pharn/pharn-contracts/test-results-record.md",
-    ".dev/features/regress-per-test-product/GRILL.md",
-    ".dev/features/regress-per-test-product/PLAN.md"
+    "pharn/pharn-contracts/test-results-record.md"
   ],
   "outside_gates": {
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {

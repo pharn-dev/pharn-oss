@@ -1338,11 +1338,26 @@ test("stamp per-test (L34): a red side whose record holds no failure and no suit
   const r = stampPT({ baseDoc: doc([A_OK, PT_B_OK]), headDoc: doc([A_RED]) });
   assert.equal(r.status, 2, r.stdout);
   assert.equal(json(r).reason_code, "per-test-unaccounted-red");
-  // A red owned by a test OUTSIDE the domain is accounted for (whole record), and compares as nothing new.
+  // A red owned only by tests OUTSIDE the compared files would compare zero failed tests — refused too (review F2), never
+  // a free `pre_existing`. That covers a reporter whose paths never match the gate's files.
   const inside = ["src/feature.test.mjs", "f1", "failed"];
-  const ok = stampPT({ baseDoc: doc([inside, A_OK]), headDoc: doc([inside, A_OK]) });
+  const unmatched = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([inside, A_OK]) });
+  assert.equal(unmatched.status, 2, unmatched.stdout);
+  assert.equal(json(unmatched).reason_code, "per-test-unaccounted-red");
+  assert.match(json(unmatched).reason, /on the head side/);
+  // CONTROL: one failed test in a compared file accounts for the red (and here it failed at base too).
+  const ok = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([inside, A_RED]) });
   assert.equal(ok.status, 0, ok.stdout);
   assert.deepEqual(json(ok).pre_existing, ["test"]);
+});
+
+test("stamp per-test: a record the builder refuses (an id over the cap) is per-test-record-refused", () => {
+  const longTitle = ["t/b.test.mjs", "x".repeat(4100), "failed"];
+  const r = stampPT({ baseDoc: doc([A_RED]), headDoc: doc([A_RED, longTitle]) });
+  assert.equal(r.status, 2, r.stdout);
+  const o = json(r);
+  assert.equal(o.reason_code, "per-test-record-refused");
+  assert.match(o.reason, /the head record of "test" is refused \(over-cap\)/);
 });
 
 test("stamp per-test: an anomaly OUTSIDE the compared files is ignored, not a refusal", () => {

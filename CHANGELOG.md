@@ -45,10 +45,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     digest on that one slot, and every other reused run still records `null`.
   - **Fail-closed.** A side whose record is absent, unbound, changed after the runner hashed it, from a timed-out run,
     malformed or holding an anomaly in a compared file, or a `pharn.config.json` that exists but cannot be read, is
-    `inconclusive` `per-test-record-refused`; a red side whose record holds no failure is `per-test-unaccounted-red`.
+    `inconclusive` `per-test-record-refused`; a red side whose record holds no failure in a compared file is
+    `per-test-unaccounted-red`.
     Both codes join `UNMEASURED_CODES`, so `/pharn-loop` stops `STOP_TERMINAL` / `unmeasured` on them, not S11.
-  - **Unchanged without the opt-in.** Nothing is read and the report keeps its bytes (tested). `check-loop-fresh.mjs`
-    re-derives the verdict from the stored records with no new input (tested).
+  - **Unchanged without the opt-in.** `check-regress.mjs` reads no record and the report keeps its bytes (tested).
+    The one change that does not wait for the opt-in: an entry-derived base stamp carries the entry results file
+    whenever the entry run wrote one, so a missing or oversized one now makes entry evidence a `log-unverified` miss
+    (the base side then runs). `check-loop-fresh.mjs` re-derives the verdict from the stored records with no new input
+    (tested).
   - **The trade, stated.** Under machine load a test red at head only now reads as a regression where the exit code
     read `pre_existing`: a false red in place of a false green. With the opt-in, a head that timed out over a red base,
     `pre_existing` before, is now `inconclusive`, and so is a both-red `test` over a base commit that predates the

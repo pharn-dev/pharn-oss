@@ -1,16 +1,20 @@
 # REGRESSION — regress-per-test-product
 
-Base: `31f8b691c8005b22fd5786bc6e6cf4ed79b375b3` (the working tree was dirty, so `base = HEAD`, the branch point on
-`origin/main` at 7.16.0). The BASE side ran in a detached temp worktree, removed afterwards.
+Base: `0da70efa55b62d3285659aeff4fe5a019a22fae2` (`origin/main` after PR #446, merged into this branch). This is the
+second run, over the final tree after the review fix round. The base is passed explicitly: with the build committed, the
+dirty-tree rule (`base = HEAD`) would have compared the build with itself. The BASE side ran in a detached temp
+worktree, removed afterwards. The first run, against `31f8b691` before the merge and the fix round, was also
+`no-regressions` with the same counts (it is superseded by this one).
 
 **REGRESSIONS: none — no deterministically-detectable breakage outside the feature** (`check-regress.mjs verdict`,
 exit 0, with `--per-test tests`).
 
 ## Scope
 
-- inside: 25 paths (the plan's `## Files` paths written by the build, plus this feature's `PLAN.md` and `GRILL.md`).
-- `check-regress.mjs scope --feature regress-per-test-product`: exit 0, `escaped: []`; `escape_exempt` = this feature's
-  `GRILL.md` and `PLAN.md`.
+- inside: 27 paths. They are the plan's `## Files` paths the build wrote, plus this feature's `PLAN.md`, `GRILL.md`,
+  `REGRESSION.md` and `regression-report.json`.
+- `check-regress.mjs scope --feature regress-per-test-product`: exit 0, `escaped: []`; `escape_exempt` = those four
+  pipeline artifacts.
 - outside tests: 189 of the 196 tracked `*.test.mjs` / `*.test.cjs` files (the 7 changed test files are inside).
 - outside eval pairs: 1 (`pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json` ↔
   `.dev/features/trust-fence/findings.json`).
@@ -33,9 +37,9 @@ exit 0, with `--per-test tests`).
 - head: 6495 passed, 0 failed, 1 skipped, 0 suite errors.
 - new failures at head: none; still failing: 0.
 
-The base and head counts differ because the 7.16.0 outside tests and this branch's copies of the same files are not the
-same code: several outside files test modules this feature changed, and the base checkout skips 8 tests the working
-tree runs (it has no `node_modules`). Every one of them passed at head.
+The base and head counts differ because the outside test files at the base and on this branch are not the same code:
+several of them test modules this feature changed. Also, the base checkout skips 8 tests that the working tree runs,
+because it has no `node_modules`. Every one of those tests passed at head.
 
 ## Honest residual
 

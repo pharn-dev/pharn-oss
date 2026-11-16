@@ -203,11 +203,14 @@ opt-in gets exactly the report it got before (no read, no key, the same bytes).
 - **Fail-closed** (`inconclusive`, exit 2, the table still reported): `per-test-record-refused` — a `pharn.config.json`
   that exists but cannot be read, a side's record absent, unbound (`null` digest), changed after the runner hashed it,
   from a timed-out run, malformed, over a cap, or holding an anomaly in a compared file — and `per-test-unaccounted-red`
-  — a red side whose whole record holds no failed test and no suite error. Both are `gate-run-core.mjs`
+  — a red side whose record holds no failed test in a compared file and no suite error (so a comparison over zero failed
+  tests, such as reporter paths that never match the gate's files, is refused, never read as `pre_existing`). Both are `gate-run-core.mjs`
   `UNMEASURED_CODES`: verdicts over accepted stamps, so `check-loop-fresh.mjs` check B passes them and `check-loop.mjs`
   stops `STOP_TERMINAL` / `unmeasured`. The step runs after the two timed-out rules, so their reports keep their bytes.
-- **Re-derivable.** The checker reads nothing the stamps do not bind except the config, so `check-loop-fresh.mjs`
-  check E's re-run reproduces the verdict, and its check J binds each results file.
+- **Re-derivable.** The checker reads nothing the stamps do not bind except the config and, to map BASE paths, the
+  process's temp root (`TMPDIR`), so `check-loop-fresh.mjs` check E's re-run under the same environment reproduces the
+  verdict, and its check J binds each results file. Under a different `TMPDIR` BASE paths stay absolute and E stops
+  `report-verdict-mismatch` over an honest report — a fail-closed stop, never a pass.
 - **The trade, stated (PR #381's).** Under machine load a test red at head only reads as a regression where the gate
   exit read `pre_existing`: a false RED in place of a false GREEN. Two rows move the same way when the opt-in is
   declared: a head that timed out over a measured-red base, `pre_existing` before, is now `per-test-record-refused` (a
@@ -215,8 +218,10 @@ opt-in gets exactly the report it got before (no read, no key, the same bytes).
   both-red `test` is `inconclusive` until the base carries the reporter.
 - **Bounds (P0).** The records are the reporter's word — project code, as is `pharn.config.json`, which no hook guards;
   the check certifies agreement between record and stamp (L43), never what ran. The verdict depends on that config staying
-  unchanged until check E re-reads it, as the AC gate's does. A `TMPDIR` changed between the BASE run and the verdict
-  leaves BASE paths absolute, so every head failure reads as new — the false-RED direction.
+  unchanged until check E re-reads it, as the AC gate's does. A `TMPDIR` changed between a fresh BASE run and the
+  verdict leaves BASE paths absolute, so no base failure sits in a compared file and the base side is refused
+  `per-test-unaccounted-red` (fail-closed). An entry-derived BASE names project-relative paths, so `TMPDIR` does not
+  touch it.
 
 ## Extra keys are IGNORED (deliberately not a closed-key object)
 
