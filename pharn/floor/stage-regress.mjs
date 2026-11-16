@@ -161,7 +161,7 @@ import { detailText } from "./install-drift-core.mjs";
 import { renderDone, renderRefused } from "./render-regression.mjs";
 import { loadRegressInstall } from "./regress-install-config-core.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
-import { spawnGate } from "./run-gates.mjs";
+import { spawnGate, reapLeftoverGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 // 6.49.0 — the default test universe's one owner (the entry check's base:test slot lists with it too).
 import { defaultTestUniverse } from "./scope-inputs.mjs";
@@ -430,11 +430,28 @@ function clearScratchKeepingBaseEvidence() {
   mkdirSync(root, { recursive: true });
 }
 
+/** 7.15.1 — stop a gate an earlier run left running, BEFORE the directory holding its record goes. A runner killed during
+ *  a gate leaves that gate alive in its own process group, and /pharn-loop's takeover re-runs this fresh argv; the clear
+ *  below deletes `head/` (and so `head/lock.child`), and a retained `base-gates/` is discarded after the HEAD side, before
+ *  the base `init` (`discardRetained`), so `run-gates.mjs init` found no record and the new gate ran beside the survivor.
+ *  Both gate directories, before the base worktree a base gate runs in is removed. The rule (an absent or stale lock only)
+ *  and the kill are run-gates.mjs's `reapLeftoverGate`, which reads a real directory only (L54): a link at either path is
+ *  never read through, and the clear below removes it as before; the parents are `containmentGuard`'s walk. A group still
+ *  alive after SIGKILL, or a lock record that is not a regular file (a FIFO is never waited on), is refused
+ *  `child-refused`. */
+function stopLeftoverGates(feature) {
+  for (const rel of [REGRESS_PATHS.head, REGRESS_PATHS.baseGates]) {
+    const r = reapLeftoverGate(rel);
+    if (!r.ok) emitUnusable(feature, "child-refused", `${rel}: ${r.reason}`);
+  }
+}
+
 function phaseFreshLate(cfg) {
   // A leftover base worktree — locked or not — is cleared (clearBaseWorktree); then the scratch directory
   // is cleared, all but a retained `base-gates/` (clearScratchKeepingBaseEvidence). One run per worktree at a
   // time (GRILL G14) — a second fresh start destroys the first run's in-progress record, matching run-gates.mjs
-  // init's own recreate of <out>.
+  // init's own recreate of <out>. A gate an earlier run left running is stopped first (stopLeftoverGates).
+  stopLeftoverGates(cfg.feature);
   clearBaseWorktree();
   clearScratchKeepingBaseEvidence();
   // 6.34.0 — no offer may name a HEAD stamp this run is about to replace. A failure is reported, never a crash: reuse

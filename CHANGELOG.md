@@ -23,6 +23,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.15.1] - 2026-11-16
+
+### Fixed
+
+- **A takeover after a runner killed during its first gate no longer starts a second gate beside the one still
+  running.** run-gates.mjs starts every gate in its own process group, so killing the runner's group leaves that gate
+  alive, and `stage-direct.mjs`'s takeover re-runs the fresh argv. Both stage scripts' fresh starts delete their gate
+  directory before calling `run-gates.mjs init`: `stage-verify.mjs` removes `pharn/.run/pharn-verify/`, and
+  `stage-regress.mjs` clears `head/` and later discards a retained `base-gates/`. That also deleted `lock.child`, so the
+  reap 7.15.0 added to `init` found no record. Each stage script now stops the group recorded in its gate directory's
+  `lock.child` (under an absent or stale lock only) before deleting it, through `run-gates.mjs`'s newly exported
+  `reapLeftoverGate`, which `init` also uses, so the rule exists once. It reads only a real gate directory, and opens
+  `lock` and `lock.child` non-blocking and without following links: a FIFO, link or unopenable record is refused, never
+  waited on. A group still alive after SIGKILL, or such a record, is refused `child-refused`, an existing code, so the
+  stage-exit vocabulary does not change. **Correction to the 7.15.0 entry:** it
+  said `init`'s reap covered a takeover's fresh re-run; it did not, for the reason above. The `stage-direct.mjs` header
+  is corrected to match. TESTED, not floor: a new end-to-end test per stage kills the runner's group during its first
+  gate, runs the resume line, and checks that the orphaned gate is dead and that no gate started beside a live one. Both
+  tests failed before the fix. Named bounds are unchanged from `run-gates.mjs`: a kill between the gate's spawn and its
+  record leaves an unrecorded group, a `setsid` descendant escapes, and a reused pgid of an exited group can be
+  signalled. Also, from the PR #443 review: the EACCES cases in `stage-direct.test.mjs` are separate tests, skipped as
+  root. From CodeRabbit's review of PR #443.
+
 ## [7.15.0] - 2026-11-13
 
 ### Added
