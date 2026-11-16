@@ -126,7 +126,7 @@ import { readOffer, acceptReuseSource } from "./head-reuse-offer.mjs";
 import { STAMP_MAX_BYTES } from "./regress-base-reuse-core.mjs";
 import { readInstallCheck, recordInstallCheck, readRecordedInstallCheck, refuses } from "./install-drift.mjs";
 import { detailText } from "./install-drift-core.mjs";
-import { reapLeftoverGate, survivorReason } from "./run-gates.mjs";
+import { reapLeftoverGate } from "./run-gates.mjs";
 import {
   flag,
   has,
@@ -232,14 +232,16 @@ function removeEarlierOutput(feature) {
 
 /** 7.15.1 — a gate an earlier run left running is stopped BEFORE the directory holding its record goes. A runner killed
  *  during its first gate leaves that gate alive in its own process group, and /pharn-loop's takeover re-runs this fresh
- *  argv; the `rmSync` above used to delete `gates/lock.child` first, so `run-gates.mjs init` found no record and the new
+ *  argv; the `rmSync` that follows used to delete `gates/lock.child` first, so `run-gates.mjs init` found no record and the new
  *  gate ran beside the survivor. The rule (an absent or stale lock only) and the kill are run-gates.mjs's
  *  `reapLeftoverGate`, which reads a real directory only (L54): a linked `gates/` is never read through, and the
- *  `rmSync` removes it as before; its parents are `containmentGuard`'s walk. A group still alive after SIGKILL is refused
- *  `child-refused`; the report and the progress record are already gone. */
+ *  `rmSync` removes it as before; its parents are `containmentGuard`'s walk. A group still alive after SIGKILL, or a lock
+ *  record that is not a regular file (a FIFO is never waited on), is refused `child-refused`; the report and the progress
+ *  record are already gone. Under a LIVE lock nothing is signalled and the directory is still removed: one run per
+ *  worktree at a time, the existing bound (stage-regress GRILL G14). */
 function stopLeftoverGate(feature) {
   const r = reapLeftoverGate(VERIFY_PATHS.gates);
-  if (!r.ok) emitUnusable(feature, "child-refused", `${VERIFY_PATHS.gates}: ${survivorReason(r.pgid)}`);
+  if (!r.ok) emitUnusable(feature, "child-refused", `${VERIFY_PATHS.gates}: ${r.reason}`);
 }
 
 function parseRestOfArgv(args, feature) {

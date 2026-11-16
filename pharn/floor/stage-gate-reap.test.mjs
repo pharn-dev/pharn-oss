@@ -13,11 +13,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { STATE_FILE } from "./stage-direct-core.mjs";
+import { reapLeftoverGate, survivorReason } from "./run-gates.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -199,3 +200,98 @@ test(
     }
   }
 );
+
+// ── reapLeftoverGate, in-process: each branch on a constructed state (L41: the crash itself is the end-to-end tests') ──
+
+/** A process group whose leader already exited and whose one member is NOT this process's child (`sleep`, reparented
+ *  when its shell exits): a group signalled and waited on synchronously must be reaped by someone other than us. */
+async function orphanGroup() {
+  const sh = spawn("/bin/sh", ["-c", "sleep 60 </dev/null >/dev/null 2>&1 & echo $!"], {
+    detached: true,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  let out = "";
+  sh.stdout.on("data", (d) => (out += d));
+  await new Promise((r) => sh.on("close", r));
+  assert.ok(Number(out.trim()) > 1, "fixture: the sleeper's pid");
+  return sh.pid;
+}
+const gateRoot = () => realpathSync(mkdtempSync(join(tmpdir(), "reap-unit-")));
+const writeLock = (dir, value) => writeFileSync(join(dir, "lock"), typeof value === "string" ? value : JSON.stringify(value));
+const writeChild = (dir, pgid) => writeFileSync(join(dir, "lock.child"), JSON.stringify({ runner_pid: 1, pgid, started_ms: Date.now() }));
+
+test("reapLeftoverGate — nothing to read: an absent path, a file or a link at the gate directory is left to the caller's removal", () => {
+  const root = gateRoot();
+  try {
+    assert.deepEqual(reapLeftoverGate(join(root, "absent")), { ok: true });
+    writeFileSync(join(root, "file"), "x");
+    assert.deepEqual(reapLeftoverGate(join(root, "file")), { ok: true });
+    mkdirSync(join(root, "real"));
+    writeChild(join(root, "real"), 999999);
+    symlinkSync(join(root, "real"), join(root, "link"));
+    assert.deepEqual(reapLeftoverGate(join(root, "link")), { ok: true });
+    assert.ok(existsSync(join(root, "real", "lock.child")), "a record behind a link is never read or removed");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reapLeftoverGate — a FIFO or a link at a lock record is refused, never waited on (PR #444 review)", () => {
+  const root = gateRoot();
+  try {
+    const a = join(root, "a");
+    mkdirSync(a);
+    execFileSync("mkfifo", [join(a, "lock")]);
+    const ra = reapLeftoverGate(a);
+    assert.equal(ra.ok, false);
+    assert.match(ra.reason, /\/a\/lock is not a regular file; refusing to judge its gate$/);
+    const b = join(root, "b");
+    mkdirSync(b);
+    execFileSync("mkfifo", [join(b, "lock.child")]); // no lock: absent, so the child record is read
+    const rb = reapLeftoverGate(b);
+    assert.equal(rb.ok, false);
+    assert.match(rb.reason, /\/b\/lock\.child is not a regular file; refusing to judge its gate$/);
+    assert.ok(existsSync(join(b, "lock.child")), "a refused record is kept");
+    const c = join(root, "c");
+    mkdirSync(c);
+    writeFileSync(join(root, "target.json"), "{}");
+    symlinkSync(join(root, "target.json"), join(c, "lock"));
+    const rc = reapLeftoverGate(c);
+    assert.equal(rc.ok, false);
+    assert.match(rc.reason, /\/c\/lock cannot be opened as a lock record \(ELOOP\); refusing to judge its gate$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reapLeftoverGate — a LIVE lock leaves the recorded group running; a torn (unparseable) lock is stale, so the group is stopped and its record removed", async () => {
+  const root = gateRoot();
+  const pgid = await orphanGroup();
+  try {
+    assert.ok(groupLive(pgid), "fixture: the recorded group runs");
+    const live = join(root, "live");
+    mkdirSync(live);
+    writeLock(live, { pid: process.pid, started_ms: Date.now(), timeout_ms: 600_000 });
+    writeChild(live, pgid);
+    assert.deepEqual(reapLeftoverGate(live), { ok: true });
+    assert.ok(groupLive(pgid), "a live run's gate was signalled");
+    assert.ok(existsSync(join(live, "lock.child")), "a live run's record was removed");
+    const torn = join(root, "torn");
+    mkdirSync(torn);
+    writeLock(torn, "{");
+    writeChild(torn, pgid);
+    assert.deepEqual(reapLeftoverGate(torn), { ok: true });
+    await until(() => !groupLive(pgid), `group ${pgid} stopped`, 30_000);
+    assert.ok(!existsSync(join(torn, "lock.child")), "the stopped group's record is removed");
+  } finally {
+    killGroup(pgid);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("survivorReason — the one refusal wording for a group still alive after SIGKILL (run-gates `lock-busy`, the stages' `child-refused`)", () => {
+  assert.equal(
+    survivorReason(4242),
+    "the gate process group 4242 a crashed run left behind is still alive after SIGKILL; refusing to overlap it"
+  );
+});

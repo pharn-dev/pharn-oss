@@ -161,7 +161,7 @@ import { detailText } from "./install-drift-core.mjs";
 import { renderDone, renderRefused } from "./render-regression.mjs";
 import { loadRegressInstall } from "./regress-install-config-core.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
-import { spawnGate, reapLeftoverGate, survivorReason } from "./run-gates.mjs";
+import { spawnGate, reapLeftoverGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 // 6.49.0 — the default test universe's one owner (the entry check's base:test slot lists with it too).
 import { defaultTestUniverse } from "./scope-inputs.mjs";
@@ -437,11 +437,12 @@ function clearScratchKeepingBaseEvidence() {
  *  Both gate directories, before the base worktree a base gate runs in is removed. The rule (an absent or stale lock only)
  *  and the kill are run-gates.mjs's `reapLeftoverGate`, which reads a real directory only (L54): a link at either path is
  *  never read through, and the clear below removes it as before; the parents are `containmentGuard`'s walk. A group still
- *  alive after SIGKILL is refused `child-refused`. */
+ *  alive after SIGKILL, or a lock record that is not a regular file (a FIFO is never waited on), is refused
+ *  `child-refused`. */
 function stopLeftoverGates(feature) {
   for (const rel of [REGRESS_PATHS.head, REGRESS_PATHS.baseGates]) {
     const r = reapLeftoverGate(rel);
-    if (!r.ok) emitUnusable(feature, "child-refused", `${rel}: ${survivorReason(r.pgid)}`);
+    if (!r.ok) emitUnusable(feature, "child-refused", `${rel}: ${r.reason}`);
   }
 }
 

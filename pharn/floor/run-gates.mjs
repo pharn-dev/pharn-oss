@@ -620,11 +620,41 @@ function waitGroupGone(pgid, ms) {
   return true;
 }
 
-/** Stop the group `<out>/lock.child` names and remove the record. Emits nothing: `{ok: true}`, or `{ok: false, pgid}` when
- *  the group is still alive after SIGKILL (the record is then kept). Every caller decides how to refuse. */
+/** A lock record (`<out>/lock` or `<out>/lock.child`) read for a reap. Absent → `{ok: true, value: null}`; a regular file →
+ *  its parsed JSON, or `null` when it does not parse (a torn record is judged stale, as before); anything else — a FIFO,
+ *  a link, a directory, an entry that cannot be opened — `{ok: false, reason}`, never waited on. Opened
+ *  O_RDONLY|O_NOFOLLOW|O_NONBLOCK and typed by `fstat` on that same descriptor (sha256RegularFile's rule), so a FIFO
+ *  planted at the name cannot block the open, and no name is checked and then used (PR #444 review). */
+function readLockRecord(file) {
+  let fd;
+  try {
+    fd = openSync(file, RESULTS_OPEN_FLAGS);
+  } catch (e) {
+    if (e && e.code === "ENOENT") return { ok: true, value: null };
+    return {
+      ok: false,
+      reason: `${file} cannot be opened as a lock record (${e && e.code ? e.code : "error"}); refusing to judge its gate`,
+    };
+  }
+  try {
+    if (!fstatSync(fd).isFile()) return { ok: false, reason: `${file} is not a regular file; refusing to judge its gate` };
+    try {
+      return { ok: true, value: JSON.parse(readFileSync(fd, "utf8")) };
+    } catch {
+      return { ok: true, value: null };
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Stop the group `<out>/lock.child` names and remove the record. Emits nothing: `{ok: true}`, or `{ok: false, reason}`
+ *  when the record is not a regular file or the group is still alive after SIGKILL (the record is then kept). Every
+ *  caller decides how to refuse. */
 function reapGroup(outAbs) {
-  const r = readJson(childPath(outAbs));
-  const pgid = r.ok && r.value !== null && typeof r.value === "object" ? r.value.pgid : null;
+  const r = readLockRecord(childPath(outAbs));
+  if (!r.ok) return r;
+  const pgid = r.value !== null && typeof r.value === "object" ? r.value.pgid : null;
   if (Number.isInteger(pgid) && pgid > 1 && groupAlive(pgid)) {
     for (const sig of ["SIGTERM", "SIGKILL"]) {
       try {
@@ -634,7 +664,7 @@ function reapGroup(outAbs) {
       }
       if (waitGroupGone(pgid, KILL_GRACE_MS)) break;
     }
-    if (groupAlive(pgid)) return { ok: false, pgid };
+    if (groupAlive(pgid)) return { ok: false, reason: survivorReason(pgid) };
   }
   removeChildRecord(outAbs);
   return { ok: true };
@@ -647,7 +677,7 @@ function survivorReason(pgid) {
 
 function reapOrphanGroup(outAbs) {
   const r = reapGroup(outAbs);
-  if (!r.ok) fail("lock-busy", survivorReason(r.pgid));
+  if (!r.ok) fail("lock-busy", r.reason);
 }
 
 /** ------------------------------------------------------------------------------------------------
@@ -660,7 +690,8 @@ function reapOrphanGroup(outAbs) {
  *  group's, above. `outDir` may be relative to the working directory, as the stage scripts' paths are.
  *  ONLY A REAL DIRECTORY is read (lstat, L54): a link at `outDir` — or a file, or nothing — is never read through, so a
  *  planted link cannot hand this a record to act on, and the caller's own removal deletes the link as before (the
- *  regress suite's retained-`base-gates/`-became-a-symlink case). Its parents are the caller's containment walk.
+ *  regress suite's retained-`base-gates/`-became-a-symlink case). Its parents are the caller's containment walk. Both
+ *  records inside it are read by readLockRecord, so a FIFO, link or unopenable record is refused, never waited on.
  *  ---------------------------------------------------------------------------------------------- */
 function reapLeftoverGate(outDir) {
   let st;
@@ -670,8 +701,9 @@ function reapLeftoverGate(outDir) {
     return { ok: true }; // absent (or unreadable): no record to read here
   }
   if (!st.isDirectory()) return { ok: true };
-  const held = readJson(lockPath(outDir));
-  if (held.ok && !isStaleLock(held.value, Date.now())) return { ok: true };
+  const held = readLockRecord(lockPath(outDir));
+  if (!held.ok) return held;
+  if (!isStaleLock(held.value, Date.now())) return { ok: true };
   return reapGroup(outDir);
 }
 
@@ -924,7 +956,7 @@ function startRecord(spec, outAbs, cwd, args, opts = {}) {
   // that runs `init` over an existing <out>. It does NOT cover /pharn-loop's takeover after a runner killed during its
   // first gate: the stage scripts delete their gate directory before `init`, so they reap first themselves (7.15.1).
   const left = reapLeftoverGate(outAbs);
-  if (!left.ok) fail("lock-busy", survivorReason(left.pgid));
+  if (!left.ok) fail("lock-busy", left.reason);
   // Recreate <out>: `init`'s wipe is what guarantees no STALE injected entry, log or stamp survives from
   // an earlier run of this stage. Containment was asserted before this point.
   rmSync(outAbs, { recursive: true, force: true });

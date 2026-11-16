@@ -34,8 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `stage-regress.mjs` clears `head/` and later discards a retained `base-gates/`. That also deleted `lock.child`, so the
   reap 7.15.0 added to `init` found no record. Each stage script now stops the group recorded in its gate directory's
   `lock.child` (under an absent or stale lock only) before deleting it, through `run-gates.mjs`'s newly exported
-  `reapLeftoverGate`, which `init` also uses, so the rule exists once. A group still alive after SIGKILL is refused
-  `child-refused`, an existing code, so the stage-exit vocabulary does not change. **Correction to the 7.15.0 entry:** it
+  `reapLeftoverGate`, which `init` also uses, so the rule exists once. It reads only a real gate directory, and opens
+  `lock` and `lock.child` non-blocking and without following links: a FIFO, link or unopenable record is refused, never
+  waited on. A group still alive after SIGKILL, or such a record, is refused `child-refused`, an existing code, so the
+  stage-exit vocabulary does not change. **Correction to the 7.15.0 entry:** it
   said `init`'s reap covered a takeover's fresh re-run; it did not, for the reason above. The `stage-direct.mjs` header
   is corrected to match. TESTED, not floor: a new end-to-end test per stage kills the runner's group during its first
   gate, runs the resume line, and checks that the orphaned gate is dead and that no gate started beside a live one. Both
