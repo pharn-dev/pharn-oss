@@ -1,0 +1,42 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "5de9b7d3577cf0fec249d6e6e64fe4e53737a34b9763e7cb426e7a2a3723f249",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "The plan has no revoke path although AC-4 is Approved: add steps for DELETE /keys/:id (204, key_revoked), a stored revokedAt field with its migration entry, its precedence against key_expired in authenticate, the revoke audit entry, the empty-204 handling in server.js and the test helper, a README row, and an AC-4 line in the acceptance mapping."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Bumping SCHEMA_VERSION to 3 changes what the existing store test asserts after migrating a v1 file; the plan must state that this existing assertion is updated (test/store.test.js is already declared) so the build does not leave the suite red."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "AC-3 needs a movable clock in the HTTP harness, but the createApp(store, {now}) seam is only in Risks and test/helpers.js is not in ## Files, so the build cannot touch it: add a step for the seam in server.js and declare test/helpers.js (and the acceptance test file) in Files."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan is silent on what a deprecated principal may do (create or rotate keys); decide and state the rule in the plan (or record it as an accepted bound) with a test; if the plan cannot decide without new SPEC intent, the supervisor takes it."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "proceed",
+      "reason": "Usage tracking or reporting of deprecated-key calls is not in the SPEC's scope or criteria (listing already shows rotation state, step 8); it is an improvement the build does not need."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "A SPEC constraint (cross-org 404 on every key route) and the plan's own 409 key_not_active refusal have no planned test; add ordinary tests for both and declare the test file that holds them in ## Files."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 7 claims the Deprecation header on every response, which is not achievable as written (unknown routes 404 before auth, 401s have no principal, principal is scoped inside the try block); restate the claim to what is achievable and specify how handle carries now and the principal to the header."
+    }
+  ]
+}

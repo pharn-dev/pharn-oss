@@ -1,0 +1,42 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "b150c59e2d88ee4cd9ba283eb02b5ab2ef41ae1bb4d031dd8facf80d7bbba14e",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "The PLAN must add revocation: a DELETE /keys/:id route returning 204, a key_revoked authentication state in src/auth.js, the step(s) for them, and an AC-4 entry in the Acceptance mapping, since the SPEC's AC-4 has no planned test."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The plan must declare a persisted revocation field (e.g. revokedAt) in the schema-3 migration in step 1 and its test in step 2, so AC-4 does not need a second schema version; revoke must keep the record so key_revoked can be reported."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The SPEC scope includes audit entries for revocation, and step 6 covers rotation only; the re-plan must add a key.revoked audit entry (target the revoked key id, acting key named) alongside the revoke route."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "proceed",
+      "reason": "The SPEC says the old key keeps working for 24 hours and bounds this by letting admins revoke it during the grace period (Assumptions); restricting a deprecated key's actions is not asked for, and the cut-off is supplied once the revocation steps from G1-1 are added."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The clock seam createApp(store, {now}) is needed by the AC-2/AC-3 HTTP tests but appears only under Risks; the re-plan must make it a numbered step naming src/server.js and where handle takes now from."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan cites an AC-TESTS.md that is not on disk although the SPEC is templated; the plan must produce it (or stop citing it) so the test mapping is real before /pharn-test."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "A minor, small guard (409 on re-rotating an already rotated key) that the build can carry out as written; it does not conflict with any criterion, and the README step already documents new error codes. The re-plan for the other findings may label it as a choice beyond the SPEC."
+    }
+  ]
+}

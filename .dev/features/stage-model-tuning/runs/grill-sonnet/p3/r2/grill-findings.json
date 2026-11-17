@@ -1,0 +1,114 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:36",
+      "problem": "Step 1 renames the stored key field `hash` to `secretHash` and asserts no migration is needed, but existing records keep `hash`, so `authenticate` would read an undefined `secretHash` and every pre-upgrade key would fail (a thrown error, a 500) instead of keep authenticating, contradicting the SPEC constraint and the store's own versioning rule.",
+      "evidence": "\"The store is plain JSON, so no schema version bump or migration is needed: older records simply lack the new fields.\" (PLAN.md:36); live src/store.js:4-5 says \"a change to a stored record's shape bumps SCHEMA_VERSION and adds a step to MIGRATIONS\"; live src/auth.js:34 reads key.hash"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:7",
+      "problem": "The plan changes the persisted key-record shape but declares no schema-version bump, no migration step and no rollback, and its Downgrade risk says only that deploys are forward-only, so a file written by this release is not refused by the previous one but silently fails every key.",
+      "evidence": "\"Downgrade. Deploys are forward-only today; a data file written by this release is not supported by the previous one.\" (PLAN.md:103-104) next to \"no schema version bump or migration is needed\" (PLAN.md:36); the `scan-plan-migrations` mention at line 36 is that negation"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:66",
+      "problem": "test/helpers.js seeds every test key with a `hash` field and is not in the plan's `## Files`, so after the rename every seeded key fails authentication and step 12's claim that the existing suites stay green cannot hold.",
+      "evidence": "live test/helpers.js:24 `hash: hashSecret(m.secret),` versus \"the existing suites stay green\" (PLAN.md:66-67) and a `## Files` list (PLAN.md:71-77) that does not name test/helpers.js"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:34",
+      "problem": "The `hash` to `secretHash` rename is justified only as a naming preference, yet it is the sole cause of the migration, test-helper and downgrade problems, so it is an addition with no triggering need; keeping `hash` and adding the four fields would need at most a trivial additive migration.",
+      "evidence": "\"Rename the key record's `hash` to `secretHash`, to tell it apart from the new fields\" (PLAN.md:34)"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:76",
+      "problem": "The SPEC requires every pre-upgrade token to keep authenticating and `## Files` promises a pre-upgrade-token test in test/auth.test.js, but no step writes one: step 2 only checks a newly created key and step 10 only the three states.",
+      "evidence": "\"`test/auth.test.js` — pre-upgrade token, and the three states at their boundaries\" (PLAN.md:76); step 2: \"assert that the new key's token works\" (PLAN.md:37-38); Approach: \"steps 1 and 2 say how existing data files carry over\" (PLAN.md:20)"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:62",
+      "problem": "No planned test covers the SPEC constraint that another organization's key reads 404 not_found on every key route, nor the new 409 key_not_active refusals or the repeat-revoke no-op, because the acceptance mapping covers AC-1 to AC-6 only and step 10 lists only authentication unit cases.",
+      "evidence": "SPEC constraint: \"A key of another organization reads as `404 not_found` on every key route.\"; PLAN.md step 10 (lines 62-64) lists three authentication boundary cases; Acceptance mapping (lines 85-94) lists AC-1 to AC-6"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:23",
+      "problem": "The plan says its acceptance tests are mapped in AC-TESTS.md, but that file does not exist for this templated SPEC (the checker exits 2 with ENOENT), so /pharn-test has no mapping to write tests from; pharn-plan.md also says never to name AC-TESTS.md in PLAN.md, and whether this prose mention trips that rule cannot be checked until the file exists.",
+      "evidence": "\"Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build\" (PLAN.md:23); the feature directory holds only PLAN.md and SPEC.md; check-ac-tests.mjs printed \"UNUSABLE — AC-TESTS.md is not readable (pharn/features/api-key-rotation/AC-TESTS.md): ENOENT\"; .claude/commands/pharn-plan.md:344 \"Never name this feature's `AC-TESTS.md` ... in PLAN.md\""
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "Step 4 compares `now >= expiresAt` without saying how the stored timestamps are typed; the store holds ISO strings, and comparing a Date to a string is false, so an expired key would never read key_expired, which fails open on AC-3.",
+      "evidence": "\"`key.expiresAt` set and `now >= expiresAt` → `AuthError(401, \"key_expired\")`\" (PLAN.md:44-45); live src/keys.js:18 stores `createdAt: now.toISOString()`; step 5 sets \"`expiresAt = now + GRACE_MS`\" (PLAN.md:49-50) with no stated type"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:54",
+      "problem": "AC-6 requires `key.rotated` to be the newest audit entry, but the plan does not say whether the new key also gets a `key.created` entry or in what order the entries are recorded, so the ordering is left to the implementer.",
+      "evidence": "\"Rotation records `key.rotated` with the old key's id as target and `{newKeyId}` in details (AC-6)\" (PLAN.md:54-55) while step 5 creates the new key \"with `newKeyMaterial()`\" (PLAN.md:48); AC-6: \"the newest entry has action `key.rotated`\""
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:52",
+      "problem": "Step 6 makes a repeat revoke a no-op answering 204 but does not say whether `revokedAt` is overwritten or a second `key.revoked` audit entry is written, so the first revocation time can be lost or the log can show a revocation that changed nothing.",
+      "evidence": "\"set `revokedAt = now` (revoking twice is a no-op that still answers 204)\" (PLAN.md:51-52) and step 7 \"revocation records `key.revoked` with the key's id as target\" (PLAN.md:55)"
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:101",
+      "problem": "Question for the human: the plan treats self-revocation as expected but does not say what happens when the revoked key is the organization's only admin key, since only an admin can create keys, so the organization may be left with no way to mint one; is that to be refused, documented as a limit, or accepted?",
+      "evidence": "\"An admin revoking its own key loses access with the next request. That is the expected meaning of revocation; the README says so.\" (PLAN.md:101-102); live src/keys.js:7 `requireAdmin(principal)` guards createKey"
+    },
+    {
+      "id": "G1-12",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:7",
+      "problem": "Rotation and revocation get audit entries, but the plan declares no server-side signal (a log line or counter) for requests authenticated with a deprecated key or rejected as key_expired or key_revoked, so an admin deciding when an old key is safe to retire has only the client-side header to go on.",
+      "evidence": "the `scan-plan-observability` mention at line 11 is \"so the audit log's actor ids keep pointing at real records\", which is audit wording, not observability for the new authentication states"
+    }
+  ]
+}

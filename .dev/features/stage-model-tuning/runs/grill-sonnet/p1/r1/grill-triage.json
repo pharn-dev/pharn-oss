@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "ed05fc348589f10e9c85407e84fedf0414456b63a45ee85d61f26f276c95fb2f",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 4 must look the invoice up only in the authenticated key's own organization (principal.orgId), never one taken from the request body; as written it contradicts AC-4 and the org-scope-from-key rule."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Drop the parent/child organization behaviour from step 4: the SPEC states no hierarchy and no failure triggers it, so it is an unrequested addition (P7)."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 8 must name the org for record() explicitly as the caller's principal.orgId, so GET /audit (filtered by the caller's org) shows the entry and AC-6 holds."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Step 2 must say the existing version-1 case's schemaVersion assertion changes from 2 to 3 (test/store.test.js is already declared in Files), or step 12's green-suite requirement fails."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Remove the reference to AC-TESTS.md from the Approach: it does not exist yet and the plan stage must not name it; say only that acceptance tests are written by /pharn-test."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The in-scope listing endpoint and the plan-added 422 codes (amount_invalid, reason_invalid, idempotency_key_invalid) have no planned test; the plan must declare tests for them (e.g. a declared ordinary test file) or drop the extras the SPEC does not ask for."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 10 must state the organization scoping the listing lookup (principal.orgId) and the role decision; whether members may see the actor key id is the human's call, so the plan should state its choice and flag it in Risks."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 6 must place the idempotency-key format, reason and body-shape checks in the order of checks, and refundInvoice's return shape (refund plus replayed flag) must be declared so the route can choose 201 vs 200."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Step 8 must say whether the audit details amount is a decimal string or minor units (GET /audit returns details as stored), and the Approach's 'only present() formats amounts' claim must be corrected to include presentRefund."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Either add the README upgrade-line note to step 11 so the downgrade mitigation is scheduled, or remove the claim that it is noted there."
+    }
+  ]
+}

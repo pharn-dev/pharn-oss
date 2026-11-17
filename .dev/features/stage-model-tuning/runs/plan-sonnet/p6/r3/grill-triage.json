@@ -1,0 +1,77 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "bc63d93e000fdcc4fad4ea9b5f6fe9834c29c49a2f70a7c3e0232b15ed7a251b",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "spec",
+      "reason": "Approved AC-7 demands no copy of the old secret in process memory, which the plan itself says a unit test cannot show; only a SPEC amendment (e.g. 'the stored hash is cleared by a stated deadline') can resolve it, not a plan-level reinterpretation."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Pending the AC-7 decision, the plan must state the sweep-lag bound explicitly and add a test that drives startKeySweeper (injected clock and interval) rather than only calling sweepExpiredKeys directly."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Verified in src/store.js: each MIGRATIONS[n] step must return the document at version n+1, and migrate() loops on schemaVersion; the plan's MIGRATIONS[2] step must say it sets schemaVersion: 3 or loading an existing file never terminates."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "proceed",
+      "reason": "Forward-only versioned migrations are the store's existing design (src/store.js header); rollback by restoring a pre-upgrade copy is a deploy concern outside the SPEC's scope and the build does not need it."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The plan must state the expiresAt representation (e.g. epoch milliseconds or ISO string parsed to ms on both sides of the comparison) in rotateKey, authenticate and sweepExpiredKeys, because JSON round-trips a Date to a string and a direct comparison never expires the key."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "startKeySweeper needs declared error handling (catch around the transact call, so a failed write cannot become an unhandled rejection that kills the server) and a test for it."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "AC-3/AC-4 require distinct key_expired/key_revoked answers, yet the plan clears the revoked hash and answers on the id alone; the plan must either state this as an explicit human-confirmed trade-off or verify the secret first for dead keys, and it must reconcile the src/auth.js same-401 comment. I cannot tell which, so it goes to re-plan and then the supervisor."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "SPEC Intent says the old key keeps working during the grace so integrations can be redeployed; restricting deprecated principals would be new behaviour outside the SPEC's scope and would cut against that intent."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "The SPEC asks for no logging or metrics and adding them would be speculative scope (P7); the sweeper-failure handling that matters for correctness is covered by the G1-6 replan."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "Both orderings satisfy AC-6; omitting key.created is a plan choice already listed in the plan, and the SPEC's audit scope names only rotation and revocation entries, so the build needs no change."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "SPEC Constraint 3 (404 on every key route) and AC-5 (member gets 403) overlap for a member targeting another org's key; the plan must list the admin-first-then-lookup order among the choices it flags for the human."
+    },
+    {
+      "id": "G1-12",
+      "disposition": "replan",
+      "reason": "The plan must say whether error responses (403/404/409/422) to a deprecated key also carry Deprecation: true and how createApp's catch path gets the principal, so the build is not left to guess."
+    },
+    {
+      "id": "G1-13",
+      "disposition": "replan",
+      "reason": "Add a test in test/keys-edge.test.js (or the AC-2 test) asserting that a non-deprecated key, including the newly issued one, gets no Deprecation header, so an unconditional header cannot pass."
+    },
+    {
+      "id": "G1-14",
+      "disposition": "replan",
+      "reason": "To keep one change-reason per file (P3), move startKeySweeper and its interval lifecycle out of src/server.js into its own declared module, add it to the Files list and have the import.meta.main block call it. I cannot tell the file is fine as is."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "c03b088ce846966c1e0f24d3c38d5df964919af34677dc78fb413a5d5a979c3c",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Confirmed in PLAN.md: no step, field, auth state, route, audit entry or acceptance mapping covers revocation (AC-4, key_revoked, key.revoked audit, revoke during grace); the re-plan must add them and declare the files."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "PLAN.md Files omits test/helpers.js and the clock option only appears under Risks; the re-plan must make the createApp clock seam a numbered step and declare test/helpers.js (clock passthrough, response headers) so the AC-2/AC-3 tests can run."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan is silent on what a deprecated key may do; it must either restrict a grace-period key (e.g. no rotate or create) or state the accepted risk, since the SPEC does not say."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "pharn-plan.md Step 4c makes /pharn-plan, not /pharn-test, write AC-TESTS.md for a templated SPEC, and none exists in the feature folder; the PLAN's statement of who writes it is wrong, so the re-plan must produce the mapping (covering AC-4 too)."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Keys store timestamps as ISO strings (createdAt in src/keys.js); the step must say expiresAt is stored as an ISO string and parsed or compared as a Date so the boundary tests are well defined."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "proceed",
+      "reason": "Step 5 states the 409 refusal explicitly as a plan decision; it is a small, safe guard against chained rotations and does not conflict with any criterion, so the build does not need it changed."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 1 migrates old keys only; the re-plan should have createKey and rotateKey write the three null fields (and any revocation field) so new and migrated records share one shape, with a test."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "Usage monitoring of deprecated keys is not in the SPEC's scope or acceptance criteria (and notifications are a non-goal); an improvement for later, not needed by the build."
+    }
+  ]
+}

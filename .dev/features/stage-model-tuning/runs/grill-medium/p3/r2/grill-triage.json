@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "6a1eb36d1f9b9c8e31bfe9c86bdfce631304f237715c53ae817e47e2c6ce96ce",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Verified in src/store.js (SCHEMA_VERSION = 2, MIGRATIONS table) and src/auth.js:34 (reads key.hash): step 1's claim that no migration is needed is wrong. Re-plan must either keep the field named hash (new fields optional) or add a 2→3 migration that renames it, and declare the choice in the steps and Files."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The plan has no step defining a test that loads a current-release (v2, hash-bearing) data file and authenticates its token, yet Files lists a pre-upgrade-token test; add that test as a step (it is the SPEC's existing-keys-keep-authenticating constraint)."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The Downgrade risk assumes the old release refuses a new file, which only holds if the schema version is bumped; the re-plan's answer to G1-1 decides this, and the risk text must then be corrected to match what the store actually does."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "proceed",
+      "reason": "The SPEC states the intent: rotation keeps the old key working for 24 hours and revocation is the immediate remedy for a known leak; restricting a deprecated principal is not in scope. Optionally the human may want a limit, but the plan matches the SPEC as written."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "If the rename stays, presentKey's guard and the listing test must check secretHash as well as hash so the no-secret-in-listing assertion is not vacuous; if the re-plan keeps the name hash, this resolves with G1-1. Add the test to the steps."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The SPEC constraint that another organization's key reads 404 on every key route has no planned test for rotate and revoke; add ordinary tests (not an AC) for both routes to the steps and Files."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "The createApp(store, {now}) clock option is only in Risks; promote it to a step on src/server.js and state that handle passes the same clock to authenticate and the rotate and revoke calls, so AC-3's HTTP test is buildable."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "Step 5 already names the 409 key_not_active refusal and step 11 documents new error codes; an unstated-by-SPEC guard on double rotation is a minor addition the build does not need changed. A README line naming it can be added by the build."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Revocation audit is an in-scope SPEC item with step 7 implementing it but no planned test; the re-plan is happening anyway, so add one ordinary test asserting the key.revoked entry's target and actor."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "Logging of refused requests is outside the SPEC's scope (audit covers rotation and revocation only) and is an operability nicety, not something the build needs."
+    }
+  ]
+}

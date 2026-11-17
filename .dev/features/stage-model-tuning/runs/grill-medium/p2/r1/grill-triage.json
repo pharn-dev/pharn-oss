@@ -1,0 +1,47 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "2a812c327a092c8a36d5284933aee7e24790855bccb8796c72fc1267ae161977",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 5 contradicts the SPEC money constraint and the plan's own 'money.js reused as is'; rewrite it to parse the amount with the existing parseMinor (mapped to 422 amount_invalid, zero rejected) and compare integer minor units, with no parseFloat or toFixed."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Once step 5 works in minor units, the plan must say that the parsed amountMinor is what gets stored and that only formatMinor/present stringify amounts; drop the toFixed(2) response rounding."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 10 must state that listRefunds loads the invoice via the org-scoped findInvoice (404 not_found for another organization), as step 4 does for refundInvoice."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The SPEC puts listing refunds in scope but has no AC for it, so the plan must declare an ordinary test for GET /invoices/:id/refunds (member access, newest-first, cross-org 404) in a Files entry, as it does for the migration test, and map it in the acceptance mapping."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Step 6 must place idempotency_key_invalid validation in the declared check order. The same-key/different-amount behaviour is a SPEC-silent product choice, so the re-plan should either state it as an explicit accepted bound in Risks or leave it to the supervisor."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The route passes five arguments but refundInvoice declares a sixth `now` used by step 8; the plan must give `now` a default of new Date(), like the existing domain functions, or pass it from the route."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Checked: README.md has no upgrade line, yet the Risks section claims one. Step 11 must add the forward-only schema 3 upgrade note (back up the data file first) to the README, or the Risks claim must be corrected."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "AC-6 checks only action, target and actor, and record() in src/audit.js already defaults `now`, so a millisecond difference from the refund's `at` affects no criterion; the details.amount format is a build detail that no criterion tests."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "e5b549a177eeb358c7e6ba9b4e6903885dca9fd3e66929706de4f2ad5767f554",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 1 must not leave pre-upgrade records unreadable: either keep the `hash` field or add a versioned migration (and the store.test.js schemaVersion assertion) so existing keys still authenticate, as the SPEC constraint requires."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "If any rename survives, test/helpers.js seededStore() must be added to Files and updated; otherwise step 12's green-suite goal is unreachable. Dropping the rename (see G1-3) removes the need."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "No acceptance criterion needs the `hash` to `secretHash` rename; the plan should drop it and only add the four optional fields, which also resolves G1-1 and G1-2."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The SPEC is templated, so the plan stage must produce AC-TESTS.md mapping the six ACs to tests; the plan refers to a mapping file that is not in the feature directory, so it needs to be produced or the reference corrected."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The clock seam AC-3 depends on is only in Risks; promote it to a step and Files: createApp options.now, handle passing now to authenticate/rotateKey/revokeKey, and how test/helpers.js startApp supplies a clock (add that file if it must change)."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Add planned tests for the cross-organization 404 on all key routes, 409 key_not_active, member DELETE 403, double revoke, and the pre-upgrade-token case that Files promises but step 10 omits; the SPEC constraint on 404 has no AC so the plan must cover it itself."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 8's 'every response' claim is wrong for unknown routes that 404 before authentication; narrow the claim and state how the principal is made visible to the catch-branch so error responses can carry the header."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "State the stored representation of expiresAt and rotatedAt (ISO strings, like createdAt) and that authenticate parses them before comparing with now; otherwise a rotated key could never expire."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "keys.js already imports DomainError from invoices.js today; the plan adds no new coupling and no SPEC criterion depends on moving it, so this is a pre-existing minor cleanup the build does not need."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Unclear if the plan stands: it should say explicitly whether a repeated revoke writes a second key.revoked entry and whether revoking the last admin key is allowed, so the supervisor or human can confirm the choice rather than it being silent."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "proceed",
+      "reason": "The SPEC's scope covers audit entries for rotation and revocation only; logging refused attempts with revoked or expired keys is outside it and is an improvement the build does not need."
+    }
+  ]
+}

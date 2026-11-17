@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:36",
+      "problem": "Step 1 renames the stored key field hash to secretHash with no migration, contradicting the SPEC constraint that every existing key keeps authenticating and that record-shape changes go through the store's versioned migrations (live src/store.js has SCHEMA_VERSION=2 and a MIGRATIONS table); every pre-upgrade key record carries only hash, so comparing secretHash breaks all existing tokens.",
+      "evidence": "The store is plain JSON, so no schema version bump or migration is needed: older records simply lack the new fields."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:37",
+      "problem": "No planned test loads a pre-upgrade (schemaVersion 2, hash-field) data file and authenticates one of its keys; step 2 only checks keys created by the new code, so the SPEC's 'existing keys keep authenticating' constraint is untested even though the Files list claims a pre-upgrade token test.",
+      "evidence": "create a key through `createKey`, reload the store, and assert the record has `secretHash` ... assert that the new key's token works. / Files: `test/auth.test.js` — pre-upgrade token"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:103",
+      "problem": "The persisted-shape change declares no rollback path, and because SCHEMA_VERSION is not bumped the previous release would load a file written by this release without refusing it and then fail on the missing hash field, rather than detecting the newer schema.",
+      "evidence": "Deploys are forward-only today; a data file written by this release is not supported by the previous one."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:69",
+      "problem": "The Files list omits test/helpers.js, whose fixture keys are written with a hash field (live test/helpers.js:24); the rename in step 1 breaks every existing suite that uses those fixtures unless that file changes too.",
+      "evidence": "## Files — lists src/store.js, src/auth.js, src/keys.js, src/server.js, test/store.test.js, test/auth.test.js, README.md; no test/helpers.js"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:13",
+      "problem": "A deprecated (rotated) admin key keeps full admin rights during its 24-hour grace period, so whoever holds it can call POST /keys or rotate another key and mint a fresh non-expiring token; the plan does not state whether that is intended or whether a deprecated key should be restricted from key-management routes. Question for the human.",
+      "evidence": "inside the grace period → a principal flagged `deprecated`, which `src/server.js` turns into the `Deprecation: true` response header."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:53",
+      "problem": "Self-revocation and revocation of other admin keys are allowed with no guard against revoking an organization's last active admin key, which would leave the organization unable to create keys and back to the manual-deletion support path the SPEC's intent describes; the Risks section names self-revocation but not the lockout.",
+      "evidence": "An admin may revoke the key it is calling with; the request itself completes."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:43",
+      "problem": "The plan does not say how expiresAt is stored or compared; if it is stored as an ISO string like createdAt, a literal now >= expiresAt comparison of a Date against a string evaluates to false and an expired key never expires.",
+      "evidence": "`key.expiresAt` set and `now >= expiresAt` → `AuthError(401, \"key_expired\")`"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:61",
+      "problem": "After the rename the secret's hash lives in secretHash, but step 9 and the existing listing test (test/auth.test.js:43 asserts the hash key is absent) still guard the old field name, so a leak of secretHash into the API view would pass that test.",
+      "evidence": "It still never includes `hash`."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:57",
+      "problem": "Step 8 passes the injected clock to authenticate but does not say the rotate and revoke routes pass it to rotateKey and revokeKey; if rotation stamps real time while authentication uses the test clock, the AC-3 test's 24-hour boundary is measured between two different clocks.",
+      "evidence": "`handle` passes `now` to `authenticate` and, when the principal is `deprecated`, sets `Deprecation: true` on every response"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:54",
+      "problem": "The plan does not say whether the replacement key also gets a key.created audit entry or in which order the entries are written; AC-6 requires key.rotated to be the newest entry, which holds only if key.rotated is recorded last.",
+      "evidence": "Rotation records `key.rotated` with the old key's id as target and `{newKeyId}` in details (AC-6)"
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:60",
+      "problem": "Admins can see which keys are in their grace period but have no way to see whether a deprecated key is still being used, so they cannot tell when integrations have been redeployed; the only signal is the Deprecation header seen by the client itself.",
+      "evidence": "`presentKey()` adds `rotatedAt`, `expiresAt`, `revokedAt` and `replacedBy`, so an admin can see which keys are in their grace period."
+    }
+  ]
+}

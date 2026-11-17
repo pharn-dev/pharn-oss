@@ -1,0 +1,132 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:28",
+      "problem": "The plan narrows Approved AC-7 (no copy of the old secret anywhere in process memory) to 'the stored hash is cleared'; that changes what the criterion means, which only a SPEC amendment via /pharn-spec can do, and the grill cannot confirm a reading of the SPEC on the human's behalf.",
+      "evidence": "So \"no copy\" is made testable as: once a rotated key's grace ends, its `hash` (the only derivative) is cleared from the in-memory document ... For `/pharn-grill`: confirm this reading."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:33",
+      "problem": "Even under the plan's own reading AC-7 holds only up to 60 s after the grace ends, and the AC-7 unit test calls sweepExpiredKeys(doc, now) directly, so it never exercises the sweeper timing the criterion depends on.",
+      "evidence": "The hash can therefore outlive the grace by up to one interval. / AC-TESTS: AC-7 | unit | `sweepExpiredKeys(doc, now) -> number`"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:47",
+      "problem": "The MIGRATIONS[2] step is described as mapping keys only and never says it sets schemaVersion: 3; src/store.js migrate() loops while schemaVersion < SCHEMA_VERSION, so a step that does not bump the version hangs every load of an existing file.",
+      "evidence": "Add `MIGRATIONS[2]` mapping each key to `{ status: \"active\", expiresAt: null, ...key }`."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:12",
+      "problem": "The v2 to v3 migration has no declared rollback path: the previous release refuses a v3 file ('unsupported schema version'), so once the new release writes the store, rolling back the deploy requires restoring a pre-upgrade copy, and the plan does not label that limit.",
+      "evidence": "The record shape changes, so `SCHEMA_VERSION` goes 2 → 3 with a `MIGRATIONS[2]` step"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:23",
+      "problem": "The plan never states how expiresAt is stored or compared; persisted through JSON it becomes a string, and `Date >= string` compares against NaN and is always false, so an expired rotated key would keep authenticating unless both sides are parsed to milliseconds.",
+      "evidence": "a `rotated` key with `now >= expiresAt` is `401 key_expired`"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:65",
+      "problem": "The sweeper runs store.transact from an interval with no declared error handling; a failed write (disk full, permissions) rejects inside the timer, and an unhandled rejection terminates the Node server process by default.",
+      "evidence": "Add an exported `startKeySweeper(store, { intervalMs = 60_000, now })` that skips `transact` when no key is due."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:123",
+      "problem": "Answering key_revoked / key_expired from the key id alone, before any secret check, lets an unauthenticated caller who knows an id learn that key's lifecycle state, and breaks the documented invariant in src/auth.js that every authentication failure is the same 401; this needs an explicit human decision.",
+      "evidence": "dead keys answer `key_revoked` or `key_expired` on the id alone, without verifying the secret."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:24",
+      "problem": "A rotated admin key inside its grace keeps full admin power (it can create keys, rotate other keys and revoke its own replacement), and the plan does not say whether that is intended or whether deprecated principals should be restricted.",
+      "evidence": "A rotated key inside its grace verifies as normal and yields a principal with `deprecated: true`."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:7",
+      "problem": "The plan adds a background sweeper and a deprecated-key path but no log or metric for either, so operators cannot see the sweeper failing or which integrations still use an old key before its grace ends (the Deprecation header informs only the caller).",
+      "evidence": "scan-plan-observability: mentions false; the Approach describes `sweepExpiredKeys` on an unref'd interval and the `deprecated` principal with no logging declared"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:18",
+      "problem": "Leaving out key.created for the new key is presented as necessary for AC-6, but recording key.created first and key.rotated second keeps key.rotated newest and keeps the audit log complete, so the stated reason does not support the choice.",
+      "evidence": "No `key.created` entry is written, so `key.rotated` stays the newest entry (AC-6)."
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:39",
+      "problem": "For a member caller targeting another org's key, SPEC Constraint 3 (404 on every key route) and the plan's admin-first check (403) disagree; the plan settles this ambiguity silently instead of listing it with the other choices for the human.",
+      "evidence": "Admin is checked before lookup, so a member gets `403 forbidden` (AC-5)."
+    },
+    {
+      "id": "G1-12",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:26",
+      "problem": "The plan says every response to a deprecated principal carries Deprecation: true, but createApp's catch path calls send() outside the scope of the principal, so it does not say whether 4xx answers to a deprecated key (403, 404, 409, 422) carry the header.",
+      "evidence": "`server.js` sends `Deprecation: true` on every response to a request whose principal is `deprecated` (AC-2)."
+    },
+    {
+      "id": "G1-13",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:71",
+      "problem": "No test is planned to show that responses to a non-deprecated key, including the newly issued key, do not carry the Deprecation header, so a header sent unconditionally would still pass AC-2.",
+      "evidence": "`test/keys-edge.test.js` (new, build-owned): cross-org rotate and revoke are `404 not_found`; rotating a rotated or revoked key is `409 key_not_active`; ..."
+    },
+    {
+      "id": "G1-14",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:83",
+      "problem": "src/server.js gains a background-job lifecycle (startKeySweeper and its interval) next to HTTP routing, which gives the file a second reason to change; ask whether the sweeper belongs in its own module.",
+      "evidence": "`src/server.js` — rotate and revoke routes, clock injection, `Deprecation` header, 204 handling, `startKeySweeper`"
+    }
+  ]
+}

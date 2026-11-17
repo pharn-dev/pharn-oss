@@ -1,0 +1,52 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "ef5f3cf86167d85c7cbe2da0342469c8ff56c986bba8f3468802b9588120ed5d",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 4 must look the invoice up with principal.orgId only; reading the org from the request body lets one tenant's admin write to another's invoices (src/invoices.js says the org comes from the principal). Add an AC-4 test variant that sends a foreign orgId."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The SPEC never mentions refunding on behalf of another organization and src/ has no parent/child relation, so step 4 adds out-of-scope behaviour. Drop it from the plan; no SPEC change is needed unless the human wants it."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan points at an AC-TESTS.md that is not in the feature directory, and the SPEC is templated. The plan stage must produce it with one entry per AC, or the plan must stop relying on it."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "I grepped README.md and it has no upgrade or forward-only note, so the Downgrade risk cites something that does not exist. Step 11 must add the line, or the risk must stop claiming it is already there."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "I confirmed MoneyError is not a DomainError and server.js does not map it, so a bad amount would give a 500. amountOf in src/invoices.js is private. The plan must say how refunds.js converts it (export amountOf, or catch MoneyError itself) and declare any file it touches."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan introduces refusals (idempotency_key_invalid, reason_invalid, zero or malformed amount) and a list route with no tests, and its acceptance test file is not under Files. Add the tests and declare the files."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 6 does not say where idempotency-key and reason validation fall in the check order, which leaves the error for a multi-defect request to the builder. I cannot tell the plan is safe as written, so a small plan fix will pin the order."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 10 gives a handler signature that gains headers but shows a route body reading req.headers. The build cannot follow both. Make the route example use the headers parameter."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "The SPEC's Assumptions already state the reason is optional free text of at most 200 characters, and privacy handling of an admin's own entry is outside this SPEC's scope. A README note is optional but the build does not need it."
+    }
+  ]
+}

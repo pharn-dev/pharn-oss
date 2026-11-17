@@ -1,0 +1,51 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:42",
+      "problem": "Step 5 handles refund amounts as floating-point dollars via parseFloat, which breaks the SPEC money constraint (two-fraction-digit strings, integer minor units) and skips the existing parseMinor in src/money.js that the plan says it reuses as is; inputs like \"30.5\", \"1e1\" or \"30abc\" would be accepted, the check against the remaining amount runs on floats, and the step that turns the parsed value into amountMinor is never stated.",
+      "evidence": "Parse `amount` with `Number.parseFloat()` ... compute `remaining = paid - refunded` in dollars, where both sums are the invoice's payments and refunds divided by 100, and round the amounts in the response with `toFixed(2)`."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "The route in step 10 reads req.headers, but handlers in src/server.js receive only {principal, params, body, store}, so req is not in scope there; the call also leaves out the `now` argument named in step 3's signature, and nothing says what refundInvoice returns that lets the route choose 201 or 200.",
+      "evidence": "store.transact((doc) => refundInvoice(doc, principal, params[0], body, req.headers[\"idempotency-key\"])) ... answering 201 with the presented refund, or 200 when the result is a replay ... The route table's handler signature gains `headers`, passed through from `handle`."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The downgrade risk is called documented in \"the README's upgrade line\", but README.md has no upgrade line (searching for 'upgrade' finds nothing) and step 11 does not add one, so the forward-only migration limit is not actually written down anywhere.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "The plan adds GET /invoices/:id/refunds (member role, newest first) and the error codes amount_invalid, reason_invalid and idempotency_key_invalid, but no acceptance criterion and no test it plans covers any of them, so the SPEC's in-scope item 'listing an invoice's refunds' and every validation path go unverified.",
+      "evidence": "and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first) ... this plan names only the implementation files and the one ordinary regression test the migration needs."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:52",
+      "problem": "When a request reuses an idempotency key with a different amount, the plan returns the original refund with 200 and does not refuse it; the SPEC does not decide this case, so it is a product choice for the human to confirm, not something the plan should settle on its own.",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    }
+  ]
+}

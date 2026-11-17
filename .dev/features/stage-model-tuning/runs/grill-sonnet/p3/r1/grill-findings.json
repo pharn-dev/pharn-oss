@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:36",
+      "problem": "The plan says no migration is needed, but the SPEC constraint requires a stored-shape change to go through the versioned migrations, and live src/store.js shows an on-disk record has `hash` while step 1 makes auth.js read `secretHash`, so every pre-upgrade key would hit Buffer.from(undefined) and answer 500 instead of authenticating.",
+      "evidence": "The store is plain JSON, so no schema version bump or migration is needed: older records simply lack the new fields."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:34",
+      "problem": "test/helpers.js seededStore() writes `hash:` on every seeded key and is not in the plan's Files, so after the rename every existing suite that uses seededStore fails and the build's writes-scope cannot repair it, making step 12's 'existing suites stay green' unreachable.",
+      "evidence": "Rename the key record's `hash` to `secretHash`, to tell it apart from the new fields, and"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:34",
+      "problem": "The `hash` to `secretHash` rename is justified only as readability, no SPEC criterion needs it, and it is the sole cause of G1-1 and G1-2, so the smaller coherent increment keeps `hash` and only adds the four optional fields.",
+      "evidence": "to tell it apart from the new fields"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:23",
+      "problem": "The plan points to an AC-TESTS.md mapping, but pharn/features/api-key-rotation/ holds only PLAN.md and SPEC.md while check-ac-tests.mjs --spec reports the SPEC TEMPLATED with 6 ACs, so the mapping that /pharn-test needs does not exist and the plan's acceptance test file name is unbacked.",
+      "evidence": "Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test`"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:99",
+      "problem": "AC-3 cannot be tested over HTTP without a clock seam, but the seam appears only under Risks and not in any step; the plan never says whether handle passes the injected now to rotateKey and revokeKey, or how test/helpers.js startApp(store), which takes no clock and is outside Files, hands one to createApp.",
+      "evidence": "they need a way to move the clock: `createApp(store, {now})` takes an optional clock"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:62",
+      "problem": "The planned tests leave uncovered the SPEC constraint that another organization's key reads 404 on every key route (no AC covers it), the 409 key_not_active refusal, a member key attempting DELETE, double revoke, and the Deprecation header on error responses, and step 10 omits the pre-upgrade-token test that the Files list promises.",
+      "evidence": "add unit cases for the three states at the boundary"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:58",
+      "problem": "The 'every response' claim is wrong against live src/server.js: an unknown route returns 404 before authenticate runs, and the principal is only bound after that point, so the plan must also say how the principal is hoisted out of the try block for the header to reach the catch-branch responses.",
+      "evidence": "sets `Deprecation: true` on every response, including"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:43",
+      "problem": "The plan does not say how expiresAt is stored; existing records store ISO strings (createdAt) and `now >= expiresAt` with a Date and an ISO string compares against NaN and is always false, which would make a rotated key never expire unless the build parses the stored value.",
+      "evidence": "`key.expiresAt` set and `now >= expiresAt` → `AuthError(401, \"key_expired\")`; `key.replacedBy` set (so still inside"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:47",
+      "problem": "The 404 not_found on the new key routes is a DomainError that src/keys.js already imports from src/invoices.js (a leaf-to-leaf reference), and the plan extends that dependency without routing the error type through a shared module.",
+      "evidence": "(`404 not_found` otherwise)"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:52",
+      "problem": "Two product questions are decided silently instead of asked: whether a repeated revoke writes a second key.revoked audit entry, and whether revoking the organization's last admin key is allowed, since that leaves no key able to create or rotate keys.",
+      "evidence": "revoking twice is a no-op that still answers 204"
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:55",
+      "problem": "Rotation and revocation are audited but a request refused with key_revoked or key_expired is recorded nowhere, so an admin revoking a leaked key cannot see whether it is still being tried; the plan neither adds this nor states it as a limit.",
+      "evidence": "revocation records `key.revoked` with the key's id as target."
+    }
+  ]
+}

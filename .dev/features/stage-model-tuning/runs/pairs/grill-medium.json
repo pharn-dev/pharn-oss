@@ -1,0 +1,635 @@
+{
+  "schema": "pharn-stage-model-pairs/1",
+  "manifest_sha256": "bfbad24957154b4514a2a8ec3ea4fbe84affbcbabe91e84f2f397266cf0c9a22",
+  "expect": {
+    "control": {
+      "plan": "opus",
+      "grill": "opus",
+      "triage": "sonnet"
+    },
+    "variant": {
+      "plan": "opus",
+      "grill": "opus",
+      "triage": "sonnet"
+    }
+  },
+  "reading": "does-not-support",
+  "reason": "catch-lost",
+  "summary": {
+    "pairs": 8,
+    "complete": 8,
+    "incomplete_control": 0,
+    "incomplete_variant": 0,
+    "control_caught": 7,
+    "variant_caught": 7,
+    "catch_lost": 1,
+    "catch_gained": 1,
+    "comparable": 8,
+    "unanchored_control": 0,
+    "unanchored_variant": 0,
+    "control": {
+      "usd": 13.0979,
+      "weighted": 3456310.3,
+      "minutes": 32.27,
+      "per_stage": {
+        "grill": {
+          "usd": 11.5327,
+          "weighted": 2752564.4,
+          "minutes": 26.71
+        },
+        "triage": {
+          "usd": 1.5653,
+          "weighted": 703745.9,
+          "minutes": 5.56
+        }
+      }
+    },
+    "variant": {
+      "usd": 11.1998,
+      "weighted": 3006513.2,
+      "minutes": 26.74,
+      "per_stage": {
+        "grill": {
+          "usd": 9.717,
+          "weighted": 2341246.3,
+          "minutes": 21.65
+        },
+        "triage": {
+          "usd": 1.4829,
+          "weighted": 665267,
+          "minutes": 5.09
+        }
+      }
+    }
+  },
+  "pairs": [
+    {
+      "probe": "p1",
+      "control": {
+        "source": 0,
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.9412666666666665,
+            "usd": 1.3758136,
+            "weighted": 320870.05,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "f60607a4890b9e73f7477e689d1e1deacec802a8ee5a718ced7fd4d9588fc48c",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6332833333333333,
+            "usd": 0.1814236,
+            "weighted": 79897.6,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "bc2acf61214200ec343360a36863da501a596716146e817d594735d4c376e6e2",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.7285,
+            "usd": 1.2783512000000004,
+            "weighted": 322177.85,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "9db53a861395258be726c2ee120b3bbb1e0763043d2e78ba54fe7344d4757974",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.62965,
+            "usd": 0.1917326,
+            "weighted": 86500.6,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "fffba3d3f9c64ab4c2ec99db32c9438be1991a8619696056f1ca19378361eddf",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p1",
+      "control": {
+        "source": 0,
+        "run": "r2",
+        "outcome": "triage-invalid",
+        "caught": false,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.4792666666666667,
+            "usd": 1.435447,
+            "weighted": 347607,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "b21267ebd24fd6f27751cf6f35e7cf6187c074c493ec2b2afa2f277c77e1697c",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 1.0964166666666666,
+            "usd": 0.27409589999999995,
+            "weighted": 136378.4,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "88edd2a6621d2437be74545eac53cb3c0aca04a4b21ab34e6e2d3fc29765ef6d",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r2",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.5610833333333334,
+            "usd": 1.2175506000000003,
+            "weighted": 276693.8,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "0a8634897e689d41ced213aa3def611d695316d8f2070f060cb6adf6ac211aad",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6787166666666666,
+            "usd": 0.1873342,
+            "weighted": 82662.95,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "d2e6eb1687d6714f816d67cabaea15cc2327442b65e5ebb1f30e5750de1266b0",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p2",
+      "control": {
+        "source": 0,
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.9191333333333334,
+            "usd": 1.6204406000000002,
+            "weighted": 390309.80000000005,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "043f1837bb71ab68609f9e3c0bbcfdac379c8c46c3fb648710a195c05e2d8b37",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6165333333333334,
+            "usd": 0.18972440000000002,
+            "weighted": 83146.9,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "8e4924c5b0b2a02c336ba5d4443ec17dc601f7621932a5661b6d134eb5978a25",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.8081,
+            "usd": 1.0404844000000002,
+            "weighted": 266586.7,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "9afa4ef2b2d4b6bbac0d20c9d7a806680b83fcbee543f02defe89801d476e6cd",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6234833333333333,
+            "usd": 0.1893715,
+            "weighted": 86889.75,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "d53f53249e228850bdb077cee7a0ac459ca26a0a7d5d0ed70eac0612c6b8b9b4",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p2",
+      "control": {
+        "source": 0,
+        "run": "r2",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.69255,
+            "usd": 1.5113552,
+            "weighted": 346830.6,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "cb6c466c4da4f2b8b04d2fffe32a2096c4378d9a33e7816c5918ba39b8ab17a6",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.7072666666666667,
+            "usd": 0.2024805,
+            "weighted": 88489,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "995a1c3a4ab08a93c55fbc6ac81d6981b882dcfb0150189b4a2787c7cb58b31b",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r2",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.4347,
+            "usd": 1.1517852000000002,
+            "weighted": 264925.85,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "27378387faf3e90693e8d68ef63d5613b6c88d2a1f166d159821e6751a61893e",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.7031666666666667,
+            "usd": 0.16615929999999998,
+            "weighted": 74548.55,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "46db219241200669e3782ef8c5f0c431f510608a6482e9a8557f337a11a54245",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p3",
+      "control": {
+        "source": 0,
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.1870666666666665,
+            "usd": 1.4126176000000001,
+            "weighted": 333121.05,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "ca3e43933fa87c7715c972f4643a862c4b0deecd1bc639d005f1e005e4876492",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6884833333333333,
+            "usd": 0.1816106,
+            "weighted": 80238.35,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "706491c026e2c53ff685c8a9fad7de4790e0c2655b82519fa28b24ae2ef2a50e",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.1752166666666666,
+            "usd": 1.3249402,
+            "weighted": 312582.85,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "39c5ec293ad5ced98ed455fd8062b660cc59b348fae625b23f51d52f5e00325c",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.7827333333333333,
+            "usd": 0.21639629999999999,
+            "weighted": 100100.8,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "0687b24a63aae86a999b5f121647de6c386bbabf0a97828d1b209463a8166d9c",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p3",
+      "control": {
+        "source": 0,
+        "run": "r2",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.2930333333333333,
+            "usd": 1.4186728,
+            "weighted": 346951.9,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "14900cada9342e6c3feae82b17f076b304c4063a04c769f8dace579f66651eda",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.5497833333333333,
+            "usd": 0.1688733,
+            "weighted": 72176.3,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "b7c03164a42e296a7827412b081a40fef4cf50ce12db6ae41c220805683b1a1f",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r2",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.825483333333333,
+            "usd": 1.1900126000000002,
+            "weighted": 283550.8,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "0ccd90f7f094d9b777f12b2e5bbaeba1b0e6c1772eceabc1f87d9250bafc9f3b",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6069333333333333,
+            "usd": 0.18802690000000002,
+            "weighted": 82904.4,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "c675be84f5c172a44cb26113afa572d57b9fc32dc5970e0496c7d41150d95144",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p4",
+      "control": {
+        "source": 0,
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 3.4276,
+            "usd": 1.4399388000000002,
+            "weighted": 349685.65,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "04f0fdbfbdcb9c32043e1f64143e80b25361228b5620ed32d16f37c5cf425030",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.5973,
+            "usd": 0.1942969,
+            "weighted": 85858.65,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "709f5784fcee9d6db64440d6a4767ac543e3e9621674f86b5733e93611bde5ae",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r1",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.332516666666667,
+            "usd": 1.2066450000000002,
+            "weighted": 294502.25,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "57b739c36b3ea3d85fef88e6a69c6e174e2c17a521f7617837e7c81c2c991bd6",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.4640666666666667,
+            "usd": 0.15944440000000001,
+            "weighted": 70881.15,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "a91c0aa1184d113571584365bc6e47319f249b0bad2bef28f6a3fc40072630de",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    },
+    {
+      "probe": "p4",
+      "control": {
+        "source": 0,
+        "run": "r2",
+        "outcome": "caught",
+        "caught": true,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.7722,
+            "usd": 1.3184102000000002,
+            "weighted": 317188.35,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "4e0464dcda484d9374c345b460a85760d26fdf90ebdb4fc49fd810372eacdbb1",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6679166666666667,
+            "usd": 0.17274820000000002,
+            "weighted": 77560.7,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "04d6f7ce04bb7f26b878ce12b01b4eafe39f82d45e300a04f0551afbd7d26043",
+            "served_expected": true
+          }
+        }
+      },
+      "variant": {
+        "run": "r2",
+        "outcome": "no-anchor-match",
+        "caught": false,
+        "unanchored": false,
+        "complete": true,
+        "sessions": {
+          "grill": {
+            "state": "valid",
+            "minutes": 2.786766666666667,
+            "usd": 1.3071908,
+            "weighted": 320226.15,
+            "model": "claude-opus-5-5",
+            "models": [
+              "claude-opus-5-5"
+            ],
+            "sha256": "0a9a163f23b1ee0e6ad4fd8a92504f82c7d724ab8e93d7850b2abb461760943a",
+            "served_expected": true
+          },
+          "triage": {
+            "state": "valid",
+            "minutes": 0.6011666666666666,
+            "usd": 0.1844163,
+            "weighted": 80778.8,
+            "model": "claude-sonnet-5-5",
+            "models": [
+              "claude-sonnet-5-5"
+            ],
+            "sha256": "10d8ef202820835df0f1e9774df2be8f3bbe6dcb58e82e49fc5b6054889553b4",
+            "served_expected": true
+          }
+        }
+      },
+      "complete": true
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "7c91f26a35a74c38e240781f0a0343877637a12e764505c574155c5cf2db6ae3",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "spec",
+      "reason": "AC-7 as approved (no copy of the secret anywhere in process memory) cannot be tested at unit level and no plan can fix that; the SPEC must be re-stated (e.g. the old key's stored hash is removed after the grace period) via /pharn-spec."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Add a planned test for the post-purge key_expired path (seed a purged key through store.transact) and state the order for a key both revoked and purged, so revoked is not reported as expired."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 3's purgeExpiredKeys predicate must say it only touches keys whose expiresAt is non-null and <= now; never-rotated keys must keep their hash."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Step 2 must say revokedAt/expiresAt are treated as unset when null OR undefined (seeded keys from test/helpers.js carry neither field), so such keys still authenticate."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The plan must say the AC-2 and AC-4 tests use their own fetch (header read, empty 204 body) because the unchanged helper request() cannot observe the header and parses JSON unconditionally."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Step 4 must declare failure handling for the interval purge (catch and log the transact error) so a write error cannot become an unhandled rejection that kills the process."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "Forward-only versioned migrations and migrate() refusing a newer schemaVersion are the store's existing, documented design that the SPEC constraint relies on; downgrade support is outside the SPEC's scope."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "spec",
+      "reason": "The SPEC does not state whether revoking the last admin key (or one's own key) is allowed; the lockout outcome is a product decision the plan cannot make, so the SPEC needs a stated rule (refuse with 409 or accept and document)."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "A SPEC Constraint (cross-org key reads 404 on every key route) has no planned test; the plan and AC-TESTS must add a cross-org check for rotate and revoke."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "Observability for the purge is not required by any SPEC criterion; adding it would be speculative (P7) and the audit log already records rotations and revocations."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "The plan's skip condition is wrong (expired keys stay expired forever); change it to skip when no expired key still has a non-null hash so idle ticks do not rewrite the file."
+    },
+    {
+      "id": "G1-12",
+      "disposition": "proceed",
+      "reason": "A rationale comment for the 60 s interval is a minor improvement the build does not need; the plan's Risks section already states the roughly-60 s bound on purge timing."
+    },
+    {
+      "id": "G1-13",
+      "disposition": "proceed",
+      "reason": "rotateKey and revokeKey already take a now parameter in the plan, so the builder can pass the request's now; this is a minor consistency point that no criterion depends on."
+    },
+    {
+      "id": "G1-14",
+      "disposition": "replan",
+      "reason": "The plan can satisfy both the 404 constraint and AC-5 by doing findOrgKey before requireAdmin in rotateKey and revokeKey (cross-org id gives 404 for everyone, own-org member gives 403); revise the order and the Risks note."
+    },
+    {
+      "id": "G1-15",
+      "disposition": "replan",
+      "reason": "Step 3 must state whether a repeat DELETE on an already-revoked key writes a second key.revoked audit entry (suggest not, so the audit log records one revocation), and say so in the plan."
+    }
+  ]
+}

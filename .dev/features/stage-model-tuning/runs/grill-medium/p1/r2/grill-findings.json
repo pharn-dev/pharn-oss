@@ -1,0 +1,96 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:39",
+      "problem": "Step 4 lets the client-supplied body.orgId choose the tenant for the invoice lookup, so an admin of any organization can refund another organization's invoice by sending its orgId; this defeats AC-4's cross-organization 404 and every other route's principal.orgId scoping.",
+      "evidence": "refundInvoice loads the invoice with findInvoice(doc, body.orgId ?? principal.orgId, id), so a parent organization's admin can refund on behalf of a child organization by sending its orgId"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:40",
+      "problem": "The parent/child organization capability is not in the SPEC and has no basis in the codebase (orgs are {id, name}; a principal is {keyId, orgId, role}), so it is a speculative scope addition with no check of any parent relationship.",
+      "evidence": "so a parent organization's admin can refund on behalf of a child organization by sending its orgId"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:93",
+      "problem": "The AC-4 test is described only as posting to another organization's invoice; unless it also sends that organization's orgId in the body, the cross-tenant path from step 4 is never exercised and the test passes while the hole stays open.",
+      "evidence": "AC-4 -> step 4: the invoice lookup. Test: \"another organization's invoice is 404\"."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:52",
+      "problem": "The plan decides on its own that replaying a key with a different body silently returns the original refund (200), where the SPEC only covers 'the same request'; a mismatch could instead be refused (e.g. 409/422), and this choice should go to the human, not be guessed.",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "GET /invoices/:id/refunds (listing refunds, in SPEC scope) is covered by no acceptance criterion and no planned test, so its role check, org scoping and newest-first ordering go unverified.",
+      "evidence": "and GET /invoices/:id/refunds -> listRefunds (member role, newest first)."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The plan says the irreversible v3 migration is noted in the README's upgrade line, but the README has no upgrade line and the README entry in Files/step 11 covers only endpoints and error codes, so the forward-only limit would go unlabeled; no rollback or backup path is declared.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:45",
+      "problem": "The check order does not place amount_invalid, reason_invalid or idempotency_key_invalid, and puts the replay before amount validation, so which error wins for a request with several defects (or a replay with a malformed amount) is left to the builder.",
+      "evidence": "then the idempotency replay (step 7); then the amount (step 5): an amount above remaining is 422 refund_exceeds_remaining (AC-2)."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "Step 10's route reads req.headers inside a handler that has no req, while the same step says the handler signature gains headers; the two descriptions disagree on how the header reaches the handler.",
+      "evidence": "store.transact((doc) => refundInvoice(doc, principal, params[0], body, req.headers[\"idempotency-key\"])) ... The route table's handler signature gains headers, passed through from handle."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P0",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:101",
+      "problem": "The concurrency claim 'they cannot' holds only within a single process (transact serializes through an in-memory queue); two server processes on the same data file would both pass the remaining-amount check, and that limit is not stated.",
+      "evidence": "They cannot: store.transact() runs one change at a time, and each change reads the invoice from the document it is about to write."
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:7",
+      "problem": "Only successful refunds leave a trace (the audit entry); refused refund attempts (403, 404, 422 refund_exceeds_remaining) on a financial path are invisible in production.",
+      "evidence": "Then record(doc, {orgId, actor: principal.keyId, action: \"invoice.refunded\", ...}) (AC-6); no logging or metric for refused attempts is declared."
+    }
+  ]
+}

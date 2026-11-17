@@ -1,0 +1,78 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:60",
+      "problem": "The plan claims every invoice has refunds[] after the migration, but createInvoice (src/invoices.js) builds new invoices without refunds or refundKeys and the plan never edits it, so the first refund on any invoice created after the upgrade throws a TypeError and answers 500.",
+      "evidence": "\"The `?? []` is defensive only; after the migration every invoice has the list.\" (step 9); step 1 initialises the fields only in MIGRATIONS[2]; step 8 does `pushed onto invoice.refunds`; Files lists src/invoices.js for `present()` only."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:42",
+      "problem": "Step 5 parses and compares the refund amount with floating point (parseFloat, dollars, toFixed), contradicting the SPEC money constraint and the README rule, bypassing parseMinor in src/money.js, and letting a second formatting path (toFixed) disagree with formatMinor.",
+      "evidence": "\"Parse `amount` with `Number.parseFloat()` ... compute `remaining = paid - refunded` in dollars, where both sums are the invoice's payments and refunds divided by 100, and round the amounts in the response with `toFixed(2)`.\" vs SPEC \"decimal strings with exactly two fraction digits on the API, integer minor units inside the service\" and README \"Never use floating-point arithmetic on an amount.\""
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:33",
+      "problem": "Step 2 keeps the existing version-1 migration test as is, but that test asserts schemaVersion 2 and will fail once SCHEMA_VERSION is 3; the plan does not say to update the assertion.",
+      "evidence": "\"Keep the existing version-1 case: it now runs both steps in sequence.\" while test/store.test.js:26 asserts `doc.schemaVersion, 2`."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "The plan adds GET /invoices/:id/refunds (org scoping, role, newest-first order) but no SPEC criterion or mapped test exercises it, so the listing route that SPEC scope names has no evidence at all.",
+      "evidence": "\"and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)\"; the Acceptance mapping covers AC-1 to AC-7 only, none of which calls that route."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "The plan lets a member-role key list refunds, and the presented refund exposes the acting key id and free-text reason, although the project keeps actor ids behind admin-only endpoints (GET /audit, GET /keys); the SPEC does not set a role for listing.",
+      "evidence": "\"`GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)\" and \"`presentRefund` returns `{id, amount, reason, actor, at}`\""
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:52",
+      "problem": "Replaying an idempotency key with a different amount silently returns 200 with the original refund instead of flagging the mismatch, which can mask a client bug as a success; the SPEC says only that the same request sent twice records one refund, so this is a decision for the human.",
+      "evidence": "\"A replay with a different amount still returns the original refund: the key, not the body, identifies the request.\""
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:49",
+      "problem": "The plan says a replay returns the refund with replayed: true and the route answers 200, but presentRefund returns no such field and step 10 does not say how the route learns the result was a replay, nor how an empty Idempotency-Key header is treated.",
+      "evidence": "\"A hit returns the stored refund with `replayed: true` and changes nothing, so the route answers 200 (AC-5).\" versus \"`presentRefund` returns `{id, amount, reason, actor, at}`\""
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The downgrade risk says it is noted in the README's upgrade line, but README.md has no upgrade line and step 11 lists only the endpoint table and error codes, so the forward-only limit would go unrecorded.",
+      "evidence": "\"Deploys are forward-only today; this is noted in the README's upgrade line.\" while step 11 reads \"Add both endpoints to the README's endpoint table and the new error codes to its error list.\""
+    }
+  ]
+}
