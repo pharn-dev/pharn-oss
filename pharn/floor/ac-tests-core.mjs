@@ -26,7 +26,7 @@ const MAPPING_HEADING_RE = /^##\s+Mapping\s*$/;
 
 /** The path the writes-scope setter scopes for a `## Files` entry — `clean` (a trailing ` (…)` annotation and edge
  *  whitespace stripped), then `isConcrete` — or `null` for an entry the setter does not scope (a placeholder or glob,
- *  which since 7.21.0 makes the setter refuse the whole plan). Both
+ *  which since 7.22.0 makes the setter refuse the whole plan). Both
  *  rules are plan-files-core's copy of the setter's, held to it by a parity test; never re-derived here. */
 export function scopedPath(entry) {
   const c = clean(entry);

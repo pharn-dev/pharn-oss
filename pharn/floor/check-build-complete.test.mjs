@@ -175,7 +175,7 @@ test("★ PARITY: `declared` equals set-writes-scope.cjs's `--from-plan` scope o
   try {
     const plan = join(root, "PLAN.md");
     // Exercise the subtle bits both parsers must agree on: literal paths (in), a placeholder + a glob
-    // (skipped by this reader, refused by the setter since 7.21.0), and an exclusion subsection (never scanned).
+    // (skipped by this reader, refused by the setter since 7.22.0), and an exclusion subsection (never scanned).
     const write = (items) =>
       writeFileSync(
         plan,
@@ -836,7 +836,7 @@ test("★ PARITY: the setter scopes a marked item's bare path — setter scope =
       "- `gen/*.md` (delete) — glob: skipped here, refused by the setter",
     ];
     const write = (lines) => writeFileSync(plan, ["# PLAN — deletion parity", "", "## Files", "", ...lines, ""].join("\n"));
-    // 7.21.0: the setter REFUSES the marked glob by name (it used to drop it); this reader still lists it in `skipped`.
+    // 7.22.0: the setter REFUSES the marked glob by name (it used to drop it); this reader still lists it in `skipped`.
     write(items);
     const refused = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(refused.status, 1, refused.stdout);

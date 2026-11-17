@@ -326,7 +326,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
       "",
       scope.declared.length ? quoteData("", scope.declared.join("\n")) : "_(none)_",
       // regress-base-integrity: the declared globs the write hook allows none of (set-writes-scope.cjs scopes concrete paths
-      // only, and since 7.21.0 refuses a plan holding one — so these arrive only from a plan the setter never judged:
+      // only, and since 7.22.0 refuses a plan holding one — so these arrive only from a plan the setter never judged:
       // one edited after the build's Step 0, or a run that skipped that advisory Bash step, L19).
       ...(Array.isArray(scope.unenforced_globs) && scope.unenforced_globs.length
         ? [

@@ -1,0 +1,27 @@
+{
+  "feature": "install-manifest",
+  "gates": {
+    "eval:trust-fence": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "60f3714fca6090a69b6ed90d934e2927d3ed1eae7ce7c3b502d37488b0d4b9c0",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "a279598c55335ea31c355f07146761a9b88cfd08499a65f54aa6f37af73d1fcf"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

@@ -633,7 +633,7 @@ test("eval pairs — a declared capability's pair (tracked or untracked) becomes
     "- `caps/a` — declared",
     "- `caps/c/c.md` — declared, no findings.json",
     "- `caps/d/` — declared, untracked pair",
-    // No `caps/**` row since 7.21.0: the setter refuses a plan holding a glob at the build's Step 0 (an advisory Bash step, L19). "A glob
+    // No `caps/**` row since 7.22.0: the setter refuses a plan holding a glob at the build's Step 0 (an advisory Bash step, L19). "A glob
     // above the capability directory selects nothing" stays pinned by stage-verify-core.test.mjs's featureEvalPairs test.
   ];
   const committed = {

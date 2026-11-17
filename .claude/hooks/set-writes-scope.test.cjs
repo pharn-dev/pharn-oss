@@ -183,9 +183,9 @@ test("--from-plan over the real pharn-plan.md template exits 1 (its `## Files` `
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", PLAN_PRODUCT_CMD);
   assert.equal(r.status, 1);
-  // Pin WHY (7.21.0 review): the template's `## Files` sits inside a code fence, so the reader finds no heading; the exit
+  // Pin WHY (7.22.0 review): the template's `## Files` sits inside a code fence, so the reader finds no heading; the exit
   // alone would also pass if it refused for another reason. A placeholder left in a real PLAN is refused by name instead
-  // (the 7.21.0 tests at the end of this file).
+  // (the 7.22.0 tests at the end of this file).
   assert.match(r.stderr, /no `## Files` heading/);
   assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
@@ -1755,7 +1755,7 @@ test("✧ 7.3.0 PIN: the setter's CANON_SUBTREES equal protect-trusted-paths.cjs
 });
 
 // ---------------------------------------------------------------------------------------------------
-// 7.21.0 (setter-dropped-bullets — lessons-learned L20, L71): a `## Files` item the setter cannot scope REFUSES the plan,
+// 7.22.0 (setter-dropped-bullets — lessons-learned L20, L71): a `## Files` item the setter cannot scope REFUSES the plan,
 // naming every such item, its reason and the count, in --check and in the set alike. Before, it was dropped without a
 // word (L71: 37 items, `35 path(s)`). The empty-list refusal stays reachable (the L14 test above), and --from-frontmatter's
 // placeholder + --target route is unchanged (the artifact-split tests at the top).
@@ -1767,7 +1767,7 @@ function planLines(cwd, lines) {
   return plan;
 }
 
-test("★ 7.21.0 every non-concrete `## Files` item is refused BY NAME with its reason, and the message counts them", () => {
+test("★ 7.22.0 every non-concrete `## Files` item is refused BY NAME with its reason, and the message counts them", () => {
   const cwd = tmp();
   const plan = planLines(cwd, [
     "- `src/a.js` — kept",
@@ -1793,7 +1793,7 @@ test("★ 7.21.0 every non-concrete `## Files` item is refused BY NAME with its 
   }
 });
 
-test("★ 7.21.0 the refusal leaves a live scope record byte-identical, from a build's set and from --check", () => {
+test("★ 7.22.0 the refusal leaves a live scope record byte-identical, from a build's set and from --check", () => {
   const cwd = tmp();
   assert.equal(setter(cwd, "--from-plan", planWith(cwd, "src/live.ts")).status, 0);
   const rec = join(cwd, "pharn", ".run", "writes-scope.json");
@@ -1808,7 +1808,7 @@ test("★ 7.21.0 the refusal leaves a live scope record byte-identical, from a b
   }
 });
 
-test("★ 7.21.0 the L71 shape: 37 items, two of them globs, is `2 of 37` and a refusal, never `35 path(s)`", () => {
+test("★ 7.22.0 the L71 shape: 37 items, two of them globs, is `2 of 37` and a refusal, never `35 path(s)`", () => {
   const cwd = tmp();
   const items = Array.from({ length: 35 }, (_, i) => `- \`src/f${i}.js\``);
   items.splice(10, 0, "- `.dev/features/x/**` — the feature folder");
@@ -1831,7 +1831,7 @@ test("★ 7.21.0 the L71 shape: 37 items, two of them globs, is `2 of 37` and a 
   assert.match(ok.stdout, /writes-scope check: 35 path\(s\)/);
 });
 
-test("★ 7.21.0 an empty item is named as empty, and an item is printed JSON-quoted (a C0 control character never reaches the terminal raw; C1, DEL and bidi are not escaped)", () => {
+test("★ 7.22.0 an empty item is named as empty, and an item is printed JSON-quoted (a C0 control character never reaches the terminal raw; C1, DEL and bidi are not escaped)", () => {
   const cwd = tmp();
   const r = setter(cwd, "--check", "--from-plan", planLines(cwd, ["- `src/a.js`", "- `   `", "- `src/\u001b[2J*.js`"]));
   assert.equal(r.status, 1);
@@ -1841,7 +1841,7 @@ test("★ 7.21.0 an empty item is named as empty, and an item is printed JSON-qu
   assert.ok(!r.stderr.includes("\u001b"), "the escape byte itself is never printed");
 });
 
-test("★ 7.21.0 an annotated item is scoped by its cleaned path, exactly as before (the refusal tests the cleaned entry)", () => {
+test("★ 7.22.0 an annotated item is scoped by its cleaned path, exactly as before (the refusal tests the cleaned entry)", () => {
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", planLines(cwd, ["- `src/a.js (gated)` — x", "- `src/a(b)` — x"]));
   assert.equal(r.status, 0, r.stderr);

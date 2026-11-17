@@ -16,3 +16,16 @@ still holds the rules every session needs; this file adds detail and does not ov
 - **The one exception where regenerating does NOT help:** an `ENUM_ERROR` (a duplicate lesson id, an
   unsafe title, unreadable canon). The generator refuses on the same invalid input, so the checker says
   so explicitly and names the canon file instead of prescribing a regenerate that cannot succeed.
+
+## The install manifest (`pharn-install.json`, 7.21.0)
+
+`npm run docs:generate` also writes the root `pharn-install.json`, the install manifest pharn-cli reads
+([`docs/install-manifest.md`](../../docs/install-manifest.md); the rules are in `.dev/floor/install-manifest-core.mjs`),
+and `docs:check` holds it byte-equal through `.dev/floor/check-install-manifest.mjs`. It is not a doc region, but it
+regenerates the same way, and it changes more often: any change to an installed file (a capability, a contract, a
+product command, hook or agent, a product-floor file, a trusted doc, `LICENSE`, `pharn/features/README.md`), to a
+capability's `applies`, to the root `models` block, or to `SKILLS_VERSION` (every bump) needs a regeneration.
+
+Its `ENUM_ERROR` is a refusal by the core, not drift: a symlinked or otherwise non-regular installable path, a surface
+or capability role contributing nothing, a malformed `SKILLS_VERSION` or `applies`, a duplicate destination, or a
+griller or lens outside its subtree. Regenerating refuses the same way, so the message names what to fix.

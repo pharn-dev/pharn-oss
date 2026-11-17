@@ -416,7 +416,7 @@ function flag(args, name) {
 // THE DECLARED PATTERNS' TWO READERS (regress-base-integrity, P2-E of the 2026-10-07 audit; lessons-learned L39, L71).
 // A PLAN's `## Files` is read by `set-writes-scope.cjs` (what the write hook allows) and by this partition (what the plan
 // authorized). The setter scopes CONCRETE entries only — it dropped anything holding `*`, `?`, `<` or `>` without a word
-// until 7.21.0, and since then REFUSES the plan, naming each such entry — while this partition matches every entry as a
+// until 7.22.0, and since then REFUSES the plan, naming each such entry — while this partition matches every entry as a
 // glob. So a `**` entry made this check (and check-quick-scope.mjs) count
 // EVERY changed path as declared while the hook denied the same writes: reproduced, `src/evil.js` and a root file passed
 // both scope checks. Two closed answers, both deterministic (regex over the normalized entry, P5):
@@ -424,7 +424,7 @@ function flag(args, name) {
 //     ("everything", in a plan's words; it matches no real path in either reader, and is refused for its intent) —
 //     covers nothing here (excluded from matching, so a caller that forgets to refuse still sees the escapes) and is
 //     returned in `totalGlobs`, which every caller REFUSES (exit 2 / refused, a closed reason code);
-//   • an UNENFORCED entry — one the setter does not scope (`isConcrete` false; since 7.21.0 the setter refuses a plan
+//   • an UNENFORCED entry — one the setter does not scope (`isConcrete` false; since 7.22.0 the setter refuses a plan
 //     holding one, so it reaches this partition only from a plan the setter never judged — edited after the build's
 //     Step 0, or a run that skipped that advisory Bash step, L19 — plan-files-core.mjs's existing byte-faithful copy of
 //     the setter's predicate, imported rather than copied a third time, L35; check-regress.test.mjs pins the two

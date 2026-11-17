@@ -279,7 +279,7 @@ node .claude/hooks/set-writes-scope.cjs --check --from-plan pharn/features/<name
 
 - **exit 0** → go to Step 4c. **Non-zero** → fix the PLAN's `## Files` (the message names the line or the entry)
   and re-run. Never add an `--allow-*` flag to it: a refused path is the person's to edit or to scope. An item holding
-  `*`, `?`, `<` or `>` is refused by name (7.21.0): name each file instead, one item per file.
+  `*`, `?`, `<` or `>` is refused by name (7.22.0): name each file instead, one item per file.
 
 ## Step 4c — Map every Acceptance Criterion to a test, in `AC-TESTS.md` (templated SPEC only)
 

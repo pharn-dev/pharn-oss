@@ -500,7 +500,7 @@ export function testFirstReds(lock, name, base, root) {
   }
   // The set of test files is part of the pin: a `## Files` entry added or removed without a rewrite is a RED. Each
   // entry is compared as the setter scopes it (scopedPath) — the spelling `--write` recorded; one the setter does
-  // not scope (a placeholder or glob, which it refuses since 7.21.0) is named.
+  // not scope (a placeholder or glob, which it refuses since 7.22.0) is named.
   const listed = pathsFromPlanFiles(readFileSafe(resolve(root, mappingPath)) ?? "");
   const now = new Set();
   for (const entry of listed.ok ? listed.value : []) {

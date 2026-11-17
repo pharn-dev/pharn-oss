@@ -254,7 +254,7 @@ node .claude/hooks/set-writes-scope.cjs --check --from-plan .dev/features/<name>
   the entry) and re-run. Never add an `--allow-*` flag: a refused path (canon, a CI workflow, a guard) is the
   human's to apply or to scope, and the halt below is where you say so. **`## Files` lists only files this increment
   writes, one concrete path per item; put anything excluded under its own `###` heading after the list.** An item
-  holding `*`, `?`, `<` or `>` is refused by name (7.21.0) — a `docs/capabilities/**` "regenerated if the catalog
+  holding `*`, `?`, `<` or `>` is refused by name (7.22.0) — a `docs/capabilities/**` "regenerated if the catalog
   moves" item included: name the generated files that change, or leave them out. The check enforces one contiguous list
   with no labels between items — between two path items only blank lines and an item's own indented wrapped text.
 
