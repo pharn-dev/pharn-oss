@@ -972,7 +972,7 @@ export function buildRecord(ctx) {
   const acTests = ["test-gate", "test-preflight"].includes(ctx.stop.at) && !green ? "refused" : ctx.acTests;
   const body = [
     "Driven by the CORE-113 spike driver (`.dev/features/loop-driver-spike/driver/loop-driver.mjs` in PHARN-OSS): every floor line ran from a node process, and each model stage ran in its own headless `claude -p` session.",
-    `Model sessions, in order: ${ctx.sessions.map((s) => `${s.stage} (${s.model}${s.agent ? ", --agent pharn-stage" : ""})`).join(", ") || "none"}.`,
+    `Model sessions, in order, each with the model it was REQUESTED on (a slash-command session's frontmatter \`model:\` replaces the request for its turn, so the served model is read from the session's stream, never from this line): ${ctx.sessions.map((s) => `${s.stage} (requested ${s.model}${s.agent ? ", --agent pharn-stage" : ""})`).join(", ") || "none"}.`,
     `Iterations reached: ${ctx.iter}; the per-iteration verify and scope exits are in the driver's \`steps.jsonl\`.`,
     `The run stopped at driver step \`${ctx.stop.at}\` (exit ${ctx.stop.exit}) — ${blocked ? `blocked ${ctx.stop.row} (\`${id}\`)` : `\`check-loop.mjs\` decision ${decision}`}.`,
     "Pointers: `GRILL.md`, `VERIFY.md` (cited, not restated).",
