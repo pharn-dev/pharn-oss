@@ -121,8 +121,10 @@ Write **`pharn/features/<name>/SHIP.md`** — a thin, **advisory** roll-up:
   stage-start marker recorded (`agent:<alias>`, followed by `general-purpose (fallback)` when that stage's Agent call
   took the fallback, or `inline:<reason>` with the remedy the route line printed),
   and for `/pharn-spec`, `/pharn-regress` and `/pharn-verify` the words `inline (policy)`, citing `ROUTE_POLICY`
-  in `pharn/floor/stage-agent-core.mjs`. A route records what was REQUESTED: never write that a stage ran on a
-  model — what it was served is `cost.json`'s `requests[].model` (P0);
+  in `pharn/floor/stage-agent-core.mjs`. After an `agent:<alias>` token, write `effort:<level> requested` when the
+  Agent call carried the effort the start line printed, or `effort not applied` when it went without one (7.20.0). A
+  route records what was REQUESTED: never write that a stage ran on a model or at an effort — what it was served is
+  `cost.json`'s `requests[].model` (P0);
 - **whether the single build-completion retry (Step 2b) fired** — and if so, the post-retry `/pharn-verify`
   - `/pharn-regress` `.verdict`s, and whether it then reached GATE 2 or STOPped (never a second retry);
 - **each structural verdict read, verbatim:** `/pharn-spec` → `check-spec-approved.mjs` exit (Approved);
@@ -326,7 +328,7 @@ routed build's advisory `done gate:pass`. `/pharn-ship` adds exactly one non-gat
   schema checked both ways, whose unusable result is a STOP. Running the lines, pasting the pinned prompt and the
   agent obeying its brief are advisory. A route records a REQUEST: "a routed stage ran on its configured model" is
   never a guarantee (`cost.json`'s served `requests[].model` is evidence from an undocumented transcript format),
-  and effort is not routed.
+  and the effort the Agent call carries is a request too: nothing on the floor observes what effort a stage ran at.
 - **Advisory, the stage agent's container (7.19.0):** a routed stage is requested as `pharn-stage`, whose tool list
   and system prompt (the definition's body, in place of `general-purpose`'s) Claude Code applies. Any
   `.claude/agents/*.md` named `pharn-stage`, in the project or at user scope, answers to that name, and nothing here

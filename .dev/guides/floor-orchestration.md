@@ -493,10 +493,15 @@ node pharn/floor/check-ship-briefing.mjs <BRIEFING.md>
 # (GATE-2 review A7). The Agent tool still returns the stage agent's final text into the orchestrator's context:
 # THREAT-MODEL §5's free-text residual in a new place — that no proceed/stop reads it is ADVISORY (review A6).
 # The orchestrators record the token on the stage-start marker (since 6.43.0 via `start`, below), so cost.json carries
-# the REQUESTED route beside the SERVED requests[].model. MODEL ROUTED, EFFORT NOT — the Agent tool takes none.
+# the REQUESTED route beside the SERVED requests[].model. EFFORT REQUESTED TOO (7.20.0, stage-effort-routing): a routed
+# `start` prints a third line `effort:<level>` (route-token-core.mjs AGENT_EFFORTS, parity-tested against the checker's
+# EFFORT_ENUM) and the orchestrator passes it as the Agent call's `effort`; where the tool lists none, or refuses the
+# value, the call goes without it and the summary says `effort not applied` (.dev/features/stage-effort-routing/
+# EFFORT-PROBE.md: the parameter, per client, and one direct Agent call whose transcript recorded the sent effort).
 # BOUNDS: a route is a request, the served model is evidence from an undocumented transcript format, NEVER proof;
 # ship's routed build proceeds on its agent's advisory `done gate:pass`, re-confirmed by /pharn-verify's floor
-# verdict; named residuals stage-agent-hang, stage-agent-background, agent-model-set-drift, stage-agent-effort;
+# verdict; named residuals stage-agent-hang, stage-agent-background, agent-model-set-drift, agent-effort-set-drift,
+# agent-effort-param-absent;
 # the live success measure (M2) is pending. Wiring: .dev/floor/command-hygiene.test.mjs STAGE_AGENT_WIRING (the
 # lines, their order, policy parity, EXECUTED). Ships: bumps SKILLS_VERSION. Exit: route 0 agent · 3 inline ·
 # 2 refused | brief 0 · 2 | report 0 · 2 | read 0 done · 3 refused · 4 question · 2 unusable — anything else, 1

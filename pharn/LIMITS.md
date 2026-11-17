@@ -665,9 +665,9 @@ Each thing that reads it answers a different question:
   directly. That check is real and it is floor (enum/regex, `ARCHITECTURE.md §2` primitive #3).
 - **Stage routing (6.27.0).** `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a
   Claude Code subagent, and `pharn/floor/stage-agent.mjs` reads the block at run time, through that checker's
-  `resolve`, to choose the model that subagent is requested on. The DECISION is floor (a closed policy table
-  and the checker's own exit codes, tested); APPLYING it is the platform's, and the orchestrating model passes
-  the model to the Agent call — advisory.
+  `resolve`, to choose the model, and since 7.20.0 the effort, that subagent is requested on. The DECISION is
+  floor (a closed policy table and the checker's own exit codes, tested); APPLYING it is the platform's, and the
+  orchestrating model passes the model and the effort to the Agent call — advisory.
 
 What either certifies is narrower than the config's presence suggests.
 
@@ -675,13 +675,19 @@ What either certifies is narrower than the config's presence suggests.
   `check-model-config`, or of an `agent:<alias>` route on a marker, as evidence that `/pharn-plan` ran on
   Opus. The checker's own stdout carries the disclaimer: `NOTE (P0): this is config↔frontmatter EQUALITY —
   never proof a stage RAN under that model.`
-- **True statement:** for a routed stage PHARN REQUESTS the configured model, and the stage's marker records
-  that request; `cost.json` records the model each request was SERVED — evidence from a transcript format the
+- **True statement:** for a routed stage PHARN REQUESTS the configured model, and the configured effort where
+  the Agent tool takes one; the stage's marker records the model request, and `cost.json` records the model
+  each request was SERVED — evidence from a transcript format the
   platform does not document, not a floor primitive. Model and effort are applied by the Claude Code
   platform, invisible to any hook, hash or enum, so **no floor primitive in PHARN observes what a stage
   actually ran under**. An agreement check is also structurally blind to both copies being wrong together.
-- **Effort is not routed.** The Agent tool takes no effort, so a routed stage runs at the effort it inherits;
-  the declared `effort` reaches a stage only when a person invokes the stage command directly.
+- **Effort is requested where the Agent tool takes it, and never observed by the floor.** For a routed stage,
+  `pharn/floor/stage-agent.mjs start` prints the effort the block resolves beside the route token, and the
+  orchestrating model passes it as the Agent call's `effort` — advisory, like the model. Where the tool lists no
+  `effort` parameter, the stage still routes, runs at the effort it inherits, and the run's summary says the
+  effort was not applied. What effort a request was sent with appears, at most, in the session's transcript —
+  evidence from a format the platform does not document, never proof. A stage that runs inline runs at the
+  session's effort; the declared `effort` reaches it only when a person invokes the stage command directly.
 - **What is not routed runs on the session's model, and the run records why.** A stage the routing policy
   keeps inline, a stage that falls back (the inline reasons `pharn/floor/stage-agent-core.mjs`'s header
   lists), and the orchestrators themselves all run on the model of the session running the orchestrator, not

@@ -23,6 +23,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.20.0] - 2026-11-16
+
+### Added
+
+- **A routed stage agent is requested at the effort `models.stages` resolves for it (CORE-111).** Until now the Agent
+  call carried the model only, so every stage's declared `effort: high` reached no routed stage. On exit `0`,
+  `pharn/floor/stage-agent.mjs start` now prints a third line, `effort:<level>`, after the token and the marker line;
+  `/pharn-loop` and `/pharn-ship` pass that level as the Agent call's `effort`. Where the Agent tool lists no `effort`
+  parameter, or refuses the value without starting an agent, the call goes without it, the stage still routes, and the
+  summary or `SHIP.md` writes `effort not applied` after the route token. A stage makes at most three calls, in order:
+  `pharn-stage` with `effort`, then `general-purpose` after an error about the type, then without `effort` after an
+  error about it. `pharn/floor/route-token-core.mjs` pins the levels as a platform fact, `AGENT_EFFORTS` (`low`,
+  `medium`, `high`, `xhigh`, `max`), and a parity test holds them equal to `check-model-config.mjs`'s `EFFORT_ENUM`.
+  `routeFromResolved` sends a resolved effort outside that set inline as `resolve-failed`. The harness probe
+  (`.dev/features/stage-effort-routing/EFFORT-PROBE.md`) found an optional `effort` taking those five levels in the
+  desktop app's Agent tool and in the terminal CLI 2.1.323's embedded schema; that schema omits the parameter when
+  `CLAUDE_CODE_EFFORT_LEVEL` is set. One direct Agent call with `effort: "low"` produced a transcript that recorded
+  the level in its requests' `output_config`. Bounds: the effort is a request (advisory), and what a stage ran at is
+  evidence from an undocumented transcript format, never proof. No routed stage has been observed yet, and neither the
+  marker nor `cost.json` records the effort. The quality and cost comparison on the benchmark features is not run here,
+  because the probe set does not exist yet; CORE-112's effort pairs measure it. `pharn/LIMITS.md` §8 was updated by
+  the maintainer. The commands, `cost-ledger.md`, the `pharn.config.json` note, `docs/limitations.md`, the README and
+  the guides drop "effort is not routed". `check-model-config.mjs` changes in its header only, so pharn-cli's
+  byte-pinned fixture copy lags until it is refreshed.
 - 2026-11-17: **Measured: a script-driven quick loop with one headless `claude -p` session per stage works, and the
   record says no-go for building one now (CORE-113 spike).** The maintainer ran a node driver from a terminal on the
   `lg3-remove-files` benchmark, on a 7.19.0 measure base. It ran every pinned floor line of `/pharn-loop --quick`

@@ -570,7 +570,8 @@ platform's, and an alias is a mutable pointer. For an `inline:<reason>` marker t
 **Bound, and it is the point.** `route` is a REQUEST; `requests[].model` is an OBSERVATION read from a transcript
 format the platform does not document (the reader's own stated assumption). The two agreeing is agreement
 between two records, never proof that a stage ran on a model, and `check-cost-ledger.mjs` still certifies
-internal consistency only. The effort a routed stage ran at is not routed at all.
+internal consistency only. Since 7.20.0 a routed stage's effort is requested on the Agent call too, and neither the
+marker nor `cost.json` records it: what effort a stage ran at is not read here at all.
 
 **No schema bump, and the old-reader direction stated.** `check-cost-ledger.mjs`'s per-marker rule is the closed
 `kind` enum and the `seq` order; it asserts no closed key set over a marker OBJECT, and a token cannot carry a
