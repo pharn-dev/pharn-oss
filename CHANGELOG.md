@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-17: **Added: per-stage model and effort arms on the defect probe set, a pairing reader, and a kit fix so a
+  stage override takes effect (CORE-112).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped
+  default changes. The kit's `--model` / `--effort` flags alone did not set a stage's model. A directly invoked
+  `/pharn-<stage>` runs on its command's `model:` / `effort:` frontmatter, so `--model grill=sonnet` would most likely
+  have run the grill on opus. `.dev/floor/defect-probe-kit.mjs` now writes an overridden stage into each run project's
+  command frontmatter and `pharn.config.json`. It refuses the build unless `check-model-config.mjs agreement` passes.
+  `.dev/floor/stage-model-pairs.mjs` pairs a variant arm's runs with the control's. For each pair it reports the
+  catch, stage minutes, USD, weighted cost and the model each session was served. It then gives the arm one reading:
+  `supports-change`, `does-not-support` or `cannot-decide`. `.dev/measurements/stage-model-tuning-2026-11-17.md`
+  pre-registers three arms before any run: grill model, plan model and grill effort. Their results are pending the
+  user's runs. The audit's whole-loop experiment E1 is out of scope, so every default that needs it stays "cannot
+  decide".
+
 - 2026-11-16: **Added: a defect probe set, its scorer and a run kit, the quality measure for changes to what the grill,
   the triage or the plan writer read (CORE-90).** Apparatus only; nothing ships and `SKILLS_VERSION` is unchanged.
   `.dev/probes/defect-probes/` holds a small fixture project and six probes, each with one planted defect: four PLAN

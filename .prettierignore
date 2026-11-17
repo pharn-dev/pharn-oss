@@ -8,6 +8,8 @@ pharn/floor/test-fixtures
 # raw run outputs committed beside the probe set's first record are model-written JSON whose sha256s its tally pins.
 .dev/probes/
 .dev/features/defect-probe-set/runs/
+# The stage-model-tuning record's raw run files (CORE-112), the same reason: the pairing reader's JSON pins their sha256s.
+.dev/features/stage-model-tuning/runs/
 
 # Generated capability catalog: byte-for-byte output of `npm run docs:generate`, guarded by
 # .dev/floor/check-capability-catalog.mjs. Excluded so the formatter can never rewrite committed

@@ -352,9 +352,40 @@ node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json 
 # --setting-sources project, --max-budget-usd (12), --output-format json to the run's own directory, then a cp of the run
 # files out. --out must be absent or empty (L66). Exit 0 built · 1 a sha256 mismatch or a non-empty --out · 2 usage, an
 # unusable arm or manifest, a failed copy or git call. Flags checked against `claude --help` 2.1.323. Apparatus: no bump.
+# OVERRIDES (2026-11-17, stage-model-tuning, CORE-112): a --model/--effort flag alone does NOT set a stage's model — a
+# directly invoked `/pharn-<stage>` runs on its command's `model:`/`effort:` frontmatter for the turn
+# (check-model-config.mjs "TURN SCOPE"). So a stage a flag names is also written into each run project (its command's
+# frontmatter line and its pharn.config.json models.stages entry) when it differs from the arm's, and the build exits 2
+# unless THIS repository's check-model-config.mjs `agreement` passes over the project (the arm's copy is never run), the
+# arm's command has exactly one such line, and the arm's config has models.stages. KIT.md names the overrides; a control
+# kit's flags equal the frontmatter and change no byte (redundant, not evidence they applied).
 node .dev/floor/defect-probe-score.mjs verify --manifest .dev/probes/defect-probes/manifest.json
 node .dev/floor/defect-probe-kit.mjs build --arm <pharn-oss checkout> --out <new dir> --runs 2 [--model grill=sonnet]...
 node .dev/floor/defect-probe-score.mjs tally --manifest .dev/probes/defect-probes/manifest.json --manifest-sha256 <pinned> --runs <kit>/runs [--min <n>]
+```
+
+## `stage-model-pairs.mjs` — pair a variant arm with the control arm
+
+```bash
+# PAIR AND READ ONE STAGE-MODEL OR EFFORT ARM (added 2026-11-17, stage-model-tuning, CORE-112; dev-only, nothing ships).
+# THE RECORDED NEED (P7): the 2026-09-29 audit requires paired runs before any per-stage model or effort default changes,
+# and CORE-90's tally reads the catch only, never a session's cost or time. For each --probe, the i-th variant run pairs
+# with the i-th control run, the control runs being each --control dir's r<n> directories in the order given. Each run
+# gets defect-probe-score.mjs `scoreRun` (the catch) and, per stage of its kind, its <stage>.session.json
+# (`claude -p --output-format json`, shape as of Claude Code 2.1.323 — L67): minutes (duration_ms), USD (total_cost_usd),
+# weighted units (2026-11-11 baseline formula over modelUsage; every cache write weighted as a 5-minute write) and the
+# SERVED model (the modelUsage key with the most output tokens), which must start with claude-<alias>- of --expect-*
+# (defaults: plan opus, grill opus, triage sonnet). A pair is complete when every session on both sides is valid. The
+# READING, first match: cannot-decide (arm-not-applied | fewer-than-six-pairs | control-caught-none) · does-not-support
+# (catch-lost | no-saving on chain USD) · supports-change (no-visible-regression-and-saving). One lost catch is decisive
+# by construction; no reading is a significance test, "non-inferior", or a decision to change a default. Only numbers,
+# the scorer's outcome and MODEL_RE-checked model ids are read; no path, session id or free text is printed (P2, L62).
+# FLOOR: the pairing, the outcomes, session validity, the served-family test, the sums, the reading. ADVISORY: that runs
+# ran as written, USD as a price, served EFFORT (recorded nowhere), anything beyond the pairs. Exit: pair 0 with a
+# reading | session 0 valid · 1 missing/invalid | 2 usage (bad manifest or flag, no or a repeated --probe, an unknown
+# probe, unequal or zero run counts). Apparatus: no bump.
+node .dev/floor/stage-model-pairs.mjs pair --manifest .dev/probes/defect-probes/manifest.json --manifest-sha256 <pinned> --control <control kit>/runs [--control <more control runs>]... --variant <variant kit>/runs --probe p1 [--probe p2]... [--expect-variant grill=sonnet]
+node .dev/floor/stage-model-pairs.mjs session <run dir>/grill.session.json
 ```
 
 ## `grill-round.mjs` — the full loop's re-plan round

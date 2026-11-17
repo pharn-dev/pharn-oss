@@ -32,6 +32,8 @@
     // `.prettierignore` twin — a fix would change a pinned sha256 and the whole set would be refused.
     ".dev/probes",
     ".dev/features/defect-probe-set/runs",
+    // The stage-model-tuning record's raw run files (CORE-112): a SPEC probe run's PLAN.md is model-written and hashed.
+    ".dev/features/stage-model-tuning/runs",
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
     "pharn/THREAT-MODEL.md",

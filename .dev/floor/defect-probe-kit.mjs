@@ -23,16 +23,27 @@
 // hooks), `--max-budget-usd` (a per-session runaway bound) and `--output-format json` (time and cost per session).
 // Every flag was checked against `claude --help` of Claude Code 2.1.323.
 //
+// WHERE A STAGE'S MODEL IS SET (stage-model-tuning, CORE-112). Each session is a direct `/pharn-<stage>` invocation, and
+// Claude Code selects a directly invoked command's model and effort from the command's own `model:` / `effort:`
+// frontmatter for that turn (pharn/floor/check-model-config.mjs, "TURN SCOPE"), so a `--model` flag the frontmatter
+// disagrees with is most likely not what runs. A stage a `--model` / `--effort` flag NAMES is therefore also written
+// into the run project: the `model:` / `effort:` line of its command's frontmatter and its `models.stages` entry in
+// pharn.config.json, when they differ from the arm's, and then THIS repository's check-model-config.mjs `agreement`
+// must pass over the project (the arm's copy is never executed). A flag equal to the arm's value changes no byte, so a
+// control kit's projects equal the arm; its flags are then redundant with the frontmatter, never evidence they applied.
+// What a session was SERVED is read afterwards from its own session file (stage-model-pairs.mjs).
+//
 // FLOOR: the manifest's shape and every sha256 (defect-probe-score.mjs `verifyInputs`) before anything is written; the
-// arm file set (a glob test); argument shapes (regex / set membership). ADVISORY: everything about the runs.
+// arm file set (a glob test); argument shapes (regex / set membership); the override's line replacement and the
+// agreement exit code. ADVISORY: everything about the runs, including which model and effort a session was served.
 //
 // Usage:
 //   node .dev/floor/defect-probe-kit.mjs build --arm <dir> --out <dir> [--runs <n>] [--probe <id>]...
 //        [--model <stage>=<model>]... [--effort <stage>=<level>]... [--max-budget-usd <n>] [--manifest <path>]
 // Exit: 0 built · 1 an input's sha256 differs from the manifest, or --out is not empty · 2 usage, an unusable arm or
-// manifest, or a failed copy or git call.
+// manifest, an override the arm cannot take or a project failing agreement, or a failed copy or git call.
 import "../../pharn/floor/runtime-floor.mjs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,6 +73,9 @@ export const ALLOWED_TOOLS = Object.freeze([
 ]);
 /** The files a run leaves for the scorer, by stage that writes them. */
 const RUN_FILES = Object.freeze({ grill: "grill-findings.json", triage: "grill-triage.json", plan: "PLAN.md" });
+/** Each kit stage's product command — the same stage keys as check-model-config.mjs's PRODUCT_STAGES. */
+export const STAGE_COMMANDS = Object.freeze({ plan: "pharn-plan.md", grill: "pharn-grill.md", triage: "pharn-triage.md" });
+const MODEL_CONFIG_CLI = join(HERE, "..", "..", "pharn", "floor", "check-model-config.mjs");
 
 const USAGE =
   "usage: defect-probe-kit.mjs build --arm <dir> --out <dir> [--runs <n>] [--probe <id>]... [--model <stage>=<model>]...\n" +
@@ -72,7 +86,13 @@ const MULTI = ["--probe", "--model", "--effort"];
 /** argv after `build` → options, or {error}. */
 export function parseArgs(argv) {
   if (argv[0] !== "build") return { error: "the only subcommand is build" };
-  const o = { runs: 2, probes: [], models: { ...DEFAULT_MODELS }, efforts: { plan: "high", grill: "high", triage: "high" } };
+  const o = {
+    runs: 2,
+    probes: [],
+    models: { ...DEFAULT_MODELS },
+    efforts: { plan: "high", grill: "high", triage: "high" },
+    overrides: [],
+  };
   const seen = new Set();
   for (let i = 1; i < argv.length; i += 2) {
     const [name, value] = [argv[i], argv[i + 1]];
@@ -87,6 +107,7 @@ export function parseArgs(argv) {
       if (name === "--model" && !/^[A-Za-z0-9._[\]-]{1,64}$/.test(m[2])) return { error: "--model value is not a model name" };
       if (name === "--effort" && !EFFORTS.includes(m[2])) return { error: `--effort value must be one of ${EFFORTS.join(", ")}` };
       (name === "--model" ? o.models : o.efforts)[m[1]] = m[2];
+      if (!o.overrides.includes(m[1])) o.overrides.push(m[1]);
     } else o[name.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = value;
   }
   if (!o.arm || !o.out) return { error: "--arm and --out are required" };
@@ -113,6 +134,64 @@ export function armSurface(arm) {
   };
   for (const top of ["pharn", ".claude"]) if (existsSync(join(arm, top))) walk(top);
   return out;
+}
+
+/**
+ * Set one `key:` line inside a command's leading `---` frontmatter. Returns {text, from} (`from` = the old value,
+ * quotes stripped) or {error} when the text has no frontmatter or not exactly one such line in it.
+ */
+export function setFrontmatterLine(text, key, value) {
+  if (!text.startsWith("---\n")) return { error: "no frontmatter" };
+  const end = text.indexOf("\n---", 3);
+  if (end === -1) return { error: "no frontmatter" };
+  const lines = text.slice(0, end).split("\n");
+  const re = new RegExp(`^${key}:(.*)$`);
+  const hits = lines.flatMap((line, i) => (re.test(line) ? [i] : []));
+  if (hits.length !== 1) return { error: `not exactly one ${key}: line` };
+  const from = re
+    .exec(lines[hits[0]])[1]
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  lines[hits[0]] = `${key}: ${value}`;
+  return { text: lines.join("\n") + text.slice(end), from };
+}
+
+/**
+ * What the run projects carry for the overridden stages: {files: {rel: text}, models, notes} or {error}. A stage whose
+ * frontmatter already holds the kit's values contributes nothing, so a control kit changes no byte of the arm.
+ */
+export function projectOverrides(arm, o, models) {
+  const files = {};
+  const notes = [];
+  const out = structuredClone(models);
+  for (const stage of o.overrides) {
+    const rel = `.claude/commands/${STAGE_COMMANDS[stage]}`;
+    let text;
+    try {
+      text = readFileSync(join(arm, rel), "utf8");
+    } catch {
+      return { error: `the arm has no ${rel} to carry the ${stage} override` };
+    }
+    const m = setFrontmatterLine(text, "model", o.models[stage]);
+    const e = m.error ? m : setFrontmatterLine(m.text, "effort", o.efforts[stage]);
+    if (e.error) return { error: `the arm's ${rel} cannot carry the ${stage} override (${e.error})` };
+    if (m.from === o.models[stage] && e.from === o.efforts[stage]) continue;
+    if (out.stages === null || typeof out.stages !== "object") return { error: "the arm's pharn.config.json has no models.stages" };
+    files[rel] = e.text;
+    out.stages[stage] = { model: o.models[stage], effort: o.efforts[stage] };
+    notes.push(`${stage} model ${o.models[stage]}, effort ${o.efforts[stage]}`);
+  }
+  return { files, models: out, notes };
+}
+
+/** This repository's check-model-config.mjs `agreement` over one run project. True on exit 0. */
+export function projectAgrees(project) {
+  const r = spawnSync(
+    process.execPath,
+    [MODEL_CONFIG_CLI, "agreement", "--config", join(project, "pharn.config.json"), "--commands-dir", join(project, ".claude", "commands")],
+    { stdio: "ignore" }
+  );
+  return r.status === 0;
 }
 
 const q = (s) => `'${s}'`;
@@ -161,6 +240,8 @@ export function build(o) {
   if (!/^\d+\.\d+\.\d+$/.test(version) || models === null || typeof models !== "object")
     return fail(2, "--arm holds an unusable SKILLS_VERSION or models block");
   if (existsSync(out) && readdirSync(out).length > 0) return fail(1, "--out is not empty: a kit is always built into a new directory");
+  const ov = projectOverrides(arm, o, models);
+  if (ov.error) return fail(2, ov.error);
   const surface = armSurface(arm);
   const probes = manifest.probes.filter((p) => o.probes.length === 0 || o.probes.includes(p.id));
   const lines = [];
@@ -172,7 +253,10 @@ export function build(o) {
         const project = join(runDir, "project");
         cpSync(join(baseDir, manifest.fixture.dir), project, { recursive: true });
         for (const rel of surface) cpSync(join(arm, rel), join(project, rel), { recursive: false });
-        writeFileSync(join(project, "pharn.config.json"), `${JSON.stringify({ skillsVersion: version, models }, null, 2)}\n`);
+        for (const [rel, text] of Object.entries(ov.files)) writeFileSync(join(project, rel), text);
+        writeFileSync(join(project, "pharn.config.json"), `${JSON.stringify({ skillsVersion: version, models: ov.models }, null, 2)}\n`);
+        if (ov.notes.length > 0 && !projectAgrees(project))
+          return fail(2, "an overridden run project fails check-model-config.mjs agreement: the arm cannot take this override");
         writeFileSync(join(project, ".gitignore"), "pharn/.run/\nnode_modules/\n");
         const feature = join(project, "pharn", "features", probe.feature);
         mkdirSync(feature, { recursive: true });
@@ -212,6 +296,7 @@ export function build(o) {
       `- manifest: \`${manifestPath}\` (sha256 \`${sha}\`)`,
       `- probes: ${probes.map((p) => p.id).join(", ")} · runs per probe: ${o.runs} · runs: ${lines.length}`,
       `- per-session spend cap: USD ${o.maxBudgetUsd} · estimated total: about USD ${Math.round(estimate)}`,
+      `- project overrides (command frontmatter and pharn.config.json): ${ov.notes.length > 0 ? ov.notes.join("; ") : "none — every project equals the arm"}`,
       "",
       "| stage | model | effort |",
       "| ----- | ----- | ------ |",

@@ -116,6 +116,15 @@ All of these were checked against `claude --help` of Claude Code 2.1.323; none w
 `--model grill=sonnet`, `--effort plan=max`, and so on, any number of times; `--probe p3` limits the kit to listed
 probes.
 
+A flag alone does not set a stage's model. Each session invokes `/pharn-<stage>` directly, and Claude Code takes a
+directly invoked command's model and effort from that command's `model:` / `effort:` frontmatter for the turn
+(`pharn/floor/check-model-config.mjs`, "TURN SCOPE"). So since stage-model-tuning (CORE-112) a stage named by
+`--model` or `--effort` is also written into each run project: its command's frontmatter line and its
+`pharn.config.json` `models.stages` entry, whenever they differ from the arm's. The kit then refuses the build unless
+this repository's `check-model-config.mjs agreement` passes over the project. `KIT.md` names the overrides. A control
+kit's flags equal the arm's frontmatter, so they change nothing: they are redundant, not evidence that they applied.
+What each session was actually served is read from its session file by `.dev/floor/stage-model-pairs.mjs`.
+
 Score with the line in `score.txt`, which is
 
 ```sh
@@ -127,6 +136,11 @@ node .dev/floor/defect-probe-score.mjs tally --manifest <manifest> --manifest-sh
 Use the same manifest, the same runs per probe, and the same Claude Code version where possible. Report both tallies'
 per-probe pairs side by side. A drop in the count is a regression to explain before shipping; an equal or higher count
 with two runs per probe says "no visible regression" at most, never "no regression".
+
+For an arm that changes one stage's model or effort, `.dev/floor/stage-model-pairs.mjs pair` does the pairing: it pairs
+the i-th variant run of each probe with the i-th control run, reports each pair's catch, minutes, USD and weighted
+units per stage, checks that each session was served the expected model, and gives the arm one reading
+(`supports-change`, `does-not-support` or `cannot-decide`) by a fixed rule stated in its header.
 
 ## Bounds (P0)
 

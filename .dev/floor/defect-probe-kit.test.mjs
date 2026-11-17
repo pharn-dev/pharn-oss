@@ -11,10 +11,22 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, sy
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ALLOWED_TOOLS, DEFAULT_MANIFEST, armSurface, commandLine, parseArgs, run } from "./defect-probe-kit.mjs";
+import {
+  ALLOWED_TOOLS,
+  DEFAULT_MANIFEST,
+  STAGE_COMMANDS,
+  armSurface,
+  commandLine,
+  parseArgs,
+  projectAgrees,
+  run,
+  setFrontmatterLine,
+} from "./defect-probe-kit.mjs";
 import { listFiles, sha256, treeSha256 } from "./defect-probe-score.mjs";
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), "defect-probe-kit.mjs");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI = join(HERE, "defect-probe-kit.mjs");
+const REPO = join(HERE, "..", "..");
 
 function put(root, rel, text) {
   mkdirSync(dirname(join(root, rel)), { recursive: true });
@@ -72,6 +84,39 @@ function world() {
   };
   put(set, "manifest.json", JSON.stringify(manifest));
   return { root, arm, set, manifest: join(set, "manifest.json"), out: join(root, "kit") };
+}
+
+/**
+ * Give the scratch arm every product command check-model-config.mjs governs, each with model/effort frontmatter, and a
+ * models.stages block that agrees with them (plan and grill opus, everything else the sonnet default; all high).
+ */
+const PRODUCT_COMMANDS = [
+  "spec",
+  "plan",
+  "grill",
+  "triage",
+  "supervise",
+  "build",
+  "regress",
+  "verify",
+  "ship",
+  "loop",
+  "review",
+  "memory-promote",
+  "test",
+];
+function withCommands(w) {
+  for (const name of PRODUCT_COMMANDS) {
+    const model = name === "plan" || name === "grill" ? "opus" : "sonnet";
+    put(w.arm, `.claude/commands/pharn-${name}.md`, `---\ndescription: "${name}"\nmodel: ${model}\neffort: high\n---\n\n# ${name}\n`);
+  }
+  const stages = {
+    default: { model: "sonnet", effort: "high" },
+    plan: { model: "opus", effort: "high" },
+    grill: { model: "opus", effort: "high" },
+  };
+  put(w.arm, "pharn.config.json", JSON.stringify({ models: { stages }, ship: {} }));
+  return stages;
 }
 
 const args = (w, extra = []) => ["build", "--arm", w.arm, "--out", w.out, "--manifest", w.manifest, ...extra];
@@ -136,13 +181,15 @@ test("build writes one fresh project per probe × run, with the arm's surface, c
 
 test("models, efforts, the spend cap and the probe filter reach every command line", () => {
   const w = world();
-  const extra = ["--runs", "1", "--probe", "p2", "--model", "grill=sonnet[1m]", "--effort", "triage=max", "--max-budget-usd", "7.5"];
-  assert.equal(run(args(w, extra)).code, 0);
+  withCommands(w);
+  const extra = ["--runs", "1", "--probe", "p2", "--model", "grill=sonnet", "--effort", "triage=max", "--max-budget-usd", "7.5"];
+  const r = run(args(w, extra));
+  assert.equal(r.code, 0, r.err);
   const [line, ...rest] = readFileSync(join(w.out, "commands.txt"), "utf8").trimEnd().split("\n");
   assert.equal(rest.length, 0);
   assert.match(
     line,
-    /claude -p '\/pharn-plan feat-b' --model 'opus' --effort high .* && claude -p '\/pharn-grill feat-b' --model 'sonnet\[1m\]'/
+    /claude -p '\/pharn-plan feat-b' --model 'opus' --effort high .* && claude -p '\/pharn-grill feat-b' --model 'sonnet' --effort high /
   );
   assert.match(line, /claude -p '\/pharn-triage feat-b' --model 'sonnet' --effort max /);
   assert.equal(line.match(/--max-budget-usd 7\.5 /g).length, 3);
@@ -157,11 +204,11 @@ test("commandLine starts in the run's project and writes each session's output b
   const line = commandLine({
     probe,
     runDir: "/k/runs/p1/r1",
-    models: { grill: "opus", triage: "sonnet" },
+    models: { grill: "opus[1m]", triage: "sonnet" },
     efforts: { grill: "high", triage: "low" },
     budget: "12",
   });
-  assert.ok(line.startsWith("cd '/k/runs/p1/r1/project' && claude -p '/pharn-grill f' --model 'opus' --effort high "));
+  assert.ok(line.startsWith("cd '/k/runs/p1/r1/project' && claude -p '/pharn-grill f' --model 'opus[1m]' --effort high "));
   assert.ok(line.includes("> '/k/runs/p1/r1/grill.session.json' && claude -p '/pharn-triage f' --model 'sonnet' --effort low "));
   assert.ok(
     line.endsWith(
@@ -208,6 +255,11 @@ test("parseArgs: defaults, and every argument refusal", () => {
   assert.equal(d.maxBudgetUsd, "12");
   assert.equal(d.manifest, DEFAULT_MANIFEST);
   assert.deepEqual(d.models, { plan: "opus", grill: "opus", triage: "sonnet" });
+  assert.deepEqual(d.efforts, { plan: "high", grill: "high", triage: "high" });
+  assert.deepEqual(d.overrides, []);
+  assert.deepEqual(parseArgs(["build", "--arm", "a", "--out", "o", "--model", "grill=sonnet", "--effort", "grill=low"]).overrides, [
+    "grill",
+  ]);
   assert.equal(parseArgs(["build", "--arm", "a", "--out", "o", "--runs", "10"]).runs, 10);
   const err = (argv) => parseArgs(argv).error;
   assert.match(err(["run"]), /only subcommand/);
@@ -227,4 +279,146 @@ test("the CLI prints a usage error and exits 2", () => {
   assert.equal(r.status, 2);
   assert.equal(r.stdout, "");
   assert.match(r.stderr, /^--arm and --out are required\nusage:/);
+});
+
+// ── stage-model-tuning (CORE-112): a stage override reaches the project where Claude Code reads it ─────────────────────
+
+test("an override is written into the stage command's frontmatter and models.stages, and the project agrees", () => {
+  const w = world();
+  const stages = withCommands(w);
+  const r = run(args(w, ["--runs", "1", "--probe", "p1", "--model", "grill=sonnet", "--effort", "grill=medium"]));
+  assert.equal(r.code, 0, r.err);
+  const project = join(w.out, "runs", "p1", "r1", "project");
+  const grill = readFileSync(join(project, ".claude/commands/pharn-grill.md"), "utf8");
+  assert.equal(grill, '---\ndescription: "grill"\nmodel: sonnet\neffort: medium\n---\n\n# grill\n');
+  for (const name of PRODUCT_COMMANDS.filter((n) => n !== "grill"))
+    assert.equal(
+      readFileSync(join(project, `.claude/commands/pharn-${name}.md`), "utf8"),
+      readFileSync(join(w.arm, `.claude/commands/pharn-${name}.md`), "utf8")
+    );
+  assert.deepEqual(JSON.parse(readFileSync(join(project, "pharn.config.json"), "utf8")).models.stages, {
+    ...stages,
+    grill: { model: "sonnet", effort: "medium" },
+  });
+  assert.equal(projectAgrees(project), true);
+  assert.equal(execFileSync("git", ["-C", project, "status", "--porcelain"], { encoding: "utf8" }), "");
+  assert.match(
+    readFileSync(join(w.out, "KIT.md"), "utf8"),
+    /- project overrides \(command frontmatter and pharn\.config\.json\): grill model sonnet, effort medium\n/
+  );
+  assert.match(readFileSync(join(w.out, "commands.txt"), "utf8"), /'\/pharn-grill feat-a' --model 'sonnet' --effort medium /);
+  rmSync(w.root, { recursive: true, force: true });
+});
+
+test("an effort-only override goes through the same rewrite, and an unrelated stage's line is never touched", () => {
+  const w = world();
+  withCommands(w);
+  assert.equal(run(args(w, ["--runs", "1", "--probe", "p2", "--effort", "plan=max"])).code, 0);
+  const project = join(w.out, "runs", "p2", "r1", "project");
+  assert.match(readFileSync(join(project, ".claude/commands/pharn-plan.md"), "utf8"), /\nmodel: opus\neffort: max\n---\n/);
+  assert.deepEqual(JSON.parse(readFileSync(join(project, "pharn.config.json"), "utf8")).models.stages.plan, {
+    model: "opus",
+    effort: "max",
+  });
+  assert.match(readFileSync(join(w.out, "KIT.md"), "utf8"), /overrides .*: plan model opus, effort max\n/);
+  rmSync(w.root, { recursive: true, force: true });
+});
+
+test("no flag, or a flag equal to the arm's value, leaves every project's commands and config equal to the arm", () => {
+  for (const extra of [[], ["--model", "grill=opus", "--effort", "triage=high"]]) {
+    const w = world();
+    const stages = withCommands(w);
+    const r = run(args(w, ["--runs", "1", ...extra]));
+    assert.equal(r.code, 0, r.err);
+    for (const id of ["p1", "p2"]) {
+      const project = join(w.out, "runs", id, "r1", "project");
+      for (const name of PRODUCT_COMMANDS)
+        assert.equal(
+          readFileSync(join(project, `.claude/commands/pharn-${name}.md`), "utf8"),
+          readFileSync(join(w.arm, `.claude/commands/pharn-${name}.md`), "utf8")
+        );
+      assert.deepEqual(JSON.parse(readFileSync(join(project, "pharn.config.json"), "utf8")).models, { stages });
+    }
+    assert.match(readFileSync(join(w.out, "KIT.md"), "utf8"), /overrides .*: none — every project equals the arm\n/);
+    rmSync(w.root, { recursive: true, force: true });
+  }
+});
+
+test("build refuses an override the arm cannot take, with exit 2", () => {
+  const cases = [
+    [
+      (w) => rmSync(join(w.arm, ".claude/commands/pharn-triage.md")),
+      ["--model", "triage=opus"],
+      /has no \.claude\/commands\/pharn-triage\.md/,
+    ],
+    [
+      (w) => put(w.arm, ".claude/commands/pharn-grill.md", "# no frontmatter\n"),
+      ["--model", "grill=sonnet"],
+      /cannot carry the grill override \(no frontmatter\)/,
+    ],
+    [
+      (w) => put(w.arm, ".claude/commands/pharn-grill.md", "---\nmodel: opus\n---\n"),
+      ["--model", "grill=sonnet"],
+      /\(not exactly one effort: line\)/,
+    ],
+    [(w) => put(w.arm, "pharn.config.json", JSON.stringify({ models: {} })), ["--model", "grill=sonnet"], /has no models\.stages/],
+    [
+      (w) => put(w.arm, ".claude/commands/pharn-review.md", "---\nmodel: haiku\neffort: high\n---\n"),
+      ["--model", "grill=sonnet"],
+      /fails check-model-config\.mjs agreement/,
+    ],
+    [() => {}, ["--model", "grill=sonnet[1m]"], /fails check-model-config\.mjs agreement/],
+  ];
+  for (const [arrange, extra, message] of cases) {
+    const w = world();
+    withCommands(w);
+    arrange(w);
+    const r = run(args(w, ["--runs", "1", ...extra]));
+    assert.equal(r.code, 2, String(message));
+    assert.match(r.err, message);
+    rmSync(w.root, { recursive: true, force: true });
+  }
+});
+
+test("setFrontmatterLine replaces exactly one line inside the leading frontmatter and reports the old value", () => {
+  assert.deepEqual(setFrontmatterLine('---\nmodel: "opus"\n---\nmodel: body\n', "model", "sonnet"), {
+    text: "---\nmodel: sonnet\n---\nmodel: body\n",
+    from: "opus",
+  });
+  assert.deepEqual(setFrontmatterLine("---\nmodel: opus\n", "model", "x"), { error: "no frontmatter" });
+  assert.deepEqual(setFrontmatterLine("---\nmodel: a\nmodel: b\n---\n", "model", "x"), { error: "not exactly one model: line" });
+  assert.deepEqual(setFrontmatterLine("---\nmodel_tier: sonnet\n---\n", "model", "x"), { error: "not exactly one model: line" });
+  assert.deepEqual(Object.keys(STAGE_COMMANDS), ["plan", "grill", "triage"]);
+});
+
+test("a real pharn-oss checkout as the arm: a grill=sonnet project passes this repository's agreement check", () => {
+  const w = world();
+  const r = run([
+    "build",
+    "--arm",
+    REPO,
+    "--out",
+    w.out,
+    "--manifest",
+    w.manifest,
+    "--runs",
+    "1",
+    "--probe",
+    "p1",
+    "--model",
+    "grill=sonnet",
+  ]);
+  assert.equal(r.code, 0, r.err);
+  const project = join(w.out, "runs", "p1", "r1", "project");
+  assert.match(readFileSync(join(project, ".claude/commands/pharn-grill.md"), "utf8"), /\nmodel: sonnet\neffort: high\n/);
+  assert.equal(
+    readFileSync(join(project, ".claude/commands/pharn-plan.md"), "utf8"),
+    readFileSync(join(REPO, ".claude/commands/pharn-plan.md"), "utf8")
+  );
+  assert.deepEqual(JSON.parse(readFileSync(join(project, "pharn.config.json"), "utf8")).models.stages.grill, {
+    model: "sonnet",
+    effort: "high",
+  });
+  assert.equal(projectAgrees(project), true);
+  rmSync(w.root, { recursive: true, force: true });
 });
