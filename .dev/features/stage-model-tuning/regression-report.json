@@ -1,0 +1,61 @@
+{
+  "base": "b696793f3538428204a7e24eac17e7f3f6a6e1db",
+  "inside": [
+    ".dev/floor/defect-probe-kit.mjs",
+    ".dev/floor/defect-probe-kit.test.mjs",
+    ".dev/floor/stage-model-pairs.mjs",
+    ".dev/floor/stage-model-pairs.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".dev/measurements/stage-model-tuning-2026-11-17.md",
+    ".dev/probes/defect-probes/README.md",
+    ".markdownlint-cli2.jsonc",
+    ".prettierignore",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6932,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6925,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
