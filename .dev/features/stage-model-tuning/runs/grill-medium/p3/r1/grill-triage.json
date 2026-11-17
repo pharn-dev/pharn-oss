@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "e6cf61a99d9090fab9eca31d83e7d89f847feceb5fe775cd12423aa020588064",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Live src/store.js (SCHEMA_VERSION=2, MIGRATIONS) and src/auth.js/src/keys.js/test/helpers.js all use `hash`, so the plan's rename with no migration breaks pre-upgrade tokens against the SPEC constraint; re-plan must either keep the field name `hash` or add a v2->v3 migration (bump SCHEMA_VERSION, declare it in Files) and drop the 'no migration needed' claim."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The plan lists a pre-upgrade token test in Files but no step builds one; re-plan must add a test that loads a schemaVersion-2 data file with hash-only key records and authenticates one of its tokens (and runs the migration if one is added)."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Downgrade story depends on the G1-1 fix: if the field stays `hash` or SCHEMA_VERSION is bumped, an older release either still works or refuses the newer file; re-plan must restate the Downgrade risk accordingly instead of claiming forward-only with an unbumped version."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Confirmed test/helpers.js:24 writes `hash` and is absent from the plan's Files; if the field is renamed it must be declared and updated, and if `hash` is kept the plan should say the fixtures stay untouched."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The SPEC says the old key keeps working for 24 hours but is silent on key-management routes; re-plan must state explicitly (in Approach or Risks) that a deprecated key keeps full role rights as an accepted bound, or add a restriction, and surface the choice for the supervisor if unsure."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Last-active-admin lockout is not covered; re-plan must either add a guard in revokeKey with a test or name the lockout alongside self-revocation in Risks as an accepted bound, since the SPEC does not decide it."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Plan leaves the type of expiresAt unspecified, and the live createdAt is an ISO string, so a literal Date >= string comparison would never expire a key; re-plan must state the stored format and compare as epoch ms/Date, with the boundary tests of step 10 covering it."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 9 and the existing listing test guard only the name `hash`; re-plan must make presentKey and the test assert that neither the old nor any renamed secret-hash field appears in the API view (moot only if the name stays `hash`)."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Step 8 passes the injected clock only to authenticate; re-plan must say the rotate and revoke routes pass the same `now` to rotateKey and revokeKey so AC-3's 24-hour boundary uses one clock."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "AC-6 needs key.rotated to be the newest audit entry; re-plan must state whether a key.created entry is written for the new key and that key.rotated is recorded last."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "proceed",
+      "reason": "Usage tracking of deprecated keys is outside the SPEC's scope (no criterion asks for it; notifications and extras are non-goals), and the Deprecation header plus listed rotatedAt/expiresAt meet the stated intent."
+    }
+  ]
+}

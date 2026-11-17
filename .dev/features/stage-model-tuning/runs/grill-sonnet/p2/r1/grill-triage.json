@@ -1,0 +1,47 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "b49b9a8f32d32a2f360e8fa5825aeee1db77365ba64dc8be13a80e0bba72d2e7",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Checked src/invoices.js: new invoices are created with payments: [] only, so the plan's claim that every invoice has refunds[] after migration is wrong; the plan must also initialise refunds and refundKeys in createInvoice (and declare that edit in Files) or have refundInvoice default them."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Step 5 uses parseFloat, dollars and toFixed, which breaks the SPEC money constraint and the README no-floating-point rule; the plan must parse with parseMinor, compare in integer minor units and format only through formatMinor."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Checked test/store.test.js: the version-1 case asserts schemaVersion 2, which fails once SCHEMA_VERSION is 3; step 2 must say to update that assertion (to 3, plus refunds/refundKeys defaults) instead of keeping the case unchanged."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "SPEC scope names listing an invoice's refunds but AC-1..AC-7 never call the GET route, so the plan has no planned test for it; add a planned test for listing (org scoping, order, role) and declare its test file in Files."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The SPEC sets no role for listing and the plan exposes actor key ids and reasons to members, unlike the admin-only audit and key endpoints; the plan should restrict listing to admins (or drop actor from the member view) and state the choice, since it cannot be told the SPEC intends otherwise."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Step 7 silently returns 200 with the original refund when a key is replayed with a different amount, which can hide a client bug and which the SPEC does not state; the plan should reject a mismatched replay (e.g. 422) or justify the choice explicitly, and escalate if it cannot decide."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "The plan says a replay carries replayed: true and the route answers 200, but presentRefund has no such field and step 10 does not say how the route sees the replay or how an empty Idempotency-Key is handled; the build cannot implement this as written, so the plan must specify the return shape and empty-header rule."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "The Downgrade risk cites a README upgrade line that does not exist (grep of README.md found none) and step 11 does not add one; the plan must add that README note to step 11 or drop the claim."
+    }
+  ]
+}

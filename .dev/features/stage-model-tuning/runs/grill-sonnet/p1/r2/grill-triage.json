@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "54eb76fbfa4208ab8dfa11f1a49d37405f001cdeee4c30da9ec191681f48445a",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 4 must look the invoice up with principal.orgId only, dropping the body.orgId fallback, so a cross-organization id is 404 not_found as AC-4 requires; the client body must never choose the organization."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The parent/child organization behaviour is in neither the SPEC nor the data model; remove it from step 4 (same edit as G1-1) so the plan adds nothing the SPEC does not ask for."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Checked test/store.test.js:26: the version-1 case asserts schemaVersion 2 and fails once SCHEMA_VERSION is 3. Step 2 must say to update that assertion to 3 (and the file list already covers the file), instead of keeping the case unchanged."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Step 7 must name a safe key store for client-chosen keys (a Map-like structure, a null-prototype object, or an own-property check) and the step 1 migration must give the same shape; keys such as __proto__ or constructor must neither false-hit nor be lost."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "proceed",
+      "reason": "AC-TESTS.md is written by /pharn-test, which runs after /pharn-grill, so its absence at this stage is the designed order; the plan states this and the test stage pins the mapping before the build."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Checked test/helpers.js: request() sends only content-type and authorization, so the AC-5 test cannot send Idempotency-Key. The plan must declare test/helpers.js in Files (an optional headers argument) or name another way for the test to send the header."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 8 must say the audit record uses principal.orgId so AC-6 holds when the admin reads GET /audit; this is settled together with the step 4 fix, after which the lookup org and the principal org are the same."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Checked README.md: it has no upgrade line, and step 11 does not add one. Either add a README forward-only upgrade note to step 11 or reword the downgrade risk so it does not cite a line that does not exist."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Not clearly harmless: a build cannot know whether a member with a bad key gets 403 or 422. While the plan is being revised for the other findings, extend step 6 to place idempotency_key_invalid and reason_invalid in the check order, after requireAdmin."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "As written the route does not pass now, so refundInvoice would throw a TypeError and answer 500. Step 3 or 10 must default now (or have the route pass it) and state the return shape that tells the route a replay from a new refund."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "proceed",
+      "reason": "The list route is a read-only convenience that SPEC scope names ('listing an invoice's refunds'); it needs no AC to satisfy the criteria, and the same-millisecond ordering is a minor point the build can settle with insertion order."
+    }
+  ]
+}

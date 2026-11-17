@@ -1,0 +1,87 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:40",
+      "problem": "Step 4 takes the tenant from the untrusted request body, so any org's admin can refund any other org's paid invoice by sending its orgId; this defeats AC-4 and the existing findInvoice tenancy invariant (src/invoices.js:16 'The org comes from the principal'), and the AC-4 test as mapped would not catch it because it sends no orgId.",
+      "evidence": "`findInvoice(doc, body.orgId ?? principal.orgId, id)`, so a parent organization's admin can refund on behalf of a child organization by sending its `orgId`"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:40",
+      "problem": "Parent/child organization refunds are not in the SPEC and no parent/child org relation exists in src/ (no 'parent' anywhere); the plan adds unspecified scope with no membership check backing it — ask the human whether this was intended at all.",
+      "evidence": "a parent organization's admin can refund on behalf of a child organization by sending its `orgId`"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:20",
+      "problem": "The plan defers all seven acceptance tests to AC-TESTS.md, but no AC-TESTS.md exists in pharn/features/invoice-refunds/ (only PLAN.md and SPEC.md) although the SPEC is templated; the AC→test mapping is asserted, not present.",
+      "evidence": "Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:107",
+      "problem": "The downgrade risk claims the README already carries an upgrade line, but README.md has no upgrade/forward-only note and step 11 does not add one; the migration ships with no rollback path and no labeled irreversibility.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:42",
+      "problem": "MoneyError is not a DomainError and server.js maps only AuthError/DomainError/BodyError, so an invalid amount becomes a 500 unless refunds.js converts it; the helper that does this (amountOf in src/invoices.js) is private and the plan neither exports it nor says refunds.js reimplements it.",
+      "evidence": "Parse `amount` with `parseMinor()` from `src/money.js` (a `MoneyError` maps to `422 amount_invalid`, and 0 is refused the same way)"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:51",
+      "problem": "Several refusals the plan introduces have no test anywhere: idempotency_key_invalid, reason_invalid, a zero amount, a malformed amount (the MoneyError path), and the GET /invoices/:id/refunds route itself; the only tests named are the seven AC tests and the migration case.",
+      "evidence": "Keys are 1–100 printable ASCII characters; anything else is `422 idempotency_key_invalid`"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:45",
+      "problem": "The order of checks omits where idempotency-key validation and reason validation sit relative to the status check and the replay, so which error a request with several defects gets is left to the builder.",
+      "evidence": "After the lookup: `requireAdmin(principal)` (`403 forbidden`, AC-3); then the status check, ... then the idempotency replay (step 7); then the amount (step 5)"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "Step 10 says handlers gain a headers parameter but the route body it shows reads req.headers, which a handler does not receive; the two halves of the step disagree on the handler contract.",
+      "evidence": "`refundInvoice(doc, principal, params[0], body, req.headers[\"idempotency-key\"]))` ... The route table's handler signature gains `headers`, passed through from `handle`."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:55",
+      "problem": "The free-text refund reason is stored forever and listed to every member key via GET /invoices/:id/refunds; the plan states no consideration of personal data a finance admin may type into it.",
+      "evidence": "`reason` is optional, trimmed, at most 200 characters"
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:115",
+      "problem": "AC-7 is mapped to a reading the SPEC does not state (purge the stored SHA-256 hash, which is not a copy of the secret), so an AC-7 test pinned by /pharn-test would pass while the approved criterion stays unverified; a human must choose between re-specifying AC-7 via /pharn-spec and accepting the narrowed reading before /pharn-test.",
+      "evidence": "purgeExpiredKeys removes the only secret-derived value the process keeps, the stored hash. This reading is narrower than the AC's text; see Risks."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:41",
+      "problem": "After the purge, the AC-3 path answers key_expired on the key id alone with no secret check, but no planned test covers that path (createApp runs no interval, so AC-3 only exercises the pre-purge secret-match path), and a key revoked during its grace period and then purged would report key_expired rather than key_revoked.",
+      "evidence": "A key whose `hash` was purged (null) and whose `expiresAt <= now` → `401 key_expired`, judged on the key id alone (see Risks)."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:61",
+      "problem": "The purge predicate has no null guard, unlike Step 2's `expiresAt set and <= now`: implemented as a Date comparison, new Date(null) is the epoch and is <= now, so every never-rotated key would lose its hash and stop authenticating.",
+      "evidence": "`purgeExpiredKeys(doc, now = new Date()) → number` sets `hash` to `null` on every key whose `expiresAt <= now`"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:38",
+      "problem": "Keys created outside createKey and the migration, including every key seeded by the unchanged test/helpers.js (verified live: it pushes records with no expiresAt or revokedAt), have those fields undefined rather than null, and the plan does not say that `set` must treat undefined as unset; a `!== null` check would refuse every seeded key with key_revoked.",
+      "evidence": "`revokedAt` set → `AuthError(401, \"key_revoked\")`;"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:100",
+      "problem": "The unchanged helper request() returns only {status, body} and always calls res.json() (verified live in test/helpers.js), so it cannot observe the AC-2 Deprecation header and would throw on AC-4's empty 204 body; the plan does not say the AC tests must use their own fetch for those two criteria.",
+      "evidence": "`test/helpers.js` — not changed; the AC tests, written before the build, must not depend on a helper change"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:76",
+      "problem": "The interval purge runs store.transact, a disk write, from an async timer callback with no declared failure handling, so a write error becomes an unhandled promise rejection, which by default terminates the Node process.",
+      "evidence": "run it again on an `unref()`'d interval, every 60 s;"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:30",
+      "problem": "The 2→3 migration declares no rollback or downgrade note: migrate() refuses a newer schemaVersion (verified live in src/store.js), so once a v3 file is written the previous release cannot load it, and a purged null hash would make the old authenticate throw in Buffer.from.",
+      "evidence": "Set `SCHEMA_VERSION = 3`. Add `MIGRATIONS[2]`, which maps every key to"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:134",
+      "problem": "Revoking the organization's last admin key is allowed and permanently locks the organization out, because only an admin can create keys and the plan has no recovery path; this destructive outcome is chosen without a SPEC basis and needs a human decision (refuse with 409, or accept and document it).",
+      "evidence": "an admin may revoke its own key, or the organization's last admin key, which locks the organization out."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:45",
+      "problem": "The SPEC Constraint that another organization's key reads as 404 on every key route is an authorization boundary with no planned test: AC-TESTS.md maps only AC-1..AC-7, and Step 5 adds only a migration test.",
+      "evidence": "`findOrgKey(doc, orgId, id)` returns the caller's key or throws `DomainError(404, \"not_found\")`."
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:7",
+      "problem": "The plan declares no observability for the new background purge job or for key_expired and key_revoked refusals beyond the audit log, so whether purges run in production, and how many keys they clear, cannot be seen.",
+      "evidence": "scan-plan-observability: mentions false; purgeExpiredKeys returns a count that no step logs or records"
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:77",
+      "problem": "The skip condition `nothing has expired` stays false forever after the first rotation ends, because expired keys stay expired, so idle ticks would rewrite the store file every 60 s unless the condition is `an expired key still has a hash`.",
+      "evidence": "skip the transaction when nothing has expired, so idle ticks do not rewrite the file."
+    },
+    {
+      "id": "G1-12",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:76",
+      "problem": "The 60 s purge interval has no stated rationale (why 60 s, and what bound it puts on how long the old secret's hash outlives the grace period), so the next maintainer cannot tell whether it is safe to change.",
+      "evidence": "run it again on an `unref()`'d interval, every 60 s;"
+    },
+    {
+      "id": "G1-13",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:71",
+      "problem": "handle reads the clock once and passes it only to authenticate, while rotateKey and revokeKey default to their own new Date(), so one request reads the clock twice and the two readings can differ.",
+      "evidence": "`handle` computes `const now = new Date()` once per request and passes it to `authenticate`."
+    },
+    {
+      "id": "G1-14",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:136",
+      "problem": "The plan reads the SPEC Constraint `404 on every key route` as applying only to admin callers, giving a member 403 even for another organization's key id; this reading of an Approved SPEC should be confirmed by the human, not settled by the plan.",
+      "evidence": "The SPEC Constraint \"404 on every key route\" is then read as applying to admin callers."
+    },
+    {
+      "id": "G1-15",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:58",
+      "problem": "Re-revoking is called idempotent, but the plan does not say whether a repeat DELETE writes a second key.revoked audit entry, which leaves the audit-log behavior to the builder's guess.",
+      "evidence": "set `revokedAt` (an already-revoked key keeps its first `revokedAt`, idempotent);"
+    }
+  ]
+}

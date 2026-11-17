@@ -1,0 +1,78 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:15",
+      "problem": "SPEC AC-4 (DELETE /keys/:id -> 204, later use -> 401 key_revoked) and the in-scope revocation audit entry have no step, no file, no stored field and no acceptance mapping anywhere in the plan.",
+      "evidence": "The key routes move out of `src/keys.js`'s single create/list pair into a small set: create, list, rotate. -- the Acceptance mapping lists AC-1, AC-2, AC-3, AC-5, AC-6 and skips AC-4; step 1 adds no revokedAt; step 4 has no revoked state; SPEC Assumption 'A rotated old key can still be revoked during its grace period' is unaddressed."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:90",
+      "problem": "The clock seam the AC-3 test needs appears only under Risks, not in any step, and test/helpers.js (startApp(store) passes no clock and returns only status and body, never headers) is not in ## Files, so the AC-2 and AC-3 tests cannot move time or observe the Deprecation header as planned.",
+      "evidence": "To test AC-3 without waiting 24 hours they need a way to move the clock: `createApp(store, {now})` takes an optional clock function -- step 7 says only 'handle passes now to authenticate'; ## Files omits test/helpers.js."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:12",
+      "problem": "A deprecated (rotated, in-grace) admin key keeps its full admin role, so during the 24 hours it can rotate its own replacement (taking a fresh token and putting the legitimate new key on a 24-hour fuse) or mint keys, and the plan states no restriction or accepted risk for that.",
+      "evidence": "inside the grace period -> a principal flagged `deprecated`, which `src/server.js` turns into the `Deprecation: true` response header."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:22",
+      "problem": "The plan defers the acceptance-test mapping to AC-TESTS.md, but no AC-TESTS.md exists in pharn/features/api-key-rotation/ (only SPEC.md and PLAN.md, read this run), although the SPEC is templated.",
+      "evidence": "Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:42",
+      "problem": "The plan does not say how expiresAt is stored or compared; keys store timestamps as ISO strings (createdAt), and comparing a Date to an ISO string with >= coerces the string to NaN, so a key would never expire unless the comparison parses it.",
+      "evidence": "`key.expiresAt` set and `now >= expiresAt` -> `AuthError(401, \"key_expired\")`"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:46",
+      "problem": "The plan adds a 409 key_not_active refusal for re-rotating a rotated key, which the SPEC does not ask for, with no rationale for why a second rotation within the grace period is refused rather than allowed.",
+      "evidence": "refuse a key that is already rotated with `409 key_not_active`"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:33",
+      "problem": "The migration gives existing keys rotatedAt, expiresAt and replacedBy as null, but no step updates createKey (or the new key made by rotateKey) to write them, so keys created after the upgrade have a different stored shape from migrated ones.",
+      "evidence": "add `MIGRATIONS[2]`, which gives every existing key `rotatedAt: null`, `expiresAt: null` and `replacedBy: null`"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:10",
+      "problem": "Nothing lets an admin or operator see whether a deprecated key is still being used during its grace period, or that key_expired rejections are happening; the Deprecation header informs only the caller and the audit log records only the rotation.",
+      "evidence": "Nothing is deleted, so the audit log's actor ids keep pointing at real records."
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:42",
+      "problem": "Step 5 parses the refund amount with Number.parseFloat and compares remaining in floating-point dollars, contradicting the SPEC constraint (two-fraction-digit decimal strings on the API, integer minor units inside) and bypassing src/money.js parseMinor, so inputs like \"30\", \"1e1\" or \"30.005\" are accepted and float error can wrongly allow or refuse a refund at the remaining-amount boundary (AC-2).",
+      "evidence": "Parse `amount` with `Number.parseFloat()` ... compute `remaining = paid - refunded` in dollars, where both sums are the invoice's payments and refunds divided by 100, and round the amounts in the response with `toFixed(2)`."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:54",
+      "problem": "The stored refund carries amountMinor, but no step says how the parsed dollar float becomes integer minor units, and step 5's toFixed(2) response rounding contradicts both the approach (only present() stringifies amounts) and step 9 (presentRefund uses formatMinor).",
+      "evidence": "A new refund is `{id: randomUUID(), amountMinor, reason, actor: principal.keyId, at: now.toISOString()}`"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "GET /invoices/:id/refunds is described only as listRefunds with member role and newest-first; unlike step 4 for refundInvoice, the plan never states that listRefunds uses the org-scoped findInvoice lookup, leaving a cross-organization read of refunds possible if built literally.",
+      "evidence": "and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:88",
+      "problem": "Listing an invoice's refunds is in SPEC scope but the acceptance mapping and test list cover no listing behaviour (member access, ordering, org scoping, 404 for another org), so GET /invoices/:id/refunds ships untested.",
+      "evidence": "Acceptance mapping lists AC-1..AC-7 only; none exercises `GET /invoices/:id/refunds`."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:51",
+      "problem": "The Idempotency-Key validation (422 idempotency_key_invalid) has no place in step 6's declared check order, and a replay with a different amount silently returns the original refund; whether a mismatched body should instead be refused is a product decision the plan makes without asking.",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "The route calls refundInvoice with five arguments while the declared signature takes a sixth `now` with no stated default, and step 8 calls now.toISOString(); unless a default like the existing domain functions' `now = new Date()` is specified, every refund throws and answers 500.",
+      "evidence": "`store.transact((doc) => refundInvoice(doc, principal, params[0], body, req.headers[\"idempotency-key\"]))`"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The 2-to-3 migration is irreversible and the plan cites a README upgrade note for it, but step 11 adds only endpoints and error codes, no backup/rollback guidance, and the README has no such upgrade line today.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:56",
+      "problem": "The audit record's details.amount format (decimal string or minor units) is unspecified, and the record call omits `now`, so the audit entry's timestamp can differ from the refund's `at`.",
+      "evidence": "Then `record(doc, {orgId, actor: principal.keyId, action: \"invoice.refunded\", target: invoice.id, details: {refundId, amount}})` (AC-6)."
+    }
+  ]
+}

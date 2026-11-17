@@ -1,0 +1,67 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "5e0a7f77f94478149a33f093765739aaae61389ed3c38e443ad982477e427c6b",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 1 must not claim that no migration is needed: either keep `hash` or bump SCHEMA_VERSION and add a MIGRATIONS step that carries every existing record forward, so pre-upgrade keys keep authenticating as the SPEC constraint requires."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Once step 1 is fixed, the plan must declare the schema-version bump or migration and its test, and reword the Downgrade risk so it matches what an older release does with a file written by this one."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "If the field is renamed, test/helpers.js (which seeds keys with `hash`) must be added to `## Files` and its change planned; if `hash` is kept this goes away. Step 12's green-suite claim must hold either way."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The rename has no need the SPEC states and causes the migration and helper problems; the re-plan should justify it or drop it and keep `hash` with an additive change."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Add a step and test that loads a pre-upgrade store record and authenticates with its existing token, since `## Files` promises it and the SPEC requires it, but no step writes it."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Plan tests for the cross-organization 404 on every key route, the 409 key_not_active refusals and the repeat-revoke no-op; the SPEC constraint has no planned test at present."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "AC-TESTS.md is missing for this templated SPEC, and pharn-plan.md says PLAN.md must never name it; the plan stage must produce AC-TESTS.md and the prose mention at PLAN.md:23 must be reworded."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 4 must say how expiresAt is stored (ISO string) and compare as dates (parse it, or compare Date values), with a boundary test, so an expired key cannot fail open on AC-3."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Cheap to settle while the plan is reopened: state whether the new key gets its own key.created entry and record key.rotated last so AC-6's newest-entry check holds."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Cheap to settle while the plan is reopened: state that a repeat revoke leaves the first revokedAt untouched and writes no second key.revoked entry, and cover it in the test from G1-6."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "Cannot tell whether the plan must change: the plan should state the only-admin-key case explicitly as an accepted limit (documented in the README) or a refusal; if the human wants a refusal that is new intent, so it goes to the supervisor."
+    },
+    {
+      "id": "G1-12",
+      "disposition": "proceed",
+      "reason": "Server-side logging or counters for deprecated or rejected keys are outside the SPEC's scope (audit entries for rotation and revocation only) and no failure has triggered them; the Deprecation header and the key listing fields from step 9 already serve the retirement decision."
+    }
+  ]
+}

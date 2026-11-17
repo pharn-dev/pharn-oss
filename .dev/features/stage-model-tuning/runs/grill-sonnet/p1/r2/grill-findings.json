@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:39",
+      "problem": "Step 4 takes the lookup organization from the untrusted request body, so an admin of any organization can refund another organization's invoice by sending its orgId, which defeats SPEC AC-4 (that case must be 404 not_found); findInvoice's own comment says the org comes from the principal.",
+      "evidence": "`refundInvoice` loads the invoice with `findInvoice(doc, body.orgId ?? principal.orgId, id)`, so a parent organization's admin can refund on behalf of a child organization by sending its `orgId`"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:39",
+      "problem": "The parent/child organization capability appears nowhere in the SPEC and the live data model has no hierarchy (orgs are flat {id, name} records in test/helpers.js and src/store.js), so this is a speculative addition with no triggering need.",
+      "evidence": "so a parent organization's admin can refund on behalf of a child organization by sending its `orgId`; an id that matches no invoice there is `404 not_found` (AC-4)"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:35",
+      "problem": "The existing version-1 case in test/store.test.js asserts schemaVersion equals 2 (line 26), so after SCHEMA_VERSION becomes 3 it fails, yet the plan says to keep it unchanged and that the existing suites stay green.",
+      "evidence": "Keep the existing version-1 case: it now runs both steps in sequence."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:49",
+      "problem": "Client-chosen Idempotency-Key strings become property names of the plain-object refundKeys map, and the allowed printable ASCII set includes __proto__, constructor and toString, which on a plain object read as inherited properties (false replay hit) or are not stored as own keys (duplicate refund on retry); the plan names no own-key lookup or null-prototype structure.",
+      "evidence": "look it up in `invoice.refundKeys`. A hit returns the stored refund with `replayed: true` and changes nothing"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:20",
+      "problem": "The plan maps all seven acceptance tests through AC-TESTS.md, but pharn/features/invoice-refunds/ holds only PLAN.md and SPEC.md at this run, so the artifact the plan points to does not exist and the test mapping cannot be checked.",
+      "evidence": "Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:94",
+      "problem": "AC-5 needs a request carrying an Idempotency-Key header, but request(method, path, token, body) in test/helpers.js cannot send extra headers and test/helpers.js is in neither Files nor Explicitly not touched, so the AC-5 integration test has no declared way to be written.",
+      "evidence": "AC-5 → step 7: the per-invoice idempotency map and the 200 replay. Test: \"a retried request records one refund\"."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:56",
+      "problem": "The audit call uses an unbound orgId; if it is the step 4 lookup org then a cross-org refund is logged in the other organization's audit log, and AC-6 (GET /audit by the refunding admin shows the entry) only holds when it is principal.orgId, which the plan never states.",
+      "evidence": "Then `record(doc, {orgId, actor: principal.keyId, action: \"invoice.refunded\", target: invoice.id, details: {refundId, amount}})` (AC-6)."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:107",
+      "problem": "The downgrade risk is closed by pointing at a README upgrade line that README.md does not have (no upgrade text in it) and that Step 11 does not add, so the one-way migration (the first write replaces the v2 file with v3) is mitigated by a document change nobody is told to make.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:43",
+      "problem": "The ordered list of checks omits idempotency_key_invalid (step 7) and reason_invalid (step 8), so which of 403, 404, 409, 422 wins when a request is wrong in two ways, for example a member sending a bad key, is left to the implementer.",
+      "evidence": "After the lookup: `requireAdmin(principal)` (`403 forbidden`, AC-3); then the status check, `status !== \"paid\"` → `409 invoice_not_paid` (AC-7); then the idempotency replay (step 7); then the amount (step"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:36",
+      "problem": "refundInvoice takes now with no default while the route in step 10 does not pass it, so step 8's now.toISOString() would throw a TypeError and answer 500 as written; the return shape that lets the route tell a replay from a new refund is also unstated, since presentRefund drops the replayed flag.",
+      "evidence": "Create `src/refunds.js` exporting `refundInvoice(doc, principal, id, body, idempotencyKey, now)`, `listRefunds(doc, principal, id)` and `presentRefund(refund)`."
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "The new GET refunds route is in SPEC scope but no AC and no named test covers it, its member-role access is a plan choice the SPEC does not state, and newest-first by timestamp is ambiguous for refunds recorded in the same millisecond.",
+      "evidence": "and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)."
+    }
+  ]
+}

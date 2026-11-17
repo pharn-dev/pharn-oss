@@ -1,0 +1,67 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "f66774782b92c368a9d336ecd368d273cfe996b79773224ff4b31588ab1e827a",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 5 must be rewritten to follow the SPEC money constraint: parse the amount with the existing parseMinor (two-fraction-digit decimal string only, positive), compare against remaining in integer minor units, and format only through formatMinor/present(); drop parseFloat, dollar division and toFixed. This also removes the conflict with the plan's own steps 8-9."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Checked live: src/invoices.js createInvoice builds invoices with payments: [] only. The plan must add src/invoices.js createInvoice initialising refunds: [] and refundKeys: {} (that file is already in Files), and reword step 9's claim that the migration alone gives every invoice the list."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 7 must say how refundKeys is looked up safely for client-chosen keys: use Object.hasOwn, a null-prototype object or a Map-like structure that survives JSON storage, so keys like __proto__ or constructor are ordinary keys; the migration and createInvoice initial value must match."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Checked live: test/store.test.js:26 asserts schemaVersion 2 after the version-1 migration, which fails once SCHEMA_VERSION is 3. Step 2 must say to update that assertion to 3 (and check the refunds/refundKeys defaults) rather than keep the case unchanged."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Steps 3 and 10 must pin the refundInvoice-to-route contract: how a replay is signalled to the route (result shape, and whether the 200 body carries it), where now comes from (default new Date() or passed by the route), and the position of idempotency_key_invalid in the check order in step 6."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "In-scope behaviour has no planned test: the listing route, amount_invalid/reason_invalid/idempotency_key_invalid, refunding exactly the remaining amount (the 30.00 then 70.00 scenario) and cross-invoice key reuse. The plan must name tests for them (ordinary tests like the migration one, since the SPEC has no AC for them) and declare the test file in Files."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Checked live: the feature directory has no AC-TESTS.md. The plan says the criteria are mapped there, so it must either state that /pharn-test creates that mapping from the Acceptance mapping section or drop the claim; the plan should not describe an artifact as existing when it does not."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Checked live: README.md has no upgrade line. Step 11 must add the forward-only note (a version-3 file cannot be read by the previous release) to the README, or the Risks section must stop claiming it is already noted there."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "Step 7 states the choice explicitly (the key, not the body, identifies the request) and the SPEC covers only the identical retry; this is an accepted bound, and the replan for G1-10 documents it in the README for clients."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Step 11 should also document client-facing behaviour in the README since it is already a declared file: Idempotency-Key semantics (per invoice, no expiry, body ignored on replay, 200), the new refunded field on GET /invoices/:id, and that a fully refunded invoice keeps status paid. Small edit; fold into the same re-plan as G1-8."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "The Concurrency risk overstates: store.transact serialises writes inside one process only. Reword to scope the guarantee to a single server process owning the data file, and label multi-process use against one file as an unsupported limit."
+    },
+    {
+      "id": "G1-12",
+      "disposition": "proceed",
+      "reason": "The SPEC requires an audit entry for every recorded refund (AC-6), which step 8 provides; logging refused or replayed attempts is outside the SPEC's scope, and the existing routes have no such logging either. A later feature can add it."
+    }
+  ]
+}

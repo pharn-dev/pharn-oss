@@ -1,0 +1,96 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:117",
+      "problem": "AC-7 is verified only at the function level (purgeExpired on a hand-built doc); the running-server property the SPEC states depends on a sweep wired only in import.meta.main, untested, and up to 30 s late, so the human must accept this reading of AC-7 or amend it via /pharn-spec.",
+      "evidence": "The sweep in `server.js` is what calls it in a running server. Read the first risk for what this does and does not show."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:121",
+      "problem": "The SPEC constraint that another org's key reads as 404 not_found on every key route has no planned test (AC-TESTS.md maps AC-1..AC-7 only), and neither do the plan-chosen 409 key_not_active and idempotent-revoke behaviours.",
+      "evidence": "`findOrgKey` gives `404 not_found` on both new key routes for another org's id (an unknown id reads the same)"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "The schema 2->3 migration is forward-only with no rollback declared: a v2 release refuses a v3 file (migrate throws unsupported schema version), and a downgraded file holding hash:null keys makes today's authenticate call Buffer.from(null, \"hex\"), a TypeError answered as 500.",
+      "evidence": "`SCHEMA_VERSION = 3`. Add `MIGRATIONS[2]`: returns `{ ...doc, schemaVersion: 3, keys: doc.keys.map(...) }`"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:79",
+      "problem": "The sweep passes a `now` that the import.meta.main block never defines: hasPurgeable/purgeExpired take a Date elsewhere, but createApp's `now` is a function, and passing the function makes `now >= new Date(expiresAt)` always false, so nothing is ever purged, silently, in a path no test covers.",
+      "evidence": "if (hasPurgeable(store.read(), now)) await store.transact((doc) => purgeExpired(doc, now))"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:147",
+      "problem": "Revoking an org's last admin key permanently locks the org out of key management (only admins create keys), bringing back the manual intervention the SPEC's Intent wants to end; the plan considers only the caller's own key, not the last admin key.",
+      "evidence": "Nothing forbids an admin rotating or revoking the key it is using. That follows the SPEC as written; no guard is added."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:66",
+      "problem": "The purge changes stored key records with no audit entry, which contradicts the README convention that every state change writes an audit entry naming the acting key, and the plan does not acknowledge the convention or state it as an exception.",
+      "evidence": "No audit entry: the rotation was already recorded and the purge is housekeeping."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:80",
+      "problem": "The sweep logs only its errors: the purge count purgeExpired returns is never logged or recorded, so whether expired hashes are actually removed in production (the AC-7 property) cannot be observed.",
+      "evidence": "catching and logging an error so a failed write cannot crash the process"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:57",
+      "problem": "The rotated key's createdAt is specified as the Date `now` rather than `now.toISOString()` as createKey stores it, so the in-memory record would hold a Date while the file holds a string until the next reload.",
+      "evidence": "its own `hash`, `createdAt: now`, `expiresAt: null`, `revokedAt: null`"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:78",
+      "problem": "SWEEP_MS = 30 s is chosen with no stated rationale (why 30 s, what would change it), even though it bounds how long an expired hash stays in memory and on disk.",
+      "evidence": "run the purge once, then every `SWEEP_MS` (30 s) with an **unref'd** `setInterval`"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:87",
+      "problem": "The README step documents only two new error codes and leaves out the plan-introduced 409 key_not_active and the idempotent 204 on a repeat revoke, both public behaviours a client needs to know.",
+      "evidence": "Authentication (24-hour grace, `Deprecation: true`, `key_expired`, `key_revoked`), and the two new error codes."
+    }
+  ]
+}

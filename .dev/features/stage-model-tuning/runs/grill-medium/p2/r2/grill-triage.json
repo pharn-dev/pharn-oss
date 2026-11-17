@@ -1,0 +1,32 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "11a5aa786668aee1f6c32a0ac69901cca2f0a92cd18d05e7670816f82080a561",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 5 contradicts the SPEC money constraint (two-fraction-digit strings, integer minor units); rewrite it to parse the amount with the existing money helpers into integer minor units, reject zero, compare minor units against paid minus refunded, and fix the 'money.js reused as is' claim so the steps agree with step 9's formatMinor."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Step 10 as written cannot be carried out against the live handler signature; the plan must state how headers reach the handler without a `req` in scope, pass the `now` argument step 3 requires, and define what refundInvoice returns so the route can choose 201 versus 200."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan claims the forward-only downgrade limit is noted in a README upgrade line that the finding says does not exist; either step 11 must add that note or the risk entry must stop claiming it is documented (to be re-checked against README.md)."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan adds a listing route and three validation error codes that no planned test covers; declare an ordinary test file in Files and the steps for them (listing order and role, amount/reason/key validation), or drop the unneeded surface, so the build is not left with unverified behaviour."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "proceed",
+      "reason": "Minor: step 7 already states the replay-with-different-amount behaviour explicitly, the SPEC is silent and no criterion depends on it, so the build does not need a change; the human can see the stated choice in the plan and the grill summary."
+    }
+  ]
+}

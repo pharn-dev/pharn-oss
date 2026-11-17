@@ -1,0 +1,69 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:78",
+      "problem": "SPEC AC-4 (revoke via DELETE /keys/:id returning 204, then 401 key_revoked) is covered by no step, no route, no authentication state and no acceptance mapping entry; the in-scope 'Revoking a key immediately' is silently dropped.",
+      "evidence": "Acceptance mapping lists AC-1, AC-2, AC-3, AC-5, AC-6 only; Approach line 15: 'The key routes move out of src/keys.js's single create/list pair into a small set: create, list, rotate.'"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:33",
+      "problem": "The schema-3 migration adds only rotation fields; revocation needs persisted state (a deleted record would authenticate as 'unauthenticated', not 'key_revoked'), so adding AC-4 later forces a second schema version for one feature.",
+      "evidence": "MIGRATIONS[2] 'gives every existing key rotatedAt: null, expiresAt: null and replacedBy: null' (no revocation field); Approach line 10: 'Nothing is deleted'"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:49",
+      "problem": "SPEC scope requires audit entries for rotation AND revocation; the plan audits only rotation.",
+      "evidence": "Step 6: 'Rotation records key.rotated with the old key's id as target and {newKeyId} in details (AC-6)'; SPEC Scope: 'Audit entries for rotation and revocation.'"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:43",
+      "problem": "A rotated (deprecated) key keeps its full role for 24 hours, so a leaked admin key that is rotated can still create and rotate keys during the grace period; with revocation missing (G1-1) there is no way to cut it off sooner.",
+      "evidence": "Step 4: 'key.replacedBy set (so still inside the grace period) -> the principal gets deprecated: true.' No restriction on what a deprecated principal may do is stated."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:91",
+      "problem": "The injectable clock that the AC-2/AC-3 HTTP tests depend on (createApp(store, {now})) is declared only under Risks; no step builds it, and step 7 does not say where handle gets now.",
+      "evidence": "Risks: 'createApp(store, {now}) takes an optional clock function, defaulting to () => new Date().' Step 7: 'handle passes now to authenticate'"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:22",
+      "problem": "The plan says the acceptance tests are mapped in AC-TESTS.md, but no AC-TESTS.md exists in pharn/features/api-key-rotation/ although the SPEC is templated; question for the human: should /pharn-plan have produced it?",
+      "evidence": "'Their tests are mapped in AC-TESTS.md and written by /pharn-test before the build'; live directory holds only PLAN.md and SPEC.md; SPEC frontmatter carries spec_template: pharn-default@sha256:..."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:45",
+      "problem": "Refusing to re-rotate an already-rotated key with 409 key_not_active is new behaviour the SPEC does not ask for, and unlike the Deprecation-on-errors choice it is not flagged as a decision beyond the SPEC.",
+      "evidence": "'refuse a key that is already rotated with 409 key_not_active'"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:43",
+      "problem": "Step 5 parses the refund amount with parseFloat and does dollar-float arithmetic, contradicting the SPEC money constraint (two-digit decimal strings in, integer minor units inside) and the README's 'never use floating-point arithmetic on an amount'; it also accepts '30', '30.5', '30abc', '1e1' and JSON numbers that parseMinor rejects.",
+      "evidence": "Parse `amount` with `Number.parseFloat()` ... then compute `remaining = paid - refunded` in dollars, where both sums are the invoice's payments and refunds divided by 100, and round the amounts in the response with `toFixed(2)`."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:61",
+      "problem": "Only the 2->3 migration gives an invoice refunds/refundKeys, but createInvoice (src/invoices.js) builds new invoices with payments only and the plan never changes it, so every invoice created at version 3 has no refunds array and refundInvoice's push/lookup throws a TypeError (500), failing AC-1, AC-2, AC-5 and AC-6 in a fresh store.",
+      "evidence": "The `?? []` is defensive only; after the migration every invoice has the list."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:49",
+      "problem": "The client-controlled Idempotency-Key is used as a property name on a plain-object map, so a key such as __proto__, constructor or toString (all valid 1-100 printable ASCII) hits inherited properties on the first request and is treated as a replay (or never recorded), instead of using Object.hasOwn, a Map or a null-prototype object.",
+      "evidence": "look it up in `invoice.refundKeys`. A hit returns the stored refund with `replayed: true` and changes nothing"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:34",
+      "problem": "The existing version-1 migration test asserts schemaVersion equals 2, so bumping SCHEMA_VERSION to 3 makes it fail; the plan says to keep it as is and never says to update the assertion, so step 12's 'existing suites stay green' cannot hold.",
+      "evidence": "Keep the existing version-1 case: it now runs both steps in sequence."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "The contract between refundInvoice and the route is unspecified: how the route learns a result is a replay (presentRefund returns no replayed field), whether the 200 body carries replayed, the default for the `now` argument (the route call omits it, so now.toISOString() would throw), and where idempotency_key_invalid sits in the check order.",
+      "evidence": "answering 201 with the presented refund, or 200 when the result is a replay"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:86",
+      "problem": "The acceptance mapping covers only AC-1..AC-7; the in-scope refund listing (GET /invoices/:id/refunds), amount_invalid/reason_invalid/idempotency_key_invalid, refunding exactly the remaining amount (the 30.00 then 70.00 scenario) and a key reused across invoices have no AC and no named test.",
+      "evidence": "AC-7 → step 6: the status check. Test: \"an open invoice cannot be refunded\"."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:20",
+      "problem": "The plan says the acceptance tests are mapped in AC-TESTS.md, but pharn/features/invoice-refunds/ holds only PLAN.md and SPEC.md, so the claimed artifact does not exist and /pharn-test has no mapping file to read.",
+      "evidence": "Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:107",
+      "problem": "The plan claims the one-way downgrade limit is noted in the README's upgrade line, but README.md has no upgrade line and step 11 adds only the endpoint table rows and error codes, so the irreversibility limit is stated in the plan and nowhere a deployer will read it.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:53",
+      "problem": "A replay with the same key but a different amount silently returns 200 with the original refund, so the client sees success for an amount it did not record; the SPEC only covers the same request sent twice, so this is a decision for the human (200 original, or 422 on a mismatched body).",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:66",
+      "problem": "The README step documents only the endpoint rows and error codes, not the non-obvious behaviour a client must know: Idempotency-Key semantics (per invoice, never expires, body ignored, 200 on replay), the new `refunded` field on invoices, and that a fully refunded invoice stays paid.",
+      "evidence": "Add both endpoints to the README's endpoint table and the new error codes to its error list."
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:100",
+      "problem": "The concurrency claim is unscoped: store.transact serializes through an in-process promise queue over an in-memory document, so it holds for one server process only and two processes on one data file would both pass the remaining-amount check; the plan states 'cannot' without labeling that limit.",
+      "evidence": "They cannot: `store.transact()` runs one change at a time, and each change reads the invoice from the document it is about to write."
+    },
+    {
+      "id": "G1-12",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:7",
+      "problem": "The plan adds a money-mutating endpoint whose only trace is the audit entry on success, so refused refunds (exceeds remaining, wrong role) and idempotent replays leave no record anywhere, and no logging or metric is declared (the observability scanner reports no mentions).",
+      "evidence": "`record(doc, {orgId, actor: principal.keyId, action: \"invoice.refunded\", target: invoice.id, details: {refundId, amount}})` (AC-6)."
+    }
+  ]
+}

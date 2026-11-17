@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:106",
+      "problem": "The plan narrows Approved AC-7 (no copy of the old secret anywhere in process memory) to 'the stored hash is deleted from the live document within up to a minute', which it admits cannot be proved; changing what an approved criterion means belongs in a SPEC amendment via /pharn-spec, not in a plan reading, yet the Acceptance mapping still lists AC-7 as covered.",
+      "evidence": "AC-7 is only partly verifiable in Node. JS strings cannot be zeroed ... so \"nowhere in process memory\" cannot be proved. ... For the human and `/pharn-grill`: is that the intended reading of AC-7?"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:29",
+      "problem": "A rotated admin key in grace keeps full admin rights, so a leaked key that was rotated can mint a new non-expiring key via POST /keys, or rotate/revoke the replacement key, during the 24 h window, which defeats rotation as a leak response; the plan does not say whether deprecated keys may use key-management routes (a question for the human).",
+      "evidence": "A key in grace authenticates and the principal carries `deprecated: true`; the server sets `Deprecation: true` on **every** response"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:19",
+      "problem": "The rotate 'must be active' check (and the idempotent-revoke check) is not tied to keyState, but test/helpers.js keys have no status field and an expired-but-unpurged key still has raw status 'rotated'; a raw `status === \"active\"` test would 409 every seeded key and break the AC-1, AC-2, AC-3 and AC-6 tests.",
+      "evidence": "**`rotateKey`** (admin only; the key must be in the caller's org, else `404 not_found`; it must be `active`, else `409 key_not_active`)"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:116",
+      "problem": "Allowing an admin to revoke the org's last admin key leaves the org with no way to create or manage keys, and nothing in the API recovers from that; the SPEC does not make this decision and the plan settles it alone when it should go to the human.",
+      "evidence": "revoking your own key, including the last admin key, is allowed."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:35",
+      "problem": "The purge's failure paths are not declared: whether a failing request-start purge transact turns an unrelated request into a 500 or is skipped, and what happens when the setInterval purge rejects (an unhandled rejection crashes a Node process by default).",
+      "evidence": "`keysDue(doc, now)` says something is due (so no write per request), and (b) from an `unref`'d once-a-minute interval"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "The schema v2 to v3 migration has no declared rollback: once a v3 file is written, the previous release refuses it ('unsupported schema version'), and purge/revoke delete hashes for good, so downgrading the binary is impossible and this is not stated as a limit.",
+      "evidence": "**Migration.** `SCHEMA_VERSION = 3`; `MIGRATIONS[2]` sets `status: \"active\"` and `expiresAt: null` on each key"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:115",
+      "problem": "Grace-end expiry and the hash purge are state changes with no audit entry or log, contrary to the README rule that every state change is audited, and admins cannot see whether the old key is still in use before grace ends; the Deprecation header only tells the caller.",
+      "evidence": "no `key.expired` audit entry for the purge (the README convention says every state change is audited, the SPEC lists only rotation and revocation)"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:112",
+      "problem": "key_revoked/key_expired are returned before the secret is checked, even while an expired key's hash is still present, so anyone holding a key id learns its state; the stated premise that 'ids are shown to admins only' is false, because the id is part of every token (`tl_<id>_<secret>`).",
+      "evidence": "The only leak is \"this id was rotated or revoked\", and ids are shown to admins only."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:20",
+      "problem": "The plan does not say whether rotateKey reuses createKey, which records `key.created`; if that entry is written after `key.rotated`, the newest audit entry is `key.created` and AC-6 fails.",
+      "evidence": "creates a new `active` key with the old key's role and label, flips the old key to `rotated`"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:65",
+      "problem": "The README step does not name the `Deprecation: true` response header, the new `status`/`expiresAt` fields in GET /keys and rotate responses, or the decisions the plan made (idempotent revoke, a rotated key is revocable).",
+      "evidence": "`README.md`: two endpoint rows, the error codes `key_expired` / `key_revoked` / `key_not_active`, and a short \"Rotating a key\" paragraph"
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P0",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:107",
+      "problem": "The plan uses 'guarantees' for a property that rests on one unit test of the document and on a timer firing; it should be labeled advisory or tied to the test that checks it.",
+      "evidence": "What the plan guarantees and tests is that the secret is never stored and the stored hash is deleted from the live document."
+    }
+  ]
+}

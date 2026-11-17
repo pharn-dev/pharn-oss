@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "c55e825648928f8c8c4dc20d632b8ec4b5fbf4add1b09fc4fa101802675c86f6",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "spec",
+      "reason": "AC-7 as approved (no copy of the secret anywhere in process memory) cannot be met or tested in Node; the plan substitutes a weaker hash-purge property, and only a SPEC amendment can decide what AC-7 should actually require."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "spec",
+      "reason": "The SPEC does not state whether a rotated key in its grace period keeps admin and key-management rights; this is a product intent question (rotation as a leak response) that no plan can settle without a SPEC decision."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan must say that rotate's 'must be active' check and the idempotent-revoke check go through keyState (status-less keys read as active; an expired but unpurged rotated key reads as expired), or the seeded test keys would 409 and break AC-1/2/3/6."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan must stop settling alone whether the last admin key can be revoked: either declare a guard or state it as an explicit accepted bound for the human to confirm; unsure the plan can stand as written, so it goes back."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The plan must declare the purge failure paths: whether a failed request-start purge is skipped or fails the request, and that the interval purge catches and handles its own rejection so it cannot crash the process."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan must state as a limit (and in the README) that a v3 data file cannot be loaded by the previous release and that purged or revoked hashes are gone for good, so downgrade is not supported."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "The plan's choice to write no audit entry or log for grace-end expiry and hash purge conflicts with the README rule that state changes are audited; it must either add an entry or justify the exception against that convention for the human to confirm."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "The plan's risk text claims key ids are shown to admins only, but the id is part of every token (tl_<id>_<secret>); that claim is wrong and must be corrected, and the key-state disclosure either accepted explicitly or the check order changed."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "The plan must state how rotateKey creates the new key (reusing createKey would write key.created) and that key.rotated is the last audit entry written, otherwise AC-6's newest-entry check fails."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "README completeness is a minor documentation improvement; the plan already lists a README step with endpoints, errors and a rotation paragraph, and the build can name the Deprecation header and new fields there without a plan change."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "proceed",
+      "reason": "Only the word 'guarantees' in a risks paragraph is off; the AC-7 mapping already says the purge is unit-tested on the document, and the wording will be revised anyway when the AC-7 question goes back to the SPEC."
+    }
+  ]
+}

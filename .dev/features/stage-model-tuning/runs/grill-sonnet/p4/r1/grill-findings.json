@@ -1,0 +1,69 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:78",
+      "problem": "The plan covers no revocation: SPEC AC-4 (DELETE /keys/:id -> 204, later use -> 401 key_revoked), the revoke audit entry and the in-scope 'revoke a key immediately' have no step, file change, stored field or test.",
+      "evidence": "## Acceptance mapping lists AC-1, AC-2, AC-3, AC-5 and AC-6 only; Steps 1-11 never mention DELETE, revokedAt, key_revoked or key.revoked."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:36",
+      "problem": "Bumping SCHEMA_VERSION to 3 breaks the existing test at test/store.test.js:26, which asserts schemaVersion 2 after migrating a v1 file (it will now migrate through to 3); the plan adds a case but never says to update that assertion.",
+      "evidence": "2. **Migration test.** In `test/store.test.js`, write a version-2 file holding one key, load it, and assert version 3,"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:90",
+      "problem": "The clock seam AC-3 needs (createApp(store, {now})) appears only under Risks, not in any Step, and test/helpers.js (whose startApp calls createApp(store)) is not in ## Files, so the build may not be able to wire a movable clock into the acceptance harness.",
+      "evidence": "`createApp(store, {now})` takes an optional clock function, defaulting to `() => new Date()`. This is a test seam, not a feature."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:43",
+      "problem": "A rotated key keeps its full role for 24 hours and the plan does not say whether a deprecated principal may still create or rotate keys, so a leaked admin key could mint a permanent successor during the grace period; the revoke path that would cut this off is itself missing (G1-1).",
+      "evidence": "the grace period) → the principal gets `deprecated: true`."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:49",
+      "problem": "Nothing records or exposes use of a deprecated key or a key_expired rejection, so an admin cannot see which integrations still depend on the old key before the 24-hour cutoff, which is the purpose of the grace period.",
+      "evidence": "6. **Audit.** Rotation records `key.rotated` with the old key's id as target and `{newKeyId}` in details (AC-6),"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:59",
+      "problem": "Only the acceptance criteria are mapped to tests, so the SPEC constraint that another organization's key reads 404 not_found on every key route, and the 409 key_not_active refusal, have no planned test.",
+      "evidence": "11. **Run the suite** (`npm test`); the acceptance tests from `AC-TESTS.md` must pass and the existing suites stay"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:51",
+      "problem": "Step 7 promises the Deprecation header on every response, but unknown routes 404 before authentication, 401s have no principal, the principal is scoped inside handle's try block, and route handlers receive no now, so the wiring is unspecified and the claim is broader than achievable.",
+      "evidence": "7. **Routes.** In `src/server.js`: `POST /keys/:id/rotate` → 201 with `{key, token}`, inside `store.transact()`. `handle` passes `now`"
+    }
+  ]
+}

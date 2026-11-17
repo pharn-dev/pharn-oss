@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "65c846623f4505e56be1494be2c594955ac5bb2f4fbb717e004fa9cf5bc016cd",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 4 takes the tenant from a client-supplied body field, which breaks AC-4's cross-organization isolation; the plan must look the invoice up with principal.orgId only and ignore any orgId in the body (and say which orgId the audit entry in step 8 uses: the principal's)."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The SPEC has no parent/child organization model, so the 'on behalf of a child organization' sentence in step 4 is an unrequested addition; remove it from the plan together with the G1-1 fix (cross-organization refunds would need a SPEC change, not a plan one)."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The AC-4 acceptance-mapping line should state that the test also posts with the other organization's id in the body and still gets 404, so the plan's own tenant-scoping fix is actually exercised."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The SPEC is silent on replaying a key with a different body and step 7 picks a behavior on its own; re-plan so the choice is stated as an explicit open question/assumption for a human to confirm (or switch to refusing a mismatch) instead of being decided silently."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "GET /invoices/:id/refunds is in SPEC scope but no step or test covers it; add a planned test file or case for it (member allowed, other organization's invoice is 404, newest first) and list that file under Files."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The Risks section says the forward-only migration is noted in a README upgrade line that does not exist; step 11 and Files must add that line (or the risk text must stop claiming it)."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 6 leaves the precedence of amount_invalid, reason_invalid and idempotency_key_invalid, and of a replay with a malformed amount, to the builder; fix one total order of checks in the plan since the build needs it to be deterministic."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 10 uses req.headers in the handler snippet while also saying handlers receive headers; make the snippet consistent (pass the idempotency header through the new headers parameter) so the build can carry it out as written."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "The Concurrency risk says simultaneous refunds 'cannot' both pass, which holds only for one server process on the data file; reword it to state the single-process limit instead of an unconditional guarantee."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "The SPEC asks for an audit entry for every recorded refund (AC-6) and says nothing about logging refused attempts; adding logging or metrics for refusals would be a speculative addition outside scope."
+    }
+  ]
+}

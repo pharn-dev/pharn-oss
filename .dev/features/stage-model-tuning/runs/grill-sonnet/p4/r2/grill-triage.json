@@ -1,0 +1,47 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "e34f6ab00126461c8140dc54e31ccc0bdb2f5b289ec51f9c389ca4f55abaee05",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Confirmed in PLAN.md: AC-4 and the revoke audit entry are in the SPEC but the plan has no DELETE /keys/:id step, no stored revoked marker (so none in the version-3 migration), no key_revoked check order against key_expired/deprecated, and no acceptance mapping; the plan must add all of these."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The SPEC is silent on what a deprecated key may do, but the plan can settle it without changing the SPEC: either bar a deprecated principal from rotating or creating keys, or state the open authority as an accepted bound with a reason. The plan must pick one and say so."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan relies on AC-TESTS.md for the AC-to-test mapping, but the live feature directory has no such file; the plan stage must produce it, or the plan must stop pointing at it and carry the mapping itself."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Confirmed: test/helpers.js calls createApp(store) with no clock and request() always runs res.json(), which fails on an empty 204 body. The plan must move the createApp clock option into a numbered step and add test/helpers.js to Files with a clock option and 204-safe parsing."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The 409 key_not_active path and the SPEC Constraint that another organization's key reads as 404 on every key route have no mapped test; the plan must add them, and decide what rotating a revoked key does, together with the revoke work from G1-1."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Confirmed in src/server.js: an unknown route returns 404 before authenticate runs, and the catch block cannot see the principal, so the plan's every-response claim is false as written. The plan must narrow the claim to responses after authentication, or restructure handle so error paths carry it."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "Observability of old-key use is not in the SPEC's scope: in-scope items are rotation, the deprecation signal, revocation and audit entries, and the plan already exposes rotatedAt, expiresAt and replacedBy in listing. Usage metrics would be an improvement the build does not need."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "Functionally harmless: authenticate tests expiresAt and replacedBy for truthiness, so a missing field behaves like null. src/keys.js, which holds createKey, is already in Files, so the build can write the three null fields at creation; the G1-1 re-plan can mention it in passing."
+    }
+  ]
+}

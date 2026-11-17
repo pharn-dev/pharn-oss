@@ -327,6 +327,73 @@ node pharn/floor/grill-triage.mjs skeleton pharn/features/<name>/grill-findings.
 node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json
 ```
 
+## `defect-probe-score.mjs` / `defect-probe-kit.mjs` — the defect probe set
+
+```bash
+# SCORE AND RUN THE DEFECT PROBE SET (added 2026-11-16, defect-probe-set, CORE-90; dev-only, nothing ships). The probe set
+# (.dev/probes/defect-probes/: manifest.json, a fixture project, 4 PLAN + 2 SPEC probes, one planted defect each) is the
+# quality measure for changes to what the grill, the triage or the plan writer read; method, anchors and bounds are its
+# README.md. THE RECORDED NEED (P7): five real plans all escalated with 7-10 findings, so a verdict cannot tell a caught
+# defect from noise, and nothing measured the chain (loop-grill-triage's TRIAGE-CHECK-MEASUREMENT.md; the 2026-09-29
+# audit's experiment E1 never ran). SCORER — a run CATCHES its probe iff grill-findings.json passes grill-findings-core
+# `validate`, grill-triage.json passes grill-triage-core `checkTriage` over those bytes, and >= 1 finding's `file` matches
+# an anchor (path equal on whole segments either way; line in [start-slack, end+slack]; or, SPEC probes only, the run's
+# own PLAN.md at a line holding a plan token as a whole word) with a disposition other than `proceed`. Only file, id and
+# disposition are read; problem/evidence never (P2), and output names codes, finding ids, built paths and sha256s (L62).
+# Outcomes are closed (OUTCOMES). A SPEC probe whose plan stage stopped (no PLAN.md, no findings, plan.session.json
+# `is_error: false`) is `caught-at-plan` when that session's `result` cites a SPEC.md line overlapping an anchor, else
+# `stopped-at-plan-unanchored` (neither catch nor miss) — both read model free text, ADVISORY; the overlap is the floor
+# part. The catch count is caught + caught-at-plan. FLOOR: the manifest's closed shape, every input's and the fixture
+# tree's sha256, the manifest's own sha256 (--manifest-sha256), the match, the count, --min. ADVISORY: that a matched
+# finding IS the planted defect (the group chance matches bound it for p1/p2), that the runs ran as written, anything two
+# runs per probe imply. Exit: verify 0 match · 1 a mismatch | score 0 caught or caught-at-plan · 1 not | tally 0 · 1 below --min | all 2
+# usage, a bad/unpinned manifest, an unknown probe, or (tally) a selected probe with no run directory.
+# KIT — builds, never runs: per probe x run a fresh project (fixture + the arm's PRODUCT_SURFACE files from
+# check-surface-bump.mjs, never a hand list (L81), pharn.config.json from the arm + the probe's inputs + one git commit)
+# and one single-line command per run: `claude -p "/pharn-<stage> <feature>"` per stage with --model / --effort
+# (defaults plan opus, grill opus, triage sonnet, high), --permission-mode acceptEdits, --allowedTools, --strict-mcp-config,
+# --setting-sources project, --max-budget-usd (12), --output-format json to the run's own directory, then a cp of the run
+# files out. --out must be absent or empty (L66). Exit 0 built · 1 a sha256 mismatch or a non-empty --out · 2 usage, an
+# unusable arm or manifest, a failed copy or git call. Flags checked against `claude --help` 2.1.323. Apparatus: no bump.
+# OVERRIDES (2026-11-17, stage-model-tuning, CORE-112): a --model/--effort flag alone does NOT set a stage's model — a
+# directly invoked `/pharn-<stage>` runs on its command's `model:`/`effort:` frontmatter for the turn
+# (check-model-config.mjs "TURN SCOPE"). So a stage a flag names is also written into each run project (its command's
+# frontmatter line and its pharn.config.json models.stages entry) when it differs from the arm's, and the build exits 2
+# unless THIS repository's check-model-config.mjs `agreement` passes over the project (the arm's copy is never run), the
+# arm's command has exactly one such line, and the arm's config has models.stages. KIT.md names the overrides; a control
+# kit's flags equal the frontmatter and change no byte (redundant, not evidence they applied).
+node .dev/floor/defect-probe-score.mjs verify --manifest .dev/probes/defect-probes/manifest.json
+node .dev/floor/defect-probe-kit.mjs build --arm <pharn-oss checkout> --out <new dir> --runs 2 [--model grill=sonnet]...
+node .dev/floor/defect-probe-score.mjs tally --manifest .dev/probes/defect-probes/manifest.json --manifest-sha256 <pinned> --runs <kit>/runs [--min <n>]
+```
+
+## `stage-model-pairs.mjs` — pair a variant arm with the control arm
+
+```bash
+# PAIR AND READ ONE STAGE-MODEL OR EFFORT ARM (added 2026-11-17, stage-model-tuning, CORE-112; dev-only, nothing ships).
+# THE RECORDED NEED (P7): the 2026-09-29 audit requires paired runs before any per-stage model or effort default changes,
+# and CORE-90's tally reads the catch only, never a session's cost or time. For each --probe, the i-th variant run pairs
+# with the i-th control run, the control runs being each --control dir's r<n> directories in the order given. Each run
+# gets defect-probe-score.mjs `scoreRun` (the catch) and, per stage of its kind, its <stage>.session.json
+# (`claude -p --output-format json`, shape as of Claude Code 2.1.323 — L67): minutes (duration_ms), USD (total_cost_usd),
+# weighted units (2026-11-11 baseline formula over modelUsage; every cache write weighted as a 5-minute write) and the
+# SERVED model (the modelUsage key with the most output tokens), which must start with claude-<alias>- of --expect-*
+# (defaults: plan opus, grill opus, triage sonnet). A pair is complete when every session on both sides is valid — or,
+# for a SPEC probe's run the scorer reads as a plan-stage stop (caught-at-plan | stopped-at-plan-unanchored), when its
+# plan session is valid (grill/triage counted when present, never required). A run's catch is caught | caught-at-plan;
+# a pair with an unanchored stop on either side is costed but not COMPARABLE, and rules 2-4 count comparable pairs. The
+# READING, first match: cannot-decide (arm-not-applied | fewer-than-six-pairs | control-caught-none) · does-not-support
+# (catch-lost | no-saving on chain USD) · supports-change (no-visible-regression-and-saving). One lost catch is decisive
+# by construction; no reading is a significance test, "non-inferior", or a decision to change a default. Only numbers,
+# the scorer's outcome and MODEL_RE-checked model ids are read; no path, session id or free text is printed (P2, L62).
+# FLOOR: the pairing, the outcomes, session validity, the served-family test, the sums, the reading. ADVISORY: that runs
+# ran as written, USD as a price, served EFFORT (recorded nowhere), anything beyond the pairs. Exit: pair 0 with a
+# reading | session 0 valid · 1 missing/invalid | 2 usage (bad manifest or flag, no or a repeated --probe, an unknown
+# probe, unequal or zero run counts). Apparatus: no bump.
+node .dev/floor/stage-model-pairs.mjs pair --manifest .dev/probes/defect-probes/manifest.json --manifest-sha256 <pinned> --control <control kit>/runs [--control <more control runs>]... --variant <variant kit>/runs --probe p1 [--probe p2]... [--expect-variant grill=sonnet]
+node .dev/floor/stage-model-pairs.mjs session <run dir>/grill.session.json
+```
+
 ## `grill-round.mjs` — the full loop's re-plan round
 
 ```bash

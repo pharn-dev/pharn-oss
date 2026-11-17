@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "e9c9a87278de269f25e9deb085932fbddab93b23769b084eb5b73e9737dd9191",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "spec",
+      "reason": "AC-7 demands that no copy of the secret exists anywhere in process memory, which cannot be tested at unit level or any other; the plan only meets a narrower reading (hash nulled in the document and file), so the SPEC must reword AC-7 or the human must accept that reading."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The plan must add planned tests (and AC-TESTS coverage) for the SPEC constraint that another org's key is 404 not_found on both rotate and revoke, plus the plan-chosen 409 key_not_active and idempotent repeat-revoke behaviours."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "proceed",
+      "reason": "Forward-only versioned migrations are the store's mechanism that SPEC Constraint 2 requires, and the added fields are additive; downgrading to an older release is outside the SPEC's scope and the build does not need a rollback."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The Step 4 sweep passes `now`, which is createApp's clock function, to hasPurgeable/purgeExpired that take a Date, so nothing would ever purge; the plan must call `now()` at each tick (or pin the parameter type) and cover this wiring."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "spec",
+      "reason": "Whether revoking an org's last admin key should be refused is intent the SPEC does not state, and a guard would add behaviour beyond the SPEC; the SPEC must either add that rule or accept the lockout as a non-goal."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan changes stored key records in the purge without an audit entry, against the README every-state-change-is-audited convention; it must either record an entry or state the purge as an explicit, justified exception after checking the convention."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "Logging the purge count is an observability nicety the build does not need; purgeExpired already returns the count and the sweep's behaviour is not required by any criterion to be logged."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 3 must store the new key's createdAt as now.toISOString(), as createKey does, so the in-memory record matches the persisted shape instead of holding a Date."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "The 30 s sweep interval is a tunable constant (SWEEP_MS) whose value the plan already names and bounds in its second risk; no criterion fixes it and the missing rationale does not change the build."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "README step 6 must also document the 409 key_not_active error and the idempotent 204 on a repeat revoke, since the plan introduces both as public behaviour."
+    }
+  ]
+}

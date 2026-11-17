@@ -1,0 +1,78 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:78",
+      "problem": "The plan covers no revocation work: AC-4 (DELETE /keys/:id, 204, then key_revoked) and the in-scope revoke audit entry have no step, file change, stored field, route or test mapping.",
+      "evidence": "\"## Acceptance mapping\" lists AC-1, AC-2, AC-3, AC-5, AC-6 only; Approach says \"The key routes move out of src/keys.js's single create/list pair into a small set: create, list, rotate.\"; step 1's migration adds rotatedAt, expiresAt and replacedBy but no revoked field."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "A key in its grace period keeps full admin authority, so a leaked old key can rotate the freshly issued replacement or create keys and end up holding a key that outlives the 24 hours; the plan neither restricts nor acknowledges this.",
+      "evidence": "Step 4 flags the old key only as \"deprecated: true\"; step 5 checks \"requireAdmin\" and \"refuse a key that is already rotated\", so the new key (replacedBy null) is rotatable by the deprecated caller, and nothing limits key-management routes for a deprecated principal."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:22",
+      "problem": "The plan says the acceptance tests are mapped in AC-TESTS.md, but no such file exists in the feature directory, so the AC-to-test mapping the plan relies on is asserted, not present.",
+      "evidence": "\"Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build\"; live listing of pharn/features/api-key-rotation/ this run shows only PLAN.md and SPEC.md (the SPEC pins spec_template pharn-default)."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:90",
+      "problem": "The clock seam that AC-3 needs is described only under Risks, not in any step or in Files, and the existing test helper cannot use it or read a 204 revoke response.",
+      "evidence": "Risks: \"createApp(store, {now}) takes an optional clock function\"; Files omit test/helpers.js, whose startApp(store) calls createApp(store) and whose request() does \"await res.json()\", which fails on an empty 204 body."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:46",
+      "problem": "The 409 key_not_active refusal (a new error code the SPEC does not define) and the cross-organization 404 on rotate have no test mapped, and rotating a revoked key is not addressed.",
+      "evidence": "\"refuse a key that is already rotated with `409 key_not_active`\"; Acceptance mapping and steps 2 and 9 name no test for the 409 or the 404 not_found Constraint."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P0",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:52",
+      "problem": "The plan claims the Deprecation header is set on every response including errors, but an unknown route returns 404 before authenticate runs and a body or domain error is caught outside the code that knows the principal, so the claim is not true as written.",
+      "evidence": "\"sets `Deprecation: true` on every response, including error responses, so a client sees it whatever it called\"; in src/server.js handle() returns send(res, 404, ...) before authenticate, and the catch block has no access to the principal."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:54",
+      "problem": "Nothing lets an admin or operator see whether a deprecated key is still being used, which is what decides when the grace period can safely end, and no log or metric is declared for deprecated or expired key use.",
+      "evidence": "\"presentKey() adds rotatedAt, expiresAt and replacedBy, so an admin can see which keys are in their grace period\"; the only logging mention is the audit log, which records rotations, not uses of a deprecated key."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:33",
+      "problem": "Migrated keys get the three new fields as null but no step makes createKey or the seeded test keys write them, so stored and listed key shapes differ between old and new keys.",
+      "evidence": "\"MIGRATIONS[2], which gives every existing key `rotatedAt: null`, `expiresAt: null` and `replacedBy: null`\"; createKey is not in the steps and the Files list does not say new keys carry the fields."
+    }
+  ]
+}
