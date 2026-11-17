@@ -5242,7 +5242,9 @@ for (const cmd of STAGE_AGENT_WIRING) {
     assert.match(s, /\*\*no\s+`isolation`\*\*/);
     assert.match(s, cmd.waitRule, "the wait-before-finish rule");
     assert.match(s, /\*\*Never run `finish` for a\s+stage that ran inline\.\*\*/);
-    assert.match(s, /\*\*The model is routed; effort is not\*\*/);
+    // 7.20.0 (stage-effort-routing): the effort is requested on the Agent call too; the 6.27.0 sentence is closed out.
+    assert.match(s, /\*\*The model and the effort are both requested on the\s+Agent call\*\*/);
+    assert.doesNotMatch(s, /effort is not|takes no effort/, "no stale 'effort is not routed' sentence in the section");
     assert.match(s, /pharn\/floor\/stage-agent-core\.mjs`'s header/, "the protocol is cited, not restated (P4)");
     // GATE-2 review: A1 (the heading says requested), A6 (the prose claim is ADVISORY, the free-text residual named).
     // 6.43.0: A5's "re-run the marker without --route" sentence is gone with the typed token; in its place, the
@@ -5351,15 +5353,16 @@ test("★ STAGE_AGENT_WIRING (6) — every committed start line routes AND marks
                 encoding: "utf8",
               }
             );
-            want = [0, `agent:${JSON.parse(res.stdout).model}\n`];
+            want = [0, `agent:${JSON.parse(res.stdout).model}\n`, `effort:${JSON.parse(res.stdout).effort}`];
           }
           const r = spawnSync("sh", ["-c", sub(l.text)], { cwd: dir, encoding: "utf8" });
           const [token, second, ...rest] = r.stdout.trimEnd().split("\n");
-          assert.deepEqual([r.status, `${token}\n`], want, `${cmd.file}:${l.idx} over ${label}: ${r.stderr}`);
+          assert.deepEqual([r.status, `${token}\n`], want.slice(0, 2), `${cmd.file}:${l.idx} over ${label}: ${r.stderr}`);
           // 6.43.0: the start line's second line is the stage-start marker it wrote, carrying the token it printed.
           assert.equal(second?.match(MARKER_LINE)?.[1], "stage-start", `${cmd.file}:${l.idx} over ${label}: the marker line`);
           assert.ok(second.endsWith(`(route ${token})`), `${cmd.file}:${l.idx}: the marker records the printed token`);
-          assert.deepEqual(rest, []);
+          // 7.20.0 (stage-effort-routing): a routed start's third line is the effort the checker resolves; inline, none.
+          assert.deepEqual(rest, want[0] === 0 ? [want[2]] : [], `${cmd.file}:${l.idx} over ${label}: the effort line`);
         } finally {
           rmSync(dir, { recursive: true, force: true });
         }

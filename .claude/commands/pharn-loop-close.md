@@ -245,9 +245,10 @@ Report, plainly and without asking anything:
   (`agent:<alias>`, followed by `general-purpose (fallback)` when that stage's Agent call took the fallback, or
   `inline:<reason>` with the remedy the route line printed), and `inline (policy)` for
   `/pharn-regress` and `/pharn-verify`, citing `ROUTE_POLICY` in `pharn/floor/stage-agent-core.mjs` (a quick run's
-  grill is `inline (policy)` too, and a quick run has no triage or supervisor line). A route
-  records what was REQUESTED; never write that a stage ran on a model — what it was served is `cost.json`'s
-  `requests[].model`. A stage agent that may still be running (a backgrounded call, S9 or S9b) is named here;
+  grill is `inline (policy)` too, and a quick run has no triage or supervisor line). After an `agent:<alias>` token,
+  write `effort:<level> requested` when the Agent call carried the effort the start line printed, or
+  `effort not applied` when it went without one (7.20.0). A route records what was REQUESTED; never write that a
+  stage ran on a model or at an effort — what it was served is `cost.json`'s `requests[].model`. A stage agent that may still be running (a backgrounded call, S9 or S9b) is named here;
 - the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
   and verify with the scope result per iteration — `## Quick mode` item 9);
 - **the gates the project excluded** (6.65.0), from the closeout document's `excluded_gates`: name each id as

@@ -19,6 +19,9 @@ import {
   isRouteToken,
   agentToken,
   inlineToken,
+  AGENT_EFFORTS,
+  EFFORT_PREFIX,
+  effortLine,
 } from "./route-token-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -133,4 +136,64 @@ test("✧ PARITY DISCRIMINATES — a checker source with one more alias fails th
   assert.notEqual(mutant, real, "precondition: the mutation must change the source (L34)");
   const aliases = checkerAliases(mutant);
   assert.notDeepEqual([...AGENT_MODELS].sort(), aliases.filter((a) => a !== "inherit").sort());
+});
+
+// ── The effort line (7.20.0, stage-effort-routing) ───────────────────────────────────────────────────────────────
+
+test("AGENT_EFFORTS — five frozen, duplicate-free, [a-z]-only levels (L34); mutant: a member dropped or the set thawed", () => {
+  assert.deepEqual([...AGENT_EFFORTS], ["low", "medium", "high", "xhigh", "max"], "the Agent tool's effort enum, read 2026-11-16");
+  assert.equal(new Set(AGENT_EFFORTS).size, AGENT_EFFORTS.length);
+  assert.ok(Object.isFrozen(AGENT_EFFORTS), "the set is frozen");
+  for (const e of AGENT_EFFORTS) assert.match(e, /^[a-z]+$/);
+  assert.equal(EFFORT_PREFIX, "effort:");
+});
+
+test("effortLine — each member maps to `effort:<level>`; every non-member is null (L36: closed, no variant spelling)", () => {
+  for (const e of AGENT_EFFORTS) assert.equal(effortLine(e), `effort:${e}`);
+  for (const bad of [
+    "turbo",
+    "High",
+    "HIGH",
+    " high",
+    "high ",
+    "high\n",
+    "",
+    "toString",
+    "effort:high",
+    3,
+    null,
+    undefined,
+    {},
+    ["high"],
+  ]) {
+    assert.equal(effortLine(bad), null, `${JSON.stringify(bad)} is not an agent effort`);
+  }
+  // The effort line is never a route token, and a route token is never an effort line.
+  for (const e of AGENT_EFFORTS) assert.equal(isRouteToken(effortLine(e)), false);
+  for (const t of ALL_TOKENS) assert.equal(effortLine(t), null);
+});
+
+// ✧ PARITY (L31) — AGENT_EFFORTS is a copy of a platform fact AND of the config checker's effort enum, read from the
+// checker's SOURCE as MODEL_ALIASES is above. A new config effort then fails here until someone decides how it routes.
+function checkerEfforts(source) {
+  const m = source.match(/^const EFFORT_ENUM = \[([^\]]*)\];$/m);
+  assert.ok(m, "the checker's `const EFFORT_ENUM = [...]` line must be found — else the parity test is vacuous (L60)");
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+}
+
+test("✧ PARITY: AGENT_EFFORTS equals check-model-config.mjs's EFFORT_ENUM", () => {
+  const efforts = checkerEfforts(readFileSync(join(HERE, "check-model-config.mjs"), "utf8"));
+  assert.ok(efforts.length > 0, "L34: the checker's enum is non-empty");
+  assert.deepEqual([...AGENT_EFFORTS].sort(), [...efforts].sort());
+});
+
+test("✧ PARITY DISCRIMINATES — a checker source with one more effort level fails the comparison, and a missing line is reported", () => {
+  const real = readFileSync(join(HERE, "check-model-config.mjs"), "utf8");
+  const mutant = real.replace('"xhigh", "max"];', '"xhigh", "max", "ultra"];');
+  assert.notEqual(mutant, real, "precondition: the mutation must change the source (L34)");
+  assert.notDeepEqual([...AGENT_EFFORTS].sort(), checkerEfforts(mutant).sort());
+  const dropped = real.replace('"low", "medium", ', "");
+  assert.notEqual(dropped, real, "precondition: the second mutation must change the source");
+  assert.notDeepEqual([...AGENT_EFFORTS].sort(), checkerEfforts(dropped).sort());
+  assert.throws(() => checkerEfforts(real.replace("const EFFORT_ENUM =", "const EFFORTS =")), /must be found/);
 });

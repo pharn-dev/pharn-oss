@@ -23,6 +23,61 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.20.0] - 2026-11-16
+
+### Added
+
+- **A routed stage agent is requested at the effort `models.stages` resolves for it (CORE-111).** Until now the Agent
+  call carried the model only, so every stage's declared `effort: high` reached no routed stage. On exit `0`,
+  `pharn/floor/stage-agent.mjs start` now prints a third line, `effort:<level>`, after the token and the marker line;
+  `/pharn-loop` and `/pharn-ship` pass that level as the Agent call's `effort`. Where the Agent tool lists no `effort`
+  parameter, or refuses the value without starting an agent, the call goes without it, the stage still routes, and the
+  summary or `SHIP.md` writes `effort not applied` after the route token. A stage makes at most three calls, in order:
+  `pharn-stage` with `effort`, then `general-purpose` after an error about the type, then without `effort` after an
+  error about it. `pharn/floor/route-token-core.mjs` pins the levels as a platform fact, `AGENT_EFFORTS` (`low`,
+  `medium`, `high`, `xhigh`, `max`), and a parity test holds them equal to `check-model-config.mjs`'s `EFFORT_ENUM`.
+  `routeFromResolved` sends a resolved effort outside that set inline as `resolve-failed`. The harness probe
+  (`.dev/features/stage-effort-routing/EFFORT-PROBE.md`) found an optional `effort` taking those five levels in the
+  desktop app's Agent tool and in the terminal CLI 2.1.323's embedded schema; that schema omits the parameter when
+  `CLAUDE_CODE_EFFORT_LEVEL` is set. One direct Agent call with `effort: "low"` produced a transcript that recorded
+  the level in its requests' `output_config`. Bounds: the effort is a request (advisory), and what a stage ran at is
+  evidence from an undocumented transcript format, never proof. No routed stage has been observed yet, and neither the
+  marker nor `cost.json` records the effort. The quality and cost comparison on the benchmark features is not run here,
+  because the probe set does not exist yet; CORE-112's effort pairs measure it. `pharn/LIMITS.md` §8 was updated by
+  the maintainer. The commands, `cost-ledger.md`, the `pharn.config.json` note, `docs/limitations.md`, the README and
+  the guides drop "effort is not routed". `check-model-config.mjs` changes in its header only, so pharn-cli's
+  byte-pinned fixture copy lags until it is refreshed.
+- 2026-11-17: **Measured: a script-driven quick loop with one headless `claude -p` session per stage works, and the
+  record says no-go for building one now (CORE-113 spike).** The maintainer ran a node driver from a terminal on the
+  `lg3-remove-files` benchmark, on a 7.19.0 measure base. It ran every pinned floor line of `/pharn-loop --quick`
+  itself, with no model request of its own, and ten sessions. It ended `STOP_CAP` after 3 iterations, with the
+  closeout's record and decision checks GREEN. No spike gate failed:
+  - routed stages were served their configured model;
+  - the write guard denied an out-of-scope Write inside a driven session;
+  - every stage completed;
+  - a resumed session acted on a relayed answer;
+  - every session ran in auto mode with no skip flag.
+
+  Effort was not observable, and the inline grill was served its frontmatter model. The cost ledger attributes no token
+  of a driven run: `coverage: unavailable`, "no session id available". Both `/pharn-loop --quick` comparison runs
+  stopped at the spec stage (S6c, `not-quick`) on the same intent bytes the driven spec accepted. So the orchestrator's
+  share after Epics 1 and 2 was measured only up to that stop (58.6% and 65.7%), which is not a whole-run figure and
+  not comparable with the baseline's 27.7%. The no-go rests on that unmet start condition. The benchmark also cannot
+  end green by either route: a project test needs edits the intent puts out of scope. Record:
+  `.dev/features/loop-driver-spike/RECORD.md`, with the driver, its test and the kit beside it. Dev apparatus only, so
+  no `SKILLS_VERSION` bump.
+
+- 2026-11-16: **Closed: four epic-4 candidates the 2026-11-11 baseline rated no-go (CORE-96, CORE-97, CORE-98,
+  CORE-99), with a decision record that re-reads each on 7.19.0.** The ledgers have not moved since the baseline (the
+  project still holds its 129 `cost.json` and is on 7.10.3), so their figures are cited: plan minutes correlate 0.76
+  with plan requests and 0.43 with plan bytes; 4 of 36 full runs had three or fewer criteria; one stop was a
+  contradiction between criteria. Main did move. `pharn-spec.md` has 1,656 B of headroom, not the 3,296 B CORE-99
+  assumed. `pharn/ARCHITECTURE.md` outside §6 is 19,582 B, about 4.9k tokens, or 5.0–7.2% of a routed stage's first
+  request depending on which estimate of it is used. And since 7.16.0's `gates.timeoutMs`, CORE-97's second reason is
+  weaker, so its closure rests on the share alone. Each section names the measurement that would reopen the task. The
+  closures are the orchestrator's decision under the user's delegation, not a maintainer sign-off. Record:
+  `.dev/measurements/epic-4-no-go-2026-11-16.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
 - 2026-11-16: **Measured: a `pharn-stage` subagent's first request is 44.6% of a `general-purpose` one's, in one
   fresh-session probe (CORE-107 follow-up).** The 7.19.0 entry left this unmeasured. On 2026-11-16 the user ran the
   probe in a fresh `claude -p` session, in a scratch worktree holding the shipped `pharn-stage.md` bytes. Both subagents

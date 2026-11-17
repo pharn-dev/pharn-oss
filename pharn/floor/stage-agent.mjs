@@ -31,7 +31,8 @@
 //   read    0 done · 3 refused · 4 question · 2 unusable (`no-result`, `malformed`, `mismatch`, `unreadable`,
 //           `usage`) — one closed line on stdout; the stage-exit numbers (`stage-exit.md`). Anything else,
 //           1 included, is a crash, and a caller must read a crash as no verdict.
-//   start   `route`'s 0 / 3 with TWO stdout lines (the token, then the marker line) · 2 refused, nothing written.
+//   start   `route`'s 0 / 3: the token, then the marker line, and on 0 a THIRD line `effort:<level>` (7.20.0) ·
+//           2 refused, nothing written.
 //   finish  `read`'s 0 / 2 / 3 / 4 with TWO stdout lines (the closed verdict line, then the marker line); with
 //           `--budget-ms`, also 5 (`WAITING_LINE`, then `MARKER_WAITING`): no result yet, run the same line again;
 //           and 6 (`CAPPED_LINE`, then `MARKER_CAPPED`; 7.2.0): no result within the wait's cap, the stage left open.
@@ -46,7 +47,11 @@
 // was adopted because the batch request named it and because no route token is typed into a shell line any more.
 //   * `start` decides exactly as `route` does, then writes the stage-start marker carrying that token through
 //     `mark-phase.mjs`'s `tryMarkPhase` (the one printed encoding, so the line binds the run as the CLI's does), and
-//     prints the token, then the marker line. Three decisions the model used to make around the old lines are code:
+//     prints the token, then the marker line — and, for a routed stage (exit 0, since 7.20.0, stage-effort-routing), a
+//     third line `effort:<level>` (`route-token-core.mjs` `effortLine`): the effort the config resolves, which the
+//     orchestrator passes as the Agent call's `effort`. It comes AFTER the marker line so the token stays exactly
+//     `route`'s line and "a second line `marker: not written`" stays true for both exits; `route` itself still prints
+//     one line. Three decisions the model used to make around the old lines are code:
 //     `--no-agent-tool` on an `agent` cell is `inline:no-agent-tool` with no config consulted (the model's reading of
 //     its own tool list stays ADVISORY, as before); a `route` refusal other than a skipped stage, or a leftover result
 //     it cannot clear, is `inline:route-unavailable` (exit 3) with the reason on stderr; and a stage that is still
@@ -197,7 +202,7 @@ import {
   CAPPED_LINE,
   waitDecision,
 } from "./stage-agent-core.mjs";
-import { inlineToken } from "./route-token-core.mjs";
+import { inlineToken, effortLine } from "./route-token-core.mjs";
 import { DEFAULT_BASE, markersPath, tryMarkPhase, latestMarker } from "./mark-phase.mjs";
 import { tsMs } from "./run-window-core.mjs";
 
@@ -639,7 +644,7 @@ function stageIsOpen(opts, base) {
   return m !== null && m.kind === "stage-start" && m.stage === opts.stage && (m.iteration ?? null) === (opts.iteration ?? null);
 }
 
-/** `start`: route, then the stage-start marker. Returns `{exit, out: [lines], err: [lines]}`. */
+/** `start`: route, then the stage-start marker; a routed stage adds its effort line. Returns `{exit, out: [lines], err: [lines]}`. */
 export function startStage(opts, { root = process.cwd(), noAgentTool = false, sessionId = null, base = join(root, DEFAULT_BASE) } = {}) {
   const d = decideStart(opts, root, noAgentTool);
   if (d.refuse) return { exit: 2, out: [], err: [d.refuse] };
@@ -660,7 +665,7 @@ export function startStage(opts, { root = process.cwd(), noAgentTool = false, se
     second = m.line;
     if (!m.ok) err.push(`start: the stage-start marker was not written (${m.code}); the route stands`);
   }
-  return { exit: d.exit, out: [d.token, second], err };
+  return { exit: d.exit, out: d.exit === 0 ? [d.token, second, effortLine(d.effort)] : [d.token, second], err };
 }
 
 function sleepMs(ms) {

@@ -56,6 +56,7 @@ import {
   CAPPED_LINE,
   renderBrief,
   buildResult,
+  STAGE_CONFIG_KEYS,
 } from "./stage-agent-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -697,6 +698,13 @@ function markersIn(dir) {
     .map((l) => JSON.parse(l));
 }
 const lines = (s) => s.split("\n").filter((l, i, a) => !(l === "" && i === a.length - 1));
+/** The effort line a routed `start` prints for `stage` over THIS repo's config — read from the config, never re-typed
+ *  (7.20.0, stage-effort-routing). */
+function effortLineFor(stage) {
+  const stages = JSON.parse(readFileSync(REPO_CONFIG, "utf8")).models.stages;
+  const key = STAGE_CONFIG_KEYS[stage];
+  return `effort:${(Object.hasOwn(stages, key) ? stages[key] : stages.default).effort}`;
+}
 /** The token `route` prints for ship's plan over THIS repo's config — read from the real CLI, never re-typed. */
 function planToken() {
   const d = scratch();
@@ -727,7 +735,8 @@ test("start — ONE call routes AND marks: line 1 is exactly what `route` prints
       assert.equal(started.status, routed.status, `${label}: the exit is route's`);
       const [token, second, ...rest] = lines(started.stdout);
       assert.equal(`${token}\n`, routed.stdout, `${label}: the token is route's own line`);
-      assert.deepEqual(rest, [], `${label}: exactly two lines`);
+      // 7.20.0: a routed start (exit 0) adds exactly one line, the config's effort; an inline one adds none.
+      assert.deepEqual(rest, started.status === 0 ? [effortLineFor(stage)] : [], `${label}: two lines, plus the effort line when routed`);
       const m = markersIn(b);
       assert.equal(m.length, 1, `${label}: one marker`);
       assert.equal(m[0].kind, "stage-start");
@@ -855,7 +864,7 @@ test("start — the OPEN-STAGE rule: a second start for the same stage and itera
     run(dir, startArgs("pharn-ship", "pharn-plan"));
     const again = run(dir, startArgs("pharn-ship", "pharn-plan"));
     assert.equal(again.status, 0, again.stderr);
-    assert.deepEqual(lines(again.stdout), [planToken(), MARKER_KEPT]);
+    assert.deepEqual(lines(again.stdout), [planToken(), MARKER_KEPT, effortLineFor("pharn-plan")]);
     assert.equal(markersIn(dir).length, 1, "no second stage-start for an open stage (ship-outcome-core (b))");
     // The stage returns: the next start of the same stage is a NEW execution.
     run(dir, finishArgs("pharn-ship", "pharn-plan"));
@@ -888,7 +897,7 @@ test("start — a hostile markers file can only make it KEEP a marker: never ano
     writeFileSync(markersFile(dir), `${forged}\n[1,2]\n"str"\n{"seq":`);
     const r = run(dir, startArgs("pharn-ship", "pharn-plan"));
     assert.equal(r.status, 0, r.stderr);
-    assert.deepEqual(lines(r.stdout), [planToken(), MARKER_KEPT], "kept — the bound stated in mark-phase.mjs");
+    assert.deepEqual(lines(r.stdout), [planToken(), MARKER_KEPT, effortLineFor("pharn-plan")], "kept — the bound stated in mark-phase.mjs");
     // CONTROL: a forged line for ANOTHER stage, or a non-marker kind, does not keep.
     writeFileSync(markersFile(dir), `${forged.replace("pharn-plan", "pharn-grill")}\n`);
     assert.notEqual(lines(run(dir, startArgs("pharn-ship", "pharn-plan")).stdout)[1], MARKER_KEPT);
@@ -917,11 +926,36 @@ test("start — an uncleared leftover result is inline:route-unavailable (exit 3
       writeFileSync(join(d2, "pharn", ".run", "cost"), "a file where the marker directory belongs\n");
       const m = run(d2, startArgs("pharn-ship", "pharn-plan"));
       assert.equal(m.status, 0, "the route stands — a marker never fails a run");
-      assert.deepEqual(lines(m.stdout), [planToken(), MARKER_NOT_WRITTEN]);
+      assert.deepEqual(lines(m.stdout), [planToken(), MARKER_NOT_WRITTEN, effortLineFor("pharn-plan")]);
       assert.match(m.stderr, /stage-start marker was not written \([A-Z]+\)/);
     } finally {
       rmSync(d2, { recursive: true, force: true });
     }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("start — a routed stage's third line is the effort ITS config resolves (7.20.0); an inline start prints none", () => {
+  const dir = scratch();
+  try {
+    // A non-default level for plan, another for build: each start prints its own stage's effort.
+    writeConfig(dir, stagesConfig({ plan: { model: "opus", effort: "low" }, build: { model: "haiku", effort: "xhigh" } }));
+    const plan = run(dir, startArgs("pharn-ship", "pharn-plan"));
+    assert.equal(plan.status, 0, plan.stderr);
+    assert.deepEqual(lines(plan.stdout).length, 3);
+    assert.deepEqual([lines(plan.stdout)[0], lines(plan.stdout)[2]], ["agent:opus", "effort:low"]);
+    assert.equal(markersIn(dir)[0].route, "agent:opus", "the marker records the token only; the effort is not a route token");
+    const build = run(dir, startArgs("pharn-loop", "pharn-build"));
+    assert.equal(lines(build.stdout)[2], "effort:xhigh");
+    // A stage with no key of its own resolves through `default`, effort included.
+    const grill = run(dir, startArgs("pharn-ship", "pharn-grill"));
+    assert.deepEqual([lines(grill.stdout)[0], lines(grill.stdout)[2]], ["agent:sonnet", "effort:high"]);
+    // Inline (no-agent-tool): exactly two lines, no effort line.
+    const inl = run(dir, startArgs("pharn-ship", "pharn-test", [NO_AGENT_TOOL]));
+    assert.equal(inl.status, 3);
+    assert.equal(lines(inl.stdout).length, 2);
+    assert.ok(!inl.stdout.includes("effort:"), "an inline start names no effort");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

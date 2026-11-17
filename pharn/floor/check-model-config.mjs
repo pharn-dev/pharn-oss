@@ -11,8 +11,8 @@
 // frontmatter is held to, which is what this checker's `agreement` mode enforces.
 // SINCE 6.27.0 THE BLOCK HAS A SECOND READER, at run time: `pharn/floor/stage-agent.mjs route` shells THIS
 // checker's `resolve <stage>` to pick the model a `/pharn-ship` or `/pharn-loop` STAGE AGENT is REQUESTED on —
-// the Agent tool takes a `model` parameter (it takes no effort). The two readers ask different questions
-// (L39): the frontmatter agreement accepts `inherit` and `claude-*` ids and the Agent tool does not, so
+// the Agent tool takes a `model` parameter, and since 7.20.0 the resolved effort is passed as its `effort` too.
+// The two readers ask different questions (L39): the frontmatter agreement accepts `inherit` and `claude-*` ids and the Agent tool does not, so
 // `route` sends those stages inline, each with its own reason. Simulating routing in prose — a command
 // "consulting" the config — would still be the exact P0 disease: the route decision is tested code, and
 // what a routed stage was SERVED is read from the transcript (`cost.json`), never asserted from this file.
@@ -38,8 +38,8 @@
 //     A stage run INLINE as a step inside `/pharn-ship` or `/pharn-loop` runs inside the ORCHESTRATOR's turn
 //     and does not get its frontmatter model: every stage the routing policy keeps inline, every routing
 //     fallback, and the orchestrators themselves. Since 6.27.0 a ROUTED stage gets its model from the Agent
-//     call instead (`stage-agent.mjs`); its EFFORT keeps this bound, because the Agent tool takes none. This
-//     checker cannot see any of it. OBSERVED, 2026-10-05, one session (`.dev/features/orchestrator-direct-stage-calls/
+//     call instead (`stage-agent.mjs`), and since 7.20.0 its effort as a request on that call where the tool
+//     takes one. This checker cannot see any of it. OBSERVED, 2026-10-05, one session (`.dev/features/orchestrator-direct-stage-calls/
 //     PLAN.md`, "Why"): "directly" means a PERSON's slash invocation. A person's `/pharn-loop` (frontmatter `sonnet`)
 //     was served `claude-sonnet-5-5` for that turn; in the next turn, served the session's `claude-opus-5-5`, the
 //     MODEL invoked `/pharn-loop` through the Skill tool, and every request after it — through the `/pharn-regress`

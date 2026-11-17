@@ -1,0 +1,26 @@
+{
+  "feature": "epic4-no-go-2026-11-16",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "6ce8ca1c02c26803f59b45c56f2d11213c51e9f3c4c0250e4992cb2ee46bd25c",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "fb4916758ec4a4ddc07256c42f81c9cbfa8108472f127889eb5f6c3a011c4c3a"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

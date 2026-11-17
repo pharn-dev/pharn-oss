@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.19.0-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.20.0-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -233,7 +233,7 @@ normal install adds:
 - the deterministic floor, contracts, grillers, and review lenses under `pharn/`,
 - `pharn.config.json`, pinning the skills version and exact installed commit, and carrying the
   `models.stages` block that sets each product command's model and effort — and, since 6.27.0, the model
-  `/pharn-ship` and `/pharn-loop` request for each stage they run as a subagent (see
+  (and since 7.20.0 the effort) `/pharn-ship` and `/pharn-loop` request for each stage they run as a subagent (see
   [Current limitations](./docs/limitations.md#current-limitations) for what that does and does not reach).
 
 ```text
