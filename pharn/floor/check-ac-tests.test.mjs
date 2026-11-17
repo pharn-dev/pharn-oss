@@ -714,8 +714,15 @@ test("★ HOOK — the RED is load-bearing: over the six probed spellings it fir
     try {
       execFileSync("git", ["init", "-q", "."], { cwd: root });
       const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
-      assert.equal(spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], { cwd: root, env }).status, 0);
-      const writable = ["vite.config.ts", "Vite.config.ts"].filter(
+      const set = spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], {
+        cwd: root,
+        env,
+        encoding: "utf8",
+      });
+      // 7.22.0: a non-concrete item refuses the plan at Step 0, so the build never starts and can write nothing.
+      assert.equal(set.status, scopedPath(entry) === null ? 1 : 0, `${entry}: ${set.stderr}`);
+      const candidates = set.status === 0 ? ["vite.config.ts", "Vite.config.ts"] : [];
+      const writable = candidates.filter(
         (target) =>
           spawnSync(process.execPath, [ENFORCER], {
             cwd: root,
@@ -922,7 +929,10 @@ test("a tree the pin cannot read is a NOTE at plan time, never a silent GREEN �
 function buildScopeAllows(root, targets) {
   execFileSync("git", ["init", "-q", "."], { cwd: root });
   const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
-  assert.equal(spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], { cwd: root, env }).status, 0);
+  const set = spawnSync(process.execPath, [SETTER, "--from-plan", `pharn/features/${NAME}/PLAN.md`], { cwd: root, env, encoding: "utf8" });
+  // 7.22.0: a plan holding a non-concrete item is refused at Step 0 by name, so the build never starts and writes nothing.
+  if (set.status === 1 && /item\(s\) in .* cannot be scoped/.test(set.stderr)) return [];
+  assert.equal(set.status, 0, set.stderr);
   return targets.filter(
     (target) =>
       spawnSync(process.execPath, [ENFORCER], {

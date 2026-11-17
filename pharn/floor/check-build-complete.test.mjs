@@ -175,25 +175,32 @@ test("★ PARITY: `declared` equals set-writes-scope.cjs's `--from-plan` scope o
   try {
     const plan = join(root, "PLAN.md");
     // Exercise the subtle bits both parsers must agree on: literal paths (in), a placeholder + a glob
-    // (filtered), and an exclusion subsection (never scanned).
-    writeFileSync(
-      plan,
-      [
-        "# PLAN — parity fixture",
-        "",
-        "## Files",
-        "",
-        "- `keep/one.md` — x",
-        "- `keep/two.mjs` — y",
-        "- `<capDir>/evals/x` — placeholder skipped",
-        "- `gen/*.md` — glob skipped",
-        "",
-        "### Explicitly not touched",
-        "",
-        "- `excluded/secret.md` — must be excluded",
-        "",
-      ].join("\n")
-    );
+    // (skipped by this reader, refused by the setter since 7.22.0), and an exclusion subsection (never scanned).
+    const write = (items) =>
+      writeFileSync(
+        plan,
+        [
+          "# PLAN — parity fixture",
+          "",
+          "## Files",
+          "",
+          ...items,
+          "",
+          "### Explicitly not touched",
+          "",
+          "- `excluded/secret.md` — must be excluded",
+          "",
+        ].join("\n")
+      );
+    const kept = ["- `keep/one.md` — x", "- `keep/two.mjs` — y"];
+    write([...kept, "- `<capDir>/evals/x` — placeholder", "- `gen/*.md` — glob"]);
+    const refused = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(refused.status, 1, refused.stdout);
+    assert.match(refused.stderr, /2 of 4 `## Files` item\(s\)/);
+    assert.ok(refused.stderr.includes('"<capDir>/evals/x": a placeholder') && refused.stderr.includes('"gen/*.md": a glob'));
+    assert.doesNotMatch(refused.stderr, /excluded\/secret\.md/, "the exclusion subsection is not read by either");
+    assert.deepEqual(json(run([plan, root])).skipped, ["<capDir>/evals/x", "gen/*.md"]);
+    write(kept);
     // The setter writes root/pharn/.run/writes-scope.json (cwd=root, so the repo's real scope is untouched).
     const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
@@ -822,20 +829,21 @@ test("★ PARITY: the setter scopes a marked item's bare path — setter scope =
   const root = mkdtempSync(join(tmpdir(), "pharn-complete-"));
   try {
     const plan = join(root, "PLAN.md");
-    writeFileSync(
-      plan,
-      [
-        "# PLAN — deletion parity",
-        "",
-        "## Files",
-        "",
-        "- `keep/one.md` — x",
-        "- `gone/two.tsx` (delete) — removed",
-        "- `.vscode/settings.json` (delete) — orphan",
-        "- `gen/*.md` (delete) — glob skipped by both",
-        "",
-      ].join("\n")
-    );
+    const items = [
+      "- `keep/one.md` — x",
+      "- `gone/two.tsx` (delete) — removed",
+      "- `.vscode/settings.json` (delete) — orphan",
+      "- `gen/*.md` (delete) — glob: skipped here, refused by the setter",
+    ];
+    const write = (lines) => writeFileSync(plan, ["# PLAN — deletion parity", "", "## Files", "", ...lines, ""].join("\n"));
+    // 7.22.0: the setter REFUSES the marked glob by name (it used to drop it); this reader still lists it in `skipped`.
+    write(items);
+    const refused = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
+    assert.equal(refused.status, 1, refused.stdout);
+    assert.ok(refused.stderr.includes("1 of 4 `## Files` item(s)") && refused.stderr.includes('"gen/*.md": a glob'), refused.stderr);
+    assert.deepEqual(json(run([plan, root])).skipped, ["gen/*.md"]);
+    // The lists the two readers share: the same items without the glob.
+    write(items.slice(0, 3));
     const s = spawnSync(process.execPath, [SETTER, "--from-plan", plan], { encoding: "utf8", cwd: root });
     assert.equal(s.status, 0, `setter failed: ${s.stderr}`);
     const scope = JSON.parse(readFileSync(join(root, "pharn", ".run", "writes-scope.json"), "utf8")).scope;
@@ -843,7 +851,7 @@ test("★ PARITY: the setter scopes a marked item's bare path — setter scope =
     assert.deepEqual([...o.declared, ...o.deletions].sort(), [...scope].sort());
     assert.deepEqual([...scope].sort(), [".vscode/settings.json", "gone/two.tsx", "keep/one.md"]);
     assert.deepEqual(o.deletions, ["gone/two.tsx", ".vscode/settings.json"]);
-    assert.deepEqual(o.skipped, ["gen/*.md"]);
+    assert.deepEqual(o.skipped, []);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

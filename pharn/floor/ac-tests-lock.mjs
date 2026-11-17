@@ -152,7 +152,7 @@ function pinOf(text) {
 }
 
 /** AC-TESTS.md's `## Files` as the writes-scope setter scopes them (ac-tests-core.mjs `scopedPath`: `clean`, then
- *  `isConcrete`), de-duplicated and sorted — `{ok, paths}` — or a refusal naming the first entry the setter would drop.
+ *  `isConcrete`), de-duplicated and sorted — `{ok, paths}` — or a refusal naming the first entry the setter would not scope.
  *  Until 6.20.5 the lock pinned the RAW entry, so `tests/a.test.js (new)` — GREEN at check-ac-tests and scoped by the
  *  setter as the bare path — made `--write` refuse "… (new) is missing". */
 function scopedFilesOf(text) {
@@ -499,8 +499,8 @@ export function testFirstReds(lock, name, base, root) {
     else if (now !== sha) reds.push(`${path} changed since the lock was written`);
   }
   // The set of test files is part of the pin: a `## Files` entry added or removed without a rewrite is a RED. Each
-  // entry is compared as the setter scopes it (scopedPath) — the spelling `--write` recorded; one the setter would
-  // drop (a placeholder or glob) is named.
+  // entry is compared as the setter scopes it (scopedPath) — the spelling `--write` recorded; one the setter does
+  // not scope (a placeholder or glob, which it refuses since 7.22.0) is named.
   const listed = pathsFromPlanFiles(readFileSafe(resolve(root, mappingPath)) ?? "");
   const now = new Set();
   for (const entry of listed.ok ? listed.value : []) {

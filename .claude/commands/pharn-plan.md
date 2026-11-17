@@ -242,7 +242,7 @@ applied_lessons: none | [L1, L2] # MANDATORY — floor-checked (Step 4b); `none`
 > path item follows it. Keep narrative before the list, after it, or as a **path-item description**
 > (``- `path` — note``), and use the `### Explicitly not touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **list items** whose
 > leading token is an angle-bracket path — ``- `<path>` `` (matching `pathsFromPlanFiles`) — so an
-> un-filled `## Files` **fails closed** at the setter (`isConcrete` rejects `<`/`>`); a bare
+> un-filled `## Files` **fails closed** at the setter, which refuses any placeholder or glob item and names it; a bare
 > ``- `path` `` item is **unsafe** because it parses as a real scope path. The `## Steps` above is **advisory prose**,
 > but a non-path line under `## Files` is not harmless (see the caveat above) — only the `## Files`
 > back-tick paths **before any such truncation** become the build's scope, and `/pharn-build` writes
@@ -278,7 +278,8 @@ node .claude/hooks/set-writes-scope.cjs --check --from-plan pharn/features/<name
 ```
 
 - **exit 0** → go to Step 4c. **Non-zero** → fix the PLAN's `## Files` (the message names the line or the entry)
-  and re-run. Never add an `--allow-*` flag to it: a refused path is the person's to edit or to scope.
+  and re-run. Never add an `--allow-*` flag to it: a refused path is the person's to edit or to scope. An item holding
+  `*`, `?`, `<` or `>` is refused by name (7.22.0): name each file instead, one item per file.
 
 ## Step 4c — Map every Acceptance Criterion to a test, in `AC-TESTS.md` (templated SPEC only)
 
