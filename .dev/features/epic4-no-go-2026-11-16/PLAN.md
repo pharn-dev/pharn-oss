@@ -127,7 +127,7 @@ check-loop.mjs spec-template-core.mjs pharn-ship-quick.md` → none; `pharn-loop
   named record), so a later reader decides it by measurement, not judgment; where the threshold itself is a choice, the
   record says who chose it.
 
-## Open questions (HALT)
+## Questions resolved at GATE 1 (no open question remains)
 
 1. **CORE-97 reopen threshold.** The close condition says "a material share" without a number. Recommended: reopen when
    a ledger set of full runs on 7.16.0 or later has more than the baseline's share of ≤3-criteria runs (4 / 36) **and**
@@ -142,3 +142,7 @@ check-loop.mjs spec-template-core.mjs pharn-ship-quick.md` → none; `pharn-loop
    (or cost) correlate with `PLAN.md` bytes at least as strongly as with plan requests over ≥ 30 runs, or a re-plan-round
    ledger (none exists) shows re-plan cost rising with plan bytes; CORE-99 when a ledger set shows two or more stops
    caused by a contradiction between criteria (the ticket's own P7 bar: more than one read case).
+
+Resolved 2026-11-16 at GATE 1 by the orchestrator, a model decision under the user's delegation ("You make all
+decisions"), not a maintainer sign-off: Q1, Q2 and Q3 each take the recommended answer as written. The record keeps
+the note that CORE-97's second reason is weaker since 7.16.0 `gates.timeoutMs` and that its closure rests on the share.

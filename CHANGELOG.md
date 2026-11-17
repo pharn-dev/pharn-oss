@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-16: **Closed: four epic-4 candidates the 2026-11-11 baseline rated no-go (CORE-96, CORE-97, CORE-98,
+  CORE-99), with a decision record that re-reads each on 7.19.0.** The ledgers have not moved since the baseline (the
+  project still holds its 129 `cost.json` and is on 7.10.3), so their figures are cited: plan minutes correlate 0.76
+  with plan requests and 0.43 with plan bytes; 4 of 36 full runs had three or fewer criteria; one stop was a
+  contradiction between criteria. Main did move. `pharn-spec.md` has 1,656 B of headroom, not the 3,296 B CORE-99
+  assumed. `pharn/ARCHITECTURE.md` outside §6 is 19,582 B, about 4.9k tokens, or 5.0–7.2% of a routed stage's first
+  request depending on which estimate of it is used. And since 7.16.0's `gates.timeoutMs`, CORE-97's second reason is
+  weaker, so its closure rests on the share alone. Each section names the measurement that would reopen the task. The
+  closures are the orchestrator's decision under the user's delegation, not a maintainer sign-off. Record:
+  `.dev/measurements/epic-4-no-go-2026-11-16.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
 - 2026-11-16: **Measured: a `pharn-stage` subagent's first request is 44.6% of a `general-purpose` one's, in one
   fresh-session probe (CORE-107 follow-up).** The 7.19.0 entry left this unmeasured. On 2026-11-16 the user ran the
   probe in a fresh `claude -p` session, in a scratch worktree holding the shipped `pharn-stage.md` bytes. Both subagents
