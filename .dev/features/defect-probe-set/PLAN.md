@@ -83,6 +83,20 @@ the kit, not `## Files`:
   as long as no test imports it. The same run listed the TEST file too, so every line of the two new test files must
   execute: no untaken branch in a test helper.
 
+## Amendments after the runs (2026-11-17, round 2 of the build)
+
+The user's 12 main-arm runs are in. Two changes, both decided by the orchestrator under the user's delegation:
+
+- **Plan-stage outcomes.** Both p5 plan sessions refused to plan, naming the planted contradiction, and left no
+  `PLAN.md`, which the pre-registered rule could only score `findings-missing`. The scorer gains `caught-at-plan` and
+  `stopped-at-plan-unanchored` (commit `6f18935a`; the README states the rule, and the record says it was added after
+  the runs and before scoring, with the manifest unchanged).
+- **Raw outputs in `## Files`.** Question 5's answer put them outside `## Files` because they did not exist at the first
+  verify. They exist now, so they are declared here by concrete path, and this round re-anchors the build epoch before
+  writing them. Each SPEC probe's `plan.session.json` is committed redacted to `type`, `subtype`, `is_error` and
+  `result`, the fields the scorer reads, because the session file also carries session and request ids. `tally.json` is
+  re-computed over the committed files, so its sha256s are theirs.
+
 ## Applied lessons
 
 - L4 — the reason this increment exists: a griller's 1 KB authored fixture passes by construction; the probe set
@@ -267,6 +281,33 @@ first push. Raw outputs and the `tally` JSON go in `.dev/features/defect-probe-s
 - `.markdownlint-cli2.jsonc` — the same two exclusions — layer: repo-meta
 - `eslint.config.mjs` — the same two exclusions — layer: repo-meta
 - `CHANGELOG.md` — one `[Unreleased]` entry, dated — layer: repo-meta
+- `.dev/features/defect-probe-set/runs/p1/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p1/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p1/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p1/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p2/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p2/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p2/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p2/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p3/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p3/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p3/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p3/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p4/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p4/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p4/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p4/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p5/r1/plan.session.json` — the plan stage's result, redacted to `type`, `subtype`, `is_error`, `result` — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p5/r2/plan.session.json` — the plan stage's result, redacted to `type`, `subtype`, `is_error`, `result` — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r1/PLAN.md` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r1/plan.session.json` — the plan stage's result, redacted as above — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r2/PLAN.md` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/p6/r2/plan.session.json` — the plan stage's result, redacted as above — layer: build apparatus
+- `.dev/features/defect-probe-set/runs/tally.json` — `defect-probe-score.mjs tally` over the committed run files, verbatim — layer: build apparatus
 
 ### Explicitly not touched
 
