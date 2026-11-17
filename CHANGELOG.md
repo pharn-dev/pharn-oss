@@ -50,8 +50,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   matches an anchor and the valid triage does not give it `proceed`. It never reads a finding's free text. A verdict-level
   score is not used, because five real, unplanted plans all escalated anyway. `.dev/floor/defect-probe-kit.mjs` builds one
   fresh project and one headless `claude -p` command line per run for any arm, with the model and effort set per stage. The
-  user runs those commands. The catch count on `main` (7.19.0) is pending in
-  `.dev/measurements/defect-probes-main-7.19.0.md`, which records the manifest's sha256 before any run.
+  user runs those commands. A SPEC probe whose plan stage refuses, citing an anchored SPEC line, scores
+  `caught-at-plan`; one citing no such line scores `stopped-at-plan-unanchored`. Both read model free text and are
+  advisory. The user ran the kit on `main` (7.19.0): 2 runs per probe, 28 sessions, USD 19.91. 10 of 12 runs caught
+  their probe, 9 at the grill and 1 at the plan stage. One run stopped at the plan stage unanchored, and one was missed
+  because its triage file failed its own check (a digest copied with one digit dropped). Record, with the manifest's
+  sha256 pre-registered before any run: `.dev/measurements/defect-probes-main-7.19.0.md`.
 
 ## [7.22.0] - 2026-11-17
 
