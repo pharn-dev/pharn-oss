@@ -13,7 +13,26 @@
   `SKILLS_VERSION` bump; `MIN_CLI` unchanged; no shipped default changes.
 - constitution_refs: [P0, P2, P5, P6, P7]
 
-## Open questions (HALT) — for GATE 1
+## Open questions — RESOLVED at GATE 1 (2026-11-17)
+
+None open. GATE 1 was decided by the orchestrator as a model decision under the user's delegation ("You make all
+decisions"), not by a human. The decisions:
+
+- **Q1 — option (a).** All four kits are built and pre-registered (manifest sha256 and the arm table in the record).
+  Run order: `plan-sonnet` + `control-spec` first (about USD 54), `grill-sonnet` second (about USD 16). `grill-medium`
+  is built and pre-registered but run only if the measured spend of the first two leaves at least USD 29 under the USD
+  70 cap; if it is not run, the record says "cannot decide" for grill effort. The run order and the stop rule go in
+  each kit's `KIT.md` (appended by hand after the build, in scratch) and in the record.
+- **Q2** — the new file `.dev/floor/stage-model-pairs.mjs` and its test.
+- **Q3** — the sanity check is one real run of `grill-sonnet`'s first line; the orchestrator relays its output path and
+  I parse it with `stage-model-pairs.mjs session` before the full loop.
+- **Conditions.** `grill-medium`'s effort goes through the same frontmatter rewrite and agreement check as a model
+  override. A test proves `arm-not-applied` cannot be satisfied by the control arm's own sessions (control run files
+  passed as the variant with `--expect-variant grill=sonnet` read `cannot-decide` / `arm-not-applied`). The probe
+  README says in one line that the control kit's `--model`/`--effort` flags are redundant with the frontmatter, not
+  that they were applied. No CORE-90 file changes beyond `defect-probe-kit.mjs`, its test and the README.
+
+### The questions as asked
 
 1. **Which arms to run within USD 70.** The three arms the orchestrator named cost about USD 99 at the kit's per-stage
    constants (table under "Budget"), over the cap. Recommended: **build and pre-register all three kits; run arm 2
