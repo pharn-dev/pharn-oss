@@ -23,6 +23,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { sessionRequests } from "../../../../pharn/floor/transcript-core.mjs";
 
 export const DENY_MARKER = "PHARN floor — write blocked";
 const ZERO = () => ({ input: 0, cache_write_5m: 0, cache_write_1h: 0, cache_read: 0, output: 0 });
@@ -127,11 +128,25 @@ export function stageOfStep(id) {
   return "other";
 }
 
-function driverFigures(dir) {
+/** One session's requests read from its TRANSCRIPT by the ledger's own reader (`transcript-core.mjs`
+ *  `sessionRequests`: one row per request id, the usage line with the greatest output), so the driver's figures and
+ *  the comparison run's `cost.json` count by one rule. The stream-json output under-reports `output_tokens` (it carries
+ *  each message's usage as streamed, measured on driver-1: 278 against the session result's 14,006), so the stream is
+ *  used for its result, init and deny lines only when a transcripts directory is given. */
+export function transcriptRequests(projectDir, sessionId) {
+  return sessionRequests(projectDir, sessionId).requests.map((r) => ({
+    model: r.record.message.model,
+    tokens: tokensOf(r.usage),
+    parent: null,
+  }));
+}
+
+function driverFigures(dir, transcripts) {
   const sessions = JSON.parse(readFileSync(join(dir, "sessions.json"), "utf8"));
   const rows = sessions.map((s) => {
     const st = readStream(readFileSync(s.stream, "utf8"));
-    const sum = summarizeRequests(st.requests);
+    const sum = summarizeRequests(transcripts ? transcriptRequests(transcripts, s.session_id) : st.requests);
+    sum.token_source = transcripts ? "transcript (sessionRequests)" : "stream-json (output under-reported)";
     return {
       stage: s.stage,
       step: s.step,
@@ -262,11 +277,17 @@ function loopStream(dir) {
 
 function main() {
   const { values } = parseArgs({
-    options: { driver: { type: "string" }, loop: { type: "string" }, "loop-cost": { type: "string" }, "driver-cost": { type: "string" } },
+    options: {
+      driver: { type: "string" },
+      transcripts: { type: "string" },
+      loop: { type: "string" },
+      "loop-cost": { type: "string" },
+      "driver-cost": { type: "string" },
+    },
     strict: true,
   });
   const doc = { schema: "loop-driver-spike-measure/1", weights: "input + 1.25*cw5m + 2*cw1h + 0.1*cr + 5*out" };
-  if (values.driver) doc.driver = driverFigures(values.driver);
+  if (values.driver) doc.driver = driverFigures(values.driver, values.transcripts);
   if (values["driver-cost"]) doc.driver_ledger = ledgerFigures(JSON.parse(readFileSync(values["driver-cost"], "utf8")));
   if (values.loop) doc.loop = { stream: loopStream(values.loop) };
   if (values["loop-cost"]) (doc.loop ??= {}).ledger = ledgerFigures(JSON.parse(readFileSync(values["loop-cost"], "utf8")));
