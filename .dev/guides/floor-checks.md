@@ -378,7 +378,10 @@ node .dev/floor/defect-probe-score.mjs tally --manifest .dev/probes/defect-probe
 # (`claude -p --output-format json`, shape as of Claude Code 2.1.323 — L67): minutes (duration_ms), USD (total_cost_usd),
 # weighted units (2026-11-11 baseline formula over modelUsage; every cache write weighted as a 5-minute write) and the
 # SERVED model (the modelUsage key with the most output tokens), which must start with claude-<alias>- of --expect-*
-# (defaults: plan opus, grill opus, triage sonnet). A pair is complete when every session on both sides is valid. The
+# (defaults: plan opus, grill opus, triage sonnet). A pair is complete when every session on both sides is valid — or,
+# for a SPEC probe's run the scorer reads as a plan-stage stop (caught-at-plan | stopped-at-plan-unanchored), when its
+# plan session is valid (grill/triage counted when present, never required). A run's catch is caught | caught-at-plan;
+# a pair with an unanchored stop on either side is costed but not COMPARABLE, and rules 2-4 count comparable pairs. The
 # READING, first match: cannot-decide (arm-not-applied | fewer-than-six-pairs | control-caught-none) · does-not-support
 # (catch-lost | no-saving on chain USD) · supports-change (no-visible-regression-and-saving). One lost catch is decisive
 # by construction; no reading is a significance test, "non-inferior", or a decision to change a default. Only numbers,

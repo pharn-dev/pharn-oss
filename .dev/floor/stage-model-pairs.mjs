@@ -9,15 +9,25 @@
 // gets one reading from a closed set, computed by a fixed first-match rule (P5):
 //
 //   1. cannot-decide     arm-not-applied        a complete pair holds a session served outside its expected family
-//   2. cannot-decide     fewer-than-six-pairs   fewer than 6 complete pairs (the 2026-09-29 audit's E1 floor)
-//   3. cannot-decide     control-caught-none    the control caught nothing in the complete pairs: "no catch was lost"
-//                                               would hold over an empty set (L34)
-//   4. does-not-support  catch-lost             a complete pair whose control caught and whose variant did not
+//   2. cannot-decide     fewer-than-six-pairs   fewer than 6 comparable complete pairs (the 2026-09-29 audit's E1
+//                                               floor; "comparable": no unanchored plan stop on either side, below)
+//   3. cannot-decide     control-caught-none    the control caught nothing in the comparable pairs: "no catch was
+//                                               lost" would hold over an empty set (L34)
+//   4. does-not-support  catch-lost             a comparable pair whose control caught and whose variant did not
 //   5. does-not-support  no-saving              the variant's chain USD is not below the control's
 //   6. supports-change   no-visible-regression-and-saving
 //
 // `supports-change` means "in these pairs, no catch was lost and the chain cost less" — never "non-inferior", never a
 // significance test (one loss is decisive by construction), and never a decision to change a shipped default.
+//
+// PLAN-STAGE STOPS (CORE-90's scorer, `planStop`). A SPEC probe's run can stop at the plan stage, leaving no PLAN.md
+// and no findings: the scorer reads it from the run's plan.session.json as `caught-at-plan` (a catch) or
+// `stopped-at-plan-unanchored` (neither a catch nor a miss). Such a run is complete on a valid plan session alone; its
+// grill and triage sessions are counted when present and valid, never required, so the pair is kept, not dropped. A
+// run's catch is `caught` or `caught-at-plan`. A pair with an unanchored stop on either side has no known catch on
+// that side: it counts in the cost sums but not in rules 2–4, which range over the COMPARABLE complete pairs (so six
+// pairs with unanchored stops never read "no catch was lost", L34). Both plan outcomes read model free text and are
+// advisory (the scorer's header says so).
 //
 // THE SESSION FILE (L67: an external tool's output, modelled from its documented shape as of Claude Code 2.1.323).
 // Read: `duration_ms`, `total_cost_usd`, and `modelUsage` — one entry per model, each with `inputTokens`,
@@ -117,22 +127,32 @@ function readOrNull(path) {
 /** Score one run directory: the catch, and every stage session the probe's kind runs. */
 function readRun(probe, dir, expect) {
   const files = { findings: readOrNull(join(dir, "grill-findings.json")), triage: readOrNull(join(dir, "grill-triage.json")) };
-  files.plan = probe.plan_tokens.length > 0 ? readOrNull(join(dir, "PLAN.md")) : null;
+  files.plan = probe.kind === "spec" ? readOrNull(join(dir, "PLAN.md")) : null;
+  files.planSession = probe.kind === "spec" ? readOrNull(join(dir, "plan.session.json")) : null;
   const s = scoreRun(probe, files);
   const sessions = {};
   for (const stage of STAGES_BY_KIND[probe.kind]) {
     const ses = readSession(readOrNull(join(dir, `${stage}.session.json`)));
     sessions[stage] = ses.state === "valid" ? { ...ses, served_expected: ses.model.startsWith(`claude-${expect[stage]}-`) } : ses;
   }
-  const valid = Object.values(sessions).every((x) => x.state === "valid");
-  return { outcome: s.outcome, caught: s.caught, complete: valid, sessions };
+  const unanchored = s.outcome === "stopped-at-plan-unanchored";
+  const required = s.caught_at_plan || unanchored ? ["plan"] : STAGES_BY_KIND[probe.kind];
+  const complete = required.every((stage) => sessions[stage].state === "valid");
+  return { outcome: s.outcome, caught: s.caught || s.caught_at_plan, unanchored, complete, sessions };
 }
+
+/** A run's valid sessions as [stage, session] pairs: an optional stage's missing or invalid session counts nothing. */
+const valid = (sessions) => Object.entries(sessions).filter(([, x]) => x.state === "valid");
+/** A pair whose catch is known on both sides: an unanchored plan stop is neither a catch nor a miss. */
+const comparable = (p) => !p.control.unanchored && !p.variant.unanchored;
+/** A lost catch, in a comparable pair: the control caught and the variant did not. */
+const lost = (p) => comparable(p) && p.control.caught && !p.variant.caught;
 
 /** Sum USD, weighted units and minutes over the given runs: chain totals and per stage. */
 function totals(runs) {
   const t = { usd: 0, weighted: 0, minutes: 0, per_stage: {} };
   for (const r of runs)
-    for (const [stage, x] of Object.entries(r.sessions)) {
+    for (const [stage, x] of valid(r.sessions)) {
       const p = (t.per_stage[stage] ??= { usd: 0, weighted: 0, minutes: 0 });
       for (const k of ["usd", "weighted", "minutes"]) {
         p[k] += x[k];
@@ -147,11 +167,12 @@ function totals(runs) {
 export function decide(complete) {
   const r = (reading, reason) => ({ reading, reason });
   const all = complete.flatMap((p) => [p.control, p.variant]);
-  if (all.some((side) => Object.values(side.sessions).some((x) => !x.served_expected))) return r("cannot-decide", "arm-not-applied");
-  if (complete.length < MIN_PAIRS) return r("cannot-decide", "fewer-than-six-pairs");
-  if (!complete.some((p) => p.control.caught)) return r("cannot-decide", "control-caught-none");
-  if (complete.some((p) => p.control.caught && !p.variant.caught)) return r("does-not-support", "catch-lost");
-  const usd = (side) => complete.reduce((s, p) => s + Object.values(p[side].sessions).reduce((a, x) => a + x.usd, 0), 0);
+  if (all.some((side) => valid(side.sessions).some(([, x]) => !x.served_expected))) return r("cannot-decide", "arm-not-applied");
+  const known = complete.filter(comparable);
+  if (known.length < MIN_PAIRS) return r("cannot-decide", "fewer-than-six-pairs");
+  if (!known.some((p) => p.control.caught)) return r("cannot-decide", "control-caught-none");
+  if (known.some(lost)) return r("does-not-support", "catch-lost");
+  const usd = (side) => complete.reduce((s, p) => s + valid(p[side].sessions).reduce((a, [, x]) => a + x.usd, 0), 0);
   if (!(usd("variant") < usd("control"))) return r("does-not-support", "no-saving");
   return r("supports-change", "no-visible-regression-and-saving");
 }
@@ -186,8 +207,11 @@ export function pair(manifest, sha, o) {
     incomplete_variant: pairs.filter((p) => !p.variant.complete).length,
     control_caught: complete.filter((p) => p.control.caught).length,
     variant_caught: complete.filter((p) => p.variant.caught).length,
-    catch_lost: complete.filter((p) => p.control.caught && !p.variant.caught).length,
-    catch_gained: complete.filter((p) => !p.control.caught && p.variant.caught).length,
+    catch_lost: complete.filter(lost).length,
+    catch_gained: complete.filter((p) => comparable(p) && !p.control.caught && p.variant.caught).length,
+    comparable: complete.filter(comparable).length,
+    unanchored_control: complete.filter((p) => p.control.unanchored).length,
+    unanchored_variant: complete.filter((p) => p.variant.unanchored).length,
     control: side("control"),
     variant: side("variant"),
   };

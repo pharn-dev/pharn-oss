@@ -310,6 +310,68 @@ test("parseArgs and the CLI: defaults, and every usage refusal exits 2", () => {
   rmSync(root, { recursive: true, force: true });
 });
 
+test("a SPEC probe run that stopped at the plan stage pairs on a valid plan session; grill and triage are optional", () => {
+  const root = mkdtempSync(join(tmpdir(), "stage-model-pairs-"));
+  const probe = { ...SPEC_PROBE, id: "p3", anchors: [{ file: "SPEC.md", start: 20, end: 21, slack: 0 }] };
+  const manifest = { probes: [probe] };
+  /** A plan session that refused to plan, citing `line` of the probe's SPEC.md. */
+  const stop = (alias, line, usd = 2) => {
+    const doc = JSON.parse(session(alias, { usd }));
+    return JSON.stringify({ ...doc, is_error: false, result: `Refusing to plan: pharn/features/feat/SPEC.md:${line} contradicts AC-3.` });
+  };
+  /** A run directory holding only the given session files (no PLAN.md, no findings): a plan-stage stop. */
+  const stopped = (dir, sessions) => {
+    mkdirSync(dir, { recursive: true });
+    for (const [stage, bytes] of Object.entries(sessions)) writeFileSync(join(dir, `${stage}.session.json`), bytes);
+  };
+  const c = join(root, "c");
+  const v = join(root, "v");
+  // r1: control caught at plan (grill and triage absent); variant stopped unanchored, with valid grill and triage.
+  stopped(join(c, "p3", "r1"), { plan: stop("opus", 20) });
+  stopped(join(v, "p3", "r1"), {
+    plan: stop("sonnet", 99, 1),
+    grill: session("opus", { usd: 3 }),
+    triage: session("sonnet", { usd: 0.5 }),
+  });
+  // r2: both caught at plan; the variant's grill session is a 0-byte file (invalid) and is never required or counted.
+  stopped(join(c, "p3", "r2"), { plan: stop("opus", 21) });
+  stopped(join(v, "p3", "r2"), { plan: stop("sonnet", 20, 1), grill: "" });
+  // r3: a plan stop with no plan session at all stays incomplete.
+  stopped(join(c, "p3", "r3"), { plan: stop("opus", 20) });
+  stopped(join(v, "p3", "r3"), {});
+  const p = pair(manifest, "f".repeat(64), opts([c], v, ["p3"], { expectVariant: { ...DEFAULT_MODELS, plan: "sonnet" } }));
+  const [r1, r2, r3] = p.doc.pairs;
+  assert.deepEqual([r1.control.outcome, r1.variant.outcome], ["caught-at-plan", "stopped-at-plan-unanchored"]);
+  assert.deepEqual([r1.complete, r2.complete, r3.complete], [true, true, false]);
+  assert.deepEqual([r1.control.caught, r1.variant.caught, r1.variant.unanchored, r2.variant.caught], [true, false, true, true]);
+  assert.equal(r2.variant.sessions.grill.state, "invalid");
+  assert.equal(r3.variant.outcome, "findings-missing");
+  const s = p.doc.summary;
+  assert.deepEqual([s.complete, s.control_caught, s.variant_caught, s.catch_lost, s.catch_gained], [2, 2, 1, 0, 0]);
+  assert.deepEqual([s.unanchored_control, s.unanchored_variant, s.incomplete_variant, s.comparable], [0, 1, 1, 1]);
+  // Variant chain: r1 plan 1 + grill 3 + triage 0.5, r2 plan 1; the invalid grill session adds nothing.
+  assert.equal(s.variant.usd, 5.5);
+  assert.deepEqual(Object.keys(s.variant.per_stage).sort(), ["grill", "plan", "triage"]);
+  assert.equal(s.control.usd, 4);
+  assert.equal(p.doc.reason, "fewer-than-six-pairs");
+  // An unanchored stop is neither a catch nor a miss: six such pairs are complete and costed, but not comparable, so
+  // they can never read "no catch was lost" (L34) — and six caught-at-plan pairs on both sides can.
+  const arms = (name, variantLine) => {
+    const [cd, vd] = [join(root, `c-${name}`), join(root, `v-${name}`)];
+    for (let i = 1; i <= 6; i++) {
+      stopped(join(cd, "p3", `r${i}`), { plan: stop("opus", 20, 3) });
+      stopped(join(vd, "p3", `r${i}`), { plan: stop("sonnet", variantLine, 1) });
+    }
+    return pair(manifest, "f".repeat(64), opts([cd], vd, ["p3"], { expectVariant: { ...DEFAULT_MODELS, plan: "sonnet" } })).doc;
+  };
+  const unanchored = arms("unanchored", 99);
+  assert.deepEqual([unanchored.summary.complete, unanchored.summary.comparable, unanchored.summary.catch_lost], [6, 0, 0]);
+  assert.deepEqual([unanchored.reading, unanchored.reason], ["cannot-decide", "fewer-than-six-pairs"]);
+  const anchored = arms("anchored", 21);
+  assert.deepEqual([anchored.reading, anchored.reason], ["supports-change", "no-visible-regression-and-saving"]);
+  rmSync(root, { recursive: true, force: true });
+});
+
 test("the session subcommand prints one file's figures: exit 0 valid, 1 missing or invalid", () => {
   const root = mkdtempSync(join(tmpdir(), "stage-model-pairs-"));
   writeFileSync(join(root, "ok.session.json"), session("sonnet"));

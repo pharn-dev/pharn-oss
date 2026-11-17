@@ -84,8 +84,9 @@ node <repo>/.dev/floor/stage-model-pairs.mjs pair --manifest <repo>/.dev/probes/
 both sides present and valid):
 
 1. `cannot-decide` / `arm-not-applied` — a session was served outside its expected family;
-2. `cannot-decide` / `fewer-than-six-pairs` — fewer than 6 complete pairs;
-3. `cannot-decide` / `control-caught-none` — the control caught nothing in the complete pairs;
+2. `cannot-decide` / `fewer-than-six-pairs` — fewer than 6 complete pairs (comparable pairs since the amendment
+   below);
+3. `cannot-decide` / `control-caught-none` — the control caught nothing in those pairs;
 4. `does-not-support` / `catch-lost` — a pair whose control caught and whose variant did not;
 5. `does-not-support` / `no-saving` — the variant's chain USD is not below the control's;
 6. `supports-change` / `no-visible-regression-and-saving`.
@@ -94,6 +95,22 @@ both sides present and valid):
 visible regression" at most, never "non-inferior". One lost catch is decisive by construction, and no reading is a
 significance test. A reading on the probe chain never decides a shipped default alone: that also needs E1's loop pairs
 and the human's call.
+
+### Amendment before any pairing: plan-stage stops (2026-11-17)
+
+Written after the first round of runs and before any pair was computed. It was made known that several p5 runs had
+stopped at the plan stage: the plan refused, naming the planted contradiction, and left no PLAN.md. Under the
+original rule those runs would have scored `findings-missing`, or been dropped as incomplete if their grill and
+triage sessions were missing. CORE-90's scorer now scores such a run from its `plan.session.json`:
+`caught-at-plan` (a catch) or `stopped-at-plan-unanchored` (neither a catch nor a miss). Both read model free text
+and are advisory. The pairing reader follows it:
+
+- a plan-stopped run is complete on a valid plan session alone; its grill and triage sessions count toward cost and
+  minutes when present and valid, and are never required;
+- a run's catch is `caught` or `caught-at-plan`;
+- a pair with an unanchored stop on either side is kept and costed, but is not **comparable**. Rules 2–4 (six pairs,
+  a control catch, no lost catch) range over comparable pairs only, so unanchored stops can never stand in for "no
+  catch was lost". Rule 5's cost comparison still uses every complete pair.
 
 ### Budget, run order and the stop rule
 
