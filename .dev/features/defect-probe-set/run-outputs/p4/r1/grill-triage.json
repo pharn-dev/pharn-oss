@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "c0a3a147b86bfeb42ab1cc832f9a7aca06f304bd91c35a3a33178b967ffb7066",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "AC-4 (DELETE /keys/:id -> 204, later use -> 401 key_revoked) is in the SPEC but has no step, file, stored field or test in the plan; add a revokedAt field to the migration, a revoke function, a route in src/server.js, a revoked state in authenticate(), and an AC-4 line in the Acceptance mapping."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Revocation audit entry is in SPEC scope and the assumption that a rotated key stays revocable in its grace period is stated, yet the plan has neither; add a key.revoked audit step and make the revoked state check come before the expired and deprecated states."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan and step 11 rely on AC-TESTS.md, which does not exist in the feature directory although the SPEC is templated; the re-plan must produce AC-TESTS.md mapping each AC to its test, or stop citing it."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Order of the role check and the organization lookup in rotateKey is unspecified; the SPEC constraint says another organization's key reads 404 on every key route, so the re-plan should state an order consistent with that constraint (look up in the caller's org first) and test it. If the supervisor sees it differently the SPEC needs an amendment."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The plan is silent on what a deprecated (rotated, in-grace) principal may do, such as rotating again or creating keys; the re-plan must state a rule, for example refusing rotate and create for a deprecated principal, and note that revocation (G1-1) is the immediate stop."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan adds the 409 on re-rotation, the Deprecation header on error responses and a cross-org 404 on rotate, and the SPEC fixes hash-only storage, but none has a mapped test; add tests for these to the Files and Acceptance mapping or regression sections."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "The createApp(store, {now}) clock seam is only under Risks; move it into the Steps for src/server.js and say the rotate route passes the same injected now to rotateKey as authenticate gets, so tests use one clock."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "Minor drift risk; the plan has rotateKey call newKeyMaterial() and return the same shape as createKey, and hash-only storage is covered by the test added for G1-6. Sharing the construction helper is an optional build-time cleanup."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "The 409 key_not_active refusal is stated in step 5 and keeps a rotated key from being re-rotated; it is within the SPEC's rotation scope and does not contradict any criterion. A one-line rationale can be added during the G1-6 re-plan."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "Server-side tracking of deprecated-key use is not in the SPEC's scope or criteria; the Deprecation header is the specified signal. An addition without a triggering failure would be speculative (P7)."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "Checked live: the routes are in the ROUTES table in src/server.js, and src/keys.js holds only the handlers; correct the Approach wording so the plan describes where the new routes go."
+    }
+  ]
+}

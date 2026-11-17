@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "733d66f15fd48f3f1a629799407f1f62590f9fc63405d878dc2af675d5177f77",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 1 must route the stored-record change through the store's versioned migrations (bump SCHEMA_VERSION, add a migration) or keep the field name `hash`, so pre-upgrade keys still authenticate as the SPEC Constraints require; add src/store.js migration to the steps."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Step 2 must add a regression test that loads a pre-upgrade (old schema version) data file with a legacy-shaped key and authenticates with its token, since the planned test only uses a freshly created key."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "If the field is renamed, ## Files must declare test/helpers.js (seeds keys with the old field) and the test/auth.test.js assertion on the old field name must be updated; alternatively removing the rename removes the blast radius. The plan must state which."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan changes the persisted shape, so it must say how a downgrade is handled; bumping the schema version (G1-1) makes the previous release refuse the file cleanly, and the Risks section should state that instead of calling it unsupported."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The SPEC is templated, so AC-TESTS.md must exist as a plan-stage output mapping each AC to its test; the plan must produce it (and list it in Files) before /pharn-test can run."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Promote the injectable clock from Risks into a numbered step: createApp(store, {now}) with default, and how now is passed to the handlers for rotateKey and revokeKey; add src/server.js wiring detail so AC-3's HTTP test is buildable."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "A SPEC constraint (cross-org 404 on every key route) and the planned 409 key_not_active behaviour have no test; add regression tests for cross-org rotate/revoke 404 and double-rotate/rotate-revoked 409 to the steps and Files."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "Server-side observability of deprecated-key use is outside the SPEC's scope (no criterion and no logging requirement); the client-facing Deprecation header is what the SPEC asks for."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "The plan already declares the header-on-errors choice under Risks, and it is compatible with AC-2 which only requires it on success; the build can capture the principal outside the try as an implementation detail."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "The build would have to guess two behaviours; the plan should decide whether a repeat revoke writes a second key.revoked audit entry and whether revoking the replacement key ends the old key's grace period (or state it does not)."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "Since step 1 is being re-planned, step 9 must name the actual secret field in its never-exposed guard sentence, and either justify widening presentKey or drop it as not required by any criterion."
+    }
+  ]
+}

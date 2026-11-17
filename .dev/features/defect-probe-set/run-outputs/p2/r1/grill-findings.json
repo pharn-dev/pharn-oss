@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:42",
+      "problem": "Step 5 parses and compares refund amounts as floating-point dollars, which contradicts the SPEC constraint (two-fraction-digit decimal strings, integer minor units inside) and the README's no-float rule; it accepts \"30\", \"30abc\" and \"1e2\", leaves dollars-to-amountMinor conversion unstated (0.29*100 is 28.999999999999996), and wrongly refuses legitimate refunds: invoice 0.30 refunded 0.10, then 0.20 > 0.3-0.1 (0.19999999999999998) gives 422 refund_exceeds_remaining. Use parseMinor() and integer remaining = paidMinor - refundedMinor, as lines 17-18 and step 9 already imply.",
+      "evidence": "Parse `amount` with `Number.parseFloat()` (NaN, or a value of 0 or less, is `422 amount_invalid`), then compute `remaining = paid - refunded` in dollars, where both sums are the invoice's payments and refunds divided by 100, and round the amounts in the response with `toFixed(2)`."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:20",
+      "problem": "The plan delegates every acceptance test to AC-TESTS.md, but pharn/features/invoice-refunds/ holds no AC-TESTS.md (read this run) although the SPEC is templated (spec_template is set), so /pharn-test has no mapping to write the tests from; re-run /pharn-plan so it emits AC-TESTS.md.",
+      "evidence": "Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build, so this plan names only the implementation files"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:49",
+      "problem": "The untrusted Idempotency-Key header is looked up as a property of the plain object refundKeys, so valid keys such as \"constructor\", \"toString\" or \"__proto__\" hit inherited Object.prototype members, are treated as replays of a refund that does not exist (likely a 500 or an undefined response), and can never be recorded; the plan should require an own-property test (Object.hasOwn) or a key prefix.",
+      "evidence": "When the request carries `Idempotency-Key`, look it up in `invoice.refundKeys`. A hit returns the stored refund with `replayed: true` and changes nothing"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "The org-scoped lookup is specified only for refundInvoice (step 4); the plan never says listRefunds uses findInvoice(doc, principal.orgId, id), so the new member-role read route has no stated organization boundary and no test for another organization's invoice.",
+      "evidence": "and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:35",
+      "problem": "The plan says to keep the existing version-1 migration test unchanged, but that test asserts doc.schemaVersion equals 2 (test/store.test.js:26), so it fails once SCHEMA_VERSION is 3; the plan should say the assertion changes to 3 (or SCHEMA_VERSION) and also checks refunds and refundKeys.",
+      "evidence": "Keep the existing version-1 case: it now runs both steps in sequence."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:76",
+      "problem": "The acceptance mapping and Files list cover only AC-1..AC-7 and the migration, so the in-scope listing route GET /invoices/:id/refunds and the new refusals amount_invalid, idempotency_key_invalid and reason_invalid have no planned test, and nothing would catch a regression in them.",
+      "evidence": "- `test/store.test.js` — the version-2 migration case"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The forward-only migration limit is said to be labeled in the README's upgrade line, but README.md has no upgrade line (read this run) and step 11 adds only endpoints and error codes, so the irreversibility of schema version 3 would ship unlabeled; step 11 should add the upgrade note explicitly.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:62",
+      "problem": "The route snippet reads req.headers inside a handler whose contract is {principal, params, body, store} (src/server.js:41), contradicting the plan's own next sentence that handlers gain a headers argument; the step should use the passed-through headers to avoid a build that reaches outside the route contract.",
+      "evidence": "principal, params[0], body, req.headers[\"idempotency-key\"]))`, answering 201 with the presented refund, or 200"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:52",
+      "problem": "Returning the original refund for a replay whose amount differs is a decision the SPEC does not make, and it silently hides a client bug (a reused key with a new amount records nothing new); this is a question for the human, since a common alternative refuses a mismatched replay with an error.",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:47",
+      "problem": "The stated reason for looking up before requireAdmin is inaccurate (requireAdmin first answers 403 for every id, so it confirms nothing), and the order differs from voidInvoice, which calls requireAdmin first (src/invoices.js:65); either order satisfies AC-3 and AC-4, but the rationale the next maintainer reads is wrong.",
+      "evidence": "The lookup comes first so that a member probing another organization's ids gets 404, not 403, which would confirm the id exists."
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:55",
+      "problem": "The plan does not say how a non-string reason (a number, an object) is handled, nor where idempotency_key_invalid and reason_invalid fall in the step-6 order of checks, so which error a request with several defects gets is left to the build.",
+      "evidence": "`reason` is optional, trimmed, at most 200 characters (longer is `422 reason_invalid`)."
+    }
+  ]
+}

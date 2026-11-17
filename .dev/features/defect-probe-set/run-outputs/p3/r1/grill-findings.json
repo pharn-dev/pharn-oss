@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:36",
+      "problem": "Step 1 refuses the versioned migration the SPEC's Constraints require, and renaming the stored `hash` to `secretHash` with no migration leaves every pre-upgrade key without `secretHash`, so src/auth.js's Buffer.from(key.secretHash, \"hex\") throws and every existing token gets 500 instead of authenticating.",
+      "evidence": "The store is plain JSON, so no schema version bump or migration is needed: older records simply lack the new fields."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:38",
+      "problem": "The only regression test for the stored-shape change uses a key created after the upgrade, so the SPEC constraint that every existing key keeps authenticating is never exercised (no schema-version-2 fixture with a `hash`-only key is loaded and used), although ## Files claims a pre-upgrade-token test.",
+      "evidence": "has `secretHash` and the four new fields null; in `test/auth.test.js`, assert that the new key's token works."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:69",
+      "problem": "The rename's live blast radius is not in ## Files: test/helpers.js seeds every test key with `hash: hashSecret(...)` (all existing suites would fail to authenticate) and test/auth.test.js:43 asserts `!(\"hash\" in k)`, which becomes vacuous after the rename.",
+      "evidence": "## Files"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:103",
+      "problem": "A persisted-shape change is declared with no rollback, and because SCHEMA_VERSION is not bumped the previous release would load a file this release wrote and crash on authentication instead of refusing it with `unsupported schema version`.",
+      "evidence": "- **Downgrade.** Deploys are forward-only today; a data file written by this release is not supported by the"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:23",
+      "problem": "The plan defers every acceptance test to an AC-TESTS.md mapping, but no AC-TESTS.md exists in pharn/features/api-key-rotation/ although the SPEC is templated (it carries spec_template), so /pharn-test has no mapping to work from: is a re-plan needed?",
+      "evidence": "The acceptance criteria are integration-level. Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test`"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:99",
+      "problem": "The injectable clock that AC-3's HTTP test depends on appears only under Risks: no step adds `createApp(store, {now})`, and step 8 never says how `now` reaches the route handlers, whose argument is {principal, params, body, store}, for rotateKey and revokeKey.",
+      "evidence": "AC-3 without waiting 24 hours they need a way to move the clock: `createApp(store, {now})` takes an optional clock"
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:17",
+      "problem": "The SPEC constraint that another organization's key reads as 404 on every key route, and the planned 409 key_not_active refusal, have no acceptance criterion and no planned regression test, so neither the cross-org path nor the double-rotate path is verified.",
+      "evidence": "four take the organization from the authenticated key, as every route does today, so another organization's key id"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:13",
+      "problem": "Use of a deprecated key during the grace period is signalled only to the client, so an operator has no server-side way to see which integrations still use an old key before it expires, which is the purpose of the grace period.",
+      "evidence": "inside the grace period → a principal flagged `deprecated`, which `src/server.js` turns into the `Deprecation: true`"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:105",
+      "problem": "Sending the Deprecation header on error responses is a product choice the SPEC does not make, and the plan makes it itself; it also needs the principal captured outside handle's try so the catch branch can set the header. Question for the human: confirm the choice or amend the SPEC.",
+      "evidence": "- **Deprecation on errors.** Setting the header on error responses too is a choice the SPEC does not make; it is the"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:52",
+      "problem": "Two revoke edge cases are left undecided: whether a repeat revoke appends a second key.revoked audit entry, and whether revoking the replacement key during the grace period should also end the old key, which as planned keeps working until expiresAt.",
+      "evidence": "`revokedAt = now` (revoking twice is a no-op that still answers 204). A rotated key inside its grace period can be"
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:61",
+      "problem": "Widening presentKey with four lifecycle fields is not required by any acceptance criterion, and its guard sentence still names `hash` after step 1 renamed the field to `secretHash`, so the stated invariant no longer names the field it protects.",
+      "evidence": "keys are in their grace period. It still never includes `hash`."
+    }
+  ]
+}

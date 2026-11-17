@@ -1,0 +1,47 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "776e3551c50a87be36df08452072c8f4f31d63d47be4ecdef6dd48f5faa03614",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "The plan must cover revocation for AC-4: add the DELETE /keys/:id route (204), a stored revoked marker in the version-3 migration, a key_revoked check in authenticate(), the files that change, and an acceptance-mapping entry."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The plan relies on an AC-TESTS.md that does not exist for this templated SPEC; the re-plan must produce it, mapping every AC (including AC-4) to its test, since the plan stage owns that file."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The SPEC puts revocation audit entries in scope and assumes a rotated key can still be revoked in its grace period; the plan must add a key.revoked audit step and state how rotate treats a revoked key (the 409 rule)."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "spec",
+      "reason": "The SPEC does not state whether a deprecated in-grace key may keep using admin key-management routes; this is a security intent decision no plan can make, so the SPEC needs to say it."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The clock seam (createApp(store, {now})) that AC-3's HTTP test needs sits only in Risks; the plan must make it a step, add it to server.js's Files entry, and say where the route takes now for rotateKey and authenticate."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan needs planned tests for rotate's cross-organization 404 (a SPEC Constraint) and its 409 key_not_active refusal, in the test files or in AC-TESTS.md, with the steps naming them."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "A last-used signal is not in the SPEC's scope or acceptance criteria, and the plan already lists rotatedAt/expiresAt in the listing; it is a possible later improvement the build does not need."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "The plan must say where the 404/409 errors come from; importing DomainError from src/invoices.js into keys.js would be a sibling import, so name an error class reached through the contracts layer or in an existing shared module and correct the claim that invoices.js is untouched."
+    }
+  ]
+}

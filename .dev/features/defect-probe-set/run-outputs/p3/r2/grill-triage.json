@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "f62926ff3c36bd305af66569b311484f9a017256455263fb4eb541fd5dcec4b3",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 1 must either drop the hash rename or add a SCHEMA_VERSION bump with a MIGRATIONS step that renames the field and backfills the new ones, so every pre-upgrade key still authenticates as the SPEC constraint requires."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The SPEC is templated, so the plan stage must produce AC-TESTS.md mapping each AC to its test; the feature directory has none and the plan must add it rather than defer to a later stage."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Add a step and test that loads a data file in the pre-upgrade shape (old schema version) and authenticates with its existing token; the Files line already claims such a test but no step describes it."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Add a planned test (acceptance or regression) that rotate and revoke on another organization's key id return 404 not_found, since the SPEC constraint covers every key route and no step tests it."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Promote the injectable clock from Risks to a numbered step: createApp(store, {now}) defaulting to the real clock, threaded into authenticate, rotateKey and revokeKey, so the AC-2/AC-3 tests have something to build."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "spec",
+      "reason": "The SPEC does not say whether a key in its grace period keeps key-management rights (create, rotate, revoke); this is a product and security decision a plan cannot make, so the SPEC needs a criterion or an explicit non-goal."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "The rename serves no criterion and causes G1-1; the re-plan should drop it (keep the field name hash) or justify it, which settles this together with G1-1."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "The plan must follow src/store.js's rule: bump SCHEMA_VERSION and add a MIGRATIONS step for the new key fields, declare it in Files, and cover it with a migration test; the claim that no migration is needed is wrong."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "Operator logging or metrics for deprecated-key use are not in the SPEC's scope (audit entries for rotation and revocation only), and adding them would be a speculative extra; the Deprecation header already tells callers."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Step 9's wording must match whatever field name step 1 ends up with after the re-plan (secretHash or hash); it is a small edit but the plan text is wrong as written if the rename stays."
+    }
+  ]
+}

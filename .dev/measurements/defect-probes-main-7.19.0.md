@@ -39,8 +39,8 @@ is only the line overlap.
 ## Results
 
 Scored with `node .dev/floor/defect-probe-score.mjs tally --manifest .dev/probes/defect-probes/manifest.json
---manifest-sha256 bfbad249… --runs .dev/features/defect-probe-set/runs`. The output is
-`.dev/features/defect-probe-set/runs/tally.json`, over the committed run files.
+--manifest-sha256 bfbad249… --runs .dev/features/defect-probe-set/run-outputs`. The output is
+`.dev/features/defect-probe-set/run-outputs/tally.json`, over the committed run files.
 
 | probe | planted defect                       | r1                                         | r2                                             | caught |
 | ----- | ------------------------------------ | ------------------------------------------ | ---------------------------------------------- | ------ |

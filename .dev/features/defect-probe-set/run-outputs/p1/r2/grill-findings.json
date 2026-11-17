@@ -1,0 +1,96 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:40",
+      "problem": "Step 4 takes the refund's organization scope from the untrusted request body, so any admin key can refund another organization's invoice by sending that organization's orgId; neither the SPEC nor src/ defines a parent/child organization, and README.md says organization scope comes from the authenticated key, never from the request.",
+      "evidence": "`findInvoice(doc, body.orgId ?? principal.orgId, id)`, so a parent organization's admin can refund on behalf of a child organization by sending its `orgId`"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:61",
+      "problem": "The plan claims every invoice has refunds[] after the migration, but createInvoice in src/invoices.js (unchanged by this plan) builds new invoices without refunds or refundKeys, so refunding any invoice created after the upgrade would read or push to undefined and answer 500.",
+      "evidence": "The `?? []` is defensive only; after the migration every invoice has the list."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:93",
+      "problem": "The AC-4 test maps only the lookup, so it passes against a request without orgId while a request that sends the other organization's orgId refunds it; no test covers the body-supplied orgId path.",
+      "evidence": "AC-4 → step 4: the invoice lookup. Test: \"another organization's invoice is 404\"."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:35",
+      "problem": "The existing version-1 store test asserts schemaVersion 2 (test/store.test.js:26), so keeping it unchanged after the bump to 3 turns the existing suite red; the plan does not say to update that assertion.",
+      "evidence": "Keep the existing version-1 case: it now runs both steps in sequence."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:53",
+      "problem": "Returning the original refund with 200 when a reused Idempotency-Key carries a different amount is a policy the SPEC never chose, and it hides a client bug; the alternative (e.g. 422 on a body mismatch) is a question for the human, not a plan default.",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "GET /invoices/:id/refunds is in the SPEC's scope but has no acceptance criterion, and the plan names no test for its member access, organization scoping or newest-first order.",
+      "evidence": "and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:63",
+      "problem": "The route sketch reads req.headers inside a handler that receives only {principal, params, body, store} (src/server.js), and omits the now argument of refundInvoice's six-parameter signature; the build has to resolve both.",
+      "evidence": "principal, params[0], body, req.headers[\"idempotency-key\"]))`"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The plan says the forward-only downgrade limit is noted in the README's upgrade line, but README.md has no upgrade line and step 11 adds only endpoints and error codes.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:107",
+      "problem": "The 2→3 migration has no declared rollback path: the store rewrites the file at version 3 on the first write after load and the previous release refuses it, and the plan names no backup of the version-2 file to make a rollback possible.",
+      "evidence": "A file migrated to version 3 cannot be read by the previous release, which refuses unknown versions"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:7",
+      "problem": "The plan declares no observability for refused refund attempts: the audit log records only successful refunds, so repeated 404/403/422 attempts on a money-recording endpoint leave no trace.",
+      "evidence": "Approach and Steps declare an audit entry for a recorded refund only; scan-plan-observability: mentions false."
+    }
+  ]
+}

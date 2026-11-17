@@ -1,0 +1,87 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:124",
+      "problem": "AC-7 as worded (no copy of the secret anywhere in process memory) cannot be shown by the planned unit heap-snapshot test, and today's code already stores only sha256(secret), so the test neither proves the criterion nor discriminates the new code from the old; the criterion needs a human decision (re-specify via /pharn-spec) before /pharn-test pins evidence for it.",
+      "evidence": "AC-7 is not verifiable as worded — for the human. ... That is evidence about the JS heap reachable from these modules, not about \"anywhere in the process\"."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:20",
+      "problem": "A deprecated (rotated) admin key keeps full admin rights for 24 h, so whoever holds a suspected-leaked old token can call POST /keys, rotate the NEW key, or revoke it, turning rotation into persistence for the attacker; neither the plan nor the SPEC decides whether a deprecated key may manage keys.",
+      "evidence": "else `expiresAt` set (inside the grace window) → authenticate, with `principal.deprecated = true`; else authenticate as today."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:61",
+      "problem": "Revocation has no guard for an admin revoking its own key or the organization's last active admin key, which leaves the org with no key able to create keys and no in-API recovery; the failure mode is neither handled nor labeled as a limit.",
+      "evidence": "`revokeKey(doc, principal, id, now = new Date())`: `requireAdmin`, `findKey`; if not yet revoked set `revokedAt`"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:28",
+      "problem": "The 2 → 3 migration is forward-only: migrate() refuses a newer schemaVersion, so rolling the deploy back to the previous release cannot load a file this release has written, and the plan declares no rollback path and does not label the upgrade as irreversible.",
+      "evidence": "the store goes to `SCHEMA_VERSION = 3` with a `2 → 3` migration that sets `expiresAt: null, revokedAt: null` on every existing key"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:118",
+      "problem": "The SPEC constraint that another org's key reads as 404 not_found on every key route is mapped to findKey for the two new routes but no test (AC or build-owned) is planned to show it for POST /keys/:id/rotate or DELETE /keys/:id.",
+      "evidence": "cross-org key → `404 not_found` on rotate and revoke (`findKey`, Step 3)"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P0",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:17",
+      "problem": "The plan states as fact that key_revoked / key_expired / deprecation are only told to a caller holding the real secret, but this has no advisory label and no planned test (e.g. a wrong secret for a revoked or expired key id still reads 401 unauthenticated).",
+      "evidence": "flag are only ever told to a caller that holds the real secret (no key-id enumeration through the new error codes)."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:156",
+      "problem": "Admins cannot observe rotation state: GET /keys shows rotated, expired and revoked keys exactly like active ones, and use of a deprecated key during the grace window is recorded nowhere, so an org cannot see which integrations still need redeploying before the 24 h cut-off.",
+      "evidence": "**Listing keys** shows rotated and revoked keys exactly as today (`presentKey` has no state fields)."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:146",
+      "problem": "Five behaviours the SPEC does not state (409 key_not_active on re-rotate, idempotent DELETE, expiry at exactly 24 h, Deprecation on error responses, member DELETE → 403) are plan-chosen; they need the human's confirmation or a SPEC amendment rather than being settled by the build.",
+      "evidence": "**Plan decisions not stated in the SPEC** (implementation choices, flagged so grill can confirm or route them)"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:25",
+      "problem": "Step 4 passes the injected clock only to authenticate, rotateKey and revokeKey, while the invoice handlers (and createKey, which Step 4 does not wire) and their audit entries keep new Date(); under an injected clock the audit log mixes two time sources and the plan does not say why the injection stops there.",
+      "evidence": "Each request reads the clock once and passes that `Date` to `authenticate` and to the key handlers."
+    }
+  ]
+}
