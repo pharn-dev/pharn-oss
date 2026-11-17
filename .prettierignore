@@ -3,6 +3,12 @@ package-lock.json
 .dev/floor/test-fixtures
 pharn/floor/test-fixtures
 
+# The defect probe set (CORE-90): hashed bytes. manifest.json pins the sha256 of every probe input and of the fixture
+# tree, so a formatter that rewrote one would change its digest and the kit and scorer would refuse the whole set. The
+# raw run outputs committed beside the probe set's first record are model-written JSON whose sha256s its tally pins.
+.dev/probes/
+.dev/features/defect-probe-set/runs/
+
 # Generated capability catalog: byte-for-byte output of `npm run docs:generate`, guarded by
 # .dev/floor/check-capability-catalog.mjs. Excluded so the formatter can never rewrite committed
 # bytes and make the drift checker see false drift (committed must equal the generator's raw output).

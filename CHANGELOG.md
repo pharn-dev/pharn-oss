@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-16: **Added: a defect probe set, its scorer and a run kit, the quality measure for changes to what the grill,
+  the triage or the plan writer read (CORE-90).** Apparatus only; nothing ships and `SKILLS_VERSION` is unchanged.
+  `.dev/probes/defect-probes/` holds a small fixture project and six probes, each with one planted defect: four PLAN
+  probes (a cross-tenant lookup, floating-point money against the SPEC's constraint, a renamed stored field with no
+  migration, and one criterion the plan never covers) and two SPEC probes (two criteria that contradict, and a criterion
+  that cannot be observed). `manifest.json` pins every input's sha256 and each probe's anchors.
+  `.dev/floor/defect-probe-score.mjs` scores a run per finding: a run catches its probe when a valid finding's `file`
+  matches an anchor and the valid triage does not give it `proceed`. It never reads a finding's free text. A verdict-level
+  score is not used, because five real, unplanted plans all escalated anyway. `.dev/floor/defect-probe-kit.mjs` builds one
+  fresh project and one headless `claude -p` command line per run for any arm, with the model and effort set per stage. The
+  user runs those commands. The catch count on `main` (7.19.0) is pending in
+  `.dev/measurements/defect-probes-main-7.19.0.md`, which records the manifest's sha256 before any run.
+
 - 2026-11-16: **Measured: a `pharn-stage` subagent's first request is 44.6% of a `general-purpose` one's, in one
   fresh-session probe (CORE-107 follow-up).** The 7.19.0 entry left this unmeasured. On 2026-11-16 the user ran the
   probe in a fresh `claude -p` session, in a scratch worktree holding the shipped `pharn-stage.md` bytes. Both subagents

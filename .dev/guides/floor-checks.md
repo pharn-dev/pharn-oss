@@ -327,6 +327,36 @@ node pharn/floor/grill-triage.mjs skeleton pharn/features/<name>/grill-findings.
 node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json --findings pharn/features/<name>/grill-findings.json
 ```
 
+## `defect-probe-score.mjs` / `defect-probe-kit.mjs` — the defect probe set
+
+```bash
+# SCORE AND RUN THE DEFECT PROBE SET (added 2026-11-16, defect-probe-set, CORE-90; dev-only, nothing ships). The probe set
+# (.dev/probes/defect-probes/: manifest.json, a fixture project, 4 PLAN + 2 SPEC probes, one planted defect each) is the
+# quality measure for changes to what the grill, the triage or the plan writer read; method, anchors and bounds are its
+# README.md. THE RECORDED NEED (P7): five real plans all escalated with 7-10 findings, so a verdict cannot tell a caught
+# defect from noise, and nothing measured the chain (loop-grill-triage's TRIAGE-CHECK-MEASUREMENT.md; the 2026-09-29
+# audit's experiment E1 never ran). SCORER — a run CATCHES its probe iff grill-findings.json passes grill-findings-core
+# `validate`, grill-triage.json passes grill-triage-core `checkTriage` over those bytes, and >= 1 finding's `file` matches
+# an anchor (path equal on whole segments either way; line in [start-slack, end+slack]; or, SPEC probes only, the run's
+# own PLAN.md at a line holding a plan token as a whole word) with a disposition other than `proceed`. Only file, id and
+# disposition are read; problem/evidence never (P2), and output names codes, finding ids, built paths and sha256s (L62).
+# Outcomes are closed (OUTCOMES); only `caught` counts. FLOOR: the manifest's closed shape, every input's and the fixture
+# tree's sha256, the manifest's own sha256 (--manifest-sha256), the match, the count, --min. ADVISORY: that a matched
+# finding IS the planted defect (the group chance matches bound it for p1/p2), that the runs ran as written, anything two
+# runs per probe imply. Exit: verify 0 match · 1 a mismatch | score 0 caught · 1 not | tally 0 · 1 below --min | all 2
+# usage, a bad/unpinned manifest, an unknown probe, or (tally) a selected probe with no run directory.
+# KIT — builds, never runs: per probe x run a fresh project (fixture + the arm's PRODUCT_SURFACE files from
+# check-surface-bump.mjs, never a hand list (L81), pharn.config.json from the arm + the probe's inputs + one git commit)
+# and one single-line command per run: `claude -p "/pharn-<stage> <feature>"` per stage with --model / --effort
+# (defaults plan opus, grill opus, triage sonnet, high), --permission-mode acceptEdits, --allowedTools, --strict-mcp-config,
+# --setting-sources project, --max-budget-usd (12), --output-format json to the run's own directory, then a cp of the run
+# files out. --out must be absent or empty (L66). Exit 0 built · 1 a sha256 mismatch or a non-empty --out · 2 usage, an
+# unusable arm or manifest, a failed copy or git call. Flags checked against `claude --help` 2.1.323. Apparatus: no bump.
+node .dev/floor/defect-probe-score.mjs verify --manifest .dev/probes/defect-probes/manifest.json
+node .dev/floor/defect-probe-kit.mjs build --arm <pharn-oss checkout> --out <new dir> --runs 2 [--model grill=sonnet]...
+node .dev/floor/defect-probe-score.mjs tally --manifest .dev/probes/defect-probes/manifest.json --manifest-sha256 <pinned> --runs <kit>/runs [--min <n>]
+```
+
 ## `grill-round.mjs` — the full loop's re-plan round
 
 ```bash

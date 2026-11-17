@@ -1,0 +1,14 @@
+{
+  "name": "tally-ledger",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "A small invoicing API for organizations: invoices, payments, API keys and an audit log over a JSON file store.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  }
+}

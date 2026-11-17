@@ -1,0 +1,89 @@
+{
+  "base": "ff937bd734c2056e4b068d4dc0395b4a578fec3f",
+  "inside": [
+    ".dev/guides/floor-checks.md",
+    ".markdownlint-cli2.jsonc",
+    ".prettierignore",
+    "CHANGELOG.md",
+    "eslint.config.mjs",
+    ".dev/features/defect-probe-set/REGRESSION.md",
+    ".dev/features/defect-probe-set/VERIFY.md",
+    ".dev/features/defect-probe-set/regression-report.json",
+    ".dev/features/defect-probe-set/verify-report.json",
+    ".dev/floor/defect-probe-kit.mjs",
+    ".dev/floor/defect-probe-kit.test.mjs",
+    ".dev/floor/defect-probe-score.mjs",
+    ".dev/floor/defect-probe-score.test.mjs",
+    ".dev/measurements/defect-probes-main-7.19.0.md",
+    ".dev/probes/defect-probes/README.md",
+    ".dev/probes/defect-probes/fixture/README.md",
+    ".dev/probes/defect-probes/fixture/package.json",
+    ".dev/probes/defect-probes/fixture/src/audit.js",
+    ".dev/probes/defect-probes/fixture/src/auth.js",
+    ".dev/probes/defect-probes/fixture/src/invoices.js",
+    ".dev/probes/defect-probes/fixture/src/keys.js",
+    ".dev/probes/defect-probes/fixture/src/money.js",
+    ".dev/probes/defect-probes/fixture/src/server.js",
+    ".dev/probes/defect-probes/fixture/src/store.js",
+    ".dev/probes/defect-probes/fixture/test/auth.test.js",
+    ".dev/probes/defect-probes/fixture/test/helpers.js",
+    ".dev/probes/defect-probes/fixture/test/invoices.test.js",
+    ".dev/probes/defect-probes/fixture/test/money.test.js",
+    ".dev/probes/defect-probes/fixture/test/store.test.js",
+    ".dev/probes/defect-probes/manifest.json",
+    ".dev/probes/defect-probes/probes/p1/PLAN.md",
+    ".dev/probes/defect-probes/probes/p2/PLAN.md",
+    ".dev/probes/defect-probes/probes/p3/PLAN.md",
+    ".dev/probes/defect-probes/probes/p4/PLAN.md",
+    ".dev/probes/defect-probes/probes/p5/SPEC.md",
+    ".dev/probes/defect-probes/probes/p6/SPEC.md",
+    ".dev/probes/defect-probes/specs/api-key-rotation/SPEC.md",
+    ".dev/probes/defect-probes/specs/invoice-refunds/SPEC.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6913,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6906,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

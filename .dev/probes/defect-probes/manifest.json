@@ -1,0 +1,222 @@
+{
+  "schema": "pharn-defect-probes/1",
+  "fixture": {
+    "dir": "fixture",
+    "tree_sha256": "7b0b65bcd9f8c79b6cc47bfae0942702c98a45ce697f630c0d87d45fe5ca73d5"
+  },
+  "probes": [
+    {
+      "id": "p1",
+      "kind": "plan",
+      "feature": "invoice-refunds",
+      "class": "authorization-cross-tenant",
+      "group": "invoice-refunds-plan",
+      "defect": "commission",
+      "inputs": [
+        {
+          "path": "specs/invoice-refunds/SPEC.md",
+          "as": "SPEC.md",
+          "sha256": "4526098adafb73391803b77dcd95d8d5c9198f18fe4ce9726e1681984699396a"
+        },
+        {
+          "path": "probes/p1/PLAN.md",
+          "as": "PLAN.md",
+          "sha256": "250b66319deac05c74301e7afc02914ec776e460e4f1fb33ccc056d369cb4181"
+        }
+      ],
+      "planted": {
+        "as": "PLAN.md",
+        "start": 39,
+        "end": 41
+      },
+      "anchors": [
+        {
+          "file": "PLAN.md",
+          "start": 39,
+          "end": 41,
+          "slack": 0
+        }
+      ],
+      "plan_tokens": [],
+      "expected_disposition": "replan"
+    },
+    {
+      "id": "p2",
+      "kind": "plan",
+      "feature": "invoice-refunds",
+      "class": "money-float-contradicts-constraint",
+      "group": "invoice-refunds-plan",
+      "defect": "commission",
+      "inputs": [
+        {
+          "path": "specs/invoice-refunds/SPEC.md",
+          "as": "SPEC.md",
+          "sha256": "4526098adafb73391803b77dcd95d8d5c9198f18fe4ce9726e1681984699396a"
+        },
+        {
+          "path": "probes/p2/PLAN.md",
+          "as": "PLAN.md",
+          "sha256": "d05e7f6de4572040e1b35e8d3aec0520c23b02320f2b989cfd29508ebba0e6fa"
+        }
+      ],
+      "planted": {
+        "as": "PLAN.md",
+        "start": 42,
+        "end": 44
+      },
+      "anchors": [
+        {
+          "file": "PLAN.md",
+          "start": 42,
+          "end": 44,
+          "slack": 0
+        }
+      ],
+      "plan_tokens": [],
+      "expected_disposition": "replan"
+    },
+    {
+      "id": "p3",
+      "kind": "plan",
+      "feature": "api-key-rotation",
+      "class": "migration-missing",
+      "group": null,
+      "defect": "commission",
+      "inputs": [
+        {
+          "path": "specs/api-key-rotation/SPEC.md",
+          "as": "SPEC.md",
+          "sha256": "20efb5855ae8f36514c7fa6357a2745caab28833104a6700d3dd7a95e2696956"
+        },
+        {
+          "path": "probes/p3/PLAN.md",
+          "as": "PLAN.md",
+          "sha256": "a5486d5514c216204073a5aa1637be4134afc82d1036a37dbeb31107c65a4900"
+        }
+      ],
+      "planted": {
+        "as": "PLAN.md",
+        "start": 34,
+        "end": 38
+      },
+      "anchors": [
+        {
+          "file": "PLAN.md",
+          "start": 34,
+          "end": 38,
+          "slack": 0
+        }
+      ],
+      "plan_tokens": [],
+      "expected_disposition": "replan"
+    },
+    {
+      "id": "p4",
+      "kind": "plan",
+      "feature": "api-key-rotation",
+      "class": "criterion-not-covered",
+      "group": null,
+      "defect": "omission",
+      "inputs": [
+        {
+          "path": "specs/api-key-rotation/SPEC.md",
+          "as": "SPEC.md",
+          "sha256": "20efb5855ae8f36514c7fa6357a2745caab28833104a6700d3dd7a95e2696956"
+        },
+        {
+          "path": "probes/p4/PLAN.md",
+          "as": "PLAN.md",
+          "sha256": "c00dda912cd9a0e51b52a2279190281d0a35bd544b4e3f241fe967ab44920fe0"
+        }
+      ],
+      "planted": null,
+      "anchors": [
+        {
+          "file": "SPEC.md",
+          "start": 44,
+          "end": 46,
+          "slack": 1
+        },
+        {
+          "file": "PLAN.md",
+          "start": 78,
+          "end": 78,
+          "slack": 0
+        }
+      ],
+      "plan_tokens": [],
+      "expected_disposition": "replan"
+    },
+    {
+      "id": "p5",
+      "kind": "spec",
+      "feature": "invoice-refunds",
+      "class": "criteria-contradict",
+      "group": null,
+      "defect": "commission",
+      "inputs": [
+        {
+          "path": "probes/p5/SPEC.md",
+          "as": "SPEC.md",
+          "sha256": "31497c688fc5a8a563ea4173daa49d29f6460bca00248f3b2ef0f5557a7be757"
+        }
+      ],
+      "planted": {
+        "as": "SPEC.md",
+        "start": 65,
+        "end": 68
+      },
+      "anchors": [
+        {
+          "file": "SPEC.md",
+          "start": 65,
+          "end": 68,
+          "slack": 1
+        },
+        {
+          "file": "SPEC.md",
+          "start": 46,
+          "end": 48,
+          "slack": 1
+        }
+      ],
+      "plan_tokens": [
+        "AC-2",
+        "AC-8"
+      ],
+      "expected_disposition": "spec"
+    },
+    {
+      "id": "p6",
+      "kind": "spec",
+      "feature": "api-key-rotation",
+      "class": "criterion-unobservable",
+      "group": null,
+      "defect": "commission",
+      "inputs": [
+        {
+          "path": "probes/p6/SPEC.md",
+          "as": "SPEC.md",
+          "sha256": "e49ba94307fb0f1826dd6ce847d44846f1293167c55d5471caa438a251a5c930"
+        }
+      ],
+      "planted": {
+        "as": "SPEC.md",
+        "start": 53,
+        "end": 55
+      },
+      "anchors": [
+        {
+          "file": "SPEC.md",
+          "start": 53,
+          "end": 55,
+          "slack": 1
+        }
+      ],
+      "plan_tokens": [
+        "AC-7"
+      ],
+      "expected_disposition": "spec"
+    }
+  ]
+}

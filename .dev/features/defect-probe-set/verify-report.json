@@ -1,0 +1,26 @@
+{
+  "feature": "defect-probe-set",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "75216a52a91888aeb08fbb9bf99837273c47f1b930eceabc6bfbc233f7e6fa9e",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "ca9c240a01601e618a9168cdc844fbbe0ebe3857e7b6459d74d299a6018b25d2"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

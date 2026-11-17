@@ -8,6 +8,9 @@ export default [
       "node_modules/**",
       ".dev/floor/test-fixtures/**",
       "pharn/floor/test-fixtures/**",
+      // The defect probe set (CORE-90): hashed bytes, and its fixture project is ES modules in `.js` files, which this
+      // config reads as CommonJS. The `.prettierignore` twin says why the bytes are pinned.
+      ".dev/probes/**",
       // Other Claude Code sessions' worktrees. They are git-excluded (.git/info/exclude), not tracked, so this removes
       // no repo file from lint coverage. Flat config does not skip dot-directories, so without it a bare `lint` in a
       // main checkout lints every nested worktree: measured, a .mjs with two lint errors in a nested copy of HEAD failed it.
