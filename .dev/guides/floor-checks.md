@@ -340,10 +340,13 @@ node pharn/floor/grill-triage.mjs check pharn/features/<name>/grill-triage.json 
 # an anchor (path equal on whole segments either way; line in [start-slack, end+slack]; or, SPEC probes only, the run's
 # own PLAN.md at a line holding a plan token as a whole word) with a disposition other than `proceed`. Only file, id and
 # disposition are read; problem/evidence never (P2), and output names codes, finding ids, built paths and sha256s (L62).
-# Outcomes are closed (OUTCOMES); only `caught` counts. FLOOR: the manifest's closed shape, every input's and the fixture
+# Outcomes are closed (OUTCOMES). A SPEC probe whose plan stage stopped (no PLAN.md, no findings, plan.session.json
+# `is_error: false`) is `caught-at-plan` when that session's `result` cites a SPEC.md line overlapping an anchor, else
+# `stopped-at-plan-unanchored` (neither catch nor miss) — both read model free text, ADVISORY; the overlap is the floor
+# part. The catch count is caught + caught-at-plan. FLOOR: the manifest's closed shape, every input's and the fixture
 # tree's sha256, the manifest's own sha256 (--manifest-sha256), the match, the count, --min. ADVISORY: that a matched
 # finding IS the planted defect (the group chance matches bound it for p1/p2), that the runs ran as written, anything two
-# runs per probe imply. Exit: verify 0 match · 1 a mismatch | score 0 caught · 1 not | tally 0 · 1 below --min | all 2
+# runs per probe imply. Exit: verify 0 match · 1 a mismatch | score 0 caught or caught-at-plan · 1 not | tally 0 · 1 below --min | all 2
 # usage, a bad/unpinned manifest, an unknown probe, or (tally) a selected probe with no run directory.
 # KIT — builds, never runs: per probe x run a fresh project (fixture + the arm's PRODUCT_SURFACE files from
 # check-surface-bump.mjs, never a hand list (L81), pharn.config.json from the arm + the probe's inputs + one git commit)
