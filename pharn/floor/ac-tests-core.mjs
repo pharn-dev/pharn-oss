@@ -25,7 +25,8 @@ export const MAPPING_RE = /^- (AC-[1-9][0-9]*) \| (unit|integration|e2e) \| `([^
 const MAPPING_HEADING_RE = /^##\s+Mapping\s*$/;
 
 /** The path the writes-scope setter scopes for a `## Files` entry — `clean` (a trailing ` (…)` annotation and edge
- *  whitespace stripped), then `isConcrete` — or `null` for an entry the setter drops (a placeholder or glob). Both
+ *  whitespace stripped), then `isConcrete` — or `null` for an entry the setter does not scope (a placeholder or glob,
+ *  which since 7.21.0 makes the setter refuse the whole plan). Both
  *  rules are plan-files-core's copy of the setter's, held to it by a parity test; never re-derived here. */
 export function scopedPath(entry) {
   const c = clean(entry);
@@ -67,7 +68,7 @@ export function mappingOf(text) {
 
 /** Why a `## Files` entry cannot be an AC test file path, or null when it can. */
 export function badPath(p) {
-  if (/[<>*?]/.test(p)) return "a placeholder or glob (the writes-scope setter drops it)";
+  if (/[<>*?]/.test(p)) return "a placeholder or glob (the writes-scope setter refuses it)";
   if (p.startsWith("/")) return "absolute";
   // The red run hands mapped files to the runner as argv after `--`, which stops npm's parsing, not the runner's.
   if (p.startsWith("-")) return "led by '-', which a test runner would read as a flag";

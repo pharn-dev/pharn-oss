@@ -1,0 +1,57 @@
+{
+  "base": "dde008dc6db1a41fa878fdc8b3f3333027aa79a3",
+  "inside": [
+    ".claude/commands/pharn-dev-plan.md",
+    ".claude/commands/pharn-plan.md",
+    ".claude/hooks/set-writes-scope.cjs",
+    ".claude/hooks/set-writes-scope.test.cjs",
+    ".dev/features/setter-dropped-bullets/GRILL.md",
+    ".dev/features/setter-dropped-bullets/PLAN.md",
+    ".dev/guides/writes-scope.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn/floor/ac-tests-core.mjs",
+    "pharn/floor/ac-tests-lock.mjs",
+    "pharn/floor/check-ac-tests.test.mjs",
+    "pharn/floor/check-build-complete.test.mjs",
+    "pharn/floor/check-regress.mjs",
+    "pharn/floor/render-regression.mjs",
+    "pharn/floor/stage-verify.test.mjs",
+    "pharn/pharn-contracts/ac-tests.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6647,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6647,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

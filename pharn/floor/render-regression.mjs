@@ -325,11 +325,13 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
       `declared (${scope.declared.length}):`,
       "",
       scope.declared.length ? quoteData("", scope.declared.join("\n")) : "_(none)_",
-      // regress-base-integrity: the declared globs the write hook drops (set-writes-scope.cjs keeps concrete paths only).
+      // regress-base-integrity: the declared globs the write hook allows none of (set-writes-scope.cjs scopes concrete paths
+      // only, and since 7.21.0 refuses a plan holding one — so these arrive only from a plan the setter never judged:
+      // one edited after the build's Step 0, or a run that skipped that advisory Bash step, L19).
       ...(Array.isArray(scope.unenforced_globs) && scope.unenforced_globs.length
         ? [
             "",
-            `not enforced by the write hook (${scope.unenforced_globs.length}) — globs this partition honors but set-writes-scope.cjs drops, so a Write-tool write they cover is denied:`,
+            `not enforced by the write hook (${scope.unenforced_globs.length}) — globs this partition honors but set-writes-scope.cjs does not scope, so a Write-tool write they cover is denied:`,
             "",
             quoteData("", scope.unenforced_globs.join("\n")),
           ]

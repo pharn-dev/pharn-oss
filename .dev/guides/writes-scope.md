@@ -258,6 +258,11 @@ CLIs write), whatever the scope; Bash still reaches them.
     `CLAUDE.m[d]` in a scope reformatted `CLAUDE.md` before this (third review).
   - **`--check`** (before the mode) runs every parse and refusal and writes nothing; `/pharn-plan` and
     `/pharn-dev-plan` run it on the PLAN they just wrote, so a refusal surfaces at plan time.
+  - **An item it cannot scope refuses the plan (7.21.0, setter-dropped-bullets — L20, L71).** A `## Files` item holding
+    `*`, `?`, `<` or `>`, or an empty one, makes `--from-plan` exit 1 in `--check` and in a build's set alike, naming
+    every such item, why, and "N of M" items. Before, it was dropped without a word and the printed count was the only
+    sign (L71: 37 items, `35 path(s)`, found mid-build as a deny). No opt-in: such an item never granted a write.
+    `--from-frontmatter` is unchanged; its placeholders resolve through `--target`.
   - A refusal is a STOP for the human: an agent never adds an `--allow-*` flag itself (`/pharn-dev-build` Step 0). The
     bound is unchanged: the setter is a Bash-run program, so an agent holding Bash can pass a flag, delete a marker or
     write the record itself (`pharn/LIMITS.md §6`).

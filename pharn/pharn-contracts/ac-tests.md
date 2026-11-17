@@ -303,7 +303,8 @@ the script.
   there, which writes that floor's schema.
 - **`files`** is sorted by path and names every `## Files` entry **as the setter scopes it** — `clean`, then
   `isConcrete` (6.20.5; before, the raw entry was pinned, so `tests/a.test.js (new)` refused the write). An entry the
-  setter would drop (a placeholder or glob) refuses the write and is a `--check` RED. Each must be a regular file, and so must
+  setter does not scope (a placeholder or glob, which since 7.21.0 makes the setter refuse the whole plan) refuses the
+  write and is a `--check` RED. Each must be a regular file, and so must
   AC-TESTS.md: a missing file or a symlink refuses the write. Test-file paths resolve against the current directory
   (the project root); the mapping path is compared by its real location, never as spelled. **Every file a `## Mapping`
   cell names must be in `files`** (6.49.3), compared byte for byte as `unlisted-file` compares it: a cell naming a file
