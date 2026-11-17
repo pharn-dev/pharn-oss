@@ -61,6 +61,7 @@ export const BUDGET_MS = 570000; // the loop's pinned --budget-ms
 export const GATE_TIMEOUT_MS = 540000; // the loop's pinned --timeout-ms
 export const MAX_AGAIN = 40; // the interpreter's bound on consecutive `again` (a stage-direct or wait resume)
 export const MAX_STEPS = 600; // the interpreter's bound on steps in one run
+export const CLOSE_STEPS = 60; // the extra steps a stop may take after it, so a spent budget still closes the run
 export const NODE_STEP_TIMEOUT_MS = 20 * 60 * 1000;
 export const SESSION_TIMEOUT_MS = 3 * 60 * 60 * 1000;
 
@@ -734,8 +735,8 @@ export function buildProgram() {
     "c-closeout-repair": closeoutStep(["--after-repair"]),
     "c-closeout-retry": closeoutStep([]),
     // Step 6d: revert, rewrite the Outcome from the closeout's document, re-check the record.
-    ...revertChain("c6d", "c6d-scope"),
-    "c6d-scope": {
+    ...revertChain("c6d", "c6d-loop-scope"),
+    "c6d-loop-scope": {
       kind: "cmd",
       argv: (ctx) =>
         node(
@@ -747,9 +748,9 @@ export function buildProgram() {
           feat(ctx, "LOOP.md")
         ),
       on: {},
-      otherwise: "goto:c6d-amend",
+      otherwise: "goto:c6d-loop-amend",
     },
-    "c6d-amend": {
+    "c6d-loop-amend": {
       kind: "cmd",
       argv: (ctx) => node(ctx, "pharn/floor/reconcile-baseline.mjs", "--amend-scope"),
       on: {},
@@ -759,9 +760,9 @@ export function buildProgram() {
       kind: "fn",
       fn: (ctx, io) => io.writeProject(feat(ctx, "LOOP.md"), renderLoop(buildRecord(ctx))),
       on: {},
-      otherwise: "goto:c6d-check",
+      otherwise: "goto:c6d-record-check",
     },
-    "c6d-check": {
+    "c6d-record-check": {
       kind: "cmd",
       argv: (ctx) => node(ctx, "pharn/floor/check-loop-record.mjs", feat(ctx, "LOOP.md")),
       on: {},
@@ -1024,7 +1025,7 @@ export function interpret(program, ctx, io) {
   };
   for (;;) {
     try {
-      if (++steps > MAX_STEPS) {
+      if (++steps > MAX_STEPS + (closing ? CLOSE_STEPS : 0)) {
         if (closing) return ctx;
         id = enterStop({ kind: "blocked", row: "S9", at: id, exit: -1 });
         ctx.crash = "step budget spent";
@@ -1054,10 +1055,7 @@ export function interpret(program, ctx, io) {
         id = "build-start";
         continue;
       }
-      if (closing) {
-        id = "c-release";
-        continue;
-      }
+      // No close step emits green, decision, stop or iterate (the closure test pins it), so a stop is entered once.
       ctx.today = io.today();
       ctx.isolationLine = readLineSafe(io, `pharn/.run/pharn-loop/${ctx.name}/isolation.json`);
       if (action === "green") id = enterStop({ kind: "green", at: id, exit });

@@ -141,7 +141,7 @@ export function transcriptRequests(projectDir, sessionId) {
   }));
 }
 
-function driverFigures(dir, transcripts) {
+export function driverFigures(dir, transcripts) {
   const sessions = JSON.parse(readFileSync(join(dir, "sessions.json"), "utf8"));
   const rows = sessions.map((s) => {
     const st = readStream(readFileSync(s.stream, "utf8"));
@@ -255,7 +255,7 @@ export function ledgerFigures(cost) {
   };
 }
 
-function loopStream(dir) {
+export function loopStream(dir) {
   const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
   return files.map((f) => {
     const st = readStream(readFileSync(join(dir, f), "utf8"));
@@ -275,8 +275,10 @@ function loopStream(dir) {
   });
 }
 
-function main() {
+/** The whole document for `argv` (the CLI's arguments). */
+export function measure(argv) {
   const { values } = parseArgs({
+    args: argv,
     options: {
       driver: { type: "string" },
       transcripts: { type: "string" },
@@ -291,7 +293,7 @@ function main() {
   if (values["driver-cost"]) doc.driver_ledger = ledgerFigures(JSON.parse(readFileSync(values["driver-cost"], "utf8")));
   if (values.loop) doc.loop = { stream: loopStream(values.loop) };
   if (values["loop-cost"]) (doc.loop ??= {}).ledger = ledgerFigures(JSON.parse(readFileSync(values["loop-cost"], "utf8")));
-  process.stdout.write(JSON.stringify(doc, null, 2) + "\n");
+  return doc;
 }
 
-if (import.meta.main) main();
+if (import.meta.main) process.stdout.write(JSON.stringify(measure(process.argv.slice(2)), null, 2) + "\n");

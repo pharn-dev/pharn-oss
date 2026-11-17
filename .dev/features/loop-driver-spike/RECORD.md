@@ -256,6 +256,15 @@ transcript. That is agreement between the driver's log and the transcripts, neve
   run's figures come from transcripts plus the driver's own logs.
 - **What the driver was tested against:** it was walked in tests with scripted exit codes. `driver-1` was its first
   live execution and its only one.
+- **Fixes after `driver-1`, in paths it never took.** Covering every added line for the pull request's coverage gate
+  found two defects:
+  - **Step-name collisions on the Step 6d path.** Three step names (`c6d-scope`, `c6d-amend`, `c6d-check`) were
+    defined twice, and the later definition silently replaced the SPEC-revert steps. The result was that a closeout
+    exit 4 would have rewritten the record without reverting the SPEC.
+  - **A spent step budget skipped the close steps.** The run would then have left its marker open.
+
+  Both are fixed, and tests now pin them: a closure test that no step id is defined twice, and walks of each path.
+  `driver-1` took neither path: its closeout exited 3 and it used 84 of 600 steps. So its outputs above are unaffected.
 
 ## What this record may claim (P0)
 

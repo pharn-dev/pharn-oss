@@ -34,6 +34,31 @@ The decision was **fix, then merge-ready**:
 
 The merge itself is not this run's: a pull request is opened and left unmerged.
 
+## After the pull request — one CI-fix iteration (a model decision under delegation)
+
+PR #457's `check` job failed at the pharn-ci diff-coverage gate: 89.31% against a 100% threshold. The uncovered lines
+were in `driver/driver-core.mjs` and `driver/measure.mjs`. All other checks passed.
+
+The orchestrator delegated the fix as tests only. This agent then made it as follows:
+
+- **Tests added**, in `driver/loop-driver.test.mjs`, in process:
+  - walks of the S12 preflight path, the Step 6d path, a failing fn step, a failed redirect, a throwing capture, a stop
+    before the isolation witness exists, a spent step budget, and a driver error while closing;
+  - `measure.mjs` end to end on fixture directories, with its CLI now an exported `measure(argv)`.
+- **Two defects the new tests found, fixed.** Both are in paths `driver-1` never took (RECORD.md §9):
+  - step names defined twice on the Step 6d path (`c6d-scope`, `c6d-amend`, `c6d-check`), so a closeout exit 4 would
+    have rewritten the record without reverting the SPEC. The record-side steps are now `c6d-loop-scope`,
+    `c6d-loop-amend` and `c6d-record-check`, and a closure test pins that no step id is defined twice;
+  - a spent step budget skipped the close steps. A stop now has `CLOSE_STEPS` (60) more steps to finish closing.
+- **One branch removed as dead code:** the interpreter's "a stop action while closing" branch. No close step emits
+  one, and a closure test pins that.
+- **Checked locally the way CI measures it:** `npm run test:coverage` (6,944 tests, 0 failed) writes
+  `coverage/lcov.info`, and it holds no zero-hit `DA` line in `driver-core.mjs`, `measure.mjs` or `token-exit.mjs`.
+- **`/pharn-dev-verify` was re-run over the fixed tree**, and read PASS (stamp `0a75d954…`). The verdict block below
+  is that run's.
+- **`/pharn-dev-regress` was not re-run.** The change touches only the feature's own files, which are inside the
+  partition, so no outside gate can flip.
+
 ## Verdict block
 
 verdict-grill: exit 0
