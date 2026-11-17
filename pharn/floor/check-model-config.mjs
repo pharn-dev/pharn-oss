@@ -83,7 +83,15 @@
 //
 // Exit: 1 on any RED / unreadable / malformed; 0 otherwise (including the two GREEN-by-design
 // no-configuration states).
+//
+// ── Importable since 7.21.0 (install-manifest, Linear CORE-193) ──────────────────────────────────────
+// The rule bindings below (PRODUCT_STAGES, MODEL_ALIASES, MODEL_ID_RE, EFFORT_ENUM) are EXPORTED, so
+// `.dev/floor/install-manifest-core.mjs` copies them into `pharn-install.json` from these bindings rather than
+// from a second list. Importing runs nothing: `main()` returns at once unless this file is the entry point
+// (`import.meta.main`), so the pinned `process.exitCode = main();` line leaves the exit code unset in an importer.
+// Run as a CLI, every mode, message and exit code is unchanged.
 
+import "./runtime-floor.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { looseFrontmatter, looseScalar } from "./frontmatter-core.mjs";
@@ -413,6 +421,7 @@ function getOpt(args, name, dflt) {
 }
 
 function main() {
+  if (!import.meta.main) return undefined; // imported for its exports: run nothing (7.21.0)
   const args = process.argv.slice(2);
   const configPath = getOpt(args, "--config", DEFAULT_CONFIG);
   const commandsDir = getOpt(args, "--commands-dir", DEFAULT_COMMANDS_DIR);
@@ -435,6 +444,9 @@ function main() {
   console.log(`RED — unknown mode ${JSON.stringify(mode)} (expected: validate | resolve <stage> | agreement)`);
   return 1;
 }
+
+// The rule bindings, for an importer (7.21.0). A separate list, so each `const` line above stays as the parity tests read it.
+export { PRODUCT_STAGES, MODEL_ALIASES, MODEL_ID_RE, EFFORT_ENUM };
 
 // THE FLUSH RULE (6.20.4; this CLI since 6.71.1): the exit code is SET and the process ends naturally, after Node has
 // drained stdout — stage-agent-core.mjs JSON.parses `resolve`'s document through spawnSync, and an immediate exit
