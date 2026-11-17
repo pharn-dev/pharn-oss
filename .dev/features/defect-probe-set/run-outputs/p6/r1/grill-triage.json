@@ -1,0 +1,67 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "9139e2b215476bda073e0ca9d0a2afbc653aa3828df35b998f809956ae66361b",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "spec",
+      "reason": "AC-7 as approved cannot be tested at unit level; the plan's narrowed test is a SPEC change (and half-vacuous), so AC-7 must be re-specified via /pharn-spec before any plan can test it."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Plan must state what a deprecated principal may do on key-management routes (restrict them, or record full admin power for the grace period as an explicit accepted bound with the SPEC's leak intent weighed); a human decision if restriction would contradict 'old key keeps working'."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The Risks claim that key_revoked is only told to a correct-secret holder is wrong given purge ignores revokedAt; plan must either not purge revoked keys' hashes or correct the claim and its consequences."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Plan must decide self-revoke: add a guard (e.g. refuse revoking the last active admin key) or declare lock-out with a recovery path as an accepted bound; currently an unexamined proposal."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Cross-org 404 on rotate and revoke is a SPEC Constraint with no mapped test; Acceptance mapping and AC-TESTS.md need a cross-org case for both new routes."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "Plan adds unconfirmed public behaviour (409 key_not_active, idempotent revoke, self-revoke, GET /keys state) and documents a new public error code; plan must drop these or map tests for them and flag them for human confirmation."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Plan introduces an irreversible v2-to-v3 migration with no stated rollback or downgrade stance; it must declare one (e.g. back up the file before migrating, or state that rollback is unsupported)."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Plan's purge steps leave failure paths undeclared: a failing pre-auth purge 500s every request, and an unhandled rejection in the interval callback kills the process; steps must say how errors are contained."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Approach sentence claiming nothing derived from the old secret remains in memory or on disk is contradicted by the plan's own Risks (purge lag, GC, disk blocks); reword it to the true, bounded claim."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "Plan's Risks already states this id-based key_expired trade-off openly in 'Expired records answer by key id'; it is an accepted, documented bound, and the response difference is small."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "proceed",
+      "reason": "SPEC scope limits audit entries to rotation and revocation; purge observability is an improvement the build does not need."
+    },
+    {
+      "id": "G1-12",
+      "disposition": "proceed",
+      "reason": "Minor clarification: the build can take a single now() per request as the obvious reading; the plan's steps are carriable out as written."
+    }
+  ]
+}

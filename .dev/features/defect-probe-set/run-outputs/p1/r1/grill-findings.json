@@ -1,0 +1,96 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "blocking",
+      "file": "pharn/features/invoice-refunds/PLAN.md:40",
+      "problem": "Step 4 takes the organization from the untrusted request body, so any admin can refund (and write an audit entry into) any other organization's paid invoice by sending its orgId; this breaks AC-4's tenant isolation and contradicts the README rule that org scope comes from the key, never the request (findInvoice and present code verified this run).",
+      "evidence": "`findInvoice(doc, body.orgId ?? principal.orgId, id)`, so a parent organization's admin can refund on behalf of a child organization by sending its `orgId`"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:40",
+      "problem": "Parent/child organization delegation is not in the SPEC and no org hierarchy exists anywhere in src/, test/ or README (grep for parent/child returned nothing this run), so step 4 adds speculative scope with no triggering need and no check that the caller's org is actually a parent.",
+      "evidence": "a parent organization's admin can refund on behalf of a child organization by sending its `orgId`"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:49",
+      "problem": "The untrusted Idempotency-Key header is used as a key into a plain `{}` object, so printable-ASCII keys such as `constructor`, `toString` or `__proto__` hit inherited Object.prototype members and are treated as replays (a false 200 or a 500); the plan should require an own-property lookup (Object.hasOwn) or a null-prototype map.",
+      "evidence": "look it up in `invoice.refundKeys`. A hit returns the stored refund with `replayed: true` ... Keys are 1–100 printable ASCII characters"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:35",
+      "problem": "The existing version-1 test in test/store.test.js asserts `doc.schemaVersion` equals the literal 2, so after the bump to 3 it fails unless edited, but the plan says to keep it as is and the build may only touch what the step describes.",
+      "evidence": "Keep the existing version-1 case: it now runs both steps in sequence."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:64",
+      "problem": "Listing an invoice's refunds is in the SPEC's scope and the plan adds GET /invoices/:id/refunds (member role, newest first, org scoping unstated), but no acceptance criterion and no planned test exercises it, so the route ships unverified.",
+      "evidence": "and `GET /invoices/:id/refunds` → `listRefunds` (member role, newest first)"
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:108",
+      "problem": "The 2→3 migration is forward-only with no rollback or pre-migration backup step, and the limit is said to be labeled in a README upgrade line that does not exist (README read this run) and that neither step 11 nor the README ## Files entry adds.",
+      "evidence": "Deploys are forward-only today; this is noted in the README's upgrade line."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/invoice-refunds/PLAN.md:53",
+      "problem": "A reused Idempotency-Key with a different amount silently returns the original refund with 200, so a client bug (e.g. a key reused across two distinct refunds) is masked as success; the SPEC is silent on a mismatched body, so this is a question for the human: accept, or refuse with 409/422.",
+      "evidence": "A replay with a different amount still returns the original refund: the key, not the body, identifies the request."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:55",
+      "problem": "Reason validation names trim and a 200-character cap but no type check, so a non-string `reason` (a number, an object) reaching `.trim()` throws a TypeError that surfaces as 500 internal instead of 422 reason_invalid.",
+      "evidence": "`reason` is optional, trimmed, at most 200 characters (longer is `422 reason_invalid`)"
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:63",
+      "problem": "The route snippet reads `req.headers` although the handler only receives the destructured context (the plan itself says the signature gains `headers`), and it leaves unstated how the 201/200 choice reads `replayed` when presentRefund drops that field and whether `replayed` appears in the response body.",
+      "evidence": "principal, params[0], body, req.headers[\"idempotency-key\"]))`, answering 201 with the presented refund, or 200"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/invoice-refunds/PLAN.md:42",
+      "problem": "src/invoices.js already has a private `amountOf()` that maps MoneyError to a 422 DomainError; the plan re-implements that mapping in src/refunds.js instead of exporting and reusing it, which gives one rule two homes.",
+      "evidence": "Parse `amount` with `parseMinor()` from `src/money.js` (a `MoneyError` maps to `422 amount_invalid`, and 0 is refused the same way)"
+    }
+  ]
+}

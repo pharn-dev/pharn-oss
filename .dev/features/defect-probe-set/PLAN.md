@@ -39,12 +39,12 @@ diff-coverage gate (it does not — see "Amendments after the grill"); and check
    downstream of it. A fixed SPEC cannot measure the spec writer's own output; the ticket's "for changes to the spec
    writer" holds only for a change that alters what the plan, grill or triage read from a SPEC.
 5. **Raw run outputs.** Recommended: **commit them after the runs** under this feature's audit trail,
-   `.dev/features/defect-probe-set/runs/<probe>/r<n>/{grill-findings.json,grill-triage.json}`, plus the scorer's
-   `tally` JSON verbatim (`runs/tally.json`), so the count can be re-scored from the repository. They are NOT in
+   `.dev/features/defect-probe-set/run-outputs/<probe>/r<n>/{grill-findings.json,grill-triage.json}`, plus the scorer's
+   `tally` JSON verbatim (`run-outputs/tally.json`), so the count can be re-scored from the repository. They are NOT in
    `## Files`: they do not exist at the first `/pharn-dev-verify`, whose completeness capture would read INCOMPLETE,
    and `.dev/features/**` is a pipeline-artifact directory the default-safe-set admits once the build's scope is
    released. The record itself (`.dev/measurements/…`, in `## Files`) is filled by re-setting this plan's scope.
-6. **Formatter and linter scope.** Recommended: **exclude `.dev/probes/` and `.dev/features/defect-probe-set/runs/`**
+6. **Formatter and linter scope.** Recommended: **exclude `.dev/probes/` and `.dev/features/defect-probe-set/run-outputs/`**
    from prettier, markdownlint and ESLint, as `.dev/floor/test-fixtures/` already is. The probe inputs are hashed: a
    formatter that rewrites one changes its sha256, and the kit and scorer then refuse the whole set; the raw outputs are
    model-written JSON whose bytes the tally's sha256s pin.
@@ -82,6 +82,21 @@ the kit, not `## Files`:
   module it imports, and not a `.js` file the test only read as bytes. So the fixture's source adds no coverable line
   as long as no test imports it. The same run listed the TEST file too, so every line of the two new test files must
   execute: no untaken branch in a test helper.
+
+## Amendments after the runs (2026-11-17, round 2 of the build)
+
+The user's 12 main-arm runs are in. Two changes, both decided by the orchestrator under the user's delegation:
+
+- **Plan-stage outcomes.** Both p5 plan sessions refused to plan, naming the planted contradiction, and left no
+  `PLAN.md`, which the pre-registered rule could only score `findings-missing`. The scorer gains `caught-at-plan` and
+  `stopped-at-plan-unanchored` (commit `6f18935a`; the README states the rule, and the record says it was added after
+  the runs and before scoring, with the manifest unchanged).
+- **Raw outputs in `## Files`.** Question 5's answer put them outside `## Files` because they did not exist at the first
+  verify. They exist now, so they are declared here by concrete path, and this round re-anchors the build epoch before
+  writing them. Each SPEC probe's `plan.session.json` is committed redacted to `type`, `subtype`, `is_error` and
+  `result`, the fields the scorer reads, because the session file also carries session and request ids. `tally.json` is
+  re-computed over the committed files, so its sha256s are theirs. The directory is `run-outputs/`, not the `runs/` of
+  question 5: the root `.gitignore` ignores every `runs/` directory, which the first copy measured.
 
 ## Applied lessons
 
@@ -225,7 +240,7 @@ archive` extraction); `--out` must not exist or be empty. It verifies the manife
 Pre-registration first: the manifest's sha256 and the commit that holds it, written before any run; the arm (`main`
 sha), models, efforts, Claude Code version. Then, after the user's runs: the per-probe pairs table, the catch count, the
 secondary readings, time and cost per session (from each `*.session.json`), and the bounds. Status `pending` in the
-first push. Raw outputs and the `tally` JSON go in `.dev/features/defect-probe-set/runs/` (question 5).
+first push. Raw outputs and the `tally` JSON go in `.dev/features/defect-probe-set/run-outputs/` (question 5).
 
 ## Files
 
@@ -267,6 +282,33 @@ first push. Raw outputs and the `tally` JSON go in `.dev/features/defect-probe-s
 - `.markdownlint-cli2.jsonc` — the same two exclusions — layer: repo-meta
 - `eslint.config.mjs` — the same two exclusions — layer: repo-meta
 - `CHANGELOG.md` — one `[Unreleased]` entry, dated — layer: repo-meta
+- `.dev/features/defect-probe-set/run-outputs/p1/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p1/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p1/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p1/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p2/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p2/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p2/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p2/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p3/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p3/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p3/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p3/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p4/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p4/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p4/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p4/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p5/r1/plan.session.json` — the plan stage's result, redacted to `type`, `subtype`, `is_error`, `result` — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p5/r2/plan.session.json` — the plan stage's result, redacted to `type`, `subtype`, `is_error`, `result` — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r1/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r1/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r1/PLAN.md` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r1/plan.session.json` — the plan stage's result, redacted as above — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r2/grill-findings.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r2/grill-triage.json` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r2/PLAN.md` — raw run output, main arm — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/p6/r2/plan.session.json` — the plan stage's result, redacted as above — layer: build apparatus
+- `.dev/features/defect-probe-set/run-outputs/tally.json` — `defect-probe-score.mjs tally` over the committed run files, verbatim — layer: build apparatus
 
 ### Explicitly not touched
 

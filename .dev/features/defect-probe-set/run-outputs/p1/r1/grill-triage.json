@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "61b51317c8f40ff5ce4a58a29f1365cbed50c3010de645469e6acafcc63159ac",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 4 must look the invoice up with principal.orgId only; an organization read from the request body lets any admin reach another organization's invoices, which AC-4 forbids."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Remove the parent/child delegation from step 4: the SPEC states no organization hierarchy and none exists in the plan's own scope, so it is unrequested scope. Same edit as G1-1."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 7 must say how refundKeys is read so header text such as constructor or __proto__ cannot match inherited members: an own-property check (Object.hasOwn) or a null-prototype map, and the migration/test must match."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Step 2 must say the existing version-1 migration test's expected schemaVersion is updated to 3 (and declare that edit), because the plan's version bump would otherwise break a test the build is told to keep."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "The GET /invoices/:id/refunds route and its org scoping have no planned test: add a test to the plan (and its file to Files), or drop the route; the SPEC scope names listing but has no criterion for it."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The Risks section cites a README upgrade line that no step adds: step 11 must add the forward-only upgrade note to the README, or the plan must stop claiming it. A backup step is optional."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "spec",
+      "reason": "The SPEC does not say what a retry with the same key but a different amount should do (return the original, or refuse); the plan cannot choose that behaviour without the SPEC stating it."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 8 must type-check reason: a non-string value should give 422 reason_invalid rather than a TypeError that surfaces as 500."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Step 10 must be buildable as written: pass headers from the handler context rather than req.headers, and state how the route reads replayed to choose 200 or 201 and whether it is in the response body."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "Minor tidy-up the build does not need: the plan already declares parseMinor-based validation in refunds.js, so one extra small mapping is harmless. Sharing it is optional and invoices.js is in Files if the builder wants it."
+    }
+  ]
+}

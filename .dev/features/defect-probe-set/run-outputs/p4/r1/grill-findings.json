@@ -1,0 +1,105 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:78",
+      "problem": "SPEC AC-4 (revoke via DELETE /keys/:id -> 204, later use -> 401 key_revoked) is covered by no step, no file, no migration field and no test; the live src/server.js has no DELETE /keys/:id route, so the build would ship without it.",
+      "evidence": "Acceptance mapping lists AC-1, AC-2, AC-3, AC-5, AC-6 only; Approach line 15: \"into a small set: create, list, rotate\"; step 1 adds only rotatedAt, expiresAt, replacedBy (no revokedAt)."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:49",
+      "problem": "The SPEC's in-scope revocation audit entry, and its assumption that a rotated key can still be revoked during its grace period, have no step; step 4's state order (expiresAt, then replacedBy) has no revoked state to check first.",
+      "evidence": "Step 6: \"Rotation records `key.rotated` with the old key's id as target\" -- SPEC Scope: \"Audit entries for rotation and revocation.\"; SPEC Assumptions: \"A rotated old key can still be revoked during its grace period.\""
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:22",
+      "problem": "The plan says the acceptance tests are mapped in AC-TESTS.md, and step 11 depends on it, but pharn/features/api-key-rotation/ holds only PLAN.md and SPEC.md this run, even though the SPEC is templated (spec_template: pharn-default).",
+      "evidence": "\"Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build\"; step 11: \"the acceptance tests from `AC-TESTS.md` must pass\"."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "With requireAdmin checked first, a member key that rotates another organization's key id gets 403 forbidden, but the SPEC constraint says another org's key reads as 404 not_found on every key route; the SPEC does not order the two, so ask the human which one wins.",
+      "evidence": "\"`rotateKey(doc, principal, id, now)` in `src/keys.js`: `requireAdmin` (`403 forbidden`, AC-5); find the key in the caller's organization (`404 not_found` otherwise)\""
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:12",
+      "problem": "A deprecated (rotated, in-grace) admin key keeps full admin privileges for 24 hours, so a leaked key can rotate its own replacement or mint new keys via POST /keys; the plan does not consider this, and with no revoke step (G1-1) nothing can stop it.",
+      "evidence": "\"inside the grace period -> a principal flagged `deprecated`, which `src/server.js` turns into the `Deprecation: true` response header\" (no privilege change stated for a deprecated principal)."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:80",
+      "problem": "Behaviour the plan adds or the SPEC constrains has no mapped test: cross-org 404 on the rotate route, the 409 on re-rotating a rotated key, the Deprecation header on error responses, and the rotated key's hash-only storage.",
+      "evidence": "Acceptance mapping covers AC-1/2/3/5/6; regression tests named are only test/store.test.js (migration) and test/auth.test.js (pre-upgrade token, boundary states)."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P5",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:90",
+      "problem": "The createApp(store, {now}) clock seam exists only under Risks, not in Steps or Files, and step 7 does not say the rotate route passes the injected clock to rotateKey, which leaves two clocks (rotation on the real clock, authentication on the injected one).",
+      "evidence": "\"`createApp(store, {now})` takes an optional clock function, defaulting to `() => new Date()`. This is a test seam, not a feature.\"; step 7: \"`handle` passes `now` to `authenticate`\"."
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:46",
+      "problem": "rotateKey builds the new key record itself instead of sharing createKey's construction, so the two paths can drift (an omitted field, or a secret stored other than as its SHA-256).",
+      "evidence": "\"create the new key with `newKeyMaterial()` and the old key's `role` and `label`\" ... \"Returns `{key, token}` exactly as `createKey` does\"."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:45",
+      "problem": "The plan adds an error code the SPEC never names (409 key_not_active) and does not say why re-rotating a rotated key is refused rather than allowed.",
+      "evidence": "\"refuse a key that is already rotated with `409 key_not_active`\""
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:11",
+      "problem": "Nothing server-side records use of a deprecated key or key_expired rejections, so an admin cannot see whether integrations have moved off the old key before the 24-hour grace ends; only the client sees the Deprecation header.",
+      "evidence": "\"past `expiresAt` -> `401 key_expired`, inside the grace period -> a principal flagged `deprecated`\"; scan-plan-observability's only hit (line 10) is the audit log, not runtime observability."
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:15",
+      "problem": "The plan says the key routes live in src/keys.js, but the live routes are in src/server.js's ROUTES table; src/keys.js holds only the createKey/listKeys/presentKey handlers.",
+      "evidence": "\"The key routes move out of `src/keys.js`'s single create/list pair into a small set: create, list, rotate.\""
+    }
+  ]
+}

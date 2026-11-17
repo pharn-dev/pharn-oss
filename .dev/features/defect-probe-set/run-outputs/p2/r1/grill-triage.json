@@ -1,0 +1,62 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "54144e2f254902e35775fe85358c1acf70303514f2372ddbedb4fddda47eaecd",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 5 must be rewritten to parse the amount with the existing money helper into integer minor units and compute remaining as paidMinor minus refundedMinor, so it matches the SPEC's money constraint and the plan's own steps 8-9; the float-dollar path would wrongly refuse valid refunds and accept malformed amounts."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "The plan hands acceptance tests to an AC-TESTS.md that does not exist for this templated SPEC; the re-plan must emit AC-TESTS.md mapping each AC to a test so /pharn-test has input."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 7 must say the idempotency lookup is an own-property test (Object.hasOwn) or uses a null-prototype map or key prefix, so keys like constructor or __proto__ are neither false replays nor unrecordable."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan must state that listRefunds uses the org-scoped findInvoice lookup like refundInvoice, and plan a test that another organization's invoice gives 404 on the list route."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Step 2 must say the existing version-1 migration test's schemaVersion assertion changes from 2 to 3 (or SCHEMA_VERSION) and that it also checks refunds and refundKeys; as written the kept test fails once the version is bumped."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The re-plan must add planned tests (in AC-TESTS.md or declared test files) for the GET refunds listing and for the amount_invalid, idempotency_key_invalid and reason_invalid refusals, since they are in scope and otherwise unguarded."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "The Risks section claims a README upgrade line that does not exist; step 11 must explicitly add a forward-only schema v3 upgrade note to the README, or the claim must be removed."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 10's snippet reads req.headers inside a handler that only receives the route contract; reword it to use the headers argument the same step says is passed through, so the build does not reach outside the contract."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "The SPEC does not say what a replay with a different amount does; cannot tell whether the plan's silent return of the original refund is acceptable, so the re-plan should either justify it explicitly or switch to refusing a mismatched replay, and surface the choice for the supervisor."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Step 6's rationale for looking up before requireAdmin is wrong (a 403 first reveals nothing) and differs from voidInvoice's order; correct the rationale or align the order, since either satisfies AC-3 and AC-4."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "Step 6 must place idempotency_key_invalid, amount_invalid and reason_invalid in the order of checks and say how a non-string reason is treated, so a request with several defects gets a defined error."
+    }
+  ]
+}

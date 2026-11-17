@@ -1,0 +1,82 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "ace00ca5e5e6df2087915eb0061f861ed29284f14d1e49c789f3ff3281e8a5c9",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 5 must parse the amount with the existing parseMinor() and compare remaining in integer minor units (formatMinor for output), not parseFloat/dollars; this conflicts with the SPEC money constraint and with the plan's own steps 8-9."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Step 2 must update the existing version-1 migration case in test/store.test.js to expect schemaVersion 3 (plus the new refunds/refundKeys defaults) instead of keeping it unchanged."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Step 7 must require an own-property check (Object.hasOwn) or a null-prototype/Map structure for refundKeys so keys like constructor or __proto__ cannot hit inherited properties; the migration default must match."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan leans on an AC-TESTS.md that is absent although the SPEC is templated; the re-plan must produce it (or stop citing it) so every AC has a mapped test before the build."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Listing refunds is in the SPEC scope but has no planned test; the plan must add a test for GET /invoices/:id/refunds covering org scoping, order and the role it chooses."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The plan cites a README upgrade line that does not exist; step 11 must add the forward-only v3 note to the README (or the Risks text must stop claiming it)."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "replan",
+      "reason": "Step 11 should also document the Idempotency-Key contract in the README: per-invoice scope, 200 on replay, original refund returned regardless of body, keys never expire."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "Step 6 must place key-format, reason and non-string amount/reason validation in the order of checks so the error a multi-defect request gets is fixed by the plan, not guessed in the build."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "replan",
+      "reason": "Cannot tell whether a reused key with a different amount should replay or be rejected; the SPEC states only same-request retry. Re-plan should surface this for a recorded decision rather than let the build assume."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "replan",
+      "reason": "Step 10 must say how headers reach the handler and how the route learns a result was a replay (the result shape must carry it past presentRefund) so the 200/201 choice is buildable as written."
+    },
+    {
+      "id": "G1-11",
+      "disposition": "replan",
+      "reason": "Acceptance mapping needs tests for the new 422 codes and the exact-remaining boundary from the SPEC scenario (refund the last 70.00, a third attempt refused)."
+    },
+    {
+      "id": "G1-12",
+      "disposition": "proceed",
+      "reason": "The SPEC asks for an audit entry for every recorded refund only; the service has no logging layer, so observability of refused attempts is outside this SPEC and not needed by the build."
+    },
+    {
+      "id": "G1-13",
+      "disposition": "replan",
+      "reason": "The SPEC does not choose who may list refunds or read reasons; the plan picked member role alone. Re-plan should justify or tighten the role so the decision is recorded."
+    },
+    {
+      "id": "G1-14",
+      "disposition": "replan",
+      "reason": "The Risks section should state that the no-double-refund argument assumes a single process owning the data file; a one-line plan edit while re-planning."
+    },
+    {
+      "id": "G1-15",
+      "disposition": "proceed",
+      "reason": "The 1-100 printable-ASCII key bound is stated in step 7 and nothing in the SPEC contradicts it; a missing rationale does not stop the build."
+    }
+  ]
+}

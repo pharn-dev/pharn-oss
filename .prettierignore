@@ -7,7 +7,7 @@ pharn/floor/test-fixtures
 # tree, so a formatter that rewrote one would change its digest and the kit and scorer would refuse the whole set. The
 # raw run outputs committed beside the probe set's first record are model-written JSON whose sha256s its tally pins.
 .dev/probes/
-.dev/features/defect-probe-set/runs/
+.dev/features/defect-probe-set/run-outputs/
 # The stage-model-tuning record's raw run files (CORE-112), the same reason: the pairing reader's JSON pins their sha256s.
 .dev/features/stage-model-tuning/runs/
 

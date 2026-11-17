@@ -1,0 +1,57 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "3a78d1f91f376b9efdb2fea638a83687599766597cca06518318fa85c4a994e",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "replan",
+      "reason": "Step 4 must look the invoice up with principal.orgId only (drop the body.orgId override and the parent/child-organization claim, which neither the SPEC nor src/ supports), so the step-8 audit orgId is unambiguous and AC-4 holds."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "replan",
+      "reason": "Confirmed in src/invoices.js: createInvoice sets payments: [] only. The plan must initialise refunds and refundKeys for new invoices (in createInvoice, already a declared file, or by defaulting in refunds.js) and correct step 9's claim that every invoice has the list."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "Once step 4 is fixed, the AC-4 acceptance mapping should also name a case where an admin sends another organization's orgId in the body and still gets 404 with that invoice's refunds unchanged."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "Confirmed test/store.test.js:26 asserts schemaVersion 2. Step 2 must say to update that assertion to 3 (the file is already declared) instead of keeping the version-1 case unchanged."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "Cannot tell whether the plan should keep this default: the SPEC is silent on a reused key with a different amount. The re-plan should list it under Risks & open questions as an explicit choice so the supervisor or human decides it."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The listing endpoint is in the SPEC's scope but the plan names no test for it. The plan should declare a regression test file for GET /invoices/:id/refunds (member access, organization scoping, newest-first order) in Files and Steps."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "Step 10 already says the route table's handler signature gains headers, passed through from handle, and step 3 gives the six-parameter signature with now; the sketch's omission of now is a wording gap the build resolves from step 3."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "replan",
+      "reason": "The Downgrade risk cites a README upgrade line that does not exist and step 11 does not add one. Either add the forward-only note to step 11's README edit or reword the risk so it does not point at a missing line."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "The plan's Risks section already states the forward-only downgrade as an accepted bound; a version-2 backup step is new operational scope the SPEC does not ask for."
+    },
+    {
+      "id": "G1-10",
+      "disposition": "proceed",
+      "reason": "The SPEC requires an audit entry for every recorded refund (AC-6) and says nothing on logging refused attempts, so this is outside the SPEC's scope and not needed by the build."
+    }
+  ]
+}

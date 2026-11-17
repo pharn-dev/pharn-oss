@@ -23,6 +23,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-17: **Measured: the defect probe set's catch count on `main` (7.19.0) is 10 of 12 runs (CORE-90).** The
+  user ran the kit on `main`: 2 runs per probe, 28 sessions, USD 19.91. 9 runs caught their probe at the grill and 1 at
+  the plan stage (`caught-at-plan`: the plan refused, citing an anchored SPEC line). One run stopped at the plan stage
+  without citing an anchored line (`stopped-at-plan-unanchored`), and one was missed because its triage file failed its
+  own check (a digest copied with one digit dropped). Both plan-stage outcomes read model free text and are advisory. A
+  duplicate runner copy overwrote one run (p4/r1); it was redone from a clean copy and the contaminated directory kept
+  aside. The raw outputs moved to `.dev/features/defect-probe-set/run-outputs/`, outside the gitignored `runs/`. Record,
+  with the manifest's sha256 pre-registered before any run: `.dev/measurements/defect-probes-main-7.19.0.md`. Dev
+  apparatus only, so no `SKILLS_VERSION` bump.
+
 - 2026-11-17: **Added: per-stage model and effort arms on the defect probe set, a pairing reader, and a kit fix so a
   stage override takes effect (CORE-112).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped
   default changes. The kit's `--model` / `--effort` flags alone did not set a stage's model. A directly invoked

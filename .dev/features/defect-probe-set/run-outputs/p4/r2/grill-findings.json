@@ -1,0 +1,78 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:78",
+      "problem": "SPEC AC-4 (revoke via DELETE /keys/:id returning 204, then 401 key_revoked) has no step, no route, no stored field and no acceptance mapping, and the Approach fixes the key routes at create, list, rotate.",
+      "evidence": "Acceptance mapping lists AC-1, AC-2, AC-3, AC-5, AC-6 only; line 15: \"The key routes move out of `src/keys.js`'s single create/list pair into a small set: create, list, rotate.\""
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:22",
+      "problem": "The plan says the acceptance tests are mapped in AC-TESTS.md, but no AC-TESTS.md exists in pharn/features/api-key-rotation/ for this templated SPEC, and /pharn-test reads it to scope and lock the AC tests.",
+      "evidence": "\"Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test` before the build\" (the feature directory holds only PLAN.md and SPEC.md)"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:49",
+      "problem": "The SPEC scopes audit entries for rotation AND revocation and assumes a rotated key can still be revoked during its grace period; the plan audits only key.rotated and its 409 key_not_active rule does not say how a revoked key behaves.",
+      "evidence": "\"Rotation records `key.rotated` with the old key's id as target and `{newKeyId}` in details (AC-6)\"; SPEC scope: \"Audit entries for rotation and revocation.\""
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:12",
+      "problem": "A deprecated (rotated, in-grace) admin key keeps its full admin role, so a leaked key that is rotated can still mint new non-expiring keys via POST /keys or rotate other keys for 24 hours; the SPEC is silent, so this is a question for the human.",
+      "evidence": "\"inside the grace period → a principal flagged `deprecated`, which `src/server.js` turns into the `Deprecation: true` response header.\""
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:91",
+      "problem": "The server clock seam that AC-3's HTTP test depends on appears only under Risks, not in any step or in server.js's Files entry, and the steps do not say where the route gets the now it passes to rotateKey and authenticate.",
+      "evidence": "\"`createApp(store, {now})` takes an optional clock function, defaulting to `() => new Date()`. This is a test seam, not a feature.\""
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "No planned test covers rotate's cross-organization 404 not_found (a SPEC Constraint for every key route) or its 409 key_not_active refusal; steps 2 and 9 test only the migration and the authentication boundary.",
+      "evidence": "\"find the key in the caller's organization (`404 not_found` otherwise); refuse a key that is already rotated with `409 key_not_active`\""
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:54",
+      "problem": "Nothing lets an admin see whether an old key is still being used during its grace period (no last-used signal), so whether integrations moved before expiry can only be learned from their 401s.",
+      "evidence": "\"`presentKey()` adds `rotatedAt`, `expiresAt` and `replacedBy`, so an admin can see which keys are in their grace period.\""
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P3",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:44",
+      "problem": "Step 5's new 404 and 409 errors would in practice be thrown as DomainError imported from src/invoices.js (the only error class the server maps besides AuthError and BodyError), which extends an existing keys→invoices sibling dependency the plan does not name.",
+      "evidence": "\"`rotateKey(doc, principal, id, now)` in `src/keys.js`: ... (`404 not_found` otherwise); refuse a key that is already rotated with `409 key_not_active`\"; Explicitly not touched: \"`src/invoices.js` — invoices do not change.\""
+    }
+  ]
+}

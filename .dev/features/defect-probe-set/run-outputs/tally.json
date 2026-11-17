@@ -1,0 +1,355 @@
+{
+  "schema": "pharn-defect-probes-tally/1",
+  "manifest_sha256": "bfbad24957154b4514a2a8ec3ea4fbe84affbcbabe91e84f2f397266cf0c9a22",
+  "catches": 10,
+  "caught": 9,
+  "caught_at_plan": 1,
+  "stopped_unanchored": 1,
+  "total": 12,
+  "probes": [
+    {
+      "id": "p1",
+      "kind": "plan",
+      "class": "authorization-cross-tenant",
+      "expected_disposition": "replan",
+      "caught": 1,
+      "caught_at_plan": 0,
+      "stopped_unanchored": 0,
+      "total": 2,
+      "runs": [
+        {
+          "run": "r1",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 10,
+          "matched": [
+            "G1-1",
+            "G1-2"
+          ],
+          "escalated_matched": [
+            "G1-1",
+            "G1-2"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "61b51317c8f40ff5ce4a58a29f1365cbed50c3010de645469e6acafcc63159ac",
+            "triage": "d4131ff32067e55a11e723605f286ccbb1d796ac6a4bf446163bf6777f5f2dc1",
+            "plan": null,
+            "planSession": null
+          }
+        },
+        {
+          "run": "r2",
+          "outcome": "triage-invalid",
+          "caught": false,
+          "caught_at_plan": false,
+          "findings": 10,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [],
+          "expected_hit": false,
+          "sha256": {
+            "findings": "3a78d1f91f376b9efdb2fea638a83687599766597cca06518318bfa85c4a994e",
+            "triage": "1cb22a5eaaabc9d5a84aec476011d30e5f17c4a3ed8e4ac07e5209c4c4228bdb",
+            "plan": null,
+            "planSession": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "p2",
+      "kind": "plan",
+      "class": "money-float-contradicts-constraint",
+      "expected_disposition": "replan",
+      "caught": 2,
+      "caught_at_plan": 0,
+      "stopped_unanchored": 0,
+      "total": 2,
+      "runs": [
+        {
+          "run": "r1",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 11,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [
+            "G1-1"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "54144e2f254902e35775fe85358c1acf70303514f2372ddbedb4fddda47eaecd",
+            "triage": "06c6463fb482f1512eb781ea252f0b579a5800e60a038a2b167dda46ae390d74",
+            "plan": null,
+            "planSession": null
+          }
+        },
+        {
+          "run": "r2",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 15,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [
+            "G1-1"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "ace00ca5e5e6df2087915eb0061f861ed29284f14d1e49c789f3ff3281e8a5c9",
+            "triage": "79d6d1413843f9880c01197352d23212ce316173442b94aef341fdd47cbced09",
+            "plan": null,
+            "planSession": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "p3",
+      "kind": "plan",
+      "class": "migration-missing",
+      "expected_disposition": "replan",
+      "caught": 2,
+      "caught_at_plan": 0,
+      "stopped_unanchored": 0,
+      "total": 2,
+      "runs": [
+        {
+          "run": "r1",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 11,
+          "matched": [
+            "G1-1",
+            "G1-2"
+          ],
+          "escalated_matched": [
+            "G1-1",
+            "G1-2"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "733d66f15fd48f3f1a629799407f1f62590f9fc63405d878dc2af675d5177f77",
+            "triage": "9f76d49e94d5959f323fa15d338913b576e88f27058b8a74094f5a7f1d2c7f38",
+            "plan": null,
+            "planSession": null
+          }
+        },
+        {
+          "run": "r2",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 10,
+          "matched": [
+            "G1-1",
+            "G1-3",
+            "G1-7",
+            "G1-8"
+          ],
+          "escalated_matched": [
+            "G1-1",
+            "G1-3",
+            "G1-7",
+            "G1-8"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "f62926ff3c36bd305af66569b311484f9a017256455263fb4eb541fd5dcec4b3",
+            "triage": "9ef23dd4783e2433e6a8639acab52550928ac3669ec1b7d2de3319c363235759",
+            "plan": null,
+            "planSession": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "p4",
+      "kind": "plan",
+      "class": "criterion-not-covered",
+      "expected_disposition": "replan",
+      "caught": 2,
+      "caught_at_plan": 0,
+      "stopped_unanchored": 0,
+      "total": 2,
+      "runs": [
+        {
+          "run": "r1",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 11,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [
+            "G1-1"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "c0a3a147b86bfeb42ab1cc832f9a7aca06f304bd91c35a3a33178b967ffb7066",
+            "triage": "b4f6d50136eda2d2dc2162072b6512de8e7ebba5688a3ed6bb71737747e6f792",
+            "plan": null,
+            "planSession": null
+          }
+        },
+        {
+          "run": "r2",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 8,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [
+            "G1-1"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "776e3551c50a87be36df08452072c8f4f31d63d47be4ecdef6dd48f5faa03614",
+            "triage": "5d42a967c26134eb070109aba83117007801ee242c40940e3b867f644d8602e0",
+            "plan": null,
+            "planSession": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "p5",
+      "kind": "spec",
+      "class": "criteria-contradict",
+      "expected_disposition": "spec",
+      "caught": 0,
+      "caught_at_plan": 1,
+      "stopped_unanchored": 1,
+      "total": 2,
+      "runs": [
+        {
+          "run": "r1",
+          "outcome": "caught-at-plan",
+          "caught": false,
+          "caught_at_plan": true,
+          "findings": 0,
+          "matched": [],
+          "escalated_matched": [],
+          "expected_hit": false,
+          "sha256": {
+            "findings": null,
+            "triage": null,
+            "plan": null,
+            "planSession": "76d671601c9e77ebc99f0b9d5ab6e3eb340c66ae76563cd001c8689a39e9d69d"
+          }
+        },
+        {
+          "run": "r2",
+          "outcome": "stopped-at-plan-unanchored",
+          "caught": false,
+          "caught_at_plan": false,
+          "findings": 0,
+          "matched": [],
+          "escalated_matched": [],
+          "expected_hit": false,
+          "sha256": {
+            "findings": null,
+            "triage": null,
+            "plan": null,
+            "planSession": "9dbef6572a32e2745e51902bec6d1987d7a898c0ccccc32328d27b87769fa7b4"
+          }
+        }
+      ]
+    },
+    {
+      "id": "p6",
+      "kind": "spec",
+      "class": "criterion-unobservable",
+      "expected_disposition": "spec",
+      "caught": 2,
+      "caught_at_plan": 0,
+      "stopped_unanchored": 0,
+      "total": 2,
+      "runs": [
+        {
+          "run": "r1",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 12,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [
+            "G1-1"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "9139e2b215476bda073e0ca9d0a2afbc653aa3828df35b998f809956ae66361b",
+            "triage": "4d1e8096d98845346753c68a3d601f97b4cbac7d69dca9a1f6857f9c2a548714",
+            "plan": "bb0dfec1b274df00cabffd27977af3bb5e986a9e1c4cf60ad68cf5fb5758425a",
+            "planSession": "90ad8ee1d4f0b4127b88ba5f1483295b1f5cf35c24611a53070e27fe089b2118"
+          }
+        },
+        {
+          "run": "r2",
+          "outcome": "caught",
+          "caught": true,
+          "caught_at_plan": false,
+          "findings": 9,
+          "matched": [
+            "G1-1"
+          ],
+          "escalated_matched": [
+            "G1-1"
+          ],
+          "expected_hit": true,
+          "sha256": {
+            "findings": "0f1c1a6e4baf5d9bc00f503855e6d5e793e2036f7376207d2d18d94f07d1bdc6",
+            "triage": "64077aaf34cb98672b18b27eca3a3dafd524220dc11fb0b39ec5ae4b5e25cc6d",
+            "plan": "56f5d80c1764a33ae50a711ac046339f08355d2a2c2631622324021b7e27b14b",
+            "planSession": "042a129130bbecac9e2003987c800e9e91bb044ef5f2d37255eaa21c23540114"
+          }
+        }
+      ]
+    }
+  ],
+  "chance_matches": [
+    {
+      "probe": "p1",
+      "run": "r1",
+      "against": "p2",
+      "matched": [
+        "G1-10"
+      ],
+      "escalated_matched": []
+    },
+    {
+      "probe": "p1",
+      "run": "r2",
+      "against": "p2",
+      "matched": [],
+      "escalated_matched": []
+    },
+    {
+      "probe": "p2",
+      "run": "r1",
+      "against": "p1",
+      "matched": [],
+      "escalated_matched": []
+    },
+    {
+      "probe": "p2",
+      "run": "r2",
+      "against": "p1",
+      "matched": [],
+      "escalated_matched": []
+    }
+  ]
+}

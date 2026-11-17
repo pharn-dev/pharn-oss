@@ -1,0 +1,96 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:34",
+      "problem": "Renaming the stored field hash to secretHash with no migration means every pre-upgrade key record has no secretHash, so authenticate() fails for every existing key (src/auth.js builds a Buffer from the field), contradicting the SPEC constraint that every existing key keeps authenticating and that shape changes go through the store's versioned migrations.",
+      "evidence": "Rename the key record's `hash` to `secretHash` ... `src/auth.js` compares `secretHash`. The store is plain JSON, so no schema version bump or migration is needed"
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:23",
+      "problem": "The plan delegates every acceptance test to AC-TESTS.md, but pharn/features/api-key-rotation/ holds only PLAN.md and SPEC.md this run, so the AC-to-test mapping /pharn-test needs does not exist.",
+      "evidence": "The acceptance criteria are integration-level. Their tests are mapped in `AC-TESTS.md` and written by `/pharn-test`"
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:37",
+      "problem": "The record test covers only a key freshly created by createKey, so no step loads a data file written before the upgrade and checks that its key still authenticates, although the Files section claims a pre-upgrade token test.",
+      "evidence": "create a key through `createKey`, reload the store, and assert the record has `secretHash` ... (Files: `test/auth.test.js` — pre-upgrade token, and the three states)"
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:17",
+      "problem": "The SPEC constraint that another organization's key reads as 404 not_found on every key route has no test in the steps or the acceptance mapping for the new rotate and revoke routes.",
+      "evidence": "four take the organization from the authenticated key, as every route does today, so another organization's key id reads as `404 not_found`."
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:98",
+      "problem": "The injectable clock that AC-2 and AC-3 tests depend on appears only under Risks and in no step, so the build has no step that adds createApp(store, {now}) or routes that clock into rotateKey, revokeKey and authenticate.",
+      "evidence": "they need a way to move the clock: `createApp(store, {now})` takes an optional clock function, defaulting to `() => new Date()`."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:43",
+      "problem": "A rotated admin key keeps full admin rights during its 24-hour grace period, so whoever holds a suspected-leaked key can mint new non-expiring keys with POST /keys or revoke the replacement key; the plan does not say whether deprecated keys should be kept off the key-management routes (question for the human).",
+      "evidence": "`key.replacedBy` set (so still inside the grace period) → the principal gets `deprecated: true`."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:34",
+      "problem": "No acceptance criterion or scope item needs the hash-to-secretHash rename; it is a cosmetic change bundled into the feature, and it is what breaks existing keys (G1-1).",
+      "evidence": "Rename the key record's `hash` to `secretHash`, to tell it apart from the new fields"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:36",
+      "problem": "The plan changes the persisted key shape but declares no migration even though src/store.js requires a SCHEMA_VERSION bump plus a MIGRATIONS step for any stored-shape change, and it gives no rollback path beyond a Risks note that downgrade is unsupported.",
+      "evidence": "The store is plain JSON, so no schema version bump or migration is needed: older records simply lack the new fields."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:54",
+      "problem": "Apart from the rotate and revoke audit entries, operators get no signal (log or metric) when a deprecated key is used or a key_expired or key_revoked token is refused, so nobody can see which integrations still run on an old key before it expires.",
+      "evidence": "Rotation records `key.rotated` with the old key's id as target and `{newKeyId}` in details (AC-6); revocation records `key.revoked`"
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:61",
+      "problem": "Step 9 says the key view never includes `hash`, but step 1 renames that field to secretHash, so the invariant names a field that will no longer exist.",
+      "evidence": "keys are in their grace period. It still never includes `hash`."
+    }
+  ]
+}

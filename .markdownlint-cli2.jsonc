@@ -31,7 +31,7 @@
     // The defect probe set and its first record's raw run outputs (CORE-90): hashed bytes, the same reason as the
     // `.prettierignore` twin — a fix would change a pinned sha256 and the whole set would be refused.
     ".dev/probes",
-    ".dev/features/defect-probe-set/runs",
+    ".dev/features/defect-probe-set/run-outputs",
     // The stage-model-tuning record's raw run files (CORE-112): a SPEC probe run's PLAN.md is model-written and hashed.
     ".dev/features/stage-model-tuning/runs",
     "pharn/CONSTITUTION.md",

@@ -1,0 +1,52 @@
+{
+  "schema": "pharn-grill-triage/1",
+  "round": 1,
+  "findings_sha256": "0f1c1a6e4baf5d9bc00f503855e6d5e793e2036f7376207d2d18d94f07d1bdc6",
+  "dispositions": [
+    {
+      "id": "G1-1",
+      "disposition": "spec",
+      "reason": "AC-7 is worded as a process-wide memory guarantee that a unit test cannot show, and the server never stored the secret anyway; the SPEC must re-word it into something testable (e.g. no record, cache or module state holds the secret) before any plan can cover it."
+    },
+    {
+      "id": "G1-2",
+      "disposition": "spec",
+      "reason": "The SPEC does not say whether a deprecated (grace-period) key may manage keys; that is a security-intent decision the SPEC lacks, and the plan cannot choose it without changing stated behaviour."
+    },
+    {
+      "id": "G1-3",
+      "disposition": "replan",
+      "reason": "The plan must either add a guard for revoking the last active admin key or own key, or explicitly list the self-lockout as an accepted limit in Risks (with a test if guarded); today it does neither."
+    },
+    {
+      "id": "G1-4",
+      "disposition": "replan",
+      "reason": "The plan should state in Risks (and README if appropriate) that the 2 to 3 migration is forward-only and the upgrade cannot be rolled back to the previous release, or declare a rollback path."
+    },
+    {
+      "id": "G1-5",
+      "disposition": "replan",
+      "reason": "A SPEC constraint (cross-org key reads 404 not_found on every key route) has no planned test; add a build-owned regression test for rotate and revoke and declare its test file in ## Files."
+    },
+    {
+      "id": "G1-6",
+      "disposition": "replan",
+      "reason": "The no-enumeration claim is stated as fact in the plan; label it advisory and plan a test that a wrong secret for a revoked or expired key id still reads 401 unauthenticated, declaring the test file."
+    },
+    {
+      "id": "G1-7",
+      "disposition": "proceed",
+      "reason": "Showing key state in GET /keys or logging deprecated-key use is not in the SPEC scope; the plan states it was deliberately not planned (Risks, Listing keys), so it is an accepted bound."
+    },
+    {
+      "id": "G1-8",
+      "disposition": "proceed",
+      "reason": "The five behaviours are implementation choices the plan already lists openly in Risks (Plan decisions not stated in the SPEC) and the README step documents the 409; none contradicts a SPEC criterion, so the build does not need a change."
+    },
+    {
+      "id": "G1-9",
+      "disposition": "proceed",
+      "reason": "Minor: the injected clock exists only so the 24 h boundary is reachable in tests; no AC asserts audit timestamps or invoice-handler time, so the partial injection does not affect the build."
+    }
+  ]
+}

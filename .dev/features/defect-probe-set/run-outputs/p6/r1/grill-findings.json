@@ -1,0 +1,114 @@
+{
+  "schema": "pharn-grill-findings/1",
+  "round": 1,
+  "findings": [
+    {
+      "id": "G1-1",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "blocking",
+      "file": "pharn/features/api-key-rotation/PLAN.md:122",
+      "problem": "The plan substitutes its own narrower test for Approved AC-7 instead of routing the change through /pharn-spec, and half of the narrowed test is vacuous: the plaintext secret is never stored, so 'JSON.stringify(doc) contains no old secret' passes with or without any purge, leaving only the hash check to discriminate.",
+      "evidence": "The plan narrows AC-7 to what a unit test can check: after `purgeExpiredKeys`, the serialized store document contains neither the old secret nor its SHA-256. If that narrowing is not acceptable, the criterion needs re-specifying via `/pharn-spec`."
+    },
+    {
+      "id": "G1-2",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:24",
+      "problem": "A deprecated (rotated) admin key keeps full admin power for 24 h, so whoever holds it can revoke the successor key or mint a non-expiring key through POST /keys; the plan never considers restricting key-management routes for a deprecated principal, which matters for the SPEC's 'suspects a leaked key' intent.",
+      "evidence": "`expiresAt > now` gives a principal marked `deprecated: true`."
+    },
+    {
+      "id": "G1-3",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:129",
+      "problem": "The claim that key_revoked is only ever told to a holder of the correct secret is false: purgeExpiredKeys deletes the hash from every key with a past expiresAt regardless of revokedAt, and revokeKey does not refuse an expired key, so a rotated-then-revoked key loses its hash and then answers key_revoked to any token carrying its id.",
+      "evidence": "Revoked keys keep their hash, so `key_revoked` is only ever told to a holder of the correct secret."
+    },
+    {
+      "id": "G1-4",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:136",
+      "problem": "Allowing an admin to revoke its own key, with no check that another active admin key remains in the org, lets an organization lock itself out permanently: keys can only be created by an admin key, and the plan names no recovery path.",
+      "evidence": "an admin may revoke the very key it is calling with"
+    },
+    {
+      "id": "G1-5",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:35",
+      "problem": "The SPEC Constraint that another organization's key reads as 404 not_found on every key route is claimed by the approach, but neither the plan's Acceptance mapping nor AC-TESTS.md declares a test for cross-org rotate or revoke.",
+      "evidence": "Organization scope follows the README convention: a key is looked up by `(principal.orgId, id)`, so another organization's key gives `404 not_found` on both new routes."
+    },
+    {
+      "id": "G1-6",
+      "type": "FINDING",
+      "rule_id": "P1",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:133",
+      "problem": "The plan adds public behaviour the SPEC does not state (409 key_not_active, idempotent revoke without a second audit entry, self-revoke, GET /keys hiding rotation and revocation state); no human has confirmed it, no test covers it, yet key_not_active is to be documented in the README as a public error code.",
+      "evidence": "Proposed behaviour the SPEC does not state: rotating a key that is already rotated or revoked gives `409 key_not_active` ... Confirm or change any of these at grill."
+    },
+    {
+      "id": "G1-7",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:46",
+      "problem": "The v2-to-v3 migration has no declared rollback: a v2 release refuses a v3 file (unsupported schema version), and even a hand-downgraded file would let revoked keys authenticate again and would crash v2 authenticate on purged records that have no hash.",
+      "evidence": "Store, schema v3 (`src/store.js`): set `SCHEMA_VERSION = 3`. Add `MIGRATIONS[2]`, which maps every key to `{ ...k, expiresAt: k.expiresAt ?? null, revokedAt: k.revokedAt ?? null }`"
+    },
+    {
+      "id": "G1-8",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:75",
+      "problem": "The purge's failure paths are undeclared: a failing purge transact before authenticate turns every request into a 500 and is retried on every request while hasExpiredUnpurged stays true, and a rejected promise inside the setInterval callback is an unhandled rejection that terminates the Node process.",
+      "evidence": "Before `authenticate`, `await store.transact(doc => purgeExpiredKeys(doc, t))` when `hasExpiredUnpurged`. ... In `import.meta.main`, add `setInterval(…, 60_000).unref()` for the same purge."
+    },
+    {
+      "id": "G1-9",
+      "type": "FINDING",
+      "rule_id": "P0",
+      "severity": "important",
+      "file": "pharn/features/api-key-rotation/PLAN.md:27",
+      "problem": "The Approach states unconditionally that after the grace period nothing derived from the old secret remains in memory or on disk, which the plan's own Risks contradict (the purge lags up to about 60 s or until the next start, and replaced documents linger until GC); on disk, a rename does not scrub prior file blocks or backups.",
+      "evidence": "After the grace period the store document, both in memory and on disk, holds nothing derived from the old secret."
+    },
+    {
+      "id": "G1-10",
+      "type": "FINDING",
+      "rule_id": "P2",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:127",
+      "problem": "An expired key's answer to a wrong-secret token depends on purge timing: before the purge the hash check gives 401 unauthenticated, after it the same token gets 401 key_expired, so responses are inconsistent and reveal that an id existed; the human should accept this trade-off explicitly.",
+      "evidence": "A purged record has no hash to check, so any token carrying its 12-hex id gets `key_expired` rather than `unauthenticated`."
+    },
+    {
+      "id": "G1-11",
+      "type": "FINDING",
+      "rule_id": "P6",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:26",
+      "problem": "The purge emits no audit entry or log, so neither operators nor the customer's auditors can see in production when a rotated key's hash was destroyed, or that the background purge is failing.",
+      "evidence": "Purge (`src/keys.js#purgeExpiredKeys`) removes `hash` from every key whose `expiresAt` has passed."
+    },
+    {
+      "id": "G1-12",
+      "type": "FINDING",
+      "rule_id": "P7",
+      "severity": "minor",
+      "file": "pharn/features/api-key-rotation/PLAN.md:76",
+      "problem": "The per-request timestamp t is used by the purge and by authenticate but is never defined; the plan should say it is one now() call per request, so the purge and the expiry check agree at the 24 h boundary.",
+      "evidence": "Pass `t` to `authenticate`."
+    }
+  ]
+}
