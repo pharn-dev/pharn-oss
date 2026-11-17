@@ -54,10 +54,14 @@ comparable.
    Outputs: `<root>/runs/loop-1/out/loop.jsonl` (the session's stream), `session-id.txt`, `loop-exit.txt`, and the
    feature's files in `<root>/runs/loop-1/tree/pharn/features/<the slug the run chose>/` (`LOOP.md`, `cost.json`).
 
-5. **Send back** the paths. Nothing needs copying: `measure.mjs` reads them in place.
+5. **Send back** the paths. Nothing needs copying: `measure.mjs` reads them in place. Run it from a PHARN-OSS
+   checkout, not from the kit copy: it imports `pharn/floor/transcript-core.mjs` by a repository-relative path, so the
+   ledger's own reader counts the tokens. Pass `--transcripts`, because a stream-json stream under-reports
+   `output_tokens`. `<key>` is the run tree's path with every non-alphanumeric character replaced by `-`.
 
    ```bash
-   node <kit>/driver/measure.mjs --driver <root>/runs/driver-1/out \
+   node <pharn-oss>/.dev/features/loop-driver-spike/driver/measure.mjs --driver <root>/runs/driver-1/out \
+     --transcripts ~/.claude/projects/<key> \
      --driver-cost <root>/runs/driver-1/tree/pharn/features/lg3-remove-files/cost.json \
      --loop <root>/runs/loop-1/out --loop-cost <root>/runs/loop-1/tree/pharn/features/<slug>/cost.json
    ```

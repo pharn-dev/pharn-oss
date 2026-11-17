@@ -1,0 +1,26 @@
+{
+  "feature": "loop-driver-spike",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "981dd9c492e5e0a9508885f469a663014476782362422ba802a6a5a3317600e8",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "aacb673d5c4e12e9138334b05386f433b78a6d1477c77a259b569b9891b25482"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

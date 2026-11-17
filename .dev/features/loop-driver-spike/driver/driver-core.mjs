@@ -14,9 +14,11 @@
 //     `iterate`, `end`. `loop-driver.test.mjs` collects every action of every step and requires each to match.
 //   * Every conditional in the driver sits between the INTERPRETER BEGIN / END markers below; the test strips
 //     comments, strings and templates and requires zero conditional tokens elsewhere in this file and in
-//     `loop-driver.mjs`. The interpreter's conditionals are of four kinds only: (1) the exit-code lookup itself,
-//     (2) its own bounds (repeats of `again`, total steps), (3) argument validation, and (4) assembling the record
-//     at a stop whose kind an earlier exit code already decided.
+//     `loop-driver.mjs`. The interpreter's conditionals are of six kinds only: (1) the exit-code lookup itself,
+//     (2) its own bounds (repeats of `again`, total steps), (3) argument validation, (4) assembling the record at a
+//     stop whose kind an earlier exit code already decided, (5) dispatch on a step's STATIC shape (its kind, and
+//     whether it captures, redirects its stdout into the project or resumes a session — fixed in the table, never
+//     read from a child), and (6) error handling: a throw becomes exit 70 at that step, or a blocked S9 stop.
 //
 // What this file does NOT do: spawn, read or write anything. `loop-driver.mjs` supplies the IO (`io`), so the
 // interpreter can be walked in tests with scripted exit codes.

@@ -63,7 +63,7 @@
        `driver-core.mjs` outside its interpreter region, nor anywhere in `loop-driver.mjs`;
      - the closed tokens the loop reads (a `finish` row, the spec kind, `stage_to_rerun`, `reason_code`,
        `terminal_cause`) become exit codes in `token-exit.mjs` first.
-   - Bound: a static scan of two files. The interpreter's own conditionals are of four named kinds (its header).
+   - Bound: a static scan of two files. The interpreter's own conditionals are of six named kinds (its header): the exit-code lookup, its own bounds, argument validation, record assembly at a stop, dispatch on a step's static shape, and error handling.
    - In `driver-1` the run took 84 steps, and every transition is in `summary.json` `trail` as `[step, exit, action]`
      [R·m].
 3. **The driven `LOOP.md` passes `check-loop-record.mjs`.**
