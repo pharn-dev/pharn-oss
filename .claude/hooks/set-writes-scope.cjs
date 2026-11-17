@@ -142,8 +142,8 @@
 // would scope, exit 1 is the refusal a build's Step 0 would meet. The two plan commands run it on the PLAN they just
 // wrote, so a refusal surfaces at plan time instead of at the build. It refuses to combine with --clear.
 //
-// AN ITEM IT CANNOT SCOPE (7.21.0, setter-dropped-bullets — lessons-learned L20, L71). `--from-plan` scopes literal paths
-// only. Before 7.21.0 an item holding `*`, `?`, `<` or `>` was DROPPED without a word: a PLAN with 37 items printed
+// AN ITEM IT CANNOT SCOPE (7.22.0, setter-dropped-bullets — lessons-learned L20, L71). `--from-plan` scopes literal paths
+// only. Before 7.22.0 an item holding `*`, `?`, `<` or `>` was DROPPED without a word: a PLAN with 37 items printed
 // `35 path(s)`, nobody compared the two numbers, and the missing grant surfaced mid-build as a deny. Now any such item
 // REFUSES the plan, in `--check` and in a build's set alike (so `--check` still predicts Step 0), naming every item it
 // could not scope, why, and how many of the list's items that is. No opt-in: such an item never granted a write, so
@@ -1042,7 +1042,7 @@ function main() {
   if (!fs.existsSync(file)) fail(`file not found: ${file}`);
 
   const raw = mode === "--from-frontmatter" ? writesFromFrontmatter(file) : pathsFromPlanFiles(file);
-  // AN ITEM IT CANNOT SCOPE (7.21.0, see the header): name every one rather than drop it. Quoted with JSON.stringify,
+  // AN ITEM IT CANNOT SCOPE (7.22.0, see the header): name every one rather than drop it. Quoted with JSON.stringify,
   // because an item is untrusted text (P2) and this check runs before the control-character refusal below.
   if (mode === "--from-plan") {
     const dropped = raw.filter((entry) => {
