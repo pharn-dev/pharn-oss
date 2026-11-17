@@ -42,6 +42,8 @@ The floor checks the structural invariants of any PHARN capability you add. A GR
 
 Three doc regions are **generated, never hand-edited**: `docs/capabilities/**`, the root `README.md` `## Current state` inventory (between its `CURRENT-STATE` markers), and `docs/lessons-index.md`. After changing a capability, contract, command, hook, or floor checker — or promoting a lesson to the memory-bank — run `npm run docs:generate` and commit the rendered output. `docs:check` (inside `npm run check`) RED-fails on any byte difference, so skipping this surfaces as a failed gate rather than as silent drift.
 
+The same command writes the root [`pharn-install.json`](./pharn-install.json), the install manifest pharn-cli reads ([`docs/install-manifest.md`](./docs/install-manifest.md)): every installed file's SHA-256, the capabilities, the `models` defaults and rules. So a change to any installed file, a capability's frontmatter, the root `models` block or `SKILLS_VERSION` (every bump) also needs `npm run docs:generate`, and `docs:check` fails until it is committed.
+
 What that buys is **byte-equality** — the committed output equals a fresh regeneration — never that the generated content is _right_: a wrong enumerator regenerates cleanly and stays GREEN. See [`CLAUDE.md`](./CLAUDE.md) ("Three doc regions are GENERATED") for the rule, and [`.dev/guides/generated-docs.md`](./.dev/guides/generated-docs.md) for the one case (`ENUM_ERROR` — a duplicate lesson id, an unsafe title) where regenerating cannot help and the canon file has to be fixed instead.
 
 ### Editing product commands (`.claude/commands/pharn-*.md`)

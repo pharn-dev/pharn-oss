@@ -23,6 +23,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.21.0] - 2026-11-17
+
+### Added
+
+- **pharn-oss now declares its install: `pharn-install.json`, a generated, drift-checked manifest at the repo root**
+  (Linear CORE-193, C8.1). pharn-cli built every install from this repository's internals: ported frontmatter rules, a
+  ported model checker and a hand-held tree layout, each pinned by a differential test, so every upstream change
+  needed a lockstep CLI release. The manifest lets the CLI copy what this repository declares instead (CORE-194).
+  - **Contents** (`schemaVersion: 1`, schema in `docs/install-manifest.md`): `skillsVersion`; every installable file's
+    `path`, `dest`, `surface`, owning `capability`, copy `policy` (`managed`, or `if-absent` for
+    `.claude/settings.json`) and SHA-256 over its raw bytes (614 files today); the 35 selectable grillers and lenses
+    with `applies` in the CLI's shape; the `models` defaults (the root `pharn.config.json` block) and rules; the layout;
+    and the install-root globs, including the older layouts' roots so the CLI can bound an older install's records. No
+    `minCli`: `MIN_CLI` stays the one source.
+  - **One declaration.** `.dev/floor/install-manifest-core.mjs` holds the install rules (surfaces, test and fixture
+    exclusions, the LICENSE mapping) and builds the file from the catalog's capability walk, git's file list,
+    `check-surface-bump.mjs`'s glob grammar and the model checker's own exports. It refuses a symlinked installable
+    path, an empty surface, a bad `SKILLS_VERSION`, a duplicate destination and a malformed `applies`.
+  - **Drift-checked on every PR.** `gen-install-manifest.mjs` joins `npm run docs:generate` and
+    `check-install-manifest.mjs` joins `npm run docs:check`, which CI's "Docs drift check" step runs. A change to any
+    installed file, and every `SKILLS_VERSION` bump, needs a regeneration. Tests bind the rules to the tree: every
+    bump-triggering product path is in the manifest, and the installed paths outside that set are exactly `LICENSE`,
+    `pharn/features/README.md` and `pharn/floor/README.md`.
+  - **`pharn/floor/check-model-config.mjs` exports its rules** (`PRODUCT_STAGES`, `MODEL_ALIASES`, `MODEL_ID_RE`,
+    `EFFORT_ENUM`) and runs nothing when imported. Run as a CLI it behaves exactly as before. This is the product-surface
+    change that makes this release; the manifest itself is installer metadata outside the bump-triggering set, like
+    `SKILLS_VERSION` and `MIN_CLI`, and is never copied into an install.
+  - **Spike.** Against pharn-cli 0.19.0's own `installManifest` on v7.19.0 and on this tree, with every capability
+    selected, the manifest names the CLI's 613 paths at the same destinations from the same sources, plus
+    `.claude/settings.json` with its copy-only-when-absent policy; the capability index and the model rules and
+    defaults agree, and the legacy roots cover all 443 paths of the last flat-layout tree. Record:
+    `.dev/features/install-manifest/SPIKE-DIFF.md`; decision record: `.dev/features/install-manifest/RFC.md`.
+  - **Bounds.** The drift check proves the committed file equals what the rules compute, never that the rules are
+    right. That the tarball carries the declared bytes holds while `.gitattributes` keeps the tree LF with no
+    `export-ignore`; the CLI's SHA-256 check after extraction is the check. The manifest is untrusted data to the CLI,
+    which validates every field. A tree older than 7.21.0 has no manifest. `MIN_CLI` is unchanged.
+
 ## [7.20.0] - 2026-11-16
 
 ### Added
