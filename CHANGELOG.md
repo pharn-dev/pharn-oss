@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-17: **Measured: a script-driven quick loop with one headless `claude -p` session per stage works, and the
+  record says no-go for building one now (CORE-113 spike).** The maintainer ran a node driver from a terminal on the
+  `lg3-remove-files` benchmark, on a 7.19.0 measure base. It ran every pinned floor line of `/pharn-loop --quick`
+  itself, with no model request of its own, and ten sessions. It ended `STOP_CAP` after 3 iterations, with the
+  closeout's record and decision checks GREEN. No spike gate failed:
+  - routed stages were served their configured model;
+  - the write guard denied an out-of-scope Write inside a driven session;
+  - every stage completed;
+  - a resumed session acted on a relayed answer;
+  - every session ran in auto mode with no skip flag.
+
+  Effort was not observable, and the inline grill was served its frontmatter model. The cost ledger attributes no token
+  of a driven run: `coverage: unavailable`, "no session id available". Both `/pharn-loop --quick` comparison runs
+  stopped at the spec stage (S6c, `not-quick`) on the same intent bytes the driven spec accepted. So the orchestrator's
+  share after Epics 1 and 2 was measured only up to that stop (58.6% and 65.7%), which is not a whole-run figure and
+  not comparable with the baseline's 27.7%. The no-go rests on that unmet start condition. The benchmark also cannot
+  end green by either route: a project test needs edits the intent puts out of scope. Record:
+  `.dev/features/loop-driver-spike/RECORD.md`, with the driver, its test and the kit beside it. Dev apparatus only, so
+  no `SKILLS_VERSION` bump.
+
 ## [7.20.0] - 2026-11-16
 
 ### Added
