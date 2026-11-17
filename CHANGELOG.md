@@ -32,9 +32,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `.dev/floor/stage-model-pairs.mjs` pairs a variant arm's runs with the control's. For each pair it reports the
   catch, stage minutes, USD, weighted cost and the model each session was served. It then gives the arm one reading:
   `supports-change`, `does-not-support` or `cannot-decide`. `.dev/measurements/stage-model-tuning-2026-11-17.md`
-  pre-registers three arms before any run: grill model, plan model and grill effort. Their results are pending the
-  user's runs. The audit's whole-loop experiment E1 is out of scope, so every default that needs it stays "cannot
-  decide".
+  pre-registers three arms before any run: grill model, plan model and grill effort. The user ran them for USD 29.94.
+  - A sonnet grill reads `supports-change`: 8 pairs, no catch lost, chain cost down 43%.
+  - A sonnet plan reads `cannot-decide`: only 4 of its 6 pairs are comparable, because of plan-stage stops.
+  - A medium-effort grill reads `does-not-support`: it lost one catch.
+
+  These readings cover the probe chain only. The audit's whole-loop experiment E1 is out of scope, so no shipped
+  default changes, and every default stays "cannot decide" until E1's loop pairs exist.
 
 - 2026-11-17: **Added: a defect probe set, its scorer and a run kit, the quality measure for changes to what the grill,
   the triage or the plan writer read (CORE-90).** Apparatus only; nothing ships and `SKILLS_VERSION` is unchanged.

@@ -1,9 +1,17 @@
 # Per-stage model and effort on the defect probe set (2026-11-17)
 
-**Status: pending.** The variant kits are built and the arms are pre-registered below; the runs are the user's to start
-(a headless `claude -p` session cannot be launched from an agent session in this repository). This record holds the
-pre-registration now, and the pair tables, readings and the defaults table after the runs. No shipped default changes
-in this task: a default change is a follow-up, and the human's call.
+**Status: measured.** The user ran all four kits on 2026-11-17, in two rounds; this agent cannot launch a headless
+`claude -p` session from an agent session in this repository. Measured spend was USD 29.94 of the USD 70 cap, so by
+the stop rule `grill-medium` ran too. One reading per arm, on the probe chain only:
+
+- **grill model opus → sonnet:** `supports-change`, with 8 of 8 pairs comparable, no catch lost, and chain USD down
+  43%.
+- **plan model opus → sonnet:** `cannot-decide`. Only 4 of its 6 pairs are comparable, because two variant runs and one
+  control run stopped at the plan stage without citing an anchor.
+- **grill effort high → medium:** `does-not-support`, because one catch was lost (p4).
+
+No shipped default changes in this task. A default change is a follow-up, needs E1's loop pairs, and is the human's
+call (see "Defaults").
 
 ## Why
 
@@ -147,20 +155,116 @@ decide (not run: budget)".
 
 ## Results
 
-Pending: per arm, the pair table (probe, run names, catch per side, stage minutes, USD and weighted units per stage
-and chain), the summary, the reading, and the Claude Code version per kit. Raw run files and each arm's pair JSON
-will be committed under `.dev/features/stage-model-tuning/runs/`.
+**How they were produced.** Each arm was paired with the three pre-registered commands above. The output is
+`.dev/features/stage-model-tuning/runs/pairs/<arm>.json`, the reader's JSON verbatim. Each arm's run files sit beside
+it under `runs/<kit>/<probe>/r<n>/`: findings, triage, and a SPEC probe's `PLAN.md`. The control's own run files belong
+to CORE-90's record (`.dev/measurements/defect-probes-main-7.19.0.md`). Session files are not committed; each pair row
+carries their sha256.
+
+**Spend, as the user measured it.**
+
+| kit            | spend     | notes                                                          |
+| -------------- | --------- | -------------------------------------------------------------- |
+| `plan-sonnet`  | USD 7.84  | 18 sessions                                                    |
+| `control-spec` | USD 3.30  | 6 sessions                                                     |
+| `grill-sonnet` | USD 7.60  | 15 sessions in round 1, plus 2 for the p1/r1 re-run (USD 0.99) |
+| `grill-medium` | USD 11.20 | 16 sessions                                                    |
+
+No session reported `is_error`. The Claude Code version the runs used was not reported. The control arm's spend is
+CORE-90's.
+
+**Served models.** Every variant session on the varied stage was served `claude-sonnet-5-5` in both sonnet arms. Every
+control and unvaried stage was served its expected family (`claude-opus-5-5` for plan and grill, `claude-sonnet-5-5`
+for triage). So no arm reads `arm-not-applied`, and the frontmatter override took effect.
+
+**One run was redone.** A duplicate copy of the user's runner re-ran `grill-sonnet` line 1 over the finished sanity
+run and was killed mid-session. That left a 0-byte `grill.session.json` and a partly re-grilled project. The directory
+was moved aside unchanged to `runs/p1/r1.contaminated-0813/` in the scratch kit (it is not committed, and the reader
+never pairs it). The run was rebuilt from a clean copy with the same override and agreement check, and run once more.
+The pair uses that re-run.
+
+**The control's p1/r2 is a miss for a run-file reason:** `triage-invalid`. Its triage file failed `checkTriage`, so
+the scorer cannot count it. That is why each grill arm shows one "gained" catch on p1/r2. It is a defect in the
+control's run file, not a better variant.
+
+### `plan-sonnet` — `cannot-decide` / `fewer-than-six-pairs`
+
+| probe | control run     | variant | control outcome            | variant outcome            | plan USD C / V | plan min C / V | chain USD C / V | chain min C / V | chain weighted (M) C / V |
+| ----- | --------------- | ------- | -------------------------- | -------------------------- | -------------- | -------------- | --------------- | --------------- | ------------------------ |
+| p5    | main r1         | r1      | caught-at-plan             | caught-at-plan             | 0.28 / 0.15    | 0.58 / 0.33    | 0.56 / 0.44     | 1.01 / 0.75     | 0.13 / 0.14              |
+| p5    | main r2         | r2      | stopped-at-plan-unanchored | stopped-at-plan-unanchored | 0.31 / 0.13    | 0.66 / 0.25    | 0.57 / 0.43     | 1.14 / 0.65     | 0.13 / 0.13              |
+| p5    | control-spec r1 | r3      | caught-at-plan             | stopped-at-plan-unanchored | 0.32 / 0.13    | 0.60 / 0.27    | 0.60 / 0.42     | 0.96 / 0.66     | 0.14 / 0.13              |
+| p6    | main r1         | r1      | caught                     | caught                     | 0.89 / 0.53    | 3.19 / 2.97    | 2.75 / 2.26     | 8.20 / 7.37     | 0.70 / 0.71              |
+| p6    | main r2         | r2      | caught                     | caught                     | 1.23 / 0.44    | 3.97 / 2.03    | 2.94 / 2.10     | 8.27 / 6.17     | 0.74 / 0.64              |
+| p6    | control-spec r1 | r3      | caught                     | caught                     | 0.88 / 0.41    | 2.87 / 2.03    | 2.71 / 2.19     | 7.52 / 6.30     | 0.71 / 0.69              |
+
+- **Pairs:** 6, all complete, 4 comparable. The two p5 pairs with an unanchored stop are costed, but they are out of
+  the catch rules.
+- **Catches:** in the comparable pairs, control 4 and variant 4. None lost, none gained.
+- **Chain:** USD 10.12 → 7.84 (−23%); minutes 27.11 → 21.88 (−19%); weighted units 2.54M → 2.44M.
+- **Plan stage:** USD 3.91 → 1.81 (−54%); minutes 11.87 → 7.89 (−34%).
+- **Advisory:** the third p5 pair is caught-at-plan on the control and unanchored on the variant. Both outcomes are
+  read from the plan session's free text. It is the one place this arm could hide a regression, and with only four
+  comparable pairs the arm cannot decide.
+
+### `grill-sonnet` — `supports-change` / `no-visible-regression-and-saving`
+
+| probe | control run | variant | control outcome | variant outcome | grill USD C / V | grill min C / V | chain USD C / V | chain min C / V | chain weighted (M) C / V |
+| ----- | ----------- | ------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------------ |
+| p1    | main r1     | r1      | caught          | caught          | 1.38 / 0.82     | 2.94 / 2.66     | 1.56 / 0.99     | 3.57 / 3.17     | 0.40 / 0.47              |
+| p1    | main r2     | r2      | triage-invalid  | caught          | 1.44 / 0.82     | 3.48 / 2.86     | 1.71 / 1.00     | 4.58 / 3.42     | 0.48 / 0.49              |
+| p2    | main r1     | r1      | caught          | caught          | 1.62 / 0.69     | 3.92 / 1.97     | 1.81 / 0.86     | 4.54 / 2.52     | 0.47 / 0.41              |
+| p2    | main r2     | r2      | caught          | caught          | 1.51 / 0.81     | 3.69 / 2.75     | 1.71 / 1.02     | 4.40 / 3.42     | 0.44 / 0.49              |
+| p3    | main r1     | r1      | caught          | caught          | 1.41 / 0.61     | 3.19 / 2.57     | 1.59 / 0.77     | 3.88 / 3.16     | 0.41 / 0.38              |
+| p3    | main r2     | r2      | caught          | caught          | 1.42 / 0.86     | 3.29 / 3.21     | 1.59 / 1.06     | 3.84 / 3.77     | 0.42 / 0.50              |
+| p4    | main r1     | r1      | caught          | caught          | 1.44 / 0.72     | 3.43 / 2.04     | 1.63 / 0.88     | 4.02 / 2.52     | 0.44 / 0.42              |
+| p4    | main r2     | r2      | caught          | caught          | 1.32 / 0.65     | 2.77 / 1.82     | 1.49 / 0.83     | 3.44 / 2.44     | 0.39 / 0.39              |
+
+- **Pairs:** 8, all complete and comparable.
+- **Catches:** control 7, variant 8. None lost; one gained (p1/r2, the control's invalid triage).
+- **Chain:** USD 13.10 → 7.41 (−43%); minutes 32.27 → 24.42 (−24%).
+- **Weighted units rose,** 3.46M → 3.55M (+3%): the sonnet grill used slightly more tokens, at half the price.
+- **Grill stage:** USD 11.53 → 5.98 (−48%); minutes 26.71 → 19.89 (−26%).
+
+### `grill-medium` — `does-not-support` / `catch-lost`
+
+| probe | control run | variant | control outcome | variant outcome | grill USD C / V | grill min C / V | chain USD C / V | chain min C / V | chain weighted (M) C / V |
+| ----- | ----------- | ------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------------ |
+| p1    | main r1     | r1      | caught          | caught          | 1.38 / 1.28     | 2.94 / 2.73     | 1.56 / 1.47     | 3.57 / 3.36     | 0.40 / 0.41              |
+| p1    | main r2     | r2      | triage-invalid  | caught          | 1.44 / 1.22     | 3.48 / 2.56     | 1.71 / 1.40     | 4.58 / 3.24     | 0.48 / 0.36              |
+| p2    | main r1     | r1      | caught          | caught          | 1.62 / 1.04     | 3.92 / 2.81     | 1.81 / 1.23     | 4.54 / 3.43     | 0.47 / 0.35              |
+| p2    | main r2     | r2      | caught          | caught          | 1.51 / 1.15     | 3.69 / 2.43     | 1.71 / 1.32     | 4.40 / 3.14     | 0.44 / 0.34              |
+| p3    | main r1     | r1      | caught          | caught          | 1.41 / 1.32     | 3.19 / 3.18     | 1.59 / 1.54     | 3.88 / 3.96     | 0.41 / 0.41              |
+| p3    | main r2     | r2      | caught          | caught          | 1.42 / 1.19     | 3.29 / 2.83     | 1.59 / 1.38     | 3.84 / 3.43     | 0.42 / 0.37              |
+| p4    | main r1     | r1      | caught          | caught          | 1.44 / 1.21     | 3.43 / 2.33     | 1.63 / 1.37     | 4.02 / 2.80     | 0.44 / 0.37              |
+| p4    | main r2     | r2      | caught          | no-anchor-match | 1.32 / 1.31     | 2.77 / 2.79     | 1.49 / 1.49     | 3.44 / 3.39     | 0.39 / 0.40              |
+
+- **Pairs:** 8, all complete and comparable.
+- **Catches:** control 7, variant 7. One lost: p4/r2, where the medium-effort grill raised no finding on the planted
+  omission's anchor. One gained: p1/r2, the control's invalid triage.
+- **Chain:** USD 13.10 → 11.20 (−14%); minutes 32.27 → 26.74 (−17%); weighted units 3.46M → 3.01M (−13%).
+- **Advisory:** the served effort is recorded nowhere. Frontmatter, config and flag all said `medium`.
 
 ## Defaults
 
-Pending the runs. The table will have one row per default this record touches:
+The probe pairs answer one question: did the varied stage lose a catch on these probes, and did the chain cost less?
+They say nothing about the loop outcomes E1 measures: completion, iterations, verify and regress verdicts, and
+external-review findings. **So no shipped default can change on this record alone.** Each row below needs E1's loop
+pairs in the measured project, and then the human's call.
 
-| default                          | probe pairs say                       | needs E1 loop pairs | decision      |
-| -------------------------------- | ------------------------------------- | ------------------- | ------------- |
-| plan model opus                  | pending (`plan-sonnet`)               | yes                 | pending       |
-| grill model opus                 | pending (`grill-sonnet`)              | yes                 | pending       |
-| grill effort high                | pending (`grill-medium`, conditional) | yes                 | pending       |
-| every other stage's model/effort | not measured                          | yes                 | cannot decide |
+| default                          | probe pairs say                                                                               | needs E1 loop pairs | decision now                                                     |
+| -------------------------------- | --------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------- |
+| grill model opus                 | **support changing to sonnet:** 8 comparable pairs, 0 catches lost, chain −43% USD, −24% min  | yes                 | supported on the probe chain; the shipped default: cannot decide |
+| grill effort high                | **do not support medium:** 1 catch lost (p4/r2) in 8 pairs                                    | yes                 | do not change                                                    |
+| plan model opus                  | **cannot decide:** 4 comparable pairs (2 unanchored plan stops), 0 lost, plan −54% USD        | yes                 | cannot decide                                                    |
+| every other stage's model/effort | not measured (spec, build, test, regress, verify, review, memory-promote, ship, loop, triage) | yes                 | cannot decide                                                    |
+
+- **Grill model, worded at its P0 ceiling:** in these 8 pairs, a sonnet grill showed no visible regression on the
+  probe chain at about half the cost. Eight pairs support that at most. They do not show it is non-inferior, and the
+  probes are authored. The next step is the E1 loop A/B in the measured project with `models.stages.grill` set to
+  sonnet there, and that is a project setting, not a pharn-oss change.
+- **Plan model** would need at least two more comparable p5 or p6 pairs, or p5 anchors that a plan-stage stop can
+  cite.
 
 ## What this record may claim (P0)
 
@@ -169,3 +273,6 @@ Pending the runs. The table will have one row per default this record touches:
   the run files.
 - **Advisory:** that the runs ran as the kits wrote them; the served effort; USD as a price; that a probe catch
   predicts a real plan's; and anything six or eight pairs imply beyond those pairs.
+- **Advisory, and not re-derivable from the repository:** p5's plan-stage outcomes (`caught-at-plan` and
+  `stopped-at-plan-unanchored`). They are read from the plan session's free-text `result`, and session files are not
+  committed. The pair JSON records each session file's sha256, so the files the user holds can be checked against it.
