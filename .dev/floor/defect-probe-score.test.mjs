@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url";
 import {
   OUTCOMES,
   findingMatches,
+  planStop,
+  specCitations,
   listFiles,
   parseArgs,
   pathMatches,
@@ -65,6 +67,11 @@ function triageBytes(findings, dispositions) {
       dispositions: doc.findings.map((f, i) => ({ id: f.id, disposition: dispositions[i], reason: "why" })),
     })
   );
+}
+
+/** A plan stage's session output, as `claude -p --output-format json` writes it. */
+function session(result, isError = false) {
+  return Buffer.from(JSON.stringify({ type: "result", is_error: isError, result }));
 }
 
 const PLAN_PROBE = {
@@ -257,11 +264,24 @@ test("scoreRun produces every outcome, and only `caught` counts", () => {
     "findings-invalid": scoreRun(PLAN_PROBE, { findings: Buffer.from("{}"), triage: null, plan: null }),
     "triage-missing": scoreRun(PLAN_PROBE, { findings: onAnchor, triage: null, plan: null }),
     "triage-invalid": scoreRun(PLAN_PROBE, { findings: onAnchor, triage: triageBytes(offAnchor, ["replan"]), plan: null }),
+    "caught-at-plan": scoreRun(SPEC_PROBE, {
+      findings: null,
+      triage: null,
+      plan: null,
+      planSession: session("Stopped: `pharn/features/feat/SPEC.md:19-25` holds two criteria that contradict."),
+    }),
+    "stopped-at-plan-unanchored": scoreRun(SPEC_PROBE, {
+      findings: null,
+      triage: null,
+      plan: null,
+      planSession: session("Stopped: see SPEC.md:90 for an open question."),
+    }),
   };
   assert.deepEqual(Object.keys(cases).sort(), [...OUTCOMES].sort());
   for (const [outcome, r] of Object.entries(cases)) {
     assert.equal(r.outcome, outcome);
     assert.equal(r.caught, outcome === "caught");
+    assert.equal(r.caught_at_plan, outcome === "caught-at-plan");
   }
   assert.deepEqual(cases.caught.matched, ["G1-1"]);
   assert.deepEqual(cases.caught.escalated_matched, ["G1-1"]);
@@ -270,6 +290,32 @@ test("scoreRun produces every outcome, and only `caught` counts", () => {
   const zero = scoreRun(PLAN_PROBE, { findings: empty, triage: triageBytes(empty, []), plan: null });
   assert.equal(zero.outcome, "no-anchor-match");
   assert.equal(zero.findings, 0);
+});
+
+test("specCitations reads SPEC.md line citations from free text, ranges and en dashes included", () => {
+  const text = "AC-2 is at `pharn/features/f/SPEC.md:46` and SPEC.md:65\u201368; SPEC.md:9-3 is reversed; XSPEC.md:4, SPEC.mdx:5 are not.";
+  assert.deepEqual(specCitations(text), [
+    { path: "pharn/features/f/SPEC.md", start: 46, end: 46 },
+    { path: "SPEC.md", start: 65, end: 68 },
+    { path: "SPEC.md", start: 9, end: 9 },
+  ]);
+});
+
+test("planStop applies only to a SPEC probe's clean, non-error plan session; a plan or findings file overrides it", () => {
+  const cited = session("contradiction at SPEC.md:21");
+  assert.equal(planStop(SPEC_PROBE, cited), "caught-at-plan");
+  assert.equal(planStop(SPEC_PROBE, session("contradiction at pharn/features/other/SPEC.md:21")), "stopped-at-plan-unanchored");
+  assert.equal(planStop(SPEC_PROBE, session("no citation at all")), "stopped-at-plan-unanchored");
+  assert.equal(planStop(PLAN_PROBE, cited), null);
+  assert.equal(planStop(SPEC_PROBE, null), null);
+  assert.equal(planStop(SPEC_PROBE, Buffer.from("{")), null);
+  assert.equal(planStop(SPEC_PROBE, Buffer.from("[]")), null);
+  assert.equal(planStop(SPEC_PROBE, session("SPEC.md:21", true)), null);
+  assert.equal(planStop(SPEC_PROBE, Buffer.from(JSON.stringify({ is_error: false, result: 7 }))), null);
+  const withPlan = scoreRun(SPEC_PROBE, { findings: null, triage: null, plan: Buffer.from("AC-3"), planSession: cited });
+  assert.equal(withPlan.outcome, "findings-missing");
+  const errored = scoreRun(SPEC_PROBE, { findings: null, triage: null, plan: null, planSession: session("SPEC.md:21", true) });
+  assert.equal(errored.outcome, "findings-missing");
 });
 
 test("a caught run with a disposition other than the expected one is still caught, with expected_hit false", () => {
@@ -349,6 +395,8 @@ function scratchSet() {
   put("p1", "r2", ["PLAN.md:50"], ["proceed"]);
   put("p2", "r1", ["PLAN.md:30"], ["replan"]);
   put("p3", "r1", ["PLAN.md:3"], ["spec"], "a\nb\nAC-2 mapping\n");
+  mkdirSync(join(runs, "p3", "r2"), { recursive: true });
+  writeFileSync(join(runs, "p3", "r2", "plan.session.json"), session("The plan stopped: SPEC.md:5 contradicts SPEC.md:9."));
   return { dir, manifest, runs, path: join(dir, "manifest.json") };
 }
 
@@ -357,13 +405,17 @@ test("tally counts caught runs, reports per-probe pairs and file hashes, and sco
   const t = tally(s.manifest, s.runs, [], "sha");
   assert.equal(t.ok, true);
   assert.equal(t.tally.caught, 2);
-  assert.equal(t.tally.total, 4);
+  assert.equal(t.tally.caught_at_plan, 1);
+  assert.equal(t.tally.catches, 3);
+  assert.equal(t.tally.stopped_unanchored, 0);
+  assert.equal(t.tally.total, 5);
+  assert.equal(t.tally.probes[2].runs[1].outcome, "caught-at-plan");
   assert.deepEqual(
     t.tally.probes.map((p) => [p.id, p.caught, p.total]),
     [
       ["p1", 1, 2],
       ["p2", 0, 1],
-      ["p3", 1, 1],
+      ["p3", 1, 2],
     ]
   );
   assert.equal(t.tally.probes[2].runs[0].sha256.plan, sha256("a\nb\nAC-2 mapping\n"));
@@ -427,14 +479,16 @@ test("run: every command's usage, manifest and verdict paths", () => {
   ];
   assert.equal(code(spec), 1);
   assert.equal(code([...spec, "--plan", join(d3, "PLAN.md")]), 0);
+  const stopped = join(s.runs, "p3", "r2", "plan.session.json");
+  assert.equal(code(["score", "--manifest", s.path, "--probe", "p3", "--findings", gone, "--triage", gone, "--plan-session", stopped]), 0);
   assert.equal(code(["tally", "--manifest", s.path]), 2);
   assert.equal(code(["tally", "--manifest", s.path, "--runs", s.runs, "--probe", "p9"]), 2);
   assert.equal(code(["tally", "--manifest", s.path, "--runs", s.runs, "--min", "-1"]), 2);
   assert.equal(code(["tally", "--manifest", s.path, "--runs", join(s.dir, "nowhere")]), 2);
-  const ok = run(["tally", "--manifest", s.path, "--runs", s.runs, "--min", "2"]);
+  const ok = run(["tally", "--manifest", s.path, "--runs", s.runs, "--min", "3"]);
   assert.equal(ok.code, 0);
   assert.equal(JSON.parse(ok.out).manifest_sha256, sha);
-  assert.equal(code(["tally", "--manifest", s.path, "--runs", s.runs, "--min", "3"]), 1);
+  assert.equal(code(["tally", "--manifest", s.path, "--runs", s.runs, "--min", "4"]), 1);
   rmSync(s.dir, { recursive: true, force: true });
 });
 

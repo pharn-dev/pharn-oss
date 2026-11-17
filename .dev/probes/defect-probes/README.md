@@ -57,8 +57,24 @@ of it on whole path segments either way round) and:
 Only `file`, `id` and `disposition` (and `severity`, inside `checkTriage`) are read. A finding's `problem` and
 `evidence` are never read, so instruction-looking text in them cannot move a score.
 
-The **catch count** of an arm is the number of caught runs, always reported with the per-probe pairs, because one grill
-varies from run to run. Reported, never counted: whether a caught finding's disposition equals the expected one, and
+### A SPEC probe that stops at the plan stage
+
+The plan writer may refuse a SPEC probe outright, naming the planted defect, and write no `PLAN.md`; the grill and triage
+then have nothing to read. Such a run has two outcomes of its own, decided from the plan session's output
+(`plan.session.json`, which the kit writes beside the project), and applied only when the run left neither `PLAN.md`
+nor `grill-findings.json` and that session reads `is_error: false`:
+
+- **`caught-at-plan`** — its `result` cites the probe's `SPEC.md` (`SPEC.md:<line>` or `SPEC.md:<a>-<b>`, any path that
+  matches on whole segments) at a line range overlapping a SPEC anchor with its slack. A catch, counted apart from a
+  grill catch.
+- **`stopped-at-plan-unanchored`** — it cites no such line. Neither a catch nor a miss.
+
+**Both read model free text (ADVISORY, P0).** The floor part is only the deterministic overlap of a parsed citation
+with the anchors; whether the session's text really names the planted defect, and whether a stop is the right
+behaviour, is advisory. A plan stage that wrote `PLAN.md` but left no findings stays `findings-missing`.
+
+The **catch count** of an arm is `caught` + `caught-at-plan`, always reported with both parts and with the per-probe
+pairs, because one grill varies from run to run. Reported, never counted: whether a caught finding's disposition equals the expected one, and
 the **chance matches** — each run of p1 scored against p2's anchors and the other way round. p1 and p2 are the same plan
 with one in-place substitution each (equal line counts; a test checks it), so a finding on the other probe's planted
 lines is a finding there for some other reason.
@@ -131,8 +147,9 @@ with two runs per probe says "no visible regression" at most, never "no regressi
 ## Bounds (P0)
 
 - **Floor:** the manifest's shape and every sha256; the match (path equality on segments, an integer interval, a
-  whole-word token test); the outcome; the count; `--min`.
-- **Advisory:** that a matched finding is the planted defect (a finding can cite the line for another reason; the
+  whole-word token test); the outcome; the count; `--min`. For the two plan-stage outcomes, only the overlap of a parsed
+  citation with the anchors.
+- **Advisory:** that a plan session's citation names the planted defect; that a matched finding is the planted defect (a finding can cite the line for another reason; the
   chance matches bound this for p1 and p2 only); that the probes are realistic (authored; plans of 6–8 KB, below the
   15–30 KB of real plans); that the runs ran as the kit wrote them; anything a count of two runs per probe implies
   beyond those runs.

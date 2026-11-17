@@ -35,11 +35,11 @@
 // Usage:
 //   node .dev/floor/defect-probe-score.mjs verify --manifest <m> [--manifest-sha256 <hex>]
 //   node .dev/floor/defect-probe-score.mjs score  --manifest <m> --probe <id> --findings <f> --triage <t> [--plan <p>]
-//                                                 [--manifest-sha256 <hex>]
+//                                                 [--plan-session <s>] [--manifest-sha256 <hex>]
 //   node .dev/floor/defect-probe-score.mjs tally  --manifest <m> --runs <dir> [--probe <id>]… [--min <n>]
 //                                                 [--manifest-sha256 <hex>]
-// Exit: verify 0 every hash matches · 1 a mismatch | score 0 caught · 1 not caught | tally 0 · 1 the count is below
-// --min | all: 2 usage, an unreadable or malformed manifest, a manifest sha256 other than --manifest-sha256, an unknown
+// Exit: verify 0 every hash matches · 1 a mismatch | score 0 caught or caught-at-plan · 1 anything else | tally 0 ·
+// 1 the catch count (caught + caught-at-plan) is below --min | all: 2 usage, an unreadable or malformed manifest, a manifest sha256 other than --manifest-sha256, an unknown
 // probe, or (tally) a selected probe with no run directory.
 import "../../pharn/floor/runtime-floor.mjs";
 import { createHash } from "node:crypto";
@@ -74,7 +74,12 @@ export const INPUT_NAMES = Object.freeze(["SPEC.md", "PLAN.md"]);
 export const EXPECTED = Object.freeze(["replan", "spec"]);
 export const SLACK_MAX = 5;
 
-/** Every outcome a run can have — closed (L36). Only `caught` counts. */
+/**
+ * Every outcome a run can have — closed (L36). Two are catches: `caught` (by the grill and triage) and `caught-at-plan`
+ * (a SPEC probe whose plan stage stopped, citing an anchored SPEC line). `stopped-at-plan-unanchored` is neither a catch
+ * nor a miss. Both plan outcomes read model free text (the plan session's `result`): ADVISORY, P0 — the floor part is
+ * only the line-range overlap of a parsed citation with the probe's SPEC anchors.
+ */
 export const OUTCOMES = Object.freeze([
   "caught",
   "no-anchor-match",
@@ -83,6 +88,8 @@ export const OUTCOMES = Object.freeze([
   "findings-invalid",
   "triage-missing",
   "triage-invalid",
+  "caught-at-plan",
+  "stopped-at-plan-unanchored",
 ]);
 
 const SHA_RE = /^[0-9a-f]{64}$/;
@@ -244,21 +251,58 @@ export function findingMatches(file, probe, planLines) {
   return onAnchor || (pathMatches(path, `${dir}PLAN.md`) && planLines.has(line));
 }
 
+const CITE_RE = /(?<![A-Za-z0-9_./-])((?:[A-Za-z0-9_.-]+\/)*SPEC\.md):(\d{1,6})(?:\s*[-\u2013]\s*(\d{1,6}))?/g;
+
+/** Every `…SPEC.md:<line>` or `…SPEC.md:<a>-<b>` citation in free text, as {path, start, end} (a reversed range is its first line). */
+export function specCitations(text) {
+  return [...text.matchAll(CITE_RE)].map((m) => {
+    const start = Number(m[2]);
+    const end = m[3] !== undefined && Number(m[3]) >= start ? Number(m[3]) : start;
+    return { path: m[1], start, end };
+  });
+}
+
 /**
- * Score one run. `findings`, `triage` and `plan` are the files' bytes (Buffer) or null when absent. `plan` is read only
- * for a probe with plan tokens. Returns {outcome, caught, findings, matched, escalated_matched, expected_hit}.
+ * The plan-stage outcome of a SPEC probe's run, or null when there is none to score: a SPEC probe, a plan session file
+ * that parses with `is_error: false` and a string `result`. The caller applies it only when the run left no PLAN.md and no
+ * findings file. A citation of the probe's SPEC.md whose line range overlaps a SPEC anchor (with its slack) makes it
+ * `caught-at-plan`; otherwise `stopped-at-plan-unanchored`. ADVISORY: the citations come from model free text.
  */
-export function scoreRun(probe, { findings, triage, plan }) {
+export function planStop(probe, planSession) {
+  if (probe.kind !== "spec" || planSession === null) return null;
+  let s;
+  try {
+    s = JSON.parse(planSession.toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (!isObject(s) || s.is_error !== false || typeof s.result !== "string") return null;
+  const full = `pharn/features/${probe.feature}/SPEC.md`;
+  const anchors = probe.anchors.filter((a) => a.file === "SPEC.md");
+  const hit = specCitations(s.result).some(
+    (c) => pathMatches(c.path, full) && anchors.some((a) => c.start <= a.end + a.slack && c.end >= a.start - a.slack)
+  );
+  return hit ? "caught-at-plan" : "stopped-at-plan-unanchored";
+}
+
+/**
+ * Score one run. `findings`, `triage`, `plan` (the run's PLAN.md) and `planSession` (its plan.session.json) are the files'
+ * bytes (Buffer) or null when absent. `plan` is read for plan tokens; `planSession` only when a SPEC probe's run left
+ * neither PLAN.md nor findings (see planStop). Returns {outcome, caught, caught_at_plan, findings, matched,
+ * escalated_matched, expected_hit}.
+ */
+export function scoreRun(probe, { findings, triage, plan, planSession = null }) {
   const result = (outcome, extra = {}) => ({
     outcome,
     caught: outcome === "caught",
+    caught_at_plan: outcome === "caught-at-plan",
     findings: 0,
     matched: [],
     escalated_matched: [],
     expected_hit: false,
     ...extra,
   });
-  if (findings === null) return result("findings-missing");
+  if (findings === null) return result((plan === null && planStop(probe, planSession)) || "findings-missing");
   const v = validateFindings(findings.toString("utf8"));
   if (!v.ok) return result("findings-invalid");
   const planLines = probe.plan_tokens.length > 0 && plan !== null ? tokenLines(plan.toString("utf8"), probe.plan_tokens) : new Set();
@@ -311,7 +355,8 @@ export function tally(manifest, runsDir, ids, manifestSha) {
     const runs = runDirs(runsDir, probe.id).map((run) => {
       const dir = join(runsDir, probe.id, run);
       const files = { findings: readOrNull(join(dir, "grill-findings.json")), triage: readOrNull(join(dir, "grill-triage.json")) };
-      files.plan = probe.plan_tokens.length > 0 ? readOrNull(join(dir, "PLAN.md")) : null;
+      files.plan = probe.kind === "spec" ? readOrNull(join(dir, "PLAN.md")) : null;
+      files.planSession = probe.kind === "spec" ? readOrNull(join(dir, "plan.session.json")) : null;
       const shas = Object.fromEntries(Object.entries(files).map(([k, b]) => [k, b === null ? null : sha256(b)]));
       const peers = manifest.probes.filter((q) => probe.group !== null && q.group === probe.group && q.id !== probe.id);
       for (const peer of peers) {
@@ -326,23 +371,38 @@ export function tally(manifest, runsDir, ids, manifestSha) {
       class: probe.class,
       expected_disposition: probe.expected_disposition,
       caught: runs.filter((r) => r.caught).length,
+      caught_at_plan: runs.filter((r) => r.caught_at_plan).length,
+      stopped_unanchored: runs.filter((r) => r.outcome === "stopped-at-plan-unanchored").length,
       total: runs.length,
       runs,
     });
   }
-  const caught = probes.reduce((n, p) => n + p.caught, 0);
-  const total = probes.reduce((n, p) => n + p.total, 0);
-  return { ok: true, tally: { schema: TALLY_SCHEMA, manifest_sha256: manifestSha, caught, total, probes, chance_matches: chance } };
+  const sum = (k) => probes.reduce((n, p) => n + p[k], 0);
+  const [caught, caughtAtPlan] = [sum("caught"), sum("caught_at_plan")];
+  return {
+    ok: true,
+    tally: {
+      schema: TALLY_SCHEMA,
+      manifest_sha256: manifestSha,
+      catches: caught + caughtAtPlan,
+      caught,
+      caught_at_plan: caughtAtPlan,
+      stopped_unanchored: sum("stopped_unanchored"),
+      total: sum("total"),
+      probes,
+      chance_matches: chance,
+    },
+  };
 }
 
 const USAGE =
   "usage: defect-probe-score.mjs verify --manifest <m> [--manifest-sha256 <hex>]\n" +
-  "       defect-probe-score.mjs score --manifest <m> --probe <id> --findings <f> --triage <t> [--plan <p>] [--manifest-sha256 <hex>]\n" +
+  "       defect-probe-score.mjs score --manifest <m> --probe <id> --findings <f> --triage <t> [--plan <p>] [--plan-session <s>] [--manifest-sha256 <hex>]\n" +
   "       defect-probe-score.mjs tally --manifest <m> --runs <dir> [--probe <id>]... [--min <n>] [--manifest-sha256 <hex>]";
 
 const FLAGS = {
   verify: ["--manifest", "--manifest-sha256"],
-  score: ["--manifest", "--manifest-sha256", "--probe", "--findings", "--triage", "--plan"],
+  score: ["--manifest", "--manifest-sha256", "--probe", "--findings", "--triage", "--plan", "--plan-session"],
   tally: ["--manifest", "--manifest-sha256", "--runs", "--probe", "--min"],
 };
 
@@ -407,9 +467,10 @@ export function run(argv) {
       findings: readOrNull(a.flags["--findings"][0]),
       triage: readOrNull(a.flags["--triage"][0]),
       plan: a.flags["--plan"] ? readOrNull(a.flags["--plan"][0]) : null,
+      planSession: a.flags["--plan-session"] ? readOrNull(a.flags["--plan-session"][0]) : null,
     };
     const s = scoreRun(probe, files);
-    return { code: s.caught ? 0 : 1, out: `${JSON.stringify({ probe: probe.id, ...s })}\n`, err: "" };
+    return { code: s.caught || s.caught_at_plan ? 0 : 1, out: `${JSON.stringify({ probe: probe.id, ...s })}\n`, err: "" };
   }
   if (!a.flags["--runs"]) return usage("--runs is required");
   const ids = a.flags["--probe"] ?? [];
@@ -418,7 +479,7 @@ export function run(argv) {
   if (min !== undefined && !/^(0|[1-9]\d{0,3})$/.test(min)) return usage("--min must be a non-negative integer");
   const t = tally(manifest, a.flags["--runs"][0], ids, sha);
   if (!t.ok) return usage(`no run directory for: ${t.missing.join(", ")}`);
-  const below = min !== undefined && t.tally.caught < Number(min);
+  const below = min !== undefined && t.tally.catches < Number(min);
   return { code: below ? 1 : 0, out: `${JSON.stringify(t.tally, null, 2)}\n`, err: "" };
 }
 
