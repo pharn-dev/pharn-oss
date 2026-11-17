@@ -142,6 +142,15 @@
 // would scope, exit 1 is the refusal a build's Step 0 would meet. The two plan commands run it on the PLAN they just
 // wrote, so a refusal surfaces at plan time instead of at the build. It refuses to combine with --clear.
 //
+// AN ITEM IT CANNOT SCOPE (7.20.0, setter-dropped-bullets — lessons-learned L20, L71). `--from-plan` scopes literal paths
+// only. Before 7.20.0 an item holding `*`, `?`, `<` or `>` was DROPPED without a word: a PLAN with 37 items printed
+// `35 path(s)`, nobody compared the two numbers, and the missing grant surfaced mid-build as a deny. Now any such item
+// REFUSES the plan, in `--check` and in a build's set alike (so `--check` still predicts Step 0), naming every item it
+// could not scope, why, and how many of the list's items that is. No opt-in: such an item never granted a write, so
+// refusing it removes no capability, only the impression that it did. `--from-frontmatter` is unchanged — there a
+// placeholder or glob is the designed input of `--target`. BOUND (P0): the test is `isConcrete`, the same character
+// membership that dropped the item; a literal path the build never writes is still scoped and still passes.
+//
 // FENCED CODE (loop-scope-hardening — review finding ENF-1). Mode B never reads a fenced code block: a fenced `## Files` is not
 // the list, and fenced lines under the list are not paths. This reader does not track list nesting, so it reads
 // the plan two ways — a fence line counts only at 0–3 spaces (CommonMark's top-level rule), and a fence line counts
@@ -1033,6 +1042,28 @@ function main() {
   if (!fs.existsSync(file)) fail(`file not found: ${file}`);
 
   const raw = mode === "--from-frontmatter" ? writesFromFrontmatter(file) : pathsFromPlanFiles(file);
+  // AN ITEM IT CANNOT SCOPE (7.20.0, see the header): name every one rather than drop it. Quoted with JSON.stringify,
+  // because an item is untrusted text (P2) and this check runs before the control-character refusal below.
+  if (mode === "--from-plan") {
+    const dropped = raw.filter((entry) => {
+      const p = resolveEntry(entry, target);
+      return p === null || !isConcrete(p);
+    });
+    if (dropped.length) {
+      const why = (entry) => {
+        const c = clean(entry);
+        if (c.length === 0) return "empty — no path between the back-ticks";
+        if (/[<>]/.test(c)) return "a placeholder (`<` or `>`) — fill it in";
+        return "a glob (`*` or `?`) — this setter scopes literal paths only";
+      };
+      fail(
+        `${dropped.length} of ${raw.length} \`## Files\` item(s) in ${file} cannot be scoped, so no write could use them:\n` +
+          dropped.map((entry) => `  - ${JSON.stringify(entry)}: ${why(entry)}\n`).join("") +
+          "  Fix: name each file the increment writes, one item per file. A path nothing in this increment writes goes under a `### …` heading after the list.\n" +
+          "  Nothing was written; pharn/.run/writes-scope.json is unchanged."
+      );
+    }
+  }
   const scope = raw
     .map((entry) => resolveEntry(entry, target))
     .filter((p) => p !== null)
