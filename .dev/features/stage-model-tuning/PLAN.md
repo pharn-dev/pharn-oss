@@ -53,6 +53,27 @@ decisions"), not by a human. The decisions:
    took effect). Alternative: a `claude -p 'Reply OK' --model sonnet --output-format json` call (cents), which checks
    the JSON shape but not the override.
 
+## Amendments after the grill (2026-11-17, before the build)
+
+`/pharn-dev-grill` raised 2 important and 4 minor concerns (`GRILL.md`). They change the kit's agreement check, the
+reader's summary, the eval list and the record, not `## Files`:
+
+- **No arm code is executed (P2).** The kit checks agreement with THIS repository's `pharn/floor/check-model-config.mjs`
+  run as `agreement --config <project>/pharn.config.json --commands-dir <project>/.claude/commands`, never the arm's
+  copy, so building a kit still runs nothing from `--arm` but its bytes through `git`.
+- **The order confound is a stated bound.** The control runs (CORE-90's kit) and the variant runs are sequential and
+  not randomized, so a change between the two windows (a Claude Code update, a model behind an alias, service load) is
+  confounded with the varied factor. The record names it, records the Claude Code version per kit as the user reports
+  it, and keeps the reading's wording at "no visible regression in these pairs".
+- **The one-loss rule is stated as strict, not statistical.** The record says a single lost catch is a visible
+  regression by construction, and that neither reading is a significance test.
+- **Chain USD leads.** The reading's saving test is the chain's USD (for the plan arm, the plan's output changes the
+  grill's cost); the record prints per-stage USD beside it.
+- **Incomplete pairs are counted.** The summary reports, per side, the runs with a missing or invalid session, so a kit
+  that lost sessions is visible without reading every row.
+- **The GATE 1 case is a named test:** control run files passed as the variant with `--expect-variant grill=sonnet`
+  read `cannot-decide` / `arm-not-applied`.
+
 ## Applied lessons
 
 - L4 — the record keeps the floor (outcomes, counts, the reading computed from the pair table) apart from the advisory
