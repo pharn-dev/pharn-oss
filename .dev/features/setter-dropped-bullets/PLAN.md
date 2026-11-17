@@ -2,7 +2,7 @@
 
 - spec_content_hash: f058fca367fabcdfecf939dc70bfb43deaadedb1b0e810b790c4aeb156d6775d
 - applied_lessons: [L20, L29, L37, L46, L68, L71, L75]
-- increment: 7.20.0 (MINOR) — `set-writes-scope.cjs --from-plan` (a build's Step 0 and both plan commands' `--check`)
+- increment: 7.21.0 (MINOR) — `set-writes-scope.cjs --from-plan` (a build's Step 0 and both plan commands' `--check`)
   exits 1 and writes nothing when a `## Files` item is not a concrete path (it holds `*`, `?`, `<` or `>`, or is empty
   once its trailing `(…)` annotation is cut), naming every such item, the reason, and how many of the list's items
   that is ("2 of 37"). Before, it dropped the item without a word and printed the smaller count.
@@ -83,7 +83,7 @@ opt-in.** Reasoning:
 - **Cost, stated:** the `docs/capabilities/**` "regenerated only if the catalog moves" item that 16 dev plans carry is
   now refused; such a path goes under a `### …` heading after the list, or is named file by file when it does change.
   An installed project's plan with a `src/**` item is refused at `/pharn-plan`'s `--check`, which tells the planner to
-  name the files. A plan approved before 7.20.0 that holds such an item now stops at Step 0 with the same message.
+  name the files. A plan approved before 7.21.0 that holds such an item now stops at Step 0 with the same message.
 
 ## Files
 
@@ -102,8 +102,8 @@ opt-in.** Reasoning:
 - `pharn/floor/render-regression.mjs` — one comment and the `unenforced_globs` line ("set-writes-scope.cjs drops") —
   product floor
 - `.dev/guides/writes-scope.md` — the `--check` bullet gains the refusal — dev guide
-- `SKILLS_VERSION` — 7.19.0 → 7.20.0 — repo meta
-- `CHANGELOG.md` — the 7.20.0 entry — repo meta
+- `SKILLS_VERSION` — 7.20.0 → 7.21.0 — repo meta
+- `CHANGELOG.md` — the 7.21.0 entry — repo meta
 - `README.md` — the version badge — repo meta
 - `pharn/floor/check-ac-tests.test.mjs` — a non-concrete row now asserts the setter's refusal (the build never starts,
   so it can write nothing); the concrete rows are unchanged — product-floor tests (not shipped)
@@ -117,7 +117,7 @@ opt-in.** Reasoning:
 
 `.claude/hooks/set-writes-scope.cjs` is on the guards' control surface. A Python patch script
 (`patch_setter_dropped_bullets.py`, taking the repo root as argv[1], asserting each of its two anchors matches exactly
-once, writing nothing otherwise) adds the header paragraph "AN ITEM IT CANNOT SCOPE (7.20.0)" and the refusal in
+once, writing nothing otherwise) adds the header paragraph "AN ITEM IT CANNOT SCOPE (7.21.0)" and the refusal in
 `main()` right after `raw` is read, before the empty-scope check (which stays reachable for a list with no back-tick
 item). The maintainer runs it after GATE 1; its output is committed BEFORE `/pharn-dev-build`'s Step 0 anchors (L68);
 the script is deleted after it runs.
@@ -186,3 +186,9 @@ No Capability is added or changed (the setter is a hook, not a `role:` file); th
 ## Open questions (HALT)
 
 None.
+
+## Renumbered before the build (2026-11-17)
+
+`origin/main` moved to 7.20.0 (#453, stage-agent effort) after GATE 1, so this increment ships as 7.21.0. `origin/main`
+was merged in (`4d925453`, no overlap with any file above), and the maintainer ran a second three-line patch renumbering
+the setter header (`60a2af53`), both before Step 0 anchors (L68).
