@@ -1,0 +1,26 @@
+{
+  "feature": "stage-effort-routing",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "9216c1ec15bc989c9335c5e2939e4262f5058280880474e5032d5abcc37a554c",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "884520235a84c34fff13f05a00826162ab7a9d5ac002e8affab84130ba8f118b"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
