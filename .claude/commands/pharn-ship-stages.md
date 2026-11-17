@@ -19,9 +19,9 @@ which still apply. Its `###` headings carry the item numbers the text cites: Ste
 ## Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model
 
 A stage `ROUTE_POLICY` routes runs as a Claude Code subagent — a **stage agent** — requested on the
-model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool takes no effort, so a
-routed stage runs at the effort it inherits. The protocol — the policy table, every inline reason and its
-remedy, the stage agent's rules, the closed result — is `pharn/floor/stage-agent-core.mjs`'s header, cited
+model `models.stages` resolves for it. **The model and the effort are both requested on the Agent call**: where your
+Agent tool takes no `effort`, a routed stage runs at the effort it inherits, and `SHIP.md` says so. The protocol — the
+policy table, every inline reason and its remedy, the stage agent's rules, the closed result — is `pharn/floor/stage-agent-core.mjs`'s header, cited
 here, not restated (P4). In this command `/pharn-plan`, `/pharn-grill`, `/pharn-test` and `/pharn-build` (the
 Step 2b re-build too) are routed. `/pharn-spec` runs inline by policy (it IS GATE 1), and so do
 `/pharn-regress` and `/pharn-verify` (floor code produces their verdicts, so their model does not change them) — one
@@ -31,7 +31,8 @@ Each routed stage in Step 2 carries a start line, a brief prompt and a finish li
 do what two lines did), and you run them in this order:
 
 1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
-   stage-start marker with that token, and prints the token, then the marker line. Branch **only** on its exit
+   stage-start marker with that token, and prints the token, then the marker line, and on exit `0` a third line
+   `effort:<level>`, the effort the config resolves for the stage. Branch **only** on its exit
    code (P5):
    - `0` — the token is `agent:<alias>`: run the stage as a stage agent (2, below).
    - `3` — it is `inline:<reason>`: run the stage INLINE, exactly as before 6.27.0, then the inline return line (4).
@@ -51,14 +52,19 @@ do what two lines did), and you run them in this order:
 
 2. **On start exit `0` only, the Agent call:** `subagent_type: "pharn-stage"` — the definition
    `.claude/agents/pharn-stage.md` (eight tools, the project's instruction files kept; Claude Code applies it) —
-   `model: "<alias>"` (the part after `agent:`), `description: "pharn stage <stage>"`,
+   `model: "<alias>"` (the part after `agent:`), `effort: "<level>"` (the part after `effort:` on the start line's
+   third line), `description: "pharn stage <stage>"`,
    `run_in_background: false` (the JSON boolean `false`, never the string `"false"`), and **no
    `isolation`** — the stages write into this one tree, one after another, never a worktree each. Its
    `prompt` is the stage's pinned one-line brief prompt, `<name>` substituted, and nothing else: the stage
    agent runs that line first and receives its rules from code (`brief`), never from your transcription. **If your
    Agent tool does not offer `pharn-stage`, or the call returns an error for that type without starting an agent,
    make the same call once with `subagent_type: "general-purpose"`**, and write `general-purpose (fallback)` after
-   that stage's route token in `SHIP.md`. A call that started an agent is never followed by a second call.
+   that stage's route token in `SHIP.md`. **If your Agent tool lists no `effort` parameter, leave it out; if a call
+   returns an error about `effort` without starting an agent, make the same call once without it.** Either way the
+   stage still routes: write `effort not applied` after that stage's route token in `SHIP.md`. So a stage makes at
+   most three calls, in this order: `pharn-stage` with `effort`, then `general-purpose` after an error about the type,
+   then without `effort` after an error about it. A call that started an agent is never followed by a second call.
 3. **The finish line — only after an Agent call has returned the agent's COMPLETED result.** It reads the agent's
    result as `read` does and writes the `orchestrator` return marker. A call that returns a background-launch
    notice has not: wait for the agent's completion notice first (you may end your turn to wait for it, and say

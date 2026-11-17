@@ -1,0 +1,107 @@
+// .dev/floor/check-install-manifest.test.mjs — the install-manifest drift checker (7.21.0, CORE-193): one test per
+// finding type with its own remedy (L27), the non-directory target, the real tree, and the package.json wiring that
+// puts the pair inside `docs:generate` / `docs:check` (and so inside CI's "Docs drift check" step).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { checkInstallManifest, FIX, main } from "./check-install-manifest.mjs";
+import { generate } from "./gen-install-manifest.mjs";
+import { MANIFEST_PATH } from "./install-manifest-core.mjs";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = join(HERE, "..", "..");
+
+/** A tree every surface and both roles contribute to (this file's own; the generator's tests build theirs). */
+function minimalTree() {
+  const root = mkdtempSync(join(tmpdir(), "pharn-install-check-"));
+  const put = (rel, body = `# ${rel}\n`) => {
+    mkdirSync(dirname(join(root, rel)), { recursive: true });
+    writeFileSync(join(root, rel), body);
+  };
+  put("SKILLS_VERSION", "1.2.3\n");
+  put("pharn.config.json", '{"models":{"stages":{"default":{"model":"opus","effort":"max"}}}}\n');
+  put("pharn/pharn-pipeline/grillers/gg/gg.md", '---\nrole: griller\napplies: ["spa"]\n---\n# gg\n');
+  put("pharn/pharn-review/ll/ll.md", '---\nrole: lens\napplies: ["universal"]\n---\n# ll\n');
+  const files = [".claude/commands/pharn-a.md", ".claude/agents/pharn-b.md", ".claude/hooks/c.cjs", ".claude/settings.json", "LICENSE"];
+  for (const d of ["CONSTITUTION", "ARCHITECTURE", "THREAT-MODEL", "LIMITS"]) files.push(`pharn/${d}.md`);
+  files.push("pharn/features/README.md", "pharn/pharn-contracts/c.md", "pharn/pharn-core/k.md", "pharn/floor/f.mjs");
+  for (const rel of files) put(rel);
+  return root;
+}
+
+function run(target) {
+  const out = [];
+  const code = main([target], { out: (s) => out.push(s) });
+  return { code, text: out.join("") };
+}
+
+test("GREEN on a freshly generated tree", (t) => {
+  const root = minimalTree();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  generate(root);
+  assert.deepEqual(checkInstallManifest(root), { ok: true, findings: [] });
+  const r = run(root);
+  assert.equal(r.code, 0);
+  assert.match(r.text, /INSTALL-MANIFEST: GREEN/);
+});
+
+const CASES = [
+  ["MISSING", (root) => rmSync(join(root, MANIFEST_PATH))],
+  ["DRIFT", (root) => writeFileSync(join(root, MANIFEST_PATH), readFileSync(join(root, MANIFEST_PATH), "utf8").replace("1.2.3", "1.2.4"))],
+  ["DRIFT", (root) => writeFileSync(join(root, "pharn/floor/f.mjs"), "// one changed installed byte\n")],
+  ["ENUM_ERROR", (root) => writeFileSync(join(root, "SKILLS_VERSION"), "x\n")],
+];
+
+for (const [type, mutate] of CASES) {
+  test(`RED ${type}, with that type's own remedy and no other's`, (t) => {
+    const root = minimalTree();
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    generate(root);
+    mutate(root);
+    const res = checkInstallManifest(root);
+    assert.equal(res.ok, false);
+    assert.deepEqual(
+      res.findings.map((f) => f.type),
+      [type]
+    );
+    const r = run(root);
+    assert.equal(r.code, 1);
+    assert.match(r.text, new RegExp(`\\[${type}\\]`));
+    assert.ok(r.text.includes(`FIX: ${FIX[type]}`));
+    for (const other of Object.keys(FIX).filter((k) => FIX[k] !== FIX[type])) assert.ok(!r.text.includes(FIX[other]), `no ${other} remedy`);
+  });
+}
+
+test("ENUM_ERROR's remedy never prescribes regenerating", () => {
+  assert.ok(!FIX.ENUM_ERROR.includes("npm run docs:generate"));
+  assert.ok(FIX.MISSING.includes("npm run docs:generate") && FIX.DRIFT.includes("npm run docs:generate"));
+});
+
+test("a target that is not a directory is RED, never GREEN over nothing", () => {
+  const r = run(join(REPO, "no-such-dir"));
+  assert.equal(r.code, 1);
+  assert.match(r.text, /target dir not found/);
+  assert.equal(run(join(REPO, "package.json")).code, 1);
+});
+
+test("✧ the real tree is GREEN, through the CLI as CI runs it", () => {
+  const r = spawnSync(process.execPath, [join(HERE, "check-install-manifest.mjs"), "."], { cwd: REPO, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout);
+  assert.match(r.stdout, /GREEN/);
+});
+
+test("✧ package.json wires the generator into docs:generate and the checker into docs:check", () => {
+  const pkg = JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
+  assert.match(pkg.scripts["docs:generate"], /node \.dev\/floor\/gen-install-manifest\.mjs \./);
+  assert.match(pkg.scripts["docs:check"], /node \.dev\/floor\/check-install-manifest\.mjs \./);
+  assert.match(pkg.scripts.check, /npm run docs:check/);
+});
+
+test("✧ .prettierignore keeps the formatter off the generated bytes", () => {
+  const lines = readFileSync(join(REPO, ".prettierignore"), "utf8").split("\n");
+  assert.ok(lines.includes(MANIFEST_PATH));
+});

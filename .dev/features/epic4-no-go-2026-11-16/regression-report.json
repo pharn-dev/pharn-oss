@@ -1,0 +1,43 @@
+{
+  "base": "65559244842cd8f3f4807961d33eb38daaf5f2e5",
+  "inside": [
+    ".dev/features/epic4-no-go-2026-11-16/PLAN.md",
+    "CHANGELOG.md",
+    ".dev/features/epic4-no-go-2026-11-16/GRILL.md",
+    ".dev/measurements/epic-4-no-go-2026-11-16.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6905,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6906,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

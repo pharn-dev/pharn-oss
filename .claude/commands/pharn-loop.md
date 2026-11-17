@@ -562,8 +562,9 @@ before a Draft is written) writes no record and no SPEC revert; it goes straight
 ## Running a stage (6.27.0) — a routed stage runs as a stage agent, requested on its configured model
 
 A stage `ROUTE_POLICY` routes runs as a Claude Code subagent — a **stage
-agent** — requested on the model `models.stages` resolves for it. **The model is routed; effort is not**: the Agent tool
-takes no effort, so a routed stage runs at the effort it inherits. The protocol is
+agent** — requested on the model `models.stages` resolves for it. **The model and the effort are both requested on the
+Agent call**: where your Agent tool takes no `effort`, a routed stage runs at the effort it inherits, and the summary
+says so. The protocol is
 `pharn/floor/stage-agent-core.mjs`'s header, cited here, not restated (P4). Here `/pharn-spec`, `/pharn-plan`,
 `/pharn-grill`, `/pharn-triage`, `/pharn-supervise` (on an escalation), `/pharn-test` and `/pharn-build` (every
 iteration) are routed. `/pharn-regress` and
@@ -576,7 +577,8 @@ Each routed stage carries a start line, a brief prompt and a finish line (6.43.0
 two lines did), and you run them in this order:
 
 1. **The start line** (`stage-agent.mjs start`). It decides the route exactly as `route` does, writes the
-   stage-start marker with that token, and prints the token, then the marker line. Branch **only** on its exit code
+   stage-start marker with that token, and prints the token, then the marker line, and on exit `0` a third line
+   `effort:<level>`, the effort the config resolves for the stage. Branch **only** on its exit code
    (P5): `0` — the token is `agent:<alias>`, so run the stage as a stage agent (2, below); `3` — it is
    `inline:<reason>`, so run the stage INLINE, exactly as before 6.27.0, then the inline return line (4); anything
    else — a crash, no marker written: run the line below (for the build, add the start line's own `--iteration <N>`),
@@ -594,6 +596,7 @@ two lines did), and you run them in this order:
 2. **On start exit `0` only, the Agent call, whatever parameters your Agent tool lists:**
    `subagent_type: "pharn-stage"` — the definition `.claude/agents/pharn-stage.md` (eight tools, the project's
    instruction files kept; Claude Code applies it) — `model: "<alias>"` (the part after `agent:`),
+   `effort: "<level>"` (the part after `effort:` on the start line's third line),
    `description: "pharn stage <stage>"`, **no `run_in_background`** — leave the parameter out; item 3 runs after the
    call whichever launch the harness picks — and **no `isolation`** — the stages write into this one tree, one after
    another, never a worktree each. Its `prompt` is the stage's
@@ -602,8 +605,12 @@ two lines did), and you run them in this order:
    below that line, in a fence longer than any backtick run inside it, labelled DATA (ADVISORY, like every
    placement). **If your Agent tool does not offer `pharn-stage`, or the call returns an error for that type without
    starting an agent, make the same call once with `subagent_type: "general-purpose"`**, and write
-   `general-purpose (fallback)` after that stage's route token in the Step 7 summary. A call that started no agent is
-   not one item 3 follows; a call that started one (its result or a background-launch notice) is never followed by a
+   `general-purpose (fallback)` after that stage's route token in the Step 7 summary. **If your Agent tool lists no
+   `effort` parameter, leave it out; if a call returns an error about `effort` without starting an agent, make the same
+   call once without it.** Either way the stage still routes: write `effort not applied` after that stage's route token
+   in the Step 7 summary. So a stage makes at most three calls, in this order: `pharn-stage` with `effort`, then
+   `general-purpose` after an error about the type, then without `effort` after an error about it. A call that started
+   no agent is not one item 3 follows; a call that started one (its result or a background-launch notice) is never followed by a
    second call.
 3. **The finish line — after EVERY Agent call, whatever it returned: the agent's COMPLETED result or a
    background-launch notice.** Run it with the Bash tool's timeout parameter set to 600000. It waits on disk for the

@@ -1,0 +1,54 @@
+{
+  "base": "155d12057815e74769e30e785f007924e273eae3",
+  "inside": [
+    ".dev/features/loop-driver-spike/GRILL.md",
+    ".dev/features/loop-driver-spike/PLAN.md",
+    ".dev/features/loop-driver-spike/driver/driver-core.mjs",
+    ".dev/features/loop-driver-spike/driver/loop-driver.mjs",
+    ".dev/features/loop-driver-spike/driver/token-exit.mjs",
+    ".dev/features/loop-driver-spike/driver/measure.mjs",
+    ".dev/features/loop-driver-spike/driver/loop-driver.test.mjs",
+    ".dev/features/loop-driver-spike/kit/README.md",
+    ".dev/features/loop-driver-spike/kit/setup.sh",
+    ".dev/features/loop-driver-spike/kit/preflight.sh",
+    ".dev/features/loop-driver-spike/kit/run-driver.sh",
+    ".dev/features/loop-driver-spike/kit/run-loop.sh",
+    ".dev/features/loop-driver-spike/kit/intent.md",
+    ".dev/features/loop-driver-spike/RECORD.md",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6905,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6906,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

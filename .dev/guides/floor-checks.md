@@ -566,7 +566,8 @@ node .dev/floor/check-provenance.mjs <candidate.json> <canon-file.md>
 # model/effort, invisible to any hook/hash/enum; (2) TURN SCOPE — the frontmatter override lasts the invoking
 # turn, so a stage run INLINE as a step inside /pharn-ship or /pharn-loop (a policy-inline stage, a routing
 # fallback, the orchestrators themselves) does not get its frontmatter model; since 6.27.0 a ROUTED stage gets
-# its model from the Agent call instead, and its EFFORT keeps this bound; and (observed once, 2026-10-05) a command
+# its model from the Agent call instead, and since 7.20.0 its effort as a request on that call where the tool takes
+# one; and (observed once, 2026-10-05) a command
 # a MODEL invokes through the Skill tool does not get its frontmatter model at all — only a person's slash invocation
 # did (the checker's header, TURN SCOPE); (3) an org availableModels allowlist
 # or auto mode can decline a value SILENTLY. `model_tier:` is a DIFFERENT,

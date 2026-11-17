@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   user's runs. The audit's whole-loop experiment E1 is out of scope, so every default that needs it stays "cannot
   decide".
 
-- 2026-11-16: **Added: a defect probe set, its scorer and a run kit, the quality measure for changes to what the grill,
+- 2026-11-17: **Added: a defect probe set, its scorer and a run kit, the quality measure for changes to what the grill,
   the triage or the plan writer read (CORE-90).** Apparatus only; nothing ships and `SKILLS_VERSION` is unchanged.
   `.dev/probes/defect-probes/` holds a small fixture project and six probes, each with one planted defect: four PLAN
   probes (a cross-tenant lookup, floating-point money against the SPEC's constraint, a renamed stored field with no
@@ -48,6 +48,98 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   fresh project and one headless `claude -p` command line per run for any arm, with the model and effort set per stage. The
   user runs those commands. The catch count on `main` (7.19.0) is pending in
   `.dev/measurements/defect-probes-main-7.19.0.md`, which records the manifest's sha256 before any run.
+
+## [7.21.0] - 2026-11-17
+
+### Added
+
+- **pharn-oss now declares its install: `pharn-install.json`, a generated, drift-checked manifest at the repo root**
+  (Linear CORE-193, C8.1). pharn-cli built every install from this repository's internals: ported frontmatter rules, a
+  ported model checker and a hand-held tree layout, each pinned by a differential test, so every upstream change
+  needed a lockstep CLI release. The manifest lets the CLI copy what this repository declares instead (CORE-194).
+  - **Contents** (`schemaVersion: 1`, schema in `docs/install-manifest.md`): `skillsVersion`; every installable file's
+    `path`, `dest`, `surface`, owning `capability`, copy `policy` (`managed`, or `if-absent` for
+    `.claude/settings.json`) and SHA-256 over its raw bytes (614 files today); the 35 selectable grillers and lenses
+    with `applies` in the CLI's shape; the `models` defaults (the root `pharn.config.json` block) and rules; the layout;
+    and the install-root globs, including the older layouts' roots so the CLI can bound an older install's records. No
+    `minCli`: `MIN_CLI` stays the one source.
+  - **One declaration.** `.dev/floor/install-manifest-core.mjs` holds the install rules (surfaces, test and fixture
+    exclusions, the LICENSE mapping) and builds the file from the catalog's capability walk, git's file list,
+    `check-surface-bump.mjs`'s glob grammar and the model checker's own exports. It refuses a symlinked installable
+    path, an empty surface, a bad `SKILLS_VERSION`, a duplicate destination and a malformed `applies`.
+  - **Drift-checked on every PR.** `gen-install-manifest.mjs` joins `npm run docs:generate` and
+    `check-install-manifest.mjs` joins `npm run docs:check`, which CI's "Docs drift check" step runs. A change to any
+    installed file, and every `SKILLS_VERSION` bump, needs a regeneration. Tests bind the rules to the tree: every
+    bump-triggering product path is in the manifest, and the installed paths outside that set are exactly `LICENSE`,
+    `pharn/features/README.md` and `pharn/floor/README.md`.
+  - **`pharn/floor/check-model-config.mjs` exports its rules** (`PRODUCT_STAGES`, `MODEL_ALIASES`, `MODEL_ID_RE`,
+    `EFFORT_ENUM`) and runs nothing when imported. Run as a CLI it behaves exactly as before. This is the product-surface
+    change that makes this release; the manifest itself is installer metadata outside the bump-triggering set, like
+    `SKILLS_VERSION` and `MIN_CLI`, and is never copied into an install.
+  - **Spike.** Against pharn-cli 0.19.0's own `installManifest` on v7.19.0 and on this tree, with every capability
+    selected, the manifest names the CLI's 613 paths at the same destinations from the same sources, plus
+    `.claude/settings.json` with its copy-only-when-absent policy; the capability index and the model rules and
+    defaults agree, and the legacy roots cover all 443 paths of the last flat-layout tree. Record:
+    `.dev/features/install-manifest/SPIKE-DIFF.md`; decision record: `.dev/features/install-manifest/RFC.md`.
+  - **Bounds.** The drift check proves the committed file equals what the rules compute, never that the rules are
+    right. That the tarball carries the declared bytes holds while `.gitattributes` keeps the tree LF with no
+    `export-ignore`; the CLI's SHA-256 check after extraction is the check. The manifest is untrusted data to the CLI,
+    which validates every field. A tree older than 7.21.0 has no manifest. `MIN_CLI` is unchanged.
+
+## [7.20.0] - 2026-11-16
+
+### Added
+
+- **A routed stage agent is requested at the effort `models.stages` resolves for it (CORE-111).** Until now the Agent
+  call carried the model only, so every stage's declared `effort: high` reached no routed stage. On exit `0`,
+  `pharn/floor/stage-agent.mjs start` now prints a third line, `effort:<level>`, after the token and the marker line;
+  `/pharn-loop` and `/pharn-ship` pass that level as the Agent call's `effort`. Where the Agent tool lists no `effort`
+  parameter, or refuses the value without starting an agent, the call goes without it, the stage still routes, and the
+  summary or `SHIP.md` writes `effort not applied` after the route token. A stage makes at most three calls, in order:
+  `pharn-stage` with `effort`, then `general-purpose` after an error about the type, then without `effort` after an
+  error about it. `pharn/floor/route-token-core.mjs` pins the levels as a platform fact, `AGENT_EFFORTS` (`low`,
+  `medium`, `high`, `xhigh`, `max`), and a parity test holds them equal to `check-model-config.mjs`'s `EFFORT_ENUM`.
+  `routeFromResolved` sends a resolved effort outside that set inline as `resolve-failed`. The harness probe
+  (`.dev/features/stage-effort-routing/EFFORT-PROBE.md`) found an optional `effort` taking those five levels in the
+  desktop app's Agent tool and in the terminal CLI 2.1.323's embedded schema; that schema omits the parameter when
+  `CLAUDE_CODE_EFFORT_LEVEL` is set. One direct Agent call with `effort: "low"` produced a transcript that recorded
+  the level in its requests' `output_config`. Bounds: the effort is a request (advisory), and what a stage ran at is
+  evidence from an undocumented transcript format, never proof. No routed stage has been observed yet, and neither the
+  marker nor `cost.json` records the effort. The quality and cost comparison on the benchmark features is not run here,
+  because the probe set does not exist yet; CORE-112's effort pairs measure it. `pharn/LIMITS.md` §8 was updated by
+  the maintainer. The commands, `cost-ledger.md`, the `pharn.config.json` note, `docs/limitations.md`, the README and
+  the guides drop "effort is not routed". `check-model-config.mjs` changes in its header only, so pharn-cli's
+  byte-pinned fixture copy lags until it is refreshed.
+- 2026-11-17: **Measured: a script-driven quick loop with one headless `claude -p` session per stage works, and the
+  record says no-go for building one now (CORE-113 spike).** The maintainer ran a node driver from a terminal on the
+  `lg3-remove-files` benchmark, on a 7.19.0 measure base. It ran every pinned floor line of `/pharn-loop --quick`
+  itself, with no model request of its own, and ten sessions. It ended `STOP_CAP` after 3 iterations, with the
+  closeout's record and decision checks GREEN. No spike gate failed:
+  - routed stages were served their configured model;
+  - the write guard denied an out-of-scope Write inside a driven session;
+  - every stage completed;
+  - a resumed session acted on a relayed answer;
+  - every session ran in auto mode with no skip flag.
+
+  Effort was not observable, and the inline grill was served its frontmatter model. The cost ledger attributes no token
+  of a driven run: `coverage: unavailable`, "no session id available". Both `/pharn-loop --quick` comparison runs
+  stopped at the spec stage (S6c, `not-quick`) on the same intent bytes the driven spec accepted. So the orchestrator's
+  share after Epics 1 and 2 was measured only up to that stop (58.6% and 65.7%), which is not a whole-run figure and
+  not comparable with the baseline's 27.7%. The no-go rests on that unmet start condition. The benchmark also cannot
+  end green by either route: a project test needs edits the intent puts out of scope. Record:
+  `.dev/features/loop-driver-spike/RECORD.md`, with the driver, its test and the kit beside it. Dev apparatus only, so
+  no `SKILLS_VERSION` bump.
+
+- 2026-11-16: **Closed: four epic-4 candidates the 2026-11-11 baseline rated no-go (CORE-96, CORE-97, CORE-98,
+  CORE-99), with a decision record that re-reads each on 7.19.0.** The ledgers have not moved since the baseline (the
+  project still holds its 129 `cost.json` and is on 7.10.3), so their figures are cited: plan minutes correlate 0.76
+  with plan requests and 0.43 with plan bytes; 4 of 36 full runs had three or fewer criteria; one stop was a
+  contradiction between criteria. Main did move. `pharn-spec.md` has 1,656 B of headroom, not the 3,296 B CORE-99
+  assumed. `pharn/ARCHITECTURE.md` outside §6 is 19,582 B, about 4.9k tokens, or 5.0–7.2% of a routed stage's first
+  request depending on which estimate of it is used. And since 7.16.0's `gates.timeoutMs`, CORE-97's second reason is
+  weaker, so its closure rests on the share alone. Each section names the measurement that would reopen the task. The
+  closures are the orchestrator's decision under the user's delegation, not a maintainer sign-off. Record:
+  `.dev/measurements/epic-4-no-go-2026-11-16.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
 
 - 2026-11-16: **Measured: a `pharn-stage` subagent's first request is 44.6% of a `general-purpose` one's, in one
   fresh-session probe (CORE-107 follow-up).** The 7.19.0 entry left this unmeasured. On 2026-11-16 the user ran the

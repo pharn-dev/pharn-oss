@@ -22,6 +22,11 @@ docs/capabilities/
 # L15), so any reformatting pass would rewrite committed bytes and the drift checker would see false drift.
 docs/lessons-index.md
 
+# Generated install manifest (7.21.0): byte-for-byte output of `npm run docs:generate`, guarded by
+# .dev/floor/check-install-manifest.mjs. Same reason as the two above: its one-entry-per-line layout is the generator's,
+# and prettier would re-wrap it, which the drift checker would read as drift.
+pharn-install.json
+
 # Memory-bank canon (7.3.0, plan-scope-hardening): canon changes only through the gated promotion, whose accepted bytes
 # a formatter must not rewrite. A Bash formatter pass over a plan-sourced scope that named canon rewrote it (review
 # 2026-11-03, probe D); the setter now refuses such a scope, and this is the second layer for an explicitly named path.

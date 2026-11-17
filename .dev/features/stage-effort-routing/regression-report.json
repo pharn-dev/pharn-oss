@@ -1,0 +1,66 @@
+{
+  "base": "155d12057815e74769e30e785f007924e273eae3",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-ship-close.md",
+    ".claude/commands/pharn-ship-stages.md",
+    ".dev/features/stage-effort-routing/EFFORT-PROBE.md",
+    ".dev/features/stage-effort-routing/GRILL.md",
+    ".dev/features/stage-effort-routing/PLAN.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    ".dev/floor/stage-agent-type.test.mjs",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/floor-orchestration.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "docs/limitations.md",
+    "pharn.config.json",
+    "pharn/LIMITS.md",
+    "pharn/floor/check-model-config.mjs",
+    "pharn/floor/route-token-core.mjs",
+    "pharn/floor/route-token-core.test.mjs",
+    "pharn/floor/stage-agent-core.mjs",
+    "pharn/floor/stage-agent-core.test.mjs",
+    "pharn/floor/stage-agent.mjs",
+    "pharn/floor/stage-agent.test.mjs",
+    "pharn/pharn-contracts/cost-ledger.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6452,
+      "failed": 1,
+      "skipped": 7,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6453,
+      "failed": 1,
+      "skipped": 6,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 1
+  }
+}

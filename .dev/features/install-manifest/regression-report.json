@@ -1,0 +1,79 @@
+{
+  "base": "155d12057815e74769e30e785f007924e273eae3",
+  "inside": [
+    ".dev/features/install-manifest/GRILL.md",
+    ".dev/features/install-manifest/PLAN.md",
+    ".dev/features/install-manifest/REGRESSION.md",
+    ".dev/features/install-manifest/REVIEW.md",
+    ".dev/features/install-manifest/RFC.md",
+    ".dev/features/install-manifest/SHIP.md",
+    ".dev/features/install-manifest/SPIKE-DIFF.md",
+    ".dev/features/install-manifest/VERIFY.md",
+    ".dev/features/install-manifest/regression-report.json",
+    ".dev/features/install-manifest/verify-report.json",
+    ".dev/floor/check-install-manifest.mjs",
+    ".dev/floor/check-install-manifest.test.mjs",
+    ".dev/floor/gen-install-manifest.mjs",
+    ".dev/floor/gen-install-manifest.test.mjs",
+    ".dev/floor/install-manifest-core.mjs",
+    ".dev/floor/install-manifest-core.test.mjs",
+    ".dev/guides/generated-docs.md",
+    ".prettierignore",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "docs/install-manifest.md",
+    "package.json",
+    "pharn-install.json",
+    "pharn/floor/check-model-config.mjs"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6912,
+      "failed": 1,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6913,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

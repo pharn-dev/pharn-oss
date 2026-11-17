@@ -138,7 +138,7 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
 - **Several announced modules are not built.** `pharn-audits`, `pharn-skills-*`, `pharn-stack-*`, and the
   rest of `pharn-core` — the constitution engine, the agnostic rule set, and the memory-bank commands
   beyond promotion. What exists is what the [generated inventory](../README.md#pharn-builds-pharn) lists.
-- **Per-stage models are routed for most orchestrated stages, effort is not, and nothing proves what a
+- **Per-stage models and efforts are requested for most orchestrated stages, and nothing proves what a
   stage ran on.** `pharn.config.json`'s `models.stages` is the source of truth for the product
   commands' `model:` / `effort:` frontmatter, and `pharn/floor/check-model-config.mjs` RED-fails when the
   two disagree — so editing the config is only half the change: update the command frontmatter too, or the
@@ -158,7 +158,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   `/pharn-ship`'s spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no
   config; a pre-0.7.0 block, which `pharn update` with `@pharn-dev/pharn` ≥ 0.7.0 migrates; `inherit`; a full
   model id) run on the session's model, the model of the session running the orchestrator, and the run says
-  why. Effort is not routed. A green checker means two files agree, and a route records what was REQUESTED:
+  why. Since 7.20.0 a routed stage is requested at the block's effort too, where the Agent tool takes one; where it
+  does not, the stage runs at the effort it inherits and the run says so. A green checker means two files agree, and a route records what was REQUESTED:
   `cost.json` shows the model each request was served, which is evidence, never proof. The full bounds — turn scope, the
   platform veto, and what deleting the block costs — are stated once, in [`pharn/LIMITS.md`](../pharn/LIMITS.md) § 8.
 - **A routed stage agent may run in the background, and `/pharn-loop` waits it out; that is handled, not gone.**
