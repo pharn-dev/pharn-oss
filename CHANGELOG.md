@@ -23,6 +23,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.22.0] - 2026-11-17
+
+### Changed
+
+- **`set-writes-scope.cjs --from-plan` refuses a `## Files` item it cannot scope, and names it (setter-dropped-bullets,
+  lessons-learned L71).** An item holding `*`, `?`, `<` or `>`, or an empty one, used to be dropped without a word: the
+  setter printed the smaller count, and the missing grant showed up mid-build as a denied write. That happened three
+  times (L37, L71, and the CORE-90 ship). Now such an item makes the setter exit 1 and write nothing. The message names
+  every such item, why it cannot be scoped, and how many of the list's items that is (`2 of 37`). This applies in
+  `--check`, which `/pharn-plan` and `/pharn-dev-plan` run at plan time, and in a build's Step 0 alike, so `--check`
+  still predicts what Step 0 meets. There is no opt-in: such an item never granted a write. A plan approved before this
+  version that holds one now stops at Step 0 with the same message. Fix: name each file the increment writes, one item
+  per file, and put a path nothing writes under a `### …` heading after the list. That includes the habitual
+  `docs/capabilities/**` "regenerated only if the catalog moves" item; name the generated files that change instead.
+  `--from-frontmatter` is unchanged, since its placeholders resolve through `--target`. This builds the plan-time
+  comparison L20 and L71 asked for, inside the setter, so it runs wherever the setter runs, not in one command's
+  prose. **Bound (P0):** a character-membership test (`isConcrete`) in a Bash-run program (`pharn/LIMITS.md §6`). A
+  literal path the build never writes is still scoped and still passes, and a plan edited after Step 0 is still read
+  by `check-regress.mjs` as before (`unenforced_globs`), as is one from a run that skipped Step 0 (an advisory Bash
+  step). The message quotes each item with `JSON.stringify`, which escapes C0 control characters but not C1 controls,
+  DEL or bidirectional overrides. The comments in `ac-tests-core.mjs`, `ac-tests-lock.mjs`, `check-regress.mjs` and
+  `render-regression.mjs`, and the `ac-tests.md` sentence, that said the setter "drops" such an item now say it does not
+  scope it. Sentences elsewhere that still say the write hook "drops" such an entry (`stage-regress.mjs`,
+  `quick-scope-core.mjs`, `regression-report.md`) or that call `isConcrete` the setter's "filter"
+  (`check-build-complete.mjs`, `ac-test-infra-core.mjs`) are unchanged in this release: the hook still allows none of
+  such an entry, but the wording predates the refusal.
+
 ## [7.21.0] - 2026-11-17
 
 ### Added

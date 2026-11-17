@@ -183,6 +183,10 @@ test("--from-plan over the real pharn-plan.md template exits 1 (its `## Files` `
   const cwd = tmp();
   const r = setter(cwd, "--from-plan", PLAN_PRODUCT_CMD);
   assert.equal(r.status, 1);
+  // Pin WHY (7.22.0 review): the template's `## Files` sits inside a code fence, so the reader finds no heading; the exit
+  // alone would also pass if it refused for another reason. A placeholder left in a real PLAN is refused by name instead
+  // (the 7.22.0 tests at the end of this file).
+  assert.match(r.stderr, /no `## Files` heading/);
   assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false);
 });
 
@@ -1748,4 +1752,98 @@ test("✧ 7.3.0 PIN: the setter's CANON_SUBTREES equal protect-trusted-paths.cjs
   const mine = entries(SETTER, "CANON_SUBTREES");
   assert.equal(mine.length, 2, "non-vacuous: both canon roots");
   assert.deepEqual([...mine].sort(), [...entries(PROTECT_HOOK, "PROTECTED_SUBTREES")].sort());
+});
+
+// ---------------------------------------------------------------------------------------------------
+// 7.22.0 (setter-dropped-bullets — lessons-learned L20, L71): a `## Files` item the setter cannot scope REFUSES the plan,
+// naming every such item, its reason and the count, in --check and in the set alike. Before, it was dropped without a
+// word (L71: 37 items, `35 path(s)`). The empty-list refusal stays reachable (the L14 test above), and --from-frontmatter's
+// placeholder + --target route is unchanged (the artifact-split tests at the top).
+// ---------------------------------------------------------------------------------------------------
+
+function planLines(cwd, lines) {
+  const plan = join(cwd, "PLAN.md");
+  fs.writeFileSync(plan, ["# PLAN — x", "", "## Files", "", ...lines, ""].join("\n"));
+  return plan;
+}
+
+test("★ 7.22.0 every non-concrete `## Files` item is refused BY NAME with its reason, and the message counts them", () => {
+  const cwd = tmp();
+  const plan = planLines(cwd, [
+    "- `src/a.js` — kept",
+    "- `docs/capabilities/**` — regenerated only if the catalog moves",
+    "- `<path>` — an unfilled placeholder",
+    "- `src/q?.js` — a single-character glob",
+    "- `src/b.js` — kept",
+  ]);
+  for (const args of [
+    ["--from-plan", plan],
+    ["--check", "--from-plan", plan],
+  ]) {
+    const r = setter(cwd, ...args);
+    assert.equal(r.status, 1, `${args.join(" ")}: ${r.stdout}`);
+    assert.match(r.stderr, /3 of 5 `## Files` item\(s\) in .*PLAN\.md cannot be scoped, so no write could use them:/);
+    assert.ok(r.stderr.includes('  - "docs/capabilities/**": a glob (`*` or `?`) — this setter scopes literal paths only\n'));
+    assert.ok(r.stderr.includes('  - "<path>": a placeholder (`<` or `>`) — fill it in\n'));
+    assert.ok(r.stderr.includes('  - "src/q?.js": a glob (`*` or `?`)'));
+    assert.doesNotMatch(r.stderr, /src\/a\.js|src\/b\.js/, "a scoped item is not named");
+    assert.match(r.stderr, /Fix: name each file the increment writes, one item per file\./);
+    assert.match(r.stderr, /Nothing was written; pharn\/\.run\/writes-scope\.json is unchanged\./);
+    assert.equal(fs.existsSync(join(cwd, "pharn", ".run", "writes-scope.json")), false, "no record is created");
+  }
+});
+
+test("★ 7.22.0 the refusal leaves a live scope record byte-identical, from a build's set and from --check", () => {
+  const cwd = tmp();
+  assert.equal(setter(cwd, "--from-plan", planWith(cwd, "src/live.ts")).status, 0);
+  const rec = join(cwd, "pharn", ".run", "writes-scope.json");
+  const before = fs.readFileSync(rec, "utf8");
+  const plan = planLines(cwd, ["- `src/a.ts`", "- `src/**/*.ts`"]);
+  for (const args of [
+    ["--from-plan", plan],
+    ["--check", "--from-plan", plan],
+  ]) {
+    assert.equal(setter(cwd, ...args).status, 1);
+    assert.equal(fs.readFileSync(rec, "utf8"), before, `${args[0]}: the older scope stands untouched`);
+  }
+});
+
+test("★ 7.22.0 the L71 shape: 37 items, two of them globs, is `2 of 37` and a refusal, never `35 path(s)`", () => {
+  const cwd = tmp();
+  const items = Array.from({ length: 35 }, (_, i) => `- \`src/f${i}.js\``);
+  items.splice(10, 0, "- `.dev/features/x/**` — the feature folder");
+  items.push("- `docs/capabilities/**` — generated");
+  const r = setter(cwd, "--check", "--from-plan", planLines(cwd, items));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^set-writes-scope: 2 of 37 `## Files` item\(s\)/);
+  assert.doesNotMatch(r.stdout, /35 path\(s\)/);
+  // control: the same list without the two globs scopes all 35, and the count equals the items
+  const ok = setter(
+    cwd,
+    "--check",
+    "--from-plan",
+    planLines(
+      cwd,
+      items.filter((l) => !l.includes("**"))
+    )
+  );
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /writes-scope check: 35 path\(s\)/);
+});
+
+test("★ 7.22.0 an empty item is named as empty, and an item is printed JSON-quoted (a C0 control character never reaches the terminal raw; C1, DEL and bidi are not escaped)", () => {
+  const cwd = tmp();
+  const r = setter(cwd, "--check", "--from-plan", planLines(cwd, ["- `src/a.js`", "- `   `", "- `src/\u001b[2J*.js`"]));
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /2 of 3 `## Files` item\(s\)/);
+  assert.ok(r.stderr.includes('  - "": empty — no path between the back-ticks\n'));
+  assert.ok(r.stderr.includes('  - "src/\\u001b[2J*.js": a glob'), r.stderr);
+  assert.ok(!r.stderr.includes("\u001b"), "the escape byte itself is never printed");
+});
+
+test("★ 7.22.0 an annotated item is scoped by its cleaned path, exactly as before (the refusal tests the cleaned entry)", () => {
+  const cwd = tmp();
+  const r = setter(cwd, "--from-plan", planLines(cwd, ["- `src/a.js (gated)` — x", "- `src/a(b)` — x"]));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(fs.readFileSync(join(cwd, "pharn", ".run", "writes-scope.json"), "utf8")).scope, ["src/a.js", "src/a(b)"]);
 });

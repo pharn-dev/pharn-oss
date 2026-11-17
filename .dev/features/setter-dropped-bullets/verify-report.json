@@ -1,0 +1,26 @@
+{
+  "feature": "setter-dropped-bullets",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "94a6888d47cc5290ce7cb232ceb70bf9733b6e34fbff3eedd27273a83165acac",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "d205a997a01c41a05fe0a321fc6edccf04028bde6339b67fd2f4e83f1f2d88c5"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
