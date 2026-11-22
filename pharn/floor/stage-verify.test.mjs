@@ -376,6 +376,37 @@ test("verdict FAIL — a red project gate is named; done is still exit 0 (the ve
   });
 });
 
+// ── 7.22.1 (CORE-298): the project's `gates.timeoutMs` reaches a standalone verify (L41, L84) ─────────────────────
+const SLOW_GATE = "const until = Date.now() + 1500; while (Date.now() < until) {}\n";
+
+test("CORE-298 — a declared gates.timeoutMs lets a gate run past the line's --timeout-ms; without it the gate is unmeasured", () => {
+  // `--timeout-ms 400` kills the 1.5 s gate; the declared 30 s does not (margins for a loaded machine).
+  const line = ["--feature", FEATURE, "--timeout-ms", "400"];
+  const committed = (cfg) => ({ "slow.cjs": SLOW_GATE, ...(cfg ? { "pharn.config.json": JSON.stringify(cfg) + "\n" } : {}) });
+  withFixture({ scripts: { lint: "node slow.cjs" }, committed: committed({ gates: { timeoutMs: 30000 } }) }, ({ dir }) => {
+    const r = runCli(dir, line);
+    assert.equal(r.code, 0, r.raw);
+    assert.equal(readReport(dir).verdict, "PASS", JSON.stringify(readReport(dir)));
+  });
+  withFixture({ scripts: { lint: "node slow.cjs" }, committed: committed(null) }, ({ dir }) => {
+    const r = runCli(dir, line);
+    assert.equal(r.code, 0, r.raw);
+    assert.notEqual(readReport(dir).verdict, "PASS", "the control without a declaration kills the gate at 400 ms");
+  });
+});
+
+test("CORE-298 — a declaration below the line's --timeout-ms is unusable bad-gate-timeout; no gate runs, no report", () => {
+  withFixture({ committed: { "pharn.config.json": JSON.stringify({ gates: { timeoutMs: 200 } }) + "\n" } }, ({ dir }) => {
+    plantEarlier(dir);
+    const r = runCli(dir, ["--feature", FEATURE, "--timeout-ms", "400"]);
+    assert.equal(r.code, 2, r.raw);
+    assert.equal(r.doc.reason_code, "bad-gate-timeout");
+    assert.match(r.doc.detail, /`gates\.timeoutMs` "200" is below the pinned per-gate timeout 400 ms/);
+    assert.deepEqual(gateLogs(dir), []);
+    earlierGone(dir);
+  });
+});
+
 // ── 6.55.0 — WHY the reconcile gate failed reaches the report and VERIFY.md (reconcile-reasons-in-reports) ─────────
 test("6.55.0 — an out-of-scope write after the anchor: reconcile_detail names the escape and VERIFY.md lists it", () => {
   withFixture({}, ({ dir }) => {

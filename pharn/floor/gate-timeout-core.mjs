@@ -8,7 +8,11 @@
 // the 9 `STOP_TERMINAL` stops were the same gate timed out at regress or verify. A killed gate is unmeasured, never a
 // pass, so each such run stopped with nothing learned. 540000 is chosen so one gate fits inside one 600 s Bash call; the
 // entry runner (entry-gates.mjs, detached since 6.42.0) and the regress/verify stage runner (stage-direct.mjs, detached
-// since 7.15.0) no longer run gates inside a Bash call, so only they may honour a longer value.
+// since 7.15.0) no longer run gates inside a Bash call, so 7.16.0 honoured a longer value only there. Since 7.22.1
+// (CORE-298) /pharn-build's gate (build-gate.mjs) and the standalone stage scripts (stage-regress.mjs, stage-verify.mjs)
+// honour it too: a build iteration over a suite that needs more than 540 s ran the full gate for 9 minutes, was killed and
+// recorded a failed gate, every iteration. Those calls run inside a Bash call, so with a declared value above its 600 s
+// they outlast it and the harness moves them to the background (stage-exit.md, "A Bash-tool timeout is not a kill").
 //
 // THE DECLARATION, beside `gates.exclude` in the project root's `pharn.config.json`:
 //
@@ -25,8 +29,8 @@
 // is killed — at entry, on each side of regress (whose base-side install the same value bounds) and at verify.
 //
 // WHAT IT DOES NOT DO (P0): it does not choose the value — the project does, in agent-editable project input (L43: the
-// value's provenance is never proven). It does not reach the gate runs that still happen inside a Bash call (the thin
-// callers run by a person, /pharn-build's full gate, /pharn-test's red run): those keep their pinned 540000.
+// value's provenance is never proven). It does not reach /pharn-test's red run, which calls run-gates.mjs directly (the
+// runner takes only the flag) over the AC tests alone: that keeps its pinned 540000.
 //
 // TRUST (P2): the value is untrusted DATA, used only as an integer after a range test; a refusal quotes it through
 // quote-core.mjs's total `shown()` (L62). NON-LLM. This module reads no file, opens no network and starts no process;
@@ -80,7 +84,8 @@ export function effectiveTimeoutMs({ declared, pinnedMs }) {
 }
 
 /**
- * The ONE resolution rule both detached runners apply (entry-gates.mjs, stage-direct.mjs — L35; review R5): given
+ * The ONE resolution rule every caller applies (entry-gates.mjs, stage-direct.mjs; since 7.22.1 build-gate.mjs,
+ * stage-regress.mjs and stage-verify.mjs — L35; review R5): given
  * gate-exclusion-core.mjs's result for the project root, the per-gate timeout to run with. A block that REFUSES is not a
  * timeout refusal (GRILL G1/G2): the pinned value is returned, and the existing reader of the block — run-gates.mjs
  * `init`, or the stage script — refuses it as before. No declaration → the pinned value, without calling
