@@ -6,6 +6,8 @@
 - layer(s): product floor (`pharn/floor/`), `pharn-contracts` (schemas only), product commands (`.claude/commands/pharn-loop*.md`), repo-meta (`CHANGELOG.md`, `SKILLS_VERSION`, `README.md`, `pharn-install.json`), dev guide. No `role:` capability; no trusted doc.
 - constitution_refs: [P0, P2, P3, P5, P6, P7]
 - ticket: Linear CORE-301 (epic CORE-294). Base `476882bc` (origin/main, `SKILLS_VERSION` 7.22.0). Bumps to **7.23.0** (minor — a new stop the product loop can take), pre-assigned by the batch orchestrator; renumbered by diff at merge time if `main` moved.
+- gate1: APPROVED 2026-11-23 — a model decision by the batch orchestrator under the user's delegation, not a human approval. `STOP_TERMINAL` + `terminal_cause: no-progress` accepted. Conditions: (1) pin that the new cause routes to Step 6 like the other non-S13 causes (no re-plan / supervisor / amend path); (2) the user-facing stop report and the record name the repeated gates / ACs / regressions; (3) tests for a stale copy at iteration 1, a changed set, an unreadable copy, the cap and the quick table; (4) CHANGELOG / PR state the ~14-minute saving and the advisory copy step.
+- grill: `GRILL.md` (4 advisory concerns, 2 important, 2 minor). Taken into the build: a test enumerating every non-S13 cause in Step 5.4's Step-6 sentence; the Step 7 summary names `repeated`; the copy bullet says a failed copy changes nothing; the L84 mutation results are recorded in the build note. The path-shape copy in `check-loop.mjs` is accepted as written.
 
 ## Why (P7 — the real failure)
 
