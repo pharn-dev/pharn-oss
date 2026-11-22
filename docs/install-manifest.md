@@ -142,7 +142,8 @@ uninstalls, or writes ignore entries). `legacy` is declared history, not derived
 The generator refuses to write a manifest that breaks any of these, and the drift check keeps the committed file equal
 to the generator's output:
 
-- every `path` and `dest` is relative, `/`-separated, with no empty, `.` or `..` segment and no backslash;
+- every `path` and `dest` is relative, `/`-separated, with no empty, `.` or `..` segment and no backslash, and every
+  segment uses only `A-Z a-z 0-9 . _ -`; no `dest` segment below its first starts with `.` (pharn-cli's own path rules);
 - every installable path is a regular file (a symlink, a directory or a submodule is refused, never followed);
 - `files` is sorted by `path`; every `dest` is unique; `sha256` is 64 lowercase hex characters;
 - every `capability` names an entry of `capabilities`, and its file lies under that entry's `dir`;
