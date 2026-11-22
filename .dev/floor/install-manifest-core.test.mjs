@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertPlainRelative,
   buildInstallManifest,
   CAPABILITY_SUBTREES,
   classify,
@@ -28,6 +29,8 @@ import {
   MANIFEST_PATH,
   modelRules,
   normalizeApplies,
+  OWNED_SEGMENT_RE,
+  PATH_SEGMENT_RE,
   POLICIES,
   renderInstallManifest,
 } from "./install-manifest-core.mjs";
@@ -360,3 +363,100 @@ test("✧ importing check-model-config.mjs runs nothing: no output, exit code un
   assert.equal(direct.status, 1);
   assert.match(direct.stdout, /unknown mode "frobnicate"/);
 });
+
+// CORE-302: the generator holds every `path` and `dest` to pharn-cli's segment rules, so a tree it accepts is one every
+// CLI installs. The tables are pharn-cli's own: the accept rows are tests/orphans.test.ts `NEW_SURFACE_KEYS` plus the
+// layout paths its "holds every path of the pharn layout" test names; the refuse rows are the segment-rule rows of
+// `NEVER_OWNED` (tests/orphans.test.ts) and of the "not a safe relative path" table (tests/upstream-manifest.test.ts).
+// `NEVER_OWNED`'s other rows (`pharn/notes.md`, `.claude/skills/my-skill/...`, `.git/hooks/pre-commit`, ...) fail the
+// CLI's root and `pharn-*` name rules, which this module does not mirror.
+const CLI_ACCEPTED_DESTS = [
+  ".claude/skills/pharn-x/SKILL.md",
+  ".claude/skills/pharn-x/references/deep/notes.md",
+  ".claude/commands/pharn-x/part.md",
+  ".claude/output-styles/pharn-terse.md",
+  "pharn/pharn-new/x.md",
+  "pharn/pharn-core/new/x.md",
+  "pharn/floor/lib/x.mjs",
+  "pharn/pharn-pipeline/other/x.md",
+  "pharn/CONSTITUTION.md",
+  "pharn/LICENSE",
+  "pharn/features/README.md",
+  "pharn/pharn-contracts/finding-shape.md",
+  "pharn/pharn-review/n-plus-one/n-plus-one.md",
+  ".claude/commands/pharn-plan.md",
+  ".claude/agents/pharn-review-lens.md",
+  ".claude/hooks/guard.cjs",
+  ".claude/settings.json",
+];
+const CLI_REFUSED = [
+  // NEVER_OWNED's segment rows: a dot-led name below the root (dest only)
+  [".claude/skills/pharn-x/.hidden", { dest: true }],
+  ["pharn/.backup/20260101-000000/x.md", { dest: true }],
+  ["pharn/.lock", { dest: true }],
+  ["pharn/.git/config", { dest: true }],
+  [".claude/.git/pharn-x/y", { dest: true }],
+  ["pharn/floor/.eslintrc.json", { dest: true }],
+  // upstream-manifest.test.ts "not a safe relative path" rows (path and dest)
+  ["pharn/../x", { path: true, dest: true }],
+  ["../x", { path: true, dest: true }],
+  ["/etc/passwd", { path: true, dest: true }],
+  ["pharn\\x", { path: true, dest: true }],
+  ["pharn//x", { path: true, dest: true }],
+  ["pharn/\u0007x", { path: true, dest: true }],
+  ["", { path: true, dest: true }],
+  // characters outside the portable filename set
+  ["evals/cases/app/[id]/page.tsx", { path: true, dest: true }],
+  ["pharn/floor/a]b.mjs", { path: true, dest: true }],
+  ["pharn/floor/a b.mjs", { path: true, dest: true }],
+  ["pharn/floor/caf\u00e9.mjs", { path: true, dest: true }],
+];
+
+test("assertPlainRelative accepts every dest pharn-cli accepts, as a path and as a dest", () => {
+  for (const rel of CLI_ACCEPTED_DESTS) {
+    assert.doesNotThrow(() => assertPlainRelative(rel), rel);
+    assert.doesNotThrow(() => assertPlainRelative(rel, { isDest: true }), rel);
+  }
+  // A source path may hold a dot-led segment below its root (MANIFEST_PATH_RE allows it); only a dest may not.
+  assert.doesNotThrow(() => assertPlainRelative("pharn/floor/.eslintrc.json"));
+});
+
+for (const [rel, { path = false, dest = false }] of CLI_REFUSED) {
+  test(`assertPlainRelative refuses ${JSON.stringify(rel)}${path ? "" : " as a dest"}`, () => {
+    const refused = (opts) => {
+      assert.throws(
+        () => assertPlainRelative(rel, opts),
+        (e) => e instanceof InstallManifestError && e.message.startsWith(JSON.stringify(rel))
+      );
+    };
+    if (path) refused({});
+    if (dest) refused({ isDest: true });
+  });
+}
+
+test("the segment regexes are pharn-cli's, byte for byte", () => {
+  // pharn-cli src/lib/install-surfaces.ts OWNED_SEGMENT_RE, and the segment class of src/lib/upstream-manifest.ts
+  // MANIFEST_PATH_RE (`[A-Za-z0-9._-]+`, whose `.`/`..` look-ahead assertPlainRelative states as its own check).
+  assert.equal(OWNED_SEGMENT_RE.source, "^[A-Za-z0-9_-][A-Za-z0-9._-]*$");
+  assert.equal(PATH_SEGMENT_RE.source, "^[A-Za-z0-9._-]+$");
+});
+
+const GENERATOR_REFUSALS = [
+  ["a dot-led floor file", "pharn/floor/.eslintrc.json"],
+  ["a [ and ] segment", "pharn/pharn-review/ll/evals/cases/app/[id]/page.tsx"],
+  ["a space", "pharn/floor/a b.mjs"],
+  ["a non-ASCII character", "pharn/pharn-contracts/caf\u00e9.md"],
+];
+
+for (const [name, rel] of GENERATOR_REFUSALS) {
+  test(`the generator refuses ${name}, naming the path (CORE-302)`, (t) => {
+    const root = fixture();
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    buildInstallManifest(root); // the control: the fixture alone builds
+    put(root, rel);
+    assert.throws(
+      () => buildInstallManifest(root),
+      (e) => e instanceof InstallManifestError && e.message.includes(JSON.stringify(rel)) && /pharn-cli's path rule/.test(e.message)
+    );
+  });
+}
