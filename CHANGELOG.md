@@ -55,6 +55,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     restated input list in the headers of `check-loop-decision.mjs`, `check-loop-record.mjs` and `loop-fresh-core.mjs`
     now includes the copies.
 
+- 2026-11-23: **Fixed: the install-manifest generator now refuses a path pharn-cli would refuse (CORE-302).**
+  `.dev/floor/install-manifest-core.mjs` refused only a leading `/`, a backslash and an empty, `.` or `..` segment, so a
+  file such as `pharn/floor/.eslintrc.json` or a segment holding `[`, `]`, a space or a non-ASCII character passed CI
+  and auto-released, and every CLI then refused that release. Every `path` and `dest` segment must now use only
+  `A-Z a-z 0-9 . _ -` (pharn-cli's `MANIFEST_PATH_RE`), and no `dest` segment below its root may start with `.`
+  (pharn-cli's `OWNED_SEGMENT_RE`); the generator fails naming the path. The current tree's `pharn-install.json` is
+  unchanged. Advisory: nothing binds the two regexes to pharn-cli's bytes, and pharn-cli's root and `pharn-*` name rules
+  are not mirrored. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
 - 2026-11-17: **Measured: the defect probe set's catch count on `main` (7.19.0) is 10 of 12 runs (CORE-90).** The
   user ran the kit on `main`: 2 runs per probe, 28 sessions, USD 19.91. 9 runs caught their probe at the grill and 1 at
   the plan stage (`caught-at-plan`: the plan refused, citing an anchored SPEC line). One run stopped at the plan stage

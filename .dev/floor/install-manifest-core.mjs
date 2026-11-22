@@ -25,7 +25,8 @@
 // REFUSALS (fail-closed, P5; each a thrown InstallManifestError, which the checker reports as ENUM_ERROR):
 //   * SKILLS_VERSION missing or not `X.Y.Z`; `pharn.config.json` without a `models.stages` object;
 //   * an installable path that is not a regular file now (a symlink, a gitlink, a directory — classified with lstat,
-//     never followed, L59); a path that is absolute, holds a `.`, `..` or empty segment, or a backslash;
+//     never followed, L59); a path that is absolute, holds a `.`, `..` or empty segment, or a backslash; a `path` or
+//     `dest` segment outside pharn-cli's character set, or a dot-led `dest` segment below its root (CORE-302);
 //   * two files with one `dest`;
 //   * a surface, or a selectable role, contributing zero entries — a wrong target must not yield an empty GREEN (L34);
 //   * a griller or lens outside its subtree, under the other role's subtree, or not one directory below it;
@@ -205,11 +206,33 @@ export function selectableCapabilities(target) {
   return caps;
 }
 
-/** Refuse a path a reader could resolve outside the project. */
-function assertPlainRelative(path) {
+/**
+ * The segment rules pharn-cli holds every manifest entry to (CORE-302). A tree this generator accepts must be one every
+ * CLI installs: a narrower rule here than the CLI's let a file such as `pharn/floor/.eslintrc.json` pass this repo's CI
+ * and auto-release, and every CLI then refused the whole release. Mirrors, character for character:
+ *   * `PATH_SEGMENT_RE` — every segment of a `path` and a `dest`: pharn-cli `src/lib/upstream-manifest.ts`
+ *     `MANIFEST_PATH_RE` (the portable filename set, no empty, `.` or `..` segment);
+ *   * `OWNED_SEGMENT_RE` — every `dest` segment below its root (`pharn/`, `.claude/`): pharn-cli
+ *     `src/lib/install-surfaces.ts` `OWNED_SEGMENT_RE`, applied by `isPharnOwnedPath` (no dot-led name).
+ * ADVISORY (P0): nothing binds these to the CLI's bytes; a change on either side must be made on both. The CLI's other
+ * `isPharnOwnedPath` rules (the root, the `pharn-*` entry names) are not mirrored here.
+ */
+export const PATH_SEGMENT_RE = /^[A-Za-z0-9._-]+$/;
+export const OWNED_SEGMENT_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+
+/** Refuse a path a reader could resolve outside the project, or one pharn-cli refuses. `isDest`: also hold every
+ *  segment below the first to OWNED_SEGMENT_RE. */
+export function assertPlainRelative(path, { isDest = false } = {}) {
   if (path.startsWith("/") || path.includes("\\")) refuse(`${JSON.stringify(path)}: not a plain relative path`);
-  if (path.split("/").some((seg) => seg === "" || seg === "." || seg === ".."))
+  const segments = path.split("/");
+  if (segments.some((seg) => seg === "" || seg === "." || seg === ".."))
     refuse(`${JSON.stringify(path)}: holds an empty, "." or ".." segment`);
+  const bad = segments.find((seg, i) => !PATH_SEGMENT_RE.test(seg) || (isDest && i > 0 && !OWNED_SEGMENT_RE.test(seg)));
+  if (bad !== undefined)
+    refuse(
+      `${JSON.stringify(path)}: segment ${JSON.stringify(bad)} is outside pharn-cli's path rule ` +
+        `(A-Z a-z 0-9 . _ - only${isDest ? ", and no dot-led name below the root" : ""}); every CLI would refuse the release`
+    );
 }
 
 /** Classify one candidate against `surfaces` (default: the declaration). Returns null (not installable) or
@@ -289,7 +312,7 @@ export function buildInstallManifest(target, { surfaces = INSTALL_SURFACES } = {
     if (!st.isFile())
       refuse(`${JSON.stringify(path)}: an installable path that is not a regular file (a symlink, a directory or a gitlink)`);
     assertPlainRelative(path);
-    assertPlainRelative(c.dest);
+    assertPlainRelative(c.dest, { isDest: true });
     if (dests.has(c.dest))
       refuse(`${JSON.stringify(path)} and ${JSON.stringify(dests.get(c.dest))} share the destination ${JSON.stringify(c.dest)}`);
     dests.set(c.dest, path);
