@@ -14,8 +14,10 @@
 //   FLOOR verdicts the existing stages already emit — /pharn-verify's `.verdict` and /pharn-regress's
 //   `.verdict`; (2) on a verify FAIL only, exact array membership of the gate key `reconcile` — and, since 6.20.0,
 //   of the AC gate's reserved id `ac-evidence` — in /pharn-verify's `.failing_gates`; (3) an integer `iter >= cap`
-//   compare; and (4, since 6.28.0) membership of ONE token of the feature's own SPEC, its `spec_kind`, which picks the
-//   table (below). The agent OBEYS the exit code (advisory COMPLIANCE, exactly as it obeys check-verify).
+//   compare; (4, since 6.28.0) membership of ONE token of the feature's own SPEC, its `spec_kind`, which picks the
+//   table (below); and (5, since 7.23.0) set equality between this iteration's failure set and the previous one's, read
+//   from the copies /pharn-loop keeps (THE NO-PROGRESS STOP, below). The agent OBEYS the exit code (advisory COMPLIANCE,
+//   exactly as it obeys check-verify).
 //
 // THE MODE (6.28.0, `/pharn-loop --quick`) — the SPEC's pinned kind, never a flag. The table is chosen by
 //   pharn/floor/loop-mode-core.mjs's `loopModeOf`, read from the SPEC.md beside the verify report (the first positional's
@@ -44,7 +46,9 @@
 // "/review NEVER GATES THE LOOP" IS STRUCTURAL, NOT DISCIPLINE (the core invariant), restated exactly (6.28.0):
 //   this helper's inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC —
 //   its `spec_kind`, read by the one kind reading from the `SPEC.md` beside the verify report — which chooses the table
-//   (verify-only for `quick`, in which the regression report is not read at all). There is still no review, finding,
+//   (verify-only for `quick`, in which the regression report is not read at all); since 7.23.0 also the PREVIOUS
+//   iteration's copies of the same two reports, at a path derived from the verify report's own (THE NO-PROGRESS STOP,
+//   below — verify's copy alone in the quick table). There is still no review, finding,
 //   severity, record or fingerprint input: it CANNOT receive a REVIEW.md, a finding, or an LLM-assigned severity (the
 //   product spine has no /review stage anyway). So "the loop stops on its FLOOR verdicts alone" is true by
 //   construction, not by an agent promise.
@@ -61,6 +65,7 @@
 //   v === "FAIL"  ∧  fg includes "reconcile"            → STOP_TERMINAL exit 4  (a detected escape — or, when the
 //                                                        gate's recorded exit is 2, reconcile-inconclusive)
 //   v === "PASS"  ∧  r === "no-regressions"            → STOP_GREEN    exit 0  (converged)
+//   a measurable red ∧ 2 <= iter < cap ∧ NO PROGRESS   → STOP_TERMINAL exit 4  (terminal_cause no-progress, 7.23.0)
 //   a measurable red (v ∈ {FAIL, INCOMPLETE} or r === "regressions") ∧ iter <  cap
 //                                                     → CONTINUE      exit 3  (retry, under cap)
 //   a measurable red                                  ∧ iter >= cap
@@ -73,6 +78,8 @@
 //   v === "FAIL"  ∧  fg includes "ac-evidence"         → STOP_TERMINAL    exit 4  (ac-evidence)
 //   v === "FAIL"  ∧  fg includes "reconcile"           → STOP_TERMINAL    exit 4  (reconcile)
 //   v === "PASS"                                      → STOP_GREEN_QUICK exit 0  (verify PASS, no regression verdict)
+//   v ∈ {FAIL, INCOMPLETE}  ∧ 2 <= iter < cap ∧ NO PROGRESS (verify only)
+//                                                     → STOP_TERMINAL    exit 4  (no-progress)
 //   v ∈ {FAIL, INCOMPLETE}  ∧ iter <  cap             → CONTINUE         exit 3
 //   v ∈ {FAIL, INCOMPLETE}  ∧ iter >= cap             → STOP_CAP         exit 1
 //
@@ -103,6 +110,31 @@
 // keeps `reconcile`, the conservative reading. BOUND: a reconcile checker that CRASHED exits 1 — its own ESCAPE code —
 // so a crash still reads as `reconcile`; the verify report's `reconcile_detail.state` (`not-checker-json`) shows it.
 //
+// THE NO-PROGRESS STOP (7.23.0, CORE-301). THE FAILURE (P7): the CORE-113 driven run
+//   (.dev/features/loop-driver-spike/RECORD.md §4, §6) failed verify on `test` alone in all three iterations; builds 2
+//   and 3 changed no code and the run paid about 28 build + verify minutes to reach STOP_CAP. So where the table would
+//   say CONTINUE, and only at iteration 2 or later, the decision compares this iteration with the previous one and
+//   stops STOP_TERMINAL, `terminal_cause: no-progress`, when ALL of these hold:
+//     • v === "FAIL", and the previous verify copy reads (readVerdict: present, an object, no repeated top-level key,
+//       `.verdict` in its enum) with `.verdict` "FAIL";
+//     • the two `failing_gates` are string arrays, equal as SETS;
+//     • the failing-AC sets are equal: the `ac_gate.acs[]` ids whose `reason` is not null (`ac_gate` absent → the empty
+//       set; a block, row or id off the contract's shape — ids /^AC-[1-9][0-9]*$/ — makes the report incomparable);
+//     • the FULL table only: the previous regression copy reads, its `.verdict` equals r, and both `regressions` are
+//       string arrays equal as sets. The quick table never opens either regression file.
+//   WHERE THE COPIES ARE: <root>/pharn/.run/pharn-loop/<name>/prev-verify-report.json (and prev-regression-report.json),
+//   derived from a verify report at <root>/pharn/features/<name>/verify-report.json — check-loop-decision.mjs's own
+//   marker shape — never from an argument, so no flag selects or names a comparison input (P5), and a re-derivation
+//   reads the same copies. A verify report at any other path has no previous iteration: today's decision. /pharn-loop
+//   writes the copies with a pinned `cp` on every CONTINUE (Step 5.4).
+//   FAILS TOWARD TODAY: anything unreadable or incomparable is "no comparison" → CONTINUE, never INCONCLUSIVE, and the
+//   predicate can only replace a CONTINUE, so it never yields a green and never fires at the cap (STOP_CAP stays). The
+//   output's `repeated` key names the repeated sets (sorted; `regressions` null in quick); null on every other decision.
+//   BOUND (P0, L43): the copies are run-writable state a Bash write reaches, and the `cp` is a line the model runs — a
+//   skipped copy leaves an older one (or none). So this proves "equal to the copy on disk", never "equal to the previous
+//   iteration"; the worst a stale or forged copy can do is stop a red run early (non-green, never committed) or fail to
+//   stop it (today). It reads gate ids and AC ids only — never `detail`, test titles or `completeness`.
+//
 // WHY AN INCONCLUSIVE VERDICT IS TERMINAL: the stage could not measure, so a fix has nothing to be judged
 // against and a retry would spend an iteration blind (P5 fail-closed). The checker's OWN exit-2
 // INCONCLUSIVE stays reserved for "cannot read a valid verdict" (bad/missing input).
@@ -127,18 +159,19 @@
 //
 // Usage:
 //   node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
-//   (the SPEC read for the mode is `<dirname of verify-report.json>/SPEC.md` — never an argument)
+//   (the SPEC read for the mode is `<dirname of verify-report.json>/SPEC.md`, and the previous iteration's copies are
+//   under `pharn/.run/pharn-loop/<name>/` — never an argument)
 //
 // Output: ONE JSON object {verify_verdict, regress_verdict, floor_green, iter, cap, mode, decision, terminal_cause,
-//   reason}; `mode` is "full" | "quick" (null only on an argv refusal, before any path is known); in quick mode
-//   `regress_verdict` is null and `floor_green` means verify PASS.
+//   repeated, reason}; `mode` is "full" | "quick" (null only on an argv refusal, before any path is known); in quick
+//   mode `regress_verdict` is null and `floor_green` means verify PASS; `repeated` is non-null on no-progress only.
 //
 // Exit: 0 STOP_GREEN, or STOP_GREEN_QUICK in the quick table · 1 STOP_CAP · 2 INCONCLUSIVE (bad input, fail-closed) ·
-//       3 CONTINUE · 4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red or a reconcile red, detected or
-//       inconclusive — stop, never retried).
+//       3 CONTINUE · 4 STOP_TERMINAL (an inconclusive verdict, an AC-evidence red, a reconcile red, detected or
+//       inconclusive, or an iteration that repeated the previous one's failure — stop, never retried).
 
 import { readFileSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 // The known verdict enums the two FLOOR stages emit. Unlike check-ship.mjs, VERIFY_VERDICTS INCLUDES
 // "INCOMPLETE", which /pharn-verify emits via `--complete`. A `.verdict` outside its set is malformed
@@ -154,7 +187,12 @@ const RECONCILE_GATE = "reconcile";
 const AC_EVIDENCE_GATE = "ac-evidence";
 
 /** Which terminal predicate fired, in precedence order. Closed; the suite asserts it both ways (L36). */
-const TERMINAL_CAUSES = Object.freeze(["unmeasured", "ac-evidence", "reconcile", "reconcile-inconclusive"]);
+const TERMINAL_CAUSES = Object.freeze(["unmeasured", "ac-evidence", "reconcile", "reconcile-inconclusive", "no-progress"]);
+
+// The no-progress stop's inputs (7.23.0): the previous iteration's copies, and the AC id shape (spec-amend-core.mjs's).
+const PREV_VERIFY = "prev-verify-report.json";
+const PREV_REGRESS = "prev-regression-report.json";
+const AC_ID_RE = /^AC-[1-9][0-9]*$/;
 
 // check-bash-reconcile.mjs's INCONCLUSIVE exit — the one recorded gate exit that names "could not decide", not "escape".
 const RECONCILE_INCONCLUSIVE_EXIT = 2;
@@ -301,6 +339,65 @@ function posInt(raw, name) {
   return { ok: true, value: n };
 }
 
+// --- THE NO-PROGRESS STOP (7.23.0; the header says why and what it reads). Each reader below returns null for
+//     "incomparable", and any null makes the comparison absent — today's CONTINUE. ---
+
+/** The directory holding the previous iteration's copies, or null when the verify report is not at
+ *  <root>/pharn/features/<name>/verify-report.json (check-loop-decision.mjs's marker shape). */
+function prevCopyDir(verifyPath) {
+  const featureDir = dirname(resolve(verifyPath));
+  const featuresDir = dirname(featureDir);
+  const pharnDir = dirname(featuresDir);
+  if (basename(featuresDir) !== "features" || basename(pharnDir) !== "pharn") return null;
+  return join(pharnDir, ".run", "pharn-loop", basename(featureDir));
+}
+
+/** A string array as a sorted, de-duplicated array; null for anything else. */
+function stringSet(value) {
+  if (!Array.isArray(value) || !value.every((s) => typeof s === "string")) return null;
+  return [...new Set(value)].sort();
+}
+
+/** The ids of the ACs a report's AC gate did not find delivered (`reason` not null), sorted; [] with no `ac_gate`;
+ *  null when the block, a row or an id is off the contract's shape. Own-property reads only (L15). */
+function failingAcs(report) {
+  if (!Object.hasOwn(report, "ac_gate") || report.ac_gate === null) return [];
+  const g = report.ac_gate;
+  if (typeof g !== "object" || Array.isArray(g) || !Object.hasOwn(g, "acs") || !Array.isArray(g.acs)) return null;
+  const ids = new Set();
+  for (const row of g.acs) {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) return null;
+    if (!Object.hasOwn(row, "id") || typeof row.id !== "string" || !AC_ID_RE.test(row.id)) return null;
+    if (!Object.hasOwn(row, "reason") || (row.reason !== null && typeof row.reason !== "string")) return null;
+    if (row.reason !== null) ids.add(row.id);
+  }
+  return [...ids].sort();
+}
+
+const sameSet = (a, b) => a !== null && b !== null && a.length === b.length && a.every((x, i) => x === b[i]);
+
+/** The repeated failure set when this iteration repeats the previous one's, else null. Called only where the table
+ *  would otherwise CONTINUE at iteration >= 2. */
+function repeatedFailure(verifyPath, verify, regress, quick, failingGates) {
+  if (verify.verdict !== "FAIL") return null;
+  const dir = prevCopyDir(verifyPath);
+  if (dir === null) return null;
+  const prev = readVerdict(join(dir, PREV_VERIFY), "previous verify-report copy", VERIFY_VERDICTS);
+  if (!prev.ok || prev.verdict !== "FAIL") return null;
+  const gates = stringSet(failingGates);
+  if (!sameSet(gates, stringSet(prev.report.failing_gates))) return null;
+  const acs = failingAcs(verify.report);
+  if (!sameSet(acs, failingAcs(prev.report))) return null;
+  if (quick) return { failing_gates: gates, failing_acs: acs, regressions: null };
+  const prevR = readVerdict(join(dir, PREV_REGRESS), "previous regression-report copy", REGRESS_VERDICTS);
+  if (!prevR.ok || prevR.verdict !== regress.verdict) return null;
+  const regressions = stringSet(regress.report.regressions);
+  if (!sameSet(regressions, stringSet(prevR.report.regressions))) return null;
+  return { failing_gates: gates, failing_acs: acs, regressions };
+}
+
+const listed = (ids) => (ids.length ? ids.join(", ") : "none");
+
 // --- THE MODE (6.28.0): loop-mode-core.mjs's `loopModeOf` over the verify report's own directory. Loaded with
 //     import() inside a `try`, so a module that cannot load, exports nothing, or throws reads "full" — the stricter
 //     table (D3). Only the exact token "quick" selects the quick table; anything else a mismatched module returns reads
@@ -331,6 +428,7 @@ async function main() {
         mode: null,
         decision: "INCONCLUSIVE",
         terminal_cause: null,
+        repeated: null,
         reason: parsed.reason,
       },
       2
@@ -362,6 +460,7 @@ async function main() {
         mode,
         decision: "INCONCLUSIVE",
         terminal_cause: null,
+        repeated: null,
         reason: bad.reason,
       },
       2
@@ -384,6 +483,13 @@ async function main() {
   // measurableRed === (v ∈ {FAIL, INCOMPLETE} || r === "regressions") — not named as its own const
   // because, by the precedence below, it is exactly what remains once the three predicates above are
   // false (proof in the trailing comment).
+
+  // The no-progress comparison runs only where the table below would otherwise reach CONTINUE (every predicate above it
+  // false, iter < cap), and only from iteration 2, so a copy an earlier run left is never compared at iteration 1.
+  const repeated =
+    !unmeasured && !acEvidenceRed && !reconcileRed && !floorGreen && iter >= 2 && iter < cap
+      ? repeatedFailure(parsed.positional[0], verify, regress, quick, gatesR.gates)
+      : null;
 
   let decision, code, reason;
   let terminal_cause = null;
@@ -424,6 +530,15 @@ async function main() {
     decision = "STOP_GREEN";
     code = 0;
     reason = "floor-GREEN: /pharn-verify PASS and /pharn-regress no-regressions — stop";
+  } else if (repeated !== null) {
+    // The same red twice: another build pass would retry it. A stop, never a green, and never at the cap.
+    decision = "STOP_TERMINAL";
+    code = 4;
+    terminal_cause = "no-progress";
+    reason =
+      `no progress: iteration ${iter} repeats iteration ${iter - 1}'s failure (${read}) — failing gates: ` +
+      `${listed(repeated.failing_gates)}; failing ACs: ${listed(repeated.failing_acs)}` +
+      `${quick ? "" : `; regressions: ${listed(repeated.regressions)}`}; another build pass would retry the same red; stop`;
   } else if (iter < cap) {
     // Reachable ONLY on a measurable red: `unmeasured` false ⇒ v ∈ {PASS, FAIL, INCOMPLETE} ∧
     // r ∈ {no-regressions, regressions} (full) or r null (quick); `floorGreen` false ⇒ v !== PASS ∨ r === regressions
@@ -440,7 +555,10 @@ async function main() {
   // Closed by construction: a cause outside TERMINAL_CAUSES cannot be emitted (the suite also scans the literals).
   if (terminal_cause !== null && !TERMINAL_CAUSES.includes(terminal_cause))
     throw new Error(`internal: ${terminal_cause} is not a terminal cause`);
-  emit({ verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, mode, decision, terminal_cause, reason }, code);
+  emit(
+    { verify_verdict: v, regress_verdict: r, floor_green: floorGreen, iter, cap, mode, decision, terminal_cause, repeated, reason },
+    code
+  );
 }
 
 // Swallow ONLY the emit sentinel; anything else is a real crash and must still end the process non-zero. `main` is

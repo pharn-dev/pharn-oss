@@ -15,7 +15,8 @@
 //
 // IT IS NOT AN INPUT TO THE STOP DECISION (structural, not discipline): check-loop.mjs's inputs are the two
 // verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, which chooses the
-// table (6.28.0). It has no record parameter, so this checker CANNOT feed it. The record is validated AFTER the stop
+// table (6.28.0) — plus (7.23.0) the previous iteration's copies of the two reports. It has no record parameter, so
+// this checker CANNOT feed it. The record is validated AFTER the stop
 // decision already exists. Reading a record's `decision` back into the loop would be the fix#3 disease; here it is
 // impossible because the input does not exist.
 //

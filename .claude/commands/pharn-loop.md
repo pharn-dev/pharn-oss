@@ -127,6 +127,8 @@ allowed-tools:
     "Bash(node pharn/floor/stage-direct.mjs --stage pharn-verify --name * --resume --budget-ms 570000)",
     "Bash(node pharn/floor/check-loop-fresh.mjs --feature * --base * --iter * --front)",
     "Bash(node pharn/floor/check-loop.mjs pharn/features/*/verify-report.json pharn/features/*/regression-report.json --iter * --cap *)",
+    "Bash(cp pharn/features/*/verify-report.json pharn/.run/pharn-loop/*/prev-verify-report.json)",
+    "Bash(cp pharn/features/*/regression-report.json pharn/.run/pharn-loop/*/prev-regression-report.json)",
     "Bash(node pharn/floor/entry-gates.mjs --abort --feature *)",
     "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name * --mode quick)",
     "Bash(node pharn/floor/check-spec.mjs --spec-kind pharn/features/*/SPEC.md)",
@@ -1105,17 +1107,28 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
      invocation: a run invoked without `--quick` over a quick SPEC gets it too, and Step 6 never commits that one
      (Step 6c). Go to Step 6.
    - **`3` `CONTINUE`** — a measurable red (verify `FAIL` — an AC not delivered yet included — or `INCOMPLETE`, or a
-     regression) and `N < M`.
+     regression) and `N < M`. Keep this iteration's reports for the next stop read, which compares the two
+     (`no-progress`, below) _(a `--quick` run: the first line alone — `## Quick mode` item 7)_; a failed copy changes
+     nothing, go on:
+
+     ```bash
+     cp pharn/features/<name>/verify-report.json pharn/.run/pharn-loop/<name>/prev-verify-report.json
+     cp pharn/features/<name>/regression-report.json pharn/.run/pharn-loop/<name>/prev-regression-report.json
+     ```
+
      `N++`, back to 1.
+
    - **`1` `STOP_CAP`** — a measurable red at `N >= M`. Go to Step 6.
    - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind — a gate the
      runner timed out or could not start included: verify `.unmeasured_gates[]`, regress `.head_timed_out[]` /
      `.base_timed_out[]`, each a gate never measured, never a red one), an
      **AC-evidence red**, or a **reconcile red** (a retry would re-anchor the baseline and erase the detected Bash
      escape — or, `reconcile-inconclusive` since 6.65.0, re-anchor over a window the checker could not judge; nothing
-     was detected then, and the summary says so). The JSON's closed `terminal_cause` says which: **`ac-evidence` is
-     S13** (`blocked: ac-evidence-invalid`) — a blocked stop, recorded as Step 2 says; `unmeasured`, `reconcile` and
-     `reconcile-inconclusive` go to Step 6 with the decision as emitted. Never rebuild over any of them.
+     was detected then, and the summary says so), or **no progress** (7.23.0: from `N = 2`, the same failing gates,
+     failing ACs and regressions as the copies of iteration `N-1`; the JSON's `repeated` names them). The JSON's closed
+     `terminal_cause` says which: **`ac-evidence` is S13** (`blocked: ac-evidence-invalid`) — a blocked stop, recorded
+     as Step 2 says; `unmeasured`, `reconcile`, `reconcile-inconclusive` and `no-progress` go to Step 6 with the
+     decision as emitted. Never rebuild over any of them.
    - **`2` `INCONCLUSIVE`** — a report is missing or malformed. Go to Step 6, fail-closed.
 
 ## At the stop — Steps 6 and 7 are in the close part

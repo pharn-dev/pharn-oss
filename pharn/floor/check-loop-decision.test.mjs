@@ -740,3 +740,21 @@ test("✧ 7.3.0 — a marker the REAL --open wrote with --mode quick is read as 
     null
   );
 });
+
+// ── 7.23.0 (CORE-301) — a no-progress record re-derives from the previous iteration's copies ──────────────────────────
+// check-loop.mjs derives the copies' path from the verify report's own, so this checker's re-run reads them with no
+// argument of its own. BOUND (L43): agreement with the copies on disk, never that they are the previous iteration's.
+test("★ 7.23.0 — a STOP_TERMINAL (no-progress) record → GREEN with the copies on disk; RED DECISION_MISMATCH once they are gone", () => {
+  withFixture({ decision: "STOP_TERMINAL", iterations: "2", cap: "3", commit: "abc1234", date: "2026-11-23" }, VFAIL, CLEAN, (r) => {
+    // Without the copies the same reports re-derive to CONTINUE — the record cannot be re-derived.
+    assert.notEqual(r.status, 0, r.out);
+    assert.match(r.out, /DECISION_MISMATCH/);
+    assert.match(r.out, /CONTINUE/);
+    const run = join(r.root, "pharn", ".run", "pharn-loop", MARKER_NAME);
+    writeFileSync(join(run, "prev-verify-report.json"), JSON.stringify(VFAIL));
+    writeFileSync(join(run, "prev-regression-report.json"), JSON.stringify(CLEAN));
+    const out = spawnSync(process.execPath, [CHECKER, r.loopPath], { encoding: "utf8" });
+    assert.equal(out.status, 0, out.stdout);
+    assert.match(out.stdout, /^GREEN —/);
+  });
+});

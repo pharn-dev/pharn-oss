@@ -30,6 +30,13 @@ come from the single code block this text was moved from, so the entry they name
 # 7.3.0 (loop-record-honesty): a report whose TOP-LEVEL object repeats a key (JSON.parse keeps the last copy, so
 # {"verdict":"FAIL",…,"verdict":"PASS"} read STOP_GREEN) is INCONCLUSIVE, exit 2, naming the keys (≤ 5, each ≤ 64
 # characters), never a value; a `\u`-escaped spelling is the same key. A repeat inside a nested object is not refused.
+# 7.23.0 (CORE-301, no-progress): where the table would CONTINUE at iteration >= 2, a verify FAIL whose failing_gates,
+# failing ACs (ac_gate.acs[] ids with a non-null reason) and — full table — regress verdict + regressions equal, as sets,
+# the previous iteration's copies (pharn/.run/pharn-loop/<name>/prev-{verify,regression}-report.json, derived from the
+# verify report's path, written by /pharn-loop Step 5.4's pinned `cp` on every CONTINUE) is STOP_TERMINAL with
+# terminal_cause `no-progress` and a `repeated` output key naming the sets. Unreadable or incomparable → CONTINUE, as
+# before; never at the cap (STOP_CAP stays), never a green. The copy is a model-run line: a skipped or forged copy can
+# only stop a red run early or fail to stop it (agreement with the copy on disk, never provenance — L43).
 node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --iter <N> --cap <M>
 ```
 

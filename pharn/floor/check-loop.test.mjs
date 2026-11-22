@@ -317,6 +317,7 @@ test("★ /review-independence: the decision object carries NO review/finding/se
       "mode",
       "reason",
       "regress_verdict",
+      "repeated",
       "terminal_cause",
       "verify_verdict",
     ]);
@@ -380,9 +381,9 @@ test("★ exact membership: an 'ac-evidence' substring in another gate id, or in
 
 // 6.65.0 (audit LOOP-3): check-bash-reconcile.mjs's INCONCLUSIVE exit 2, recorded under the gate id.
 const VRECONCILE_INCONCLUSIVE = { feature: "x", gates: { reconcile: 2 }, verdict: "FAIL", failing_gates: ["reconcile"] };
-const CAUSES = ["ac-evidence", "reconcile", "reconcile-inconclusive", "unmeasured"];
+const CAUSES = ["ac-evidence", "no-progress", "reconcile", "reconcile-inconclusive", "unmeasured"];
 
-test("✧ L36 CLOSURE — terminal_cause takes exactly the four causes on STOP_TERMINAL and null otherwise", () => {
+test("✧ L36 CLOSURE — terminal_cause takes exactly the five causes on STOP_TERMINAL and null otherwise", () => {
   const seen = new Map();
   const cases = [
     [PASS, CLEAN, 1, 3],
@@ -401,6 +402,9 @@ test("✧ L36 CLOSURE — terminal_cause takes exactly the four causes on STOP_T
     if (o.decision === "STOP_TERMINAL") assert.ok(CAUSES.includes(o.terminal_cause), JSON.stringify(o));
     else assert.equal(o.terminal_cause, null, JSON.stringify(o));
   }
+  // no-progress (7.23.0) needs the previous iteration's copy, which only a feature-directory project holds.
+  const np = json(inProject({ verify: VFAIL, regress: CLEAN, prevVerify: VFAIL, prevRegress: CLEAN }, 2, 3));
+  seen.set(np.decision + ":" + np.terminal_cause, true);
   const causes = [...seen.keys()]
     .filter((k) => k.startsWith("STOP_TERMINAL:"))
     .map((k) => k.split(":")[1])
@@ -816,4 +820,282 @@ test("★ 6.59.0 — an unmeasured verify gate or a timed-out regress head is ST
   // longer emits that report for a run the runner killed.
   const before = decide({ feature: "x", gates: { test: 124 }, verdict: "FAIL", failing_gates: ["test"] }, regressOk, 1, 999, FEATURE_SPEC);
   assert.equal(json(before).decision, "CONTINUE");
+});
+
+// ── THE NO-PROGRESS STOP (7.23.0, CORE-301) ──────────────────────────────────────────────────────────────────────────
+// The previous iteration's copies live at pharn/.run/pharn-loop/<name>/, derived from a verify report at
+// pharn/features/<name>/verify-report.json — so these cases build that project shape. Every pre-7.23.0 case above uses
+// a flat scratch directory, which has no previous iteration: they are the "decides exactly as before" half (AC 3).
+// L84: the branch leaves a safe default (CONTINUE), so the ★ cases take it on REALISTIC reports — the shape
+// stage-verify.mjs writes, with a full ac_gate block — not only on the minimal fixtures above.
+
+/** Run the stop over a scratch project holding the current reports and (optionally) the previous copies. `undefined`
+ *  or null = do not write that file; a string is written verbatim. */
+function inProject({ verify, regress, prevVerify, prevRegress, spec }, iter, cap) {
+  const root = mkdtempSync(join(tmpdir(), "pharn-loop-np-"));
+  try {
+    const fd = join(root, "pharn", "features", "demo");
+    const rd = join(root, "pharn", ".run", "pharn-loop", "demo");
+    mkdirSync(fd, { recursive: true });
+    mkdirSync(rd, { recursive: true });
+    const raw = (o) => (typeof o === "string" ? o : JSON.stringify(o));
+    const put = (p, o) => o !== undefined && o !== null && writeFileSync(p, raw(o));
+    put(join(fd, "verify-report.json"), verify);
+    put(join(fd, "regression-report.json"), regress);
+    put(join(rd, "prev-verify-report.json"), prevVerify);
+    put(join(rd, "prev-regression-report.json"), prevRegress);
+    put(join(fd, "SPEC.md"), spec);
+    return run([join(fd, "verify-report.json"), join(fd, "regression-report.json"), "--iter", String(iter), "--cap", String(cap)]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+const acRow = (id, reason) => ({
+  id,
+  level: "unit",
+  tests: [`tests/ac/demo.unit.test.ts::demo › ${id}: does the thing`],
+  status: reason === null ? "passed" : "failed",
+  reason,
+  detail: reason === null ? "" : "1 of 1 matched result(s) failed",
+});
+/** A verify FAIL as stage-verify.mjs writes it (L84). */
+const realFail = (failing_gates, acs, gates = { "format:check": 0, lint: 0, test: 1, reconcile: 0 }) => ({
+  feature: "demo",
+  gates,
+  verdict: "FAIL",
+  failing_gates,
+  completeness: {
+    declared: ["src/a.ts"],
+    skipped: [],
+    missing: [],
+    deletions: [],
+    undeleted: [],
+    complete: true,
+    verdict: "COMPLETE",
+    note: "",
+  },
+  verifiers: { registered: 0, findings: [], note: "zero verifiers" },
+  ac_gate: { mode: "test-first", verdict: "FAIL", reason: null, evidence: [], acs, unmapped_anomalies: [], note: "an AC is delivered = …" },
+  gate_reuse: { reused: [{ id: "lint", stage: "pharn-regress", side: "head", seq: 3 }] },
+  head_install: null,
+  reconcile_detail: { state: "clean", exit: 0 },
+  gate_run: { stamp_sha256: "0".repeat(64) },
+});
+const ACS_2_RED = [acRow("AC-1", null), acRow("AC-2", "ac-test-failed"), acRow("AC-3", null)];
+const V_STUCK = realFail(["ac-delivery", "test"], ACS_2_RED);
+const R_CLEAN = {
+  feature: "demo",
+  base: "a".repeat(40),
+  head_gates: { test: 1 },
+  regressions: [],
+  pre_existing: ["test"],
+  verdict: "no-regressions",
+};
+
+test("★ no-progress: iteration 2 repeats iteration 1's failing gates, failing ACs and regressions → STOP_TERMINAL, exit 4, naming them", () => {
+  for (const [iter, cap] of [
+    [2, 3],
+    [3, 5],
+  ]) {
+    const r = inProject({ verify: V_STUCK, regress: R_CLEAN, prevVerify: V_STUCK, prevRegress: R_CLEAN }, iter, cap);
+    assert.equal(r.status, 4, r.stdout);
+    const o = json(r);
+    assert.equal(o.decision, "STOP_TERMINAL");
+    assert.equal(o.terminal_cause, "no-progress");
+    assert.equal(o.floor_green, false);
+    assert.deepEqual(o.repeated, { failing_gates: ["ac-delivery", "test"], failing_acs: ["AC-2"], regressions: [] });
+    assert.match(o.reason, /failing gates: ac-delivery, test; failing ACs: AC-2; regressions: none/);
+    assert.match(o.reason, new RegExp(`iteration ${iter} repeats iteration ${iter - 1}`));
+  }
+  // The same repeat with a regression in both iterations names it too.
+  const REG = { ...R_CLEAN, regressions: ["lint"], verdict: "regressions" };
+  const o = json(inProject({ verify: V_STUCK, regress: REG, prevVerify: V_STUCK, prevRegress: REG }, 2, 3));
+  assert.deepEqual(o.repeated.regressions, ["lint"]);
+});
+
+test("★ no-progress: a CHANGED failure set → CONTINUE, exactly as before (gates, ACs, regressions, regress verdict, previous verdict)", () => {
+  const variants = [
+    ["a gate cleared", realFail(["ac-delivery", "test", "lint"], ACS_2_RED)],
+    [
+      "another AC red",
+      realFail(["ac-delivery", "test"], [acRow("AC-1", "ac-test-failed"), acRow("AC-2", "ac-test-failed"), acRow("AC-3", null)]),
+    ],
+    ["the AC moved", realFail(["ac-delivery", "test"], [acRow("AC-1", null), acRow("AC-2", null), acRow("AC-3", "ac-test-failed")])],
+    ["previous was INCOMPLETE", { ...V_STUCK, verdict: "INCOMPLETE", failing_gates: [] }],
+  ];
+  for (const [label, prev] of variants) {
+    const r = inProject({ verify: V_STUCK, regress: R_CLEAN, prevVerify: prev, prevRegress: R_CLEAN }, 2, 3);
+    assert.equal(r.status, 3, `${label}: ${r.stdout}`);
+    assert.equal(json(r).decision, "CONTINUE", label);
+    assert.equal(json(r).repeated, null, label);
+  }
+  const REG = { ...R_CLEAN, regressions: ["lint"], verdict: "regressions" };
+  for (const [label, prevR] of [
+    ["regressions differ", { ...REG, regressions: ["format:check"] }],
+    ["regress verdict differs", REG],
+  ]) {
+    const cur = label === "regress verdict differs" ? R_CLEAN : REG;
+    const r = inProject({ verify: V_STUCK, regress: cur, prevVerify: V_STUCK, prevRegress: prevR }, 2, 3);
+    assert.equal(json(r).decision, "CONTINUE", label);
+  }
+});
+
+test("★ no-progress: a copy on disk is IGNORED at iteration 1 (an earlier run's) → CONTINUE", () => {
+  const r = inProject({ verify: V_STUCK, regress: R_CLEAN, prevVerify: V_STUCK, prevRegress: R_CLEAN }, 1, 3);
+  assert.equal(r.status, 3, r.stdout);
+  assert.equal(json(r).decision, "CONTINUE");
+});
+
+test("★ no-progress never fires at the cap: the same set at iter == cap → STOP_CAP, exit 1", () => {
+  const r = inProject({ verify: V_STUCK, regress: R_CLEAN, prevVerify: V_STUCK, prevRegress: R_CLEAN }, 3, 3);
+  assert.equal(r.status, 1, r.stdout);
+  assert.equal(json(r).decision, "STOP_CAP");
+  assert.equal(json(r).repeated, null);
+});
+
+test("★ no-progress: an unreadable or incomparable copy → CONTINUE, never INCONCLUSIVE", () => {
+  const badAc = (acs) => ({ ...V_STUCK, ac_gate: { ...V_STUCK.ac_gate, acs } });
+  const cases = [
+    ["no previous verify copy", { prevVerify: null, prevRegress: R_CLEAN }],
+    ["previous verify copy not JSON", { prevVerify: "{not json", prevRegress: R_CLEAN }],
+    [
+      "previous verify copy repeats a key",
+      { prevVerify: '{"verdict":"FAIL","failing_gates":["test"],"verdict":"FAIL"}', prevRegress: R_CLEAN },
+    ],
+    ["previous verdict outside the enum", { prevVerify: { ...V_STUCK, verdict: "BOGUS" }, prevRegress: R_CLEAN }],
+    ["previous failing_gates not an array", { prevVerify: { ...V_STUCK, failing_gates: "test" }, prevRegress: R_CLEAN }],
+    ["previous ac_gate.acs not an array", { prevVerify: { ...V_STUCK, ac_gate: { acs: "AC-2" } }, prevRegress: R_CLEAN }],
+    ["previous AC id off-shape", { prevVerify: badAc([acRow("AC-02", "ac-test-failed")]), prevRegress: R_CLEAN }],
+    ["previous AC row without reason", { prevVerify: badAc([{ id: "AC-2" }]), prevRegress: R_CLEAN }],
+    ["no previous regression copy (full)", { prevVerify: V_STUCK, prevRegress: null }],
+    ["previous regressions not an array", { prevVerify: V_STUCK, prevRegress: { ...R_CLEAN, regressions: "x" } }],
+  ];
+  for (const [label, prev] of cases) {
+    const r = inProject({ verify: V_STUCK, regress: R_CLEAN, ...prev }, 2, 3);
+    assert.equal(r.status, 3, `${label}: ${r.stdout}`);
+    assert.equal(json(r).decision, "CONTINUE", label);
+  }
+  // …and the CURRENT report's own AC block off-shape is incomparable too (not bad input — the decision is unchanged).
+  const cur = badAc([acRow("AC-x", "ac-test-failed")]);
+  assert.equal(json(inProject({ verify: cur, regress: R_CLEAN, prevVerify: cur, prevRegress: R_CLEAN }, 2, 3)).decision, "CONTINUE");
+});
+
+test("no-progress compares SETS: order and duplicates do not matter; an absent ac_gate is the empty set", () => {
+  const a = realFail(["test", "ac-delivery"], [acRow("AC-3", null), acRow("AC-2", "ac-test-failed")]);
+  const o = json(inProject({ verify: V_STUCK, regress: R_CLEAN, prevVerify: a, prevRegress: R_CLEAN }, 2, 3));
+  assert.equal(o.terminal_cause, "no-progress", JSON.stringify(o));
+  const d = { ...V_STUCK, failing_gates: ["test", "test", "ac-delivery"] };
+  assert.equal(
+    json(inProject({ verify: V_STUCK, regress: R_CLEAN, prevVerify: d, prevRegress: R_CLEAN }, 2, 3)).terminal_cause,
+    "no-progress"
+  );
+  assert.deepEqual(json(inProject({ verify: VFAIL, regress: CLEAN, prevVerify: VFAIL, prevRegress: CLEAN }, 2, 3)).repeated, {
+    failing_gates: ["test"],
+    failing_acs: [],
+    regressions: [],
+  });
+});
+
+test("no-progress needs a verify FAIL: INCOMPLETE twice, or a regression-only red twice → CONTINUE", () => {
+  const REG = { ...R_CLEAN, regressions: ["lint"], verdict: "regressions" };
+  for (const [label, v, rg] of [
+    ["INCOMPLETE twice", VINCOMPLETE, CLEAN],
+    ["regression-only red twice", PASS, REG],
+  ]) {
+    const r = inProject({ verify: v, regress: rg, prevVerify: v, prevRegress: rg }, 2, 3);
+    assert.equal(json(r).decision, "CONTINUE", `${label}: ${r.stdout}`);
+  }
+});
+
+test("★ no-progress never shadows a terminal red or a green: a reconcile red twice stays `reconcile`; a PASS stays green", () => {
+  const rec = json(inProject({ verify: VRECONCILE, regress: CLEAN, prevVerify: VRECONCILE, prevRegress: CLEAN }, 2, 3));
+  assert.equal(rec.terminal_cause, "reconcile");
+  assert.equal(rec.repeated, null);
+  const green = json(inProject({ verify: PASS, regress: CLEAN, prevVerify: V_STUCK, prevRegress: R_CLEAN }, 2, 3));
+  assert.equal(green.decision, "STOP_GREEN");
+});
+
+test("★ quick: the same verify failure set → no-progress with `regressions: null`; no regression file is opened", () => {
+  // A garbage current regression report and no previous one: the quick table reads neither.
+  const r = inProject({ verify: V_STUCK, regress: "{garbage", prevVerify: V_STUCK, prevRegress: null, spec: QUICK_SPEC }, 2, 3);
+  assert.equal(r.status, 4, r.stdout);
+  const o = json(r);
+  assert.equal(o.mode, "quick");
+  assert.equal(o.terminal_cause, "no-progress");
+  assert.deepEqual(o.repeated, { failing_gates: ["ac-delivery", "test"], failing_acs: ["AC-2"], regressions: null });
+  assert.doesNotMatch(o.reason, /regressions:/);
+  // A changed quick set CONTINUEs, and the quick cap still STOP_CAPs.
+  const moved = realFail(["ac-delivery", "test"], [acRow("AC-1", "ac-test-failed")]);
+  assert.equal(json(inProject({ verify: V_STUCK, prevVerify: moved, spec: QUICK_SPEC }, 2, 3)).decision, "CONTINUE");
+  assert.equal(json(inProject({ verify: V_STUCK, prevVerify: V_STUCK, spec: QUICK_SPEC }, 3, 3)).decision, "STOP_CAP");
+});
+
+test("★ WIRING (L45, L44) — the COMMITTED CONTINUE copy lines, each run as its own shell, then the COMMITTED stop line at N=2 → no-progress; skipping the copy → CONTINUE", () => {
+  const root = join(here, "..", "..", ".claude", "commands");
+  const cmd = readFileSync(join(root, "pharn-loop.md"), "utf8");
+  const trimmed = cmd.split(/\r?\n/).map((l) => l.trim());
+  const copies = trimmed.filter((l) => l.startsWith("cp pharn/features/"));
+  assert.equal(copies.length, 2, `pharn-loop.md must pin exactly the two copy lines, found ${copies.length}`);
+  const stop = trimmed.filter((l) => l.startsWith("node pharn/floor/check-loop.mjs "));
+  assert.equal(stop.length, 1);
+  const sub = (l, n) => l.replaceAll("<name>", "demo").replace("<N>", String(n)).replace("<M>", "3");
+  for (const l of [...copies, stop[0]]) assert.doesNotMatch(sub(l, 2), /<[a-z][^>]*>|\$/, `placeholder or shell variable: ${l}`);
+  // Each grant in the frontmatter admits its copy line (the `*` of a grant stands for <name>).
+  for (const l of copies) {
+    const grant = `"Bash(${l.replaceAll("<name>", "*")})",`;
+    assert.ok(cmd.includes(grant), `allowed-tools must grant ${grant}`);
+  }
+  const quickPart = readFileSync(join(root, "pharn-loop-quick.md"), "utf8");
+  assert.match(quickPart, /On `CONTINUE`, run the copy block's first line only/);
+  assert.match(copies[0], /verify-report\.json/, "the first copy line is verify's — the one a quick run keeps");
+
+  const scenario = (lines, spec) => {
+    const proj = mkdtempSync(join(tmpdir(), "pharn-loop-np-wiring-"));
+    try {
+      mkdirSync(join(proj, "pharn"), { recursive: true });
+      symlinkSync(here, join(proj, "pharn", "floor"));
+      const fd = join(proj, "pharn", "features", "demo");
+      mkdirSync(fd, { recursive: true });
+      mkdirSync(join(proj, "pharn", ".run", "pharn-loop", "demo"), { recursive: true }); // Step 1a's mkdir
+      if (spec) writeFileSync(join(fd, "SPEC.md"), spec);
+      const sh = (l) => spawnSync("sh", ["-c", l], { cwd: proj, encoding: "utf8" });
+      // iteration 1's reports, then its CONTINUE copy block, line by line (each its own shell — L44)
+      writeFileSync(join(fd, "verify-report.json"), JSON.stringify(V_STUCK));
+      if (!spec) writeFileSync(join(fd, "regression-report.json"), JSON.stringify(R_CLEAN));
+      for (const l of lines) assert.equal(sh(sub(l, 1)).status, 0, l);
+      // iteration 2 overwrites the reports with the same red; the stop line reads the copies
+      writeFileSync(join(fd, "verify-report.json"), JSON.stringify(V_STUCK));
+      return sh(sub(stop[0], 2));
+    } finally {
+      rmSync(proj, { recursive: true, force: true });
+    }
+  };
+  let r = scenario(copies, null);
+  assert.equal(r.status, 4, r.stdout + r.stderr);
+  assert.equal(json(r).terminal_cause, "no-progress");
+  r = scenario([copies[0]], QUICK_SPEC);
+  assert.equal(r.status, 4, r.stdout + r.stderr);
+  assert.equal(json(r).terminal_cause, "no-progress");
+  // NEGATIVE CONTROL: the same two iterations with the copy block skipped decide as before 7.23.0.
+  r = scenario([], null);
+  assert.equal(r.status, 3, r.stdout);
+  assert.equal(json(r).decision, "CONTINUE");
+});
+
+test("✧ ROUTING (GATE-1 condition 1, L29) — Step 5.4 sends every terminal cause but ac-evidence to Step 6 as emitted; ac-evidence alone is S13", () => {
+  const cmd = readFileSync(join(here, "..", "..", ".claude", "commands", "pharn-loop.md"), "utf8").replace(/\s+/g, " ");
+  const src = readFileSync(CL, "utf8");
+  const live = JSON.parse(src.match(/const TERMINAL_CAUSES = Object\.freeze\((\[[^\]]*\])\)/)[1]);
+  assert.deepEqual([...live].sort(), CAUSES, "the closed set the source declares");
+  const sentence = cmd.match(
+    /`terminal_cause` says which: \*\*`ac-evidence` is S13\*\*[^.]*?;([^.]*?) go to Step 6 with the decision as emitted\./
+  );
+  assert.ok(sentence, "Step 5.4's STOP_TERMINAL bullet must carry the cause → Step 6 sentence");
+  const named = [...sentence[1].matchAll(/`([a-z-]+)`/g)].map((m) => m[1]).sort();
+  assert.deepEqual(
+    named,
+    CAUSES.filter((c) => c !== "ac-evidence"),
+    "every non-S13 cause, and only those, goes to Step 6"
+  );
 });
