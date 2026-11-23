@@ -37,7 +37,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `cost.json` (each bound by sha256 in the record). CORE-88 stays closed: verify took 42.6 s, the second-smallest stage,
   and running one side's gates at once could save at most 43.5 to 85.6 s per iteration (1.8% to 3.5% of the run), with
   `test` already at 83.6% of its 540 s timeout at entry and a 1-minute load of 14 to 80 during the run. CORE-89 is
-  accepted: verify reused regress HEAD's 383.3 s `test` run, and its acceptance gate passed from the copied results.
+  accepted: verify reused regress HEAD's 383.3 s `test` run, and its acceptance gate passed from the copied results;
+  CORE-312's record (`.dev/measurements/reuse-and-effort-2026-11-23.md`) puts the saving at one outside-subset run per
+  iteration, 410.0 s in run 2.
   CORE-109's padding-only outcome stands: deferring Step 5 of `pharn-loop.md` (now 84,935 B) would save at most 0.32%
   of the run's weighted units, Steps 4 and 5 at most 0.71%. CORE-113's no-go stands: run 2's orchestrator share is
   26.95%, just below the 27.7% reopen condition, but one main-session run on a non-benchmark feature is not evidence

@@ -11,7 +11,9 @@ This record re-decides each one from evidence read on 2026-11-23. **It is not th
 - **Written by:** the `delegated-signoff-2026-11-23` increment, run through `/pharn-dev-ship`. GATE 1 (approved with
   changes) was the batch orchestrator's model decision under the same delegation; GATE 2 was this agent's
   (`.dev/features/delegated-signoff-2026-11-23/SHIP.md`).
-- **Dated** by its name. This repository was at `e8f0527e` (7.23.0, equal to `origin/main` after a fetch).
+- **Dated** by its name. This repository was at `e8f0527e` (7.23.0, equal to `origin/main` after a fetch) when the
+  evidence was read; `origin/main` then moved to `ead56ead` (#468, CORE-312's record, no product byte), which was merged
+  in before the build was re-anchored.
 - **Changes:** this file and one CHANGELOG entry. No product-surface byte, no `SKILLS_VERSION` bump.
 
 ## Labels (the 2026-10-05, 2026-10-25, 2026-11-11 and 2026-11-16 records' convention)
@@ -161,17 +163,24 @@ without green-run durations.
   `passed` from the results file copied from the regress HEAD run [R·m].
 - **The loss is disclosed.** `VERIFY.md` says verify has no independent second sample of the suite, so a flaky test that
   passed once reads as passed, and points at `pharn/LIMITS.md §9` [R·m], which states the same bound [S·m].
-- **What it saved:** at most the HEAD execution it reused, about 383 s, 15.6% of the run's wall-clock [R·e, 383,287 /
-  2,451,000]. What a fresh verify `test` would have taken in this run is not measured; the 2026-11-16 copy took 286.3 s
-  at 7.16.0 [O·m].
-- **CORE-312** measures this separately (another agent). No PR of it existed when this was written
-  (`gh pr list --state all --search CORE-312`) [S·m], so this row rests on run 2's store.
+- **What it saved, as CORE-312 measured it.** CORE-312's record, `.dev/measurements/reuse-and-effort-2026-11-23.md`
+  (merged in #468), measured three 7.22.0 iterations of the project, run 2 included [O·m]:
+  - verify spawned no `test` in any of them (0 s, reused), against regress HEAD whole-suite runs of 184.1 s, 188.8 s and
+    383.3 s;
+  - by its accounting, what 7.18.0 removed from each iteration is the HEAD outside-subset run, whose stand-in, the base
+    subset run, took 211.8 s, 209.2 s and 410.0 s. That is about 3.5 minutes per iteration on a quiet host and about
+    6.8 minutes in run 2, under load.
+
+  In run 2's terms, the 410.0 s stand-in is 16.7% of the 2,451 s window [O·e, 410,037 / 2,451,000]. What a fresh
+  verify `test` would have taken in run 2 itself is not measured. CORE-312's own decision leaves keep or revert to the
+  maintainer; this record decides it under delegation (§4.3).
 
 ### 4.3 Decision: accept
 
 **Decided by the agent under the maintainer's explicit delegation (2026-11-23), not a maintainer sign-off.** Keep the
-7.18.0 reuse. It did what the ticket set out to do on the first green run, the acceptance gate's verdict held, and the
-cost (no second sample) is stated where a reader of the report sees it.
+7.18.0 reuse. It did what the ticket set out to do in every measured iteration (three, run 2 the green one), saving
+about one outside-subset `test` run each; the acceptance gate's verdict held on run 2; and the cost (no second sample)
+is stated where a reader of the report sees it.
 
 **What would overturn it:** a run whose verify PASS over a reused `test` is followed by a red `test` on the same tree
 with no code change in between, which is a flake the second sample could have caught. That is a revert task under the
@@ -270,7 +279,8 @@ node <scratch>/figures.mjs ~/Projects/pharn-measure/core-310/run2
 # and print sum − max over the executed rows minus reconcile (and minus lint/format:check at entry);
 # then over worktree/feature/cost.json: sum the weighted units of requests[] and of those with agent_id === null.
 wc -c .claude/commands/pharn-loop.md
-gh pr list --state all --search CORE-312
+git log --oneline 0da70efa..HEAD -- pharn/pharn-contracts/gate-run-record.md pharn/floor/gate-run-core.mjs \
+  pharn/floor/run-gates.mjs pharn/floor/loop-fresh-core.mjs
 ```
 
 ## Bounds of this record
