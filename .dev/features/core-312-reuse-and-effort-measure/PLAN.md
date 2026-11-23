@@ -159,7 +159,33 @@ CORE-310's as pending, and the PR waits for it (the orchestrator's call), rather
 
 ## Open questions (HALT)
 
-- GATE 1: Option A ($0, reuse CORE-90's main kit as both arms, state "no change in served effort, so no gain by
-  construction") or Option B (~USD 13 replicate that measures variance only)?
-- Should the PR wait for CORE-310's run evidence before opening, or open with the 2026-11-18 data point and add
-  CORE-310's figures by a follow-up commit on the same PR?
+None open. Both were resolved at GATE 1 (below).
+
+## GATE 1 — decisions (2026-11-23)
+
+Approved by the batch orchestrator as a **model decision under the maintainer's delegation** ("You make all
+decisions, do not ask me"), not a human approval.
+
+1. **AC2 = Option A, 0 runs.** Option B is not run. The record also states the scope plainly: on this machine the
+   inherited level equals the configured one (`high`), so CORE-111 shows no gain here by construction, and its effect
+   exists only where the inherited level is lower than the configured one. The closest evidence for that case is
+   CORE-112's `grill-medium` arm (a directly invoked grill, medium vs high) as corrected by CORE-313 (p4/r2 hand-scored
+   a catch, so no catch lost at medium; about −14% chain USD; advisory). It is cited as "what high bought over medium
+   on the grill in the probe set: nothing measurable", labelled a proxy, never the CORE-111 comparison. The record says
+   "no gain shown" and leaves keep/revert to the maintainer (AC3).
+2. **Wait for CORE-310's evidence and build once.** If CORE-310 ends without usable evidence, build with the existing
+   data point(s) and say so.
+
+### After GATE 1 (read before the build)
+
+- The 10:14 host reboot wiped the batch scratch directory. The 2026-11-18 stamps were re-copied read-only from the
+  measured project into this worktree's gitignored `pharn/.run/core-312-evidence/`; their sha256s are unchanged
+  (`cb886488`, `7b8feebd`, `c104fef4`; reports `f21d315a`, `72e3df83`).
+- The measured project's feature `cost.json` files record each regress and verify execution's per-gate durations
+  (`work[]`, `pharn-stage-work/2`). That adds a second 7.22.0 iteration, `pricing-competitor-column-2` (2026-11-17:
+  regress HEAD whole suite 184.1 s, BASE subset 211.8 s, verify `test` reused). Older `cost.json` entries carry no
+  per-gate durations.
+- CORE-310 run 1 (re-run on base `8c896454`, 11:39 to 11:56) stopped at the test stage (`blocked: stage-refused`, S9,
+  `INCONCLUSIVE`, 1 iteration, no build). It ran no regress or verify, so it yields **no AC1 data point**; the record
+  says so. Its routed stages (spec, plan, grill, triage, test) do add AC2 served-effort rows: all requested and sent
+  `high`.
