@@ -34,6 +34,8 @@
     ".dev/features/defect-probe-set/run-outputs",
     // The stage-model-tuning record's raw run files (CORE-112): a SPEC probe run's PLAN.md is model-written and hashed.
     ".dev/features/stage-model-tuning/runs",
+    // The real-loop record's evidence bundles (CORE-310): JSON only today; listed so a later markdown member is not linted.
+    ".dev/features/core-310-real-loop-record/evidence",
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
     "pharn/THREAT-MODEL.md",

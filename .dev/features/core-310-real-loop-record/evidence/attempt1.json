@@ -1,0 +1,1335 @@
+{
+  "schema": "core-310-evidence-bundle/1",
+  "run": "attempt1",
+  "outcome": "killed by host reboot during build (no stop)",
+  "source": "~/Projects/pharn-measure/core-310/attempt1/ (machine-local; transcripts, gate stdout/stderr, test-results JSON and the reconcile baseline are there, not here)",
+  "intent": {
+    "file": "intent.md",
+    "sha256": "e1f51cdfed790b6f0efec30e886753f26db985b14a3caa7eb559184c96392ba0",
+    "text": "profile-todo-cleanup: features/profile/services/get-profile.ts still carries the comment \"TODO: Add organizationId parameter when multi-workspace support is added (see CLAUDE.md)\". That TODO is stale: workspaces have existed for months, the profile page is personal-only by decision (pharn/features/profile-personal-only), getProfileData reads only the user and user_profiles rows of one person, and CLAUDE.md says nothing about it. Replace the TODO with a one-sentence doc-comment line stating the actual rule: the profile is per person, not per workspace, so getProfileData takes no organization id. No behaviour change: getProfileData's signature, return value and E2E branch stay exactly as they are. Acceptance: (1) no file under features/profile/ contains the text \"multi-workspace support\" or a TODO about an organizationId parameter; (2) the getProfileData doc comment states that the profile is per person and takes no organization id; (3) the existing profile unit tests still pass unchanged.\n"
+  },
+  "selection": "core-310 bundle.mjs select(): fixed files + worktree/, gitdir/, the slug's pharn-loop/cost/build dirs, pharn-test/style; stamps of another feature dropped",
+  "absent": [
+    "start.txt",
+    "stop.txt",
+    "final.json",
+    "load.txt",
+    "run-state/pharn-regress/base-gates/stamp.json",
+    "run-state/pharn-regress/head/stamp.json",
+    "run-state/pharn-verify/gates/stamp.json",
+    "run-state/pharn-build/profile-todo-cleanup/"
+  ],
+  "dropped_stale": [],
+  "scrub": "home dir -> ~, user name -> <user>, email addresses -> <email>; sha256 is of the ORIGINAL bytes",
+  "members": {
+    "gitdir/pharn-entry-base-offer.json": {
+      "bytes": 1005,
+      "sha256": "504361fcc1557f73423ad04f4eed9132a94ab93e885a88e7264a9f0ae8f435d6",
+      "content": {
+        "schema": "pharn-entry-base-offer/1",
+        "feature": "profile-todo-cleanup",
+        "run": {
+          "command": "pharn-loop",
+          "marker_sha256": "fa6b5d9c1895e35a7f7dfc654c5a823e21b6da221a56f243109999f8aa913a67"
+        },
+        "nonce": "8894c89a0dfc15ab17f6a2b0ecb8659d",
+        "base": "be523aa85b167a6ad5d9298162b3dcb793534af5",
+        "stamp_sha256": "a7c501168d85d7fa92eaceb4b5c4e3129339ff790cf3118a4b75afdb45c97108",
+        "timeout_ms": 540000,
+        "d0": "absent",
+        "feature_dir": [
+          {
+            "id": "lint",
+            "before": "absent",
+            "after": "absent"
+          },
+          {
+            "id": "format:check",
+            "before": "absent",
+            "after": "absent"
+          },
+          {
+            "id": "test",
+            "before": "absent",
+            "after": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead"
+          },
+          {
+            "id": "typecheck",
+            "before": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead",
+            "after": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead"
+          }
+        ]
+      }
+    },
+    "gitdir/pharn-entry-cache-inputs.json": {
+      "bytes": 964,
+      "sha256": "275454641391b13b67a98095b6c4bb43b52c15f60a290e6d40368d354e4a3154",
+      "content": {
+        "schema": "pharn-entry-cache-inputs/1",
+        "feature": "profile-todo-cleanup",
+        "nonce": "8894c89a0dfc15ab17f6a2b0ecb8659d",
+        "measured_at": "2026-11-23T08:23:51.859Z",
+        "node": "v24.13.1 darwin-arm64",
+        "prefix": "",
+        "timeout_ms": 540000,
+        "exclude": [
+          "build",
+          "e2e"
+        ],
+        "install": [
+          [
+            "bun.lock",
+            null
+          ],
+          [
+            "bun.lockb",
+            null
+          ],
+          [
+            "node_modules/.modules.yaml",
+            null
+          ],
+          [
+            "node_modules/.package-lock.json",
+            "23cb572e3a00e957ecda046b422c6be7c5503f430f3701a77a45b6e4eafea3af"
+          ],
+          [
+            "node_modules/.yarn-integrity",
+            null
+          ],
+          [
+            "node_modules/.yarn-state.yml",
+            null
+          ],
+          [
+            "npm-shrinkwrap.json",
+            null
+          ],
+          [
+            "package-lock.json",
+            "5ceff151701de75de0a173da6fef021a82049e2cfb8d4668e2bd1391dbd6d079"
+          ],
+          [
+            "pnpm-lock.yaml",
+            null
+          ],
+          [
+            "yarn.lock",
+            null
+          ]
+        ]
+      }
+    },
+    "gitdir/pharn-entry-gate-changes.json": {
+      "bytes": 415,
+      "sha256": "8c1fdcf7198c9838838ebbfa6e261d5d4eec6cb9c6517b120c984be4e157baa6",
+      "content": {
+        "schema": "pharn-pre-run-snapshot/1",
+        "feature": "profile-todo-cleanup",
+        "run": {
+          "command": "pharn-loop",
+          "marker_sha256": "fa6b5d9c1895e35a7f7dfc654c5a823e21b6da221a56f243109999f8aa913a67"
+        },
+        "base": "8c896454c7ba7761b95625dc2062a5f4c9a5a253",
+        "paths": [
+          [
+            "docs/product/ACTION-APP-CONTRACT.md",
+            "20f0763ab038ede89c00139436b953b7e9cdc388c14061e29cfc369dbd6c4041"
+          ]
+        ]
+      }
+    },
+    "gitdir/pharn-pre-run-snapshot.json": {
+      "bytes": 4212,
+      "sha256": "25a8267b6e37fbd2f5c9c3cd3cecef133f23844b48fd7ef4780fe6a709953071",
+      "content": {
+        "schema": "pharn-pre-run-snapshot/1",
+        "feature": "profile-todo-cleanup",
+        "run": {
+          "command": "pharn-loop",
+          "marker_sha256": "fa6b5d9c1895e35a7f7dfc654c5a823e21b6da221a56f243109999f8aa913a67"
+        },
+        "base": "be523aa85b167a6ad5d9298162b3dcb793534af5",
+        "paths": [
+          [
+            ".agents/skills/security-audit/AI-AND-LLM.md",
+            "7335a95c43554eadefcf03ece639291bb0e038c398a179299e3887ffe06bd2ef"
+          ],
+          [
+            ".agents/skills/security-audit/ATTACK-CLASSES.md",
+            "3ee4f00c6e8c9dcf6dd02dd5ac2a4ceb322e2085f3e9fbe79cf0c6330bc7ef83"
+          ],
+          [
+            ".agents/skills/security-audit/CLIENT-SIDE.md",
+            "613f6b98f86083e045525c5b60154ffdab122bac35f1e05eb17488e6e453370c"
+          ],
+          [
+            ".agents/skills/security-audit/CLOUD-AND-DEPLOYMENT.md",
+            "3c80f3088be22345e07b057c056d6ed99fe2b0304f794398964f7ccd5a496ca3"
+          ],
+          [
+            ".agents/skills/security-audit/DATA-ISOLATION-AND-LIFECYCLE.md",
+            "307dcb3e24d292715c4a041190e7bb135646a37eb6187619ae01d000a634a4ad"
+          ],
+          [
+            ".agents/skills/security-audit/DESKTOP-MOBILE-AND-LOCAL-IPC.md",
+            "58eae8ee0ca6a46611c501ec5a3ab47fdff88dd7db0d8d74789bbf8bb19d8cb2"
+          ],
+          [
+            ".agents/skills/security-audit/HUNTING.md",
+            "71c121decea1322c47c718f6e110f1a892980bb4266bd7ac55ef043a213ade09"
+          ],
+          [
+            ".agents/skills/security-audit/MEMORY-SAFETY-AND-BINARY.md",
+            "7c8b0dccfb35315cca2455509674d49632b2fe37e1f3aac16c1a496a7e9924a7"
+          ],
+          [
+            ".agents/skills/security-audit/PROTOCOLS-RPC-AND-MESSAGING.md",
+            "8b73816fa5b3697c9c40977f0c836b40f01d6e81929ff2720fe83ce089e9a619"
+          ],
+          [
+            ".agents/skills/security-audit/RECONNAISSANCE.md",
+            "02ca887aca84de8ae137f1891bd2f0a54f28d3fa6da92a27f54734382b3381a2"
+          ],
+          [
+            ".agents/skills/security-audit/RESOURCE-EXHAUSTION-AND-AVAILABILITY.md",
+            "4326fab5c92a0b4c420a70196254040105cd794026562130b59bf1a6db3e4baa"
+          ],
+          [
+            ".agents/skills/security-audit/SKILL.md",
+            "5e3e96a1e438d8f35fef0a1e38f02d4f00e2bdf910401b7dfe00e6779c6dac85"
+          ],
+          [
+            ".agents/skills/security-audit/SUPPLY-CHAIN-AND-RELEASE.md",
+            "f372e919940e335468ba1ae09f99026c3986a345f7fe26f8068f132e199f52a5"
+          ],
+          [
+            ".agents/skills/security-audit/VALIDATION-AND-REPORTING.md",
+            "b892470cb89bb31f33403e050d4bdfbe2cdaef940ade1496fa65e32b2e129449"
+          ],
+          [
+            ".agents/skills/security-audit/WEB-PROTOCOL-AND-AUTH.md",
+            "4f3066dffa23c5635859187be9b96c32f2aff29a688186b91ff0c63e47d62b5c"
+          ],
+          [
+            ".agents/skills/security-audit/report-schema.json",
+            "6575c9de4a62255699ea052ebf9a49ebfb373a32891bcd89af6f55cc84b35519"
+          ],
+          [
+            ".agents/skills/security-audit/validate-coverage-ledger.cjs",
+            "2eb280bd2e33c002916f86db9b29f9edfedb6454e5db973c766290465b868ac8"
+          ],
+          [
+            ".agents/skills/security-audit/validate-coverage-ledger.test.cjs",
+            "cfb9df26b03469a4279a70e7664a2a5434dd6f8c2c204e91f9b0aeb9dd71e648"
+          ],
+          [
+            ".agents/skills/security-audit/validate-findings.cjs",
+            "e85f232e36bfac0f866f244da50376692d6b45c690beadcb00608b0e6c8b5283"
+          ],
+          [
+            ".agents/skills/security-audit/validate-findings.test.cjs",
+            "b92001117a92c4161d43777a0ba2fa182a8a4d97f2304cc8c0cee5331497b73b"
+          ],
+          [
+            ".agents/skills/source-command-pharn-ship-stages/SKILL.md",
+            "8f1989f4ebe22fe14bcd11568d2c93938f86e1e1c7f99c71606f3be72ed6d31c"
+          ],
+          [
+            ".agents/skills/source-command-pharn-supervise/SKILL.md",
+            "a0dbf10f7a25e9c030b461403f87098b0e17ce958fdc86eab2615ad871dd7de4"
+          ],
+          [
+            ".agents/skills/source-command-pharn-triage/SKILL.md",
+            "c7ab1e39e7ba2372660484f2ca7cecc076f31416a751228e2a3c4f5f75b3936e"
+          ],
+          [
+            ".claude/skills/security-audit",
+            "fb6e1ba4e330e591b09af53cfc169c4c675cf81c2b30170e8f14c3f44f08db7d"
+          ],
+          [
+            ".codex/agents/pharn-review-lens.toml",
+            "13f6eaac55b41c1edf0dc3c788a1b0fc5ab25e8b8b625823af9b199205cb55b7"
+          ],
+          [
+            ".codex/agents/pharn-stage.toml",
+            "b335d7d621ba3143e2f62c3c9d2fc56c1e62b6b3c5cd794ce728d60a0b286e20"
+          ],
+          [
+            "skills-lock.json",
+            "43694c5df9ad578b84bd41bcf261c6687a460e52affb1f565cbef9b7d6575966"
+          ]
+        ]
+      }
+    },
+    "gitdir/pharn-regress-base-reuse.json": {
+      "bytes": 485,
+      "sha256": "7b9d0e1d03944ee83e02f871aaf489689a61e71bd11ae8117ed5715c4f9144dc",
+      "content": {
+        "schema": "pharn-regress-base-reuse/1",
+        "feature": "core63-data-retention",
+        "run": {
+          "command": "pharn-loop",
+          "marker_sha256": "730cb6a352a7feb67d9e5c5ccf4f59a538f61d180e5e8792a45bdf4ef5a698a6"
+        },
+        "stamp_sha256": "cb88648812cc75977013caae5095650ddded051ade6584f6274466f8d36b5f21",
+        "install": {
+          "kind": "cmd",
+          "cmd": "npm ci"
+        },
+        "install_result": {
+          "ran": true,
+          "exit": 0,
+          "timedOut": false
+        },
+        "timeout_ms": 540000,
+        "head_root": []
+      }
+    },
+    "gitdir/pharn-regress-head-offer.json": {
+      "bytes": 302,
+      "sha256": "e328152396c7f0c4ee316313fc954ac92eb7d7721345b6132bfa03160baacb06",
+      "content": {
+        "schema": "pharn-regress-head-offer/1",
+        "feature": "core63-data-retention",
+        "run": {
+          "command": "pharn-loop",
+          "marker_sha256": "730cb6a352a7feb67d9e5c5ccf4f59a538f61d180e5e8792a45bdf4ef5a698a6"
+        },
+        "stamp_sha256": "7b8feebd5da512089120d5c1694f5a1836b795089a0ad69c48754fa1f6d72210"
+      }
+    },
+    "run-state/cost/profile-todo-cleanup/entry.jsonl": {
+      "bytes": 2088,
+      "sha256": "7c8481f1cd29a45529d410679c04eb338a57fe3d0e01501122e65c16a59d2e78",
+      "content": "{\"schema\":\"pharn-entry-observation/1\",\"event\":\"start\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"run\":{\"seq\":1,\"ts\":\"2026-11-23T08:23:43.460Z\"},\"ts\":\"2026-11-23T08:23:51.805Z\",\"end_ts\":\"2026-11-23T08:23:53.279Z\",\"elapsed_ms\":1474,\"outcome\":\"started\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"segment-begin\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"segment\":\"a18634d292d5ab98\",\"kind\":\"runner\",\"ts\":\"2026-11-23T08:23:53.326Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"gate\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"segment\":\"a18634d292d5ab98\",\"id\":\"lint\",\"ts\":\"2026-11-23T08:24:24.059Z\",\"duration_ms\":29241,\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"gate\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"segment\":\"a18634d292d5ab98\",\"id\":\"format:check\",\"ts\":\"2026-11-23T08:24:42.522Z\",\"duration_ms\":17138,\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"gate\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"segment\":\"a18634d292d5ab98\",\"id\":\"test\",\"ts\":\"2026-11-23T08:31:20.809Z\",\"duration_ms\":396555,\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"gate\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"segment\":\"a18634d292d5ab98\",\"id\":\"typecheck\",\"ts\":\"2026-11-23T08:31:25.973Z\",\"duration_ms\":4432,\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"segment-end\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"segment\":\"a18634d292d5ab98\",\"kind\":\"runner\",\"ts\":\"2026-11-23T08:31:25.978Z\",\"elapsed_ms\":452653,\"end\":\"done\",\"gates\":4,\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"schema\":\"pharn-entry-observation/1\",\"event\":\"wait\",\"nonce\":\"8894c89a0dfc15ab17f6a2b0ecb8659d\",\"call\":\"92610cdb8e11135e\",\"ts\":\"2026-11-23T08:33:30.569Z\",\"end_ts\":\"2026-11-23T08:33:30.660Z\",\"elapsed_ms\":91,\"status\":\"green\",\"takeover\":null,\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n"
+    },
+    "run-state/cost/profile-todo-cleanup/markers.jsonl": {
+      "bytes": 1925,
+      "sha256": "3baa06be458aca03654cfea9bf7a8d6abecbe7f7a76ceec603416256e3f82f7f",
+      "content": "{\"seq\":1,\"kind\":\"run-start\",\"stage\":null,\"iteration\":null,\"ts\":\"2026-11-23T08:23:43.460Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"seq\":2,\"kind\":\"stage-start\",\"stage\":\"pharn-spec\",\"iteration\":null,\"ts\":\"2026-11-23T08:23:58.333Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\",\"route\":\"agent:opus\"}\n{\"seq\":3,\"kind\":\"orchestrator\",\"stage\":null,\"iteration\":null,\"ts\":\"2026-11-23T08:25:21.444Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"seq\":4,\"kind\":\"stage-start\",\"stage\":\"pharn-plan\",\"iteration\":null,\"ts\":\"2026-11-23T08:25:29.165Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\",\"route\":\"agent:opus\"}\n{\"seq\":5,\"kind\":\"orchestrator\",\"stage\":null,\"iteration\":null,\"ts\":\"2026-11-23T08:28:45.346Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"seq\":6,\"kind\":\"stage-start\",\"stage\":\"pharn-grill\",\"iteration\":null,\"ts\":\"2026-11-23T08:28:56.860Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\",\"route\":\"agent:opus\"}\n{\"seq\":7,\"kind\":\"orchestrator\",\"stage\":null,\"iteration\":null,\"ts\":\"2026-11-23T08:32:32.460Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"seq\":8,\"kind\":\"stage-start\",\"stage\":\"pharn-triage\",\"iteration\":null,\"ts\":\"2026-11-23T08:32:40.674Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\",\"route\":\"agent:sonnet\"}\n{\"seq\":9,\"kind\":\"orchestrator\",\"stage\":null,\"iteration\":null,\"ts\":\"2026-11-23T08:33:21.869Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"seq\":10,\"kind\":\"stage-start\",\"stage\":\"pharn-test\",\"iteration\":null,\"ts\":\"2026-11-23T08:33:34.917Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\",\"route\":\"agent:opus\"}\n{\"seq\":11,\"kind\":\"orchestrator\",\"stage\":null,\"iteration\":null,\"ts\":\"2026-11-23T09:04:45.498Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\"}\n{\"seq\":12,\"kind\":\"stage-start\",\"stage\":\"pharn-build\",\"iteration\":1,\"ts\":\"2026-11-23T09:05:05.681Z\",\"session_id\":\"6df61532-8c3e-4d92-8664-34c819a56384\",\"route\":\"agent:sonnet\"}\n"
+    },
+    "run-state/pharn-entry/gates/stamp.json": {
+      "bytes": 3936,
+      "sha256": "a7c501168d85d7fa92eaceb4b5c4e3129339ff790cf3118a4b75afdb45c97108",
+      "content": {
+        "schema": "gate-run-record/1",
+        "stage": "entry",
+        "side": null,
+        "feature": "profile-todo-cleanup",
+        "head": "be523aa85b167a6ad5d9298162b3dcb793534af5",
+        "source": "discover",
+        "source_raw": null,
+        "style_skipped": false,
+        "excluded": {
+          "declared_in": "pharn.config.json#gates.exclude",
+          "ids": [
+            "build",
+            "e2e"
+          ]
+        },
+        "finalized": true,
+        "fingerprint": {
+          "algo": "worktree-fingerprint/3+sha256+entry-feature-dir",
+          "init": "01ec32b087adfbc495145215d710fe2452ba220b5e93b00d7364698421be6cee",
+          "final": "b913e7aeac8d6c0a70b0968bc2a01ff94c25fcf39cae6f21693488e0f52dec8f"
+        },
+        "required": [
+          "lint",
+          "format:check",
+          "test",
+          "typecheck"
+        ],
+        "runs": [
+          {
+            "seq": 0,
+            "id": "lint",
+            "exit": 0,
+            "ran": true,
+            "timed_out": false,
+            "mutated": false,
+            "reason": null,
+            "argv": [
+              "npm",
+              "run",
+              "lint"
+            ],
+            "shell": null,
+            "files": [],
+            "fp_before": "01ec32b087adfbc495145215d710fe2452ba220b5e93b00d7364698421be6cee",
+            "fp_after": "01ec32b087adfbc495145215d710fe2452ba220b5e93b00d7364698421be6cee",
+            "stdout_sha256": "ce66b72ffce9d4bdf0ab10aeb5cabb4f9e145d7c3c1c477bcfa8f8f23f58bab8",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "results_sha256": null,
+            "identity_sha256": "7cd836e4bc0b904fe510297eb5953048e5e37e6783bf4435815f94c4e7cafe83",
+            "duration_ms": 29241
+          },
+          {
+            "seq": 1,
+            "id": "format:check",
+            "exit": 0,
+            "ran": true,
+            "timed_out": false,
+            "mutated": false,
+            "reason": null,
+            "argv": [
+              "npm",
+              "run",
+              "format:check"
+            ],
+            "shell": null,
+            "files": [],
+            "fp_before": "01ec32b087adfbc495145215d710fe2452ba220b5e93b00d7364698421be6cee",
+            "fp_after": "01ec32b087adfbc495145215d710fe2452ba220b5e93b00d7364698421be6cee",
+            "stdout_sha256": "9c314329d9bdeb489038f4051428dfd21b242a9b4378fd7afd9bed68439d458f",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "results_sha256": null,
+            "identity_sha256": "e0fd6276698b59ca68c16e6192d5d6cf8a5b1795686eec72f67565c8345eb2bf",
+            "duration_ms": 17138
+          },
+          {
+            "seq": 2,
+            "id": "test",
+            "exit": 0,
+            "ran": true,
+            "timed_out": false,
+            "mutated": true,
+            "reason": null,
+            "argv": [
+              "npm",
+              "run",
+              "test"
+            ],
+            "shell": null,
+            "files": [],
+            "fp_before": "01ec32b087adfbc495145215d710fe2452ba220b5e93b00d7364698421be6cee",
+            "fp_after": "b913e7aeac8d6c0a70b0968bc2a01ff94c25fcf39cae6f21693488e0f52dec8f",
+            "stdout_sha256": "08e5570a5ea8e2ca0eac211abd43892aa5e07126c53c5ec82e994408408241d5",
+            "stderr_sha256": "e6d9730931e5d560c2ba171b491bd6c5d834cb66d0ae5dbb9fa9bdf71f85dfb8",
+            "results_sha256": "18ee2056a907616921c614084304ed0f8518b536841f6d207c3c3d204e415d83",
+            "identity_sha256": "d1a7edd0e8a2967426a3daaad3e60d7e1ce48e505b903ef63929a5a8784a4143",
+            "duration_ms": 396555
+          },
+          {
+            "seq": 3,
+            "id": "typecheck",
+            "exit": 0,
+            "ran": true,
+            "timed_out": false,
+            "mutated": false,
+            "reason": null,
+            "argv": [
+              "npm",
+              "run",
+              "typecheck"
+            ],
+            "shell": null,
+            "files": [],
+            "fp_before": "b913e7aeac8d6c0a70b0968bc2a01ff94c25fcf39cae6f21693488e0f52dec8f",
+            "fp_after": "b913e7aeac8d6c0a70b0968bc2a01ff94c25fcf39cae6f21693488e0f52dec8f",
+            "stdout_sha256": "911687ac7c5db220aecce2e70d1c277946f3b91dd854c9d04c0e5ad49d157eb8",
+            "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "results_sha256": null,
+            "identity_sha256": "66ab5c9f27fe7b2e60476d850c086499796c67f6cafae22506d9edf786079798",
+            "duration_ms": 4432
+          }
+        ],
+        "aux": {
+          "completeness": null
+        }
+      }
+    },
+    "run-state/pharn-entry/progress.json": {
+      "bytes": 1082,
+      "sha256": "c77fe23835c1e7b2dedcf3778499fd3a325441bd7a0bec28112f841c72ce1546",
+      "content": {
+        "schema": "pharn-entry-progress/1",
+        "feature": "profile-todo-cleanup",
+        "nonce": "8894c89a0dfc15ab17f6a2b0ecb8659d",
+        "feature_dir": [
+          {
+            "id": "lint",
+            "before": "absent",
+            "after": "absent"
+          },
+          {
+            "id": "format:check",
+            "before": "absent",
+            "after": "absent"
+          },
+          {
+            "id": "test",
+            "before": "absent",
+            "after": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead"
+          },
+          {
+            "id": "typecheck",
+            "before": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead",
+            "after": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead"
+          }
+        ],
+        "gate_changes": [
+          {
+            "id": "lint",
+            "paths": []
+          },
+          {
+            "id": "format:check",
+            "paths": []
+          },
+          {
+            "id": "test",
+            "paths": [
+              [
+                "docs/product/ACTION-APP-CONTRACT.md",
+                "20f0763ab038ede89c00139436b953b7e9cdc388c14061e29cfc369dbd6c4041"
+              ]
+            ]
+          },
+          {
+            "id": "typecheck",
+            "paths": []
+          }
+        ]
+      }
+    },
+    "run-state/pharn-entry/result.json": {
+      "bytes": 1186,
+      "sha256": "f09d3345256fa951d9b785effa8344b19bbc19aa6f455b3d62956525090b4e3f",
+      "content": {
+        "schema": "pharn-entry-result/1",
+        "status": "done",
+        "feature": "profile-todo-cleanup",
+        "nonce": "8894c89a0dfc15ab17f6a2b0ecb8659d",
+        "stamp_sha256": "a7c501168d85d7fa92eaceb4b5c4e3129339ff790cf3118a4b75afdb45c97108",
+        "feature_dir": [
+          {
+            "id": "lint",
+            "before": "absent",
+            "after": "absent"
+          },
+          {
+            "id": "format:check",
+            "before": "absent",
+            "after": "absent"
+          },
+          {
+            "id": "test",
+            "before": "absent",
+            "after": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead"
+          },
+          {
+            "id": "typecheck",
+            "before": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead",
+            "after": "sha256:f61ac38867f998ea07459dac1fd18187c24d34e40197123bd652207bae1ccead"
+          }
+        ],
+        "gate_changes": [
+          {
+            "id": "lint",
+            "paths": []
+          },
+          {
+            "id": "format:check",
+            "paths": []
+          },
+          {
+            "id": "test",
+            "paths": [
+              [
+                "docs/product/ACTION-APP-CONTRACT.md",
+                "20f0763ab038ede89c00139436b953b7e9cdc388c14061e29cfc369dbd6c4041"
+              ]
+            ]
+          },
+          {
+            "id": "typecheck",
+            "paths": []
+          }
+        ]
+      }
+    },
+    "run-state/pharn-entry/runner.json": {
+      "bytes": 181,
+      "sha256": "9e0b841b22160e70eec53cea4c54400d6b05d79f785e82f586d3e515ead40bdb",
+      "content": {
+        "schema": "pharn-entry-runner/1",
+        "feature": "profile-todo-cleanup",
+        "nonce": "8894c89a0dfc15ab17f6a2b0ecb8659d",
+        "pid": 41296,
+        "timeout_ms": 540000,
+        "d0": "absent"
+      }
+    },
+    "run-state/pharn-loop/profile-todo-cleanup/active.json": {
+      "bytes": 177,
+      "sha256": "fa6b5d9c1895e35a7f7dfc654c5a823e21b6da221a56f243109999f8aa913a67",
+      "content": {
+        "schema": "pharn-loop-active/1",
+        "name": "profile-todo-cleanup",
+        "session_id": "6df61532-8c3e-4d92-8664-34c819a56384",
+        "started_at": "2026-11-23T08:23:29.839Z",
+        "cap": 3,
+        "mode": "full"
+      }
+    },
+    "run-state/pharn-loop/profile-todo-cleanup/entry-context.txt": {
+      "bytes": 80,
+      "sha256": "dc8deb328c671ce3fbc4e48d8e8cd9bf6e61bd3a6ffa5eef6e24053661303e15",
+      "content": "entry-context: within 111349 <= 320000 tokens (context main, threshold default)\n"
+    },
+    "run-state/pharn-loop/profile-todo-cleanup/instruction-files.json": {
+      "bytes": 1098,
+      "sha256": "826d1d37f907feefe01a857950db9364adfd16481ecf81d03e541b1c9ff023b3",
+      "content": {
+        "schema": "pharn-instruction-files/1",
+        "mode": "report",
+        "verdict": "reported",
+        "files": [
+          {
+            "path": ".claude/rules/code-review.md",
+            "via": "rule",
+            "bytes": 3073
+          },
+          {
+            "path": ".claude/rules/feature-module-layers.md",
+            "via": "rule",
+            "bytes": 7420
+          },
+          {
+            "path": ".claude/rules/product.md",
+            "via": "rule",
+            "bytes": 2725
+          },
+          {
+            "path": "CLAUDE.md",
+            "via": "root",
+            "bytes": 55563
+          }
+        ],
+        "total_bytes": 68781,
+        "estimated_tokens": 17196,
+        "estimate_basis": "bytes / 4 — an estimate, never a measurement (pharn/LIMITS.md §1c)",
+        "path_scoped": [
+          ".claude/rules/animations.md",
+          ".claude/rules/api-client.md",
+          ".claude/rules/auth.md",
+          ".claude/rules/database.md",
+          ".claude/rules/env-vars.md",
+          ".claude/rules/feature-flags.md",
+          ".claude/rules/i18n.md",
+          ".claude/rules/observability.md",
+          ".claude/rules/privacy.md",
+          ".claude/rules/proxy.md",
+          ".claude/rules/safe-action.md",
+          ".claude/rules/testing.md"
+        ],
+        "notes": [],
+        "personal": null
+      }
+    },
+    "run-state/pharn-loop/profile-todo-cleanup/isolation.json": {
+      "bytes": 177,
+      "sha256": "c1b2063e96f3a87d77c24d16e9c2c06164874abca6c2546616917afe33c970c0",
+      "content": {
+        "outcome": "HOST",
+        "evidence": [
+          "cred:ssh-dir",
+          "cred:ssh-agent",
+          "cred:gh-hosts",
+          "cred:credential-helper",
+          "cred:aws-credentials",
+          "cred:npmrc-home"
+        ],
+        "accepted_host_execution": true
+      }
+    },
+    "run-state/pharn-loop/profile-todo-cleanup/pre-run-status.txt": {
+      "bytes": 1444,
+      "sha256": "705f348b383294c9f3d6e395f9060129c517816e364a6806730c678cf5d56ec3",
+      "content": " M skills-lock.json\n?? .agents/skills/security-audit/AI-AND-LLM.md\n?? .agents/skills/security-audit/ATTACK-CLASSES.md\n?? .agents/skills/security-audit/CLIENT-SIDE.md\n?? .agents/skills/security-audit/CLOUD-AND-DEPLOYMENT.md\n?? .agents/skills/security-audit/DATA-ISOLATION-AND-LIFECYCLE.md\n?? .agents/skills/security-audit/DESKTOP-MOBILE-AND-LOCAL-IPC.md\n?? .agents/skills/security-audit/HUNTING.md\n?? .agents/skills/security-audit/MEMORY-SAFETY-AND-BINARY.md\n?? .agents/skills/security-audit/PROTOCOLS-RPC-AND-MESSAGING.md\n?? .agents/skills/security-audit/RECONNAISSANCE.md\n?? .agents/skills/security-audit/RESOURCE-EXHAUSTION-AND-AVAILABILITY.md\n?? .agents/skills/security-audit/SKILL.md\n?? .agents/skills/security-audit/SUPPLY-CHAIN-AND-RELEASE.md\n?? .agents/skills/security-audit/VALIDATION-AND-REPORTING.md\n?? .agents/skills/security-audit/WEB-PROTOCOL-AND-AUTH.md\n?? .agents/skills/security-audit/report-schema.json\n?? .agents/skills/security-audit/validate-coverage-ledger.cjs\n?? .agents/skills/security-audit/validate-coverage-ledger.test.cjs\n?? .agents/skills/security-audit/validate-findings.cjs\n?? .agents/skills/security-audit/validate-findings.test.cjs\n?? .agents/skills/source-command-pharn-ship-stages/SKILL.md\n?? .agents/skills/source-command-pharn-supervise/SKILL.md\n?? .agents/skills/source-command-pharn-triage/SKILL.md\n?? .claude/skills/security-audit\n?? .codex/agents/pharn-review-lens.toml\n?? .codex/agents/pharn-stage.toml\n"
+    },
+    "run-state/pharn-test/gates/stamp.json": {
+      "bytes": 1595,
+      "sha256": "70bf49b2b6bafdd7aa714170f5124be439e4b147ca5b39397889134b1f53210e",
+      "content": {
+        "schema": "gate-run-record/1",
+        "stage": "ac-test",
+        "side": null,
+        "feature": "profile-todo-cleanup",
+        "head": "8c896454c7ba7761b95625dc2062a5f4c9a5a253",
+        "source": "discover",
+        "source_raw": null,
+        "style_skipped": false,
+        "finalized": true,
+        "fingerprint": {
+          "algo": "worktree-fingerprint/3+sha256",
+          "init": "d7209d02fbb0e2fa9b9fdc6490e2f11315ff792238ba5b25652e88bb3dd99d60",
+          "final": "d7209d02fbb0e2fa9b9fdc6490e2f11315ff792238ba5b25652e88bb3dd99d60"
+        },
+        "required": [
+          "test"
+        ],
+        "runs": [
+          {
+            "seq": 0,
+            "id": "test",
+            "exit": 1,
+            "ran": true,
+            "timed_out": false,
+            "mutated": false,
+            "reason": null,
+            "argv": [
+              "npm",
+              "run",
+              "test"
+            ],
+            "shell": null,
+            "files": [
+              "__tests__/profile-todo-cleanup-fixture.ac.test.ts",
+              "__tests__/profile-todo-cleanup-source.ac.test.ts",
+              "__tests__/profile-todo-cleanup-suite.ac.test.ts"
+            ],
+            "fp_before": "d7209d02fbb0e2fa9b9fdc6490e2f11315ff792238ba5b25652e88bb3dd99d60",
+            "fp_after": "d7209d02fbb0e2fa9b9fdc6490e2f11315ff792238ba5b25652e88bb3dd99d60",
+            "stdout_sha256": "5c5c8fb5d93f14a34e53cd1cebe3b1e4f5668a26652de1f8ff297395a7544834",
+            "stderr_sha256": "8c21dfad7396d4c6de03edf41252d7933d876300af9f631cc7fe39149444f8d4",
+            "results_sha256": "8b6bac600809467cc6d427521021abd34c71e293a2528e2c56caad21adca6843",
+            "identity_sha256": "13be6957b54772f7eb5ecec2b8e22a114f64c83e3313763fa88876a6ac8aab59",
+            "duration_ms": 20829
+          }
+        ],
+        "aux": {
+          "completeness": null
+        }
+      }
+    },
+    "run-state/pharn-test/style/after-format-check.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content": ""
+    },
+    "run-state/pharn-test/style/after-format-check.out": {
+      "bytes": 77,
+      "sha256": "fa228acc8040a924ccaa27308439af38c25a4812b7347c6b22dccc3d79920270",
+      "content": "\n> pharn-app@0.1.0 format:check\n> prettier . --check\n\nChecking formatting...\n"
+    },
+    "run-state/pharn-test/style/after-lint.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content": ""
+    },
+    "run-state/pharn-test/style/after-lint.out": {
+      "bytes": 53,
+      "sha256": "ce66b72ffce9d4bdf0ab10aeb5cabb4f9e145d7c3c1c477bcfa8f8f23f58bab8",
+      "content": "\n> pharn-app@0.1.0 lint\n> eslint . --max-warnings=0\n\n"
+    },
+    "run-state/pharn-test/style/after.json": {
+      "bytes": 288,
+      "sha256": "ec54f86008b1689602313e1e0be5d48dc9e5dfb14940c90d6b4bf43df8ca4bcc",
+      "content": {
+        "schema": "ac-style/1",
+        "phase": "after",
+        "feature": "profile-todo-cleanup",
+        "tests_existed": true,
+        "gates": [
+          {
+            "id": "lint",
+            "exit": 124,
+            "timed_out": true
+          },
+          {
+            "id": "format:check",
+            "exit": 124,
+            "timed_out": true
+          }
+        ]
+      }
+    },
+    "run-state/pharn-test/style/before-format-check.err": {
+      "bytes": 43,
+      "sha256": "b1753beda127198adb5ba2249c6b513db903e74c88a83d00bb9338c8d6f2471d",
+      "content": "[warn] docs/product/ACTION-APP-CONTRACT.md\n"
+    },
+    "run-state/pharn-test/style/before-format-check.out": {
+      "bytes": 77,
+      "sha256": "fa228acc8040a924ccaa27308439af38c25a4812b7347c6b22dccc3d79920270",
+      "content": "\n> pharn-app@0.1.0 format:check\n> prettier . --check\n\nChecking formatting...\n"
+    },
+    "run-state/pharn-test/style/before-lint.err": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content": ""
+    },
+    "run-state/pharn-test/style/before-lint.out": {
+      "bytes": 53,
+      "sha256": "ce66b72ffce9d4bdf0ab10aeb5cabb4f9e145d7c3c1c477bcfa8f8f23f58bab8",
+      "content": "\n> pharn-app@0.1.0 lint\n> eslint . --max-warnings=0\n\n"
+    },
+    "run-state/pharn-test/style/before.json": {
+      "bytes": 290,
+      "sha256": "3db6b00a64bb04420d15cb46fe67542f157910055081d9fc8c6545475538d7f4",
+      "content": {
+        "schema": "ac-style/1",
+        "phase": "before",
+        "feature": "profile-todo-cleanup",
+        "tests_existed": false,
+        "gates": [
+          {
+            "id": "lint",
+            "exit": 124,
+            "timed_out": true
+          },
+          {
+            "id": "format:check",
+            "exit": 124,
+            "timed_out": true
+          }
+        ]
+      }
+    },
+    "run-state/writes-scope.json": {
+      "bytes": 167,
+      "sha256": "17d23dd78e73b05dc2e488d326f8e7d4eb53c3a2fae53aa2cc1438cfec368a5f",
+      "content": {
+        "scope": [
+          "features/profile/services/get-profile.ts"
+        ],
+        "set_by": "pharn/features/profile-todo-cleanup/PLAN.md",
+        "set_at": "2026-11-23T09:05:43.617Z"
+      }
+    },
+    "tokens.json": {
+      "bytes": 5380,
+      "sha256": "41e3c8b08f61e824acf7871a4b865c720b48ad3137da08bbb9b4bc32634ca19c",
+      "content": {
+        "main": {
+          "requests": 37,
+          "models": {
+            "claude-sonnet-5-5": 37
+          },
+          "first": "2026-11-23T08:23:03.186Z",
+          "last": "2026-11-23T09:05:15.036Z",
+          "span_s": 2531.85,
+          "usage": {
+            "input": 74,
+            "output": 8689,
+            "cache_create": 120758,
+            "cache_read": 4255835,
+            "processed": 4385356
+          },
+          "tools": {
+            "Read": 1,
+            "Bash": 31,
+            "Write": 1,
+            "Agent": 6
+          },
+          "flagged": []
+        },
+        "agents": {
+          "agent-a0181e61dab8e22cb": {
+            "meta": {
+              "agentType": "pharn-stage",
+              "isBuiltIn": false,
+              "description": "pharn stage pharn-spec",
+              "toolUseId": "toolu_01LcBVn7JiLwu3rVWseStT8J",
+              "spawnDepth": 1,
+              "requestShape": "background",
+              "requestNonInteractive": true,
+              "model": "opus",
+              "effort": "high",
+              "pickedEffortModel": "claude-sonnet-5-5",
+              "finished": true
+            },
+            "requests": 13,
+            "models": {
+              "claude-opus-5-5": 13
+            },
+            "first": "2026-11-23T08:24:03.588Z",
+            "last": "2026-11-23T08:25:30.091Z",
+            "span_s": 86.503,
+            "usage": {
+              "input": 26,
+              "output": 5606,
+              "cache_create": 67714,
+              "cache_read": 684768,
+              "processed": 758114
+            },
+            "tools": {
+              "Bash": 11,
+              "Read": 1,
+              "Write": 2,
+              "Edit": 1,
+              "SubagentHandback": 1
+            },
+            "flagged": []
+          },
+          "agent-a48ed0b07110374cc": {
+            "meta": {
+              "agentType": "pharn-stage",
+              "isBuiltIn": false,
+              "description": "pharn stage pharn-grill",
+              "toolUseId": "toolu_01Gwwv3TihG8U7ft7TjRteN3",
+              "spawnDepth": 1,
+              "requestShape": "background",
+              "requestNonInteractive": true,
+              "model": "opus",
+              "effort": "high",
+              "pickedEffortModel": "claude-sonnet-5-5",
+              "finished": true
+            },
+            "requests": 22,
+            "models": {
+              "claude-opus-5-5": 22
+            },
+            "first": "2026-11-23T08:29:01.939Z",
+            "last": "2026-11-23T08:32:44.427Z",
+            "span_s": 222.488,
+            "usage": {
+              "input": 44,
+              "output": 16674,
+              "cache_create": 160690,
+              "cache_read": 2298309,
+              "processed": 2475717
+            },
+            "tools": {
+              "Bash": 23,
+              "Read": 3,
+              "Write": 2,
+              "SubagentHandback": 1
+            },
+            "flagged": []
+          },
+          "agent-a7af51a4a533446cb": {
+            "meta": {
+              "agentType": "pharn-stage",
+              "isBuiltIn": false,
+              "description": "pharn stage pharn-build",
+              "toolUseId": "toolu_01VWPuVJRUzTVzAiTdLCF8SS",
+              "spawnDepth": 1,
+              "requestShape": "background",
+              "requestNonInteractive": true,
+              "model": "sonnet",
+              "effort": "high",
+              "pickedEffortModel": "claude-sonnet-5-5"
+            },
+            "requests": 7,
+            "models": {
+              "claude-sonnet-5-5": 7
+            },
+            "first": "2026-11-23T09:05:10.901Z",
+            "last": "2026-11-23T09:07:53.257Z",
+            "span_s": 162.356,
+            "usage": {
+              "input": 16,
+              "output": 1431,
+              "cache_create": 85737,
+              "cache_read": 325672,
+              "processed": 412856
+            },
+            "tools": {
+              "Bash": 6,
+              "Read": 4,
+              "Edit": 1
+            },
+            "flagged": []
+          },
+          "agent-a83abe630c3d7ea82": {
+            "meta": {
+              "agentType": "pharn-stage",
+              "isBuiltIn": false,
+              "description": "pharn stage pharn-test",
+              "toolUseId": "toolu_01XBQbkgWyBVxTEspznEru6G",
+              "spawnDepth": 1,
+              "requestShape": "background",
+              "requestNonInteractive": true,
+              "model": "opus",
+              "effort": "high",
+              "pickedEffortModel": "claude-sonnet-5-5",
+              "finished": true
+            },
+            "requests": 22,
+            "models": {
+              "claude-opus-5-5": 22
+            },
+            "first": "2026-11-23T08:33:38.492Z",
+            "last": "2026-11-23T09:05:03.444Z",
+            "span_s": 1884.952,
+            "usage": {
+              "input": 46,
+              "output": 10783,
+              "cache_create": 358489,
+              "cache_read": 1371004,
+              "processed": 1740322
+            },
+            "tools": {
+              "Bash": 20,
+              "Read": 1,
+              "Write": 3,
+              "SubagentHandback": 1
+            },
+            "flagged": []
+          },
+          "agent-ab7f0bed62433173f": {
+            "meta": {
+              "agentType": "pharn-stage",
+              "isBuiltIn": false,
+              "description": "pharn stage pharn-triage",
+              "toolUseId": "toolu_015hyWfmYamunhKLeovWmYBV",
+              "spawnDepth": 1,
+              "requestShape": "background",
+              "requestNonInteractive": true,
+              "model": "sonnet",
+              "effort": "high",
+              "pickedEffortModel": "claude-sonnet-5-5",
+              "finished": true
+            },
+            "requests": 9,
+            "models": {
+              "claude-sonnet-5-5": 9
+            },
+            "first": "2026-11-23T08:32:44.108Z",
+            "last": "2026-11-23T08:33:27.105Z",
+            "span_s": 42.997,
+            "usage": {
+              "input": 18,
+              "output": 3414,
+              "cache_create": 59186,
+              "cache_read": 398546,
+              "processed": 461164
+            },
+            "tools": {
+              "Bash": 6,
+              "Read": 6,
+              "Write": 1,
+              "SubagentHandback": 1
+            },
+            "flagged": []
+          },
+          "agent-afa16ea202e496842": {
+            "meta": {
+              "agentType": "pharn-stage",
+              "isBuiltIn": false,
+              "description": "pharn stage pharn-plan",
+              "toolUseId": "toolu_01RxEjCvsaB3aUc3bexd1TPN",
+              "spawnDepth": 1,
+              "requestShape": "background",
+              "requestNonInteractive": true,
+              "model": "opus",
+              "effort": "high",
+              "pickedEffortModel": "claude-sonnet-5-5",
+              "finished": true
+            },
+            "requests": 19,
+            "models": {
+              "claude-opus-5-5": 19
+            },
+            "first": "2026-11-23T08:25:32.642Z",
+            "last": "2026-11-23T08:28:56.912Z",
+            "span_s": 204.27,
+            "usage": {
+              "input": 38,
+              "output": 12234,
+              "cache_create": 87052,
+              "cache_read": 1267024,
+              "processed": 1366348
+            },
+            "tools": {
+              "Bash": 17,
+              "Read": 1,
+              "Write": 2,
+              "Edit": 1,
+              "SubagentHandback": 1
+            },
+            "flagged": []
+          }
+        },
+        "total": {
+          "processed": 11599877,
+          "output": 58831
+        }
+      }
+    },
+    "worktree/feature/AC-TESTS.lock.json": {
+      "bytes": 3912,
+      "sha256": "1c81db4c2c83da8502c39e7ff87ecb759a45c2d96b8a3c66fa30411f136671bf",
+      "content": {
+        "schema": "ac-tests-lock/6",
+        "feature": "profile-todo-cleanup",
+        "mode": "test-first",
+        "spec": {
+          "spec_id": "profile-todo-cleanup",
+          "spec_content_hash": "d0bf34a9bd0e038370beea890a486b669af71067d62a9e155abecb3b8f20e99d"
+        },
+        "mapping": {
+          "path": "pharn/features/profile-todo-cleanup/AC-TESTS.md",
+          "sha256": "2aaea62b83846a67f2d3a4dc82281e9165bc16b19f50227e6495f93767aeda42"
+        },
+        "files": [
+          {
+            "path": "__tests__/profile-todo-cleanup-fixture.ac.test.ts",
+            "sha256": "ec83f712f25e65af610f884e0d5112f0abcb7f192e94a84ce651ad02fe0bcbba"
+          },
+          {
+            "path": "__tests__/profile-todo-cleanup-source.ac.test.ts",
+            "sha256": "9583826e69a4fba3a7ff2412a0330d43a55db2ebd703cc68a0699758b164cd42"
+          },
+          {
+            "path": "__tests__/profile-todo-cleanup-suite.ac.test.ts",
+            "sha256": "33dfe93aa431e00ec1e21a2a7648f056bb4b862d96bd3a26178a315927e2c2b1"
+          }
+        ],
+        "bootstrap": null,
+        "red_run": {
+          "stamp_sha256": "70bf49b2b6bafdd7aa714170f5124be439e4b147ca5b39397889134b1f53210e",
+          "files_sha256": "56e1dd940b646cbfe569188ea367eb10f774e2434dfb1a823d7601b2035a8b9d",
+          "gates": [
+            {
+              "gate": "test",
+              "results_sha256": "8b6bac600809467cc6d427521021abd34c71e293a2528e2c56caad21adca6843"
+            }
+          ],
+          "acs": [
+            {
+              "id": "AC-1",
+              "tests": [
+                "__tests__/profile-todo-cleanup-source.ac.test.ts::profile-todo-cleanup source › AC-1: no file under features/profile/ mentions multi-workspace support or a TODO about an organizationId parameter"
+              ]
+            },
+            {
+              "id": "AC-2",
+              "tests": [
+                "__tests__/profile-todo-cleanup-source.ac.test.ts::profile-todo-cleanup source › AC-2: the getProfileData doc comment has one sentence saying the profile is per person, not per workspace, so getProfileData takes no organization id"
+              ]
+            },
+            {
+              "id": "AC-3",
+              "tests": [
+                "__tests__/profile-todo-cleanup-suite.ac.test.ts::profile-todo-cleanup suite › AC-3: every existing unit test under features/profile/ passes on the changed tree"
+              ]
+            },
+            {
+              "id": "AC-4",
+              "tests": [
+                "__tests__/profile-todo-cleanup-fixture.ac.test.ts::profile-todo-cleanup fixture › AC-4: getProfileData declares exactly one parameter and returns the unchanged personal fixture in E2E fixture mode"
+              ]
+            }
+          ]
+        },
+        "test_infra": {
+          "levels": [
+            "unit"
+          ],
+          "gates": [
+            {
+              "id": "test",
+              "script": "vitest run",
+              "pre": null,
+              "post": null,
+              "results": "vitest-json"
+            }
+          ],
+          "chained": [],
+          "configs": [
+            {
+              "path": ".npmrc",
+              "sha256": "a093bb2fed59d699b7f9a62a5203cc196054c624e9c39c6d908c9e7db5dd2464"
+            },
+            {
+              "path": "playwright.config.ts",
+              "sha256": "018b98823248f8639a6cb2312331787c0e3416178208665004152a1cea27e568"
+            },
+            {
+              "path": "vitest.config.ts",
+              "sha256": "1af15eaa2d47c06185e054d47144fa0ab643798e164dd707f876df377b8ddeda"
+            }
+          ],
+          "script_files": [],
+          "jest": null,
+          "exclude": [
+            "build",
+            "e2e"
+          ],
+          "other_gates": [
+            {
+              "id": "build",
+              "script": "next build",
+              "pre": null,
+              "post": null
+            },
+            {
+              "id": "e2e",
+              "script": "playwright test --project=app",
+              "pre": null,
+              "post": null
+            },
+            {
+              "id": "format:check",
+              "script": "prettier . --check",
+              "pre": null,
+              "post": null
+            },
+            {
+              "id": "lint",
+              "script": "eslint . --max-warnings=0",
+              "pre": null,
+              "post": null
+            },
+            {
+              "id": "typecheck",
+              "script": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc --noEmit",
+              "pre": null,
+              "post": null
+            }
+          ],
+          "other_chained": []
+        }
+      }
+    },
+    "worktree/feature/AC-TESTS.md": {
+      "bytes": 2509,
+      "sha256": "2aaea62b83846a67f2d3a4dc82281e9165bc16b19f50227e6495f93767aeda42",
+      "content": "---\nspec_id: profile-todo-cleanup\nspec_content_hash: d0bf34a9bd0e038370beea890a486b669af71067d62a9e155abecb3b8f20e99d\n---\n\n## Files\n\n- `__tests__/profile-todo-cleanup-source.ac.test.ts` — the tests for AC-1, AC-2\n- `__tests__/profile-todo-cleanup-suite.ac.test.ts` — the tests for AC-3\n- `__tests__/profile-todo-cleanup-fixture.ac.test.ts` — the tests for AC-4\n\n## Mapping\n\n- AC-1 | unit | `__tests__/profile-todo-cleanup-source.ac.test.ts` | every file under features/profile/ (walked recursively with node:fs `readdirSync` / `readFileSync` from the repo root, inside the test body) — a helper returns the list of `<path>:<line>` matches for the text \"multi-workspace support\" and for a line matching /TODO[^\\n]*organizationId/; the test asserts that list equals []\n- AC-2 | unit | `__tests__/profile-todo-cleanup-source.ac.test.ts` | features/profile/services/get-profile.ts text (node:fs, inside the test body) — the `/** … */` block that ends directly before `export async function getProfileData` (only whitespace between `*/` and `export`), its ` * ` prefixes stripped and lines joined with spaces; that text matches /per person/i, /not per workspace/i and /no organization id/i within one sentence (split on `. `), and the sentence names `getProfileData`\n- AC-3 | unit | `__tests__/profile-todo-cleanup-suite.ac.test.ts` | precondition: features/profile/services/get-profile.ts text contains no \"multi-workspace support\" (the changed tree); then `spawnSync(process.execPath, [\"node_modules/vitest/vitest.mjs\", \"run\", \"features/profile/\", \"--reporter=json\", \"--outputFile=<mkdtemp dir>/result.json\"], { cwd: repo root, env: process.env without PHARN_TEST_RESULTS and VITEST_JUNIT_OUTPUT })` — exit status 0, and the JSON report's numTotalTests > 0 and numFailedTests === 0; per-test timeout 180000 ms\n- AC-4 | unit | `__tests__/profile-todo-cleanup-fixture.ac.test.ts` | features/profile/services/get-profile.ts#getProfileData(userId: string): Promise<ProfileData> — imported inside the test body after `vi.mock(\"@/env\", () => ({ E2E_MSW_ENABLED: \"enabled\", env: { NEXT_PUBLIC_E2E_MSW: \"enabled\" } }))`, `@/shared/lib/db/client` mocked with a `db.select` that throws if called, `@/shared/lib/logger` mocked; precondition: the file's text contains no \"multi-workspace support\" (the AC's \"after the change\"); then `getProfileData.length === 1` and `await getProfileData(\"user-1\")` toEqual `{ personal: { fullName: \"Development User\", email: \"<email>\", avatarUrl: null } }`\n"
+    },
+    "worktree/feature/GRILL.md": {
+      "bytes": 9104,
+      "sha256": "617006e428e32885af4d440f22eef9142c2d177a8028593b89f7b61fe4a8813d",
+      "content": "# GRILL — profile-todo-cleanup\n\nPlan: `pharn/features/profile-todo-cleanup/PLAN.md` · chain: GREEN (verified by pharn/floor/check-plan-spec-agree.mjs) · lessons: GREEN (verified by pharn/floor/check-plan-lessons.mjs)\n\nmode: full (/pharn-grill profile-todo-cleanup, invoked by /pharn-loop)\n\nskills: mode=select (selectable); read=[\".claude/skills/feature-module-layers/SKILL.md\", \".claude/skills/pharn-ci-cover/SKILL.md\", \".claude/skills/pharn-ci-explain/SKILL.md\", \".claude/skills/pharn-ci-install/SKILL.md\", \".claude/skills/vitest/SKILL.md\"]; not-read=[\".claude/skills/a11y-audit/SKILL.md\" — no UI touched, \".claude/skills/ai-seo/SKILL.md\" — marketing/SEO not touched, \".claude/skills/avoid-react-use-effect/SKILL.md\" — no React code, \".claude/skills/competitors/SKILL.md\" — marketing not touched, \".claude/skills/content-strategy/SKILL.md\" — marketing not touched, \".claude/skills/copy-editing/SKILL.md\" — no marketing copy, \".claude/skills/copywriting/SKILL.md\" — no marketing copy, \".claude/skills/directory-submissions/SKILL.md\" — marketing not touched, \".claude/skills/launch/SKILL.md\" — no launch work, \".claude/skills/next-cache-components/SKILL.md\" — no page or data-fetching change, \".claude/skills/nodejs-backend-patterns/SKILL.md\" — no server behaviour change, \".claude/skills/pharn-cli/SKILL.md\" — no PHARN CLI operation, \".claude/skills/plan-feature/SKILL.md\" — not a new feature module, \".claude/skills/product-marketing/SKILL.md\" — marketing not touched, \".claude/skills/schema/SKILL.md\" — no structured data, \".claude/skills/seo-audit/SKILL.md\" — SEO not touched, \".claude/skills/shadcn-ui/SKILL.md\" — no UI, \".claude/skills/site-architecture/SKILL.md\" — no site structure change]; failed=[]; unsafe=[]; excluded=32 (symlink); expanded=[]\n\ngrillers: 13 registered, 13 printed (pharn/floor/griller-extract.mjs) — 194044 B of griller files, 99396 B printed; deep omission: 13 pharn-owned, 0 other; left out where present: guarantee-audit (13), machine-readable-emission (13), two-layers (13), layer-1 (13), finding-output (13); kept whole: none\n\n## Deterministic plan scans (`pharn/floor/grill-scan.mjs`)\n\nAdvisory: each finding below gates nothing. The scanners detect a pattern's presence on a line; a scanner finding\nis not the griller's judgment.\n\n```yaml\n- type: FINDING\n  rule_id: \"P2\"\n  severity: important\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:20\"\n  problem: \"a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller's deterministic half)\"\n  evidence: \"scan-plan-pii matched kind email-literal on line 20\"\n- type: FINDING\n  rule_id: \"P2\"\n  severity: important\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:71\"\n  problem: \"a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller's deterministic half)\"\n  evidence: \"scan-plan-pii matched kind email-literal on line 71\"\n```\n\n- `scan-plan-migrations`: mentions false. Not a finding: whether the plan needs or adequately declares this is the migrations griller's judgment.\n- `scan-plan-observability`: mentions true — lines 20 (logging). Not a finding: whether the plan needs or adequately declares this is the observability griller's judgment.\n\n## Findings\n\n<!-- GRILL-FINDINGS:BEGIN — rendered by pharn/floor/grill-findings.mjs from grill-findings.json; do not edit -->\n```yaml\n- id: G1-1\n  type: FINDING\n  rule_id: \"P2\"\n  severity: important\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:20\"\n  problem: \"a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller's deterministic half)\"\n  evidence: \"scan-plan-pii matched kind email-literal on line 20\"\n- id: G1-2\n  type: FINDING\n  rule_id: \"P2\"\n  severity: important\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:71\"\n  problem: \"a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller's deterministic half)\"\n  evidence: \"scan-plan-pii matched kind email-literal on line 71\"\n- id: G1-3\n  type: FINDING\n  rule_id: \"P1\"\n  severity: important\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:85\"\n  problem: \"The AC-3 test spawns a nested Vitest from inside a Vitest worker, a pattern with no precedent in this repository (no test spawns vitest.mjs today), and strips only PHARN_TEST_RESULTS and VITEST_JUNIT_OUTPUT, leaving the parent worker's VITEST_* variables (VITEST, VITEST_POOL_ID, VITEST_WORKER_ID) inherited; the plan should say whether those are stripped too, or record that the child was run once this way and behaved.\"\n  evidence: \"AC-3's child Vitest must not inherit PHARN_TEST_RESULTS or VITEST_JUNIT_OUTPUT ... The test deletes both from the child's env\"\n- id: G1-4\n  type: FINDING\n  rule_id: \"P1\"\n  severity: minor\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:82\"\n  problem: \"For AC-3 the plan adds a source-text precondition the criterion's Given does not state, so the AC-3 test checks the AC-1 text before it checks the suite and is not independent evidence; the plan itself defers to grill, so the human should confirm this reading or re-specify AC-3 via /pharn-spec.\"\n  evidence: \"AC-3's Given (\\\"with no test file changed\\\") does not, so for AC-3 the precondition is the plan's reading of the criterion as being about the changed tree\"\n- id: G1-5\n  type: FINDING\n  rule_id: \"P7\"\n  severity: minor\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:89\"\n  problem: \"The committed AC-3 test re-runs the whole profile suite (20 test files live, not about 24) in a child process on every full npm run test and CI run, with a 180 s timeout, and the plan does not name that recurring cost or the slowdown and flakiness risk under a loaded parallel run.\"\n  evidence: \"The child run of ~24 profile test files needs a per-test timeout well above the 10 s default (180 s suggested).\"\n- id: G1-6\n  type: FINDING\n  rule_id: \"P6\"\n  severity: minor\n  file: \"pharn/features/profile-todo-cleanup/PLAN.md:44\"\n  problem: \"The plan says the new comment line is no longer than the TODO line it replaces, but measured live the new line is 94 characters and the TODO line 92; format:check still passes because Prettier does not wrap comments and the ESLint config has no max-len rule, not because the line is shorter.\"\n  evidence: \"the new line (about 94 characters) is no longer than the TODO line it replaces, which passes `format:check` and lint today.\"\n```\n<!-- GRILL-FINDINGS:END -->\n\n## Summary (advisory)\n\nThe plan is a one-line doc-comment edit in `features/profile/services/get-profile.ts`. Checked live this run: the TODO\nsits on line 57, it is the only `TODO` and the only \"multi-workspace\" match under `features/profile/`, and\n`organizationId` appears in no other file there. The approach covers all four acceptance criteria, and it puts the AC\ntests in the root `__tests__/`, which keeps them out of the AC-1 search and out of AC-3's child run.\n\nEvery concern raised is about how the tests are run, not about the code change:\n\n- **G1-1, G1-2 (scanner, privacy).** Both hits are the E2E fixture address `<email>`. It is on a\n  `.local` domain and is already in the source the plan quotes. It is not a real person's data, the plan collects or\n  logs nothing new, and no privacy concern beyond the scanner hit is warranted.\n- **G1-3 (most worth a look).** AC-3 starts a Vitest run from inside a Vitest worker. Nothing in the repository does\n  that today, and the plan strips only the two reporter variables. `/pharn-test` should strip the inherited `VITEST_*`\n  worker variables too, or confirm with one real run that the child behaves.\n- **G1-4.** The plan already raises the AC-3 precondition question itself and hands it to the grill. Reading\n  \"Given … with no test file changed\" as being about the changed tree is reasonable, but it is an interpretation. If the\n  human disagrees, the fix is `/pharn-spec`, not a weaker test.\n- **G1-5.** The AC-3 test is committed, so every later full test run also runs the profile suite a second time in a\n  child process. The plan's count of about 24 files is 20 live.\n- **G1-6.** The line-length reasoning is factually off (94 > 92), but the conclusion holds for a different reason.\n\nGriller axes with no finding: a11y and i18n (no UI and no user-facing text), architecture and coupling (one comment in\none file), comprehension (the new sentence itself records why there is no organization id), documentation (no public\nsurface changes, and the edit is the documentation), error-handling and performance (no runtime change), migrations\n(no persisted data touched; the scanner found no mentions), observability (the line 20 logging mention describes the\nexisting error log, which is left untouched), security (the secret scan is clean, and there is no sensitive operation).\nFor P0, the plan labels its pass-before-build workaround ADVISORY and claims nothing it cannot back. For P3, P5 and P7,\nit is one file, one reason to change, and the smallest coherent increment.\n\nADVISORY VERDICT: 6 concerns raised (0 blocking-severity, 6 advisory: 3 important, 3 minor) — for the human to weigh before /pharn-build. This is not a statement that the plan is sound.\n"
+    },
+    "worktree/feature/PLAN.md": {
+      "bytes": 6495,
+      "sha256": "cc64f0491963f5e7d9520ea630fe81148332eb418d4c4502ebeff018a534e2f9",
+      "content": "---\nspec_id: profile-todo-cleanup\nspec_content_hash: d0bf34a9bd0e038370beea890a486b669af71067d62a9e155abecb3b8f20e99d\napplied_lessons: none\n---\n\n## Approach\n\nA comment-only edit to one file. In `features/profile/services/get-profile.ts`, the doc comment directly above\n`export async function getProfileData(userId: string)` (read live this run, lines 52–58) ends with the stale line\n`TODO: Add organizationId parameter when multi-workspace support is added (see CLAUDE.md).`. The build replaces that\nline, and only that line, with one English sentence stating the actual rule:\n\n```text\n * The profile is per person, not per workspace, so `getProfileData` takes no organization id.\n```\n\nThe blank ` *` separator line before it stays, so the comment keeps its two paragraphs (what the function reads, then\nthe rule). Nothing else in the file changes: the signature, the E2E fixture branch (`fullName: \"Development User\"`,\n`email: \"<email>\"`, `avatarUrl: null` over `DEFAULT_PERSONAL`), the two parallel queries, the error log\nand the return value are byte-for-byte as they are. No test file under `features/profile/` is edited (SPEC non-goal).\n\nThe AC tests (written by `/pharn-test`, mapped in `AC-TESTS.md`) live in the repository-root `__tests__/` directory, NOT\nunder `features/profile/`. This is load-bearing: AC-1 searches every file under `features/profile/` for the text\n\"multi-workspace support\" and for a TODO naming an organizationId parameter, so an AC test placed there would contain\nthose very strings and fail AC-1 forever; AC-3 runs the profile unit tests in a child Vitest, and an AC test inside\n`features/profile/` would also be picked up by that child run and recurse. The root `__tests__/*.test.ts` files run in\nthe `node` Vitest project (`vitest.config.ts` include `**/__tests__/**/*.{test,spec}.ts`), the precedent being\n`__tests__/core63-data-retention-docs.ac.test.ts`.\n\n## Applied lessons\n\n- none — `check-lessons-index.mjs --verdict` printed `NO_CANON`: the project has no memory-bank lessons yet, so there is\n  nothing to apply.\n\n## Steps\n\n1. Edit `features/profile/services/get-profile.ts`: replace the doc-comment line\n   ` * TODO: Add organizationId parameter when multi-workspace support is added (see CLAUDE.md).` with\n   ` * The profile is per person, not per workspace, so `getProfileData` takes no organization id.` (backticks around\n   `getProfileData` inside the comment, as the file's other comments quote identifiers). One sentence, English.\n2. Run Prettier on that one file only (`npx prettier --check features/profile/services/get-profile.ts`, then `--write`\n   on the same path if needed). Prettier does not wrap comment text, and the new line (about 94 characters) is no longer\n   than the TODO line it replaces, which passes `format:check` and lint today.\n3. Gates: `npm run lint` (zero warnings), `npm run typecheck`, `npm run format:check`, and\n   `npx vitest run features/profile/` (every existing profile unit test passes unchanged).\n\n## Files\n\n- `features/profile/services/get-profile.ts` — the `getProfileData` doc comment: the stale TODO line replaced by the one per-person sentence; no code change\n\n### Explicitly not touched\n\n- `features/profile/services/__tests__/get-profile.test.ts` — existing test, must pass unchanged (SPEC non-goal)\n- `features/profile/constants.ts` — `DEFAULT_PERSONAL` read by AC-4, never edited\n- `CLAUDE.md` — the instructions file the TODO pointed at; SPEC non-goal\n- `docs/architecture/profile.md` — architecture doc; SPEC non-goal\n\n## Acceptance mapping\n\n- AC-1 → Step 1 removes the only match: `grep -rn \"multi-workspace\\|TODO\" features/profile/` this run returns exactly\n  line 57 of `get-profile.ts`, so after the edit a recursive read of every file under `features/profile/` finds neither\n  \"multi-workspace support\" nor a `TODO` line naming `organizationId`. The new sentence contains no `TODO`.\n- AC-2 → Step 1 puts \"The profile is per person, not per workspace, so `getProfileData` takes no organization id.\" in\n  the JSDoc block that ends directly above `export async function getProfileData`; the AC test extracts that block and\n  checks it states per person, not per workspace, and no organization id.\n- AC-3 → no test file changes and no code changes, so the profile unit tests (`features/profile/**/__tests__/*`) pass\n  as they do today; the AC test runs them in a child Vitest and reads the result.\n- AC-4 → the signature `getProfileData(userId: string)` is untouched (`getProfileData.length === 1`), and the E2E\n  branch is untouched, so in fixture mode it returns `{ personal: { fullName: \"Development User\", email:\n  \"<email>\", avatarUrl: null } }` as before.\n\n## Risks & open questions\n\n- **AC-3 and AC-4 already hold before the build** (ADVISORY — for `/pharn-test` and `/pharn-grill`). Their Thens (the\n  existing tests pass; one parameter and the same fixture) are true of today's tree, and `/pharn-test` refuses an AC\n  test that passes before the build (`ac-test-passes-before-build`, no escape hatch — the stop\n  `pharn/features/gh3-connect-github/LOOP.md` records). Following the precedent in\n  `pharn/features/user-billing-privacy/PLAN.md` (a precondition drawn from the AC's Given), each of those two tests\n  first asserts the \"after the change\" state its Given names — the source of `features/profile/services/get-profile.ts`\n  no longer contains \"multi-workspace support\" — and only then checks its Then. AC-4's Given says \"after the change\"\n  in words; AC-3's Given (\"with no test file changed\") does not, so for AC-3 the precondition is the plan's reading of\n  the criterion as being about the changed tree. If grill judges that precondition outside AC-3, the criterion needs\n  re-specifying via `/pharn-spec`, not weakening.\n- **AC-3's child Vitest** must not inherit `PHARN_TEST_RESULTS` or `VITEST_JUNIT_OUTPUT`: `vitest.config.ts` adds a JSON\n  / JUnit reporter from them, and a child that inherited `PHARN_TEST_RESULTS` would overwrite the gate's own per-test\n  record. The test deletes both from the child's env and asks for its own JSON report in a temp directory\n  (`--reporter=json --outputFile=<tmp>`), then asserts exit 0, `numTotalTests > 0` and `numFailedTests === 0`. The child\n  run of ~24 profile test files needs a per-test timeout well above the 10 s default (180 s suggested).\n- **`/pharn-regress`** compares the profile tests before and after; with a comment-only change it should see no\n  difference.\n"
+    },
+    "worktree/feature/SPEC.md": {
+      "bytes": 3948,
+      "sha256": "2cb0c16eed3f8a5c0efa349ed6ab70ebee4279cc98a2d5bc1b9d142f3ea31be4",
+      "content": "---\nspec_id: profile-todo-cleanup\nstate: Approved\nspec_content_hash: d0bf34a9bd0e038370beea890a486b669af71067d62a9e155abecb3b8f20e99d\napproved_by: model\nspec_template: pharn-default@sha256:0ac964d307ef33dc333d1eae764877b6ea5ae4006fe3fcad4dc54ed58a0478a4\n---\n\n## Intent\n\nThe doc comment of `getProfileData` in `features/profile/services/get-profile.ts` still ends with \"TODO: Add\norganizationId parameter when multi-workspace support is added (see CLAUDE.md)\". The TODO is stale: workspaces have\nexisted for months, the profile page is personal-only by decision (`pharn/features/profile-personal-only`),\n`getProfileData` reads only one person's `user` and `user_profiles` rows, and the project instructions it points to say\nnothing about it. A reader of the service today is told that a workspace parameter is pending, which is false and invites\nsomeone to add one.\n\nThe owner wants the TODO replaced by one doc-comment sentence that states the actual rule: the profile is per person, not\nper workspace, so `getProfileData` takes no organization id. Nothing the function does changes.\n\n## Scope\n\n**In scope:**\n\n- Removing the stale TODO line from the `getProfileData` doc comment.\n- Adding one sentence to that doc comment stating that the profile is per person, not per workspace, so `getProfileData`\n  takes no organization id.\n\n**Out of scope (non-goals):**\n\n- Any change to `getProfileData`'s parameters, return value, E2E fixture branch, queries or error handling.\n- Any change to other profile services, actions, components or the profile page.\n- Editing or adding tests: the existing profile unit tests must pass unchanged.\n- Editing the project instructions file or any architecture doc.\n\n## Acceptance Criteria\n\n- **AC-1** Given the repository after the change When every file under `features/profile/` is searched for the text\n  \"multi-workspace support\" and for a TODO that mentions an organizationId parameter Then the search returns no match\n  - verify: unit\n- **AC-2** Given `features/profile/services/get-profile.ts` after the change When the doc comment directly above\n  `export async function getProfileData` is read Then it contains a sentence stating that the profile is per person (not\n  per workspace) and that `getProfileData` takes no organization id\n  - verify: unit\n- **AC-3** Given the existing unit tests under `features/profile/`, with no test file changed When they are run with the\n  project's Vitest runner Then every one of them passes\n  - verify: unit\n- **AC-4** Given the exported `getProfileData` after the change When its declared parameter count is read and it is\n  called with a user id in E2E fixture mode Then it declares exactly one parameter and returns the same personal-section\n  fixture it returned before the change (full name \"Development User\", email \"<email>\", no avatar URL)\n  - verify: unit\n\n## Constraints\n\n- No behaviour change: `getProfileData`'s signature, return value and E2E branch stay exactly as they are.\n- The change must keep `npm run lint` (zero warnings), `npm run typecheck` and `npm run format:check` green.\n- The new doc-comment text is English and is one sentence.\n\n## Assumptions\n\n- The decision that the profile is per person is the one recorded by the built `pharn/features/profile-personal-only`\n  increment and by the profile page living under `/user-account`, outside the workspace routes; its SPEC file still reads\n  `state: Draft`, which is taken as a record-keeping gap, not as the decision being open.\n- AC-1 and AC-2 are source-text properties; a unit test may observe them by reading the files under `features/profile/`\n  and returning the matches, which is the returned value the Then names.\n- The project's `test` script (`vitest run`) is the runner for every criterion; no e2e runner is needed.\n- The E2E fixture values named in AC-4 are the ones `getProfileData` returns today, read live from\n  `features/profile/services/get-profile.ts` this run.\n"
+    },
+    "worktree/feature/grill-findings.json": {
+      "bytes": 3461,
+      "sha256": "38f91d2017b63c8b1a627e1a9d124134bf53aac15699c611d906d6bc619de007",
+      "content": {
+        "schema": "pharn-grill-findings/1",
+        "round": 1,
+        "findings": [
+          {
+            "id": "G1-1",
+            "type": "FINDING",
+            "rule_id": "P2",
+            "severity": "important",
+            "file": "pharn/features/profile-todo-cleanup/PLAN.md:20",
+            "problem": "a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller's deterministic half)",
+            "evidence": "scan-plan-pii matched kind email-literal on line 20"
+          },
+          {
+            "id": "G1-2",
+            "type": "FINDING",
+            "rule_id": "P2",
+            "severity": "important",
+            "file": "pharn/features/profile-todo-cleanup/PLAN.md:71",
+            "problem": "a PII-shaped pattern appears in the plan (scan-plan-pii, privacy griller's deterministic half)",
+            "evidence": "scan-plan-pii matched kind email-literal on line 71"
+          },
+          {
+            "id": "G1-3",
+            "type": "FINDING",
+            "rule_id": "P1",
+            "severity": "important",
+            "file": "pharn/features/profile-todo-cleanup/PLAN.md:85",
+            "problem": "The AC-3 test spawns a nested Vitest from inside a Vitest worker, a pattern with no precedent in this repository (no test spawns vitest.mjs today), and strips only PHARN_TEST_RESULTS and VITEST_JUNIT_OUTPUT, leaving the parent worker's VITEST_* variables (VITEST, VITEST_POOL_ID, VITEST_WORKER_ID) inherited; the plan should say whether those are stripped too, or record that the child was run once this way and behaved.",
+            "evidence": "AC-3's child Vitest must not inherit PHARN_TEST_RESULTS or VITEST_JUNIT_OUTPUT ... The test deletes both from the child's env"
+          },
+          {
+            "id": "G1-4",
+            "type": "FINDING",
+            "rule_id": "P1",
+            "severity": "minor",
+            "file": "pharn/features/profile-todo-cleanup/PLAN.md:82",
+            "problem": "For AC-3 the plan adds a source-text precondition the criterion's Given does not state, so the AC-3 test checks the AC-1 text before it checks the suite and is not independent evidence; the plan itself defers to grill, so the human should confirm this reading or re-specify AC-3 via /pharn-spec.",
+            "evidence": "AC-3's Given (\"with no test file changed\") does not, so for AC-3 the precondition is the plan's reading of the criterion as being about the changed tree"
+          },
+          {
+            "id": "G1-5",
+            "type": "FINDING",
+            "rule_id": "P7",
+            "severity": "minor",
+            "file": "pharn/features/profile-todo-cleanup/PLAN.md:89",
+            "problem": "The committed AC-3 test re-runs the whole profile suite (20 test files live, not about 24) in a child process on every full npm run test and CI run, with a 180 s timeout, and the plan does not name that recurring cost or the slowdown and flakiness risk under a loaded parallel run.",
+            "evidence": "The child run of ~24 profile test files needs a per-test timeout well above the 10 s default (180 s suggested)."
+          },
+          {
+            "id": "G1-6",
+            "type": "FINDING",
+            "rule_id": "P6",
+            "severity": "minor",
+            "file": "pharn/features/profile-todo-cleanup/PLAN.md:44",
+            "problem": "The plan says the new comment line is no longer than the TODO line it replaces, but measured live the new line is 94 characters and the TODO line 92; format:check still passes because Prettier does not wrap comments and the ESLint config has no max-len rule, not because the line is shorter.",
+            "evidence": "the new line (about 94 characters) is no longer than the TODO line it replaces, which passes `format:check` and lint today."
+          }
+        ]
+      }
+    },
+    "worktree/feature/grill-triage.json": {
+      "bytes": 2055,
+      "sha256": "19faafcfc7450f2fb65ee57f3ebd40b9181bb21b3e2d99a0e329781a2b120964",
+      "content": {
+        "schema": "pharn-grill-triage/1",
+        "round": 1,
+        "findings_sha256": "38f91d2017b63c8b1a627e1a9d124134bf53aac15699c611d906d6bc619de007",
+        "dispositions": [
+          {
+            "id": "G1-1",
+            "disposition": "proceed",
+            "reason": "Scanner hit on the E2E fixture address the plan quotes from existing source; it is a reserved .local test value, not a person's data, and the plan collects, logs or writes nothing new."
+          },
+          {
+            "id": "G1-2",
+            "disposition": "proceed",
+            "reason": "Same fixture address as G1-1, quoted in the acceptance mapping so AC-4's expected value is explicit; no real PII and no change to what the function returns."
+          },
+          {
+            "id": "G1-3",
+            "disposition": "proceed",
+            "reason": "A test-authoring detail, not a plan flaw: the plan already requires the child run to drop the reporter variables, and a wrongly inherited VITEST_* worker variable would make the AC-3 test fail loudly when /pharn-test runs it, never pass silently; the test stage should also drop the VITEST_* worker variables and confirm with one real run."
+          },
+          {
+            "id": "G1-4",
+            "disposition": "proceed",
+            "reason": "The plan states this bound itself: AC-3 already holds before the build, and the repo's precedent (user-billing-privacy) is a precondition drawn from the Given; reading AC-3 as about the changed tree is reasonable, and the SPEC needs no change for the build to carry it out."
+          },
+          {
+            "id": "G1-5",
+            "disposition": "proceed",
+            "reason": "Accepted cost of testing AC-3 as the SPEC words it (run the existing profile tests); it is a minor recurring runtime cost with a generous timeout, and the file count (20 live, not about 24) is a harmless misstatement in a risk note."
+          },
+          {
+            "id": "G1-6",
+            "disposition": "proceed",
+            "reason": "Immaterial: the new line is 94 characters against the old 92, but Prettier does not wrap comments and no max-len lint rule exists, so format:check and lint still pass; the build runs both gates anyway."
+          }
+        ]
+      }
+    },
+    "worktree/get-profile.diff": {
+      "bytes": 737,
+      "sha256": "babb7a3115653121aacb2a72132a52a02986d6f3abba3db38acbdd0cb8e95b12",
+      "content": "diff --git a/features/profile/services/get-profile.ts b/features/profile/services/get-profile.ts\nindex 6753b1970..87f28a8f1 100644\n--- a/features/profile/services/get-profile.ts\n+++ b/features/profile/services/get-profile.ts\n@@ -54,7 +54,7 @@ function toServingUrl(\n  * ProfileData object (the personal section only). Returns defaults filled from\n  * the `user` row when no `user_profiles` row exists yet.\n  *\n- * TODO: Add organizationId parameter when multi-workspace support is added (see CLAUDE.md).\n+ * The profile is per person, not per workspace, so `getProfileData` takes no organization id.\n  */\n export async function getProfileData(userId: string): Promise<ProfileData> {\n   if (env.NEXT_PUBLIC_E2E_MSW === E2E_MSW_ENABLED) {\n"
+    },
+    "worktree/profile-todo-cleanup-fixture.ac.test.ts": {
+      "bytes": 1506,
+      "sha256": "ec83f712f25e65af610f884e0d5112f0abcb7f192e94a84ce651ad02fe0bcbba",
+      "content": "import { readFileSync } from \"node:fs\";\nimport { join } from \"node:path\";\n\nimport { describe, expect, it, vi } from \"vitest\";\n\n/**\n * profile-todo-cleanup — AC-4: after the change, `getProfileData` still declares\n * one parameter and, in E2E fixture mode, returns the same personal fixture.\n */\n\nvi.mock(\"@/env\", () => ({\n  E2E_MSW_ENABLED: \"enabled\",\n  env: { NEXT_PUBLIC_E2E_MSW: \"enabled\" },\n}));\n\nvi.mock(\"@/shared/lib/db/client\", () => ({\n  db: {\n    select: () => {\n      throw new Error(\"db.select must not be called in E2E fixture mode\");\n    },\n  },\n}));\n\nvi.mock(\"@/shared/lib/logger\", () => ({\n  createLogger: () => ({\n    info: vi.fn(),\n    error: vi.fn(),\n    warn: vi.fn(),\n    debug: vi.fn(),\n  }),\n}));\n\ndescribe(\"profile-todo-cleanup fixture\", () => {\n  it(\"AC-4: getProfileData declares exactly one parameter and returns the unchanged personal fixture in E2E fixture mode\", async () => {\n    const source = readFileSync(\n      join(__dirname, \"..\", \"features/profile/services/get-profile.ts\"),\n      \"utf8\",\n    );\n    // After the change: the stale workspace TODO is gone.\n    expect(source).not.toContain(\"multi-workspace support\");\n\n    const { getProfileData } =\n      await import(\"@/features/profile/services/get-profile\");\n\n    expect(getProfileData.length).toBe(1);\n    await expect(getProfileData(\"user-1\")).resolves.toEqual({\n      personal: {\n        fullName: \"Development User\",\n        email: \"<email>\",\n        avatarUrl: null,\n      },\n    });\n  });\n});\n"
+    },
+    "worktree/profile-todo-cleanup-source.ac.test.ts": {
+      "bytes": 3202,
+      "sha256": "9583826e69a4fba3a7ff2412a0330d43a55db2ebd703cc68a0699758b164cd42",
+      "content": "import { readdirSync, readFileSync } from \"node:fs\";\nimport { join, relative } from \"node:path\";\n\nimport { describe, expect, it } from \"vitest\";\n\n/**\n * profile-todo-cleanup — AC-1 and AC-2: no stale workspace TODO is left under\n * features/profile/, and the doc comment above `getProfileData` states that the\n * profile is per person, so the function takes no organization id.\n *\n * This file lives in the root `__tests__/`, not under features/profile/, so the\n * search below never reads its own patterns.\n */\n\nconst repoRoot = join(__dirname, \"..\");\n\n/** Every file under `dir`, walked recursively. */\nfunction listFiles(dir: string): string[] {\n  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {\n    const path = join(dir, entry.name);\n    if (entry.isDirectory()) return listFiles(path);\n    return entry.isFile() ? [path] : [];\n  });\n}\n\n/** `<path>:<line>` for each line under features/profile/ that names the stale TODO. */\nfunction staleTodoMatches(): string[] {\n  const matches: string[] = [];\n  for (const file of listFiles(join(repoRoot, \"features/profile\"))) {\n    const lines = readFileSync(file, \"utf8\").split(\"\\n\");\n    lines.forEach((line, index) => {\n      if (\n        line.includes(\"multi-workspace support\") ||\n        /TODO[^\\n]*organizationId/.test(line)\n      ) {\n        matches.push(`${relative(repoRoot, file)}:${index + 1}`);\n      }\n    });\n  }\n  return matches;\n}\n\n/**\n * The text of the `/** … *\\/` block that ends directly before\n * `export async function getProfileData` (only whitespace between), its ` * `\n * prefixes stripped and its lines joined with spaces; `null` when there is none.\n */\nfunction getProfileDataDocComment(source: string): string | null {\n  const declaration = source.indexOf(\"export async function getProfileData\");\n  if (declaration === -1) return null;\n  const before = source.slice(0, declaration).trimEnd();\n  if (!before.endsWith(\"*/\")) return null;\n  const start = before.lastIndexOf(\"/**\");\n  if (start === -1) return null;\n  return before\n    .slice(start + 3, before.length - 2)\n    .split(\"\\n\")\n    .map((line) => line.replace(/^\\s*\\*\\s?/, \"\").trim())\n    .filter((line) => line !== \"\")\n    .join(\" \");\n}\n\ndescribe(\"profile-todo-cleanup source\", () => {\n  it(\"AC-1: no file under features/profile/ mentions multi-workspace support or a TODO about an organizationId parameter\", () => {\n    expect(staleTodoMatches()).toEqual([]);\n  });\n\n  it(\"AC-2: the getProfileData doc comment has one sentence saying the profile is per person, not per workspace, so getProfileData takes no organization id\", () => {\n    const source = readFileSync(\n      join(repoRoot, \"features/profile/services/get-profile.ts\"),\n      \"utf8\",\n    );\n    const comment = getProfileDataDocComment(source);\n    expect(comment).not.toBeNull();\n\n    const sentences = (comment ?? \"\")\n      .split(/\\.\\s+/)\n      .map((sentence) => sentence.trim());\n    const rule = sentences.filter(\n      (sentence) =>\n        /per person/i.test(sentence) &&\n        /not per workspace/i.test(sentence) &&\n        /no organization id/i.test(sentence) &&\n        sentence.includes(\"getProfileData\"),\n    );\n    expect(rule.length).toBeGreaterThan(0);\n  });\n});\n"
+    },
+    "worktree/profile-todo-cleanup-suite.ac.test.ts": {
+      "bytes": 2401,
+      "sha256": "33dfe93aa431e00ec1e21a2a7648f056bb4b862d96bd3a26178a315927e2c2b1",
+      "content": "import { spawnSync } from \"node:child_process\";\nimport { mkdtempSync, readFileSync, rmSync } from \"node:fs\";\nimport { tmpdir } from \"node:os\";\nimport { join } from \"node:path\";\n\nimport { describe, expect, it } from \"vitest\";\n\n/**\n * profile-todo-cleanup — AC-3: on the changed tree, the existing unit tests\n * under features/profile/ all pass with the project's Vitest runner.\n *\n * The child run must not inherit the gate's reporter variables: vitest.config.ts\n * adds a JSON / JUnit reporter from them, and a child writing PHARN_TEST_RESULTS\n * would overwrite the gate's own per-test record. It writes its own JSON report\n * to a temporary directory instead.\n */\n\nconst repoRoot = join(__dirname, \"..\");\n\n/** The parent's environment without the reporter variables or Vitest's own worker state. */\nfunction childEnv(): NodeJS.ProcessEnv {\n  const env: NodeJS.ProcessEnv = {};\n  for (const [key, value] of Object.entries(process.env)) {\n    if (key === \"PHARN_TEST_RESULTS\") continue;\n    if (key.startsWith(\"VITEST\")) continue;\n    env[key] = value;\n  }\n  return env;\n}\n\ntype VitestJsonReport = { numTotalTests: number; numFailedTests: number };\n\ndescribe(\"profile-todo-cleanup suite\", () => {\n  it(\"AC-3: every existing unit test under features/profile/ passes on the changed tree\", () => {\n    const source = readFileSync(\n      join(repoRoot, \"features/profile/services/get-profile.ts\"),\n      \"utf8\",\n    );\n    // The changed tree: the stale workspace TODO is gone.\n    expect(source).not.toContain(\"multi-workspace support\");\n\n    const outDir = mkdtempSync(join(tmpdir(), \"profile-todo-cleanup-\"));\n    try {\n      const outputFile = join(outDir, \"result.json\");\n      const child = spawnSync(\n        process.execPath,\n        [\n          \"node_modules/vitest/vitest.mjs\",\n          \"run\",\n          \"features/profile/\",\n          \"--reporter=json\",\n          `--outputFile=${outputFile}`,\n        ],\n        {\n          cwd: repoRoot,\n          env: childEnv(),\n          encoding: \"utf8\",\n          maxBuffer: 64 * 1024 * 1024,\n        },\n      );\n\n      expect(child.status).toBe(0);\n      const report = JSON.parse(\n        readFileSync(outputFile, \"utf8\"),\n      ) as VitestJsonReport;\n      expect(report.numTotalTests).toBeGreaterThan(0);\n      expect(report.numFailedTests).toBe(0);\n    } finally {\n      rmSync(outDir, { recursive: true, force: true });\n    }\n  }, 180_000);\n});\n"
+    }
+  }
+}
