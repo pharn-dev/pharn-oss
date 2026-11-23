@@ -5,14 +5,14 @@
     "instruction-growth": 0,
     "lint": 0,
     "lint:md": 0,
-    "reconcile": 1,
+    "reconcile": 0,
     "test": 0,
     "validate": 0
   },
-  "verdict": "FAIL",
-  "failing_gates": ["reconcile"],
+  "verdict": "PASS",
+  "failing_gates": [],
   "gate_run": {
-    "stamp_sha256": "32d690c6b94d1765f0cb7a9ab4d7dfd334bec06e3407cf26714610492a33c6fa",
+    "stamp_sha256": "a4a172e2313e441ec530c1ce98b80deb2af81b9b411494b39b9ffbc95245744c",
     "source": "explicit",
     "fingerprint": {
       "algo": "worktree-fingerprint/3+sha256",

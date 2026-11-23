@@ -1,8 +1,9 @@
 # VERIFY — core-301-no-progress-stop
 
 Gates run through `pharn/floor/run-gates.mjs` (stamp `pharn/.run/pharn-dev-verify/gates/stamp.json`, sha256
-`32d690c6…a33c6fa`), verdict by `check-verify.mjs --stamp` (exit 1). Tree: HEAD `2295c52f` (the build, the merge of
-`origin/main` 302f26f8 and the merge of `origin/fix/prettier-3.10.1-format`, #464).
+`a4a172e2…5245744c`), verdict by `check-verify.mjs --stamp` (exit 0). Tree: HEAD `db59a76c` (the build, the merge of
+`origin/main` 302f26f8, the merge of `origin/fix/prettier-3.10.1-format` (#464), the regress artifacts and the first
+verify's record), after the build's re-anchor.
 
 | gate                 | exit |
 | -------------------- | ---: |
@@ -12,27 +13,26 @@ Gates run through `pharn/floor/run-gates.mjs` (stamp `pharn/.run/pharn-dev-verif
 | `format:check`       |    0 |
 | `lint:md`            |    0 |
 | `instruction-growth` |    0 |
-| `reconcile`          |    1 |
+| `reconcile`          |    0 |
 
-**VERIFY FAILS: gate(s) `reconcile` red — stage FAILS.**
+**VERIFIED: floor gates PASS.**
 
-## The reconcile red
+## Run 1 — FAIL, and the remedy
 
-`pharn/.run/pharn-dev-verify/gates/6-reconcile.out` lists two escapes, each `denied_by: writes-scope (snapshot)`,
-scope set by this feature's PLAN (quoted as data):
+The first verify (stamp `32d690c6…a33c6fa`, at `2295c52f`) was **FAIL** on `reconcile` alone: two escapes, each
+`denied_by: writes-scope (snapshot)` with the scope set by this feature's PLAN (quoted as data):
 
 - `.dev/features/observability-code-side-limit/LIMITS-5-PROPOSED.md`
 - `.dev/features/release-workflow/HUMAN-PATCH.md`
 
-Those are exactly the two files #464 (`origin/fix/prettier-3.10.1-format`, commit `9a29df8a`) reformats. The branch
-was merged into this one after the build anchored, at the orchestrator's instruction, because `origin/main` 302f26f8
-is red on `format:check` without it. The reconcile's `merged` exception covers bytes that `origin/main` merged in
-during the window — it lists the five files of the `origin/main` merge (`install-manifest-core.mjs` and its test,
-`docs/install-manifest.md`, `package.json`, `package-lock.json`) — and not a branch that has not landed on `main`.
-No write in this build touched either file; the checker reports _what_ changed, never _who_ changed it.
+They are the two files #464 reformats. That branch was merged after the build anchored its reconciliation epoch,
+and the reconcile's `merged` exception covers only bytes `origin/main` merged in during the window (it did list the
+five files of the `origin/main` merge), not a branch that has not landed. The build never wrote either file.
 
-Not edited, not re-measured elsewhere: the verdict stands as `FAIL` and the run stops here (`/pharn-dev-ship`, "A
-STOP is a STOP").
+Remedy, decided by the batch orchestrator under delegation (a model decision, not a human one): re-run
+`/pharn-dev-build`. The build was already committed, so it wrote nothing; its Step 0 re-anchored the epoch after both
+merges (3947 paths), the spec hash still matched and `validate.mjs` was GREEN. Then this stage was re-run from
+`init`. The baseline was never edited. Run 2 is the verdict above.
 
 ## Verifiers
 
