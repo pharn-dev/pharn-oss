@@ -88,6 +88,21 @@ lines is a finding there for some other reason.
   criterion's lines in `SPEC.md` (slack 1) or the `## Acceptance mapping` heading of `PLAN.md` (slack 0). The stated
   miss: the extracted grillers tell a grill to cite the plan's first line for a whole-plan absence, and that line is not
   an anchor, because every other whole-plan absence (error handling, observability) is cited there too.
+- **A measured off-anchor catch (2026-11-23, CORE-313).** CORE-112's `grill-medium` p4/r2 cited the omission at
+  `PLAN.md:15`, the plan's route list ("create, list, rotate"), which is neither anchor. Its finding names AC-4 and is
+  triaged `replan`. The scorer counted it a miss, and that one run made the arm read `does-not-support` / `catch-lost`.
+  It is 1 of the 6 p4 grill runs scored so far; every p1–p3 grill run (18) matched an anchor. The scorer is left as it
+  is, for three reasons. Recognising "names the defect at another line" means reading `problem` / `evidence`, which the
+  scorer never reads (P2), and a catch decided that way is not floor (P0). Adding an anchor after a run changes the
+  manifest's pinned sha256 and fits the anchor to that run. And an off-anchor catch can only push a reading towards
+  `does-not-support`, which never changes a default.
+- **Hand-check a `catch-lost` reading before stating it (ADVISORY).** A record that reaches `does-not-support` /
+  `catch-lost` opens the variant run of every lost pair. That run is re-scored as a catch, by hand, only when all three
+  hold: a finding names the planted defect (the omitted or contradicted criterion, by its id or by its observable
+  behaviour); the triage disposes that finding anything but `proceed`; and its `file` cites the probe's own `PLAN.md`
+  or `SPEC.md`. If any run is re-scored, the record states both readings, the floor one from `stage-model-pairs.mjs`
+  and the hand one labelled advisory, and the reason. Only lost pairs are checked, because only a variant miss can
+  produce `catch-lost`: a gained catch or a control miss cannot. Nothing checks a record against this rule.
 
 ## Pre-registration
 

@@ -10,6 +10,9 @@ pharn/floor/test-fixtures
 .dev/features/defect-probe-set/run-outputs/
 # The stage-model-tuning record's raw run files (CORE-112), the same reason: the pairing reader's JSON pins their sha256s.
 .dev/features/stage-model-tuning/runs/
+# The real-loop record's evidence bundles (CORE-310): another project's run state, copied with each member's sha256, so a
+# formatter must not rewrite them.
+.dev/features/core-310-real-loop-record/evidence/
 
 # Generated capability catalog: byte-for-byte output of `npm run docs:generate`, guarded by
 # .dev/floor/check-capability-catalog.mjs. Excluded so the formatter can never rewrite committed

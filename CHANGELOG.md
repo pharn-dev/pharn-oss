@@ -23,6 +23,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-23: **Measured: one real full `/pharn-loop` on pharn-app at 7.22.0 ended `STOP_GREEN` after one iteration —
+  on its third start, with a revised description (CORE-310).** Attempt 1 was killed mid-build by a host reboot. Run 1
+  stopped S9 at the test stage, because its third criterion ("existing tests still pass") cannot fail before the
+  build (CORE-344). Run 2's description moved that criterion into the constraints and added formatting the file that
+  keeps pharn-app `main`'s `format:check` red, then ended green in 40 min 51 s at USD 5.86 list price.
+  - **Fired in run 2:** verify reused regress HEAD's `test` and `typecheck` (CORE-89). Every routed stage ran as a
+    `pharn-stage` agent with its configured model and effort, and completed its wait. That is CORE-105's fourth
+    criterion, except "the same client as the 11 inline runs", which was never recorded and so cannot be shown.
+  - **Did not fire:** the entry gate cache (it stores only red evidence), and entry-as-base evidence (`start-dirty`).
+  - **Not distinguishable:** effort routing (CORE-111), because every stage in that project is at `high`.
+  - No stage used an MCP, WebFetch, WebSearch or Skill tool.
+  - Every duration was taken under heavy external load (1-minute load 14 to 80), so none is a baseline.
+  - Filed from the runs: CORE-343, CORE-344 and CORE-345.
+  - Record, with per-stage wall-clock, tokens, model and effort, and per-gate `duration_ms`:
+    `.dev/measurements/loop-real-run-7.22.0-2026-11-23.md`. Scrubbed evidence bundles:
+    `.dev/features/core-310-real-loop-record/evidence/`.
+  - Apparatus only, so no `SKILLS_VERSION` bump.
+
 - 2026-11-23: **Recorded the CORE-107 benchmark comparison: one `/pharn-loop` with `pharn-stage` stage agents, one
   with `general-purpose`, on the same measured-project base and intent** (`.dev/measurements/stage-agent-benchmark-2026-11-23.md`,
   Linear CORE-311). The `pharn-stage` first request was 33,011 tokens against 60,207 with the same instruction files.
@@ -54,6 +72,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   26.95%, just below the 27.7% reopen condition, but one main-session run on a non-benchmark feature is not evidence
   either way. No ticket is reopened. CORE-314's first criterion, the maintainer's own acceptance, is not met by this
   record. Record: `.dev/measurements/delegated-signoff-2026-11-23.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
+### Fixed
+
+- 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
+  scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default
+  changes. The 2026-11-17 entry said "A medium-effort grill reads `does-not-support`: it lost one catch." That reading
+  rested on one run, p4/r2. Its finding names the uncovered AC-4 and is triaged `replan`, but it cites `PLAN.md:15`,
+  which is not one of the manifest's anchors, so `defect-probe-score.mjs` scored it a miss. Re-scored by hand, the arm
+  loses no catch in 8 comparable pairs, and chain cost is down 14%. So `.dev/measurements/stage-model-tuning-2026-11-17.md`
+  now reads `supports-change` for grill effort, labelled advisory, beside the unchanged floor reading
+  (`does-not-support` / `catch-lost`). The scorer is unchanged: matching the finding's free text would cross its trust
+  boundary, and a new anchor would change the pinned manifest. Instead, `.dev/probes/defect-probes/README.md` now asks
+  every record to hand-check a lost pair before stating `catch-lost`. Whether the shipped grill effort changes is the
+  maintainer's decision, with the E1 loop pairs, tracked as CORE-342.
 
 ## [7.23.0] - 2026-11-23
 
