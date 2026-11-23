@@ -12,8 +12,8 @@ This record re-decides each one from evidence read on 2026-11-23. **It is not th
   changes) was the batch orchestrator's model decision under the same delegation; GATE 2 was this agent's
   (`.dev/features/delegated-signoff-2026-11-23/SHIP.md`).
 - **Dated** by its name. This repository was at `e8f0527e` (7.23.0, equal to `origin/main` after a fetch) when the
-  evidence was read; `origin/main` then moved to `ead56ead` (#468, CORE-312's record, no product byte), which was merged
-  in before the build was re-anchored.
+  evidence was read; `origin/main` then moved to `ead56ead` (#468, CORE-312's record) and to `2ec930d7` (#469, CORE-311's
+  record), neither with a product byte, and each was merged in before the build was re-anchored.
 - **Changes:** this file and one CHANGELOG entry. No product-surface byte, no `SKILLS_VERSION` bump.
 
 ## Labels (the 2026-10-05, 2026-10-25, 2026-11-11 and 2026-11-16 records' convention)
@@ -297,7 +297,9 @@ git log --oneline 0da70efa..HEAD -- pharn/pharn-contracts/gate-run-record.md pha
 
 - **Floor.** Nothing this record concludes is a floor guarantee. The floor facts near it are the runner's stamps and
   checks that produced run 2's verdicts, and the dev chain over this change: the writes-scope hook over the two files it
-  wrote, `reconcile`, and `check:surface-bump`, which finds no product path in it.
+  wrote, and `check:surface-bump`, which finds no product path in it. `reconcile` ran too, but `main` moved twice during
+  the run and each merge was followed by a re-anchor, so its window held only the later fixes to this file, not the
+  first writes (`.dev/features/delegated-signoff-2026-11-23/VERIFY.md`).
 - **Measured** (`m`): the per-gate durations and exits, the reuse rows and the stamp hash they carry, the stage elapsed
   times, the entry timings, the load samples, the byte counts, the request counts and the file hashes.
 - **Estimated** (`e`, each with its formula): the best cases, the shares, the percentages and the token conversions.

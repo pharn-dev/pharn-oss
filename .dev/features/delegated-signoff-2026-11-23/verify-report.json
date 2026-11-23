@@ -1,0 +1,26 @@
+{
+  "feature": "delegated-signoff-2026-11-23",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "b9586c84e2120da33bc41ffb4d2ffe972f73f9f4aab157c70ad8dd140a6b0239",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "a461ed62af09e43d02eb9b77954568c4af918c251fa6fdbab8d74e09ee173a17"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
