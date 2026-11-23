@@ -13,7 +13,8 @@ This record re-decides each one from evidence read on 2026-11-23. **It is not th
   (`.dev/features/delegated-signoff-2026-11-23/SHIP.md`).
 - **Dated** by its name. This repository was at `e8f0527e` (7.23.0, equal to `origin/main` after a fetch) when the
   evidence was read; `origin/main` then moved to `ead56ead` (#468, CORE-312's record) and to `2ec930d7` (#469, CORE-311's
-  record), neither with a product byte, and each was merged in before the build was re-anchored.
+  record), neither with a product byte, and each was merged in before the build was re-anchored. It moved twice more,
+  to `5233723c` (#470, CORE-310's record) and `88dbaeeb` (#471, CORE-313), both merged in before the last verify.
 - **Changes:** this file and one CHANGELOG entry. No product-surface byte, no `SKILLS_VERSION` bump.
 
 ## Labels (the 2026-10-05, 2026-10-25, 2026-11-11 and 2026-11-16 records' convention)
@@ -39,9 +40,11 @@ A real full `/pharn-loop` on the measured project, `~/Projects/pharn-app`, insta
 feature `profile-todo-cleanup`. It ended `STOP_GREEN` after one iteration [R·m]. Its window was 13:26:59 to 14:07:50
 CET on 2026-11-23, **2,451 s** (`start.txt`, `stop.txt`) [R·m].
 
-CORE-310's own record (`.dev/measurements/loop-real-run-7.22.0-2026-11-23.md`) was not merged when this was written.
-The figures below come from the run's store, `~/Projects/pharn-measure/core-310/run2/`, outside this repository. Every
-file read is bound by its sha256, so a later reader can check that the same bytes are meant. The store is project
+CORE-310's own record, `.dev/measurements/loop-real-run-7.22.0-2026-11-23.md` (merged in #470), reports the same
+per-gate table in its "Run 2, per gate" section [O·m], with scrubbed run summaries under
+`.dev/features/core-310-real-loop-record/evidence/`; that bundle holds no stamp or `cost.json`. So the figures below
+were read from the run's store, `~/Projects/pharn-measure/core-310/run2/`, outside this repository, and every file read
+is bound by its sha256, so a later reader can check that the same bytes are meant. The store is project
 output, `trust: untrusted`: this record reads ints, enum strings, hashes and paths from it and quotes no free text.
 
 | file (under the store)                                       | sha256                                                             |
@@ -297,9 +300,9 @@ git log --oneline 0da70efa..HEAD -- pharn/pharn-contracts/gate-run-record.md pha
 
 - **Floor.** Nothing this record concludes is a floor guarantee. The floor facts near it are the runner's stamps and
   checks that produced run 2's verdicts, and the dev chain over this change: the writes-scope hook over the two files it
-  wrote, and `check:surface-bump`, which finds no product path in it. `reconcile` ran too, but `main` moved twice during
-  the run and each merge was followed by a re-anchor, so its window held only the later fixes to this file, not the
-  first writes (`.dev/features/delegated-signoff-2026-11-23/VERIFY.md`).
+  wrote, and `check:surface-bump`, which finds no product path in it. `reconcile` ran too, but `main` moved during the
+  run and the first two merges were each followed by a re-anchor, so its window held only the later fixes to this file,
+  not the first writes (`.dev/features/delegated-signoff-2026-11-23/VERIFY.md`).
 - **Measured** (`m`): the per-gate durations and exits, the reuse rows and the stamp hash they carry, the stage elapsed
   times, the entry timings, the load samples, the byte counts, the request counts and the file hashes.
 - **Estimated** (`e`, each with its formula): the best cases, the shares, the percentages and the token conversions.

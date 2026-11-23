@@ -1,10 +1,11 @@
 {
-  "base": "2ec930d7cb34844f9f90ada8666966b3710e127d",
+  "base": "d5313883f49e6889af0d317c348cfcaefcfe429e",
   "inside": [
-    ".dev/features/delegated-signoff-2026-11-23/GRILL.md",
-    ".dev/features/delegated-signoff-2026-11-23/PLAN.md",
     ".dev/measurements/delegated-signoff-2026-11-23.md",
-    "CHANGELOG.md"
+    ".dev/features/delegated-signoff-2026-11-23/REGRESSION.md",
+    ".dev/features/delegated-signoff-2026-11-23/VERIFY.md",
+    ".dev/features/delegated-signoff-2026-11-23/regression-report.json",
+    ".dev/features/delegated-signoff-2026-11-23/verify-report.json"
   ],
   "outside_gates": {
     "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
@@ -32,9 +33,9 @@
       "suite_errors": 0
     },
     "head": {
-      "passed": 7082,
+      "passed": 7089,
       "failed": 0,
-      "skipped": 8,
+      "skipped": 1,
       "suite_errors": 0
     },
     "new_failures": [],
