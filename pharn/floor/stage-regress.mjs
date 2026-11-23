@@ -110,6 +110,17 @@
 // `head-node-modules` base links the project's node_modules into the base worktree). Child stdout is parsed as JSON
 // and only enums/ints branch; free text is quoted through `dataText`/`quoteData` (`quote-core.mjs`).
 //
+// THE PER-GATE TIMEOUT (7.22.1, CORE-298): a FRESH invocation replaces `--timeout-ms` with the project's
+// `pharn.config.json` `gates.timeoutMs` when it declares one (gate-timeout-core.mjs `resolveRunTimeout`, the rule the
+// detached runners apply — L35), and records it in the progress record, so both sides and the base install use it and a
+// `--resume` reads it from there. `--budget-ms` is NOT raised: the detached runner (stage-direct.mjs) passes the
+// declared value with the pinned budget, and `--resume --budget-ms` would override a raise anyway, so each invocation's
+// first slow step may run up to the declared value (stage-exit.md). Under stage-direct.mjs the argv already carries the
+// resolved value and this resolves it to the same value, BOUNDED: the config is read a second time, after that
+// runner's `timeout-changed` pin, so an edit in the moment between the two reads is applied unpinned. A declaration
+// below `--timeout-ms` is `unusable bad-gate-timeout`; a `gates` block that refuses leaves `--timeout-ms` as given (the
+// runner's `init` refuses the block as before). No declaration → every argv, record and output byte-identical.
+//
 // Usage:
 //   node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>]
 //        [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
@@ -135,6 +146,8 @@ import { basename, dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { doneExit, refusedExit, unusableExit, continueExit, questionExit, EXIT_CODE } from "./stage-exit-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
+import { resolveRunTimeout } from "./gate-timeout-core.mjs";
 import {
   flag,
   has,
@@ -351,7 +364,10 @@ function parseRestOfArgv(args, feature) {
   // rule, and a TRAILING `--budget-ms` with no value is refused, never read as "unbudgeted".
   const timeout = parseTimeoutMs(args);
   if (!timeout.ok) emitUnusable(feature, "usage-error", timeout.detail);
-  const timeoutMs = timeout.value;
+  // 7.22.1 (CORE-298): the project's declared per-gate timeout, when it declares one (header).
+  const tm = resolveRunTimeout(loadGateExclusion("."), timeout.value);
+  if (!tm.ok) emitUnusable(feature, "bad-gate-timeout", tm.reason);
+  const timeoutMs = tm.value;
 
   const budget = parseBudgetMs(args);
   if (!budget.ok) emitUnusable(feature, "usage-error", budget.detail);

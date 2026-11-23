@@ -19,8 +19,9 @@
 //   • `exclude` must be an array of DISTINCT ALLOWLIST members (`[]` excludes nothing);
 //   • `timeoutMs` (7.16.0, gate-timeout-above-bash-cap) must pass gate-timeout-core.mjs `timeoutDeclarationError`, which
 //     owns its value rule; this file only carries it, as `timeoutMs` in the result (`null` when absent). Every reader of
-//     the block therefore refuses a malformed value, as it refuses a malformed `exclude`; only the two detached runners
-//     (entry-gates.mjs, stage-direct.mjs) APPLY it, through gate-timeout-core.mjs `effectiveTimeoutMs`;
+//     the block therefore refuses a malformed value, as it refuses a malformed `exclude`; the gate callers that APPLY it
+//     (entry-gates.mjs, stage-direct.mjs, and since 7.22.1 build-gate.mjs, stage-regress.mjs, stage-verify.mjs) do so
+//     through gate-timeout-core.mjs `resolveRunTimeout`;
 //   • an unknown key names the remedy (7.16.0): a key a newer PHARN added needs that PHARN (`npx @pharn-dev/pharn@latest
 //     update`), otherwise it is removed. A floor ≤ 7.15.0 cannot be changed to say so: it refuses `timeoutMs` with "its
 //     only key is `exclude`" (CHANGELOG [7.16.0]);

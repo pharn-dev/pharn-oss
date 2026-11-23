@@ -238,9 +238,10 @@ too. If a gate of yours is slow but healthy — a test suite that takes nine min
   on both sides of `/pharn-regress` (and its base install) and at `/pharn-verify`. Declare the smallest value your
   slowest healthy gate needs.
 - **Where it applies.** `/pharn-loop` and `/pharn-ship` use it for the entry check and for the regress and verify
-  stages they run, and both sides of one regress comparison use the same value. It does **not** apply where a gate
-  still runs inside one tool call: `/pharn-regress` and `/pharn-verify` run by hand, `/pharn-build`'s full gate and
-  `/pharn-test`'s red run keep 540 s.
+  stages they run, and both sides of one regress comparison use the same value. Since 7.22.1 `/pharn-build`'s gate
+  (both its targeted and its full run) and `/pharn-regress` and `/pharn-verify` run by hand use it too; a call that
+  then runs past the tool's own time limit carries on in the background, and the command waits for it. Only
+  `/pharn-test`'s red run, which runs your acceptance tests alone, keeps 540 s.
 - **Declare it and commit it before the run.** The value the entry check used is pinned for the run: if the
   declaration changes before regress or verify, that stage stops (`timeout-changed`). Restore the value or start a new
   run.

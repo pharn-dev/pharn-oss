@@ -315,7 +315,8 @@ apply it through that module's one `resolveRunTimeout`. A malformed value makes 
 that PHARN (`npx @pharn-dev/pharn@latest update`), otherwise remove it. A floor older than 7.16.0 refuses the key
 with its own message (its only key is `exclude`), which names the key but not the update.
 
-**Where it applies.** Only in the two runners that do not run their gates inside a Bash call:
+**Where it applies.** In the two runners that do not run their gates inside a Bash call, and since 7.22.1 (CORE-298) in
+the three scripts that do:
 
 - the entry runner, `entry-gates.mjs --start`, which puts the value in `runner.json` `timeout_ms`, the runner's
   argv and the cached-evidence inputs (a declaration below the pinned value is `unusable bad-gate-timeout`);
@@ -324,22 +325,38 @@ with its own message (its only key is `exclude`), which names the key but not th
   and for its base-side install. When this run's entry record (`pharn/.run/pharn-entry/runner.json`, this feature)
   holds another value, the call refuses `timeout-changed`; a value below the pinned one is `timeout-unusable`.
 
-Every other caller keeps its pinned value: the thin `/pharn-regress` and `/pharn-verify` a person runs, `/pharn-build`'s
-`build-gate.mjs` and `/pharn-test`'s red run. With no declaration every argv, record and stamp is byte-identical to
-before, given the same pinned `--timeout-ms` at entry and at the stage (every pinned line carries 540000; a stage call
-pinned to another value than its run's entry check refuses `timeout-changed`).
+- `/pharn-build`'s gate, `build-gate.mjs`, in both modes: the declared value replaces `--timeout-ms`, and the budget is
+  raised by the same amount, so the line's slack (`--budget-ms` − `--timeout-ms`, 30 s) is kept and a CONTINUE re-runs
+  the same line with the same arithmetic;
+- the stage scripts, `stage-regress.mjs` and `stage-verify.mjs`, on a fresh invocation: the declared value goes into the
+  progress record (regress uses it on both sides and for the base install), and `--resume` reads it from there. Their
+  budget is **not** raised — the same as under `stage-direct.mjs`, which passes the declared value with the pinned
+  budget — and a raise would be overridden by the pinned `--resume --budget-ms 570000` anyway; so each invocation's
+  first slow step may run up to the declared value. Under `stage-direct.mjs` the argv already carries the resolved value
+  and the script resolves it to the same one; the config is read a second time, after the run pin, so an edit in the
+  moment between the two reads is applied unpinned.
+
+In all three a declaration below the given `--timeout-ms` is `bad-gate-timeout` (`build-gate.mjs` exit 2; the stage
+scripts' `unusable bad-gate-timeout`). They run inside a Bash call, so with a declared value above its 600 s an
+invocation outlasts the call, which the harness moves to the background (`stage-exit.md`, "A Bash-tool timeout is not a
+kill"); the thin commands say to wait for its completion notice.
+
+Only `/pharn-test`'s red run keeps its pinned value: it calls `run-gates.mjs` directly over the AC tests alone, and the
+runner takes only the flag. With no declaration every argv, record and stamp is byte-identical to before, given the
+same pinned `--timeout-ms` at entry and at the stage (every pinned line carries 540000; a stage call pinned to another
+value than its run's entry check refuses `timeout-changed`).
 
 A declaration below the pinned value is refused at entry, but `/pharn-loop` reads an entry exit 2 as "go on", so such a
-run first stops at regress, after the build (follow-up `entry-timeout-refusal-stop`); `/pharn-ship` asks at its entry
-read.
+run first stops at regress, after the build, whose gate refuses it too and records a failed gate (follow-up
+`entry-timeout-refusal-stop`); `/pharn-ship` asks at its entry read.
 
 **What it costs.** A longer timeout lengthens a HUNG gate too: a gate that hangs runs the declared time before it is
-killed, at entry, on each side of regress (and a hung base install) and at verify. A takeover — the entry check's
+killed, at entry, in the build's gate, on each side of regress (and a hung base install) and at verify. A takeover — the entry check's
 `--wait` takeover or the stage runner's — always starts its first gate (L58), so its one foreground invocation can then
 run past the 600 s Bash call by up to the declared value (`stage-exit.md`).
 
 **What it proves, and what it does not (P0).** The range test on the value is FLOOR (an integer range and a closed key
-set, enum/regex class). That both runners apply the resolved value is tested runner behaviour, not a floor primitive.
+set, enum/regex class). That the five callers apply the resolved value is tested behaviour, not a floor primitive.
 The value itself is chosen by whoever edits `pharn.config.json`,
 agent-editable project input: never proven to be the project owner's choice (**L43**). The run pin is integer
 equality between two `pharn/.run/` records a Bash writer reaches, so it narrows a mid-run change of the declaration and
@@ -492,11 +509,16 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   `--timeout-ms` is forwarded to the gate's group (6.50.1); the runner then dies by that signal and records nothing
   for the entry, which the next `run --next` runs again. A `SIGKILL` cannot be caught: it orphans the group until the
   next `run --next` recovers the stale lock, which first stops the group `<out>/lock.child` names (SIGTERM, then
-  SIGKILL; still alive is `lock-busy`) so two copies of a gate never overlap. Bounded: a kill in the instant between
-  the spawn and that record is not covered, and a group that had already exited may have had its id reused, which
-  nothing can tell apart. The invoking command's Bash timeout must still exceed `--timeout-ms`.
+  SIGKILL; still alive is `lock-busy`) so two copies of a gate never overlap. Since 7.22.2 that group is signalled
+  only when its leader's start time (`ps -o etime=`) is within 10 s of the record's `started_ms`. On a mismatch, or
+  when the start cannot be read, nothing is signalled, the record is dropped, and a `run-gates: note —` line goes to
+  stderr. Bounded: a kill in the instant between the spawn and that record is not covered; a reused group id is
+  still signalled if an unrelated leader with that id started within 10 s of the recorded start; a group whose
+  leader already exited while other members still run cannot be judged and is no longer stopped; and a wall-clock
+  step of more than 10 s between the record and the recovery reads as a mismatch. The invoking command's Bash
+  timeout must still exceed `--timeout-ms`.
 - **`--timeout-ms` is required.** Floor code carries no harness-specific default, so there is no default
-  for a test to leave unexercised (**L41**). Since 7.16.0 the entry and stage runners pass a project's declared
+  for a test to leave unexercised (**L41**). Since 7.16.0 the entry and stage runners (since 7.22.1 also `build-gate.mjs` and the two stage scripts) pass a project's declared
   `gates.timeoutMs` in its place ("A longer per-gate timeout", above); the runner itself still takes only the flag.
 - Gate stdout/stderr are **untrusted free text** (P2): written by fd, only their sha256 reaches the
   record, and no verdict reads their content.

@@ -56,6 +56,10 @@
 // `mayStartSlowStep`), `elapsed` measured from the top of `runFresh`/`runResume`. Not counted, named: node's startup
 // and module loading, and the fast work after the last permitted slow step (`run --next`'s two fingerprints, the
 // verdict call, the composition, the render and the writes). With no `--budget-ms` nothing is budgeted.
+// THE PER-GATE TIMEOUT (7.22.1, CORE-298): a FRESH invocation replaces `--timeout-ms` with the project's
+// `pharn.config.json` `gates.timeoutMs` when it declares one, exactly as stage-regress.mjs does (its header states the
+// rule, the unraised budget and the bound; gate-timeout-core.mjs `resolveRunTimeout` owns the value rule — L35), and
+// records it in the progress record. A declaration below `--timeout-ms` is `unusable bad-gate-timeout`.
 //
 // ==================================== RESUME ====================================
 // `--resume` accepts only `--budget-ms` and reads everything else from `pharn/.run/pharn-verify/stage.json`
@@ -104,6 +108,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { recordWork, verifyWork } from "./stage-work.mjs";
 import { doneExit, refusedExit, unusableExit, continueExit, questionExit, EXIT_CODE } from "./stage-exit-core.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
+import { resolveRunTimeout } from "./gate-timeout-core.mjs";
 import {
   VERIFY_PATHS,
   PROGRESS_SCHEMA,
@@ -250,13 +256,16 @@ function parseRestOfArgv(args, feature) {
   if (!scan.ok) emitUnusable(feature, "usage-error", scan.detail);
   const timeout = parseTimeoutMs(args);
   if (!timeout.ok) emitUnusable(feature, "usage-error", timeout.detail);
+  // 7.22.1 (CORE-298): the project's declared per-gate timeout, when it declares one (header).
+  const tm = resolveRunTimeout(loadGateExclusion("."), timeout.value);
+  if (!tm.ok) emitUnusable(feature, "bad-gate-timeout", tm.reason);
   const budget = parseBudgetMs(args);
   if (!budget.ok) emitUnusable(feature, "usage-error", budget.detail);
   const gatesSpec = flag(args, "--gates") ?? null;
   if (has(args, "--gates") && (!gatesSpec || gatesSpec.length === 0)) {
     emitUnusable(feature, "usage-error", "--gates requires a non-empty value");
   }
-  return { feature, timeoutMs: timeout.value, budgetMs: budget.value, gatesSpec, originalArgv: [...args] };
+  return { feature, timeoutMs: tm.value, budgetMs: budget.value, gatesSpec, originalArgv: [...args] };
 }
 
 function requireArtifacts(cfg) {

@@ -50,8 +50,9 @@
 //   • If the HARNESS kills this process before its own `--timeout-ms` fires: a SIGTERM, SIGINT or SIGHUP is
 //     FORWARDED to the gate's group and the runner then dies by that signal, recording nothing for the entry; a
 //     SIGKILL cannot be caught, so the group is orphaned until the next `run --next` recovers the stale lock and
-//     stops the group `<out>/lock.child` names before re-running the entry (reapOrphanGroup, audit P3-P). That
-//     is why the invoking command's Bash timeout must still exceed `--timeout-ms`, and why `--timeout-ms` is
+//     stops the group `<out>/lock.child` names before re-running the entry (reapOrphanGroup, audit P3-P) — only
+//     when that group's leader's start time matches the record (7.22.2; the bounds are at THE RUNNING GATE'S
+//     PROCESS GROUP, below). That is why the invoking command's Bash timeout must still exceed `--timeout-ms`, and why `--timeout-ms` is
 //     REQUIRED rather than defaulted: floor code carries no harness-specific default, so there is no default
 //     for a test to leave unexercised (lessons-learned L41).
 //   • `CI=1` is added to the environment of the test-level gates (CI_GATE_IDS) unless `CI` is already defined,
@@ -595,10 +596,22 @@ function releaseLock(lp) {
  *  `lock-busy` (a lapse: re-run later), never overlapped. A group that answers EPERM belongs to another user, so it is
  *  not this runner's gate and is left alone.
  *
+ *  THE GROUP MUST STILL BE OURS (7.22.2, CORE-299). If the whole orphan group exited, its id can since have been reused
+ *  by an unrelated group of the same user (an editor, a dev server, another session's job). So before any signal the
+ *  reap reads the group LEADER's elapsed time (`ps -o etime= -p <pgid>`, a POSIX field: no locale, time zone or DST to
+ *  parse) and signals only when the start it implies is within START_MATCH_TOLERANCE_MS of the record's `started_ms`
+ *  — the runner's `Date.now()` taken right after `spawn` returned, so it trails the leader's fork by the exec time.
+ *  On a mismatch, or when the start cannot be read (no such leader, `ps` failed or printed something else, no integer
+ *  `started_ms`), nothing is signalled, the record is dropped, and one `run-gates: note —` line goes to stderr
+ *  (stdout stays the caller's one JSON object).
+ *
  *  BOUNDS, named: a SIGKILL between the spawn and the sidecar write leaves an unrecorded group (a window of one
- *  synchronous write); a descendant that called `setsid` left the group and is not reached; and if the WHOLE orphan
- *  group already exited, its id may since have been reused by an unrelated group of the same user, which the reap
- *  would signal — POSIX keeps a pgid unreused only while a member lives, and nothing here can tell the two apart.
+ *  synchronous write); a descendant that called `setsid` left the group and is not reached; a reused pgid is still
+ *  signalled if an unrelated leader with that pid started within the tolerance of the recorded start (a pid wrap
+ *  inside 10 s); a group whose LEADER already exited while other members still run cannot be judged, so it is NO
+ *  LONGER reaped (real gate leaders — `npm`, `/bin/sh`, `node` — wait for their children, so a runner SIGKILL leaves
+ *  the leader alive); a wall-clock step of more than the tolerance between the record and the reap reads as a
+ *  mismatch, so that orphan is left running; and `ps` is looked up on PATH by bare name, as `git` is here.
  *  ---------------------------------------------------------------------------------------------- */
 function childPath(outAbs) {
   return join(outAbs, "lock.child");
@@ -664,14 +677,68 @@ function readLockRecord(file) {
   }
 }
 
-/** Stop the group `<out>/lock.child` names and remove the record. Emits nothing: `{ok: true}`, or `{ok: false, reason}`
- *  when the record is not a regular file or the group is still alive after SIGKILL (the record is then kept). Every
- *  caller decides how to refuse. */
+/** How far apart the recorded `started_ms` and the leader's start implied by `ps` may be for the group to count as
+ *  the one the record names. Covers `etime`'s 1 s resolution (truncated by procps, rounded by macOS `ps`), the
+ *  spawn→`Date.now()` gap and `ps` latency on a loaded machine; a false match needs the pid freed and reused inside it. */
+const START_MATCH_TOLERANCE_MS = 10_000;
+
+/** `ps -o etime=` text (POSIX: `[[dd-]hh:]mm:ss`, padded with spaces, newline-terminated) → whole seconds, or `null`
+ *  for anything else. Pure; exported for its grammar test. */
+function parseElapsedSeconds(text) {
+  if (typeof text !== "string") return null;
+  const m = /^[ \t]*(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)[ \t]*\n?$/.exec(text);
+  if (m === null) return null;
+  const [days, hours, minutes, seconds] = [m[1], m[2], m[3], m[4]].map((v) => (v === undefined ? 0 : Number(v)));
+  return ((days * 24 + hours) * 60 + minutes) * 60 + seconds;
+}
+
+/** The start of process `pid` in epoch ms, from its elapsed time, or `null` when it cannot be read. `now` is taken
+ *  BEFORE `ps` runs, and `etime` is measured later, so the estimate errs EARLY by at most `ps`'s latency plus 1 s. */
+function leaderStartMs(pid) {
+  const now = Date.now();
+  let out;
+  try {
+    out = execFileSync("ps", ["-o", "etime=", "-p", String(pid)], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5000,
+      env: { ...process.env, LC_ALL: "C" },
+    });
+  } catch {
+    return null; // no such process (exit 1), no `ps`, or a timeout
+  }
+  const secs = parseElapsedSeconds(out);
+  return secs === null ? null : now - secs * 1000;
+}
+
+/** null when group `pgid`'s leader started within the tolerance of `startedMs`; otherwise the note's reason text. */
+function startMismatch(pgid, startedMs) {
+  if (!Number.isInteger(startedMs)) return "cannot be read (the record has no integer started_ms)";
+  const leader = leaderStartMs(pgid);
+  if (leader === null) return "cannot be read";
+  const apart = Math.abs(leader - startedMs);
+  return apart <= START_MATCH_TOLERANCE_MS ? null : `does not match the record (started ${Math.round(apart / 1000)} s apart)`;
+}
+
+/** Stop the group `<out>/lock.child` names and remove the record. Emits nothing on stdout: `{ok: true}`, or
+ *  `{ok: false, reason}` when the record is not a regular file or the group is still alive after SIGKILL (the record is
+ *  then kept). Every caller decides how to refuse. A live group whose leader's start does not match the record, or
+ *  cannot be read, is NOT signalled: its record is dropped, one note goes to stderr, and the result is `{ok: true}`. */
 function reapGroup(outAbs) {
   const r = readLockRecord(childPath(outAbs));
   if (!r.ok) return r;
-  const pgid = r.value !== null && typeof r.value === "object" ? r.value.pgid : null;
+  const rec = r.value !== null && typeof r.value === "object" ? r.value : null;
+  const pgid = rec !== null ? rec.pgid : null;
   if (Number.isInteger(pgid) && pgid > 1 && groupAlive(pgid)) {
+    const mismatch = startMismatch(pgid, rec.started_ms);
+    if (mismatch !== null) {
+      removeChildRecord(outAbs);
+      process.stderr.write(
+        `run-gates: note — ${childPath(outAbs)} named process group ${pgid}, whose leader's start time ${mismatch}; ` +
+          "the group was not signalled and the record was dropped\n"
+      );
+      return { ok: true };
+    }
     for (const sig of ["SIGTERM", "SIGKILL"]) {
       try {
         process.kill(-pgid, sig);
@@ -1533,4 +1600,6 @@ export {
   CI_GATE_IDS,
   reapLeftoverGate,
   survivorReason,
+  parseElapsedSeconds,
+  START_MATCH_TOLERANCE_MS,
 };

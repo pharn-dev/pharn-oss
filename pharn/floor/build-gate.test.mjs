@@ -328,6 +328,53 @@ test("L44/L66 — CONTINUE (exit 5) under the budget; the same line continues an
   });
 });
 
+// ── 7.22.1 (CORE-298): the project's `gates.timeoutMs` reaches the build gate (L41, L84: a test that takes the branch) ──
+const ONE_GATE = { test: "node runner.cjs test" };
+const withTimeoutCfg = (ms) => ({ testResults: { test: "vitest-json" }, gates: { timeoutMs: ms } });
+
+test("CORE-298 — a declared gates.timeoutMs lets a gate run past the line's --timeout-ms; without it the gate is killed", () => {
+  // The gate busy-waits 1.5 s: past the line's 300 ms, well inside the declared 20 s (margins for a loaded machine).
+  const line = ["--timeout-ms", "300", "--budget-ms", "600"];
+  for (const mode of ["full", "targeted"]) {
+    withProject({ scripts: ONE_GATE, config: withTimeoutCfg(20000) }, (dir) => {
+      setMode(dir, { sleep: 1500 });
+      const r = gate(dir, ["--mode", mode, ...line]);
+      assert.equal(r.status, EXIT.green, `${mode}: ${r.stdout}${r.stderr}`);
+    });
+  }
+  withProject({ scripts: ONE_GATE }, (dir) => {
+    setMode(dir, { sleep: 1500 });
+    const r = gate(dir, ["--mode", "full", ...line]);
+    assert.equal(r.status, EXIT.red, `the control without a declaration is killed at 300 ms: ${r.stdout}${r.stderr}`);
+  });
+});
+
+test("CORE-298 — the budget moves with the declared timeout: two quick gates run in ONE invocation", () => {
+  // budget 30000 + (600000 − 1000) = 629000, so the second gate starts whenever the first ends within the line's 29 s
+  // slack (room for a loaded machine); an unraised 30000 under a 600 s timeout would exit 5 after the first, and a
+  // `budget > timeout` check made on the resolved values would refuse the line.
+  withProject({ scripts: { test: "node runner.cjs test", lint: "node runner.cjs lint" }, config: withTimeoutCfg(600000) }, (dir) => {
+    const r = gate(dir, ["--mode", "full", "--timeout-ms", "1000", "--budget-ms", "30000"]);
+    assert.equal(r.status, EXIT.green, r.stdout + r.stderr);
+    assert.deepEqual(
+      calls(dir).map((c) => c.id),
+      ["test", "lint"]
+    );
+  });
+});
+
+test("CORE-298 — a declaration below the line's --timeout-ms is UNUSABLE bad-gate-timeout; nothing runs", () => {
+  withProject({ scripts: ONE_GATE, config: withTimeoutCfg(200) }, (dir) => {
+    const r = gate(dir, ["--mode", "full", "--timeout-ms", "300", "--budget-ms", "600"]);
+    assert.equal(r.status, EXIT.unusable, r.stdout + r.stderr);
+    assert.match(
+      r.stdout,
+      /^UNUSABLE — bad-gate-timeout: pharn\.config\.json `gates\.timeoutMs` "200" is below the pinned per-gate timeout 300 ms/
+    );
+    assert.deepEqual(calls(dir), [], "nothing ran");
+  });
+});
+
 test("UNUSABLE (exit 2) — usage, and a symlinked or dangling pharn/.run/pharn-build (L54); never a crash code", () => {
   withProject({}, (dir) => {
     for (const args of [

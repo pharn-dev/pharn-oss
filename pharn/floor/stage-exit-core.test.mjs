@@ -78,6 +78,7 @@ test("REGISTRY: the regress vocabulary matches the plan's closed table exactly",
       "progress-malformed",
       "base-worktree-unplaceable", // regress-base-integrity
       "install-config-invalid", // regress-install-config (6.66.0)
+      "bad-gate-timeout", // CORE-298 (7.22.1)
     ])
   );
   assert.deepEqual(STAGES, ["regress", "verify"]);
@@ -96,8 +97,9 @@ test("REGISTRY: the verify vocabulary matches the stage-verify-script plan's clo
     "child-refused",
     "no-progress",
     "progress-malformed",
+    "bad-gate-timeout", // CORE-298 (7.22.1)
   ]);
-  assert.equal(allReasonCodes("verify").length, 4 + 1 + 8);
+  assert.equal(allReasonCodes("verify").length, 4 + 1 + 9);
   // verify's no-gates names its one cause and the AC-gate caveat, and offers exactly --gates or stop.
   const q = REGISTRY.verify.question["no-gates"];
   assert.match(q.question, /test-infra-changed/);
@@ -158,7 +160,7 @@ test("isReasonCode / allReasonCodes: membership matches the registry, and non-me
   assert.equal(isReasonCode("nonexistent-stage", "refused", "chain-red"), false);
 
   const all = allReasonCodes("regress");
-  assert.equal(all.length, 8 + 4 + 11, "refused + question + unusable counts");
+  assert.equal(all.length, 8 + 4 + 12, "refused + question + unusable counts");
   assert.deepEqual(new Set(all).size, all.length, "no duplicate reason_code across the three sub-vocabularies");
   assert.deepEqual(allReasonCodes("nonexistent-stage"), []);
 });

@@ -2454,6 +2454,16 @@ function alive(pid) {
   }
 }
 
+/** Cleanup kill: a gate that exits between alive() and the signal is already what cleanup wants, so ESRCH is ignored; any other error is rethrown. */
+function killIfAlive(pid) {
+  if (pid === null || !alive(pid)) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch (e) {
+    if (e.code !== "ESRCH") throw e;
+  }
+}
+
 async function waitFor(cond, ms) {
   const t0 = Date.now();
   while (!cond()) {
@@ -2497,7 +2507,7 @@ test("audit P3-P — a SIGKILLed runner's gate group is stopped by the next run'
     assert.ok(!existsSync(join(dir, OUT, "lock.child")), "the sidecar survived the recovery");
     assert.ok(!existsSync(join(dir, OUT, "lock")), "the lock survived the call");
   } finally {
-    if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+    killIfAlive(gate);
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -2518,7 +2528,7 @@ test("PR #443 — a fresh `init` after a SIGKILLed runner stops the gate group i
     assert.equal(alive(gate), false, "the orphaned gate was still running after the fresh init (a new run would overlap it)");
     assert.ok(!existsSync(join(dir, OUT, "lock.child")), "the sidecar survived the init");
   } finally {
-    if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+    killIfAlive(gate);
     rmSync(dir, { recursive: true, force: true });
   }
   // CONTROL (L34): under a LIVE lock, init leaves the running gate alone (the reap acts on a stale lock only).
@@ -2533,7 +2543,7 @@ test("PR #443 — a fresh `init` after a SIGKILLed runner stops the gate group i
     run.runner.kill("SIGTERM");
     await run.exited;
   } finally {
-    if (liveGate !== null && alive(liveGate)) process.kill(liveGate, "SIGKILL");
+    killIfAlive(liveGate);
     rmSync(live, { recursive: true, force: true });
   }
 });
@@ -2552,7 +2562,7 @@ test("audit P3-P — a LIVE lock's running group is never touched: the second ru
     run.runner.kill("SIGTERM");
     await run.exited;
   } finally {
-    if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+    killIfAlive(gate);
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -2578,7 +2588,7 @@ test("audit P3-P — SIGTERM, SIGINT and SIGHUP are FORWARDED to the gate's grou
       assert.equal(r.json.ran, "slow");
       assert.equal(r.json.exit, 0);
     } finally {
-      if (gate !== null && alive(gate)) process.kill(gate, "SIGKILL");
+      killIfAlive(gate);
       rmSync(dir, { recursive: true, force: true });
     }
   }

@@ -112,6 +112,11 @@ are pinned (Bash-tool timeout 600000; `N < B < 600000`, GATE 1 Q2):
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms 540000 --budget-ms 570000
 ```
 
+A project's `pharn.config.json` `gates.timeoutMs` replaces the 540000 inside the script (`gate-run-record.md`, "A longer
+per-gate timeout"; below the pinned value it is `unusable bad-gate-timeout`), so a call can outlast the Bash timeout: it
+then moves to the background (`stage-exit.md`, "A Bash-tool timeout is not a kill"). Wait for its completion notice and
+branch on the exit it reports; never run this line or `--resume` again while it runs.
+
 **The base.** With no `--base`, the script picks one by its rule (`BASE_RULE`, `pharn/floor/stage-regress-core.mjs`):
 `HEAD` when the working tree is dirty, else the merge-base with `origin/main`, else it asks. Either implicit branch puts
 a build that is already **committed** inside its own base, so its breakage would compare against itself. The report
@@ -317,8 +322,8 @@ classifies nothing in Step 1. Every terminal fallback is a structured `question`
   compares against a base that holds the committed part — only `--base` closes it (`base_source` says which rule ran).
 - **The suite is the ceiling.** `/pharn-regress` catches exactly what the project's deterministic suite
   catches — a regression no test/type-check/lint covers is invisible.
-- **The Bash-tool timeout must exceed `--timeout-ms`** (540000 < 600000): a harness kill before the
-  script's own timeout fires orphans its process group.
+- **The Bash-tool timeout exceeds the pinned `--timeout-ms`** (540000 < 600000). A declared `gates.timeoutMs` above it
+  lets a call outlast the tool's timeout, which moves the call to the background rather than killing it (Step 1).
 - **The budget clock counts the opening work, but not everything.** `elapsed` starts at the top of the
   invocation (GATE-2 round 2), so argv, the chain check, the base, the partition and head init are charged.
   Node's startup, and the fast work after the last permitted slow step (fingerprints, the worktree
