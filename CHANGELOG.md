@@ -23,6 +23,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-11-23: **Decided, by the agent under the maintainer's delegation and not as a maintainer sign-off: the four
+  outcomes CORE-314 lists stand (CORE-88, CORE-89, CORE-109, CORE-113).** Each was re-decided from CORE-310's run 2, a
+  full `/pharn-loop` on the measured project at 7.22.0 that ended `STOP_GREEN` in 2,451 s, read from its stamps and
+  `cost.json` (each bound by sha256 in the record). CORE-88 stays closed: verify took 42.6 s, the second-smallest stage,
+  and running one side's gates at once could save at most 43.5 to 85.6 s per iteration (1.8% to 3.5% of the run), with
+  `test` already at 83.6% of its 540 s timeout at entry and a 1-minute load of 14 to 80 during the run. CORE-89 is
+  accepted: verify reused regress HEAD's 383.3 s `test` run, and its acceptance gate passed from the copied results.
+  CORE-109's padding-only outcome stands: deferring Step 5 of `pharn-loop.md` (now 84,935 B) would save at most 0.32%
+  of the run's weighted units, Steps 4 and 5 at most 0.71%. CORE-113's no-go stands: run 2's orchestrator share is
+  26.95%, just below the 27.7% reopen condition, but one main-session run on a non-benchmark feature is not evidence
+  either way. No ticket is reopened. CORE-314's first criterion, the maintainer's own acceptance, is not met by this
+  record. Record: `.dev/measurements/delegated-signoff-2026-11-23.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
 ## [7.23.0] - 2026-11-23
 
 ### Added
