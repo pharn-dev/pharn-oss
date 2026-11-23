@@ -23,8 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-### Added
-
 - 2026-11-23: **Measured: one real full `/pharn-loop` on pharn-app at 7.22.0 ended `STOP_GREEN` after one iteration —
   on its third start, with a revised description (CORE-310).** Attempt 1 was killed mid-build by a host reboot. Run 1
   stopped S9 at the test stage, because its third criterion ("existing tests still pass") cannot fail before the
@@ -41,6 +39,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `.dev/measurements/loop-real-run-7.22.0-2026-11-23.md`. Scrubbed evidence bundles:
     `.dev/features/core-310-real-loop-record/evidence/`.
   - Apparatus only, so no `SKILLS_VERSION` bump.
+
+- 2026-11-23: **Measured what CORE-89's HEAD `test` reuse saves and what CORE-111's routed-stage effort changed
+  (`.dev/measurements/reuse-and-effort-2026-11-23.md`, CORE-312).** In the measured project's three 7.22.0 iterations,
+  this batch's real loop run included, verify spawned no `test` (it reused regress HEAD's 184.1 s, 188.8 s and 383.3 s
+  whole-suite runs), saving about one outside-subset run per iteration: about 3.5 minutes on a quiet host, 6.8 minutes
+  under load. For CORE-111, routed stages on this machine were sent at `high`
+  both before 7.20.0 (inherited) and after (configured), so no gain is shown and no probe runs were paid for. Keep or
+  revert stays the maintainer's call. Apparatus only: no product bytes change.
 
 ## [7.23.0] - 2026-11-23
 

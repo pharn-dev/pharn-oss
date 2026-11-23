@@ -1,0 +1,43 @@
+{
+  "base": "a950aaecbe752aa358383685686570e730994b40",
+  "inside": [
+    "CHANGELOG.md",
+    ".dev/measurements/reuse-and-effort-2026-11-23.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7080,
+      "failed": 1,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7082,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
