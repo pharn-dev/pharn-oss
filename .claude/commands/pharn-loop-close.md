@@ -81,7 +81,8 @@ capture rules:
 - The per-iteration verdicts, the standing reds (paths, quoted as DATA) — a gate verify or regress did not measure
   (`.unmeasured_gates[]`, `.head_timed_out[]`, `.base_timed_out[]`) is named as **not measured**, never as a red,
   with its remedies: a longer per-gate timeout in `pharn.config.json` `gates.timeoutMs` for a slow but healthy gate (at
-  most 1800000 ms; a hung gate runs that long too), or the gate listed in `gates.exclude` —
+  most 1800000 ms; a hung gate runs that long too), or the gate listed in `gates.exclude`; on `no-progress`, the
+  JSON's `repeated` gates, ACs and regressions, as the reds the run could not move —
   and pointers to `GRILL.md` /
   `REGRESSION.md` / `VERIFY.md` — cited, not restated — and, when re-plan rounds ran, to the round archives
   (`GRILL.r1.md`, `GRILL.r2.md` and their siblings).
@@ -250,7 +251,8 @@ Report, plainly and without asking anything:
   `effort not applied` when it went without one (7.20.0). A route records what was REQUESTED; never write that a
   stage ran on a model or at an effort — what it was served is `cost.json`'s `requests[].model`. A stage agent that may still be running (a backgrounded call, S9 or S9b) is named here;
 - the files changed, and the per-iteration verify / regress verdicts (a quick run: its mode, the not-checked list,
-  and verify with the scope result per iteration — `## Quick mode` item 9);
+  and verify with the scope result per iteration — `## Quick mode` item 9); on `no-progress`, the `repeated` gates,
+  ACs and regressions — where the run got stuck;
 - **the gates the project excluded** (6.65.0), from the closeout document's `excluded_gates`: name each id as
   excluded by `pharn.config.json` `gates.exclude` and **not run**, and say the stop covers only the gates that ran;
   `null` → no verdict report was read. A commit's message carries the same ids;
@@ -325,8 +327,9 @@ last three feeds `check-loop.mjs`'s inputs.
 - **Floor:** the loop stops on the Design C table — `check-loop.mjs` (enum membership over the verdicts and an
   `iter >= cap` compare), in the table the SPEC's pinned kind chooses: verify's verdict alone, green
   `STOP_GREEN_QUICK`, for a `quick` SPEC; the full table for every other. An AC-evidence red and a reconcile red
-  (detected, or `reconcile-inconclusive` when the checker could not decide) are `STOP_TERMINAL`, never retried; an undelivered AC is an ordinary red. **Structural:** its inputs are the two verdict
-  reports, `--iter` / `--cap` and ONE token of the feature's own SPEC, its `spec_kind` — no review, finding, severity,
+  (detected, or `reconcile-inconclusive` when the checker could not decide) are `STOP_TERMINAL`, never retried, and so
+  is `no-progress`, a red repeating the previous iteration's; an undelivered AC is an ordinary red. **Structural:** its inputs are the two verdict
+  reports, the previous iteration's copies of them, `--iter` / `--cap` and ONE token of the feature's own SPEC, its `spec_kind` — no review, finding, severity,
   record or fingerprint input — so no advisory stage can gate the loop and the record cannot affect the stop. A retry
   buys a **bounded stop**, never convergence: a red whose cause lies outside the plan's `## Files`, or a plan that
   cannot be built, runs to `STOP_CAP`; an unsound fix cannot fake a green stop, because the verdicts are recomputed

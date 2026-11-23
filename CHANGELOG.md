@@ -23,6 +23,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.23.0] - 2026-11-23
+
+### Added
+
+- **`/pharn-loop` stops when an iteration repeats the previous iteration's failure (`check-loop.mjs`,
+  `terminal_cause: no-progress`, CORE-301).** Where the stop table would say `CONTINUE`, at iteration 2 or later and
+  under the cap, `check-loop.mjs` compares this iteration's verify `FAIL` with the previous iteration's: the failing
+  gates, the failing acceptance criteria (the `ac_gate.acs[]` ids whose `reason` is not null) and, in the full table,
+  the regression verdict and `regressions`, each as a set. When all of them match, the decision is `STOP_TERMINAL`
+  (exit 4) with the new closed cause `no-progress`, and a new `repeated` output key names the repeated gates, ACs and
+  regressions. The loop record's standing reds and the Step 7 summary name them too. The previous iteration's reports
+  are copies: on every `CONTINUE`, `/pharn-loop` Step 5.4 runs a pinned `cp` into `pharn/.run/pharn-loop/<name>/`
+  (verify's copy alone in a quick run). `check-loop.mjs` finds the copies from the verify report's own path, never from
+  an argument, so `check-loop-decision.mjs` re-derives a `no-progress` record from the same copies with no code change.
+  The decision token is still `STOP_TERMINAL`, so no record, ledger or closeout vocabulary changes.
+  - **Why:** the CORE-113 driven run (`.dev/features/loop-driver-spike/RECORD.md`) failed verify on `test` alone in
+    all three iterations, and builds 2 and 3 changed no code. Those two iterations took about 28 minutes of build and
+    verify. With this stop that run ends after iteration 2, which saves iteration 3: about 14 minutes at its rates,
+    not 28. Two iterations are the least that show a repeat.
+  - **What does not change:** a run whose failure set changes between iterations, a run at its cap (`STOP_CAP`
+    stays), a verify `INCOMPLETE`, a regression-only red, and every terminal red decide exactly as before. Anything
+    unreadable or incomparable in a copy means "no comparison", so the run continues as before; it is never
+    `INCONCLUSIVE` and never a green.
+  - **Advisory, stated:** the copy is a Bash line the model runs. A skipped copy turns the stop off for that iteration
+    or leaves an older copy (from an earlier iteration, or an earlier run if every copy this run was skipped). A Bash
+    write can forge a copy. Either way the result is at worst a red run stopped early (never committed) or not
+    stopped (today's behaviour). The re-derivation proves agreement with the copies on disk, never that they are the
+    previous iteration's.
+  - The contracts `verify-report.md`, `regression-report.md` and `loop-record.md` name the new reads and cause. The
+    restated input list in the headers of `check-loop-decision.mjs`, `check-loop-record.mjs` and `loop-fresh-core.mjs`
+    now includes the copies.
+
 ## [7.22.2] - 2026-11-23
 
 ### Fixed

@@ -128,7 +128,8 @@ reads.
 
 7. **Step 5, sub-step 4 — the stop.** The same pinned line; `check-loop.mjs` reads the kind itself. **Exit `0` is
    `STOP_GREEN_QUICK`** — verify `PASS`, no regression verdict read. Every other exit, `terminal_cause` and row is as
-   written (`ac-evidence` → S13).
+   written (`ac-evidence` → S13). On `CONTINUE`, run the copy block's first line only (no regression report exists);
+   `no-progress` compares verify's copy alone.
 
 8. **Step 6 — the record and the commit.** A quick run's green stop is `STOP_GREEN_QUICK`: Step 6a reverts on
    anything else, and Step 6c commits on it with a GREEN `<decision-check>`. `LOOP.md` carries **`mode: quick`** on

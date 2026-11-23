@@ -67,19 +67,19 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
 
 ## Field shape + trust classes
 
-| field            | shape                                                                                                                                        | class                                                       |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `base`           | the git ref the baseline was captured at, or `null`                                                                                          | ADVISORY — no floor op reads it                             |
-| `inside`         | array of repo-relative paths counted as inside the feature                                                                                   | ADVISORY — no floor op reads it                             |
-| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                                                                                          | ADVISORY — no floor op reads it                             |
-| `regressions`    | array of gate-ids that were `0` at base and non-zero at head — and, with `per_test`, its gate when red on both sides with a new head failure | ADVISORY — no floor op reads it                             |
-| `pre_existing`   | array of gate-ids already non-zero at base, except a `per_test` gate with a new head failure                                                 | ADVISORY — no floor op reads it                             |
-| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                                                                                 | **FLOOR-RELEVANT** — enum-gated by 4 sites                  |
-| `reason`         | a diagnostic sentence, present only on `inconclusive`                                                                                        | ADVISORY — no floor op reads it                             |
-| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty                                                                  | ADVISORY — the verdict already reflects it                  |
-| `head_timed_out` | gate-ids whose HEAD run timed out (6.59.0) — stamp path, present only when non-empty                                                         | ADVISORY — the verdict already reflects it                  |
-| `per_test`       | the opt-in per-test comparison of one gate (6.72.0 dev path; 7.17.0 product path, `test`) — below                                            | ADVISORY — no floor op reads it; its ids are untrusted DATA |
-| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)                                                                    | ADVISORY — no floor op reads it                             |
+| field            | shape                                                                                                                                        | class                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `base`           | the git ref the baseline was captured at, or `null`                                                                                          | ADVISORY — no floor op reads it                                                       |
+| `inside`         | array of repo-relative paths counted as inside the feature                                                                                   | ADVISORY — no floor op reads it                                                       |
+| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                                                                                          | ADVISORY — no floor op reads it                                                       |
+| `regressions`    | array of gate-ids that were `0` at base and non-zero at head — and, with `per_test`, its gate when red on both sides with a new head failure | `check-loop.mjs` compares it with the previous iteration's copy (no-progress, 7.23.0) |
+| `pre_existing`   | array of gate-ids already non-zero at base, except a `per_test` gate with a new head failure                                                 | ADVISORY — no floor op reads it                                                       |
+| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                                                                                 | **FLOOR-RELEVANT** — enum-gated by 4 sites                                            |
+| `reason`         | a diagnostic sentence, present only on `inconclusive`                                                                                        | ADVISORY — no floor op reads it                                                       |
+| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty                                                                  | ADVISORY — the verdict already reflects it                                            |
+| `head_timed_out` | gate-ids whose HEAD run timed out (6.59.0) — stamp path, present only when non-empty                                                         | ADVISORY — the verdict already reflects it                                            |
+| `per_test`       | the opt-in per-test comparison of one gate (6.72.0 dev path; 7.17.0 product path, `test`) — below                                            | ADVISORY — no floor op reads it; its ids are untrusted DATA                           |
+| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)                                                                    | ADVISORY — no floor op reads it                                                       |
 
 **`regressions` being empty is not the guarantee — `verdict` is.** The two always agree in emitter
 output, but only one of them is read, so a hand-edited report with `regressions: []` beside
@@ -108,7 +108,10 @@ into this file.
 
 ## The `verdict` field — the one floor-relevant part
 
-`verdict` is the only field any floor checker reads from a committed report. Four checkers read it, and
+`verdict` is the only field any floor checker reads from a committed report to decide alone — with one exception since
+7.23.0: `check-loop.mjs`'s no-progress stop also compares `regressions` (as a set of gate ids) with the previous
+iteration's copy, and only where its table would otherwise continue (its header, "THE NO-PROGRESS STOP"); an
+unreadable `regressions` there means "no comparison", never a stop. Four checkers read `verdict`, and
 here — unlike `pharn/pharn-contracts/verify-report.md`, where the sets diverge — **all four accept the
 same set**, `{no-regressions, regressions, inconclusive}`:
 

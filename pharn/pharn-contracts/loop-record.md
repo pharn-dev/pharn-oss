@@ -350,7 +350,10 @@ or (at verify) unable to start — makes the stage's verdict inconclusive, so a 
 hang, or — for a timed-out regress BASE — the blocked stop S11 `stale-evidence` (`verify-report.md`, "A gate that was
 not measured"; `regression-report.md`). From 6.65.0 a reconcile gate that could not decide (its checker's exit 2) is
 `terminal_cause: reconcile-inconclusive` rather than `reconcile`; the record's `decision` is `STOP_TERMINAL` as
-before. Nothing branches on a prior record's `decision` (a later run reads only
+before. From 7.23.0 an iteration (the second or later, under the cap) that repeats the previous iteration's failing
+gates, failing ACs and regressions — compared with the copies `/pharn-loop` keeps on every `CONTINUE` — is
+`terminal_cause: no-progress`, where an earlier run continued to `STOP_CAP`; the record's `decision` is
+`STOP_TERMINAL`, and its body names the repeated sets. Nothing branches on a prior record's `decision` (a later run reads only
 its `## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
 
 **`commit` — `unknown` is an honest absence, not a value.** `/pharn-loop` captures the SHA with
@@ -474,7 +477,8 @@ the stuck-point ids listed in "The one exception: a blocked stop" — RED `BLOCK
 - **Unchanged by this contract:** the stop decision itself. `check-loop.mjs`'s inputs are the two verdict
   reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, read by the one kind
   reading from the `SPEC.md` beside the verify report — which chooses the table (verify-only for `quick`, in which
-  the regression report is not read at all); there is no review, finding, severity, record or fingerprint input, so
+  the regression report is not read at all) — plus, since 7.23.0, the previous iteration's copies of the two reports
+  (`check-loop.mjs`'s header, "THE NO-PROGRESS STOP"); there is no review, finding, severity, record or fingerprint input, so
   this record **cannot** feed the loop's stop. The record's `mode` never selects a table: it is compared with the
   table afterwards. The record is validated **after** the stop decision already exists — that exclusion is
   structural, not a promise.

@@ -23,7 +23,8 @@
 // WHY A SEPARATE CHECKER, NOT A CHANGE TO check-loop.mjs: that file's inputs are a load-bearing, structural claim in
 // /pharn-loop's own description (no advisory stage can gate the stop). Restated exactly since 6.28.0, they are the two
 // verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`, which chooses the
-// table — and still no review, finding, severity, record or fingerprint input. A filesystem fingerprint input would
+// table — plus (7.23.0) the previous iteration's copies of the two reports, for its no-progress stop — and still no
+// review, finding, severity, record or fingerprint input. A filesystem fingerprint input would
 // break that claim. So the command reads THIS checker first, and check-loop.mjs reads no fingerprint.
 //
 // THE MODE (6.28.0, `/pharn-loop --quick`): read once per evaluation with loop-mode-core.mjs's `loopModeOf` over the

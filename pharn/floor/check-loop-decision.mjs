@@ -27,8 +27,11 @@
 //
 // STRUCTURAL, NOT A NEW GATE ON THE STOP ITSELF (the invariant this file must never blur): `check-loop.mjs`'s
 // inputs are the two verdict reports, `--iter` / `--cap`, and ONE token of the feature's own SPEC — its `spec_kind`,
-// read from the `SPEC.md` beside the verify report, which chooses the table (6.28.0) — and this file is not one of
-// them and cannot become one. This checker runs strictly AFTER a stop already exists (it consumes `check-loop.mjs`'s
+// read from the `SPEC.md` beside the verify report, which chooses the table (6.28.0) — plus (7.23.0) the previous
+// iteration's copies of the two reports under `pharn/.run/pharn-loop/<name>/`, at a path check-loop.mjs derives from
+// the verify report's own, so this file's re-run reads the same copies with no argument of its own — and this file is
+// not one of them and cannot become one. BOUND (L43): a `no-progress` record re-derives from the copies on disk; that
+// proves agreement with them, never that they are the previous iteration's. This checker runs strictly AFTER a stop already exists (it consumes `check-loop.mjs`'s
 // OUTPUT, from a fresh invocation, never feeds its input) and gates only the downstream `/pharn-loop` Step 6c commit —
 // never the stop decision itself. "No advisory stage can gate the loop's stop" remains true by construction.
 //
