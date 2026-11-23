@@ -108,9 +108,11 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # THE PER-GATE TIMEOUT (7.16.0, gate-timeout-above-bash-cap — CORE-87): `gates.timeoutMs` sits beside `exclude`
 # (GATES_KEYS), read by the same block reader (so every reader refuses a malformed value as `bad-gate-exclusion`); its
 # value rule — an integer 100..1800000 that may only LENGTHEN the pinned --timeout-ms — is pharn/floor/gate-timeout-core.mjs.
-# Only the two detached runners apply it: entry-gates.mjs --start (a value below the pinned one is `unusable
-# bad-gate-timeout`) and stage-direct.mjs (`timeout-unusable`; `timeout-changed` against this run's entry record). An
-# unknown `gates` key now names the update remedy. TRIGGER (P7): .dev/measurements/loop-baseline-2026-11-11.md §7/§12.
+# Applied by entry-gates.mjs --start (a value below the pinned one is `unusable bad-gate-timeout`) and stage-direct.mjs
+# (`timeout-unusable`; `timeout-changed` against this run's entry record), and since 7.22.1 (CORE-298) by build-gate.mjs
+# (both modes; budget raised by the difference) and stage-regress.mjs / stage-verify.mjs on a fresh invocation (budget
+# NOT raised, as under stage-direct; `unusable bad-gate-timeout`) — all through gate-timeout-core.mjs resolveRunTimeout.
+# /pharn-test's red run keeps 540000. An unknown `gates` key now names the update remedy. TRIGGER (P7): .dev/measurements/loop-baseline-2026-11-11.md §7/§12.
 # Contract: gate-run-record.md, "A longer per-gate timeout".
 ```
 
@@ -319,6 +321,8 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # project's (an APPROXIMATION: dependency-caused regressions read pre_existing; disclosed in the report's `base_install`
 # block and REGRESSION.md; exempt from the unreliable-install mask; never reused). Anything that cannot answer is
 # `unusable install-config-invalid`. Not pinned at /pharn-test (it decides regress's base, not verify's AC gate).
+# THE PER-GATE TIMEOUT (7.22.1, CORE-298): a fresh invocation resolves `gates.timeoutMs` itself (gate-exclusion
+# section above) into the progress record; the budget is not raised; below --timeout-ms is `unusable bad-gate-timeout`.
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-regress.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--base <ref>] [--gates "<cmd>[::<id>],…"] [--install "<cmd>" | --no-install] [--tests "<pathspec>,…" | --no-tests]
@@ -454,6 +458,8 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # moved tree still ends `done` (GATE 2 review F4). A SEPARATE residual: a stop before the slug and containment point,
 # or a crash, can leave an EARLIER run's report on disk; /pharn-ship answers that one by reading `.verdict` only after a
 # `done` exit in the same run. Contracts: pharn/pharn-contracts/stage-exit.md, verify-report.md.
+# THE PER-GATE TIMEOUT (7.22.1, CORE-298): as stage-regress.mjs (`gates.timeoutMs` on a fresh invocation, budget not
+# raised, `unusable bad-gate-timeout`).
 # Ships: bumps SKILLS_VERSION. Exit: 0 done · 2 unusable · 3 refused · 4 question · 5 continue · anything else
 # (1 included) = crashed.
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
@@ -517,7 +523,9 @@ node pharn/floor/stage-verify.mjs --resume [--budget-ms <B>]
 # package.json, none allowlisted) → exit 4; a HUMAN may then name the gates with --gates, as at /pharn-verify (appended
 # verbatim, never model-typed, never filtered); /pharn-loop maps 4 to S4. FLOOR: the set (resolveSet), the exit
 # codes (the stamp). ADVISORY: that the agent runs nothing else, that an excerpt holds the diagnostic, that a targeted
-# GREEN predicts a full one. Follow-up `build-gate-execution-reuse`. Exit: 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE ·
+# GREEN predicts a full one. Follow-up `build-gate-execution-reuse`. Since 7.22.1 (CORE-298) the project's
+# `gates.timeoutMs` replaces --timeout-ms in both modes and the budget rises by the difference (the line's 30 s slack
+# kept); below --timeout-ms is UNUSABLE `bad-gate-timeout`. Exit: 0 GREEN · 3 RED · 4 NO-GATES · 5 CONTINUE ·
 # 2 UNUSABLE · anything else (1 included) = crashed. Ships: bumps SKILLS_VERSION.
 node pharn/floor/build-gate.mjs --feature <name> --mode targeted|full --timeout-ms <N> [--budget-ms <B>] [--gates "<cmd>[::<id>],…"]
 ```
