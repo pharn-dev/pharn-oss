@@ -24,7 +24,7 @@ four irreducible limits", and a fifth entry under it would contradict its own he
 ## The text (apply verbatim)
 
 ```markdown
----
+***
 
 ## 5. Observability is interrogated at plan time only
 
