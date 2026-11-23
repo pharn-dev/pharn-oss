@@ -315,6 +315,8 @@ export const REGISTRY = Object.freeze({
     // not be created (base-worktree.mjs). `install-config-invalid` (6.66.0, regress-install-config): pharn.config.json's
     // `regress.install` cannot be read or cannot answer this run (regress-install-config-core.mjs; a declared family with no
     // lockfile at BASE; `head-node-modules` with no real node_modules directory, or a link that could not be made).
+    // `bad-gate-timeout` (7.22.1, CORE-298): pharn.config.json's `gates.timeoutMs` is below the given `--timeout-ms`
+    // (gate-timeout-core.mjs — the entry runner's name for the same refusal); in both stages.
     unusable: Object.freeze([
       "usage-error",
       "no-feature",
@@ -327,6 +329,7 @@ export const REGISTRY = Object.freeze({
       "progress-malformed",
       "base-worktree-unplaceable",
       "install-config-invalid",
+      "bad-gate-timeout",
     ]),
   }),
   // stage-verify-script (6.26.0): `/pharn-verify`'s vocabulary. ONE question — verify has no base, no install and
@@ -366,6 +369,7 @@ export const REGISTRY = Object.freeze({
       "child-refused",
       "no-progress",
       "progress-malformed",
+      "bad-gate-timeout",
     ]),
   }),
 });

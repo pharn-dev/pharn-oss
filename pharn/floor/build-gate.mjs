@@ -8,7 +8,14 @@
 //
 // WHAT IT DOES, in order:
 //   1. argv (stage-runtime.mjs's rules): `<name>` a FEATURE_SLUG_RE member, `--mode` in MODES, `--timeout-ms`
-//      REQUIRED (no default — L41), `--budget-ms` optional (absent = unbudgeted, for a code caller). `--gates` is a
+//      REQUIRED (no default — L41), `--budget-ms` optional (absent = unbudgeted, for a code caller; when given it must
+//      exceed `--timeout-ms`, both as given). THE PER-GATE TIMEOUT (7.22.1, CORE-298): the project's
+//      `pharn.config.json` `gates.timeoutMs` replaces `--timeout-ms` when it declares one, through gate-timeout-core.mjs
+//      `resolveRunTimeout` — the rule the two detached runners apply (L35), in both modes. The budget is raised by the
+//      same amount, so the line's slack (budget − timeout) is kept; with a declaration above the Bash call's 600 s an
+//      invocation outlasts the call, which the harness moves to the background (stage-exit.md). A declaration below
+//      `--timeout-ms` is UNUSABLE `bad-gate-timeout`; a `gates` block that refuses leaves `--timeout-ms` as given, and the
+//      runner's `init` refuses the block as before. No declaration → every argv and output byte-identical. `--gates` is a
 //      HUMAN's spec (review R1), exactly as `/pharn-verify` takes one: the invoker appends it verbatim, it reaches the
 //      runner as ONE argv string (no shell parses it here), and the project's gate exclusion never filters it.
 //   2. containment: every path under `pharn/.run/pharn-build/<name>/` is walked with containmentWalk first (lstat; a
@@ -59,6 +66,8 @@ import {
   scanFlags,
 } from "./stage-runtime.mjs";
 import { fingerprint } from "./worktree-fingerprint.mjs";
+import { loadGateExclusion } from "./gate-exclusion-core.mjs";
+import { resolveRunTimeout } from "./gate-timeout-core.mjs";
 import { declaredWrites } from "./scope-inputs.mjs";
 import { RESULTS_GATES, buildRecord, gateResults, testIdOf } from "./per-test-results-core.mjs";
 import { FEATURE_BASE } from "./check-test-stage.mjs";
@@ -235,6 +244,11 @@ function run(argv) {
   if (has(args, "--budget-ms") && budgetMs.value !== null && budgetMs.value <= timeout.value) {
     unusable("usage-error: --budget-ms must exceed --timeout-ms");
   }
+  // 7.22.1 (CORE-298): the project's declared per-gate timeout, when it declares one; the budget moves with it.
+  const tm = resolveRunTimeout(loadGateExclusion("."), timeout.value);
+  if (!tm.ok) unusable(`bad-gate-timeout: ${tm.reason}`);
+  const timeoutMs = tm.value;
+  const budgetMsEff = budgetMs.value === null ? null : budgetMs.value + (timeoutMs - timeout.value);
   let gatesSpec = null;
   if (has(args, "--gates")) {
     gatesSpec = flag(args, "--gates");
@@ -267,7 +281,7 @@ function run(argv) {
   const total = rec && Array.isArray(rec.entries) ? rec.entries.length : 0;
 
   // The budget handed to the shared drain, wrapped only to observe each runner call's two edges (grill G1).
-  const budget = makeBudget({ timeoutMs: timeout.value, budgetMs: budgetMs.value }, invocationStart);
+  const budget = makeBudget({ timeoutMs, budgetMs: budgetMsEff }, invocationStart);
   let started = null;
   const observed = {
     may: () => {
@@ -282,7 +296,7 @@ function run(argv) {
       atomicWrite(paths.root, paths.times(mode), `${JSON.stringify(times)}\n`);
     },
   };
-  const res = drainGates({ outDir: out, timeoutMs: timeout.value, budget: observed });
+  const res = drainGates({ outDir: out, timeoutMs, budget: observed });
   if (res.kind === "budget") {
     const now = readJsonFile(statePath);
     const done = now && Array.isArray(now.runs) ? now.runs : [];

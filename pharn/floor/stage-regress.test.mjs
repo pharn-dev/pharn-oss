@@ -800,6 +800,42 @@ test("question/tests-unresolved (A2 fix): a genuinely EMPTY universe still asks,
 // (the walk that must pass before removal is safe). EVERY other argv usage-error — a bad --timeout-ms, a
 // bad --budget-ms, a mutual-exclusivity refusal, … — now fires strictly AFTER stale-report removal, so it
 // no longer strands a previous run's report on disk.
+// ── 7.22.1 (CORE-298): the project's `gates.timeoutMs` reaches a standalone regress, on BOTH sides (L41, L84) ─────
+test("CORE-298 — a declared gates.timeoutMs lets a gate run past the line's --timeout-ms on both sides; without it the run is not clean", () => {
+  // `--timeout-ms 400` kills the 1.5 s gate; the declared 30 s does not (margins for a loaded machine).
+  const slow = "const until = Date.now() + 1500; while (Date.now() < until) {}\n";
+  const run = (cfg) => {
+    const committed = { "slow.cjs": slow, ...(cfg ? { "pharn.config.json": JSON.stringify(cfg) + "\n" } : {}) };
+    const { dir, base } = repo({ scripts: { typecheck: "node slow.cjs" }, committed });
+    try {
+      writeFileSync(join(dir, "src", "index.js"), "export function add(a, b) { return a + b; }\nexport function id(x) { return x; }\n");
+      const r = cli(dir, ["--feature", FEATURE, "--timeout-ms", "400", "--no-install", "--no-tests", "--base", base]);
+      assert.equal(r.code, 0, r.raw);
+      return JSON.parse(readFileSync(join(dir, r.json.report), "utf8"));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  const declared = run({ gates: { timeoutMs: 30000 } });
+  assert.equal(declared.verdict, "no-regressions", JSON.stringify(declared));
+  const control = run(null);
+  assert.equal(control.verdict, "inconclusive", `the control without a declaration kills the gate at 400 ms: ${JSON.stringify(control)}`);
+});
+
+test("CORE-298 — a declaration below the line's --timeout-ms is unusable bad-gate-timeout, after the earlier report is removed", () => {
+  const { dir, base } = repo({ committed: { "pharn.config.json": JSON.stringify({ gates: { timeoutMs: 200 } }) + "\n" } });
+  try {
+    writeFileSync(join(dir, FEATURES, FEATURE, "regression-report.json"), '{"verdict":"no-regressions"}');
+    const r = cli(dir, ["--feature", FEATURE, "--timeout-ms", "400", "--no-install", "--base", base]);
+    assert.equal(r.code, 2, r.raw);
+    assert.equal(r.json.reason_code, "bad-gate-timeout");
+    assert.match(r.json.detail, /`gates\.timeoutMs` "200" is below the pinned per-gate timeout 400 ms/);
+    assert.equal(existsSync(join(dir, FEATURES, FEATURE, "regression-report.json")), false, "the stale report is already gone");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("unusable/usage-error: a stop BEFORE the slug parses removes nothing — the narrowed residual (F2)", () => {
   const { dir, base } = repo();
   try {
@@ -1318,10 +1354,11 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
   // head-install-drift since 6.40.0; plan-files-total-glob, no-change-under-test, base-install-unreliable since
   // regress-base-integrity (plus the unusable base-worktree-unplaceable); the unusable install-config-invalid since 6.66.0
-  // (reached by the regress-install-config tests at the end of this file)
+  // (reached by the regress-install-config tests at the end of this file); the unusable bad-gate-timeout since 7.22.1
+  // (CORE-298, reached by its test above)
   assert.equal(REGISTRY.regress.refused.length, 8);
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
-  assert.equal(REGISTRY.regress.unusable.length, 11);
+  assert.equal(REGISTRY.regress.unusable.length, 12);
 });
 
 // ── ★ WIRING (L45) — the COMMITTED pharn-regress.md line, executed ─────────────────────────────────

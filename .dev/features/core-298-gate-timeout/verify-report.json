@@ -1,0 +1,26 @@
+{
+  "feature": "core-298-gate-timeout",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "f9a79c729fe875cb1f2e11211e61bd21a4d3945627f2531e08514c179bd0568f",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "7927224977b710a2fbd96819f1a50acc5c2e6a1011a4e0c544a7d8fbf4eb4896"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

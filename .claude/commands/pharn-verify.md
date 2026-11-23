@@ -107,6 +107,11 @@ appended verbatim — but **not for a feature with AC evidence** (see the refere
 node pharn/floor/stage-verify.mjs --feature <name> --timeout-ms 540000 --budget-ms 570000
 ```
 
+A project's `pharn.config.json` `gates.timeoutMs` replaces the 540000 inside the script (`gate-run-record.md`, "A longer
+per-gate timeout"; below the pinned value it is `unusable bad-gate-timeout`), so a call can outlast the Bash timeout: it
+then moves to the background (`stage-exit.md`, "A Bash-tool timeout is not a kill"). Wait for its completion notice and
+branch on the exit it reports; never run this line or `--resume` again while it runs.
+
 Read the printed `pharn-stage-exit/1` object and branch on the **exit code only**:
 
 - **`0` done** — report the **report's** `verdict`, read from `pharn/features/<name>/verify-report.json` — never

@@ -170,7 +170,9 @@ Keyed by stage; `regress` and `verify` are its members.
   `child-crashed`, `child-refused`, `no-progress`, `progress-malformed`, `base-worktree-unplaceable`
   (regress-base-integrity: the temp directory that holds the base checkout is inside the project, or could not be
   created — `pharn/floor/base-worktree.mjs`), `install-config-invalid` (6.66.0: the project's `pharn.config.json`
-  `regress.install` cannot be read or cannot answer this run — see "The `regress` install command" below). A progress
+  `regress.install` cannot be read or cannot answer this run — see "The `regress` install command" below),
+  `bad-gate-timeout` (7.22.1: the project's `pharn.config.json` `gates.timeoutMs` is below the given `--timeout-ms` —
+  `gate-run-record.md`, "A longer per-gate timeout"; in both stages). A progress
   record of schema `pharn-stage-regress-progress/4` carries the
   base's source and its checkout path; a resumed record whose path is not this project's temp-root checkout is
   `progress-malformed`, and an older schema is refused the same way (re-run fresh).
@@ -196,7 +198,7 @@ Step 2 table, not restated here):
   check regress runs, first thing in `init`, before any gate). Each writes `VERIFY.md` naming the refusal and **no**
   `verify-report.json`.
 - **`unusable`** — `usage-error`, `no-feature`, `path-containment`, `git-failed`, `child-crashed`, `child-refused`,
-  `no-progress`, `progress-malformed`. `child-crashed` covers a shelled checker that crashed (the chain check, the
+  `no-progress`, `progress-malformed`, `bad-gate-timeout` (7.22.1, as for regress). `child-crashed` covers a shelled checker that crashed (the chain check, the
   verifier count, the verdict call whose exit disagrees with its printed verdict) AND a completeness capture that
   is not the checker's shape — a crashed `check-build-complete.mjs` is refused here, before any gate runs, never
   read as an incomplete build. `child-refused` is the runner refusing, a lapse (`lock-busy`,
@@ -271,7 +273,9 @@ call, with the same argv; the 600 s tie binds the call's in-node wait (at most `
 invocation, which runs in the foreground of a call. Since 7.16.0 that argv carries a project's declared
 `gates.timeoutMs` (up to 1800000) in place of the pinned 540000 (`gate-run-record.md`, "A longer per-gate timeout"):
 each invocation's first slow step may then run up to the declared value, so a takeover's invocation can outlast the
-600 s Bash call by that much, and the call is moved to the background as described below.
+600 s Bash call by that much, and the call is moved to the background as described below. Since 7.22.1 the scripts
+resolve that value themselves on a fresh invocation, so the same holds for the thin `/pharn-regress` and
+`/pharn-verify` a person runs (their budget is not raised; `gate-run-record.md` states why).
 
 For `verify` the clock is the same (`stage-runtime.mjs`'s `makeBudget`, one owner for both stages), the opening
 work is argv, containment, the removal, the chain check, the eval-pair listing, the verifier count and the

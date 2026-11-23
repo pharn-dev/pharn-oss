@@ -45,7 +45,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - A wall-clock step of more than 10 s between the record and the recovery reads as a mismatch, and that orphan is
     left running.
 
-### Added
+## [7.22.1] - 2026-11-23
+
+### Fixed
+
+- **`/pharn-build`'s gate and the standalone `/pharn-regress` / `/pharn-verify` honour `gates.timeoutMs` (CORE-298).**
+  7.16.0 let a project with a slow suite declare a longer per-gate timeout in `pharn.config.json`, but only the entry
+  check and the regress/verify runs that `/pharn-loop` and `/pharn-ship` start applied it. `build-gate.mjs` still
+  killed every gate at 540 s, so for a suite that needs longer, every build iteration ran the full gate for nine
+  minutes and recorded a failed gate, and `/pharn-loop` went on to the next iteration. Run by hand, `/pharn-regress` and
+  `/pharn-verify` reported the suite as unmeasured. The 2026-11-22 review found this by reading the code; no recorded
+  run shows the build gate killed. Now `build-gate.mjs` (targeted and full), `stage-regress.mjs` and `stage-verify.mjs`
+  resolve the timeout with `gate-timeout-core.mjs` `resolveRunTimeout`, the rule the other two callers already use: it
+  may only lengthen the pinned value, up to 1,800,000 ms. No command line changes. The build gate raises its budget by
+  the same amount, keeping the line's 30 s slack. The stage scripts do not raise theirs, which matches what the
+  `/pharn-loop` and `/pharn-ship` runs already do; a raise would be overridden by the pinned `--resume` line's budget
+  (570000) anyway. A declaration below the pinned value is refused as `bad-gate-timeout`: exit 2 from the build gate,
+  and a new `unusable` code in both stage vocabularies. These calls run inside a Bash call, so with a declared value
+  above 600 s a call outlasts the tool's timeout and the harness moves it to the background. The three commands now say
+  to wait for its completion notice and never run the line again beside it. That move is an observed harness
+  behaviour, not a floor fact (`stage-exit.md`). `/pharn-test`'s red run keeps 540 s: it runs the acceptance tests
+  alone and calls the gate runner directly, and the runner takes only the flag. With no declaration, every argv, record
+  and output is byte-identical. Contract: `gate-run-record.md`, "A longer per-gate timeout".
+
+- 2026-11-23: **Fixed: the gate-group cleanup in `pharn/floor/run-gates.test.mjs` no longer fails when the gate exits
+  between its liveness check and the kill (CORE-296).** The five cleanup lines checked `alive(gate)` and then called
+  `process.kill(gate, "SIGKILL")`, so a gate that died in that window threw `ESRCH` and failed the test; it broke CI on
+  259f27dd and cost the 7.18.0 tag. They now call a local `killIfAlive` helper that ignores `ESRCH` and rethrows any
+  other error. No assertion changed. No other test file under `pharn/floor/`, `.dev/floor/` or `.claude/hooks/` signals
+  after a separate liveness check. Test-only, so no `SKILLS_VERSION` bump.
 
 - 2026-11-23: **Fixed: `main` failed the format check after the prettier 3.10.1 bump.** #459 merged with a red
   `check`: prettier 3.10.1 formats two dev-only files differently, so `npm run format:check` failed on `main`. Those two
@@ -61,6 +89,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (pharn-cli's `OWNED_SEGMENT_RE`); the generator fails naming the path. The current tree's `pharn-install.json` is
   unchanged. Advisory: nothing binds the two regexes to pharn-cli's bytes, and pharn-cli's root and `pharn-*` name rules
   are not mirrored. Dev apparatus only, so no `SKILLS_VERSION` bump.
+
+### Added
 
 - 2026-11-17: **Measured: the defect probe set's catch count on `main` (7.19.0) is 10 of 12 runs (CORE-90).** The
   user ran the kit on `main`: 2 runs per probe, 28 sessions, USD 19.91. 9 runs caught their probe at the grill and 1 at

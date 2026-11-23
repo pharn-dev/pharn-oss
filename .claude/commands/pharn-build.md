@@ -244,6 +244,11 @@ node pharn/floor/build-gate.mjs --feature <name> --mode targeted --timeout-ms 54
 node pharn/floor/build-gate.mjs --feature <name> --mode full --timeout-ms 540000 --budget-ms 570000
 ```
 
+A project's `pharn.config.json` `gates.timeoutMs` replaces the 540000 inside the helper (`gate-run-record.md`, "A longer
+per-gate timeout"), so a call can outlast the Bash timeout: it then moves to the background (`stage-exit.md`, "A
+Bash-tool timeout is not a kill"). Wait for its completion notice and branch on the exit it reports; never run a line
+again while it runs.
+
 - **targeted:** `3` → fix within scope, run it again; a red you cannot fix within `## Files` (a runner that ran none of
   the targets included) → the full line, never loop; `0` or `4` → the full line; `5` → the same line again; `2` or any
   other exit → HALT, the gate failed.
