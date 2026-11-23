@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { STATE_FILE } from "./stage-direct-core.mjs";
-import { reapLeftoverGate, survivorReason } from "./run-gates.mjs";
+import { reapLeftoverGate, survivorReason, parseElapsedSeconds, START_MATCH_TOLERANCE_MS } from "./run-gates.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..", "..");
@@ -216,6 +216,42 @@ async function orphanGroup() {
   assert.ok(Number(out.trim()) > 1, "fixture: the sleeper's pid");
   return sh.pid;
 }
+/** A process group whose LEADER is alive and is NOT this process's child (7.22.2): a detached `node` starts `sleep 60`
+ *  as the leader of its own group and exits, so `sleep` is reparented. The reap reads the leader's start time, so a
+ *  group it may stop needs a live leader; and, as for orphanGroup, a group signalled and waited on synchronously must be
+ *  reaped by someone other than us. Returns the group id (the `sleep`'s pid). */
+async function liveLeaderGroup() {
+  const starter = spawn(
+    process.execPath,
+    [
+      "-e",
+      'const c = require("child_process").spawn("sleep", ["60"], { detached: true, stdio: "ignore" }); console.log(c.pid); c.unref();',
+    ],
+    { stdio: ["ignore", "pipe", "ignore"] }
+  );
+  let out = "";
+  starter.stdout.on("data", (d) => (out += d));
+  await new Promise((r) => starter.on("close", r));
+  const pgid = Number(out.trim());
+  assert.ok(pgid > 1, "fixture: the leader's pid");
+  return pgid;
+}
+/** Run `fn` with process.stderr.write captured; returns `{ value, stderr }`. */
+function withStderr(fn) {
+  const real = process.stderr.write;
+  let stderr = "";
+  process.stderr.write = (chunk, ...rest) => {
+    stderr += String(chunk);
+    const cb = rest.find((a) => typeof a === "function");
+    if (cb) cb();
+    return true;
+  };
+  try {
+    return { value: fn(), stderr };
+  } finally {
+    process.stderr.write = real;
+  }
+}
 const gateRoot = () => realpathSync(mkdtempSync(join(tmpdir(), "reap-unit-")));
 const writeLock = (dir, value) => writeFileSync(join(dir, "lock"), typeof value === "string" ? value : JSON.stringify(value));
 const writeChild = (dir, pgid) => writeFileSync(join(dir, "lock.child"), JSON.stringify({ runner_pid: 1, pgid, started_ms: Date.now() }));
@@ -265,8 +301,11 @@ test("reapLeftoverGate — a FIFO or a link at a lock record is refused, never w
 });
 
 test("reapLeftoverGate — a LIVE lock leaves the recorded group running; a torn (unparseable) lock is stale, so the group is stopped and its record removed", async () => {
+  // 7.22.2: a live-leader group, since the reap now signals only a group whose leader's start matches the record
+  // (writeChild's `started_ms: Date.now()` is within the tolerance of a leader started just before). This is the
+  // matched-start CONTROL for the mismatch cases below (L34).
   const root = gateRoot();
-  const pgid = await orphanGroup();
+  const pgid = await liveLeaderGroup();
   try {
     assert.ok(groupLive(pgid), "fixture: the recorded group runs");
     const live = join(root, "live");
@@ -287,6 +326,86 @@ test("reapLeftoverGate — a LIVE lock leaves the recorded group running; a torn
     killGroup(pgid);
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ── 7.22.2 (CORE-299): the group must still be the one the record names before it is signalled ──
+
+const settle = () => sleep(750); // a stray SIGTERM/SIGKILL would have landed by now
+
+test("reapLeftoverGate (CORE-299) — a live group whose leader's start time does NOT match the record is left running; the record is dropped and a note says so", async () => {
+  const root = gateRoot();
+  const pgid = await liveLeaderGroup();
+  try {
+    assert.ok(groupLive(pgid), "fixture: the recorded group runs");
+    const dir = join(root, "reused");
+    mkdirSync(dir);
+    // No `lock`: absent, so the record is acted on. The record says the group started an hour ago — the shape of a
+    // pgid the OS reused for an unrelated group after the real orphan exited.
+    writeFileSync(join(dir, "lock.child"), JSON.stringify({ runner_pid: 1, pgid, started_ms: Date.now() - 3_600_000 }));
+    const { value, stderr } = withStderr(() => reapLeftoverGate(dir));
+    assert.deepEqual(value, { ok: true });
+    await settle();
+    assert.ok(groupLive(pgid), "a group whose leader's start time does not match the record was signalled");
+    assert.ok(!existsSync(join(dir, "lock.child")), "the mismatched record was kept");
+    assert.match(
+      stderr,
+      /^run-gates: note — .*\/reused\/lock\.child named process group \d+, whose leader's start time does not match the record \(started \d+ s apart\); the group was not signalled and the record was dropped\n$/
+    );
+  } finally {
+    killGroup(pgid);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("reapLeftoverGate (CORE-299) — when the leader's start cannot be read (leader exited, or no integer started_ms) the group is left running and the record dropped", async () => {
+  const root = gateRoot();
+  const leaderless = await orphanGroup(); // its leader (`/bin/sh`) already exited; a `sleep` member still runs
+  const live = await liveLeaderGroup();
+  try {
+    assert.ok(groupLive(leaderless) && groupLive(live), "fixture: both recorded groups run");
+    const a = join(root, "leaderless");
+    mkdirSync(a);
+    writeChild(a, leaderless);
+    const ra = withStderr(() => reapLeftoverGate(a));
+    assert.deepEqual(ra.value, { ok: true });
+    assert.match(ra.stderr, /whose leader's start time cannot be read; the group was not signalled and the record was dropped\n$/);
+    const b = join(root, "no-start");
+    mkdirSync(b);
+    writeFileSync(join(b, "lock.child"), JSON.stringify({ runner_pid: 1, pgid: live }));
+    const rb = withStderr(() => reapLeftoverGate(b));
+    assert.deepEqual(rb.value, { ok: true });
+    assert.match(rb.stderr, /whose leader's start time cannot be read \(the record has no integer started_ms\);/);
+    await settle();
+    assert.ok(groupLive(leaderless), "a group whose leader exited was signalled");
+    assert.ok(groupLive(live), "a group named by a record with no started_ms was signalled");
+    assert.ok(!existsSync(join(a, "lock.child")) && !existsSync(join(b, "lock.child")), "an unjudgeable record was kept");
+  } finally {
+    killGroup(leaderless);
+    killGroup(live);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("parseElapsedSeconds (CORE-299) — the POSIX `ps -o etime=` grammar [[dd-]hh:]mm:ss, and null for anything else", () => {
+  const cases = [
+    ["00:00\n", 0],
+    ["  01:05", 65],
+    ["59:59\n", 3599],
+    ["02:00:01\n", 7201],
+    ["3-04:05:06\n", 273906],
+    ["  12-00:00:00 \n", 1036800],
+    ["", null],
+    ["-", null],
+    ["\n", null],
+    ["abc\n", null],
+    ["05\n", null],
+    ["1:2:3:4\n", null],
+    ["01:05\n02:00\n", null],
+    ["-01:05", null],
+    [undefined, null],
+  ];
+  for (const [text, want] of cases) assert.equal(parseElapsedSeconds(text), want, JSON.stringify(text));
+  assert.equal(START_MATCH_TOLERANCE_MS, 10_000);
 });
 
 test("survivorReason — the one refusal wording for a group still alive after SIGKILL (run-gates `lock-busy`, the stages' `child-refused`)", () => {

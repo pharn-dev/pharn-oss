@@ -23,6 +23,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.22.2] - 2026-11-23
+
+### Fixed
+
+- **The orphan-gate reap signals a process group only when the group's leader still has the start time the record
+  names (CORE-299).** `run-gates.mjs` keeps `<out>/lock.child` (`{runner_pid, pgid, started_ms}`) while a gate runs. A
+  stale-lock recovery, `init`, and the `/pharn-verify` and `/pharn-regress` stage scripts' fresh start (7.15.1) read
+  that record and SIGTERM, then SIGKILL, the group it names. Before this change nothing checked that the group was
+  still the one PHARN started. A record left behind by a crash or a reboot could name a group id the OS had since
+  reused for an unrelated group of the same user, such as an editor, a dev server or another session's job. Now the
+  reap first reads the leader's elapsed time with `ps -o etime= -p <pgid>`. That is a POSIX field, so there is no
+  locale, time zone or DST to parse. The group is signalled only when the start this implies is within 10 s of the
+  record's `started_ms`. On a mismatch, or when the start cannot be read, nothing is signalled, the record is dropped,
+  and a `run-gates: note —` line goes to stderr. Stdout is unchanged. Bounded, as in `gate-run-record.md`:
+  - A reused group id is still signalled if an unrelated leader with that id started within 10 s of the recorded
+    start.
+  - A group whose leader already exited while other members still run cannot be judged, so it is no longer stopped.
+    Real gate leaders (`npm`, `/bin/sh`, `node`) wait for their children, so a runner SIGKILL leaves the leader
+    alive.
+  - A wall-clock step of more than 10 s between the record and the recovery reads as a mismatch, and that orphan is
+    left running.
+
 ## [7.22.1] - 2026-11-23
 
 ### Fixed

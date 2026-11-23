@@ -509,9 +509,14 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   `--timeout-ms` is forwarded to the gate's group (6.50.1); the runner then dies by that signal and records nothing
   for the entry, which the next `run --next` runs again. A `SIGKILL` cannot be caught: it orphans the group until the
   next `run --next` recovers the stale lock, which first stops the group `<out>/lock.child` names (SIGTERM, then
-  SIGKILL; still alive is `lock-busy`) so two copies of a gate never overlap. Bounded: a kill in the instant between
-  the spawn and that record is not covered, and a group that had already exited may have had its id reused, which
-  nothing can tell apart. The invoking command's Bash timeout must still exceed `--timeout-ms`.
+  SIGKILL; still alive is `lock-busy`) so two copies of a gate never overlap. Since 7.22.2 that group is signalled
+  only when its leader's start time (`ps -o etime=`) is within 10 s of the record's `started_ms`. On a mismatch, or
+  when the start cannot be read, nothing is signalled, the record is dropped, and a `run-gates: note —` line goes to
+  stderr. Bounded: a kill in the instant between the spawn and that record is not covered; a reused group id is
+  still signalled if an unrelated leader with that id started within 10 s of the recorded start; a group whose
+  leader already exited while other members still run cannot be judged and is no longer stopped; and a wall-clock
+  step of more than 10 s between the record and the recovery reads as a mismatch. The invoking command's Bash
+  timeout must still exceed `--timeout-ms`.
 - **`--timeout-ms` is required.** Floor code carries no harness-specific default, so there is no default
   for a test to leave unexercised (**L41**). Since 7.16.0 the entry and stage runners (since 7.22.1 also `build-gate.mjs` and the two stage scripts) pass a project's declared
   `gates.timeoutMs` in its place ("A longer per-gate timeout", above); the runner itself still takes only the flag.
