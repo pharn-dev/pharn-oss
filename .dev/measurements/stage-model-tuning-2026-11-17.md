@@ -8,7 +8,10 @@ the stop rule `grill-medium` ran too. One reading per arm, on the probe chain on
   43%.
 - **plan model opus → sonnet:** `cannot-decide`. Only 4 of its 6 pairs are comparable, because two variant runs and one
   control run stopped at the plan stage without citing an anchor.
-- **grill effort high → medium:** `does-not-support`, because one catch was lost (p4).
+- **grill effort high → medium:** `supports-change` by hand (advisory), with 8 of 8 pairs comparable, no catch lost,
+  and chain USD down 14%. The reader's floor reading is still `does-not-support` / `catch-lost`. The one "lost" catch
+  (p4/r2) was a catch cited off the manifest's anchors, a scorer miss. The record first stated the floor reading alone;
+  see "Correction (2026-11-23, CORE-313)".
 
 No shipped default changes in this task. A default change is a follow-up, needs E1's loop pairs, and is the human's
 call (see "Defaults").
@@ -226,7 +229,7 @@ control's run file, not a better variant.
 - **Weighted units rose,** 3.46M → 3.55M (+3%): the sonnet grill used slightly more tokens, at half the price.
 - **Grill stage:** USD 11.53 → 5.98 (−48%); minutes 26.71 → 19.89 (−26%).
 
-### `grill-medium` — `does-not-support` / `catch-lost`
+### `grill-medium` — floor `does-not-support` / `catch-lost`; by hand `supports-change` (see the correction)
 
 | probe | control run | variant | control outcome | variant outcome | grill USD C / V | grill min C / V | chain USD C / V | chain min C / V | chain weighted (M) C / V |
 | ----- | ----------- | ------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | ------------------------ |
@@ -240,10 +243,57 @@ control's run file, not a better variant.
 | p4    | main r2     | r2      | caught          | no-anchor-match | 1.32 / 1.31     | 2.77 / 2.79     | 1.49 / 1.49     | 3.44 / 3.39     | 0.39 / 0.40              |
 
 - **Pairs:** 8, all complete and comparable.
-- **Catches:** control 7, variant 7. One lost: p4/r2, where the medium-effort grill raised no finding on the planted
-  omission's anchor. One gained: p1/r2, the control's invalid triage.
+- **Catches, as the scorer counts them:** control 7, variant 7. One lost: p4/r2, where the medium-effort grill raised
+  no finding on the planted omission's anchor. One gained: p1/r2, the control's invalid triage.
+- **Catches, re-scored by hand (advisory, 2026-11-23):** control 7, variant 8, none lost. p4/r2 caught the omission
+  at a line the manifest does not anchor (see "Correction (2026-11-23, CORE-313)").
 - **Chain:** USD 13.10 → 11.20 (−14%); minutes 32.27 → 26.74 (−17%); weighted units 3.46M → 3.01M (−13%).
 - **Advisory:** the served effort is recorded nowhere. Frontmatter, config and flag all said `medium`.
+
+### Correction (2026-11-23, CORE-313): p4/r2 was a catch at an unanchored line
+
+As first written, this record stated `grill-medium`'s floor reading alone, so its verdict was `does-not-support`. That
+verdict rested on one run, p4/r2. Re-scored by hand, that run caught the planted defect.
+
+**What the files say** (all committed, re-read 2026-11-23):
+
+- `defect-probe-score.mjs score --probe p4` over `runs/grill-medium/p4/r2/` prints `no-anchor-match` with
+  `matched: []`. p4 is an omission probe: AC-4 (revoke a key: `DELETE /keys/:id` → 204, then `401 key_revoked`) has
+  no step, route, test or mapping. Its anchors are `SPEC.md:44-46` (slack 1) and `PLAN.md:78`, the
+  `## Acceptance mapping` heading (slack 0).
+- Finding G1-1 (severity `blocking`) cites `pharn/features/api-key-rotation/PLAN.md:15`. That is the probe plan's route
+  list ("create, list, rotate"), which leaves out revoke. Its text names SPEC AC-4 as having no step, file, stored field
+  or acceptance mapping, and says the Acceptance mapping skips AC-4. `grill-triage.json` disposes G1-1 `replan`, the
+  probe's expected disposition.
+- The other five p4 grill runs (CORE-90's two control runs, both `grill-sonnet` runs and `grill-medium` r1) cite the
+  same omission at `PLAN.md:78` and score `caught`. Every p1–p3 grill run in the three arms (18) matches an anchor.
+
+**Hand re-score (advisory).** G1-1 names the planted defect, is triaged other than `proceed`, and cites the probe's own
+`PLAN.md`. So p4/r2 is a catch. The pre-registered rules, applied in order to the re-scored pairs:
+
+1. `arm-not-applied`: no. Every session was served its expected family (unchanged).
+2. `fewer-than-six-pairs`: no. 8 complete pairs, all comparable (unchanged).
+3. `control-caught-none`: no. The control caught 7 (unchanged).
+4. `catch-lost`: no. With p4/r2 caught, no pair has a control catch and a variant miss. The variant caught 8, and
+   p1/r2 is still a gained catch, from the control's invalid triage file.
+5. `no-saving`: no. Chain USD 13.10 → 11.20 (−14%).
+6. **`supports-change` / `no-visible-regression-and-saving`.**
+
+**Both readings stand side by side.** The floor reading in `runs/pairs/grill-medium.json` is the reader's output,
+verbatim and unchanged: `does-not-support` / `catch-lost`. The corrected reading is advisory, because it rests on
+reading G1-1's free text. In these 8 pairs a medium-effort grill showed no visible regression on the probe chain at 14%
+less chain USD. That is the most eight pairs can support: it does not show non-inferiority, the probes are authored,
+and the served effort is recorded nowhere.
+
+**The scorer is unchanged, and why.** Accepting a finding that names the defect at another line would mean reading
+`problem` / `evidence`, which the scorer never reads (P2). Such a catch would no longer be floor (P0). Adding
+`PLAN.md:15` as an anchor would change the manifest's pinned sha256 and fit an anchor to the run that cited it. The
+scorer's error here is the conservative one: an off-anchor catch can only push a reading towards `does-not-support`.
+Instead, the probe set's README now asks every record to hand-check each lost pair's variant run before it states a
+`catch-lost` reading (`.dev/probes/defect-probes/README.md`, "The anchor rules, per defect kind").
+
+**The default.** Whether the grill's shipped effort changes is the maintainer's decision, with E1's loop pairs, and is
+tracked as CORE-342. This correction changes no default.
 
 ## Defaults
 
@@ -252,12 +302,12 @@ They say nothing about the loop outcomes E1 measures: completion, iterations, ve
 external-review findings. **So no shipped default can change on this record alone.** Each row below needs E1's loop
 pairs in the measured project, and then the human's call.
 
-| default                          | probe pairs say                                                                               | needs E1 loop pairs | decision now                                                     |
-| -------------------------------- | --------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------- |
-| grill model opus                 | **support changing to sonnet:** 8 comparable pairs, 0 catches lost, chain −43% USD, −24% min  | yes                 | supported on the probe chain; the shipped default: cannot decide |
-| grill effort high                | **do not support medium:** 1 catch lost (p4/r2) in 8 pairs                                    | yes                 | do not change                                                    |
-| plan model opus                  | **cannot decide:** 4 comparable pairs (2 unanchored plan stops), 0 lost, plan −54% USD        | yes                 | cannot decide                                                    |
-| every other stage's model/effort | not measured (spec, build, test, regress, verify, review, memory-promote, ship, loop, triage) | yes                 | cannot decide                                                    |
+| default                          | probe pairs say                                                                                                                                     | needs E1 loop pairs | decision now                                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| grill model opus                 | **support changing to sonnet:** 8 comparable pairs, 0 catches lost, chain −43% USD, −24% min                                                        | yes                 | supported on the probe chain; the shipped default: cannot decide                            |
+| grill effort high                | **support medium, by hand (advisory):** 8 comparable pairs, 0 lost once p4/r2 is re-scored, chain −14% USD, −17% min; the floor reading says 1 lost | yes                 | supported on the probe chain by hand; the shipped default: the maintainer's call (CORE-342) |
+| plan model opus                  | **cannot decide:** 4 comparable pairs (2 unanchored plan stops), 0 lost, plan −54% USD                                                              | yes                 | cannot decide                                                                               |
+| every other stage's model/effort | not measured (spec, build, test, regress, verify, review, memory-promote, ship, loop, triage)                                                       | yes                 | cannot decide                                                                               |
 
 - **Grill model, worded at its P0 ceiling:** in these 8 pairs, a sonnet grill showed no visible regression on the
   probe chain at about half the cost. Eight pairs support that at most. They do not show it is non-inferior, and the
@@ -271,6 +321,8 @@ pairs in the measured project, and then the human's call.
 - **Floor:** the manifest's sha256; each run's outcome (defect-probe-score.mjs `scoreRun`); each session's validity,
   figures and served-family test; the sums; and each arm's reading, as `stage-model-pairs.mjs pair` computes them from
   the run files.
+- **Advisory (2026-11-23, CORE-313):** the hand re-score of `grill-medium` p4/r2 as a catch, and the `supports-change`
+  reading of grill effort derived from it. It reads G1-1's free text. The floor reading of that arm is unchanged.
 - **Advisory:** that the runs ran as the kits wrote them; the served effort; USD as a price; that a probe catch
   predicts a real plan's; and anything six or eight pairs imply beyond those pairs.
 - **Advisory, and not re-derivable from the repository:** p5's plan-stage outcomes (`caught-at-plan` and

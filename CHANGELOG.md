@@ -58,6 +58,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   both before 7.20.0 (inherited) and after (configured), so no gain is shown and no probe runs were paid for. Keep or
   revert stays the maintainer's call. Apparatus only: no product bytes change.
 
+### Fixed
+
+- 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
+  scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default
+  changes. The 2026-11-17 entry said "A medium-effort grill reads `does-not-support`: it lost one catch." That reading
+  rested on one run, p4/r2. Its finding names the uncovered AC-4 and is triaged `replan`, but it cites `PLAN.md:15`,
+  which is not one of the manifest's anchors, so `defect-probe-score.mjs` scored it a miss. Re-scored by hand, the arm
+  loses no catch in 8 comparable pairs, and chain cost is down 14%. So `.dev/measurements/stage-model-tuning-2026-11-17.md`
+  now reads `supports-change` for grill effort, labelled advisory, beside the unchanged floor reading
+  (`does-not-support` / `catch-lost`). The scorer is unchanged: matching the finding's free text would cross its trust
+  boundary, and a new anchor would change the pinned manifest. Instead, `.dev/probes/defect-probes/README.md` now asks
+  every record to hand-check a lost pair before stating `catch-lost`. Whether the shipped grill effort changes is the
+  maintainer's decision, with the E1 loop pairs, tracked as CORE-342.
+
 ## [7.23.0] - 2026-11-23
 
 ### Added
