@@ -1,0 +1,47 @@
+{
+  "base": "ead56eadd4c42f044d5fd803ee3147986aa90c95",
+  "inside": [
+    ".dev/features/core-311-stage-agent-benchmark/GRILL.md",
+    ".dev/features/core-311-stage-agent-benchmark/PLAN.md",
+    ".dev/features/core-311-stage-agent-benchmark/measure-output.json",
+    ".dev/features/core-311-stage-agent-benchmark/measure.mjs",
+    ".dev/features/lean-stage-agent/SHIP.md",
+    ".dev/guides/product-commands.md",
+    ".dev/measurements/stage-agent-benchmark-2026-11-23.md",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7081,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7082,
+      "failed": 0,
+      "skipped": 8,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "feature": "core-311-stage-agent-benchmark",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "8831b4c55b976416f6c05eb4be517fac2058c411fdf655e3b96ff574af86b3dc",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "b9fcfe1ec67b09aee24f4945ec0703014b216e1ac87b128a3aa19dfe69034e7a"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
