@@ -40,6 +40,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     `.dev/features/core-310-real-loop-record/evidence/`.
   - Apparatus only, so no `SKILLS_VERSION` bump.
 
+- 2026-11-23: **Recorded the CORE-107 benchmark comparison: one `/pharn-loop` with `pharn-stage` stage agents, one
+  with `general-purpose`, on the same measured-project base and intent** (`.dev/measurements/stage-agent-benchmark-2026-11-23.md`,
+  Linear CORE-311). The `pharn-stage` first request was 33,011 tokens against 60,207 with the same instruction files.
+  No stage in either arm used an MCP, web or Skill tool, though `general-purpose` agents could reach the project's
+  shadcn server, so no follow-up for the tool list was opened. The feature was a one-line doc-comment change, n = 1 per
+  arm; a build that needs a UI-component server was not measured. Two defects the runs showed are CORE-346 and
+  CORE-347. Also records that a `claude -p` checkout under `/private/tmp` loaded no project instruction files on Claude
+  Code 2.1.328, and corrects a `.dev/guides/product-commands.md` sentence that said pharn-cli does not install
+  `.claude/agents/` yet. Apparatus only; no `SKILLS_VERSION` bump.
 - 2026-11-23: **Measured what CORE-89's HEAD `test` reuse saves and what CORE-111's routed-stage effort changed
   (`.dev/measurements/reuse-and-effort-2026-11-23.md`, CORE-312).** In the measured project's three 7.22.0 iterations,
   this batch's real loop run included, verify spawned no `test` (it reused regress HEAD's 184.1 s, 188.8 s and 383.3 s

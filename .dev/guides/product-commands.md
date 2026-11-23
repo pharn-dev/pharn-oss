@@ -88,7 +88,8 @@ true`, `user-invocable: false` — documented keys; the one live probe was incon
   that the prompt's first line is the `stage-agent.mjs brief` line to run and follow: the brief and the stage command
   carry the task. So the `general-purpose` fallback runs the same task text either way.
 - **The fallback is a rule, not a choice.** Claude Code discovers `.claude/agents/` only in a session that started
-  after the directory existed, and pharn-cli does not install it yet (follow-up `cli-install-agents`). So a command
+  after the directory existed, and an install older than pharn-cli's `cli-install-agents` work has no definitions (the
+  measured project's pharn-cli 0.21.1 install lists both in `pharn.records.json`, read 2026-11-23). So a command
   that names a product type also names `general-purpose` with the same prompt for when the type is not offered or a
   call is refused, and says so in its report (the lens agents block; the stage's route line).
 - **The bytes are the measured bytes.** `.dev/floor/review-lens-agent.test.mjs` pins the lens definition's SHA-256 to
