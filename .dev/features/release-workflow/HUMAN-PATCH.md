@@ -13,7 +13,7 @@ so the pull request that carries it bumps `SKILLS_VERSION` (patch) and opens its
 ## 1. `pharn/LIMITS.md` — append after §10
 
 ```markdown
----
+***
 
 ## 11. A merge to `main` is not a release; only the release channel waits for CI
 

@@ -46,6 +46,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   alone and calls the gate runner directly, and the runner takes only the flag. With no declaration, every argv, record
   and output is byte-identical. Contract: `gate-run-record.md`, "A longer per-gate timeout".
 
+- 2026-11-23: **Fixed: `main` failed the format check after the prettier 3.10.1 bump.** #459 merged with a red
+  `check`: prettier 3.10.1 formats two dev-only files differently, so `npm run format:check` failed on `main`. Those two
+  files, `.dev/features/observability-code-side-limit/LIMITS-5-PROPOSED.md` and
+  `.dev/features/release-workflow/HUMAN-PATCH.md`, are reformatted with `prettier --write`, one line each. Dev
+  apparatus only, so no `SKILLS_VERSION` bump.
+
 - 2026-11-23: **Fixed: the install-manifest generator now refuses a path pharn-cli would refuse (CORE-302).**
   `.dev/floor/install-manifest-core.mjs` refused only a leading `/`, a backslash and an empty, `.` or `..` segment, so a
   file such as `pharn/floor/.eslintrc.json` or a segment holding `[`, `]`, a space or a non-ASCII character passed CI
