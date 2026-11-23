@@ -1,0 +1,26 @@
+{
+  "feature": "core-310-real-loop-record",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "ac6a07ab2d823a99ed90726bf83ce0de64b4ac20699a31c303bd44302fd15e0c",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "4211da1db7da9b679d062c4fd0d5c2ced906b11357565ad5150097fe04311602"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

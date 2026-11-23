@@ -1,0 +1,60 @@
+{
+  "base": "2ec930d7cb34844f9f90ada8666966b3710e127d",
+  "inside": [
+    ".dev/features/core-310-real-loop-record/GRILL.md",
+    ".dev/features/core-310-real-loop-record/PLAN.md",
+    ".dev/features/core-310-real-loop-record/evidence/attempt1.json",
+    ".dev/features/core-310-real-loop-record/evidence/run1.json",
+    ".dev/features/core-310-real-loop-record/evidence/run2.json",
+    ".dev/measurements/loop-real-run-7.22.0-2026-11-23.md",
+    ".markdownlint-cli2.jsonc",
+    ".prettierignore",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7089,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7089,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

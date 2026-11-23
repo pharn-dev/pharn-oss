@@ -29,7 +29,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   build (CORE-344). Run 2's description moved that criterion into the constraints and added formatting the file that
   keeps pharn-app `main`'s `format:check` red, then ended green in 40 min 51 s at USD 5.86 list price.
   - **Fired in run 2:** verify reused regress HEAD's `test` and `typecheck` (CORE-89). Every routed stage ran as a
-    `pharn-stage` agent with its configured model and effort, which closes CORE-105's fourth criterion.
+    `pharn-stage` agent with its configured model and effort, and completed its wait. That is CORE-105's fourth
+    criterion, except "the same client as the 11 inline runs", which was never recorded and so cannot be shown.
   - **Did not fire:** the entry gate cache (it stores only red evidence), and entry-as-base evidence (`start-dirty`).
   - **Not distinguishable:** effort routing (CORE-111), because every stage in that project is at `high`.
   - No stage used an MCP, WebFetch, WebSearch or Skill tool.

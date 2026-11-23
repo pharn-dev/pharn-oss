@@ -145,10 +145,13 @@ Each line quotes the field that shows it.
 - **`pharn-stage` agent type (CORE-107): used for every routed stage.** All six routed stages (spec, plan, grill,
   triage, test, build) were launched with `subagent_type: "pharn-stage"`. Each is followed in the transcript by a
   `stage-agent.mjs finish --budget-ms` wait.
-- **CORE-105 AC4: met by this run.** This was a main-session run without `--no-foreground-agent`. The six routed
-  stages carry `agent:<alias>` routes in `markers.jsonl` (`agent:opus` or `agent:sonnet`), each agent's `meta.json` says
-  `finished: true`, and its result returned before the next marker. Claude Code recorded the launches as
-  `requestShape: "background"` in a headless client.
+- **CORE-105 AC4: its observable part holds; the "same client" part cannot be shown.** This was a main-session run
+  without `--no-foreground-agent`. The six routed stages carry `agent:<alias>` routes in `markers.jsonl` (`agent:opus`
+  or `agent:sonnet`), each agent's `meta.json` says `finished: true`, and its result returned before the next marker.
+  Claude Code recorded the launches as `requestShape: "background"`. The criterion also asks for "the client where the
+  11 inline runs happened". The baseline records that client as never recorded
+  (`.dev/measurements/loop-baseline-2026-11-11.md`), so this headless `claude -p` 2.1.328 run cannot be shown to be the
+  same client.
 - **Entry-as-base evidence (6.49.0): not used.** `regression-report.json` has `base_evidence.entry.used: false` and
   `miss: "start-dirty"`, and `REGRESSION.md` says the base evidence was "produced by this invocation". Regress
   therefore ran the base side's `test` again (410,037 ms) after the entry had run it on the same commit. The dirty
