@@ -1,21 +1,25 @@
 # VERIFY — core-310-real-loop-record
 
+This is iteration 2, run after the GATE 2 "fix" (commit `0726c006`). Iteration 1 was `PASS` too, with stamp
+`ac6a07ab…`.
+
 Gates run by `pharn/floor/run-gates.mjs` (stamp `pharn/.run/pharn-dev-verify/gates/stamp.json`, sha256
-`ac6a07ab2d823a99ed90726bf83ce0de64b4ac20699a31c303bd44302fd15e0c`), verdict by `pharn/floor/check-verify.mjs` (exit 0).
+`c6770ade74ee0c78bdf38a558e10df74fe83799f7185d6d467437456d4623207`), verdict by `pharn/floor/check-verify.mjs` (exit 0).
 
 | gate               | exit | duration_ms |
 | ------------------ | ---- | ----------- |
-| test               | 0    | 631,554     |
-| validate           | 0    | 131         |
-| lint               | 0    | 4,667       |
-| format:check       | 0    | 30,407      |
-| lint:md            | 0    | 11,382      |
-| instruction-growth | 0    | 231         |
-| reconcile          | 0    | 232         |
+| test               | 0    | 824,599     |
+| validate           | 0    | 124         |
+| lint               | 0    | 4,550       |
+| format:check       | 0    | 30,781      |
+| lint:md            | 0    | 11,472      |
+| instruction-growth | 0    | 206         |
+| reconcile          | 0    | 264         |
 
-`reconcile`: `CLEAN`, 0 escapes, 0 merged, against the epoch re-anchored after the merge of `origin/main` `2ec930d7`.
-Build completeness: every `## Files` path is present. The worktree ran on its own `node_modules` (prettier 3.10.1, from
-`npm ci`). Load average was 2 to 9 during the gates.
+- `reconcile`: `CLEAN`, 0 escapes, 0 merged, against the epoch re-anchored after the merge of `origin/main` `2ec930d7`.
+  The fix changed two paths declared in `## Files`.
+- Build completeness: every `## Files` path is present.
+- The worktree ran on its own `node_modules` (prettier 3.10.1).
 
 **VERIFIED: floor gates PASS.**
 

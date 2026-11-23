@@ -42,6 +42,15 @@ location.
 
 GREEN on the floor, with 2 important advisory findings (one overclaim, stated twice) for the GATE 2 decision.
 
+## Iteration 2 (after the GATE 2 "fix")
+
+Both important findings are fixed in commit `0726c006`. Record line 148 now says AC4's observable part holds and the
+"same client" part cannot be shown, and the CHANGELOG entry says the same. Both restatements were checked against the
+primary sentence (L64). The other bounds are unchanged.
+
+Re-reviewed after iteration 2: floor GREEN, regress `no-regressions`, verify `PASS` (stamp `c6770ade…`). No new
+finding. Verdict: GREEN, 0 open important findings. The P2 note stays as recorded.
+
 ## Proposed lesson candidate
 
 None proposed. The overclaim is L64's shape (a restatement re-derives its quantifier), and L64 already names it; this
