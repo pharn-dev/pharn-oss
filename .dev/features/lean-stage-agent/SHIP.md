@@ -39,5 +39,11 @@ Follow-up, 2026-11-16 (`.dev/features/lean-stage-agent-probe/`): the probe ran i
 observed (the Write was denied by the writes-scope guard), AC1's binding confirmed (probed SHA-256 = `PINNED_SHA256`):
 `.dev/features/lean-stage-agent/MEASUREMENTS.md`. AC5 is still pending on `cli-install-agents`.
 
+Follow-up, 2026-11-23 (Linear CORE-311): AC5's two arms ran in the measured project, whose install now carries the
+definitions. One full loop had every routed stage on `pharn-stage`; one had them on `general-purpose`, with the same
+base, intent and instruction files. First request 33,011 against 60,207 tokens, no stage used or needed a dropped
+tool, and the verdicts differed for reasons outside the type (n = 1 per arm):
+`.dev/measurements/stage-agent-benchmark-2026-11-23.md`.
+
 _Chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate._
