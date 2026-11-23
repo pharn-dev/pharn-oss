@@ -23,6 +23,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-23: **Measured: one real full `/pharn-loop` on pharn-app at 7.22.0 ended `STOP_GREEN` after one iteration —
+  on its third start, with a revised description (CORE-310).** Attempt 1 was killed mid-build by a host reboot. Run 1
+  stopped S9 at the test stage, because its third criterion ("existing tests still pass") cannot fail before the
+  build (CORE-344). Run 2's description moved that criterion into the constraints and added formatting the file that
+  keeps pharn-app `main`'s `format:check` red, then ended green in 40 min 51 s at USD 5.86 list price.
+  - **Fired in run 2:** verify reused regress HEAD's `test` and `typecheck` (CORE-89). Every routed stage ran as a
+    `pharn-stage` agent with its configured model and effort, which closes CORE-105's fourth criterion.
+  - **Did not fire:** the entry gate cache (it stores only red evidence), and entry-as-base evidence (`start-dirty`).
+  - **Not distinguishable:** effort routing (CORE-111), because every stage in that project is at `high`.
+  - No stage used an MCP, WebFetch, WebSearch or Skill tool.
+  - Every duration was taken under heavy external load (1-minute load 14 to 80), so none is a baseline.
+  - Filed from the runs: CORE-343, CORE-344 and CORE-345.
+  - Record, with per-stage wall-clock, tokens, model and effort, and per-gate `duration_ms`:
+    `.dev/measurements/loop-real-run-7.22.0-2026-11-23.md`. Scrubbed evidence bundles:
+    `.dev/features/core-310-real-loop-record/evidence/`.
+  - Apparatus only, so no `SKILLS_VERSION` bump.
+
 ## [7.23.0] - 2026-11-23
 
 ### Added
