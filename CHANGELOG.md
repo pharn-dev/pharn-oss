@@ -37,14 +37,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   resolve the timeout with `gate-timeout-core.mjs` `resolveRunTimeout`, the rule the other two callers already use: it
   may only lengthen the pinned value, up to 1,800,000 ms. No command line changes. The build gate raises its budget by
   the same amount, keeping the line's 30 s slack. The stage scripts do not raise theirs, which matches what the
-  `/pharn-loop` and `/pharn-ship` runs already do; a raise would be overridden by the pinned `--resume --budget-ms
-570000` anyway. A declaration below the pinned value is refused as `bad-gate-timeout`: exit 2 from the build gate,
+  `/pharn-loop` and `/pharn-ship` runs already do; a raise would be overridden by the pinned `--resume` line's budget
+  (570000) anyway. A declaration below the pinned value is refused as `bad-gate-timeout`: exit 2 from the build gate,
   and a new `unusable` code in both stage vocabularies. These calls run inside a Bash call, so with a declared value
   above 600 s a call outlasts the tool's timeout and the harness moves it to the background. The three commands now say
   to wait for its completion notice and never run the line again beside it. That move is an observed harness
   behaviour, not a floor fact (`stage-exit.md`). `/pharn-test`'s red run keeps 540 s: it runs the acceptance tests
   alone and calls the gate runner directly, and the runner takes only the flag. With no declaration, every argv, record
   and output is byte-identical. Contract: `gate-run-record.md`, "A longer per-gate timeout".
+
+- 2026-11-23: **Fixed: the install-manifest generator now refuses a path pharn-cli would refuse (CORE-302).**
+  `.dev/floor/install-manifest-core.mjs` refused only a leading `/`, a backslash and an empty, `.` or `..` segment, so a
+  file such as `pharn/floor/.eslintrc.json` or a segment holding `[`, `]`, a space or a non-ASCII character passed CI
+  and auto-released, and every CLI then refused that release. Every `path` and `dest` segment must now use only
+  `A-Z a-z 0-9 . _ -` (pharn-cli's `MANIFEST_PATH_RE`), and no `dest` segment below its root may start with `.`
+  (pharn-cli's `OWNED_SEGMENT_RE`); the generator fails naming the path. The current tree's `pharn-install.json` is
+  unchanged. Advisory: nothing binds the two regexes to pharn-cli's bytes, and pharn-cli's root and `pharn-*` name rules
+  are not mirrored. Dev apparatus only, so no `SKILLS_VERSION` bump.
 
 ### Added
 
