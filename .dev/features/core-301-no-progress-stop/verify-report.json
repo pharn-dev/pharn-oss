@@ -1,0 +1,23 @@
+{
+  "feature": "core-301-no-progress-stop",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 1,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "FAIL",
+  "failing_gates": ["reconcile"],
+  "gate_run": {
+    "stamp_sha256": "32d690c6b94d1765f0cb7a9ab4d7dfd334bec06e3407cf26714610492a33c6fa",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "d9b4f9801c18e93f9ac4aa0f42a5856720c245f4dc87bf514158851665452517"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}
