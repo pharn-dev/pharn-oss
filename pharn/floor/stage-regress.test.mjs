@@ -1354,10 +1354,11 @@ test("★ CLOSURE discriminates — an injected variant spelling FAILS the scan"
 test("every REGISTERED regress reason_code is reachable — the registry and the script agree on the vocabulary size", () => {
   // head-install-drift since 6.40.0; plan-files-total-glob, no-change-under-test, base-install-unreliable since
   // regress-base-integrity (plus the unusable base-worktree-unplaceable); the unusable install-config-invalid since 6.66.0
-  // (reached by the regress-install-config tests at the end of this file)
+  // (reached by the regress-install-config tests at the end of this file); the unusable bad-gate-timeout since 7.22.1
+  // (CORE-298, reached by its test above)
   assert.equal(REGISTRY.regress.refused.length, 8);
   assert.equal(Object.keys(REGISTRY.regress.question).length, 4);
-  assert.equal(REGISTRY.regress.unusable.length, 11);
+  assert.equal(REGISTRY.regress.unusable.length, 12);
 });
 
 // ── ★ WIRING (L45) — the COMMITTED pharn-regress.md line, executed ─────────────────────────────────

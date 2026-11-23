@@ -350,10 +350,11 @@ test("CORE-298 — a declared gates.timeoutMs lets a gate run past the line's --
 });
 
 test("CORE-298 — the budget moves with the declared timeout: two quick gates run in ONE invocation", () => {
-  // budget 1500 + (20000 − 1000) = 20500, so the second gate starts; an unraised 1500 under a 20 s timeout would exit 5
-  // after the first, and a `budget > timeout` check made on the resolved values would refuse the line.
-  withProject({ scripts: { test: "node runner.cjs test", lint: "node runner.cjs lint" }, config: withTimeoutCfg(20000) }, (dir) => {
-    const r = gate(dir, ["--mode", "full", "--timeout-ms", "1000", "--budget-ms", "1500"]);
+  // budget 30000 + (600000 − 1000) = 629000, so the second gate starts whenever the first ends within the line's 29 s
+  // slack (room for a loaded machine); an unraised 30000 under a 600 s timeout would exit 5 after the first, and a
+  // `budget > timeout` check made on the resolved values would refuse the line.
+  withProject({ scripts: { test: "node runner.cjs test", lint: "node runner.cjs lint" }, config: withTimeoutCfg(600000) }, (dir) => {
+    const r = gate(dir, ["--mode", "full", "--timeout-ms", "1000", "--budget-ms", "30000"]);
     assert.equal(r.status, EXIT.green, r.stdout + r.stderr);
     assert.deepEqual(
       calls(dir).map((c) => c.id),

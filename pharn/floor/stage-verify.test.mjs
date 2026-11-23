@@ -1283,7 +1283,7 @@ test("★ CLOSURE — every reason_code literal stage-verify.mjs emits is a regi
   assert.deepEqual([...new Set(lits)].sort(), [...registered].sort());
   assert.equal(REGISTRY.verify.refused.length, 4); // head-install-drift since 6.40.0
   assert.equal(Object.keys(REGISTRY.verify.question).length, 1);
-  assert.equal(REGISTRY.verify.unusable.length, 8);
+  assert.equal(REGISTRY.verify.unusable.length, 9); // bad-gate-timeout since 7.22.1 (CORE-298)
   assert.deepEqual(Object.keys(EXIT_CODE).sort(), ["continue", "done", "question", "refused", "unusable"]);
 });
 
