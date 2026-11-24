@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-25: **Moved the pharn-ci action pin in `ci.yml` and `pharn-ci-comment.yml` from v0.11.0 to v0.12.0
+  (`a370515e32f8040771ccf4b6f737d3d25f62749f`).** v0.12.0's `action.yml` changes two input descriptions (`accept-label`
+  and `config`) and no input these workflows use. Its release notes list stricter checks, among them the pharn-ci
+  config read at the merge base (CORE-95) and a tracked coverage file now an error. Read against this repository,
+  neither applies: `ci.yml` checks out with `fetch-depth: 0` and no coverage report is tracked. That is a reading of
+  the notes, not a test. This pull request's own pharn-ci run is the check, and the notes' other new checks, such as
+  the test-integrity changes, were not evaluated. No `SKILLS_VERSION` bump: workflows are not product surface.
 - 2026-11-24: **Measured: on CORE-310's intent v1, `/pharn-spec --model-approve` moved the "existing profile unit
   tests still pass unchanged" criterion into `## Constraints` (CORE-357). n = 1.** One full `/pharn-loop` ran on a
   scratch pharn-app worktree with PHARN 7.25.0 installed through the pharn CLI.
