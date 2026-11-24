@@ -132,7 +132,8 @@ pharn/floor/                                   the floor (§2): checkers, scanne
 pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. severity enum),
                              eval-format, seam-config, loop-record, ship-briefing, ship-record,
                              cost-ledger, reconciliation-record, regression-report, verify-report,
-                             gate-run-record, test-results-record, ac-tests, stage-exit, spec-template
+                             gate-run-record, test-results-record, ac-tests, stage-exit, grill-triage,
+                             supervisor, spec-template
                              (+ templates/spec-template.md, the default SPEC template it defines;
                              a project may supply its own at pharn/spec-template.md).
                              Everything depends on this.
@@ -141,7 +142,8 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
                               which installed skills to read.
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
        └─ pharn-review        lenses (post-build review, one hunt each)
-.claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, review, memory-promote)
+.claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, triage, supervise,
+                                               review, memory-promote)
 .claude/agents/                                PHARN's subagent types: pharn-review-lens (/pharn-review's lens groups),
                                                pharn-stage (the routed stage agents of /pharn-ship and /pharn-loop)
 ```

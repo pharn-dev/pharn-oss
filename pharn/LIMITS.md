@@ -298,8 +298,8 @@ scanners; there is no `scan-code-*` counterpart, and no lens in `pharn/pharn-rev
 telemetry wiring.
 
 The consequence, stated plainly: **a plan may declare telemetry, pass the grill, and the diff that
-results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs only
-the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all. A full
+results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs neither
+the observability scanner nor the griller's judgment, so there the plan's telemetry is not judged at all. A full
 `/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions, the re-plan rounds those dispositions start
 (7.8.0) and the supervisor's decision on an escalation (7.9.0).
 Nothing downstream re-checks the promise against the code. `/pharn-verify` runs the project's own discovered gates,
@@ -407,14 +407,15 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   sharing a tree share `pharn/.run/`, so a second session's writes can surface as this one's escape —
   [[L38]], which this inherits and cannot fix — and the tree holds ONE baseline, so a second run's build anchor
   replaces the first run's window and erases the escapes recorded in it; since 7.3.0 `--anchor` refuses to do that
-  while the other feature's `/pharn-loop` or `/pharn-ship` marker is open, but a marker closed early or older than
+  while the other feature's `/pharn-loop` or `/pharn-ship` marker is open (since 7.24.0 `--check-epoch` asks the same at
+  `/pharn-loop`'s entry and after `/pharn-ship`'s GATE 1), but a marker closed early or older than
   24 h, runs that open no marker, and two runs of one feature still erase each other's window,
   `reconciliation-record.md` §1); and there is **no attribution** — it reports *what*,
   never *who*.
 - **DELETING it is loud; FORGING it is silent — and that bounds the whole claim.** The baseline lives
   under `pharn/.run/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
   green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
-  the always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
+  the always-reconciled control surface (the four `.claude/hooks/` guards, `.claude/settings*.json`, `pharn/floor/*`,
   `.dev/floor/*`, since 6.53.0 the four trusted docs, `CODEOWNERS`, `pharn/spec-template.md` and memory-bank canon, and
   since 7.3.0 the CI exec-config `.github/workflows/*` and `.github/actions/*`, an added untracked file included) is
   compared against **committed blob ids** rather than against the baseline, so that
@@ -636,7 +637,7 @@ read off the wiring:
   judged by `check-bash-reconcile.mjs` against the build's recorded scope**, and reads as an escape, as an
   editor edit does.
 - **The `/pharn-loop` Stop guard acts only when Claude Code starts it, and it fails OPEN.**
-  `require-loop-record.cjs` refuses a turn end, at most three times per run, while an unattended loop
+  `require-loop-record.cjs` refuses a turn end, three times per run by default (`PHARN_STOP_GUARD_MAX`, 1 to 7), while an unattended loop
   run open in this session has no `LOOP.md`. It cannot make a model do work, cannot judge the record,
   and is satisfied by any non-empty file. A hook that cannot start, times out, or crashes lets the turn
   end, which is the safe direction for a guard that ends turns. Its wiring is exec form, so the
