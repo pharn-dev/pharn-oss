@@ -26,7 +26,9 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   PHARN's own run state under `pharn/.run/` whether or not your project ignores it, are outside the reconciled
   set; the window is anchor→verify; the model is one worktree per session (one tree holds one baseline, so a second
   run's build anchor would replace the first run's window; since 7.3.0 the anchor refuses while that other feature's
-  `/pharn-loop` or `/pharn-ship` run is open, but runs that open no marker still erase each other's window); and
+  `/pharn-loop` or `/pharn-ship` run is open, and since 7.24.0 `/pharn-loop` makes the same check at entry and
+  `/pharn-ship` right after you approve the spec, so such a run stops before its plan instead of at its build; runs
+  that open no marker still erase each other's window); and
   there is no attribution — it reports _what_, never _who_. A clean verdict means **no escape was
   detected**, not that none occurred. **And this is accounting, not security.** The baseline is
   unauthenticated state inside the writable tree, so a writer who edits a denied file **and** rewrites
@@ -152,8 +154,8 @@ PHARN is deliberately narrower than the claims many AI-development tools make.
   changed, and a re-run `pharn init` replaces it with the shipped one
   ([pharn-cli's `pharn.config.json` reference](https://github.com/pharn-dev/pharn-cli/blob/main/docs/reference/pharn-config.md#what-each-command-does-with-it)).
   `/pharn-supervise` (7.9.0) is the same: no `supervise` key in the shipped block, so it resolves through `default` and
-  `pharn-supervise.md`'s frontmatter must follow `default` too. No pharn-cli release accepts a `supervise` key yet, so
-  do not add one. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
+  `pharn-supervise.md`'s frontmatter must follow `default` too. A `supervise` entry of your own needs pharn-cli 0.18.3
+  or newer (older releases report it as rejected), so the shipped block names none, for the same reason. Since 6.27.0 `/pharn-ship` and `/pharn-loop` also read the block at run time: each
   stage their routing policy routes runs as a subagent, requested on the model the block resolves for it.
   `/pharn-ship`'s spec stage, every `/pharn-regress` and `/pharn-verify`, and any stage that falls back (no
   config; a pre-0.7.0 block, which `pharn update` with `@pharn-dev/pharn` ≥ 0.7.0 migrates; `inherit`; a full
