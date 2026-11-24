@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [7.25.2] - 2026-11-24
+## [7.25.2] - 2026-11-25
 
 ### Fixed
 
@@ -47,6 +47,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
   Not covered: `CLAUDE.md`, the four trusted docs and `.dev/guides/**` (part B of CORE-371). The pharn-cli claim
   rests on a read of its v0.21.5 source; another repository can change after it.
+
+- 2026-11-25: **`main`'s `npm run format:check` went red after the code-scanning autofix commits left one array in
+  `pharn/floor/stage-direct.test.mjs` unformatted, and this re-formats that test file to Prettier's output.** Test file
+  only: no `SKILLS_VERSION` bump.
 
 ### Added
 
