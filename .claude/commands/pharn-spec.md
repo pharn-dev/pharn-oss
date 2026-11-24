@@ -162,7 +162,7 @@ findings (there is no `rule_id` for "intent quality"):
 - **Testable criteria** — every criterion can be written as `Given … When … Then …` with a Then that is
   **observable on the public surface**: visible text, an accessible role and name, a URL, an HTTP status,
   or a returned value. A Then that only the implementation could see is a gap to raise.
-- **Fails before the build** (advisory; every kind but `test-infra`) — is any criterion's Then already true on
+- **Fails before the build** (advisory; a templated `feature` or `quick` SPEC only) — is any criterion's Then already true on
   today's tree ("nothing changes", "existing tests still pass")? Its test cannot fail first, so `/pharn-test` would
   stop. Propose moving it into `## Constraints` (rule: `pharn/pharn-contracts/spec-template.md`, "The
   acceptance-criteria grammar").
@@ -326,7 +326,9 @@ render the form and do not wait:
 - **Each criterion whose Then already holds before the build** (Step 2's "Fails before the build"; advisory): move
   it into `## Constraints`, text kept with its id written plain, and add one `## Assumptions` line:
   `AC-<n> holds before the build, so it is a constraint`; `check-spec.mjs` must stay GREEN. If no criterion would
-  remain, approve nothing and report back blocked on thin intent.
+  remain, approve nothing and report back blocked on thin intent. **In amend mode (Step 1a)** never move an existing
+  criterion, and never append one that already holds. If an existing criterion holds, leave the SPEC `Draft` and
+  report back blocked: a person must revise the SPEC.
 - Otherwise, with Step 3's Draft GREEN, go straight to Step 5, and in Step 5's frontmatter edit also add
   `approved_by: model`.
 

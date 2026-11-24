@@ -41,8 +41,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     compares them at base and head in a full run, and `/pharn-verify` runs them at HEAD in every run.
   - **Where a run meets it:**
     - `/pharn-spec` Step 2 raises such a criterion.
-    - `/pharn-spec` Step 4a moves it under `--model-approve`, so amend mode is covered too, and reports back blocked
-      on thin intent when no criterion would remain. `/pharn-loop`'s S6 row names that cause.
+    - `/pharn-spec` Step 4a moves it under `--model-approve`, and reports back blocked on thin intent when no
+      criterion would remain. `/pharn-loop`'s S6 row names that cause.
+    - In an amend (Step 1a), the spec stage moves no existing criterion, since amend mode is append-only, and appends
+      none that already holds. If an existing criterion holds, it leaves the SPEC `Draft` and reports that a person
+      must revise it. That is `/pharn-loop`'s S18.
     - `/pharn-grill`'s acceptance-criteria axis flags it, and `/pharn-triage` lists it under `spec`.
   - **The guard decision** lives in `pharn/pharn-contracts/ac-tests.md`, "The red run": a check the build makes true,
     placed in front of an assertion that already holds, is the passes-before-build case in disguise. `/pharn-test`

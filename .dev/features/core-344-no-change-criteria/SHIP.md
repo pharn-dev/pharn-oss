@@ -50,5 +50,33 @@ not be asked from a delegated subagent; under the batch brief no candidate is pr
 
 deferred: none
 
+## After the recorded verify (2026-11-24)
+
+These are the two changes made after the recorded verify.
+
+**1. Merge and renumber.** The orchestrator merges PRs one by one, so the branch merged `origin/main` (merge commit,
+no re-anchor, L85) and was renumbered: 7.23.3 at first, then the number main left free at the next merge.
+
+**2. Product prose changed after the recorded verify.** CodeRabbit's review of PR #479 found a real defect.
+
+- In amend mode (Step 1a), the new `/pharn-spec` Step 4a bullet would have moved an existing criterion that already
+  holds. Amend mode is append-only, so `spec-amend.mjs check` would reject that and the loop would stop
+  `blocked: spec-amend-red` with an unexplained reason.
+- The orchestrator decided to fix it before merge, a model decision under delegation. Step 4a now moves nothing in an
+  amend, appends no criterion that already holds, and reports that a person must revise the SPEC. `/pharn-loop`'s S6
+  row points an amend at S18, and S18 names that report.
+
+Wording-only fixes applied in the same pass:
+
+- `/pharn-spec` Step 2 and `/pharn-grill` P1 now scope the rule to templated `feature` and `quick` SPECs (review
+  finding 1; CodeRabbit).
+- `ac-tests.md` now says that moving a criterion in an approved SPEC needs re-approval and a re-pin (CodeRabbit).
+- The CHANGELOG entry no longer says Step 4a "covers amend mode".
+
+The files changed are `pharn-spec.md`, `pharn-loop.md`, `pharn-grill.md` and `ac-tests.md`, plus this PR's own
+CHANGELOG entry. They were checked with validate (GREEN), the command budget, stage-load and command-family tests
+(pass), prettier and markdownlint, the cheap per-PR checks, and full CI on the pushed head. `/pharn-dev-verify` was
+**not** re-run on them, so the verdict block above describes the tree before this change.
+
 _chain ran; the named floor verdicts are as shown — this is NOT a judgment that the increment is good or wise; that is
 the human's call at the post-review gate._

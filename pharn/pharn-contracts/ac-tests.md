@@ -218,7 +218,8 @@ cannot fail, is never collected, or is skipped would otherwise pass unnoticed.
   it as red, but it is the `ac-test-passes-before-build` case in disguise, and `/pharn-test` does not write one. For
   such a criterion it writes the plain test, and the red run's stop is the correct result. The remedy is the SPEC:
   move the criterion into `## Constraints` (`spec-template.md`, "The acceptance-criteria grammar"), and never fix
-  it in the test. **Advisory:** `check-red-run.mjs` reads each matched test's status, never why the test failed, so
+  it in the test. In an approved SPEC that move changes the pinned body, so the SPEC is re-approved and re-pinned,
+  and the stages after it re-run on the new pin. **Advisory:** `check-red-run.mjs` reads each matched test's status, never why the test failed, so
   the floor cannot see a guard. Telling a guard from a part of the Then is judgment.
 
 - **The binding.** A verdict is only about THIS mapping's run over THIS tree: the stamp validates as `ac-test` for
