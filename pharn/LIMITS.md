@@ -821,11 +821,12 @@ that points elsewhere.
 - **True statement:** every merge reaches the `main` channel; a merge that bumps `SKILLS_VERSION` also becomes a
   release once its required checks are green on `main`; an `[Unreleased]` merge releases nothing new.
 - **Bounds.** The gate is a property of a GitHub Actions workflow, not a PHARN floor primitive.
-  - Since 2026-10-26 the ruleset that holds the required checks (25907495) has no bypass actor, so no account, the
-    owner's included, merges a tree whose required checks failed. The owner's bypass of the other `main` ruleset
-    (18045407) and of classic branch protection (`enforce_admins` off) still skips the review and classic protection's
-    own required `gitleaks` check, so a commit whose secret scan failed can reach `main`, and the `main` channel
-    installs it. The release job waits for `gitleaks` since 7.3.0, so that commit is not tagged.
+  - The ruleset that holds the required checks (25907495) had no bypass actor from 2026-10-26; since 2026-11-04 the
+    owner's account is its bypass actor (`always`), as it is of the other `main` ruleset (18045407) and of classic
+    branch protection (`enforce_admins` off). So a merge made with the owner's credentials can skip the review, the
+    required checks and classic protection's own required `gitleaks` check, and the `main` channel installs what
+    lands. The release job waits for every check it lists, `gitleaks` included since 7.3.0, so such a commit is not
+    tagged.
   - Tag ruleset 25907484 refuses deleting or moving a `v*` tag for every account. Creating a new `v*` tag by hand is
     not refused.
   - The workflow's check list is a copy of ruleset 25907495's plus classic protection's `gitleaks`. A check added to
