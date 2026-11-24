@@ -73,7 +73,7 @@ order, choose **one** disposition by asking what the build would need:
 - `replan` — the plan must change before the build: a criterion with no planned test, a file the plan needs but does
   not declare, a claim in the plan that is wrong, a step the build cannot carry out as written.
 - `spec` — no plan can fix it without changing the SPEC: criteria that contradict each other, intent the SPEC does not
-  state, a criterion that cannot be tested at its level.
+  state, a criterion that cannot be tested at its level, a criterion whose Then already holds before the build.
 - `proceed` — the plan stands as written: the finding is already handled (cite where), it is an accepted bound the
   plan or SPEC states, it is outside the SPEC's scope, or it is a minor improvement the build does not need.
 

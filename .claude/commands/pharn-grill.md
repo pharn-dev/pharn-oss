@@ -186,7 +186,8 @@ the plan **omits, assumes, or overstates** — do not restate what it got right.
   and no `advisory` label is the disease — flag it.
 - **Acceptance-criteria coverage → P1.** Does the plan's approach satisfy **every** SPEC Acceptance
   Criterion, with the evidence/tests that would show it? Flag any criterion the plan leaves uncovered or
-  hand-waved.
+  hand-waved, and, in a templated `feature` or `quick` SPEC, any whose Then already holds before the build: its test
+  cannot fail first, so it belongs in the SPEC's Constraints (`pharn/pharn-contracts/spec-template.md`, "The acceptance-criteria grammar"; advisory).
 - **Trust propagation → P2.** If the increment ingests any untrusted artifact, does the plan state how
   taint flows through its outputs (`pharn/ARCHITECTURE.md §8`, `finding-shape.md`)? A missing or hand-wavy trust
   audit is a finding.

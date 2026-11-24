@@ -1,0 +1,26 @@
+{
+  "feature": "early-marker-refusal",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "48f603fdc316e2ad4fefd8740c9841ce3e6a04f5b79fc45226539cb8581cf411",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "48c670d7a5f8815b6b4d3cf137cb6bd70b79016abe3aaa2c50d9d2a638545d4e"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

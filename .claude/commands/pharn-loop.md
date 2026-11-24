@@ -83,6 +83,7 @@ allowed-tools:
     "Bash(git rev-parse HEAD)",
     "Bash(git symbolic-ref --short -q HEAD)",
     "Bash(echo detached)",
+    "Bash(node pharn/floor/reconcile-baseline.mjs --check-epoch *)",
     "Bash(mkdir -p pharn/.run/pharn-loop/*)",
     "Bash(git status --porcelain -uall > pharn/.run/pharn-loop/*/pre-run-status.txt)",
     "Bash(node .claude/hooks/require-loop-record.cjs --open * --cap * --mode *)",
@@ -343,6 +344,20 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    no shell line takes it (Step 6d returns without it). A failed `git rev-parse HEAD` (no repository, an unborn
    `HEAD`) → stop `blocked: no-git-base`.
 
+   **Then the epoch check** (7.24.0) — before anything is written, so a refusal leaves nothing behind. It runs the test
+   your build's anchor would run (`pharn/floor/reconcile-baseline.mjs`, header "--CHECK-EPOCH"):
+
+   ```bash
+   node pharn/floor/reconcile-baseline.mjs --check-epoch '<name>'
+   ```
+
+   **Non-zero → STOP**, **S9** (`blocked: stage-refused`): another feature's run that is still open, or one that
+   crashed less than 24 h ago, owns the reconcile epoch, and this run's build would refuse to anchor after every
+   stage before it had run. No directory, marker or record exists yet, so go straight to the Step 7 summary and quote
+   the line's stderr there as DATA, with the close line it names. **Never run that close line yourself**, although your
+   grant covers it: only a person can tell that the other run is no longer active. The Final step's `--close '<name>'`
+   names this run alone, which opened no marker.
+
 4. **Snapshot the dirty tree** (`-uall` lists an untracked directory as its files):
 
    ```bash
@@ -480,12 +495,12 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S3 | always, before the first stage | capture the base SHA and original checkout (Step 1a); a failed capture stops `blocked: no-git-base` |
 | S4 | gate discovery yields no gates (no `--gates`, and the allowlist ∩ `package.json` scripts, minus `gates.exclude`, is empty — or, at `/pharn-regress`, holds only the e2e gates it never discovers) | stop `blocked: no-gates` — never run verify over an empty gate map |
 | S5 | `/pharn-build`'s seam-config extraction or `check-seam-config.mjs` is non-zero | stop `blocked: seam-config` — never substitute the default policy |
-| S6 | the description cannot fill the SPEC's required sections without inventing intent, or every criterion needs a write no plan may scope (`/pharn-spec` Step 4a) | stop `blocked: thin-intent` |
+| S6 | the description cannot fill the SPEC's required sections without inventing intent, or every criterion needs a write no plan may scope or already holds before the build (`/pharn-spec` Step 4a; in an amend that is S18) | stop `blocked: thin-intent` |
 | S6b | `/pharn-spec` reports the Draft still carries a clarification marker, so it will not approve it | stop `blocked: needs-clarification` — a person answers the marked questions; the run never guesses them |
 | S6c | `/pharn-spec --quick --model-approve` reports the intent does not fit a quick SPEC (over three criteria, or one only end-to-end), or a `--quick` run's Step-3 kind read prints anything but `quick` | stop `blocked: not-quick` — a person narrows the intent or re-runs without `--quick`; never widened into a full run |
 | S7 | the build finds the plan ambiguous | stop `blocked: plan-ambiguity` |
 | S8 | the seam resolver's walk reaches `ask` | stop `blocked: seam-unresolved` |
-| S9 | a stage refuses before its verdict (a missing artifact, RED spec→plan chain or lessons declaration, unparseable `## Files`, open `## Open questions (HALT)`, install unlike lockfile), or a routed stage agent returned no usable result | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too |
+| S9 | a stage refuses before its verdict (a missing artifact, RED spec→plan chain or lessons declaration, unparseable `## Files`, open `## Open questions (HALT)`, install unlike lockfile), or a routed stage agent returned no usable result | stop `blocked: stage-refused`; Step 1a's epoch check, snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too |
 | S9b | a routed stage's `stage-agent.mjs finish` exits `6` (`capped …`: no result within the wait's cap from the stage's start), or, when work resumes, you find the session ended while a stage agent ran | stop `blocked: stage-outlived-wait` — stop that agent with TaskStop and never resume it (a result it reported may be on disk, unread); a person sets its partial work aside and re-runs the loop |
 | S10 | any other sub-stage instruction to ask the human | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess |
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5) | stop `blocked: stale-evidence` — never read a stop from evidence about another tree |
@@ -498,7 +513,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S15b | Step 1a's entry-context check exits `3`: the context running this command already holds more tokens than `budget.entryContextTokens` (default 320,000) | stop `blocked: context-too-large` — every later request would re-send it: start a fresh session (or run the loop inside an agent) and re-run, or raise `budget.entryContextTokens` in `pharn.config.json` |
 | S16 | triage escalated (Step 4's read exits `4`, or `3` with no re-plan round left) and `supervisor.mjs check` exits `3`: the supervisor decided `stop` (a full run only) | stop `blocked: grill-escalation` — copy the verdict, the round and the `escalated` ids into `### next_steps` as DATA, pointing at `grill-triage.json` and `SUPERVISOR.json` for the reasons; a person revises the plan or the SPEC, then re-runs (Step 4 says what a re-run is) |
 | S17 | triage escalated and `supervisor.mjs check` exits anything but `0`, `3` or `4`: no decision passed its check (a full run only) | stop `blocked: supervisor-red` — quote the check's first line as DATA in `### next_steps`; a person decides the escalation (S16's remedy) |
-| S18 | the supervisor decided `amend-spec` (`supervisor.mjs check` exits `4`) and a line of the amend branch exits non-zero: `spec-amend.mjs begin`, the re-run spec stage (`finish` exit 6: S9b), `check-spec-approved.mjs` or `spec-amend.mjs check` (a full run only) | stop `blocked: spec-amend-red` — quote the failing line's first line of output as DATA in `### next_steps`; an amend runs once, so a person decides the escalation (S16's remedy) |
+| S18 | the supervisor decided `amend-spec` (`supervisor.mjs check` exits `4`) and a line of the amend branch exits non-zero: `spec-amend.mjs begin`, the re-run spec stage (`finish` exit 6: S9b), `check-spec-approved.mjs` or `spec-amend.mjs check` (a full run only) — a spec stage that left the SPEC `Draft` because an existing criterion already holds before the build lands here too | stop `blocked: spec-amend-red` — quote the failing line's first line of output as DATA in `### next_steps`, and the spec stage's blocked reason when it gave one; an amend runs once, so a person decides the escalation (S16's remedy) |
 
 **`/pharn-regress`'s stage-exit mapping (since `stage-regress-script`, 6.23.0).** Step 5 runs
 `pharn/floor/stage-regress.mjs` through one `stage-direct.mjs` call (6.43.0), which prints the script's one

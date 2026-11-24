@@ -166,11 +166,20 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # lstat presence + the hooks' symmetric 24h ceiling; any lstat error but ENOENT/ENOTDIR = open). An unreadable prior record
 # refuses on ANY other feature's open marker; a legacy null snapshot never refuses. Bounds: presence-only markers (the
 # loop's own --close grant reaches them), no-marker runs and same-feature runs are not told apart.
+# ENTRY CHECK (7.24.0, CORE-343): `--check-epoch <name>` runs epochOwnerOpen read-only for the scope the build's setter
+# would write for <name> (set_by pharn/features/<name>/PLAN.md) — exit 2 + the same refusal, or 0; no git, no write.
+# /pharn-loop Step 1a runs it before its marker opens, /pharn-ship Step 2.1 after GATE 1 (and the quick part's order),
+# so a crashed run's open marker stops the next run before spec/plan instead of at the build anchor (~41 min measured).
 # EXEC CONFIG (7.3.0, contract §4b): `.github/workflows/` and `.github/actions/` are always-reconciled prefixes. Cost: an
 # uncommitted edit there REDs with no baseline (commit first, L68), and apply-plan-deletions refuses a plan's (delete) there.
+# ABSENT AT BOTH ENDS (7.23.1, CORE-346, contract §3): `--anchor` records each listed path lstat proves absent
+# (`provenAbsent`, ENOENT/ENOTDIR) in `absent_at_anchor`; the checker clears an unhashable path only when it is in that
+# list, has no entry, and is proven absent now — a tracked file deleted before the anchor. A path that exists now, a
+# path index-added in the window, and every path under an older record (no field) stay fail-closed candidates.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
+node pharn/floor/reconcile-baseline.mjs --check-epoch <name> [--base <dir>]
 node pharn/floor/check-bash-reconcile.mjs [--base <dir>] [--require-baseline]
 ```
 

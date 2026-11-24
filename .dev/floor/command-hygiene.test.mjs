@@ -7165,3 +7165,46 @@ test("AC6 (7.16.0) — every not-measured stop names gates.timeoutMs beside gate
     }
   }
 });
+
+// early-marker-refusal (7.24.0, CORE-343): a crashed run's open marker stops the next run at ENTRY, not at its build
+// anchor. The order IS the deliverable: in /pharn-loop the check sits after S3's base capture and before anything is
+// written (the snapshot's mkdir, the marker --open); in /pharn-ship after the base capture and before the run marker,
+// and the quick part's restated order names it in the same place. Every caller is enumerated here (L29). Presence and
+// ordering of text only — never proof a run executed the line (that line's behaviour: reconcile-baseline.test.mjs).
+const EPOCH_CHECK_LINE = "node pharn/floor/reconcile-baseline.mjs --check-epoch '<name>'";
+const EPOCH_CHECK_SITES = [
+  {
+    file: "pharn-loop.md",
+    after: "git rev-parse HEAD\n",
+    before: ["mkdir -p pharn/.run/pharn-loop/<name>", "node .claude/hooks/require-loop-record.cjs --open '<name>'"],
+  },
+  {
+    file: "pharn-ship-stages.md",
+    after: "git rev-parse --verify HEAD\n",
+    before: ["node pharn/floor/run-marker.mjs --open pharn-ship '<name>'", "node pharn/floor/pre-run-snapshot.mjs --capture"],
+  },
+];
+test("✧ early-marker-refusal: each entry runs the epoch check after its base capture and before it writes anything", () => {
+  assert.equal(EPOCH_CHECK_SITES.length, 2, "NON-VACUITY (L34): both callers");
+  for (const { file, after, before } of EPOCH_CHECK_SITES) {
+    const body = commandBody(file);
+    const own = new RegExp(`^[ \\t]*${EPOCH_CHECK_LINE.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}$`, "gm");
+    const hits = [...body.matchAll(own)];
+    assert.equal(hits.length, 1, `${file}: pins \`${EPOCH_CHECK_LINE}\` once, on its own line`);
+    const at = hits[0].index;
+    const a = body.indexOf(after);
+    assert.ok(a >= 0 && a < at, `${file}: the check follows the base capture`);
+    for (const b of before) {
+      const i = body.indexOf(b);
+      assert.ok(i > at, `${file}: the check precedes \`${b}\``);
+    }
+    const tail = body.slice(at, at + 1400);
+    assert.match(tail, /\*\*Non-zero → STOP\*\*/, `${file}: a non-zero exit is a STOP`);
+    assert.match(tail, /never run that close line yourself/i, `${file}: the run never clears the other run's marker`);
+  }
+  assert.match(commandBody("pharn-loop.md"), /^\| S9 \|.*Step 1a's epoch check/m, "the S9 row names the epoch check");
+  const quick = commandBody("pharn-ship-quick.md");
+  const q = quick.indexOf("the epoch check exits `0`, the marker opens");
+  assert.ok(q > quick.indexOf("the base capture prints `<base sha>`"), "pharn-ship-quick.md: the restated order names the check");
+  assert.match(commandBody("pharn-loop-quick.md"), /Step 1a runs unchanged/, "the loop's quick part runs Step 1a as written");
+});

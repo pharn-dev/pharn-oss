@@ -1,0 +1,23 @@
+{
+  "feature": "core-344-no-change-criteria",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "33859d83591160d7987e55e4742760effda80e8ed4a3f26701b18fda7e8088af",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "5d90c5f1abfa7c7aeb86c2fc13a8ee38753e49bfe5ad2579fe4c7b70e452a075"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}

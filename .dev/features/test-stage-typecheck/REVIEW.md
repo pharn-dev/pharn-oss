@@ -42,8 +42,8 @@ directions of the exempt list's error are stated in the module header, the claim
 
 ### L-eval → P1
 
-No capability added. Every verdict row is executed (`ac-types-core.test.mjs`, 15 tests; `check-ac-types.test.mjs`, 10
-tests), each MISSING_TARGET_CODES member individually (L29), the measured CORE-311 shape on real tsc output in both
+No capability added. Every verdict row is executed (`ac-types-core.test.mjs`, 14 tests; `check-ac-types.test.mjs`, 10
+tests at review, 11 after the coverage test SHIP.md records), each MISSING_TARGET_CODES member individually (L29), the measured CORE-311 shape on real tsc output in both
 forms, and a ★ WIRING test that runs the committed Step 3c line. No finding beyond the untested branch above.
 
 ### L-trust → P2

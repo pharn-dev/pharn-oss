@@ -112,7 +112,7 @@ node pharn/floor/check-ac-style.mjs --after <name> --timeout-ms <N>
 ## `check-ac-types.mjs` — the AC tests must not carry their own type errors
 
 ```bash
-# THE TYPECHECK CHECK (added 7.24.0, CORE-347) — /pharn-test Step 3c, after Step 3b and before Step 4 pins the tests. The
+# THE TYPECHECK CHECK (added 7.25.0, CORE-347) — /pharn-test Step 3c, after Step 3b and before Step 4 pins the tests. The
 # trigger: a CORE-311 test-first run pinned an AC test vitest ran without type-checking; after the build regress and
 # verify reported `typecheck` red on TS2741 in that pinned file, which the build may not edit (L83: surface the refusal
 # at the earliest stage that pins the input). ONE run, no before/after: attribution is by LOCATION. The gate set is
