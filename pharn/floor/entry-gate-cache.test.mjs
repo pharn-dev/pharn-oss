@@ -88,6 +88,37 @@ function record(dir) {
   return r;
 }
 
+// The CORE-86 test, kept and inverted for CORE-358: the same setup, the opposite answer from the linked worktree.
+test("the record lives in each tree's OWN git dir — not the same file from a linked worktree — and the inputs beside it", () => {
+  const dir = repo();
+  const wt = `${dir}-wt`;
+  try {
+    const main = inDir(dir, () => cachePath());
+    assert.equal(main, join(dir, ".git", CACHE_BASENAME));
+    assert.equal(
+      inDir(dir, () => inputsPath()),
+      join(dir, ".git", INPUTS_BASENAME)
+    );
+    execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: dir });
+    assert.notEqual(realpathSync(dirname(inDir(wt, () => cachePath()))), realpathSync(join(dir, ".git")), "one record per worktree");
+    assert.ok(inDir(wt, () => inputsPath()).includes(join(".git", "worktrees")), "inputs stay per worktree");
+    // A record written from the main checkout is NOT read from the worktree.
+    assert.deepEqual(
+      inDir(dir, () => writeCache(record(dir))),
+      { ok: true }
+    );
+    assert.equal(inDir(wt, () => readCache()).state, "absent");
+  } finally {
+    try {
+      execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: dir, stdio: "ignore" });
+    } catch {
+      /* gone */
+    }
+    rmSync(wt, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("CORE-358 — the record lives in EACH worktree's own git dir: a red cached in worktree A is not read by worktree B, and the main checkout keeps its path", () => {
   const dir = repo();
   const wtA = `${dir}-a`;
