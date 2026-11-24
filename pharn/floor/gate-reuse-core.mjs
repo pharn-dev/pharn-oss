@@ -49,6 +49,18 @@
 // `compare_files`) stays `not-reusable-id`. BOUND: after the decision, nothing re-binds the copy to the source run
 // (`verify-reuse-rederive`), and a verify stamp's reused `test` cannot show which kind of source it came from.
 //
+// NOT EQUIVALENT: the build's full gate run vs regress HEAD (7.23.1, CORE-345, a model decision under delegation). The
+// build's `--mode full` stamp runs the same `npm run test` (`files: []`) at the same HEAD and timeout, yet its identity
+// differs from the regress HEAD run's, because `fp_before` differs. Measured on the CORE-310 run2 loop
+// (`.dev/features/core-310-real-loop-record/evidence/run2.json`): build a234ec98…, regress HEAD bc340bab…. The observed
+// cause is the build's own Step 5: the one fingerprinted write the transcript shows between the two runs is
+// `pharn/features/<name>/BUILD.md`, an INCLUDED artifact (worktree-fingerprint.mjs) written after the full gate because
+// it records that gate's result. So under this file's identity the build's run is not this tree's evidence: findReusable
+// refuses a build stamp first (`source-invalid`, regress/head only), and past that its identity comparison would still
+// miss (`identity-mismatch`); no offer exists for it, and making it match would need a weaker identity (BUILD.md out of
+// the fingerprint, or a "fingerprint minus BUILD.md" rule). Reopen only if the build's record stops changing the
+// fingerprinted tree. Contract: gate-run-record.md, "One execution of `test` for regress and verify".
+//
 // ============================ THE SOURCE — only this run's offer ============================
 // A regress/head stamp reaches the runner only as `--reuse-stamp` + `--reuse-sha256`, which `stage-verify.mjs` passes
 // only when `head-reuse-offer.mjs`'s git-dir offer names THIS run and THOSE bytes (grill B2) — see that module.

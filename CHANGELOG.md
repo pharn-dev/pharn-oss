@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.23.1] - 2026-11-24
+
+- 2026-11-24: **Decided, not built: the build's full-gate `test` run is not offered to regress HEAD (CORE-345).** In
+  the CORE-310 run2 loop the suite ran twice at HEAD: the build's full gate (327.7 s), then regress HEAD (383.3 s),
+  which verify then reused (CORE-89). Both ran `npm run test` at the same HEAD and timeout, but their recorded
+  `fp_before` differ (`a234ec98…` vs `bc340bab…`), so their execution identities differ and CORE-89's rule would miss
+  the build's run even if it were offered. The observed cause is `BUILD.md`: the one fingerprinted write the run's
+  transcript shows between the two runs, written by the build after its full gate because it records that gate's
+  result. A match would need a weaker identity, so none ships. The reason and the reopen condition are now stated
+  where CORE-89's bound is: `pharn/pharn-contracts/gate-run-record.md` ("One execution of `test` for regress and
+  verify") and the `pharn/floor/gate-reuse-core.mjs` header (a comment; no code changed). Decided by the agent under
+  the orchestrator's delegation (`.dev/features/core-345-build-regress-reuse/`). Patch: shipped prose only.
+
 - 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
   Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
   write made before it into the baseline, outside the window verify judges. The CORE-314 run
