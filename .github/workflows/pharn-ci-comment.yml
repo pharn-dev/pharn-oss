@@ -27,7 +27,7 @@ jobs:
         env:
           PR_FILE: ${{ runner.temp }}/pharn-ci-input/pr-number
         run: echo "number=$(tr -dc '0-9' < "$PR_FILE" | head -c 10)" >> "$GITHUB_OUTPUT"
-      - uses: pharn-dev/pharn-ci@38aca1f95b3f5e4bfa83ff08a98d0d3147869a90 # v0.10.0
+      - uses: pharn-dev/pharn-ci@bd7b36ea07588884418f5002ae74afc35135c400 # v0.11.0
         timeout-minutes: 5
         with:
           coverage-file: ${{ runner.temp }}/pharn-ci-input/coverage/lcov.info
