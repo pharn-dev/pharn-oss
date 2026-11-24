@@ -1,0 +1,63 @@
+{
+  "base": "08d7f63e693a1cdb1e0269ee552357ce77408313",
+  "inside": [
+    ".claude/commands/pharn-grill.md",
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-spec.md",
+    ".claude/commands/pharn-test.md",
+    ".claude/commands/pharn-triage.md",
+    "CHANGELOG.md",
+    "SKILLS_VERSION",
+    "pharn/pharn-contracts/ac-tests.md",
+    "pharn/pharn-contracts/spec-template.md",
+    ".dev/features/core-344-no-change-criteria/GRILL.md",
+    ".dev/features/core-344-no-change-criteria/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 1
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": ["tests"],
+  "pre_existing": [],
+  "verdict": "regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7081,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7086,
+      "failed": 3,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [
+      {
+        "id": ".dev/floor/check-install-manifest.test.mjs::✧ the real tree is GREEN, through the CLI as CI runs it",
+        "base": "passed"
+      },
+      {
+        "id": ".dev/floor/check-version-badge.test.mjs::the checker is GREEN against this repo",
+        "base": "passed"
+      },
+      {
+        "id": ".dev/floor/install-manifest-core.test.mjs::✧ the work tree's pharn-install.json is the real tree's manifest (the docs:check verdict, inside npm test too)",
+        "base": "passed"
+      }
+    ],
+    "still_failing": 0
+  }
+}

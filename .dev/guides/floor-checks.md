@@ -172,6 +172,10 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # so a crashed run's open marker stops the next run before spec/plan instead of at the build anchor (~41 min measured).
 # EXEC CONFIG (7.3.0, contract §4b): `.github/workflows/` and `.github/actions/` are always-reconciled prefixes. Cost: an
 # uncommitted edit there REDs with no baseline (commit first, L68), and apply-plan-deletions refuses a plan's (delete) there.
+# ABSENT AT BOTH ENDS (7.23.1, CORE-346, contract §3): `--anchor` records each listed path lstat proves absent
+# (`provenAbsent`, ENOENT/ENOTDIR) in `absent_at_anchor`; the checker clears an unhashable path only when it is in that
+# list, has no entry, and is proven absent now — a tracked file deleted before the anchor. A path that exists now, a
+# path index-added in the window, and every path under an older record (no field) stay fail-closed candidates.
 # Contract: pharn/pharn-contracts/reconciliation-record.md. Data: pharn/floor/reconcile-ignore.json.
 # Exit: 0 CLEAN|NO_BASELINE · 1 ESCAPE · 2 INCONCLUSIVE / no usable scope to anchor (D6).
 node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]

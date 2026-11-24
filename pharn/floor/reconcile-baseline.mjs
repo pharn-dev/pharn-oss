@@ -419,10 +419,27 @@ export function headCommit(baseDir) {
   }
 }
 
+// true ONLY when `lstat` proves nothing answers to this path: ENOENT, or ENOTDIR (a parent component is a file) — the
+// L54 rule, never stat/existsSync, which follow a link. Any entry at the path (a file, a directory, a FIFO, a dangling
+// link) or any other lstat error is NOT proof of absence. Deliberately stricter than check-bash-reconcile.mjs's
+// `absenceState`, which counts a directory as "gone": that test decides whether an anchored ENTRY still exists, this one
+// decides whether a path may be cleared as absent at both ends (CORE-346, contract §3), so it must never clear a path
+// that holds anything now. Kept outside the hashFile..snapshotScope region on purpose: that region's single-descriptor
+// rule (the CWE-367 test) is about hashing bytes, and this function hashes nothing.
+export function provenAbsent(abs) {
+  try {
+    lstatSync(abs);
+    return false;
+  } catch (e) {
+    return Boolean(e) && (e.code === "ENOENT" || e.code === "ENOTDIR");
+  }
+}
+
 export function buildRecord(baseDir, by) {
   const en = enumerate(baseDir);
   if (!en.ok) return { ok: false, reason: en.reason };
   const entries = {};
+  const absentAtAnchor = [];
   let hashed = 0;
   for (const rel of en.paths) {
     if (isStateRootPath(rel)) continue; // never hashed, ignored or not (7.2.0)
@@ -430,6 +447,8 @@ export function buildRecord(baseDir, by) {
     if (h !== null) {
       entries[rel] = h;
       hashed++;
+    } else if (provenAbsent(resolve(baseDir, rel))) {
+      absentAtAnchor.push(rel); // a listed (tracked) path missing from the worktree now (CORE-346)
     }
   }
   return {
@@ -450,6 +469,10 @@ export function buildRecord(baseDir, by) {
       // Always an array, never absent, so a reader never branches on presence (a baseline written
       // before this field existed reads as `undefined`, which the checker coerces to `[]`).
       scope_amendments: [],
+      // Paths git listed that `lstat` proved absent at this instant (CORE-346, 7.23.1) — a tracked file deleted before
+      // the anchor. Read by check-bash-reconcile.mjs only, to clear such a path when it is still proven absent at
+      // verify. Additive, so RECORD_VERSION stays 1; a record without it reads as [] (the old fail-closed behaviour).
+      absent_at_anchor: absentAtAnchor,
       entry_count: hashed,
       entries,
     },

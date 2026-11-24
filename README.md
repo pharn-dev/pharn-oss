@@ -68,7 +68,9 @@ increment a trail in Git:
   `/pharn-loop --quick` — records its two floor stops and explicitly did not interrogate — see `--quick` under
   [Quick start](#quick-start)); `grill-findings.json` holds its findings, one id each.
 - `grill-triage.json` — in a full `/pharn-loop` run, one disposition per grill finding (`proceed`, `replan` or
-  `spec`); anything but `proceed` stops the run for a person.
+  `spec`). A `replan` sends the plan back for a re-plan round (at most two); a `spec`, or a `replan` with no round
+  left, goes to the supervisor, whose decision (`proceed-at-risk`, `stop` or, once, `amend-spec`) is recorded in
+  `SUPERVISOR.json`.
 - `AC-TESTS.md`, `AC-TESTS.lock.json` — which test covers each acceptance criterion, and the pinned evidence
   that each of those tests failed before the build.
 - `BUILD.md`, `REGRESSION.md`, `VERIFY.md`, `SHIP.md` — what changed, what ran, what passed, what did
@@ -136,8 +138,9 @@ Then open Claude Code in the same project and run the full loop:
 ```
 
 `/pharn-loop` runs spec → plan → grill → test → build → regress → verify **unattended**. The model approves its
-own spec, runs the full grill and then a triage stage that gives every grill finding a disposition (since 7.7.0; any
-finding that needs a plan or spec change stops the run for a person), writes each acceptance criterion's test and shows it fails before any code exists, repeats build →
+own spec, runs the full grill and then a triage stage that gives every grill finding a disposition (since 7.7.0; a finding that needs a plan
+change gets up to two re-plan rounds, and one that needs a spec change goes to a supervisor agent that stops the run,
+proceeds with it as a known risk or amends the spec once), writes each acceptance criterion's test and shows it fails before any code exists, repeats build →
 regress → verify until a deterministic stop — green, the `--max-iter` cap, or a
 result it must not retry — commits a green result to a new local branch (never pushed or merged), and
 ends with a summary of what was done. While the spec, plan and grill stages work, it runs your project's gates once
@@ -226,6 +229,8 @@ You see the selected capability list, with a reason beside each entry, before th
 normal install adds:
 
 - product commands in `.claude/commands/`,
+- two subagent definitions in `.claude/agents/`: `pharn-stage`, which `/pharn-ship` and `/pharn-loop` run each routed
+  stage as, and `pharn-review-lens`, which `/pharn-review` runs its lenses as,
 - hooks in `.claude/hooks/`: the two write guards, the scope setter they read, and a `Stop` guard for
   `/pharn-loop` (see below),
 - the four trusted docs — `pharn/CONSTITUTION.md` and `pharn/ARCHITECTURE.md`, plus `pharn/THREAT-MODEL.md` and
@@ -239,6 +244,7 @@ normal install adds:
 ```text
 your-repo/
 ├── .claude/
+│   ├── agents/pharn-*.md          # the stage and review-lens subagent definitions
 │   ├── commands/pharn-*.md        # the product commands
 │   ├── hooks/*.cjs                # the write guards, their setter, the /pharn-loop Stop guard
 │   └── settings.json              # wires the hooks (see the caveat below)
@@ -328,6 +334,8 @@ two are standalone: neither is a pipeline stage, and neither is invoked by `/pha
 | `/pharn-spec`           | Convert prose intent into a structured `SPEC.md`, surface gaps, and stop for approval before implementation.                                                                                                                                               |
 | `/pharn-plan`           | Convert an approved `SPEC.md` into a `PLAN.md` with declared files and declared promoted lessons.                                                                                                                                                          |
 | `/pharn-grill`          | Challenge the plan before code exists and re-check the spec/plan hash chain.                                                                                                                                                                               |
+| `/pharn-triage`         | Give every grill finding one disposition (`proceed`, `replan` or `spec`) in `grill-triage.json`, checked by `grill-triage.mjs`. A full `/pharn-loop` runs it after its grill.                                                                              |
+| `/pharn-supervise`      | Decide an escalated full `/pharn-loop` run: `proceed-at-risk`, `stop` or (once) `amend-spec`, in `SUPERVISOR.json`, checked by `supervisor.mjs`. A full `/pharn-loop` runs it when triage escalates.                                                       |
 | `/pharn-test`           | Write each acceptance criterion's test before the build, into the files `/pharn-plan` mapped in `AC-TESTS.md`, run them and require each to fail, and pin the evidence. Runs between `/pharn-grill` and `/pharn-build` in `/pharn-ship` and `/pharn-loop`. |
 | `/pharn-build`          | Implement the plan after setting the active write scope from `PLAN.md`.                                                                                                                                                                                    |
 | `/pharn-regress`        | Re-run existing project suites and record regressions outside the feature.                                                                                                                                                                                 |

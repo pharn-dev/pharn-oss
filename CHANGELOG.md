@@ -41,6 +41,137 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `/pharn-loop`'s grant covers, and only the command's text forbids the run to use it. Contract:
   `pharn/pharn-contracts/reconciliation-record.md §1`.
 
+## [7.23.4] - 2026-11-24
+
+### Changed
+
+- **A criterion of a test-first SPEC must be able to fail before the build. A "nothing changes" criterion goes in
+  `## Constraints`, and a precondition guard is not test-first evidence (CORE-344).**
+  - **Why:** in the CORE-310 loop (7.22.0), one intent's criterion "the existing profile unit tests still pass
+    unchanged" holds before the build as well as after it. Run 1 wrote its test plainly: it passed in the red run, and
+    `check-red-run.mjs` stopped the loop at the test stage (`ac-test-passes-before-build`, S9) after about 15 minutes.
+    Spec, plan, grill and triage had all let it through. Attempt 1 put "the source no longer contains the old TODO" in
+    front of the same check, so it failed before the build for a reason unrelated to the criterion, and the run went
+    on. Which way it went depended on how the test-stage model chose to write the test.
+  - **The rule** lives in `pharn/pharn-contracts/spec-template.md`, "The acceptance-criteria grammar". In a `feature`
+    or `quick` SPEC, each criterion's Then must be false on today's tree. A criterion that holds before the build
+    too is a constraint. The project's own gates hold it there, only as far as they observe it: `/pharn-regress`
+    compares them at base and head in a full run, and `/pharn-verify` runs them at HEAD in every run.
+  - **Where a run meets it:**
+    - `/pharn-spec` Step 2 raises such a criterion.
+    - `/pharn-spec` Step 4a moves it under `--model-approve`, and reports back blocked on thin intent when no
+      criterion would remain. `/pharn-loop`'s S6 row names that cause.
+    - In an amend (Step 1a), the spec stage moves no existing criterion, since amend mode is append-only, and appends
+      none that already holds. If an existing criterion holds, it leaves the SPEC `Draft` and reports that a person
+      must revise it. That is `/pharn-loop`'s S18.
+    - `/pharn-grill`'s acceptance-criteria axis flags it, and `/pharn-triage` lists it under `spec`.
+  - **The guard decision** lives in `pharn/pharn-contracts/ac-tests.md`, "The red run": a check the build makes true,
+    placed in front of an assertion that already holds, is the passes-before-build case in disguise. `/pharn-test`
+    Step 3 now tells the model not to write one, but to write the plain test and let the red run stop.
+  - **Advisory, stated:** whether a Then already holds is a judgment of meaning, so no spec-time check exists. A
+    phrase list would be a heuristic. The floor is unchanged: `check-red-run.mjs` still REDs such a criterion at the
+    test stage, and it cannot see why a test failed, so a guard is invisible to it. No checker, contract shape or
+    template changes.
+
+## [7.23.3] - 2026-11-24
+
+### Fixed
+
+- 2026-11-24: **Fixed: docs that no longer said what `main` does (CORE-350).** A claim-by-claim check of the
+  hand-written docs against `main` (about 140 claims, 9 false or stale) corrected:
+  - **`pharn/LIMITS.md` §11 (shipped, so this patch bump), `CLAUDE.md`, `CONTRIBUTING.md` and two comments each in
+    `.github/workflows/release.yml` and the per-PR checks' tests** said ruleset 25907495, which requires `main`'s CI
+    checks, has no bypass actor. Read live on 2026-11-24, the owner has been its bypass actor (`always`) since
+    2026-11-04, so a merge made with the owner's credentials can land a tree whose required checks failed. The release
+    job still tags only a commit whose listed checks passed. The trusted-doc and workflow lines were applied by a
+    human.
+  - The product command lists in `CLAUDE.md` and the README Commands table now include `/pharn-triage` and
+    `/pharn-supervise`.
+  - `CLAUDE.md` names the fourth per-PR gate outside `npm run check`, `check:instruction-growth`.
+  - README: `.claude/agents/` (the `pharn-stage` and `pharn-review-lens` subagent definitions) is in what an install
+    receives. A full `/pharn-loop` triage no longer reads as stopping for a person: since 7.8.0 a `replan` gets re-plan
+    rounds, and since 7.9.0 an escalation goes to the supervisor and `SUPERVISOR.json`.
+  - `docs/pipeline.md` names the triage and supervisor stages of a full loop.
+  - `CONTRIBUTING.md`: the trusted-doc hook denies the four write tools, not a Bash write.
+  - `SECURITY.md`: the delivery runs' state under `pharn/.run/pharn-{loop,ship,review}/` is in the protected list.
+
+  Not covered: the docs checked are a fixed list (README outside the generated block, CLAUDE.md, CONTRIBUTING,
+  SECURITY, `docs/*.md`, the trusted docs). GitHub settings can change again after this read, which is how the
+  ruleset sentence went stale.
+
+## [7.23.2] - 2026-11-24
+
+- 2026-11-24: **Decided, not built: the build's full-gate `test` run is not offered to regress HEAD (CORE-345).** In
+  the CORE-310 run2 loop the suite ran twice at HEAD: the build's full gate (327.7 s), then regress HEAD (383.3 s),
+  which verify then reused (CORE-89). Both ran `npm run test` at the same HEAD and timeout, but their recorded
+  `fp_before` differ (`a234ec98…` vs `bc340bab…`), so their execution identities differ and CORE-89's rule would miss
+  the build's run even if it were offered. The observed cause is `BUILD.md`: the one fingerprinted write the run's
+  transcript shows between the two runs, written by the build after its full gate because it records that gate's
+  result. A match would need a weaker identity, so none ships. The reason and the reopen condition are now stated
+  where CORE-89's bound is: `pharn/pharn-contracts/gate-run-record.md` ("One execution of `test` for regress and
+  verify") and the `pharn/floor/gate-reuse-core.mjs` header (a comment; no code changed). Decided by the agent under
+  the orchestrator's delegation (`.dev/features/core-345-build-regress-reuse/`). Patch: shipped prose only.
+
+- 2026-11-24: **Measured: one E1 loop pair on pharn-app, grill effort `high` against `medium`. The shipped grill effort
+  stays `high`. This is a decision by the agent under the maintainer's delegation, not a maintainer decision
+  (CORE-342).** Both arms used the same base, intent and launch line, at PHARN 7.22.0. Only the project's
+  `models.stages.grill.effort` differed.
+  - **Medium:** `STOP_GREEN` after one iteration on its fourth attempt. Its first three attempts were void: an entry
+    test timeout under load; a red cached by the first attempt; and a timing race on the base's own `format:check` red.
+  - **High:** both attempts were environmental voids. The project's `test` gate timed out under machine load.
+  - **Decision:** by the rule fixed before any run, the incomplete pair keeps `high`.
+  - **Served effort:** every grill request sent its arm's level in `output_config`, and every other context sent
+    `high`. That is a client record, not proof of what the server applied.
+  - **Catches:** no grill finding in either arm was triaged other than `proceed`, so the catch comparison is
+    uninformative.
+  - **Bounds:** n is one attempted pair with no non-void control, so the record supports no claim about medium's
+    quality either way.
+  - **Reopen trigger:** a non-void high run of the same pair on a quiet machine.
+  - **Defect filed:** the entry-gate cache lives in the repository's common git dir and is shared across worktrees
+    (CORE-358).
+  - **Where it is:** the record is `.dev/measurements/grill-effort-e1-2026-11-24.md`, with scrubbed evidence bundles
+    under `.dev/features/core-342-grill-effort-e1/evidence/`. Dev-only: no `SKILLS_VERSION` bump.
+
+## [7.23.1] - 2026-11-24
+
+### Fixed
+
+- **Fixed: reconcile no longer reports a tracked file deleted before the build anchor as an escape when it is still
+  absent at verify (`reconcile-baseline.mjs`, `check-bash-reconcile.mjs`, CORE-346).** git lists a tracked file that
+  is missing from the worktree, so such a file hashed to nothing at verify and the fail-closed branch made it a
+  candidate. Measured: CORE-311's benchmark deleted `.claude/agents/pharn-stage.md` before its run; nothing touched it,
+  and verify still read `FAIL` (`terminal_cause: reconcile`). Now `--anchor` records each listed path that `lstat`
+  proves absent in a new additive record field, `absent_at_anchor` (the record stays version 1). The checker clears an
+  unhashable path, with a warning, only when it is in that list, has no `entries` value, and `lstat` proves it absent
+  now. A path that exists now (readable or not, a directory or a dangling link included), a path deleted in the
+  window, a path absent at the anchor and re-created, and a path that entered the index in the window with no file
+  all stay fail-closed candidates. **A baseline anchored before 7.23.1 has no `absent_at_anchor`, so it keeps the old
+  fail-closed behaviour until the next `--anchor` records the list.** Contract: `reconciliation-record.md` §1 (the
+  field) and §3 (the exception, and that it never applies to a path that exists now).
+
+- 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
+  scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default
+  changes. The 2026-11-17 entry said "A medium-effort grill reads `does-not-support`: it lost one catch." That reading
+  rested on one run, p4/r2. Its finding names the uncovered AC-4 and is triaged `replan`, but it cites `PLAN.md:15`,
+  which is not one of the manifest's anchors, so `defect-probe-score.mjs` scored it a miss. Re-scored by hand, the arm
+  loses no catch in 8 comparable pairs, and chain cost is down 14%. So `.dev/measurements/stage-model-tuning-2026-11-17.md`
+  now reads `supports-change` for grill effort, labelled advisory, beside the unchanged floor reading
+  (`does-not-support` / `catch-lost`). The scorer is unchanged: matching the finding's free text would cross its trust
+  boundary, and a new anchor would change the pinned manifest. Instead, `.dev/probes/defect-probes/README.md` now asks
+  every record to hand-check a lost pair before stating `catch-lost`. Whether the shipped grill effort changes is the
+  maintainer's decision, with the E1 loop pairs, tracked as CORE-342.
+
+### Added
+
+- 2026-11-24: **The `stage-verify` Kill test no longer leaves a looping `sh slow.sh` behind on every `npm test`
+  (CORE-349).** The test SIGKILLs the stage's process group, but its gate runs in its own group and exits only once it
+  sees `pharn/.run/slow-release`. In the mutant call `--resume` returned at once, so the fixture was removed inside the
+  gate's 100 ms poll and the shell looped forever. 22 such orphans were found on the maintainer's machine. Each run of
+  the gate now records its pid, and the test SIGKILLs every recorded gate before writing the release and again before
+  removing the fixture. It asserts that none survives. A pid is signalled only while its command still reads
+  `sh slow.sh`, so a reused pid is never touched. No other floor test has a gate that waits forever. Test-only: no
+  `SKILLS_VERSION` bump.
+
 - 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
   Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
   write made before it into the baseline, outside the window verify judges. The CORE-314 run
@@ -99,20 +230,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   26.95%, just below the 27.7% reopen condition, but one main-session run on a non-benchmark feature is not evidence
   either way. No ticket is reopened. CORE-314's first criterion, the maintainer's own acceptance, is not met by this
   record. Record: `.dev/measurements/delegated-signoff-2026-11-23.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
-
-### Fixed
-
-- 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
-  scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default
-  changes. The 2026-11-17 entry said "A medium-effort grill reads `does-not-support`: it lost one catch." That reading
-  rested on one run, p4/r2. Its finding names the uncovered AC-4 and is triaged `replan`, but it cites `PLAN.md:15`,
-  which is not one of the manifest's anchors, so `defect-probe-score.mjs` scored it a miss. Re-scored by hand, the arm
-  loses no catch in 8 comparable pairs, and chain cost is down 14%. So `.dev/measurements/stage-model-tuning-2026-11-17.md`
-  now reads `supports-change` for grill effort, labelled advisory, beside the unchanged floor reading
-  (`does-not-support` / `catch-lost`). The scorer is unchanged: matching the finding's free text would cross its trust
-  boundary, and a new anchor would change the pinned manifest. Instead, `.dev/probes/defect-probes/README.md` now asks
-  every record to hand-check a lost pair before stating `catch-lost`. Whether the shipped grill effort changes is the
-  maintainer's decision, with the E1 loop pairs, tracked as CORE-342.
 
 ## [7.23.0] - 2026-11-23
 

@@ -58,7 +58,10 @@ final merge/fix/abandon decision after verification.
 The orchestration itself is not a deterministic guarantee: the agent invokes the stages. The proceed/stop
 decisions inside the pipeline are read from the deterministic verdicts emitted by the relevant checkers.
 
-`/pharn-loop` runs the same chain without either human gate. The model approves the spec, and the build →
+`/pharn-loop` runs the same chain without either human gate. A full run also adds a triage stage after the grill
+(`/pharn-triage`, 7.7.0): a `replan` disposition costs up to two re-plan rounds, and a `spec` one, or a `replan` with
+no round left, goes to `/pharn-supervise` (7.9.0), whose model decision stops the run, proceeds with the escalated
+findings as known risk, or amends the spec once ([`ARCHITECTURE.md` §6](../pharn/ARCHITECTURE.md)). The model approves the spec, and the build →
 regress → verify middle repeats until a deterministic stop: green, the iteration cap, or a red it must not
 retry (an inconclusive result; a reconcile red — a retry would re-anchor the baseline and erase the
 detected escape; or, since 6.20.0, acceptance-criterion evidence that changed after `/pharn-test`, which another
