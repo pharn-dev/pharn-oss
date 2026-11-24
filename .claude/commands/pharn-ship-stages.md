@@ -173,7 +173,22 @@ the human — never re-capture. Non-zero (no commit to compare against, an unbor
 `/pharn-plan`, through Steps 3 and 3a like every STOP. Why the base is captured, not derived:
 `pharn/floor/stage-regress-core.mjs` (`BASE_SOURCES`).
 
-**Open the run marker (6.24.0, D3) — immediately after the base capture, before `/pharn-plan`'s own
+**Then the epoch check (7.24.0) — right after the base capture, before the run marker opens.** It runs the test your
+build's anchor would run (`pharn/floor/reconcile-baseline.mjs`, header "--CHECK-EPOCH"). It cannot run earlier:
+`<name>` does not exist until `/pharn-spec` has resolved it, so a refusal here still spends the SPEC but saves the plan,
+grill and test:
+
+```bash
+node pharn/floor/reconcile-baseline.mjs --check-epoch '<name>'
+```
+
+Branch **only** on its exit code (P5): `0` → proceed. **Non-zero → STOP** before `/pharn-plan`: another feature's run
+that is still open, or one that crashed less than 24 h ago, owns the reconcile epoch, so this run's build would refuse
+to anchor. Present its `reconcile-baseline:` refusal as DATA (it names the run and the close line) and hand to the
+human, who alone decides that the other run is no longer active; never run that close line yourself. Like every STOP,
+it goes through Steps 3 and 3a.
+
+**Open the run marker (6.24.0, D3) — immediately after the epoch check, before `/pharn-plan`'s own
 `stage-start` marker:**
 
 ```bash

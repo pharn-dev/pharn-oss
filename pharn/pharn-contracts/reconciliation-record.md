@@ -87,7 +87,12 @@ value, not against the hook sources. The marker is present (`lstat`, never follo
 24 h of now in either direction, and any `lstat` error other than `ENOENT`/`ENOTDIR` counts as open. A record that cannot
 be read cannot be attributed, so then any other feature's open loop/ship marker refuses. A legacy record with a `null`
 snapshot derives no feature and never refuses. `/pharn-review` markers are not read, since a review never anchors. The
-record's shape is unchanged and the CLI takes no new argument. **Bounds:** markers are presence-only and Bash-writable, so a
+record's shape is unchanged. **Since 7.24.0 the same test also runs at a run's entry**, read-only:
+`reconcile-baseline.mjs --check-epoch <name>` asks it for the scope the build's setter would write for `<name>` and exits 2
+with the same refusal, or 0. It writes nothing. `/pharn-loop` runs it in Step 1a before its marker opens, and
+`/pharn-ship` runs it right after GATE 1, the first point at which its `<name>` exists. A crashed run's open marker then
+stops the next run before spec (loop) or plan (ship), not at its build. The anchor's own refusal stays, for a run opened
+between entry and build. **Bounds:** markers are presence-only and Bash-writable, so a
 marker closed early lets the overwrite through. That includes a model holding `/pharn-loop`'s pre-approved
 `require-loop-record.cjs --close *`. A marker older than 24 h lets it through too. Runs that open no marker (dev builds,
 a standalone `/pharn-build`) and two runs of one feature are not told apart. This makes one erase loud; it does not make
@@ -536,7 +541,10 @@ never exemptible. They are the same pair `set-writes-scope.cjs` refuses from a p
   paths and the state root `pharn/.run/` (§1); the window is anchor→reconcile; the model is one worktree per session; no attribution.
 - **"an anchor never replaces another open run's epoch"** (7.3.0, §1) → **FLOOR within its bounds**: slug regex,
   closed directory membership, `lstat` error-code membership and an integer age compare, in the anchor CLI. That the
-  anchor runs at all is ADVISORY (a Bash call, L19). "Two runs in one tree are safe" is **STRUCK**.
+  anchor runs at all is ADVISORY (a Bash call, L19). "Two runs in one tree are safe" is **STRUCK**. The entry check
+  (`--check-epoch`, 7.24.0) is the same predicate, so the same FLOOR within the same bounds; that a run calls it is
+  ADVISORY, and "the next run cannot clear a crashed run's marker" is **STRUCK**: the refusal names the close line and
+  `/pharn-loop`'s grant covers it, so only the command's text forbids it.
 - **"a shell command was analysed"** → **STRUCK, and structurally impossible here.** No Bash command
   string is ever read. Shell parsing is undecidable and a verb denylist is a heuristic, which P0 forbids
   labelling a guarantee.

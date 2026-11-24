@@ -72,20 +72,31 @@
 // against the hook sources); any `lstat` error other than ENOENT/ENOTDIR counts as open (fail-closed). A prior record that cannot be
 // read or parsed cannot be attributed, so then ANY other feature's open loop/ship marker refuses. `pharn-review`
 // markers are not read: a review never anchors. A legacy record with a null `scope_snapshot` derives no feature and
-// never refuses. No new argv and no new record field: both shipped anchor lines (and `/pharn-loop`'s grant) are
-// unchanged, and a refusal is the build's Step-0 HALT.
+// never refuses. No new record field, and both shipped anchor lines (and `/pharn-loop`'s grant for them) are
+// unchanged; a refusal is the build's Step-0 HALT.
 // BOUNDS, stated (P0): markers are Bash-writable and presence-only, so a marker closed early (by a human, or by a
 // model holding `/pharn-loop`'s pre-approved `require-loop-record.cjs --close *`) or aged past the ceiling lets the
 // overwrite through; runs that open no marker (dev builds, a standalone `/pharn-build`) and two runs of the SAME
 // feature are not told apart. This makes one erase LOUD for tooling; it does not make two runs in one tree safe —
 // the structural remedy is still one worktree per run (lessons-learned L38).
 //
+// --CHECK-EPOCH <name> ASKS THE ANCHOR'S QUESTION AT A RUN'S ENTRY (7.24.0, CORE-343). A loop killed mid-build (a host
+// reboot) left its marker open and its epoch on disk, and a fresh `/pharn-loop` for another slug then ran entry, spec,
+// plan, grill, triage and test (~41 min measured) before its build anchor refused. `--check-epoch <name>` runs
+// `epochOwnerOpen` against the scope record the build's Step-0 setter writes for <name> (`set_by:
+// pharn/features/<name>/PLAN.md`, so `activeFeatureSlug` derives <name>) and exits 2 with the same refusal, or 0. It
+// reads the baseline and `lstat`s markers only: no git, no write. `/pharn-loop` Step 1a runs it before its own marker
+// opens; `/pharn-ship` after GATE 1, because its <name> exists only then. One predicate, called earlier (L35): not a
+// second rule, and the anchor's refusal stays as the backstop for a run opened between entry and build. Same bounds.
+//
 // Usage:
 //   node pharn/floor/reconcile-baseline.mjs --anchor [--base <dir>] [--by <label>]
 //   node pharn/floor/reconcile-baseline.mjs --show   [--base <dir>]
+//   node pharn/floor/reconcile-baseline.mjs --check-epoch <name> [--base <dir>]
 //
 // Exit: 0 ok · 2 unusable input / git unavailable / no usable scope to snapshot (D6) / another open run's epoch on
-// disk (7.3.0) / write failed — FAIL-CLOSED (P5). Never a silent pass.
+// disk (7.3.0; `--check-epoch` too, 7.24.0) / a `--check-epoch` name that is not a plain slug / write failed —
+// FAIL-CLOSED (P5). Never a silent pass.
 
 import "./runtime-floor.mjs";
 import {
@@ -224,7 +235,8 @@ const CLOSE_CMD = {
 };
 
 // The refusal text. Every interpolated name passed FEATURE_SLUG_RE; every path is built from fixed segments.
-export function epochRefusalMessage(res) {
+// `verb` names the refused act: "anchor" at the build, "start" for `--check-epoch` at a run's entry.
+export function epochRefusalMessage(res, verb = "anchor") {
   const lines = res.markers.map((m) => {
     if (m.unlisted) return `  • a run marker under ${m.path} (its name is not a plain slug, or the directory cannot be listed)`;
     const age = m.ageHours === null ? "age unknown: lstat failed" : `age ~${m.ageHours}h`;
@@ -232,13 +244,17 @@ export function epochRefusalMessage(res) {
   });
   const head =
     res.owner === null
-      ? `refusing to anchor: the baseline at ${RECORD_PATH} cannot be read, so the epoch it holds cannot be attributed, and another feature's run is open:`
-      : `refusing to anchor: the baseline at ${RECORD_PATH} holds the reconciliation epoch of feature "${res.owner}", whose run is still open:`;
+      ? `refusing to ${verb}: the baseline at ${RECORD_PATH} cannot be read, so the epoch it holds cannot be attributed, and another feature's run is open:`
+      : `refusing to ${verb}: the baseline at ${RECORD_PATH} holds the reconciliation epoch of feature "${res.owner}", whose run is still open:`;
+  const why =
+    verb === "anchor"
+      ? "Anchoring now would replace that epoch: that run's verify would then judge only the writes made after this anchor, and its earlier Bash escapes would be erased (pharn/LIMITS.md §6 — one worktree per run)."
+      : "This run's build would refuse to anchor over that epoch, after every stage before it had run: replacing it would erase that run's earlier Bash escapes from its verify (pharn/LIMITS.md §6 — one worktree per run).";
   return [
     head,
     ...lines,
-    "Anchoring now would replace that epoch: that run's verify would then judge only the writes made after this anchor, and its earlier Bash escapes would be erased (pharn/LIMITS.md §6 — one worktree per run).",
-    "Run this build in its own worktree, or let that run finish. Only when a human has established that the run is no longer active does a human close its marker and re-run this step. Never delete or edit the baseline to get past this.",
+    why,
+    "Run this in its own worktree, or let that run finish. Only when a human has established that the run is no longer active does a human close its marker and re-run this step. Never delete or edit the baseline to get past this.",
   ].join("\n");
 }
 
@@ -546,16 +562,29 @@ function main(argv) {
   let mode = null;
   let baseDir = ".";
   let by = "unknown";
+  let checkName = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--anchor" || args[i] === "--show" || args[i] === "--amend-scope") mode = args[i];
-    else if (args[i] === "--base") baseDir = args[++i] ?? die("--base requires a directory");
+    else if (args[i] === "--check-epoch") {
+      mode = args[i];
+      checkName = args[++i] ?? die("--check-epoch requires a feature name");
+    } else if (args[i] === "--base") baseDir = args[++i] ?? die("--base requires a directory");
     else if (args[i] === "--by") by = args[++i] ?? die("--by requires a label");
     else die(`unknown argument: ${args[i]}`);
   }
-  if (!mode) die("usage: reconcile-baseline.mjs (--anchor | --amend-scope | --show) [--base <dir>] [--by <label>]");
+  if (!mode) die("usage: reconcile-baseline.mjs (--anchor | --amend-scope | --show | --check-epoch <name>) [--base <dir>] [--by <label>]");
 
   const root = resolve(baseDir);
   if (!existsSync(root) || !statSync(root).isDirectory()) die(`--base is not a directory: ${baseDir}`);
+
+  // 7.24.0 (CORE-343): the anchor's epoch-owner test, read-only, at a run's entry (see "--CHECK-EPOCH" in the header).
+  if (mode === "--check-epoch") {
+    if (!FEATURE_SLUG_RE.test(checkName)) die("--check-epoch: the feature name is not a plain slug");
+    const res = epochOwnerOpen(root, { set_by: `pharn/features/${checkName}/PLAN.md` });
+    if (res.refuse) die(epochRefusalMessage(res, "start"));
+    process.stdout.write(`reconcile epoch: no other feature's open run owns the epoch at ${RECORD_PATH}\n`);
+    process.exit(0);
+  }
 
   if (mode === "--amend-scope") {
     const res = amendScope(root);

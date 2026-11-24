@@ -83,6 +83,7 @@ allowed-tools:
     "Bash(git rev-parse HEAD)",
     "Bash(git symbolic-ref --short -q HEAD)",
     "Bash(echo detached)",
+    "Bash(node pharn/floor/reconcile-baseline.mjs --check-epoch *)",
     "Bash(mkdir -p pharn/.run/pharn-loop/*)",
     "Bash(git status --porcelain -uall > pharn/.run/pharn-loop/*/pre-run-status.txt)",
     "Bash(node .claude/hooks/require-loop-record.cjs --open * --cap * --mode *)",
@@ -342,6 +343,20 @@ holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells
    no shell line takes it (Step 6d returns without it). A failed `git rev-parse HEAD` (no repository, an unborn
    `HEAD`) → stop `blocked: no-git-base`.
 
+   **Then the epoch check** (7.24.0) — before anything is written, so a refusal leaves nothing behind. It runs the test
+   your build's anchor would run (`pharn/floor/reconcile-baseline.mjs`, header "--CHECK-EPOCH"):
+
+   ```bash
+   node pharn/floor/reconcile-baseline.mjs --check-epoch '<name>'
+   ```
+
+   **Non-zero → STOP**, **S9** (`blocked: stage-refused`): another feature's run that is still open, or one that
+   crashed less than 24 h ago, owns the reconcile epoch, and this run's build would refuse to anchor after every
+   stage before it had run. No directory, marker or record exists yet, so go straight to the Step 7 summary and quote
+   the line's stderr there as DATA, with the close line it names. **Never run that close line yourself**, although your
+   grant covers it: only a person can tell that the other run is no longer active. The Final step's `--close '<name>'`
+   names this run alone, which opened no marker.
+
 4. **Snapshot the dirty tree** (`-uall` lists an untracked directory as its files):
 
    ```bash
@@ -484,7 +499,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S6c | `/pharn-spec --quick --model-approve` reports the intent does not fit a quick SPEC (over three criteria, or one only end-to-end), or a `--quick` run's Step-3 kind read prints anything but `quick` | stop `blocked: not-quick` — a person narrows the intent or re-runs without `--quick`; never widened into a full run |
 | S7 | the build finds the plan ambiguous | stop `blocked: plan-ambiguity` |
 | S8 | the seam resolver's walk reaches `ask` | stop `blocked: seam-unresolved` |
-| S9 | a stage refuses before its verdict (a missing artifact, RED spec→plan chain or lessons declaration, unparseable `## Files`, open `## Open questions (HALT)`, install unlike lockfile), or a routed stage agent returned no usable result | stop `blocked: stage-refused`; Step 1a's snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too |
+| S9 | a stage refuses before its verdict (a missing artifact, RED spec→plan chain or lessons declaration, unparseable `## Files`, open `## Open questions (HALT)`, install unlike lockfile), or a routed stage agent returned no usable result | stop `blocked: stage-refused`; Step 1a's epoch check, snapshot or marker `--open`, or a quick scope check, exiting non-zero stops here too |
 | S9b | a routed stage's `stage-agent.mjs finish` exits `6` (`capped …`: no result within the wait's cap from the stage's start), or, when work resumes, you find the session ended while a stage agent ran | stop `blocked: stage-outlived-wait` — stop that agent with TaskStop and never resume it (a result it reported may be on disk, unread); a person sets its partial work aside and re-runs the loop |
 | S10 | any other sub-stage instruction to ask the human | stop `blocked: unlisted-ask` — the closure row; nothing falls through to a guess |
 | S11 | a stage's evidence is stale or missing after the stage claims to have run, and `check-loop-fresh.mjs` will not offer another re-run (Step 5) | stop `blocked: stale-evidence` — never read a stop from evidence about another tree |
