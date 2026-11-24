@@ -3,12 +3,20 @@
 // writes the two git-dir files and captures this run's inputs. No CLI: entry-gates.mjs calls it (P3).
 //
 // ================================ WHERE EACH PIECE LIVES, AND WHO CAN WRITE IT ================================
-// • The RECORD — `<git rev-parse --git-common-dir>/pharn-entry-gate-cache.json`, ONE per repository, so a run in another
-//   worktree of it reads the same record. git prints the common dir relative to the working directory in a main checkout,
-//   so it is resolved against `process.cwd()`.
-// • The start-time INPUTS — `<git rev-parse --absolute-git-dir>/pharn-entry-cache-inputs.json`, per worktree, resolved
-//   through regress-base-reuse.mjs `gitDirFile` (the entry-base offer's resolver — L35). `--start` writes it after
-//   `run-gates.mjs init`; `--wait` reads it, bound to the runner record's nonce and feature.
+// • The RECORD — `<git rev-parse --absolute-git-dir>/pharn-entry-gate-cache.json`, ONE per worktree (7.25.1, Linear
+//   CORE-358). In a main checkout that is `<repo>/.git/`, the path it always had; in a linked worktree it is
+//   `<repo>/.git/worktrees/<name>/`, so a red measured in one worktree is never read, and never overwritten, by another.
+//   Until 7.25.0 it sat in the git COMMON dir, one per repository: in CORE-342 a red one worktree measured stopped that
+//   worktree's next run after its `pharn/.run/` and its own git-dir records were removed, because the record lived in a
+//   directory no worktree-scoped cleanup touches. Records written there before 7.25.1 carry schema `/1`, which
+//   `recordDefect` refuses, so they read `record-unusable` (a miss) and never stop a run.
+//   RESETTING IT: delete this file, remove the worktree (`git worktree remove` deletes its git dir), or re-run with
+//   `--refresh` (the loops' `--refresh-entry`), which measures again and replaces or clears it. Clearing `pharn/.run/`
+//   alone does NOT reset it, on purpose: the write tools reach `pharn/.run/**`, so a record kept there could be planted
+//   or dropped by any write-tool edit.
+// • The start-time INPUTS — `<git rev-parse --absolute-git-dir>/pharn-entry-cache-inputs.json`, beside the record.
+//   `--start` writes it after `run-gates.mjs init`; `--wait` reads it, bound to the runner record's nonce and feature.
+// Both resolve through regress-base-reuse.mjs `gitDirFile` (the entry-base offer's resolver — L35).
 // Both are denied to the write tools in the layouts the ★ HOOK test probes (a main checkout: protect-trusted-paths.cjs,
 // a `.git` segment; a linked worktree: enforce-writes-scope.cjs, a path inside another git tree — L65). A Bash writer
 // reaches both (L19); a forged record can only STOP a run (entry-gate-cache-core.mjs, "WHAT IT DOES NOT CLAIM").
@@ -21,7 +29,7 @@
 // READS are lstat-first and never followed: regress-base-reuse.mjs `readRegularFile` (O_NOFOLLOW, fstat regular, capped).
 
 import { renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { gitSync, lstatSafe } from "./stage-runtime.mjs";
 import { gitDirFile, readRegularFile } from "./regress-base-reuse.mjs";
 import { hashFile } from "./reconcile-baseline.mjs";
@@ -37,17 +45,9 @@ import {
   recordDefect,
 } from "./entry-gate-cache-core.mjs";
 
-/** `<git common dir>/<name>`, or null when git cannot name it. */
-export function commonDirFile(name) {
-  const r = gitSync(["rev-parse", "--git-common-dir"]);
-  if (!r.ok) return null;
-  const dir = r.stdout.trim();
-  return dir === "" ? null : join(resolve(process.cwd(), dir), name);
-}
-
-/** The record's path, or null. */
+/** The record's path (this worktree's git dir), or null. */
 export function cachePath() {
-  return commonDirFile(CACHE_BASENAME);
+  return gitDirFile(CACHE_BASENAME);
 }
 
 /** The start-time inputs' path, or null. */

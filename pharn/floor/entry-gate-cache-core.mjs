@@ -11,10 +11,13 @@
 // stands in for evidence a later check relies on. A cached red can only STOP a run, before its spec stage.
 //
 // ============================== THE RECORD ==============================
-// One record per repository (the git COMMON dir, so every worktree reads it), written by `entry-gates.mjs --wait` after a
-// decided verdict (`cacheableRed` → `buildRecord`), and replaced or CLEARED by every later decided `--wait` — last writer
-// wins. A clear only ever removes a hit; it can never add a stop. The record carries the KEY (every input below), the
-// SOURCE run (its feature, nonce and the moment its gates started) and the red gate ids.
+// One record per WORKTREE (its own git dir — entry-gate-cache.mjs; 7.25.1, Linear CORE-358), written by
+// `entry-gates.mjs --wait` after a decided verdict (`cacheableRed` → `buildRecord`), and replaced or CLEARED by every
+// later decided `--wait` in that worktree — last writer wins. A clear only ever removes a hit; it can never add a stop.
+// The record carries the KEY (every input below), the SOURCE run (its feature, nonce and the moment its gates started)
+// and the red gate ids. Until 7.25.0 the record was one per repository, in the git COMMON dir, so a red measured in one
+// worktree stopped another's run (CORE-342); a cross-worktree hit was never measured to save a run. RECORD_SCHEMA moved
+// to `/2` with the move, so a record written before it reads `record-unusable` — a miss — wherever it is found.
 //
 // ============================== THE DECISION (`decideCache`) — first failing check decides ==============================
 //   refresh             `--refresh` was given (the loops' `--refresh-entry` or `--allow-red-entry`; /pharn-ship's Continue)
@@ -47,8 +50,8 @@
 //   • FLOOR: the hit decision — string equality over sha256 digests and canonical JSON, membership over closed enums.
 //   • ADVISORY: that a cached red is what a fresh run would measure. Environment variables, machine load, a flaky test,
 //     ignored files other than INSTALL_FILES (caches, `.env`, build output) and the ABSOLUTE working directory are not
-//     bound — the absolute path is left out on purpose, so a fresh worktree of the same repository can hit. The age limit
-//     bounds their drift; it does not remove it.
+//     bound — the absolute path is left out because a record never leaves its worktree's git dir (a moved checkout
+//     keeps its git dir). The age limit bounds their drift; it does not remove it.
 //   • ADVISORY, inherited from entry-gates-core.mjs: that a non-style gate read nothing in the excluded feature
 //     directories (`entry-gates-nonstyle-overlap`).
 //   • Provenance (L43). The record is out of the write tools' reach, but a Bash writer reaches the git dir. A forged record
@@ -63,7 +66,9 @@ import { LOCKFILE_FAMILIES } from "./stage-regress-core.mjs";
 
 export const CACHE_BASENAME = "pharn-entry-gate-cache.json";
 export const INPUTS_BASENAME = "pharn-entry-cache-inputs.json";
-export const RECORD_SCHEMA = "pharn-entry-gate-cache/1";
+/** `/2` since 7.25.1 (the record moved to each worktree's git dir): a `/1` record, written to the shared common dir,
+ *  is refused by `recordDefect` and so never stops a run. */
+export const RECORD_SCHEMA = "pharn-entry-gate-cache/2";
 export const INPUTS_SCHEMA = "pharn-entry-cache-inputs/1";
 export const RECORD_MAX_BYTES = 1 << 20;
 /** The age limit (GATE 1: fixed, no config key). */
