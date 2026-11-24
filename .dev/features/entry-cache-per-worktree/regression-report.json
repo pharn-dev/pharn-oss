@@ -1,0 +1,52 @@
+{
+  "base": "aa91a852bb8a842da97b181c6ba7e40d3adaa4d8",
+  "inside": [
+    ".dev/guides/floor-gates.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn-install.json",
+    "pharn/floor/entry-gate-cache-core.mjs",
+    "pharn/floor/entry-gate-cache-core.test.mjs",
+    "pharn/floor/entry-gate-cache.mjs",
+    "pharn/floor/entry-gate-cache.test.mjs",
+    "pharn/floor/entry-gates.mjs",
+    "pharn/pharn-contracts/gate-run-record.md",
+    ".dev/features/entry-cache-per-worktree/GRILL.md",
+    ".dev/features/entry-cache-per-worktree/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7099,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7107,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

@@ -1,5 +1,5 @@
 // pharn/floor/entry-gate-cache.test.mjs — the storage half of the entry check's cached-red evidence (gate-evidence-cache,
-// Linear CORE-86): where the two git-dir files live (the common dir for the record, so a fresh worktree reads it), that
+// Linear CORE-86): where the two git-dir files live (each worktree's own git dir, both — CORE-358), that
 // reads never follow a link, that nothing here throws, and the ★ HOOK probe that both files are out of the write tools'
 // reach (L65).
 
@@ -88,32 +88,77 @@ function record(dir) {
   return r;
 }
 
-test("the record lives in the git COMMON dir — the same file from a linked worktree — and the inputs in each tree's own git dir", () => {
+test("CORE-358 — the record lives in EACH worktree's own git dir: a red cached in worktree A is not read by worktree B, and the main checkout keeps its path", () => {
   const dir = repo();
-  const wt = `${dir}-wt`;
+  const wtA = `${dir}-a`;
+  const wtB = `${dir}-b`;
   try {
+    // The main checkout: the same path as before 7.25.1 (its git dir IS the common dir), and it round-trips.
     const main = inDir(dir, () => cachePath());
     assert.equal(main, join(dir, ".git", CACHE_BASENAME));
     assert.equal(
       inDir(dir, () => inputsPath()),
       join(dir, ".git", INPUTS_BASENAME)
     );
-    execFileSync("git", ["worktree", "add", "-q", "--detach", wt], { cwd: dir });
-    assert.equal(realpathSync(dirname(inDir(wt, () => cachePath()))), realpathSync(join(dir, ".git")), "one record per repository");
-    assert.ok(inDir(wt, () => inputsPath()).includes(join(".git", "worktrees")), "inputs stay per worktree");
-    // A record written from the main checkout is read from the worktree.
+    execFileSync("git", ["worktree", "add", "-q", "--detach", wtA], { cwd: dir });
+    execFileSync("git", ["worktree", "add", "-q", "--detach", wtB], { cwd: dir });
+    const pathA = inDir(wtA, () => cachePath());
+    const pathB = inDir(wtB, () => cachePath());
+    assert.ok(pathA.includes(join(".git", "worktrees")), pathA);
+    assert.ok(pathB.includes(join(".git", "worktrees")), pathB);
+    assert.equal(new Set([main, pathA, pathB]).size, 3, "one record per worktree, never shared");
+    assert.equal(dirname(pathA), dirname(inDir(wtA, () => inputsPath())), "the record sits beside its inputs");
+    // A red cached in A (the realistic input — L84: a real linked worktree, a valid record).
+    assert.deepEqual(
+      inDir(wtA, () => writeCache(record(wtA))),
+      { ok: true }
+    );
+    assert.equal(inDir(wtA, () => readCache()).state, "ok", "A reads its own record");
+    assert.equal(inDir(wtB, () => readCache()).state, "absent", "B never reads A's red");
+    assert.equal(inDir(dir, () => readCache()).state, "absent", "A's write left the main checkout's slot untouched");
+    // The main checkout keeps working as before: its own record round-trips, and A's is still there.
     assert.deepEqual(
       inDir(dir, () => writeCache(record(dir))),
       { ok: true }
     );
-    assert.equal(inDir(wt, () => readCache()).state, "ok");
+    assert.equal(inDir(dir, () => readCache()).state, "ok");
+    assert.equal(inDir(wtA, () => readCache()).state, "ok");
+    // B clearing its (absent) slot removes nothing anywhere else.
+    assert.deepEqual(
+      inDir(wtB, () => clearCache()),
+      { ok: true, removed: false }
+    );
+    assert.equal(inDir(wtA, () => readCache()).state, "ok");
+    assert.equal(inDir(dir, () => readCache()).state, "ok");
+    // Removing worktree A removes its record with its git dir — the reset a worktree's own cleanup now gives.
+    execFileSync("git", ["worktree", "remove", "--force", wtA], { cwd: dir });
+    assert.equal(existsSync(pathA), false);
   } finally {
-    try {
-      execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: dir, stdio: "ignore" });
-    } catch {
-      /* gone */
+    for (const wt of [wtA, wtB]) {
+      try {
+        execFileSync("git", ["worktree", "remove", "--force", wt], { cwd: dir, stdio: "ignore" });
+      } catch {
+        /* gone */
+      }
+      rmSync(wt, { recursive: true, force: true });
     }
-    rmSync(wt, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CORE-358 migration — a pre-7.25.1 record (schema /1) left in the common dir reads unusable from the main checkout, never as evidence", () => {
+  const dir = repo();
+  try {
+    const old = { ...record(dir), schema: "pharn-entry-gate-cache/1" };
+    writeFileSync(join(dir, ".git", CACHE_BASENAME), `${JSON.stringify(old, null, 2)}\n`);
+    assert.equal(inDir(dir, () => readCache()).state, "unusable");
+    // The next decided --wait in the main checkout replaces it.
+    assert.deepEqual(
+      inDir(dir, () => writeCache(record(dir))),
+      { ok: true }
+    );
+    assert.equal(inDir(dir, () => readCache()).state, "ok");
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -316,6 +361,7 @@ test("★ HOOK — both real write guards deny the record and the inputs in a ma
     const wtRecord = inDir(wt, () => cachePath());
     const wtInputs = inDir(wt, () => inputsPath());
     assert.ok(wtInputs.includes(join(".git", "worktrees")), wtInputs);
+    assert.ok(wtRecord.includes(join(".git", "worktrees")), `the probed record path is the worktree's own (CORE-358): ${wtRecord}`);
     for (const p of [wtRecord, wtInputs]) {
       assert.equal(hookExit(ENFORCE, wt, p), 2, `enforce-writes-scope denies a path inside another git tree: ${p}`);
     }

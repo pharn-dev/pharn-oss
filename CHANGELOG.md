@@ -23,6 +23,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.25.1] - 2026-11-24
+
+### Fixed
+
+- **The entry check's cached red is kept per worktree, so a red measured in one worktree no longer stops a loop in
+  another (`entry-gate-cache.mjs`, CORE-358).** Since 7.14.0 (CORE-86) the record sat in the git common dir, one file
+  per repository that the main checkout and every linked worktree read and overwrote. In CORE-342's runs a red one
+  worktree measured stopped that worktree's next run (`blocked: gates-red-cached`) after its `pharn/.run/` and its own
+  git-dir records had been removed, because the shared file sits where no worktree-scoped cleanup reaches. The record
+  now lives in `git rev-parse --absolute-git-dir`, beside the start-time inputs it is paired with. In a main checkout
+  that is the same `.git/pharn-entry-gate-cache.json` as before. The cost: a red no longer carries to a fresh worktree
+  of the same repository. That cross-worktree hit was the reason for the common dir, but it was never measured to save
+  a run, and the one cross-worktree effect observed was this harmful one. The record's schema moves to
+  `pharn-entry-gate-cache/2`, so a record written before the upgrade reads `record-unusable` (a miss: the run measures)
+  and never stops a run; the next decided entry check replaces it, with no migration code. To reset a worktree's
+  record, delete that file, remove the worktree, or re-run with `--refresh-entry`. Clearing `pharn/.run/` alone does not
+  reset it, on purpose: the write tools reach `pharn/.run/**`, so a record kept there could be planted or dropped by
+  any write-tool edit.
+
 ## [7.25.0] - 2026-11-24
 
 ### Added
