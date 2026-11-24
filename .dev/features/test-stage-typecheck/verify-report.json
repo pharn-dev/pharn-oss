@@ -1,0 +1,26 @@
+{
+  "feature": "test-stage-typecheck",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "0329713cf7a0da38dde3f4386180e032396348d6ece090217054297f62dec403",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "ae2df893bd76598c37c8ec8f8154034cdb6e6a571959b6dc6639042d8546fe31"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

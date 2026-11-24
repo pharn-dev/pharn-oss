@@ -23,6 +23,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.24.0] - 2026-11-24
+
+### Added
+
+- **`/pharn-test` runs the project's typecheck gate before it pins the AC tests, and refuses `ac-tests-typecheck` when
+  a type error sits in one of its own test files (`check-ac-types.mjs`, CORE-347).** In a real test-first run
+  (CORE-311), `/pharn-test` pinned a test that vitest ran without type-checking; after the build, regress and verify
+  both reported `typecheck` red on `TS2741` in that pinned file, which the build may not edit, so every iteration
+  failed the same way. The new Step 3c runs `typecheck` / `type-check` (those `package.json` has, minus
+  `gates.exclude`) and reads the gate's output in tsc's two line forms (measured on tsc 6.0.3). A diagnostic located
+  in a mapped AC test file whose code is outside a closed missing-target list (`TS2307` cannot find module, `TS2339`
+  property does not exist, `TS2554` argument count, and 14 more) is `RED`. The stage fixes its own files once, then
+  refuses. A missing-target code, an error in any other file, output in another format and an unmeasured gate are
+  `NOTE`s, so a red-first test that imports a target the build has not written is never refused. The list is set
+  membership, not cause, and is wrong both ways, stated in `pharn/floor/ac-types-core.mjs`: a legitimate test that
+  passes a value only the built target accepts is refused (the stage's remedy is to type the value through the
+  target), and a test-own error with a listed code such as `TS2339` still reaches the post-build gates.
+  `check-test-stage.mjs` does not re-check it. `/pharn-loop` gets one grant for the new line.
+
 - 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
   Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
   write made before it into the baseline, outside the window verify judges. The CORE-314 run

@@ -1,0 +1,55 @@
+{
+  "base": "08d7f63e693a1cdb1e0269ee552357ce77408313",
+  "inside": [
+    ".claude/commands/pharn-loop.md",
+    ".claude/commands/pharn-test.md",
+    ".dev/floor/stage-load-budget.test.mjs",
+    ".dev/guides/floor-ac-tests.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn-install.json",
+    ".dev/features/test-stage-typecheck/GRILL.md",
+    ".dev/features/test-stage-typecheck/PLAN.md",
+    "pharn/floor/ac-types-core.mjs",
+    "pharn/floor/ac-types-core.test.mjs",
+    "pharn/floor/check-ac-types.mjs",
+    "pharn/floor/check-ac-types.test.mjs",
+    "pharn/floor/test-fixtures/typecheck/tsc-plain.out",
+    "pharn/floor/test-fixtures/typecheck/tsc-pretty.out"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7075,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7083,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

@@ -109,6 +109,32 @@ node pharn/floor/check-ac-style.mjs --before <name> --timeout-ms <N>
 node pharn/floor/check-ac-style.mjs --after <name> --timeout-ms <N>
 ```
 
+## `check-ac-types.mjs` — the AC tests must not carry their own type errors
+
+```bash
+# THE TYPECHECK CHECK (added 7.24.0, CORE-347) — /pharn-test Step 3c, after Step 3b and before Step 4 pins the tests. The
+# trigger: a CORE-311 test-first run pinned an AC test vitest ran without type-checking; after the build regress and
+# verify reported `typecheck` red on TS2741 in that pinned file, which the build may not edit (L83: surface the refusal
+# at the earliest stage that pins the input). ONE run, no before/after: attribution is by LOCATION. The gate set is
+# TYPE_SET (typecheck, type-check) ∩ package.json scripts − gates.exclude, each `npm run <id>` through spawnGate,
+# `--timeout-ms` per gate REQUIRED (/pharn-test pins 170000: two gates fit 600000). Logs under
+# pharn/.run/pharn-test/types/ (recreated each run; containment-walked). For a gate measured non-zero both logs are
+# read (unreadable → exit 2) and parsed by ONE anchored rule per tsc form — plain `path(l,c): error TSn:` and pretty
+# `path:l:c - error TSn:` (ANSI stripped; measured on tsc 6.0.3, pharn/floor/test-fixtures/typecheck/). VERDICT
+# (ac-types-core.mjs typesVerdict): a diagnostic whose path resolves (case-folded, toward refusing) to a mapped test
+# file and whose code is outside the closed MISSING_TARGET_CODES list → RED `ac-tests-typecheck`; a listed code there →
+# NOTE (expected before the build); any other file → one "not attributed" NOTE; a red gate with no tsc-format line →
+# NOTE; not measured → NOTE (the error may still reach the post-build gates); no gate → explicit GREEN line. Exit 0
+# GREEN · 1 RED · 2 UNUSABLE (a crash exits 2). /pharn-test: exit 1 → fix only its own test files once with
+# Write/Edit, then Step 3b's --after and this line again, still 1 → refusal `ac-tests-typecheck`; exit 2 →
+# `typecheck-check-unusable`; no /pharn-loop mapping (no lock → check-test-stage non-zero → S9). BOUNDS (the module
+# header owns them): the list is membership, not cause, wrong BOTH ways — a legitimate test passing a value only the
+# built target accepts (TS2322/TS2345) IS refused, and a test-own TS2339 passes; only tsc's two forms at line start are
+# read (a runner prefix or another checker → NOTE, i.e. no change); advisory that the command runs it
+# (check-test-stage does not re-check); a tsconfig that excludes the tests sees nothing; agreement, not provenance.
+node pharn/floor/check-ac-types.mjs <name> --timeout-ms <N>
+```
+
 ## `check-test-stage.mjs` — the test-stage gate
 
 ```bash
