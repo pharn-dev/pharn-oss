@@ -1,6 +1,6 @@
 # PLAN — core-371-canon-docs
 
-- spec_content_hash: f058fca367fabcdfecf939dc70bfb43deaadedb1b0e810b790c4aeb156d6775d
+- spec_content_hash: 8566b4432ed6cc7035de5d925dafe3755086e23b12acacde0dcdda07a43a9167
 - applied_lessons: [L50, L64, L68, L75, L78]
 - increment: check that `CLAUDE.md`, the four trusted docs and the ten `.dev/guides/*.md` say what `main` (93c2af1b,
   `SKILLS_VERSION` 7.25.1) really does, and correct only the claims that are false or stale (Linear CORE-371, part B;
@@ -10,9 +10,9 @@
   build apparatus.
 - constitution_refs: [P0, P2, P6, P7]
 
-The `spec_content_hash` above is the pre-patch `pharn/ARCHITECTURE.md`. The patch below changes it, so the line is
-re-pinned to the post-image hash (expected `8566b4432ed6cc7035de5d925dafe3755086e23b12acacde0dcdda07a43a9167`) after
-the human's patch is committed and before `/pharn-dev-build` Step 0.
+The `spec_content_hash` above is the post-patch `pharn/ARCHITECTURE.md` (`hash-doc.mjs`, measured after the human's
+patch was committed as `cef96e15`); the plan was first pinned to the pre-patch hash
+`f058fca367fabcdfecf939dc70bfb43deaadedb1b0e810b790c4aeb156d6775d` and re-pinned before `/pharn-dev-build` Step 0.
 
 ## Discovery (read this run)
 
