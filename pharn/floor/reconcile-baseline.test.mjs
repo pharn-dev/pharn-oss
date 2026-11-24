@@ -16,6 +16,7 @@ import {
   chmodSync,
   lstatSync,
   utimesSync,
+  readdirSync,
 } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -842,6 +843,132 @@ test("✧ activeFeatureSlug is owned here and re-exported by the checker as the 
   assert.equal(activeFeatureSlug({ set_by: ".dev/features/x/PLAN.md" }), "x");
   assert.equal(activeFeatureSlug({ set_by: "pharn/features/../PLAN.md" }), null);
 });
+
+// ---- --check-epoch (7.24.0, CORE-343): the anchor's epoch-owner test, read-only, at a run's entry. ----------------
+const checkCli = (dir, ...name) => spawnSync(process.execPath, [ANCHOR, "--check-epoch", ...name, "--base", dir], { encoding: "utf8" });
+// Every file under the sandbox but .git, with its bytes: the check must leave this unchanged.
+function treeState(dir) {
+  const out = [];
+  const walk = (rel) => {
+    for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (r === ".git") continue;
+      if (e.isDirectory()) walk(r);
+      else out.push(`${r}\0${readFileSync(join(dir, r), "utf8")}`);
+    }
+  };
+  walk("");
+  return out.sort().join("\n");
+}
+
+for (const runDir of EPOCH_RUN_DIRS) {
+  test(`★ --check-epoch b while feature a's ${runDir} marker is open exits 2, names the close line, writes nothing`, () => {
+    const dir = makeRepo();
+    runAAnchored(dir);
+    const marker = plantMarker(dir, runDir, "a");
+    const before = treeState(dir);
+    const r = checkCli(dir, "b");
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.equal(r.stdout, "");
+    assert.match(
+      r.stderr,
+      /refusing to start: the baseline at pharn\/\.run\/reconcile\/baseline\.json holds the reconciliation epoch of feature "a"/
+    );
+    assert.ok(r.stderr.includes(marker), r.stderr);
+    const close =
+      runDir === "pharn-loop"
+        ? "node .claude/hooks/require-loop-record.cjs --close a"
+        : "node pharn/floor/run-marker.mjs --close pharn-ship a";
+    assert.ok(r.stderr.includes(close), r.stderr);
+    assert.match(r.stderr, /This run's build would refuse to anchor over that epoch/);
+    assert.equal(treeState(dir), before, "--check-epoch writes nothing");
+    // Agreement with the anchor it stands in for: the same tree refuses an anchor by b.
+    scopeFor(dir, "b");
+    assert.equal(anchorCli(dir).status, 2);
+  });
+}
+
+test("★ --check-epoch with an unreadable baseline and another feature's open marker exits 2 (cannot be attributed)", () => {
+  const dir = makeRepo();
+  runAAnchored(dir);
+  writeFileSync(join(dir, RECORD_PATH), "{ torn");
+  plantMarker(dir, "pharn-loop", "a");
+  const before = treeState(dir);
+  const r = checkCli(dir, "b");
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /refusing to start: the baseline at .* cannot be read/);
+  assert.equal(treeState(dir), before);
+});
+
+test("★ --check-epoch exits 0 where the anchor would not refuse: same feature, no baseline, closed or aged marker, legacy null snapshot", () => {
+  const ok = (dir, name) => {
+    const before = treeState(dir);
+    const r = checkCli(dir, name);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /^reconcile epoch: no other feature's open run owns the epoch/);
+    assert.equal(treeState(dir), before, "--check-epoch writes nothing");
+  };
+  // The same feature: a's own marker (the loop's --open refuses that case itself).
+  const same = makeRepo();
+  runAAnchored(same);
+  plantMarker(same, "pharn-loop", "a");
+  ok(same, "a");
+  // No baseline at all.
+  const none = makeRepo();
+  plantMarker(none, "pharn-loop", "a");
+  ok(none, "b");
+  // The owner's marker is absent, or older than the ceiling.
+  const closed = makeRepo();
+  runAAnchored(closed);
+  ok(closed, "b");
+  plantMarker(closed, "pharn-ship", "a", RUN_AGE_CEILING_MS + 3_600_000);
+  ok(closed, "b");
+  // A legacy record with a null scope_snapshot derives no feature.
+  const legacy = makeRepo();
+  runAAnchored(legacy);
+  const abs = join(legacy, RECORD_PATH);
+  const rec = JSON.parse(readFileSync(abs, "utf8"));
+  rec.scope_snapshot = null;
+  writeFileSync(abs, JSON.stringify(rec));
+  plantMarker(legacy, "pharn-loop", "a");
+  ok(legacy, "b");
+});
+
+test("★ --check-epoch refuses a missing or non-slug name with its own message, never as a pass or an owner refusal", () => {
+  const dir = makeRepo();
+  runAAnchored(dir);
+  plantMarker(dir, "pharn-loop", "a");
+  for (const name of ["../a", "A", "a b", "-a", ""]) {
+    const r = checkCli(dir, name);
+    assert.equal(r.status, 2, `${JSON.stringify(name)}: ${r.stdout}${r.stderr}`);
+    assert.equal(r.stdout, "");
+    assert.match(r.stderr, /--check-epoch: the feature name is not a plain slug/);
+    assert.doesNotMatch(r.stderr, /refusing to start/);
+  }
+  const bare = spawnSync(process.execPath, [ANCHOR, "--check-epoch"], { encoding: "utf8" });
+  assert.equal(bare.status, 2);
+  assert.match(bare.stderr, /--check-epoch requires a feature name/);
+});
+
+// Both callers (L29): each command's pinned line, read from its text and executed whole in a refusing sandbox.
+const REPO_ROOT = resolve(HERE, "..", "..");
+const CHECK_LINE_RE = /^[ \t]*(node pharn\/floor\/reconcile-baseline\.mjs --check-epoch '<name>')$/m;
+for (const file of ["pharn-loop.md", "pharn-ship-stages.md"]) {
+  test(`★ ${file}'s pinned --check-epoch line stops a run whose epoch another open run owns`, () => {
+    const text = readFileSync(join(REPO_ROOT, ".claude", "commands", file), "utf8");
+    const m = CHECK_LINE_RE.exec(text);
+    assert.ok(m, `${file} pins \`node pharn/floor/reconcile-baseline.mjs --check-epoch '<name>'\` on its own line`);
+    const dir = makeRepo();
+    runAAnchored(dir);
+    plantMarker(dir, "pharn-loop", "a");
+    const line = m[1].replace("pharn/floor/reconcile-baseline.mjs", JSON.stringify(ANCHOR));
+    const r = spawnSync("sh", ["-c", line.replace("<name>", "b")], { cwd: dir, encoding: "utf8" });
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /refusing to start/);
+    const pass = spawnSync("sh", ["-c", line.replace("<name>", "a")], { cwd: dir, encoding: "utf8" });
+    assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+  });
+}
 
 // ------------------------------------------------------------------ CORE-346: absent_at_anchor
 test("★ provenAbsent: true only for ENOENT / ENOTDIR — any entry at the path, a dangling link included, is not absence (L54)", () => {

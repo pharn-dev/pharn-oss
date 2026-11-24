@@ -23,6 +23,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.24.0] - 2026-11-24
+
+### Added
+
+- 2026-11-24: **A crashed run's open marker now stops the next `/pharn-loop` at entry, not at its build anchor
+  (`reconcile-baseline.mjs --check-epoch <name>`, CORE-343).** A loop killed by a host reboot during its build
+  (CORE-310 attempt 1, pharn-app at 7.22.0) left its marker open and its epoch on disk. A fresh `/pharn-loop` for any
+  other slug then ran entry, spec, plan, grill, triage and test, about 41 minutes in that run, before build Step 0's
+  `--anchor` refused through `epochOwnerOpen`. The new read-only mode runs that same function for the scope the build's
+  setter would write for `<name>`, and exits 2 with the same refusal (it names the run and its close line), or 0. It
+  reads the baseline and `lstat`s markers only: no git, no write. `/pharn-loop` Step 1a runs it after S3, before
+  anything is written: a non-zero exit is S9 and the run goes straight to its summary. `/pharn-ship` runs it in Step 2.1
+  right after GATE 1, the first point its `<name>` exists, so it still saves plan, grill and test; the quick part's
+  restated order names it. The anchor's own refusal stays, for a run opened between entry and build. Bounds, unchanged
+  from 7.3.0: presence and a 24 h age only, no liveness test (no pid or session). The refusal names a close line that
+  `/pharn-loop`'s grant covers, and only the command's text forbids the run to use it. Contract:
+  `pharn/pharn-contracts/reconciliation-record.md §1`.
+
 ## [7.23.4] - 2026-11-24
 
 ### Changed
