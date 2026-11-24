@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
+  Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
+  write made before it into the baseline, outside the window verify judges. The CORE-314 run
+  (`.dev/features/delegated-signoff-2026-11-23/`) re-anchored after two merges, as its batch brief said, and verify's
+  reconcile read `reconciled: 0`. After two later merges with no re-anchor, all 24 upstream paths read `merged`. That
+  run's lesson step could not ask its question from a subagent, so the candidate waited in its `REVIEW.md`. It was
+  promoted through `/pharn-dev-ship` (`.dev/features/reanchor-lesson/`) and the gated `/pharn-dev-memory-promote`,
+  and `docs/lessons-index.md` was regenerated. Dev-only: no `SKILLS_VERSION` bump.
+
 - 2026-11-23: **Measured: one real full `/pharn-loop` on pharn-app at 7.22.0 ended `STOP_GREEN` after one iteration —
   on its third start, with a revised description (CORE-310).** Attempt 1 was killed mid-build by a host reboot. Run 1
   stopped S9 at the test stage, because its third criterion ("existing tests still pass") cannot fail before the

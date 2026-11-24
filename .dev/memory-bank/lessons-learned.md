@@ -2529,3 +2529,18 @@ type: floor · concepts: [safe-default, validator-reuse, test-blindspot, partial
 - commit: ba7b5bb256bf4c7647cfd3cf253ec9a5c5e885d9
 - source: .dev/features/entry-verdict-early-read/GRILL.md § Inline — guarantee audit / evals (the P6 blocking finding); .dev/features/entry-verdict-early-read/REVIEW.md § Proposed lesson candidate
 - promoted: 2026-11-10 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L85 — Re-anchoring after merging origin/main mid-ship drops the build's own writes out of reconcile's window — keep the anchor and let `merged` take upstream's bytes
+
+type: scoping · concepts: [reconciliation, upstream-merge, re-anchor, reconcile-window, false-record]
+
+**Lesson.** Since 6.52.0 `check-bash-reconcile.mjs` lists a would-be escape whose bytes are the ones HEAD merged in from upstream under `merged` (`pharn/pharn-contracts/reconciliation-record.md` §2a), so merging `origin/main` into a branch whose epoch is open needs no re-anchor. A re-anchor hashes the working tree into a new baseline, so every write made before it, committed or not, leaves the window verify reconciles. Measured in CORE-314 (`delegated-signoff-2026-11-23`): `origin/main` moved four times. After the first two merges the run re-ran build Step 0 (setter, then `--anchor`), as its batch brief said, and verify's reconcile read `CLEAN` with `reconciled: 0`, while the record's P0 section first named reconcile among the checks over the build's two files. After the last two merges it kept the anchor, and reconcile listed all 24 upstream paths under `merged` with no escape. Remedy: after merging `origin/main`, keep the anchor. When a merge brings bytes `merged` cannot classify — a commit that is not upstream's, such as a fast-forward onto a local sibling commit, or a hand-resolved conflict on an out-of-scope path (§2a's "stays RED by design") — the escapes are real verdicts: land the change upstream first, or revert and re-apply it, and never re-anchor to absorb them ([[L68]]). If a re-anchor happens anyway, the record says which writes the window no longer covers.
+
+**Why it matters.** The re-anchor fails nothing: it narrows what reconcile saw without a sound, so a record can name a reconcile its window never held, as CORE-314's did until its review caught it. Nothing reads a record for which writes the window covered. It is the same window as [[L68]] (a human write must land outside it), seen from the other side: there an outside write would enter the window, here the build's own writes are pushed out of it. [[L48]] is the scope half of the same epoch (a scope set after the anchor is invisible to it), and [[L17]] is the failure class §2a was built against. **Bound (P0):** discipline only; no checker compares a verify's reconciled set with the paths the build wrote. **Trigger (P7):** observed once, in CORE-314; that run's lesson step could not ask from a subagent, and the maintainer asked for the promotion in chat on 2026-11-23.
+
+**Provenance.**
+
+- feature: delegated-signoff-2026-11-23
+- commit: 8d626cae3b6fffbc10289e4ef84214fa3e432a4d
+- source: .dev/features/delegated-signoff-2026-11-23/REVIEW.md § Proposed lesson candidate and its first advisory finding; .dev/features/delegated-signoff-2026-11-23/VERIFY.md § Orchestration notes
+- promoted: 2026-11-24 via gated `/pharn-dev-memory-promote` (human-approved).
