@@ -23,6 +23,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.23.4] - 2026-11-24
+
+### Changed
+
+- **A criterion of a test-first SPEC must be able to fail before the build. A "nothing changes" criterion goes in
+  `## Constraints`, and a precondition guard is not test-first evidence (CORE-344).**
+  - **Why:** in the CORE-310 loop (7.22.0), one intent's criterion "the existing profile unit tests still pass
+    unchanged" holds before the build as well as after it. Run 1 wrote its test plainly: it passed in the red run, and
+    `check-red-run.mjs` stopped the loop at the test stage (`ac-test-passes-before-build`, S9) after about 15 minutes.
+    Spec, plan, grill and triage had all let it through. Attempt 1 put "the source no longer contains the old TODO" in
+    front of the same check, so it failed before the build for a reason unrelated to the criterion, and the run went
+    on. Which way it went depended on how the test-stage model chose to write the test.
+  - **The rule** lives in `pharn/pharn-contracts/spec-template.md`, "The acceptance-criteria grammar". In a `feature`
+    or `quick` SPEC, each criterion's Then must be false on today's tree. A criterion that holds before the build
+    too is a constraint. The project's own gates hold it there, only as far as they observe it: `/pharn-regress`
+    compares them at base and head in a full run, and `/pharn-verify` runs them at HEAD in every run.
+  - **Where a run meets it:**
+    - `/pharn-spec` Step 2 raises such a criterion.
+    - `/pharn-spec` Step 4a moves it under `--model-approve`, and reports back blocked on thin intent when no
+      criterion would remain. `/pharn-loop`'s S6 row names that cause.
+    - In an amend (Step 1a), the spec stage moves no existing criterion, since amend mode is append-only, and appends
+      none that already holds. If an existing criterion holds, it leaves the SPEC `Draft` and reports that a person
+      must revise it. That is `/pharn-loop`'s S18.
+    - `/pharn-grill`'s acceptance-criteria axis flags it, and `/pharn-triage` lists it under `spec`.
+  - **The guard decision** lives in `pharn/pharn-contracts/ac-tests.md`, "The red run": a check the build makes true,
+    placed in front of an assertion that already holds, is the passes-before-build case in disguise. `/pharn-test`
+    Step 3 now tells the model not to write one, but to write the plain test and let the red run stop.
+  - **Advisory, stated:** whether a Then already holds is a judgment of meaning, so no spec-time check exists. A
+    phrase list would be a heuristic. The floor is unchanged: `check-red-run.mjs` still REDs such a criterion at the
+    test stage, and it cannot see why a test failed, so a guard is invisible to it. No checker, contract shape or
+    template changes.
+
 ## [7.23.3] - 2026-11-24
 
 ### Fixed

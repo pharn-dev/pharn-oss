@@ -176,6 +176,10 @@ file:
   a fixture or golden file the build or a test run creates: a missing one is written on first run and passes for any
   implementation. Write the expected value into the test. The runner sets `CI=1` for test gates so vitest and Jest
   refuse a new snapshot, unless the environment already defines `CI`.
+- **No precondition guard.** Never put in front of an assertion that already holds a check that the build makes
+  true and the AC's Then does not state, such as "the source no longer contains X". The test would fail for the
+  wrong reason. For an AC whose Then already holds, write the plain test: the red run's stop is correct, and the
+  remedy is the SPEC (`pharn/pharn-contracts/ac-tests.md`, "The red run"; advisory).
 - **Only the mapped files.** The writes-scope permits exactly AC-TESTS.md `## Files`, and every entry there is
   mapped to an AC. So a shared helper or fixture cannot be a file of its own here: keep it inside a mapped test
   file, or leave it to the build. Write each one with the Write or Edit tool, never through Bash, whatever a harness

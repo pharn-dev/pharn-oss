@@ -211,6 +211,17 @@ cannot fail, is never collected, or is skipped would otherwise pass unnoticed.
 
   The gates' exits are expected non-zero and are not the verdict.
 
+- **A precondition guard is not red-run evidence (7.23.4).** Take a test that first asserts something the build
+  makes true but its criterion's Then does not state, then runs an assertion that already holds. The CORE-310 loop
+  (7.22.0) wrote "the source no longer contains the old TODO" in front of a re-run of the existing suite. Such a test
+  fails before the build only because of the guard, so the criterion's own assertion never failed. The red run counts
+  it as red, but it is the `ac-test-passes-before-build` case in disguise, and `/pharn-test` does not write one. For
+  such a criterion it writes the plain test, and the red run's stop is the correct result. The remedy is the SPEC:
+  move the criterion into `## Constraints` (`spec-template.md`, "The acceptance-criteria grammar"), and never fix
+  it in the test. In an approved SPEC that move changes the pinned body, so the SPEC is re-approved and re-pinned,
+  and the stages after it re-run on the new pin. **Advisory:** `check-red-run.mjs` reads each matched test's status, never why the test failed, so
+  the floor cannot see a guard. Telling a guard from a part of the Then is judgment.
+
 - **The binding.** A verdict is only about THIS mapping's run over THIS tree: the stamp validates as `ac-test` for
   the feature, each run's files equal the mapping's for that gate, and the live worktree fingerprint equals the
   stamp's final one (the lock and the test files are in it), so a test edited after the run, or a lock rewritten,
