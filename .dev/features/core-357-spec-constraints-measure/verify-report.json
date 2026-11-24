@@ -1,0 +1,26 @@
+{
+  "feature": "core-357-spec-constraints-measure",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "41b7a949caf873bf227a1c6026c10cbfd6698575b87cc15da19a1578e96d0fdb",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "d42f0462447d6ca9547ddc49ae4c37aef4a68850155aac2cec3f6df30a94e418"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

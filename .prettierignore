@@ -15,6 +15,8 @@ pharn/floor/test-fixtures
 .dev/features/core-310-real-loop-record/evidence/
 # The grill-effort E1 record's evidence bundles (CORE-342): the same kind of bundle, the same reason.
 .dev/features/core-342-grill-effort-e1/evidence/
+# The CORE-357 spec-constraints record's evidence bundle: the same kind of bundle, the same reason.
+.dev/features/core-357-spec-constraints-measure/evidence/
 
 # Generated capability catalog: byte-for-byte output of `npm run docs:generate`, guarded by
 # .dev/floor/check-capability-catalog.mjs. Excluded so the formatter can never rewrite committed
