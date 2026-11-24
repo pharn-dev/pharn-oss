@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-24: **Measured: one E1 loop pair on pharn-app, grill effort `high` against `medium`. The shipped grill effort
+  stays `high`. This is a decision by the agent under the maintainer's delegation, not a maintainer decision
+  (CORE-342).** Both arms used the same base, intent and launch line, at PHARN 7.22.0. Only the project's
+  `models.stages.grill.effort` differed.
+  - **Medium:** `STOP_GREEN` after one iteration on its fourth attempt. Its first three attempts were void: an entry
+    test timeout under load; a red cached by the first attempt; and a timing race on the base's own `format:check` red.
+  - **High:** both attempts were environmental voids. The project's `test` gate timed out under machine load.
+  - **Decision:** by the rule fixed before any run, the incomplete pair keeps `high`.
+  - **Served effort:** every grill request sent its arm's level in `output_config`, and every other context sent
+    `high`. That is a client record, not proof of what the server applied.
+  - **Catches:** no grill finding in either arm was triaged other than `proceed`, so the catch comparison is
+    uninformative.
+  - **Bounds:** n is one attempted pair with no non-void control, so the record supports no claim about medium's
+    quality either way.
+  - **Reopen trigger:** a non-void high run of the same pair on a quiet machine.
+  - **Defect filed:** the entry-gate cache lives in the repository's common git dir and is shared across worktrees
+    (CORE-358).
+  - **Where it is:** the record is `.dev/measurements/grill-effort-e1-2026-11-24.md`, with scrubbed evidence bundles
+    under `.dev/features/core-342-grill-effort-e1/evidence/`. Dev-only: no `SKILLS_VERSION` bump.
+
 ## [7.23.1] - 2026-11-24
 
 ### Fixed
