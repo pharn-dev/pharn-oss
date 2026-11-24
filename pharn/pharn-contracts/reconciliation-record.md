@@ -110,21 +110,23 @@ before this call, so the refusal reaches only a caller that anchors out of order
   "scope_amendments": [
     { "scope": ["pharn/memory-bank/lessons-learned.md"], "set_by": ".claude/commands/pharn-memory-promote.md", "set_at": "…" }
   ],
+  "absent_at_anchor": ["<repo-relative path>"],
   "entry_count": 1759,
   "entries": { "<repo-relative path>": "<sha256 hex>" }
 }
 ```
 
-| Field              | Type             | Meaning                                                                                                                                                                                                       |
-| ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                     |
-| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                        |
-| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                           |
-| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.52.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`       |
-| `scope_snapshot`   | object \| `null` | A verbatim copy of `pharn/.run/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.24.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above) |
-| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                                  |
-| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                                   |
-| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below)            |
+| Field              | Type             | Meaning                                                                                                                                                                                                                                     |
+| ------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`          | integer          | Schema version. A **newer** version than the reader is `INCONCLUSIVE`; an **older** one is tolerated at read and reported in `warnings[]`                                                                                                   |
+| `epoch`            | ISO-8601         | When this epoch opened                                                                                                                                                                                                                      |
+| `anchored_by`      | string           | A label passed as `--by`. **Advisory** — it is argv, so it is a description, never an authorization                                                                                                                                         |
+| `anchored_head`    | string \| `null` | The full object id of the commit HEAD named at anchor time (6.52.0); `null` on an unborn HEAD or a git error. Read only by the `merged` classification (§2a). Absent on an older record, read as `null`                                     |
+| `scope_snapshot`   | object \| `null` | A verbatim copy of `pharn/.run/writes-scope.json` at anchor time. An object; `null` only in a baseline anchored before 6.24.0 — since then `--anchor` REFUSES rather than write a `null` snapshot (D6, above)                               |
+| `scope_amendments` | array            | Further scopes that came into force **during** the epoch, in call order. Empty on a fresh anchor; absent on a pre-5.1.0 record, read as `[]`                                                                                                |
+| `absent_at_anchor` | array            | Paths git listed at anchor time that `lstat` proved absent (`ENOENT`/`ENOTDIR`): a tracked file deleted before the anchor (7.23.1). Never in `entries`. Absent on an older record, read as `[]`; read only by §3's absent-at-both-ends rule |
+| `entry_count`      | integer          | `Object.keys(entries).length` at write time                                                                                                                                                                                                 |
+| `entries`          | object           | Repo-relative path → SHA-256 of its bytes. A symlink → SHA-256 of `symlink\0` + its raw link text, whatever its target (6.17.1 for a non-file target, 6.20.8 for every link; see "Symlinks" below)                                          |
 
 **Why the scope is snapshotted rather than read live.** By reconciliation time
 `pharn/.run/writes-scope.json` holds a **later** stage's scope — it is one mutable record, global to the
@@ -380,6 +382,28 @@ RED when the guards would deny it, and a `warnings[]` line names it either way. 
 purpose: if it were only a warning, making a file unreadable would hide a denied change. (Before 6.17.1
 this section listed it under WARN; the checker had already been treating it as changed, and the row was
 corrected in 6.17.1.)
+
+**The one exception: a path absent at both ends is not a change (7.23.1, CORE-346).** git lists a tracked file that is
+missing from the worktree, so a file deleted **before** the anchor used to hash to nothing at verify and read as an
+`ESCAPE`, though nothing in the window touched it (measured: CORE-311's benchmark run stopped `STOP_TERMINAL` on it).
+Now `--anchor` records each listed path that `lstat` proves absent in `absent_at_anchor` (§1). The checker clears an
+unhashable path, with the warning `absent at anchor, absent now — not a change: <path>`, only when all three hold: the
+path is in `absent_at_anchor`, it has no `entries` value, and `lstat` proves it absent **now** (`ENOENT` or `ENOTDIR`).
+**The clear never applies to a path that exists now** — readable or not, a file, a directory, a FIFO or a dangling
+link. Every other unhashable path is still a candidate:
+
+- a path the anchor hashed and that is gone now (a deletion in the window);
+- a path absent at the anchor and present now, whatever its bytes, or present and unreadable;
+- a path present but unreadable at the anchor (not proven absent, so not recorded) and gone now;
+- a path that entered the index during the window with no file on disk (`git add` then `rm`) — "no entry" alone
+  cannot tell it from a pre-anchor deletion, which is why the anchor records the list;
+- every path under a record **without** `absent_at_anchor` (anchored before 7.23.1), or with a non-array value there.
+  Such a baseline keeps the old fail-closed behaviour until the next anchor records the list.
+
+Bound, stated: reconcile compares two instants, so a path absent at the anchor that is created and deleted again
+inside the window reads unchanged, exactly as a write that ends at the anchored bytes does. Absence is now one of the
+anchored states. A control-surface path is still compared with HEAD's blobs whatever the baseline says (§4a), so a
+pre-anchor deletion there is still reported.
 
 **WARN** (`warnings[]`, verdict unaffected): a path present at anchor that git no longer lists, that is still on
 disk, **and that git itself reports ignored** (`git check-ignore --stdin -z --no-index`, given the path on stdin, exits 0 and echoes it back) — it left the

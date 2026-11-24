@@ -2168,3 +2168,180 @@ test("✧ no always-reconciled path lies under the state root — the exclusion 
     "no member is under, or a prefix of, pharn/.run/"
   );
 });
+
+// ------------------------------------------------------------------ CORE-346: a tracked file deleted BEFORE the anchor
+// A tracked path missing at the anchor and still missing at verify is not a change. The anchor records it in
+// `absent_at_anchor`; the checker clears it only when (1) it is in that list, (2) it has no `entries` value, and (3) lstat
+// proves it absent now (contract §3). Every row of the plan's case table is pinned below, each with the verdict and the
+// warning that proves which branch judged it (L60: a negative control per asserted property).
+const GONE = "src/gone.txt";
+const KEPT = "src/kept.txt";
+const CLEARED = (p) => `absent at anchor, absent now — not a change: ${p}`;
+const UNREADABLE_W = (p) => `unreadable during reconcile, treated as changed: ${p}`;
+const isRoot = () => typeof process.getuid === "function" && process.getuid() === 0;
+
+function preAnchorDeletionFixture({ beforeAnchor = () => {} } = {}) {
+  const dir = makeRepo();
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, GONE), "deleted before the anchor\n");
+  writeFileSync(join(dir, KEPT), "kept\n");
+  gitIn(dir, "add", "-A");
+  gitIn(dir, "commit", "-q", "-m", "two tracked files");
+  unlinkSync(join(dir, GONE)); // deleted from the worktree, still in the index — git keeps listing it
+  beforeAnchor(dir);
+  // A scope that covers neither src/ path, so any candidate there is an ESCAPE.
+  setScope(dir, ["pharn/features/keep.md"]);
+  const a = anchor(dir);
+  assert.equal(a.status, 0, a.stdout + a.stderr);
+  return dir;
+}
+const readBaseline = (dir) => JSON.parse(readFileSync(join(dir, RECORD_PATH), "utf8"));
+
+test("★ CORE-346: a tracked file deleted before the anchor and still absent at verify is CLEAN, with a warning", () => {
+  const dir = preAnchorDeletionFixture();
+  const rec = readBaseline(dir);
+  assert.deepEqual(rec.absent_at_anchor, [GONE], "the anchor recorded the missing tracked path");
+  assert.equal(rec.entries[GONE], undefined, "and gave it no entry");
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(r.json.verdict, "CLEAN", r.stdout);
+  assert.ok(r.json.warnings.includes(CLEARED(GONE)), r.stdout);
+  assert.ok(!r.json.warnings.includes(UNREADABLE_W(GONE)), "not judged by the fail-closed branch");
+});
+
+test("★ CORE-346: the clear never reaches a path that changed — every negative row stays an ESCAPE", () => {
+  const rows = [
+    {
+      name: "present at the anchor, deleted in the window",
+      act: (dir) => unlinkSync(join(dir, KEPT)),
+      file: KEPT,
+      warning: UNREADABLE_W(KEPT),
+    },
+    {
+      name: "absent at the anchor, re-created in the window",
+      act: (dir) => writeFileSync(join(dir, GONE), "back\n"),
+      file: GONE,
+      warning: null,
+    },
+    {
+      name: "absent at the anchor, a directory at the path now",
+      act: (dir) => mkdirSync(join(dir, GONE)),
+      file: GONE,
+      warning: UNREADABLE_W(GONE),
+    },
+    {
+      name: "absent at the anchor, a dangling symlink at the path now (L54)",
+      act: (dir) => symlinkSync("nowhere.txt", join(dir, GONE)),
+      file: GONE,
+      warning: null,
+    },
+    {
+      name: "not in the index at the anchor, added to the index with no file",
+      act: (dir) => {
+        writeFileSync(join(dir, "src/new.txt"), "staged then removed\n");
+        gitIn(dir, "add", "--", "src/new.txt");
+        unlinkSync(join(dir, "src/new.txt"));
+      },
+      file: "src/new.txt",
+      warning: UNREADABLE_W("src/new.txt"),
+    },
+    {
+      name: "a legacy baseline without absent_at_anchor",
+      act: (dir) => {
+        const rec = readBaseline(dir);
+        delete rec.absent_at_anchor;
+        writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+      },
+      file: GONE,
+      warning: UNREADABLE_W(GONE),
+    },
+    {
+      // An entry means the anchor hashed bytes there, so its absence now is a deletion, whatever the list says.
+      name: "a record that lists the path as absent AND gives it an entry",
+      act: (dir) => {
+        const rec = readBaseline(dir);
+        rec.entries[GONE] = createHash("sha256").update("deleted before the anchor\n").digest("hex");
+        writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+      },
+      file: GONE,
+      warning: UNREADABLE_W(GONE),
+    },
+    {
+      // An object, not a string: spreading or iterating it would throw, so this row also proves the Array.isArray guard.
+      name: "a malformed absent_at_anchor (an object, not an array)",
+      act: (dir) => {
+        const rec = readBaseline(dir);
+        rec.absent_at_anchor = { [GONE]: true };
+        writeFileSync(join(dir, RECORD_PATH), JSON.stringify(rec, null, 2) + "\n");
+      },
+      file: GONE,
+      warning: UNREADABLE_W(GONE),
+    },
+  ];
+  assert.ok(rows.length >= 7, "the row set is non-empty (L34)");
+  for (const row of rows) {
+    const dir = preAnchorDeletionFixture();
+    row.act(dir);
+    const r = check(dir, ["--require-baseline"]);
+    assert.equal(r.json?.verdict, "ESCAPE", `${row.name}: ${r.stdout}${r.stderr}`);
+    assert.deepEqual(
+      r.json.escapes.map((e) => e.file),
+      [row.file],
+      row.name
+    );
+    assert.ok(!r.json.warnings.includes(CLEARED(row.file)), `${row.name}: never cleared`);
+    if (row.warning) assert.ok(r.json.warnings.includes(row.warning), `${row.name}: ${r.stdout}`);
+  }
+});
+
+test("★ CORE-346: absent at the anchor, present but unreadable at verify is an ESCAPE (the path exists now)", (t) => {
+  if (isRoot()) {
+    t.skip("root reads a mode-000 file, so it cannot be made unreadable");
+    return;
+  }
+  const dir = preAnchorDeletionFixture();
+  writeFileSync(join(dir, GONE), "back, then hidden\n");
+  chmodSync(join(dir, GONE), 0o000);
+  let r;
+  try {
+    r = check(dir, ["--require-baseline"]);
+  } finally {
+    chmodSync(join(dir, GONE), 0o644);
+  }
+  assert.equal(r.json?.verdict, "ESCAPE", r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    [GONE]
+  );
+  assert.ok(r.json.warnings.includes(UNREADABLE_W(GONE)), r.stdout);
+  assert.ok(!r.json.warnings.includes(CLEARED(GONE)), r.stdout);
+});
+
+test("★ CORE-346: present but unreadable at the anchor, then deleted, is an ESCAPE (never recorded as absent)", (t) => {
+  if (isRoot()) {
+    t.skip("root reads a mode-000 file, so it cannot be made unreadable");
+    return;
+  }
+  // The file is unlinked below, so its mode-000 needs no restoring.
+  const dir = preAnchorDeletionFixture({ beforeAnchor: (d) => chmodSync(join(d, KEPT), 0o000) });
+  const rec = readBaseline(dir);
+  assert.equal(rec.entries[KEPT], undefined, "precondition: the anchor could not hash it");
+  assert.ok(!rec.absent_at_anchor.includes(KEPT), "an unreadable file is not proven absent");
+  unlinkSync(join(dir, KEPT));
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.json?.verdict, "ESCAPE", r.stdout + r.stderr);
+  assert.deepEqual(
+    r.json.escapes.map((e) => e.file),
+    [KEPT]
+  );
+  assert.ok(r.json.warnings.includes(UNREADABLE_W(KEPT)), r.stdout);
+});
+
+test("★ CORE-346: absent at the anchor, created and deleted again inside the window, reads CLEAN (two-instant bound)", () => {
+  const dir = preAnchorDeletionFixture();
+  writeFileSync(join(dir, GONE), "briefly back\n");
+  unlinkSync(join(dir, GONE));
+  const r = check(dir, ["--require-baseline"]);
+  assert.equal(r.json?.verdict, "CLEAN", r.stdout + r.stderr);
+  assert.ok(r.json.warnings.includes(CLEARED(GONE)), r.stdout);
+});

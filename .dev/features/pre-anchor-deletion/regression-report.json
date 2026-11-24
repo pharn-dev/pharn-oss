@@ -1,0 +1,51 @@
+{
+  "base": "08d7f63e693a1cdb1e0269ee552357ce77408313",
+  "inside": [
+    ".dev/guides/floor-checks.md",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn-install.json",
+    "pharn/floor/check-bash-reconcile.mjs",
+    "pharn/floor/check-bash-reconcile.test.mjs",
+    "pharn/floor/reconcile-baseline.mjs",
+    "pharn/floor/reconcile-baseline.test.mjs",
+    "pharn/pharn-contracts/reconciliation-record.md",
+    ".dev/features/pre-anchor-deletion/GRILL.md",
+    ".dev/features/pre-anchor-deletion/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6913,
+      "failed": 0,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6921,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
