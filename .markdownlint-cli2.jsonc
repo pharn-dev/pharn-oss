@@ -38,6 +38,8 @@
     ".dev/features/core-310-real-loop-record/evidence",
     // The grill-effort E1 record's evidence bundles (CORE-342): JSON only, listed for the same reason.
     ".dev/features/core-342-grill-effort-e1/evidence",
+    // The CORE-357 spec-constraints record's evidence bundle: JSON only, listed for the same reason.
+    ".dev/features/core-357-spec-constraints-measure/evidence",
     "pharn/CONSTITUTION.md",
     "pharn/ARCHITECTURE.md",
     "pharn/THREAT-MODEL.md",

@@ -23,6 +23,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-24: **Measured: on CORE-310's intent v1, `/pharn-spec --model-approve` moved the "existing profile unit
+  tests still pass unchanged" criterion into `## Constraints` (CORE-357). n = 1.** One full `/pharn-loop` ran on a
+  scratch pharn-app worktree with PHARN 7.25.0 installed through the pharn CLI.
+  - **Answer 1 (the SPEC):** AC-3 moved, its id written plain, with the Assumptions line `AC-3 holds before the
+build, so it is a constraint`. That is the pre-registered "fired" case.
+  - **Answer 2 (the test stage):** a green red run. Both remaining criteria failed before the build, and nothing
+    stopped with `ac-test-passes-before-build`.
+  - **Answer 3 (the AC tests):** no precondition guard, by a hand reading (advisory).
+  - **Attribution:** the run also differs from CORE-310 run 1 in PHARN version, window, load and sampling, so
+    "CORE-344 caused it" is advisory. One run shows the rule firing once, not a rate.
+  - **The loop's own stop:** `STOP_TERMINAL` on `reconcile`, after the test stage. The 17 escapes were the
+    uncommitted install's own files, byte-equal to 7.25.0. The record proposes a loop-entry check as a follow-up.
+  - **Settings:** a copied `settings.local.json` granted `Bash(python3 -)` and `Bash(gh pr merge:*)` to the
+    unattended run. Neither was called.
+  - **Cost:** USD 5.90, 35 min 54 s.
+  - Record: `.dev/measurements/spec-constraints-core-357-2026-11-24.md`. Apparatus only: no `SKILLS_VERSION` bump.
+
 ## [7.25.0] - 2026-11-24
 
 ### Added
