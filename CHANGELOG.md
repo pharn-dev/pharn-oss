@@ -54,6 +54,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- 2026-11-24: **The `stage-verify` Kill test no longer leaves a looping `sh slow.sh` behind on every `npm test`
+  (CORE-349).** The test SIGKILLs the stage's process group, but its gate runs in its own group and exits only once it
+  sees `pharn/.run/slow-release`. In the mutant call `--resume` returned at once, so the fixture was removed inside the
+  gate's 100 ms poll and the shell looped forever. 22 such orphans were found on the maintainer's machine. Each run of
+  the gate now records its pid, and the test SIGKILLs every recorded gate before writing the release and again before
+  removing the fixture. It asserts that none survives. A pid is signalled only while its command still reads
+  `sh slow.sh`, so a reused pid is never touched. No other floor test has a gate that waits forever. Test-only: no
+  `SKILLS_VERSION` bump.
+
 - 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
   Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
   write made before it into the baseline, outside the window verify judges. The CORE-314 run
