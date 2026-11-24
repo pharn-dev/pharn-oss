@@ -280,6 +280,19 @@ outside the criteria. An edge case that matters **is** a criterion.
   URL, an HTTP status, or a returned value. Tests for the criteria are meant to be written before the
   build, from the SPEC and the PLAN only. This is **advisory**: no check can tell an observable outcome
   from an internal one.
+- **Each criterion must be able to fail before the build (7.23.1)**, in a SPEC whose criteria are tested first: a
+  `feature` or `quick` kind, not `test-infra` (whose lock is a bootstrap record) and not a legacy SPEC (which gets no
+  AC tests). Its Then must be false on today's tree. A criterion that holds before the build as well — nothing
+  changes, existing behaviour or existing tests still pass, a signature stays as it is — is a **constraint**: it goes
+  in `## Constraints`, never in the criteria. There the project's own gates hold it, and only as far as those gates
+  observe it: `/pharn-regress` compares them at base and head in a full run, and `/pharn-verify` runs them at HEAD in
+  every run (a quick run has no base comparison). This rule is **advisory**: whether a Then already holds is a
+  judgment of what it means against the code, so no structural check can make it, and a phrase list ("still",
+  "unchanged") would be a heuristic. The floor backstop comes later. At `/pharn-test` such a criterion's test passes
+  in the red run, and `check-red-run.mjs` REDs it `ac-test-passes-before-build` (`ac-tests.md`, "The red run"). The
+  failure that set the rule: the CORE-310 loop (7.22.0), whose criterion "the existing profile unit tests still pass
+  unchanged" stopped one run at the test stage, and got past the red run in another only through a precondition guard,
+  which `ac-tests.md` rules out.
 
 ## Clarification markers and guidance comments
 

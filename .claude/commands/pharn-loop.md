@@ -479,7 +479,7 @@ trigger, the Step-3 kind read of a `--quick` run, is a floor read.
 | S3 | always, before the first stage | capture the base SHA and original checkout (Step 1a); a failed capture stops `blocked: no-git-base` |
 | S4 | gate discovery yields no gates (no `--gates`, and the allowlist ∩ `package.json` scripts, minus `gates.exclude`, is empty — or, at `/pharn-regress`, holds only the e2e gates it never discovers) | stop `blocked: no-gates` — never run verify over an empty gate map |
 | S5 | `/pharn-build`'s seam-config extraction or `check-seam-config.mjs` is non-zero | stop `blocked: seam-config` — never substitute the default policy |
-| S6 | the description cannot fill the SPEC's required sections without inventing intent, or every criterion needs a write no plan may scope (`/pharn-spec` Step 4a) | stop `blocked: thin-intent` |
+| S6 | the description cannot fill the SPEC's required sections without inventing intent, or every criterion needs a write no plan may scope or already holds before the build (`/pharn-spec` Step 4a) | stop `blocked: thin-intent` |
 | S6b | `/pharn-spec` reports the Draft still carries a clarification marker, so it will not approve it | stop `blocked: needs-clarification` — a person answers the marked questions; the run never guesses them |
 | S6c | `/pharn-spec --quick --model-approve` reports the intent does not fit a quick SPEC (over three criteria, or one only end-to-end), or a `--quick` run's Step-3 kind read prints anything but `quick` | stop `blocked: not-quick` — a person narrows the intent or re-runs without `--quick`; never widened into a full run |
 | S7 | the build finds the plan ambiguous | stop `blocked: plan-ambiguity` |

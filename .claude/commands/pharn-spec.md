@@ -162,6 +162,10 @@ findings (there is no `rule_id` for "intent quality"):
 - **Testable criteria** — every criterion can be written as `Given … When … Then …` with a Then that is
   **observable on the public surface**: visible text, an accessible role and name, a URL, an HTTP status,
   or a returned value. A Then that only the implementation could see is a gap to raise.
+- **Fails before the build** (advisory; every kind but `test-infra`) — is any criterion's Then already true on
+  today's tree ("nothing changes", "existing tests still pass")? Its test cannot fail first, so `/pharn-test` would
+  stop. Propose moving it into `## Constraints` (rule: `pharn/pharn-contracts/spec-template.md`, "The
+  acceptance-criteria grammar").
 - **No test script PHARN can find** — read `package.json`'s `scripts` object (the structured field, not a
   text search). If there is no `package.json`, no own `test` key, or a `test` value containing npm's
   placeholder `no test specified`, warn that PHARN's gate discovery finds no `test` script, so nothing at
@@ -319,6 +323,10 @@ render the form and do not wait:
   one `## Assumptions` line: `AC-<n> names <path> only as a reference; it asks for no write to it`. Then re-run both
   checks: `check-spec.mjs` must be GREEN, and every criterion still listed must have its Assumptions line. If no
   criterion would remain, approve nothing and report back blocked on thin intent.
+- **Each criterion whose Then already holds before the build** (Step 2's "Fails before the build"; advisory): move
+  it into `## Constraints`, text kept with its id written plain, and add one `## Assumptions` line:
+  `AC-<n> holds before the build, so it is a constraint`; `check-spec.mjs` must stay GREEN. If no criterion would
+  remain, approve nothing and report back blocked on thin intent.
 - Otherwise, with Step 3's Draft GREEN, go straight to Step 5, and in Step 5's frontmatter edit also add
   `approved_by: model`.
 
