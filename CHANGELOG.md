@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.23.1] - 2026-11-24
+
 - 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
   Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
   write made before it into the baseline, outside the window verify judges. The CORE-314 run
@@ -83,6 +85,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   record. Record: `.dev/measurements/delegated-signoff-2026-11-23.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
 
 ### Fixed
+
+- 2026-11-24: **Fixed: docs that no longer said what `main` does (CORE-350).** A claim-by-claim check of the
+  hand-written docs against `main` (about 140 claims, 9 false or stale) corrected:
+  - **`pharn/LIMITS.md` §11 (shipped, so this patch bump), `CLAUDE.md`, `CONTRIBUTING.md` and two comments each in
+    `.github/workflows/release.yml` and the per-PR checks' tests** said ruleset 25907495, which requires `main`'s CI
+    checks, has no bypass actor. Read live on 2026-11-24, the owner has been its bypass actor (`always`) since
+    2026-11-04, so a merge made with the owner's credentials can land a tree whose required checks failed. The release
+    job still tags only a commit whose listed checks passed. The trusted-doc and workflow lines were applied by a
+    human.
+  - The product command lists in `CLAUDE.md` and the README Commands table now include `/pharn-triage` and
+    `/pharn-supervise`.
+  - `CLAUDE.md` names the fourth per-PR gate outside `npm run check`, `check:instruction-growth`.
+  - README: `.claude/agents/` (the `pharn-stage` and `pharn-review-lens` subagent definitions) is in what an install
+    receives. A full `/pharn-loop` triage no longer reads as stopping for a person: since 7.8.0 a `replan` gets re-plan
+    rounds, and since 7.9.0 an escalation goes to the supervisor and `SUPERVISOR.json`.
+  - `docs/pipeline.md` names the triage and supervisor stages of a full loop.
+  - `CONTRIBUTING.md`: the trusted-doc hook denies the four write tools, not a Bash write.
+  - `SECURITY.md`: the delivery runs' state under `pharn/.run/pharn-{loop,ship,review}/` is in the protected list.
+
+  Not covered: the docs checked are a fixed list (README outside the generated block, CLAUDE.md, CONTRIBUTING,
+  SECURITY, `docs/*.md`, the trusted docs). GitHub settings can change again after this read, which is how the
+  ruleset sentence went stale.
 
 - 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
   scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default

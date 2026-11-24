@@ -1,0 +1,53 @@
+{
+  "base": "33db1df7ae195261f8bcdd42990caac63620a402",
+  "inside": [
+    ".dev/floor/check-surface-bump.test.mjs",
+    ".dev/floor/instruction-growth-wiring.test.mjs",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "SECURITY.md",
+    "SKILLS_VERSION",
+    "docs/pipeline.md",
+    "pharn-install.json",
+    ".dev/features/core-350-docs-truth/GRILL.md",
+    ".dev/features/core-350-docs-truth/PLAN.md"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7052,
+      "failed": 2,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7062,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
