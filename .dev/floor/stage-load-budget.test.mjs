@@ -145,7 +145,7 @@ const STAGE_LOAD_CEILINGS = Object.freeze({
   "pharn-review": 375808, // 341,324 — 22 lenses
   "pharn-ship": 181248, // 164,502 — re-measured at 7.19.0 (lean-stage-agent: the pharn-stage definition, item 2's fallback)
   "pharn-spec": 77824, // 70,314 — re-measured at 7.10.0 (loop-amend-spec: the amend mode, Step 1a)
-  "pharn-test": 31232, // 28,046
+  "pharn-test": 36352, // 32,713 — re-measured at 7.25.0 (test-stage-typecheck: Step 3c)
   "pharn-supervise": 17920, // 16,093 — measured at 7.9.0 (loop-supervisor)
   "pharn-triage": 17408, // 15,596 — measured at 7.7.0 (loop-grill-triage)
   "pharn-verify": 29696, // 26,940

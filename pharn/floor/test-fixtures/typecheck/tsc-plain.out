@@ -1,0 +1,6 @@
+src/__tests__/a.test.ts(2,42): error TS2307: Cannot find module '../reset.js' or its corresponding type declarations.
+src/__tests__/a.test.ts(4,18): error TS2554: Expected 1 arguments, but got 2.
+src/__tests__/a.test.ts(5,9): error TS2741: Property 'NODE_ENV' is missing in type '{}' but required in type 'Env'.
+src/__tests__/a.test.ts(6,7): error TS2339: Property 'missing' does not exist on type 'typeof import("/project/src/lib")'.
+src/__tests__/a.test.ts(7,11): error TS2339: Property 'nope' does not exist on type 'typeof import("/project/src/lib")'.
+src/lib.ts(3,14): error TS2322: Type 'string' is not assignable to type 'number'.
