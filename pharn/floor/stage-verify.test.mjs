@@ -1186,9 +1186,50 @@ test("★ budget clock — the opening work counts: a slow first `git ls-files` 
 });
 
 // ── ★ KILL MID-DRAIN ────────────────────────────────────────────────────────────────────────────────
+// CORE-349: the gate `sh slow.sh` runs in its own process group, so the SIGKILL of the stage's group never reaches it,
+// and it exits only when it next sees `slow-release`. Where `--resume` returned at once (the mutant), `rmSync` removed
+// the fixture inside the gate's poll window and the shell looped forever — one leaked process per `npm test`. Each run of
+// the gate now records its pid, and every recorded gate is SIGKILLed before the fixture goes.
+const SLOW_PIDS = "pharn/.run/slow-pids";
+
+/** Is `pid` still this fixture's gate? Only while its command reads exactly `sh slow.sh`: a stale pid may be reused. */
+function isSlowGate(pid) {
+  const r = spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8" });
+  return r.status === 0 && r.stdout.trim() === "sh slow.sh";
+}
+
+/** The pids `slow.sh` recorded in `dir`; [] when it recorded none. */
+function slowGatePids(dir) {
+  const file = join(dir, SLOW_PIDS);
+  if (!existsSync(file)) return [];
+  return readFileSync(file, "utf8").split(/\s+/).filter(Boolean).map(Number);
+}
+
+/** SIGKILL every recorded gate still running (its group and itself), wait up to 5 s, return the pids still alive. */
+async function reapSlowGates(dir) {
+  const signal = (target) => {
+    try {
+      process.kill(target, "SIGKILL");
+    } catch (e) {
+      if (e.code !== "ESRCH") throw e;
+    }
+  };
+  let live = slowGatePids(dir).filter(isSlowGate);
+  for (const pid of live) {
+    signal(-pid);
+    signal(pid);
+  }
+  const t0 = Date.now();
+  while (live.length > 0 && Date.now() - t0 < 5000) {
+    await new Promise((res) => setTimeout(res, 50));
+    live = live.filter(isSlowGate);
+  }
+  return live;
+}
+
 async function killMidDrain(cliSource) {
   const committed = {
-    "slow.sh": "#!/bin/sh\n: > pharn/.run/slow-started\nwhile [ ! -f pharn/.run/slow-release ]; do sleep 0.1; done\nexit 0\n",
+    "slow.sh": `#!/bin/sh\necho $$ >> ${SLOW_PIDS}\n: > pharn/.run/slow-started\nwhile [ ! -f pharn/.run/slow-release ]; do sleep 0.1; done\nexit 0\n`,
   };
   const fx = fixture({ committed, cliSource });
   try {
@@ -1206,7 +1247,9 @@ async function killMidDrain(cliSource) {
     const phase = existsSync(join(fx.dir, VERIFY_PATHS.stageJson))
       ? JSON.parse(readFileSync(join(fx.dir, VERIFY_PATHS.stageJson), "utf8")).phase
       : null;
-    writeFileSync(join(fx.dir, "pharn/.run/slow-release"), ""); // lets the orphaned gate (its own process group) exit
+    const recorded = slowGatePids(fx.dir).length;
+    const orphans = await reapSlowGates(fx.dir); // before the release: the orphaned gate is still looping here
+    writeFileSync(join(fx.dir, "pharn/.run/slow-release"), ""); // lets the resume's re-run of the gate exit
     let r;
     for (let i = 0; i < 40; i++) {
       r = runCli(fx.dir, ["--resume", "--budget-ms", "600000"]);
@@ -1214,8 +1257,9 @@ async function killMidDrain(cliSource) {
       if (!busy) break;
       await new Promise((res) => setTimeout(res, 250));
     }
-    return { phase, r };
+    return { phase, r, recorded, orphans };
   } finally {
+    await reapSlowGates(fx.dir); // the resume's re-run, and any gate a failed assertion above left running
     rmSync(fx.dir, { recursive: true, force: true });
   }
 }
@@ -1225,12 +1269,16 @@ test("★ Kill — a SIGKILL while a gate runs leaves the record at drain, and -
   assert.equal(real.phase, "drain", "the drain-top checkpoint was persisted before the gate ran");
   assert.equal(real.r.code, 0, real.r.raw);
   assert.equal(real.r.doc.status, "done");
+  assert.ok(real.recorded >= 1, "slow.sh recorded no pid, so the orphan check below would be vacuous");
+  assert.deepEqual(real.orphans, [], "a killed run's gate outlived the reap: it would loop forever once the fixture goes");
 
   const noCheckpoint = mutate(readFileSync(CLI_SRC, "utf8"), '    checkpoint(state, "drain");\n', "");
   const mutant = await killMidDrain(noCheckpoint);
   assert.equal(mutant.phase, null, "the mutant persisted nothing before the kill");
   assert.equal(mutant.r.code, 2);
   assert.equal(mutant.r.doc.reason_code, "no-progress", "…so its resume has nothing to resume — the edit this test catches");
+  assert.ok(mutant.recorded >= 1, "slow.sh recorded no pid in the mutant run");
+  assert.deepEqual(mutant.orphans, [], "the mutant run's gate outlived the reap");
 });
 
 // ── VERIFIERS (counted, never run) ──────────────────────────────────────────────────────────────────
