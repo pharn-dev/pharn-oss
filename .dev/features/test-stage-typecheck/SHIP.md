@@ -16,6 +16,11 @@ verdict-regress: no-regressions
 verdict-verify: PASS
 run-ended: GATE 2
 
+After the PR opened, CI's pharn-ci diff-coverage gate read 99.41% (threshold 100%): `check-ac-types.mjs` lines 94–95,
+the invalid-`package.json` branch. One test was added to `pharn/floor/check-ac-types.test.mjs` (a declared `## Files`
+path, test-only, no product bytes) covering that branch and the unreadable-log branch `REVIEW.md` named as untested.
+The verdicts above are from the run before that addition; CI re-runs the full suite on it.
+
 Pointers: `REVIEW.md` (findings, advisory), `GRILL.md` (advisory), `REGRESSION.md`, `VERIFY.md`.
 
 changelog-entry: exit 0

@@ -194,6 +194,31 @@ test("UNUSABLE (exit 2) — bad argv, a missing mapping, or a symlinked scratch 
   }
 });
 
+test("UNUSABLE (exit 2) — a package.json that is not JSON, or a gate log that cannot be read after a red exit (never GREEN)", () => {
+  const bad = project();
+  try {
+    writeFileSync(join(bad.dir, "package.json"), "{ not json");
+    const r = check(bad.dir);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stdout, /^UNUSABLE — package\.json is not valid JSON/m);
+  } finally {
+    bad.done();
+  }
+  // The gate removes its own stderr log, then exits 1: the checker cannot read it and must not judge.
+  const gone = project({ scripts: { typecheck: "node rm-log.mjs" } });
+  try {
+    writeFileSync(
+      join(gone.dir, "rm-log.mjs"),
+      'import { rmSync } from "node:fs";\nrmSync("pharn/.run/pharn-test/types/typecheck.err", { force: true });\nprocess.exitCode = 1;\n'
+    );
+    const r = check(gone.dir);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stdout, /^UNUSABLE — cannot read the typecheck log .*typecheck\.err.* after a red exit/m);
+  } finally {
+    gone.done();
+  }
+});
+
 // ── ★ WIRING (L45): /pharn-test's COMMITTED Step 3c line ───────────────────────────────────────────────────
 
 const PHARN_TEST_CMD = join(HERE, "..", "..", ".claude", "commands", "pharn-test.md");
