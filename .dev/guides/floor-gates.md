@@ -422,7 +422,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # it on a reused `test` only). AC gate + check-loop-fresh J bind the copy; VERIFY.md states the lost second sample
 # (pharn/LIMITS.md §9). Bound: nothing re-binds the copy to the source afterwards (verify-reuse-rederive). Record:
 # .dev/features/head-test-single-run/.
-# NOT A SOURCE: the build's full gate run (7.23.1, CORE-345, decided, not built). Same `npm run test` at the same HEAD
+# NOT A SOURCE: the build's full gate run (7.23.2, CORE-345, decided, not built). Same `npm run test` at the same HEAD
 # and timeout as regress HEAD, but a different fp_before (CORE-310 run2: a234ec98… vs bc340bab…), so a different
 # identity: the build writes BUILD.md (fingerprinted, INCLUDED_ARTIFACTS) after its full gate. Matching it needs a weaker
 # identity; reasons and the reopen condition: gate-reuse-core.mjs header, gate-run-record.md CORE-89 section.

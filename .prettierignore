@@ -13,6 +13,8 @@ pharn/floor/test-fixtures
 # The real-loop record's evidence bundles (CORE-310): another project's run state, copied with each member's sha256, so a
 # formatter must not rewrite them.
 .dev/features/core-310-real-loop-record/evidence/
+# The grill-effort E1 record's evidence bundles (CORE-342): the same kind of bundle, the same reason.
+.dev/features/core-342-grill-effort-e1/evidence/
 
 # Generated capability catalog: byte-for-byte output of `npm run docs:generate`, guarded by
 # .dev/floor/check-capability-catalog.mjs. Excluded so the formatter can never rewrite committed

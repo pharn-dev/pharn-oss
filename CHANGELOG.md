@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [7.23.1] - 2026-11-24
+## [7.23.2] - 2026-11-24
 
 - 2026-11-24: **Decided, not built: the build's full-gate `test` run is not offered to regress HEAD (CORE-345).** In
   the CORE-310 run2 loop the suite ran twice at HEAD: the build's full gate (327.7 s), then regress HEAD (383.3 s),
@@ -35,6 +35,66 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   where CORE-89's bound is: `pharn/pharn-contracts/gate-run-record.md` ("One execution of `test` for regress and
   verify") and the `pharn/floor/gate-reuse-core.mjs` header (a comment; no code changed). Decided by the agent under
   the orchestrator's delegation (`.dev/features/core-345-build-regress-reuse/`). Patch: shipped prose only.
+
+- 2026-11-24: **Measured: one E1 loop pair on pharn-app, grill effort `high` against `medium`. The shipped grill effort
+  stays `high`. This is a decision by the agent under the maintainer's delegation, not a maintainer decision
+  (CORE-342).** Both arms used the same base, intent and launch line, at PHARN 7.22.0. Only the project's
+  `models.stages.grill.effort` differed.
+  - **Medium:** `STOP_GREEN` after one iteration on its fourth attempt. Its first three attempts were void: an entry
+    test timeout under load; a red cached by the first attempt; and a timing race on the base's own `format:check` red.
+  - **High:** both attempts were environmental voids. The project's `test` gate timed out under machine load.
+  - **Decision:** by the rule fixed before any run, the incomplete pair keeps `high`.
+  - **Served effort:** every grill request sent its arm's level in `output_config`, and every other context sent
+    `high`. That is a client record, not proof of what the server applied.
+  - **Catches:** no grill finding in either arm was triaged other than `proceed`, so the catch comparison is
+    uninformative.
+  - **Bounds:** n is one attempted pair with no non-void control, so the record supports no claim about medium's
+    quality either way.
+  - **Reopen trigger:** a non-void high run of the same pair on a quiet machine.
+  - **Defect filed:** the entry-gate cache lives in the repository's common git dir and is shared across worktrees
+    (CORE-358).
+  - **Where it is:** the record is `.dev/measurements/grill-effort-e1-2026-11-24.md`, with scrubbed evidence bundles
+    under `.dev/features/core-342-grill-effort-e1/evidence/`. Dev-only: no `SKILLS_VERSION` bump.
+
+## [7.23.1] - 2026-11-24
+
+### Fixed
+
+- **Fixed: reconcile no longer reports a tracked file deleted before the build anchor as an escape when it is still
+  absent at verify (`reconcile-baseline.mjs`, `check-bash-reconcile.mjs`, CORE-346).** git lists a tracked file that
+  is missing from the worktree, so such a file hashed to nothing at verify and the fail-closed branch made it a
+  candidate. Measured: CORE-311's benchmark deleted `.claude/agents/pharn-stage.md` before its run; nothing touched it,
+  and verify still read `FAIL` (`terminal_cause: reconcile`). Now `--anchor` records each listed path that `lstat`
+  proves absent in a new additive record field, `absent_at_anchor` (the record stays version 1). The checker clears an
+  unhashable path, with a warning, only when it is in that list, has no `entries` value, and `lstat` proves it absent
+  now. A path that exists now (readable or not, a directory or a dangling link included), a path deleted in the
+  window, a path absent at the anchor and re-created, and a path that entered the index in the window with no file
+  all stay fail-closed candidates. **A baseline anchored before 7.23.1 has no `absent_at_anchor`, so it keeps the old
+  fail-closed behaviour until the next `--anchor` records the list.** Contract: `reconciliation-record.md` §1 (the
+  field) and §3 (the exception, and that it never applies to a path that exists now).
+
+- 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
+  scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default
+  changes. The 2026-11-17 entry said "A medium-effort grill reads `does-not-support`: it lost one catch." That reading
+  rested on one run, p4/r2. Its finding names the uncovered AC-4 and is triaged `replan`, but it cites `PLAN.md:15`,
+  which is not one of the manifest's anchors, so `defect-probe-score.mjs` scored it a miss. Re-scored by hand, the arm
+  loses no catch in 8 comparable pairs, and chain cost is down 14%. So `.dev/measurements/stage-model-tuning-2026-11-17.md`
+  now reads `supports-change` for grill effort, labelled advisory, beside the unchanged floor reading
+  (`does-not-support` / `catch-lost`). The scorer is unchanged: matching the finding's free text would cross its trust
+  boundary, and a new anchor would change the pinned manifest. Instead, `.dev/probes/defect-probes/README.md` now asks
+  every record to hand-check a lost pair before stating `catch-lost`. Whether the shipped grill effort changes is the
+  maintainer's decision, with the E1 loop pairs, tracked as CORE-342.
+
+### Added
+
+- 2026-11-24: **The `stage-verify` Kill test no longer leaves a looping `sh slow.sh` behind on every `npm test`
+  (CORE-349).** The test SIGKILLs the stage's process group, but its gate runs in its own group and exits only once it
+  sees `pharn/.run/slow-release`. In the mutant call `--resume` returned at once, so the fixture was removed inside the
+  gate's 100 ms poll and the shell looped forever. 22 such orphans were found on the maintainer's machine. Each run of
+  the gate now records its pid, and the test SIGKILLs every recorded gate before writing the release and again before
+  removing the fixture. It asserts that none survives. A pid is signalled only while its command still reads
+  `sh slow.sh`, so a reused pid is never touched. No other floor test has a gate that waits forever. Test-only: no
+  `SKILLS_VERSION` bump.
 
 - 2026-11-23: **Lesson L85: after merging `origin/main` into a branch whose reconcile epoch is open, keep the anchor.**
   Since 6.52.0 reconcile lists upstream's bytes under `merged`, so the merge needs no re-anchor. A re-anchor moves every
@@ -94,20 +154,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   26.95%, just below the 27.7% reopen condition, but one main-session run on a non-benchmark feature is not evidence
   either way. No ticket is reopened. CORE-314's first criterion, the maintainer's own acceptance, is not met by this
   record. Record: `.dev/measurements/delegated-signoff-2026-11-23.md`. Dev apparatus only, so no `SKILLS_VERSION` bump.
-
-### Fixed
-
-- 2026-11-23: **Fixed: the CORE-112 record's grill-effort verdict. A medium-effort grill lost no catch on probe p4; the
-  scorer missed one (CORE-313).** Apparatus only; nothing ships, `SKILLS_VERSION` is unchanged, and no shipped default
-  changes. The 2026-11-17 entry said "A medium-effort grill reads `does-not-support`: it lost one catch." That reading
-  rested on one run, p4/r2. Its finding names the uncovered AC-4 and is triaged `replan`, but it cites `PLAN.md:15`,
-  which is not one of the manifest's anchors, so `defect-probe-score.mjs` scored it a miss. Re-scored by hand, the arm
-  loses no catch in 8 comparable pairs, and chain cost is down 14%. So `.dev/measurements/stage-model-tuning-2026-11-17.md`
-  now reads `supports-change` for grill effort, labelled advisory, beside the unchanged floor reading
-  (`does-not-support` / `catch-lost`). The scorer is unchanged: matching the finding's free text would cross its trust
-  boundary, and a new anchor would change the pinned manifest. Instead, `.dev/probes/defect-probes/README.md` now asks
-  every record to hand-check a lost pair before stating `catch-lost`. Whether the shipped grill effort changes is the
-  maintainer's decision, with the E1 loop pairs, tracked as CORE-342.
 
 ## [7.23.0] - 2026-11-23
 

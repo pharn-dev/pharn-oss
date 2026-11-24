@@ -49,7 +49,7 @@
 // `compare_files`) stays `not-reusable-id`. BOUND: after the decision, nothing re-binds the copy to the source run
 // (`verify-reuse-rederive`), and a verify stamp's reused `test` cannot show which kind of source it came from.
 //
-// NOT EQUIVALENT: the build's full gate run vs regress HEAD (7.23.1, CORE-345, a model decision under delegation). The
+// NOT EQUIVALENT: the build's full gate run vs regress HEAD (7.23.2, CORE-345, a model decision under delegation). The
 // build's `--mode full` stamp runs the same `npm run test` (`files: []`) at the same HEAD and timeout, yet its identity
 // differs from the regress HEAD run's, because `fp_before` differs. Measured on the CORE-310 run2 loop
 // (`.dev/features/core-310-real-loop-record/evidence/run2.json`): build a234ec98…, regress HEAD bc340bab…. The observed
