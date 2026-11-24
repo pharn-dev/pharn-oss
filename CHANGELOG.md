@@ -39,6 +39,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   neither applies: `ci.yml` checks out with `fetch-depth: 0` and no coverage report is tracked. That is a reading of
   the notes, not a test. This pull request's own pharn-ci run is the check, and the notes' other new checks, such as
   the test-integrity changes, were not evaluated. No `SKILLS_VERSION` bump: workflows are not product surface.
+
+## [7.25.2] - 2026-11-25
+
+### Fixed
+
+- **Fixed: hand-written user docs that no longer said what `main` does (CORE-371, part A).** A claim-by-claim check of
+  `README.md` (outside the generated block), `docs/guarantees.md`, `docs/install-manifest.md`, `docs/limitations.md`,
+  `docs/pipeline.md`, `CONTRIBUTING.md`, `SECURITY.md` and `pharn/floor/README.md` against `main` at 7.25.1 (about 200
+  claims, 9 false or stale) corrected:
+  - **`pharn/floor/README.md` (installed, so this patch bump):** validate's sibling-reference check is described as it
+    has worked since 3.0.5 (any `pharn-<module>` in `reads:` other than the capability's own and `pharn-contracts` /
+    `pharn-core`), and the protected-path list names `pharn/.run/writes-scope.json`, memory-bank canon and, since
+    7.3.0, the delivery runs' state under `pharn/.run/pharn-{loop,ship,review}/`.
+  - `docs/limitations.md`: a `supervise` entry in `models.stages` needs pharn-cli 0.18.3 or newer, which accepts it;
+    the doc said no release did. Since 7.24.0 a run blocked by another feature's open epoch stops at `/pharn-loop`
+    entry, or right after `/pharn-ship`'s spec approval, not at its build anchor.
+  - `docs/pipeline.md`: `/pharn-test`'s typecheck step (7.25.0) gives each typecheck gate a fixed 170 s, and its
+    `ac-tests-typecheck` refusal is listed among what the test stage needs from a project. A delivery run's verify
+    reuses the HEAD gate result regress recorded on the same inputs.
+  - `CONTRIBUTING.md`: the `check` job also runs `npm run test:coverage` and, on a pull request, the pharn-ci diff
+    coverage gate, which neither local command exercises.
+  - `SECURITY.md`: the two subagent definitions under `.claude/agents/` are part of the security surface.
+
+  Not covered: `CLAUDE.md`, the four trusted docs and `.dev/guides/**` (part B of CORE-371). The pharn-cli claim
+  rests on a read of its v0.21.5 source; another repository can change after it.
+
+- 2026-11-25: **`main`'s `npm run format:check` went red after the code-scanning autofix commits left one array in
+  `pharn/floor/stage-direct.test.mjs` unformatted, and this re-formats that test file to Prettier's output.** Test file
+  only: no `SKILLS_VERSION` bump.
+
+### Added
+
 - 2026-11-24: **Measured: on CORE-310's intent v1, `/pharn-spec --model-approve` moved the "existing profile unit
   tests still pass unchanged" criterion into `## Constraints` (CORE-357). n = 1.** One full `/pharn-loop` ran on a
   scratch pharn-app worktree with PHARN 7.25.0 installed through the pharn CLI.

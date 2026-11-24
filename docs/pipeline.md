@@ -50,7 +50,8 @@ test, build, regress, verify). A literal `spec_id` field appears in `SPEC.md` (t
 `check-spec.mjs --spec-id`), `PLAN.md` and `BRIEFING.md` — not on every artifact.
 
 Stages do **not** each read the previous one's output. `/pharn-regress` reads the plan to derive the
-inside/outside scope boundary; `/pharn-verify` reads the plan, its own gates and, for the acceptance-criteria
+inside/outside scope boundary; `/pharn-verify` reads the plan, its own gates (in a `/pharn-ship` or `/pharn-loop`
+run it reuses the result `/pharn-regress` recorded at HEAD for a gate on the same inputs, 6.34.0) and, for the acceptance-criteria
 check, the SPEC's criteria, `AC-TESTS.md` and the lock, and it **does not read `regression-report.json` at all**. The stage that reads everything is `/pharn-ship`, which orchestrates
 the chain and preserves two human decision points: explicit spec approval before planning, and the
 final merge/fix/abandon decision after verification.
@@ -224,7 +225,7 @@ Each id must be one of the gates PHARN discovers (`test`, `lint`, `format:check`
 
 ### Lengthening the per-gate timeout (7.16.0)
 
-Every gate PHARN runs is killed after 540 s, and a killed gate is **not measured**, never a pass:
+Every gate PHARN runs is killed after 540 s (one exception, below), and a killed gate is **not measured**, never a pass:
 `/pharn-loop` stops `blocked: gates-unmeasured-at-entry`, and a regress or verify run that loses a gate this way stops
 too. If a gate of yours is slow but healthy — a test suite that takes nine minutes, say — declare a longer limit beside
 `exclude` in `pharn.config.json`:
@@ -244,7 +245,9 @@ too. If a gate of yours is slow but healthy — a test suite that takes nine min
   stages they run, and both sides of one regress comparison use the same value. Since 7.22.1 `/pharn-build`'s gate
   (both its targeted and its full run) and `/pharn-regress` and `/pharn-verify` run by hand use it too; a call that
   then runs past the tool's own time limit carries on in the background, and the command waits for it. Only
-  `/pharn-test`'s red run, which runs your acceptance tests alone, keeps 540 s.
+  `/pharn-test` keeps fixed limits: its red run, which runs your acceptance tests alone, keeps 540 s, and its
+  typecheck step (7.25.0, below) gives each typecheck gate 170 s; a typecheck gate that does not finish in time is
+  noted, not refused.
 - **Declare it and commit it before the run.** The value the entry check used is pinned for the run: if the
   declaration changes before regress or verify, that stage stops (`timeout-changed`). Restore the value or start a new
   run.
@@ -301,11 +304,17 @@ What it needs from your project:
   use its transpile-only mode.
 - **An e2e runner that serves the app itself.** The red run does not run `build`; Playwright's `webServer` option
   is the usual way.
+- **Tests that type-check, if you have a `typecheck` or `type-check` gate.** Since 7.25.0 `/pharn-test` runs that
+  gate before it pins the tests. A type error located in one of its own test files, with a code outside a closed
+  list of missing-target codes (`TS2307` cannot find module, `TS2339` property does not exist, and others a
+  not-yet-built target causes), gets one fix attempt; if it remains, the stage refuses (`ac-tests-typecheck`). The list is set
+  membership, not cause, so it is wrong both ways: `pharn/floor/ac-types-core.mjs` states the bound.
 
 A criterion's test that already **passes** before the build is refused, with no override: either the test is
 vacuous, or the behaviour exists and the criterion restates it. What the red run proves is limited to what the
 record shows. "Failed" is the runner's status, so a test that fails on a typo of its own reads the same as one
-that fails because the feature is missing. Details: `pharn/pharn-contracts/ac-tests.md`.
+that fails because the feature is missing (the typecheck step above catches only a typo the type checker reports
+with a code outside its list). Details: `pharn/pharn-contracts/ac-tests.md`.
 
 ### What verify proves about acceptance criteria
 

@@ -2490,7 +2490,7 @@ test("runRunner (in-process) — it waits for a late handoff; then a setter that
     // Another process hands the lock over 300 ms after the runner starts waiting for it.
     spawn(
       process.execPath,
-      ["-e", `setTimeout(() => require("node:fs").writeFileSync(${JSON.stringify(lockPath(root))}, ${JSON.stringify(text)}), 300)`],
+      ["-e", 'setTimeout(() => require("node:fs").writeFileSync(process.argv[1], process.argv[2]), 300)', lockPath(root), text],
       {
         stdio: "ignore",
       }
