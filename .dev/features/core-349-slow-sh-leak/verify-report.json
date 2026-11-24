@@ -1,0 +1,26 @@
+{
+  "feature": "core-349-slow-sh-leak",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "1305d81dcd5b648a4c5173860ec838b3d49fae53528bcb5e4bddae2dae9bf259",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "e2e59bb61267e83b2378fc336632806112cdc20479e15ead8e3b718455242ffd"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

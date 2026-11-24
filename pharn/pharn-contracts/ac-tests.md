@@ -211,7 +211,7 @@ cannot fail, is never collected, or is skipped would otherwise pass unnoticed.
 
   The gates' exits are expected non-zero and are not the verdict.
 
-- **A precondition guard is not red-run evidence (7.23.1).** Take a test that first asserts something the build
+- **A precondition guard is not red-run evidence (7.23.3).** Take a test that first asserts something the build
   makes true but its criterion's Then does not state, then runs an assertion that already holds. The CORE-310 loop
   (7.22.0) wrote "the source no longer contains the old TODO" in front of a re-run of the existing suite. Such a test
   fails before the build only because of the guard, so the criterion's own assertion never failed. The red run counts

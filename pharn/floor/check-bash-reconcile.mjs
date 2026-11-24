@@ -161,6 +161,7 @@ import { createHash } from "node:crypto";
 import {
   enumerate,
   hashFile,
+  provenAbsent,
   RECORD_VERSION,
   RECORD_PATH,
   isStateRootPath,
@@ -735,9 +736,18 @@ function main(argv) {
   let candidates = [];
   if (baseline) {
     const seen = new Set();
+    // Paths the anchor proved absent (CORE-346, contract §3). An older record without the field, or a non-array, is the
+    // empty set, so a malformed list can only fail closed; a non-string member never equals a path under `has`.
+    const absentAtAnchor = new Set(Array.isArray(baseline.absent_at_anchor) ? baseline.absent_at_anchor : []);
     for (const rel of en.paths) {
       seen.add(rel);
       const now = hashFile(resolve(root, rel));
+      if (now === null && absentAtAnchor.has(rel) && baseline.entries[rel] === undefined && provenAbsent(resolve(root, rel))) {
+        // Absent at BOTH ends: the anchor proved it absent, it had no entry, and lstat proves nothing is there now. Not a
+        // change (a tracked file deleted before the anchor). Never applies to a path that exists now, readable or not.
+        warnings.push(`absent at anchor, absent now — not a change: ${rel}`);
+        continue;
+      }
       if (now === null) {
         // FAIL-CLOSED: a path we cannot hash is a path we cannot clear. Treating it as a warning and
         // continuing would let "make it unreadable" suppress a denied change (P5).

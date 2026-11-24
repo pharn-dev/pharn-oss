@@ -206,6 +206,20 @@ orchestrator under the maintainer's delegation.
   HEAD drain) saw other bytes than verify would. A standalone `/pharn-regress`, or a verify that misses, pays the whole
   suite at HEAD with nothing reused. The time saved per iteration is the outside-subset run that HEAD no longer makes,
   roughly the whole suite minus the inside tests.
+- **Not a source: the build's full gate run (7.23.2, CORE-345).** In a delivery run `test` still runs twice at HEAD:
+  `/pharn-build`'s `--mode full` gate, then the regress HEAD side. The build's run is not offered to regress, because it
+  is not the same execution under the identity above. On the CORE-310 run2 loop
+  (`.dev/features/core-310-real-loop-record/evidence/run2.json`) both ran `npm run test` with `files: []` at the same
+  HEAD and timeout, but the build's `fp_before` was `a234ec98…` and regress HEAD's `bc340bab…`, so their
+  `identity_sha256` differ. `findReusable` would refuse a build stamp first as `source-invalid` (it accepts a
+  regress/head stamp only), and past that check its identity comparison would still answer `identity-mismatch`. The
+  observed cause is the build's own record: the one fingerprinted write the run's transcript shows between the two
+  runs is `BUILD.md`, which the fingerprint includes and which `/pharn-build` writes after its full gate, because it
+  records that gate's result. A match would need a weaker identity: `BUILD.md` moved out of the fingerprint (every
+  stamp's algo changes, and `check-loop-fresh.mjs` G no longer sees a `BUILD.md` edit between regress and verify), or a
+  build-only fingerprint that skips it (a suite that reads it becomes unbound). Neither was taken. The decision was made
+  by a model agent under the delegation of the orchestrator, itself acting for the maintainer. It is reopened only if
+  the build's record stops changing the fingerprinted tree.
 
 ### The closed reuse matrix, and the entry-derived BASE stamp (6.49.0)
 

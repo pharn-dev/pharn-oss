@@ -1,0 +1,26 @@
+{
+  "feature": "core-342-grill-effort-e1",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "d05024271e4f5c8cfaa37fad2c1b30e714299b48272b30362c6539514e0a5fe2",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "42d07d1e8dfae40a3f0d041300834e81868c3f9ac2f45a7ff4d8809ffed6358a"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

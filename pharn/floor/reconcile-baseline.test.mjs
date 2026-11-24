@@ -38,6 +38,7 @@ import {
   openMarker,
   epochOwnerOpen,
   activeFeatureSlug,
+  provenAbsent,
 } from "./reconcile-baseline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -840,4 +841,49 @@ test("✧ activeFeatureSlug is owned here and re-exported by the checker as the 
   assert.equal(checker.activeFeatureSlug, activeFeatureSlug);
   assert.equal(activeFeatureSlug({ set_by: ".dev/features/x/PLAN.md" }), "x");
   assert.equal(activeFeatureSlug({ set_by: "pharn/features/../PLAN.md" }), null);
+});
+
+// ------------------------------------------------------------------ CORE-346: absent_at_anchor
+test("★ provenAbsent: true only for ENOENT / ENOTDIR — any entry at the path, a dangling link included, is not absence (L54)", () => {
+  const dir = makeRepo();
+  symlinkSync("nowhere", join(dir, "dangling"));
+  mkdirSync(join(dir, "adir"));
+  assert.equal(provenAbsent(join(dir, "missing.txt")), true, "ENOENT");
+  assert.equal(provenAbsent(join(dir, "tracked.md", "child")), true, "ENOTDIR: a parent component is a file");
+  assert.equal(provenAbsent(join(dir, "tracked.md")), false, "a regular file");
+  assert.equal(provenAbsent(join(dir, "adir")), false, "a directory");
+  assert.equal(provenAbsent(join(dir, "dangling")), false, "a dangling symlink — lstat, never stat");
+});
+
+test("★ the anchor records a tracked path missing from the worktree in absent_at_anchor, and gives it no entry", () => {
+  const dir = makeRepo();
+  assert.deepEqual(buildRecord(dir, "t").record.absent_at_anchor, [], "always an array; empty when nothing is missing");
+  unlinkSync(join(dir, "tracked.md")); // still in the index, so git still lists it
+  const rec = buildRecord(dir, "t").record;
+  assert.deepEqual(rec.absent_at_anchor, ["tracked.md"]);
+  assert.equal(rec.entries["tracked.md"], undefined);
+  assert.equal(rec.entry_count, Object.keys(rec.entries).length, "entry_count still counts entries only");
+});
+
+test("★ the anchor never records an unhashable path that EXISTS (a directory, or an unreadable file) as absent", (t) => {
+  const dir = makeRepo();
+  unlinkSync(join(dir, "tracked.md"));
+  mkdirSync(join(dir, "tracked.md")); // a directory at the tracked path: hashFile null, but lstat succeeds
+  let rec = buildRecord(dir, "t").record;
+  assert.equal(rec.entries["tracked.md"], undefined, "precondition: unhashable");
+  assert.deepEqual(rec.absent_at_anchor, [], "a directory is not absence");
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root reads a mode-000 file, so the unreadable half cannot be produced");
+    return;
+  }
+  writeFileSync(join(dir, "locked.md"), "x\n");
+  execFileSync("git", ["add", "locked.md"], { cwd: dir, stdio: "pipe" });
+  chmodSync(join(dir, "locked.md"), 0o000);
+  try {
+    rec = buildRecord(dir, "t").record;
+  } finally {
+    chmodSync(join(dir, "locked.md"), 0o644);
+  }
+  assert.equal(rec.entries["locked.md"], undefined, "precondition: unreadable, so unhashable");
+  assert.ok(!rec.absent_at_anchor.includes("locked.md"), "an unreadable file is not proven absent");
 });
