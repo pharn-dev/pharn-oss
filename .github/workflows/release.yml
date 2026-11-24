@@ -23,8 +23,8 @@ name: release
 #   5. Tag and release — the tag object and its ref (creating a ref that exists fails, never overwrites), then
 #      `gh release create --verify-tag --latest`: not a draft, not a prerelease.
 #
-# REQUIRED_CHECKS is a COPY of what main requires: ruleset 25907495's required status checks (no bypass actors; read
-# 2026-11-03), minus `Socket Security: Pull Request Alerts`, which runs on pull requests only and never posts on a push
+# REQUIRED_CHECKS is a COPY of what main requires: ruleset 25907495's required status checks (read 2026-11-03;
+# since 2026-11-04 the owner is its bypass actor), minus `Socket Security: Pull Request Alerts`, which runs on pull requests only and never posts on a push
 # to main (measured on the two main commits before this file; it is still enforced on the pull request by the
 # ruleset), plus `gitleaks`, which main's classic branch protection requires (that layer has `enforce_admins` off).
 # Change them together. The copy drifts unevenly: a check renamed in a workflow makes this job time out (fails closed),
@@ -33,8 +33,8 @@ name: release
 #
 # BOUNDS (P0): this is a property of this workflow, not a PHARN floor primitive. It does not stop a person with
 # admin rights from creating or moving a tag by hand (a tag ruleset protecting v* is a maintainer setting), and it
-# says nothing about `main` itself: the owner's bypass still merges past the review and classic protection's
-# `gitleaks` (ruleset 25907495's checks bind every account), and pharn-cli's `main` channel installs what lands. GitHub keeps one PENDING run per concurrency group, so a newer push cancels an older
+# says nothing about `main` itself: the owner's bypass still merges past the review, the required checks (ruleset
+# 25907495's bypass actor since 2026-11-04) and classic protection's `gitleaks`, and pharn-cli's `main` channel installs what lands. GitHub keeps one PENDING run per concurrency group, so a newer push cancels an older
 # pending run (never a running one); the next run releases the then-current SKILLS_VERSION at its own commit. A
 # failed run is fixed and re-run with workflow_dispatch on main — never by moving or re-creating a tag.
 #
