@@ -280,7 +280,7 @@ outside the criteria. An edge case that matters **is** a criterion.
   URL, an HTTP status, or a returned value. Tests for the criteria are meant to be written before the
   build, from the SPEC and the PLAN only. This is **advisory**: no check can tell an observable outcome
   from an internal one.
-- **Each criterion must be able to fail before the build (7.23.3)**, in a SPEC whose criteria are tested first: a
+- **Each criterion must be able to fail before the build (7.23.4)**, in a SPEC whose criteria are tested first: a
   `feature` or `quick` kind, not `test-infra` (whose lock is a bootstrap record) and not a legacy SPEC (which gets no
   AC tests). Its Then must be false on today's tree. A criterion that holds before the build as well — nothing
   changes, existing behaviour or existing tests still pass, a signature stays as it is — is a **constraint**: it goes

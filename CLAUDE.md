@@ -109,7 +109,8 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
    guard"). `main` carries GitHub branch protection requiring Code-Owner review and the CI checks. The owner's account
    is the review ruleset's bypass actor and `enforce_admins` is off, so a merge made with the owner's credentials —
    an agent running `gh pr merge --admin` with the owner's token included — skips the review and classic protection's
-   `gitleaks`; since 2026-10-26 ruleset 25907495 binds every account to the other required checks. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
+   `gitleaks` and, since 2026-11-04 (the owner was added as ruleset 25907495's bypass actor), the other required
+   checks too. `release.yml` tags `v<SKILLS_VERSION>` only after the required checks that run on a push succeeded on that
    commit, so pharn-cli's `--ref latest` (the default for new installs since 0.15.0) does not receive a red tree through
    the workflow; its `main` channel still can (`pharn/LIMITS.md §11`).
    **It also protects the two guards' own
@@ -155,7 +156,7 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
 
 ## Commands
 
-- **Slash commands `/pharn-dev-plan`, `/pharn-dev-build`, `/pharn-dev-review`** (`.claude/commands/*.md`) are the core workflow. **Command-naming convention (dev/product boundary):** build-apparatus commands carry the **`pharn-dev-`** prefix (contributor tooling — `pharn-dev-plan` / `-build` / `-grill` / `-regress` / `-verify` / `-review` / `-ship` / `-memory-promote` / `-eval`); **product** commands carry **`pharn-`** without `-dev-` (what a PHARN user runs — `/pharn-spec` / `-plan` / `-grill` / `-test` / `-build` / `-regress` / `-verify` / `-ship` / `-review` / `-loop` / `-memory-promote`, now built). The split is by **name (prefix)**, since `.claude/commands/` cannot move. The prefix is naming/menu UX only — **not** an access gate (Apache-2.0; a user who wants a dev command can still type it).
+- **Slash commands `/pharn-dev-plan`, `/pharn-dev-build`, `/pharn-dev-review`** (`.claude/commands/*.md`) are the core workflow. **Command-naming convention (dev/product boundary):** build-apparatus commands carry the **`pharn-dev-`** prefix (contributor tooling — `pharn-dev-plan` / `-build` / `-grill` / `-regress` / `-verify` / `-review` / `-ship` / `-memory-promote` / `-eval`); **product** commands carry **`pharn-`** without `-dev-` (what a PHARN user runs — `/pharn-spec` / `-plan` / `-grill` / `-triage` / `-supervise` / `-test` / `-build` / `-regress` / `-verify` / `-ship` / `-review` / `-loop` / `-memory-promote`, now built). The split is by **name (prefix)**, since `.claude/commands/` cannot move. The prefix is naming/menu UX only — **not** an access gate (Apache-2.0; a user who wants a dev command can still type it).
 - **Dev tooling is real; the methodology stays stdlib-only.** The floor, the hook, and the commands
   have **zero runtime dependencies** (Node stdlib; Node 24). The repo carries **dev-only**
   devDependencies (ESLint, Prettier, markdownlint) wired as npm scripts: `npm run check`
@@ -164,12 +165,13 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live
-  (`npm test`), never assert it from this doc (P6). Three per-PR gates are deliberately **outside** the
+  (`npm test`), never assert it from this doc (P6). Four per-PR gates are deliberately **outside** the
   chain because each needs a base to compare against: `npm run check:changelog-entry`
   (`.dev/floor/check-changelog-entry.mjs`, the CHANGELOG diff), `npm run check:surface-bump`
-  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`) and `npm run check:ship-record`
-  (`.dev/floor/check-ship-record.mjs`, product paths vs a green `/pharn-dev-ship` record). CI runs all three on pull
-  requests only, against the merge commit's first parent.
+  (`.dev/floor/check-surface-bump.mjs`, product paths vs `SKILLS_VERSION`), `npm run check:ship-record`
+  (`.dev/floor/check-ship-record.mjs`, product paths vs a green `/pharn-dev-ship` record) and
+  `npm run check:instruction-growth` (`pharn/floor/check-instruction-files.mjs`, bytes added to `CLAUDE.md` vs the
+  base's budget). CI runs all four on pull requests only, against the merge commit's first parent.
 - `node pharn/floor/validate.mjs .` reports `GREEN` over the product surface — the `pharn/pharn-review/*`
   code-review lenses, the `pharn/pharn-pipeline/grillers/*` grillers, and the `pharn/pharn-core/` skills
   (`seam-resolver/`, `installed-skill-selection/`), over the `pharn/pharn-contracts/{finding-shape,eval-format,seam-config}` contracts.
