@@ -1,0 +1,64 @@
+{
+  "base": "08d7f63e693a1cdb1e0269ee552357ce77408313",
+  "inside": [
+    ".dev/features/core-342-grill-effort-e1/GRILL.md",
+    ".dev/features/core-342-grill-effort-e1/PLAN.md",
+    ".dev/features/core-342-grill-effort-e1/REGRESSION.md",
+    ".dev/features/core-342-grill-effort-e1/REVIEW.md",
+    ".dev/features/core-342-grill-effort-e1/VERIFY.md",
+    ".dev/features/core-342-grill-effort-e1/evidence/arm-a.json",
+    ".dev/features/core-342-grill-effort-e1/evidence/arm-b.json",
+    ".dev/features/core-342-grill-effort-e1/regression-report.json",
+    ".dev/features/core-342-grill-effort-e1/verify-report.json",
+    ".dev/measurements/grill-effort-e1-2026-11-24.md",
+    ".markdownlint-cli2.jsonc",
+    ".prettierignore",
+    "CHANGELOG.md"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:expected-injection-comment": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7089,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7089,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
