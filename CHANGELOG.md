@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-25: **`main`'s `npm run format:check` went red after the code-scanning autofix commits left one array in
+  `pharn/floor/stage-direct.test.mjs` unformatted, and this re-formats that test file to Prettier's output.** Test file
+  only: no `SKILLS_VERSION` bump.
 - 2026-11-24: **Measured: on CORE-310's intent v1, `/pharn-spec --model-approve` moved the "existing profile unit
   tests still pass unchanged" criterion into `## Constraints` (CORE-357). n = 1.** One full `/pharn-loop` ran on a
   scratch pharn-app worktree with PHARN 7.25.0 installed through the pharn CLI.
