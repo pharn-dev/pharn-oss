@@ -201,6 +201,9 @@ test("cacheableRed: only a completed red with no unmeasured or mutated gate, a H
 test("buildRecord: the key carries the inputs, the stamp's gates (base:test left out), HEAD and fingerprint.init; the record is closed", () => {
   const r = goodRecord();
   assert.equal(r.schema, RECORD_SCHEMA);
+  // CORE-358: `/2` since the record moved to each worktree's git dir; a `/1` record is a defect, so never a hit.
+  assert.equal(RECORD_SCHEMA, "pharn-entry-gate-cache/2");
+  assert.notEqual(recordDefect({ ...r, schema: "pharn-entry-gate-cache/1" }), null);
   assert.deepEqual(
     r.key.gates.map((g) => g.id),
     ["lint", "test"]

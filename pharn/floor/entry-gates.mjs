@@ -100,7 +100,7 @@
 //     (entry-base-evidence.mjs `publishEntryOffer`, in the git dir); `--start` discards an earlier one. Publication is
 //     best-effort: a failure is one `note —` line on stderr and changes no document, exit or record.
 //   • CACHED RED EVIDENCE (gate-evidence-cache, Linear CORE-86): after `init`, `--start` keeps this run's inputs in the
-//     git dir and looks up the repository's one cached-red record (entry-gate-cache.mjs); when every bound input is equal
+//     git dir and looks up this worktree's one cached-red record (entry-gate-cache.mjs); when every bound input is equal
 //     it stops with exit 4, spawning nothing. Every miss is a closed member, printed as one line, and the run goes on
 //     exactly as before. A `--wait` that decided a verdict then records a cacheable red, or clears the record — after the
 //     offer, best-effort like it. A cached red is never offered to /pharn-regress and never stands in for a green. The

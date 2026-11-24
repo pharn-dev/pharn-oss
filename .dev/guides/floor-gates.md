@@ -769,8 +769,10 @@ node pharn/floor/entry-gates.mjs --abort --feature <name>
 # .dev/measurements/loop-baseline-2026-11-11.md §6 — 5 of the 16 entry stops reused an earlier run's base commit, tree
 # equality unverifiable then; §12 rated it needs-evidence, and the orchestrator (maintainer's delegation) scoped it to REDS
 # ONLY. FLOW: `entry-gates.mjs --start`, after `run-gates.mjs init`, writes this run's inputs to
-# <git rev-parse --absolute-git-dir>/pharn-entry-cache-inputs.json, then reads <git rev-parse --git-common-dir>/
-# pharn-entry-gate-cache.json (ONE per repository, so another worktree hits); all inputs equal → exit 4, an `unusable`
+# <git rev-parse --absolute-git-dir>/pharn-entry-cache-inputs.json, then reads <git rev-parse --absolute-git-dir>/
+# pharn-entry-gate-cache.json (ONE per worktree since 7.25.1, CORE-358; before it one per repository in the git common
+# dir, so a red one worktree measured stopped another's run — CORE-342 — and no cross-worktree hit was ever measured to
+# save one; schema `/2`, so a pre-7.25.1 `/1` record reads `record-unusable`, a miss); all inputs equal → exit 4, an `unusable`
 # `cached-red` result, the start observation `cached-red`, no runner, no offer (discarded before init, as before). Every
 # miss prints `entry-gates: cached evidence — miss <member>` and the run goes on unchanged. `--wait`, after a decided
 # verdict and after the offer, records a cacheable red (completed; no unmeasured or mutated run, base:test included; a
@@ -783,7 +785,10 @@ node pharn/floor/entry-gates.mjs --abort --feature <name>
 # the hit decision (sha256/JSON equality, closed enums) and the ★ HOOK deny of both git-dir files (protect-trusted-paths:
 # a `.git` segment in a main checkout; enforce-writes-scope: another git tree from a linked worktree). ADVISORY: that a
 # cached red equals a fresh run — env, machine load, flaky tests, ignored files outside INSTALL_FILES and the ABSOLUTE
-# cwd are unbound (the repo-relative prefix is bound, GATE 1, so fresh worktrees can hit); the 24 h age limit (fixed, no
-# config key, no MIN_CLI change) bounds the drift. A Bash writer can forge the record; a forged record can only STOP a
-# run, and --refresh lifts it. One slot, last writer wins across worktrees; a clear only removes a hit.
+# cwd are unbound (a record never leaves its worktree's git dir); the 24 h age limit (fixed, no config key, no MIN_CLI
+# change) bounds the drift. A Bash writer can forge the record; a forged record can only STOP a run, and --refresh lifts
+# it. One slot per worktree, last writer wins; a clear only removes a hit. RESET: delete
+# <git rev-parse --absolute-git-dir>/pharn-entry-gate-cache.json, remove the worktree, or run the `--refresh` line.
+# Clearing pharn/.run/ alone does NOT reset it, on purpose — the write tools reach pharn/.run/**, so a record kept there
+# could be planted or dropped by any write-tool edit.
 ```
