@@ -100,6 +100,12 @@ jobs:
       - name: Bash-write reconciliation check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:reconcile
+      # Builds `git archive` of HEAD with codeload's `pharn-oss-<sha>/` root and walks it with pharn-cli's extractor
+      # rules (entry types, ustar paths, path characters, entry and size limits), so a commit the CLI cannot unpack
+      # fails this job and release.yml never tags it. A port of the CLI's rules, not the CLI (.dev/floor/check-source-archive.mjs).
+      - name: Source-archive check
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm run check:archive
       - name: Test
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run test:coverage
