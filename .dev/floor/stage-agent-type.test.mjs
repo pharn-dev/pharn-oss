@@ -24,7 +24,8 @@
 // HONEST SCOPE (P0). Presence, bytes and set membership over committed text. NOT: that Claude Code parses the
 // frontmatter as intended, applies the tool list, or keeps the instruction files in a run (only the probe can show
 // that, once); that an orchestrator takes the fallback only when it should; or that an install has the file (pharn-cli
-// does not copy `.claude/agents/` yet; follow-up `cli-install-agents`), so in an install every stage takes the fallback.
+// copies `.claude/agents/pharn-*.md` since 0.20.0; an install made by an older pharn-cli has none, so there every stage
+// takes the fallback).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
