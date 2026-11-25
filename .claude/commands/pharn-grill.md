@@ -124,7 +124,7 @@ nothing). Any other exit → write the line `scans: NOT run (grill-scan.mjs exit
 `GRILL.md` then takes Step 4's quick shape with these substitutions: the mode line is
 `mode: floor-only (/pharn-grill --floor-only)`, the pinned line is
 `interrogation NOT performed — skipped by mode (floor-only)`, and the scan section follows it. Step 0's scope and
-the Final step are unchanged. Run inside an orchestrator, Step 4's "end your turn" does not apply: return to it.
+the Final step are unchanged.
 
 ## Step 2 — The hash-chain re-verification (FLOOR — refuse-or-proceed; the FIRST of two deterministic stops)
 
