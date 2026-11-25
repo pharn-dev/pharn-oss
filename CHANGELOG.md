@@ -23,6 +23,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-25: **`docs/install-manifest.md` now states the source-archive contract: what every entry of the tarball
+  pharn-cli downloads must satisfy, not only the installable paths.** pharn-cli unpacks the whole codeload archive
+  before it installs anything, and its extractor (`src/lib/tar-extract.ts`, read at pharn-cli 0.21.5) refuses the
+  whole archive on one bad entry anywhere, which is how seven git symlinks under `.claude/skills/` made v7.25.3 to
+  v7.25.5 uninstallable (CORE-380). The new section lists the rules (regular files and directories only, a path that
+  fits ustar's name and prefix fields, valid UTF-8 with no control or format character, no `\`, `:`, `..` or empty
+  segment, one root, at most 20,000 entries, 32 MiB compressed and 128 MiB unpacked), says pharn-cli owns them and
+  this repository satisfies them, and keeps them binding while `MIN_CLI` admits a CLI that judges every entry. It is
+  labeled advisory: the floor check planned to enforce it (`.dev/floor/check-source-archive.mjs`, CORE-383) does not
+  exist yet. Docs only, not on the product surface, so `SKILLS_VERSION` is unchanged.
+
 ## [7.25.5] - 2026-11-25
 
 ### Fixed

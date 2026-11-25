@@ -166,3 +166,62 @@ guard, holds `name`, `role` and `applies` to its own allowlists, checks the `sha
   declares no `export-ignore`; nothing checks either. The consumer's sha256 verification is the check.
 - **Anything about a local, uncommitted tree.** The file list is git's (tracked plus untracked files that are not
   ignored), so a local untracked file under a surface appears in a local generation until it is ignored or removed.
+
+## The source-archive contract
+
+**Status: advisory.** Nothing in this repository checks these rules yet. The floor check that will enforce them is
+planned as `.dev/floor/check-source-archive.mjs`, run by `npm run check:archive` (CORE-383); until it lands, the
+contract below is written down and nothing more (`pharn/CONSTITUTION.md` P0). The one part already on the floor is
+narrower: the generator refuses an installable path that is not a regular file (above).
+
+**What it covers: every entry of the archive, not only the installable paths.** pharn-cli downloads this repository
+as one codeload tarball (`codeload.github.com/<owner>/<repo>/tar.gz/<sha>`, written by `git archive`) and unpacks the
+**whole** archive into a temporary directory before it reads `pharn-install.json` or copies a single file. So every
+tracked path counts, including those an install never receives: `.dev/**`, `.github/**`, `.claude/skills/**`, test
+files, fixtures. One bad entry anywhere fails every `pharn init` and `pharn update` at that ref.
+
+**Why this section exists.** Releases v7.25.3, v7.25.4 and v7.25.5 could not be installed: the tree tracked seven
+git symlinks (mode `120000`) under `.claude/skills/`, a path no install copies, and the extractor refused the whole
+archive on the first one (CORE-380). The manifest rules above passed, because they judge installable paths only.
+
+**Who owns it.** pharn-cli owns the rules: they are its extractor, `src/lib/tar-extract.ts` (with the size and count
+limits passed in by `src/lib/repo.ts`), read for this section at pharn-cli 0.21.5. This repository owns satisfying
+them, on every commit a CLI may fetch. When the two disagree, the code wins and this section is wrong.
+
+A later pharn-cli release narrows the extractor so that it judges only the entries an install needs (pharn-cli
+CORE-386). That does not retire this contract: older CLIs stay in use, so the rules keep binding as long as
+`MIN_CLI` admits any CLI version that judges every entry. Today `MIN_CLI` is `0.14.0`, and every release from it up to
+0.21.5 does. Those older releases differ from 0.21.5 in detail, so this section tracks the newest extractor; the
+refusals in rule 1 hold in all of them.
+
+The rules, as pharn-cli 0.21.5 applies them. A break of any one refuses the whole archive, never just the entry:
+
+1. **Entry type.** Every entry is a regular file (typeflag `0` or NUL) or a directory (`5`). The only other type
+   tolerated is a pax global header (`g`), which is skipped unread; every `git archive` tarball opens with one.
+   Refused: a pax extended header (`x`), a hard link (`1`), a symlink (`2`), a character or block device (`3`, `4`), a
+   fifo (`6`), a contiguous file (`7`), a GNU long name or long link (`L`, `K`), and any other typeflag. So the tree
+   tracks no symlink. A submodule (gitlink) is not a refused type, but it arrives as an empty directory and installs
+   nothing.
+2. **The path fits ustar.** pax records are never read, so a path must fit the ustar header: at most 100 bytes in
+   the `name` field, or split at one `/` into a `prefix` of at most 155 bytes and a `name` of at most 100 bytes. The
+   archive path includes its top directory, and the byte count is of the UTF-8 encoding. For a path that does not
+   fit, `git archive` writes a pax `x` header, which rule 1 refuses: in practice, any path segment over 100 bytes, or
+   a path too long to split that way.
+3. **The path's characters.** `prefix` and `name` are each valid UTF-8 (an invalid byte is refused, never replaced).
+   The joined path holds no control character (U+0000–U+001F, U+007F–U+009F), no Unicode format character (category
+   `Cf`: bidi overrides, zero-width characters, a byte-order mark), no U+2028 or U+2029, and no backslash (`\`) or
+   colon (`:`).
+4. **The path's shape.** Not empty, not absolute (no leading `/`). After trailing slashes are dropped: no `..`
+   segment anywhere; a first segment (the top directory) that is neither empty nor `.`; and no empty or `.` segment
+   below it (`a//b`, `a/./b`).
+5. **One root.** Every entry's first segment is the same. An entry with nothing below the top directory must be a
+   directory (the top directory's own entry); a file there is refused.
+6. **Counts and sizes.** At most 20,000 entries, counting every file and directory below the top directory and every
+   pax global header (the top directory's own entry is not counted). At most 32 MiB (33,554,432 bytes) compressed, as
+   downloaded. At most 128 MiB (134,217,728 bytes) unpacked, measured as the decompressed tar stream, headers and
+   padding included.
+7. **A well-formed tar stream.** Every header passes its checksum, carries the `ustar` magic and has octal numeric
+   fields; no entry runs past the end of the stream; the stream ends with an end-of-archive block followed only by
+   zero bytes. `git archive` output meets these on its own; they are listed so the set is complete.
+
+The extractor never inspects contents: it writes each file's bytes as they are.
