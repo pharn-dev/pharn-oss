@@ -25,6 +25,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [7.25.4] - 2026-11-25
 
+### Changed
+
+- 2026-11-25: **A bare `npm run lint` no longer goes red in a checkout that holds Codex's `.agents/` skill import, and
+  two test headers stop saying pharn-cli does not install `.claude/agents/`.** `eslint.config.mjs` ignores `.agents/**`
+  (gitignored, already skipped by markdownlint; measured: lint exit 1 before, 0 after, in a checkout with the import).
+  `stage-agent-type.test.mjs` and `review-lens-agent.test.mjs` now say pharn-cli copies `.claude/agents/pharn-*.md`
+  since 0.20.0. Follow-ups from the CORE-371 audit. Apparatus and repo-meta only: no `SKILLS_VERSION` bump.
+- 2026-11-25: Update the pharn-ci agent skills (`.claude/skills/pharn-ci-*`, `pharn-cli`) and `skills-lock.json` to
+  the pharn-ci 0.12.0 set. Apparatus only; no product-surface bytes change.
+
 ### Fixed
 
 - **Five shipped files stop describing what `main` no longer does (CORE-371 follow-ups).** A patch bump: each fix
@@ -47,12 +57,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   - **`.claude/hooks/set-writes-scope.cjs`** header comments said its control surface was `settings.json` plus the
     four hook scripts. `CONTROL_SURFACE` holds both settings files and the four scripts, so the comments now say six
     paths. A comment in `.claude/hooks/protect-trusted-paths.test.cjs` gets the same correction.
-
-- 2026-11-25: **A bare `npm run lint` no longer goes red in a checkout that holds Codex's `.agents/` skill import, and
-  two test headers stop saying pharn-cli does not install `.claude/agents/`.** `eslint.config.mjs` ignores `.agents/**`
-  (gitignored, already skipped by markdownlint; measured: lint exit 1 before, 0 after, in a checkout with the import).
-  `stage-agent-type.test.mjs` and `review-lens-agent.test.mjs` now say pharn-cli copies `.claude/agents/pharn-*.md`
-  since 0.20.0. Follow-ups from the CORE-371 audit. Apparatus and repo-meta only: no `SKILLS_VERSION` bump.
 
 ## [7.25.3] - 2026-11-25
 

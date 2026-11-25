@@ -13,7 +13,10 @@ Stages run, in order: `/pharn-dev-plan` → GATE 1 → `/pharn-dev-grill` → `/
   - This agent checked both post-image sha256s and `cmp`-ed both files against the dry-run outputs before committing.
   - They were committed as `93be75e0`, with the `pharn-install.json` regeneration as a separate commit. Both landed
     before `/pharn-dev-build` Step 0's anchor (L68), after `origin/main` (60829452, PR #494) was merged in.
-- PR #494's `[Unreleased]` entry was moved into this PR's `## [7.25.4]` section, below the new entry.
+- After the PR opened, `main` moved to 04a11bcc (PR #495, apparatus only), and the branch conflicted on
+  `CHANGELOG.md`. The resolution merged `origin/main` and moved both `[Unreleased]` entries (PR #494's and PR #495's)
+  into `## [7.25.4]` under their own `### Changed` heading. The new entry sits under `### Fixed`. This merge came after
+  verify: PR #495's files (`.claude/skills/*`, `skills-lock.json`) are outside this run's verify, and CI measures them.
 - GATE 2: orchestrator decision under delegation. The brief said, in advance: "run the rest of the chain, open the PR,
   drive CI green, report; do not merge". This was not a human approval. The three advisory review findings (all minor)
   are presented for that decision and were not fixed in this run.
