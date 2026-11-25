@@ -1,40 +1,47 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "phargus-diagnose": {
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/phargus/skills/phargus-diagnose/SKILL.md",
-      "computedHash": "196664f8f6351706ae07910a33c93cb6648a2e6603d355a57b64583c23c22a28",
+      "computedHash": "5e01960cf22fd1602c914bc77429f166922643a401bff91904b5fd85909f8560",
       "installMode": "copy"
     },
     "phargus-memory": {
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/phargus/skills/phargus-memory/SKILL.md",
-      "computedHash": "52a9b124fb907f73c6c997794b06e0f4d2dcd1c26a50cfef7843a7ea10851ccf",
+      "computedHash": "ca29e28c32847160ff7feaa519b86803f6b5ac611be4f19140c4157550f2fc78",
       "installMode": "copy"
     },
     "phargus-rules": {
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/phargus/skills/phargus-rules/SKILL.md",
-      "computedHash": "d1fd8f8661bd0ac866b4a4498845b425194059c8f1fcf6628fb075430cbf4ef4",
+      "computedHash": "1998ec95d467e081996e023db9d200546376a04f151cb21d8aab19b18dadbc9c",
       "installMode": "copy"
     },
     "phargus-setup": {
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/phargus/skills/phargus-setup/SKILL.md",
-      "computedHash": "92c69c6fbcc20eb5142d4cfb788471cbbeb2858d96c2a32a75eb350349d213fe",
+      "computedHash": "bd59e368f1c8aad5756f1747101af6bbd5f7d92c892c8bf81ecc38298b62818d",
       "installMode": "copy"
     },
     "phargus-verify": {
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/phargus/skills/phargus-verify/SKILL.md",
-      "computedHash": "6deb31b4203151e6f3ed3639118cd0aadee79342b51825fd49d2c176d98a5820",
+      "computedHash": "5445eadad9f3b88320db503154fe92187e94ca895650ec31b054ac7b244fc4cc",
       "installMode": "copy"
+    },
+    "security-audit": {
+      "source": "cloudflare/security-audit-skill",
+      "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
+      "sourceType": "github",
+      "skillPath": "skills/security-audit/SKILL.md",
+      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5"
     }
   }
 }
