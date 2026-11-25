@@ -106,6 +106,18 @@ jobs:
       - name: Source-archive check
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run check:archive
+      # Runs the real pharn-cli over HEAD's archive instead of trusting a port of its rules (CORE-384). verify-archive
+      # does with the tarball what an install does: unpacks the manifest-listed paths, checks each listed file's sha256,
+      # builds the capability index and parses MIN_CLI, offline and in a temp dir; exit 1 names the entry and the rule.
+      # It needs one root directory, hence --prefix. Since pharn-cli 0.21.6 the CLI skips unlisted entries, so a bad
+      # entry outside the manifest (a symlink under .dev/) passes here: the source-archive check above catches it, for
+      # the older CLIs MIN_CLI still admits. Pinned to 0.22.0 exactly, the first release with verify-archive: MIN_CLI
+      # (0.14.0) lacks the command, and @latest would let a CLI release change this verdict on an unchanged commit.
+      - name: Install check (pharn-cli verify-archive)
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: |
+          git archive --prefix=pharn-oss/ --format=tar.gz -o "$RUNNER_TEMP/pharn-oss.tar.gz" HEAD
+          npx --yes @pharn-dev/pharn@0.22.0 verify-archive "$RUNNER_TEMP/pharn-oss.tar.gz" --expect-version "$(cat SKILLS_VERSION)"
       - name: Test
         if: ${{ always() && steps.install.outcome == 'success' }}
         run: npm run test:coverage
