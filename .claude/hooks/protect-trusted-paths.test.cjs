@@ -250,7 +250,7 @@ test("✧ blocks an ABSOLUTE path whose ROOT prefix is spelled in a different ca
   }
 });
 
-// --- F3: the guard's own control surface (settings.json + the four hook scripts) ---
+// --- F3: the guard's own control surface (settings.json + the four hook scripts; settings.local.json is under CONTROL SURFACE below) ---
 
 for (const p of [
   ".claude/settings.json",

@@ -97,8 +97,8 @@
 // failed, so a gate red at base hid every NEW failure at head behind `pre_existing`: a load-red base masked 11 real head
 // failures in one recorded /pharn-dev-regress run (.dev/features/frontmatter-parser-parity/REGRESSION.md). With
 // `--per-test <gate> --base-tests <b> --head-tests <h>` the two files are `pharn-test-results/1` documents
-// (test-results-record.md's `pharn-json`), read and checked by per-test-results-core.mjs's own `readResultsFile` +
-// `parseResults` + `buildRecord` — one grammar (L35), with the gate's exit from each map as that record's exit. For
+// (test-results-record.md's `pharn-json`), read and checked by per-test-results-core.mjs's `readResultsFile` +
+// `buildRecord` and per-test-results-formats.mjs's `parseResults` — one grammar (L35), with the gate's exit from each map as that record's exit. For
 // that gate only, base != 0 && head != 0 becomes a REGRESSION when some test FAILED at head whose base status is not
 // `failed` (passed, skipped, or absent from the base record), or head reports more suite errors than base; otherwise it
 // stays `pre_existing`. Every other row of the table is unchanged, and the report adds `per_test`. FAIL-CLOSED (P5),
@@ -661,8 +661,8 @@ function readSideStamp(path, side, label) {
 // --- THE PER-TEST COMPARISON (6.72.0) — see the header, THE OPT-IN PER-TEST COMPARISON. ---------------------------
 const PER_TEST_FLAGS = ["--per-test", "--base-tests", "--head-tests"];
 
-/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: per-test-results-core.mjs's own
- *  read + parse + build over a `pharn-test-results/1` document, then the two refusals only a COMPARISON needs (an
+/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: per-test-results-core.mjs's
+ *  read + build and per-test-results-formats.mjs's parse over a `pharn-test-results/1` document, then the two refusals only a COMPARISON needs (an
  *  ambiguous test, and a red the record does not account for — L34). `{ok, record}` or `{ok: false, reason_code,
  *  reason}`. No child process; the file is read under the builder's byte cap, never followed or evaluated. */
 function readTestsRecord(path, gate, exit, label) {

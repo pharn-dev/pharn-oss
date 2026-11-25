@@ -48,7 +48,7 @@
 // Exits non-zero (and writes nothing) rather than emit an empty/placeholder scope — fail-closed.
 //
 // It also REFUSES, on the same fail-closed terms, to emit a scope naming the two pre-write guards' own
-// control surface (CONTROL_SURFACE below: .claude/settings.json + the four hook scripts). A declared
+// control surface (CONTROL_SURFACE below: both settings files + the four hook scripts). A declared
 // `writes:` / `## Files` list is `trust: untrusted` input (CONSTITUTION P2): before this check, an entry
 // naming a hook produced a scope that enforce-writes-scope.cjs then honored, so an untrusted document
 // could authorize disarming a guard. --allow-claude-dir opts back in for the increments that genuinely
@@ -243,12 +243,13 @@ function parseArgs(argv) {
   return { mode, file, target, allowClaudeDir, allowPharnSurface, allowExecConfig, allowInstructionFiles, check, clear };
 }
 
-// The two pre-write guards' own control surface: the settings file that WIRES both PreToolUse hooks, and
-// the four hook scripts. Each is re-read fresh on every tool call, so a write to any one of them disarms
-// a guard on the very next write. Kept identical to the `.claude/` entries of DEFAULT_PROTECTED in
-// protect-trusted-paths.cjs — the two guards cover the same four paths, one by denylist, one by refusing
-// to authorize them. `.claude/commands/**` and `.claude/hooks/*.test.cjs` are deliberately absent: an
-// increment that edits a command, or a hook's own tests, must not need an opt-in flag.
+// The two pre-write guards' own control surface: the two settings files that can WIRE both PreToolUse
+// hooks (settings.json, and settings.local.json, which is loaded too), and the four hook scripts. Each is
+// re-read fresh on every tool call, so a write to any one of them disarms a guard on the very next write.
+// Kept identical to the `.claude/` entries of DEFAULT_PROTECTED in protect-trusted-paths.cjs — the two
+// guards cover the same six paths, one by denylist, one by refusing to authorize them. `.claude/commands/**`
+// and `.claude/hooks/*.test.cjs` are deliberately absent: an increment that edits a command, or a hook's own
+// tests, must not need an opt-in flag.
 const CONTROL_SURFACE = [
   ".claude/settings.json",
   // settings.local.json is a real, loaded settings file that can wire or override the same hooks, so
