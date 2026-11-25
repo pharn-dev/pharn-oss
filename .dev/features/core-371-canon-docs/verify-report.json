@@ -1,0 +1,23 @@
+{
+  "feature": "core-371-canon-docs",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "1c7d711a19691191243846482da9fe9ce2203b232b5b22c437010ebb94b07764",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "9dab4bb9b728e6894081f6eeff566bfe094ae7bb4fe6e276cc2ab9ac02a9d32a"
+    }
+  },
+  "verifiers": { "registered": 0, "findings": [] }
+}

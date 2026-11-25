@@ -1,0 +1,56 @@
+{
+  "base": "7fb95462178bac162bcba8f8566f7655f458fbde",
+  "inside": [
+    ".dev/guides/deferred-decisions.md",
+    ".dev/guides/floor-ac-tests.md",
+    ".dev/guides/floor-checks.md",
+    ".dev/guides/floor-gates.md",
+    ".dev/guides/floor-orchestration.md",
+    ".dev/guides/generated-docs.md",
+    ".dev/guides/lessons.md",
+    ".dev/guides/product-commands.md",
+    ".dev/guides/versioning.md",
+    ".dev/guides/writes-scope.md",
+    "CHANGELOG.md",
+    "CLAUDE.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn-install.json"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 1,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [
+    "tests"
+  ],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7122,
+      "failed": 2,
+      "skipped": 9,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7132,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

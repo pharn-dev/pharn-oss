@@ -1,7 +1,7 @@
 # Floor CLI reference — the gate runner and the regress/verify/build stage scripts
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before planning a change to, running, or citing one of the CLIs below.
@@ -86,6 +86,7 @@ come from the single code block this text was moved from, so the entry they name
 # run 0 an entry ran (a FAILING GATE IS DATA, not a runner error) | 2 runner error | 3 nothing left.
 node pharn/floor/run-gates.mjs init --stage verify|regress|entry [--side base|head] --feature <name> --out <dir> [--cwd <dir>] [--discover <package.json>] [--gates "<cmd>[::<id>],…"] [--extra <json>] [--scope-json <f>] [--skip-style] [--spec-from <dir>] [--reuse-stamp <f> --reuse-sha256 <hex>] [--base-tests <json-array-file>] [--test-whole-suite]   # --base-tests: entry only (6.49.0); --test-whole-suite: regress/head only (7.18.0)
 node pharn/floor/run-gates.mjs init --stage ac-test --feature <name> --out <dir> --discover <package.json> --ac-tests <AC-TESTS.md> [--cwd <dir>]   # 6.18.0, /pharn-test's red run
+node pharn/floor/run-gates.mjs init --stage build --feature <name> --out <dir> (--discover <package.json> | --gates "<c>[::<id>],…") [--targets <json-file>] [--cwd <dir>]   # 6.39.0, build-gate.mjs
 node pharn/floor/run-gates.mjs run --next --out <dir> --timeout-ms <N>
 node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 ```
@@ -169,7 +170,7 @@ node pharn/floor/worktree-fingerprint.mjs [--base <dir>] [--feature <name>]
 # `gate-not-measured`, FIRST in the precedence (before a red gate, an AC id and INCOMPLETE), with `unmeasured_gates:
 # [{id, cause}]` and `failing_gates: []`; gate-run-core.mjs `unmeasuredRuns` is the one owner. A signal exit (>= 128) the
 # runner did not cause stays a measured FAIL. check-regress gains the HEAD twin of the base rule (`head-timed-out`,
-# `head_timed_out`; 126/127 at regress are compared as before — a stated bound). The three codes are gate-run-core.mjs
+# `head_timed_out`; 126/127 at regress are compared as before — a stated bound). The three codes are in gate-run-core.mjs
 # UNMEASURED_CODES, which check-loop-fresh B passes through to check-loop.mjs (STOP_TERMINAL / unmeasured). The
 # positional map is unchanged (it carries no `timed_out`), so /pharn-dev-regress (positional) is byte-identical. Since
 # 7.3.0 (dev-verdict-discipline) /pharn-dev-verify reads a run-gates.mjs stamp through `--stamp`, so the dev verify
@@ -199,8 +200,8 @@ node pharn/floor/check-regress.mjs verdict --base-stamp <p> --head-stamp <p> --b
 # instead (the next block). /pharn-dev-regress passes them for its outside `tests` gate:
 # Step 2 runs `node --test` through .dev/floor/node-test-results-reporter.mjs on each side (an ABSOLUTE path into the
 # working tree — the base checkout has no reporter of its own), Step 3 adds the three flags. The files are
-# pharn-test-results/1 documents, read by per-test-results-core.mjs's readResultsFile + parseResults + buildRecord (one
-# grammar). For that gate, red on BOTH sides is a REGRESSION when a test failed at head whose base status is not
+# pharn-test-results/1 documents, read by per-test-results-core.mjs's readResultsFile + buildRecord and
+# per-test-results-formats.mjs's parseResults (one grammar). For that gate, red on BOTH sides is a REGRESSION when a test failed at head whose base status is not
 # `failed` (passed / skipped / absent), or head has more suite errors; otherwise `pre_existing`. Every other row is
 # unchanged; the report adds `per_test` (regression-report.md). Fail-closed, exit 2: usage-error,
 # per-test-record-refused (unreadable, malformed, over a cap, failures under exit 0, an anomaly),
@@ -390,7 +391,7 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # tree fingerprint algo + fp_before; `run-gates.mjs` records it on every run as `runs[].identity_sha256`) and the
 # eligibility (a completed process exit 0..125 — a completed RED is reused like a green —, not timed out, not mutated,
 # no regular results file, never an id in gate-run-core.mjs NON_REUSABLE_IDS = every AC level gate, every STYLE_SET gate
-# (a whole-tree style run reads the fingerprint-excluded REGRESSION.md/VERIFY.md, grill B1) and reconcile). The source is
+# (a whole-tree style run reads the fingerprint-excluded REGRESSION.md/VERIFY.md, grill B1), reconcile and instruction-growth). The source is
 # offered only through pharn/floor/head-reuse-offer.mjs's record in the GIT DIR (`pharn-regress-head-offer.json`; the
 # module also holds the acceptance rule) — denied to the write tools in a main checkout and a linked worktree (★ HOOK),
 # NOT for a separate git dir under a temp root in an installed project with no run open (GATE-2 review, the BASE record's
@@ -435,8 +436,9 @@ node pharn/floor/stage-regress.mjs --resume [--budget-ms <B>]
 # THE /pharn-verify STAGE SCRIPT (added 6.26.0, stage-verify-script) — the same move for verify: every deterministic
 # step of the stage in ONE tested script, so `.claude/commands/pharn-verify.md` is a THIN CALLER that pins one line
 # and branches on the script's EXIT CODE (the shared stage-exit.md protocol; verify's own registry entry — question
-# `no-gates`; refused `missing-artifact`/`chain-red`/`plan-files-unparseable`; unusable `usage-error`/`no-feature`/
-# `path-containment`/`git-failed`/`child-crashed`/`child-refused`/`no-progress`/`progress-malformed`). THE TRIGGER
+# `no-gates`; refused `missing-artifact`/`chain-red`/`plan-files-unparseable`/`head-install-drift`; unusable `usage-error`/
+# `no-feature`/`path-containment`/`git-failed`/`child-crashed`/`child-refused`/`no-progress`/`progress-malformed`/
+# `bad-gate-timeout`). THE TRIGGER
 # (P7) is Phase 1.1's: the command prescribed 14 + d + G + P tool calls over a 55,683-byte prompt. PHASES
 # (stage-verify-core.mjs, the one owner): fresh -> chain -> pairs -> verifiers -> init -> drain -> verdict -> render.
 # "fresh" removes THIS feature's earlier verify-report.json/VERIFY.md and clears `pharn/.run/pharn-verify/` (the progress
@@ -670,8 +672,8 @@ node pharn/floor/pre-run-snapshot.mjs --capture <name>
 # (`blocked: not-isolated`), a Step 1a stop: no feature directory, no record, the Final step closes the marker.
 # /pharn-ship does NOT run it (two human gates). THE RULE (check-run-isolation-core.mjs, pure, the one owner): frozen
 # ISOLATION_CODES (fs:dockerenv, fs:containerenv, fs:proc1-cgroup, the REMOTE_CONTAINERS / CODESPACES /
-# GITPOD_WORKSPACE_ID / GITHUB_ACTIONS env codes, operator:PHARN_ISOLATED) and CREDENTIAL_CODES (16: ~/.ssh, an SSH
-# agent, gh hosts.yml, GH_TOKEN, .git-credentials, a plain or URL-scoped credential helper, .netrc, .aws/credentials,
+# GITPOD_WORKSPACE_ID / GITHUB_ACTIONS env codes, operator:PHARN_ISOLATED) and CREDENTIAL_CODES (17: ~/.ssh, an SSH
+# agent, gh hosts.yml, GH_TOKEN, GITHUB_TOKEN outside GitHub Actions, .git-credentials, a plain or URL-scoped credential helper, .netrc, .aws/credentials,
 # an .npmrc _authToken in HOME or the project, and six token env vars) → HOST (no isolation code) /
 # ISOLATED_WITH_CREDENTIALS / ISOLATED; only ISOLATED exits 0 without the flag. Unknown evidence (unreadable HOME, a
 # git that cannot answer) refuses WITH the flag too. PROBES (the CLI): lstat first, never followed, ENOENT/ENOTDIR the
@@ -753,7 +755,7 @@ node pharn/floor/check-entry-context.mjs --feature <name> [--session <id>] [--pr
 # (runner.json `timeout_ms`, the runner's argv, the cache inputs); below the pinned value → `unusable bad-gate-timeout`,
 # exit 2 (observation `init-refused`). With no declaration every record is byte-identical.
 # Exit (--wait): 0 green · 4 red · 6 unmeasured · 3 no-gates · 5 continue (run again) · 2 unusable; --peek the same
-# codes (5 = not decided yet, never re-run); --start 0 · 3 · 2; --abort 0.
+# codes (5 = not decided yet, never re-run); --start 0 · 3 · 4 (cached red) · 2; --abort 0.
 node pharn/floor/entry-gates.mjs --start [--refresh] --feature <name> --timeout-ms <N>
 node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
 node pharn/floor/entry-gates.mjs --peek --feature <name>

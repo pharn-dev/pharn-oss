@@ -1,7 +1,7 @@
 # Floor CLI reference — acceptance-criteria tests
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before planning a change to, running, or citing one of the CLIs below.
@@ -52,7 +52,7 @@ come from the single code block this text was moved from, so the entry they name
 # the `/pharn-ship "…(spec_kind: test-infra)"` command, or for an exclusion-caused AC the ids to remove from
 # gates.exclude (since 6.36.0 check-ac-tests.mjs REDs that mapping row earlier, `level-excluded`) (/pharn-test --unattended prints it;
 # interactive asks; never a nested run). run-gates --stage ac-test selects the gates BY ID from the levels and hands
-# each its mapped files after `--` (--gates/--extra/--skip-style/--scope-json/--spec-from/--side refused; no
+# each its mapped files after `--` (--gates/--extra/--skip-style/--scope-json/--spec-from/--side/--base refused; no
 # reconcile, no build). check-red-run.mjs --verdict (red-run-core.mjs): per AC, over the record of every gate its level
 # maps to, entries whose `file` EQUALS the mapped file (not case-folded) and whose LEAF title starts `AC-<n>:` —
 # ≥1 (else ac-test-not-collected), none passed (ac-test-passes-before-build — NO escape hatch), none skipped
@@ -68,7 +68,7 @@ come from the single code block this text was moved from, so the entry they name
 # CommonJS Jest, where `await import()` stays red forever (jest-after.json). ac-tests-lock.mjs --record-red-run re-derives the
 # verdict and writes `red_run` {stamp_sha256, files_sha256, gates, acs}; `--check --require-red-run` is the question
 # "did a red run happen" (plain --check GREEN never means that) — a bootstrap lock FAILS it unless the caller also passes
-# --allow-bootstrap (only /pharn-test's Step B does), and a bootstrap lock is written/checked only over an Approved,
+# --allow-bootstrap (only /pharn-test's Step B and check-test-stage.mjs's bootstrap branch do), and a bootstrap lock is written/checked only over an Approved,
 # un-drifted SPEC (check-spec-approved.mjs, shelled). BOOTSTRAP: SPEC frontmatter `spec_kind: test-infra`
 # (spec-template rule 8; the PIN covers a spec_kind line — check-spec pinHash — so flipping it after approval is
 # drift) → no mapping, no tests, no run; --write-bootstrap records mode bootstrap + the SPEC's levels — WEAKER, and

@@ -209,7 +209,7 @@ ids rather than in the baseline. Since 6.53.0 that surface includes the four tru
 implemented; an authenticated baseline store outside the worktree is the same category and equally
 absent. Further bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are
 outside the reconciled set; the window is anchor→verify; one worktree per session (a second run's anchor would
-replace the first's epoch: since 7.3.0 `--anchor` refuses while that run's loop/ship marker is open); **no attribution** (it
+replace the first's epoch: since 7.3.0 `--anchor` (and since 7.24.0 a run's entry) refuses while that run's loop/ship marker is open); **no attribution** (it
 reports _what_, never _who_); the checker runs from the worktree, so it cannot vouch for its own
 integrity; and the anchor is a Bash step (L19), so a run that SKIPS it silently reuses an earlier epoch
 instead of failing — only a tree that has never anchored yields `INCONCLUSIVE`. **No shell command string

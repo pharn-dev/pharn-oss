@@ -23,6 +23,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.25.3] - 2026-11-24
+
+### Fixed
+
+- **The trusted docs, `CLAUDE.md` and the contributor guides say what `main` does again: 40 false or stale claims
+  corrected, each against the code or setting it describes (CORE-371).** A patch bump, because three trusted docs ship.
+  - **`pharn/THREAT-MODEL.md`:** `/pharn-loop --quick`'s grill runs no plan scanner, so not even the security
+    griller's secret scan; `/pharn-loop` grants seven Skill names, `pharn-triage` and `pharn-supervise` included; the
+    setter refuses a CI workflow or a git hooks directory in every project since 7.3.0, not only an installed one; and
+    since 2026-11-04 the owner is the bypass actor of ruleset 25907495 (CORE-350 corrected `pharn/LIMITS.md` §11, not
+    this restatement).
+  - **`pharn/LIMITS.md`:** the quick loop's grill runs no observability scanner either; since 7.24.0 the epoch-owner
+    refusal also runs at `/pharn-loop`'s entry and after `/pharn-ship`'s GATE 1 (`--check-epoch`); the always-reconciled
+    surface holds the four hook guards, not every hook file; and the Stop guard's three refusals are a default
+    (`PHARN_STOP_GUARD_MAX`, 1 to 7).
+  - **`pharn/ARCHITECTURE.md` §4:** the contract list names `grill-triage` and `supervisor`, and the command list names
+    `triage` and `supervise`.
+  - **`CLAUDE.md`:** the epoch-owner refusal line names the 7.24.0 entry check.
+  - **`.dev/guides/`** (apparatus): each guide's header no longer says its text is unchanged since the move; and 19
+    restated facts now match their code, among them `entry-gates.mjs --start`'s exit 4, 17 `CREDENTIAL_CODES`, the
+    five `UNMEASURED_CODES`, `/pharn-loop`'s seven finish lines, which helpers re-export which names, when the ship run
+    marker opens, and that an open run marker keeps the fail-closed default standing past 24 h while writes refresh
+    it.
+  - The three trusted-doc edits were applied by a human from a reviewed patch script, as the write guard requires.
+    Nothing in a checker or command changed. Record: `.dev/features/core-371-canon-docs/`.
+
+### Added
+
 - 2026-11-24: **Measured: on CORE-310's intent v1, `/pharn-spec --model-approve` moved the "existing profile unit
   tests still pass unchanged" criterion into `## Constraints` (CORE-357). n = 1.** One full `/pharn-loop` ran on a
   scratch pharn-app worktree with PHARN 7.25.0 installed through the pharn CLI.

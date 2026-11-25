@@ -1,7 +1,7 @@
 # Writes-scope (fix #7) — detail
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before planning or editing a write guard, a hook's wiring, a writes-scope, the setter's `--allow-claude-dir` flag, or anything under `pharn/.run/`; and after any write is denied. The root `CLAUDE.md` section "Writes-scope (fix #7 — fail-closed)" and hard constraint 1 hold the rules; this file holds the postures, the deny bodies and the reasons.
@@ -99,7 +99,8 @@ CLIs write), whatever the scope; Bash still reaches them.
   (L35), and **STOPs** (S9) when its Step 1a snapshot or that marker's `--open` exits non-zero (re-review
   R2). All of these are Bash calls outside the `PreToolUse` gate (L19) — ADVISORY: a run that skips `--open` is
   unguarded between its own scoped steps, and one that skips `--close` leaves the fail-closed default
-  standing for at most 24 h. Tree-wide, not per-session — the scope record is already one per tree (L38),
+  standing until 24 h after the last write the guard judged without a scope (each such write refreshes the
+  marker, 6.31.2). Tree-wide, not per-session — the scope record is already one per tree (L38),
   and a subagent a command spawns must be covered by the marker its own orchestrator opened. In a dev
   checkout or an unsignalled tree the guard never reads these markers, the default is the pre-6.24.0 one, and
   every deny message the old hook printed is byte-identical; the only verdict changes 6.24.0 made there are toward
@@ -172,7 +173,7 @@ CLIs write), whatever the scope; Bash still reaches them.
 ## The setter refuses to scope the guards themselves
 
 - **The setter refuses to scope the guards themselves.** `set-writes-scope.cjs` exits non-zero and
-  writes nothing if the parsed scope names `.claude/settings.json` or one of the four hook scripts,
+  writes nothing if the parsed scope names either settings file or one of the four hook scripts,
   unless `--allow-claude-dir` is passed. A `PLAN.md` is untrusted input, so without this an increment
   could declare its way into disarming a guard. Use the flag only when the increment genuinely edits a
   guard; it is an argv flag, so no declared file can set it for itself. The check is **lexical** (it

@@ -1,7 +1,7 @@
 # Floor CLI reference — /pharn-loop and /pharn-ship stops, records, ledgers and routing
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before planning a change to, running, or citing one of the CLIs below.
@@ -56,7 +56,7 @@ node pharn/floor/check-loop.mjs <verify-report.json> <regression-report.json> --
 # on a usage error or checker-crashed). THE CHECKS, first failure decides, fabrication (J/E/H) before staleness (F/G):
 #   A reports exist + parse (RERUN report-missing|report-malformed) · B a report reason_code in LAPSE_CODES
 #   (RERUN; empty-source-set → STOP, the command maps it to S4; an UNMEASURED_CODES member — base-timed-out,
-#   gate-not-measured, head-timed-out, 6.59.0 — passes, a verdict check-loop.mjs stops STOP_TERMINAL; any other
+#   gate-not-measured, head-timed-out, 6.59.0; per-test-record-refused, per-test-unaccounted-red, 7.17.0 — passes, a verdict check-loop.mjs stops STOP_TERMINAL; any other
 #   member → STOP) · C each of the three
 #   stamps validates (missing/lapse RERUN, else STOP) · D report.gate_run.stamp_sha256 == sha256(stamp bytes)
 #   (RERUN report-stamp-unbound) · J every recorded stdout/stderr sha256 == its log on disk (STOP
@@ -539,7 +539,7 @@ node pharn/floor/stage-agent.mjs read --command <c> --name '<name>' --stage <sta
 # and a later finish still consumes a result that arrives (7.2.0, issue #410 — before, the cap printed no-result and
 # wrote the marker, closing for good a stage whose agent outlived the session); no usable anchor → no-result +
 # `wait-unanchored`. /pharn-loop pins `--budget-ms 570000` on
-# its four finish lines (Bash timeout 600000), runs them after EVERY Agent call, omits run_in_background, and TaskStops
+# its seven finish lines (Bash timeout 600000), runs them after EVERY Agent call, omits run_in_background, and TaskStops
 # a leftover background agent before S9 (ADVISORY); on exit 6, or on finding the session ended while a stage agent
 # ran, it TaskStops the agent and stops S9b `stage-outlived-wait` (never resumes it). /pharn-ship pins no budget:
 # unchanged. The anchor is unauthenticated
