@@ -1,7 +1,7 @@
 # Versioning — the installer, MIN_CLI and CHANGELOG cites
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before editing `SKILLS_VERSION` or `MIN_CLI`, relocating an installed path, or changing a contract or frontmatter shape that existing installs read. The bump rules stay in the root `CLAUDE.md` ("SKILLS_VERSION discipline"); the CHANGELOG rules are owned by `CONTRIBUTING.md` ("CHANGELOG entries").

@@ -1,7 +1,7 @@
 # Floor CLI reference — checks, provenance, config and repo-meta
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before planning a change to, running, or citing one of the CLIs below (and `CLAUDE.md`'s SKILLS_VERSION rules decide whether the change bumps).
@@ -152,7 +152,7 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # STATE ROOT (7.2.0, issue #408, contract §1): `pharn/.run/` is outside the reconciled set WHETHER OR NOT the project
 # ignores it — --anchor never hashes it, the checker drops it from the enumeration and skips it among a legacy
 # baseline's keys. `isStateRootPath` / STATE_ROOT_SEGMENT live in reconcile-baseline.mjs (worktree-fingerprint.mjs
-# re-exports them; its digest did not move). Before, an install that never ignored pharn/.run/ failed verify on 54 of
+# imports both and re-exports the constant; its digest did not move). Before, an install that never ignored pharn/.run/ failed verify on 54 of
 # 55 escapes, all PHARN's own run state: the snapshot match lacked the hook's always-writable `pharn/.run/**`, and the
 # setter's own writes-scope.json is Write-tool-denied. Cost: a Bash write to writes-scope.json is unreported, as it
 # already was wherever pharn/.run/ is ignored (the checker reads the baseline's snapshot, never the live file).
@@ -162,7 +162,7 @@ node pharn/floor/check-plan-lessons.mjs <PLAN.md> <lessons-learned.md>
 # widens, judged against the snapshot.
 # EPOCH OWNER (7.3.0, contract §1): `--anchor` refuses (exit 2, nothing written) to replace a baseline whose feature
 # (activeFeatureSlug of its scope_snapshot; PIPELINE_RE + activeFeatureSlug now live in reconcile-baseline.mjs, the checker
-# re-exports) differs from the new anchor's and whose pharn-loop / pharn-ship marker is open (run-marker.mjs markerPath;
+# imports both and re-exports activeFeatureSlug) differs from the new anchor's and whose pharn-loop / pharn-ship marker is open (run-marker.mjs markerPath;
 # lstat presence + the hooks' symmetric 24h ceiling; any lstat error but ENOENT/ENOTDIR = open). An unreadable prior record
 # refuses on ANY other feature's open marker; a legacy null snapshot never refuses. Bounds: presence-only markers (the
 # loop's own --close grant reaches them), no-marker runs and same-feature runs are not told apart.
@@ -214,11 +214,12 @@ node pharn/floor/runtime-floor.mjs   # silent exit 0 on a supported Node
 # `pharn/.run/<command>/<name>/active.json` = `{schema, command, name, session_id, started_at}`; the guard
 # reads only the marker's PRESENCE (lstat, never followed) and its mtime (24h ceiling, symmetric) —
 # NEVER its contents. `--open` overwrites (refreshes the age); `--close` is idempotent. `/pharn-ship` opens
-# right after its GATE-1 resume backstop and closes in Step 3a (every exit that ends the run);
+# in Step 2.1 after its GATE-1 backstop, base capture and epoch check, and closes in Step 3a (every exit that ends the run);
 # `/pharn-review` opens just before Step 3 (after its last ask-the-human point) and closes in its own
 # Step 7. Both lines are Bash calls outside the PreToolUse gate (L19) — ADVISORY: a run that skips `--open`
 # is simply unguarded between its own scoped steps, and one that skips `--close` leaves the fail-closed
-# default standing for at most 24h. Both commands STOP when `--open` exits non-zero (GATE-2 review, S1: a
+# default standing until 24h after the last write the guard judged without a scope (each such write refreshes the
+# marker, 6.31.2). Both commands STOP when `--open` exits non-zero (GATE-2 review, S1: a
 # FILE planted at `pharn/.run`, `pharn/.run/<command>` or `pharn/.run/<command>/<name>` used to crash the writer with
 # exit 1 and a stack trace, and neither command stopped); run-marker.test.mjs EXECUTES each command's pinned
 # line — the WHOLE line, so a suffix like `|| true` is caught — against such a planted file. `/pharn-loop`,
@@ -619,7 +620,7 @@ node pharn/floor/check-model-config.mjs [validate | resolve <stage> | agreement]
 # surface. Adding model:/effort: to a dev command means adding its stage to DEV_WIRED in the same edit.
 # Exits non-zero on RED.
 # INVOKER: no npm script and no CI step of its own. Its test's "★ live ★" case runs `agreement` over the REAL
-# pharn.config.json and .claude/commands, so `npm test` (in `npm run check`, and CI's Test step) gates it; a
+# pharn.config.json and .claude/commands, so `npm test` (in `npm run check`; CI's Test step runs it as `test:coverage`) gates it; a
 # separate script would run the same check twice. Run it by hand to see the verdict line.
 node .dev/floor/check-config.mjs [validate | resolve <stage> | agreement]
 ```
@@ -768,7 +769,7 @@ node pharn/floor/render-review.mjs <name> [--root <dir>]
 # `check-version-badge` precedent fired on the same lesson. Fail-closed on every unusable input
 # (MISSING_PACKAGE | NO_CHECK_SCRIPT | EMPTY_CHAIN | MISSING_DOC) — no input state is GREEN by default.
 # NARROWED, and stated: it proves each gate is NAMED, never that CONTRIBUTING DESCRIBES it correctly (a
-# doc listing all seven and explaining each wrongly stays GREEN), and it does NOT check the REVERSE
+# doc listing every gate and explaining each wrongly stays GREEN), and it does NOT check the REVERSE
 # direction — a gate removed from the chain but still documented is GREEN, deliberately, because
 # CONTRIBUTING legitimately names non-chain scripts (`docs:generate`, `format`) and the two shapes are
 # indistinguishable from these two files alone. Wired into `npm run check` as `check:contributing` AND as

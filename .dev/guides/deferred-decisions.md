@@ -1,7 +1,7 @@
 # Deferred decisions — what the product surface deliberately does not have yet
 
-Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text is the moved text, unchanged except
-for the `##` headings added for navigation and the leading indentation Prettier normalizes. The root `CLAUDE.md`
+Moved out of the always-loaded root `CLAUDE.md` at `6ff4dd1` (SKILLS_VERSION 6.46.0) by `claude-md-bootstrap`. The text began as the moved text, plus
+the `##` headings added for navigation and the leading indentation Prettier normalizes; later increments edit it. The root `CLAUDE.md`
 still holds the rules every session needs; this file adds detail and does not override them.
 
 **Read when:** before proposing a generated capability catalog for users or a product `/pharn-eval`. `.dev/floor/specified-primitives.json` registers both forward claims below as `check:markers` sites.
