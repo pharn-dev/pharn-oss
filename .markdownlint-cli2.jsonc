@@ -25,11 +25,12 @@
     // linted clean and `/.codex/` held no markdown, so neither is listed. Bound: this matches only at the
     // root, as the `.gitignore` line does, and is tied to where the importer writes today.
     ".agents",
-    // The security-audit skill's symlink (`-> ../../.agents/skills/security-audit`, symlink mode in
-    // `skills-lock.json`). Unlike ESLint, this tool follows a linked directory, so in a checkout where the
-    // skill is restored the `.agents` entry above does not cover it: measured, 48 errors in the skill's
-    // third-party markdown. In CI and a fresh clone the link dangles and this matches nothing. Bound: it
-    // names this one link; another symlink-mode skill would need its own entry.
+    // The security-audit skill, a byte-for-byte copy of cloudflare/security-audit-skill that `skills-lock.json`
+    // pins by `computedHash` (copy mode since 7.25.6; before that it was a symlink into `.agents/`, which
+    // dangled in every clone and made pharn-cli refuse the archive). Its third-party markdown fails this
+    // config (measured: 48 errors), and a `--fix` would make the copy drift from its pin. The ESLint twin is
+    // `eslint.config.mjs`'s `.claude/skills/security-audit/**` entry. Bound: it names this one skill;
+    // another vendored skill whose markdown fails would need its own entry.
     ".claude/skills/security-audit",
     "node_modules",
     ".dev/floor/test-fixtures",

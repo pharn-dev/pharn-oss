@@ -1,0 +1,512 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pharn.dev/schemas/ci/policy.v1.json",
+  "title": "pharn-ci policy document, version 1",
+  "description": "An organization's policy for pharn-ci: what safe to merge means for a repository. Served by pharn.dev (the policy field of the GET /policy response) or read from a JSON file in the repository. Untrusted input: every object is closed, every list and string is bounded. Every key except version is optional, and this schema implies no default. Tighten rules describe how item 20 merges layers; nothing in this schema merges.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Policy document version; must be 1. Not merged: every layer carries the same version.",
+      "type": "integer",
+      "const": 1
+    },
+    "coverage": {
+      "description": "Diff coverage gate settings.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "threshold": {
+          "description": "Minimum diff coverage percentage, 0-100; feeds the diff coverage gate. Tighten: numbers, max wins.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "exclude": {
+          "description": "GLOB patterns of files left out of diff coverage; feeds the diff coverage gate. Tighten: POLICY-SPEC gives no rule for this key; item 20 decides.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/glob" }
+        },
+        "root": {
+          "description": "ROOT directory that relative coverage paths start from, or null for none; feeds the diff coverage gate. Tighten: POLICY-SPEC gives no rule for this key; item 20 decides.",
+          "anyOf": [{ "$ref": "#/$defs/root" }, { "type": "null" }]
+        }
+      }
+    },
+    "setup": {
+      "description": "Agent setup rules (P01-P08).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require": {
+          "description": "Whether at least one agent setup file is required; feeds P01. Tighten: booleans, true wins.",
+          "type": "boolean"
+        },
+        "expect": {
+          "description": "Agent tools whose setup files must be present (names from AGENT_TOOLS); feeds P01. Tighten: required lists, union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "enum": [
+              "claude-code",
+              "cursor",
+              "copilot",
+              "codex",
+              "gemini",
+              "windsurf",
+              "cline",
+              "mcp",
+              "aider",
+              "amazon-q",
+              "amp",
+              "augment",
+              "continue",
+              "goose",
+              "jules",
+              "junie",
+              "kiro",
+              "opencode",
+              "roo",
+              "zed"
+            ]
+          }
+        },
+        "consistency": {
+          "description": "Severity of contradictory agent setup files; feeds P07. Tighten: severities, block > warn > info > off.",
+          "$ref": "#/$defs/severity"
+        },
+        "forbidden_permissions": {
+          "description": "PERM rules an agent settings file must not allow; feeds P02. Tighten: forbidden_* lists, union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/permission" }
+        },
+        "required_permissions_deny": {
+          "description": "PERM rules that must appear in permissions.deny; feeds P03. Tighten: required_* lists, union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/permission" }
+        },
+        "allowed_mcp_servers": {
+          "description": "MCP server NAMEs allowed; an empty list means any server; feeds P04. Tighten: allowed_* lists, intersection (an empty allowlist means any, the loosest; a non-empty one restricts).",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/name" }
+        },
+        "forbidden_mcp_servers": {
+          "description": "MCP server names or command globs (NAME_OR_GLOB) that must not be configured; feeds P05. Tighten: forbidden_* lists, union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/nameOrGlob" }
+        },
+        "required_hooks": {
+          "description": "Hooks (an event and an optional matcher) that must exist in the agent settings; feeds P06. Tighten: required_* lists, union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/requiredHook" }
+        },
+        "forbidden_files": {
+          "description": "GLOB patterns of files that must not be tracked; feeds P08. Tighten: forbidden_* lists, union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/glob" }
+        }
+      }
+    },
+    "test_integrity": {
+      "description": "Test-integrity signal settings (TI01-TI17).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "How test-integrity findings affect the verdict; feeds the TI signals. Tighten: mode, block > warn > off.",
+          "type": "string",
+          "enum": ["block", "warn", "off"]
+        },
+        "signals": {
+          "description": "Per-signal severity overrides, keyed by signal id TI01-TI17; any other key (TI18 included) is an error; feeds the TI signals. Tighten: per-signal severities, block > warn > info > off.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "TI01": {
+              "description": "Severity of signal TI01. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI02": {
+              "description": "Severity of signal TI02. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI03": {
+              "description": "Severity of signal TI03. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI04": {
+              "description": "Severity of signal TI04. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI05": {
+              "description": "Severity of signal TI05. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI06": {
+              "description": "Severity of signal TI06. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI07": {
+              "description": "Severity of signal TI07. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI08": {
+              "description": "Severity of signal TI08. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI09": {
+              "description": "Severity of signal TI09. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI10": {
+              "description": "Severity of signal TI10. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI11": {
+              "description": "Severity of signal TI11. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI12": {
+              "description": "Severity of signal TI12. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI13": {
+              "description": "Severity of signal TI13. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI14": {
+              "description": "Severity of signal TI14. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI15": {
+              "description": "Severity of signal TI15. Validated and not applied: this release emits no TI15, so the value changes nothing. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI16": {
+              "description": "Severity of signal TI16. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "TI17": {
+              "description": "Severity of signal TI17. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            }
+          }
+        },
+        "accept_label": {
+          "description": "LABEL that signs off test-integrity blocks on a pull request; feeds the TI sign-off. Never read from .pharn/ci.yml. Tighten: POLICY-SPEC gives no rule for this key; item 20 decides.",
+          "$ref": "#/$defs/label"
+        }
+      }
+    },
+    "flaky": {
+      "description": "Flaky test handling.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quarantine": {
+          "description": "Whether known flaky tests are quarantined; feeds flaky test handling. Tighten: booleans, true wins.",
+          "type": "boolean"
+        }
+      }
+    },
+    "policy": {
+      "description": "Policy mode settings and rule severities (P01-P14).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": {
+          "description": "In an app policy, true makes agent settings files that could not be read (so P02 to P06 did not run) a POLICY_SETTINGS_INVALID error instead of a warning. It does not make a policy that could not be fetched block the check: a policy that is not there cannot ask for that, and only the workflow input `policy: required` turns a fetch failure into a failing POLICY_UNAVAILABLE (P10). Not allowed in a `file:` policy (named in POLICY_OVERRIDE_IGNORED). Tighten: booleans, true wins.",
+          "type": "boolean"
+        },
+        "rules": {
+          "description": "Per-rule severity overrides, keyed by rule id P01-P14; any other key is an error. Tighten: per-rule severities, block > warn > info > off.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "P01": {
+              "description": "Severity of rule P01. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P02": {
+              "description": "Severity of rule P02. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P03": {
+              "description": "Severity of rule P03. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P04": {
+              "description": "Severity of rule P04. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P05": {
+              "description": "Severity of rule P05. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P06": {
+              "description": "Severity of rule P06. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P07": {
+              "description": "Severity of rule P07. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P08": {
+              "description": "Severity of rule P08. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P09": {
+              "description": "Severity of rule P09. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P10": {
+              "description": "Severity of rule P10. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P11": {
+              "description": "Severity of rule P11. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P12": {
+              "description": "Severity of rule P12 (agent pull request needs a human approval). Validated and not applied: this release runs no P12, so the value changes nothing. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P13": {
+              "description": "Severity of rule P13, agent self-modification (default block: an agent pull request widens agent powers in its settings, MCP configs, workflows or CODEOWNERS). Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "P14": {
+              "description": "Severity of rule P14. Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            }
+          }
+        }
+      }
+    },
+    "agents": {
+      "description": "Agent pull request detection and rules (P11, P13 and P14; P12 is validated and not applied).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "labels": {
+          "description": "Pull request LABELs that mark an agent pull request; feeds agent PR detection for P11, P13 and P14. Tighten: union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/label" }
+        },
+        "extra_logins": {
+          "description": "Extra GitHub LOGINs whose pull requests are agent pull requests; feeds agent PR detection for P11, P13 and P14. Tighten: union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/login" }
+        },
+        "protected_paths": {
+          "description": "GLOB patterns an agent pull request must not touch; feeds P11. Tighten: union.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/glob" }
+        },
+        "protected_paths_mode": {
+          "description": "What touching a protected path does; feeds P11. Tighten: mode, block > warn.",
+          "type": "string",
+          "enum": ["block", "warn"]
+        },
+        "require_human_approval": {
+          "description": "Whether an agent pull request needs a human approval; meant for P12. Validated and not applied: this release runs no P12 and checks no approval, so the value changes nothing. Tighten: true wins.",
+          "type": "boolean"
+        },
+        "max_files": {
+          "description": "Most files an agent pull request may change, an integer 1-100000; feeds P14, which runs only when this or max_changed_lines is set (there is no default cap). A rename counts once; lockfiles, snapshots, *.generated.* files and coverage.exclude paths do not count (coverage.exclude paths do when the pull request edits the config or a workflow, unless the app policy sets the exclusions). Tighten: a cap, so the smaller limit wins: a policy file the pull request edits applies the smaller of its merge-base and head values, so it can lower the cap but never raise or remove it.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "max_changed_lines": {
+          "description": "Most changed lines (added plus removed, as the diff shows them; a binary file has none) an agent pull request may have, an integer 1-10000000; feeds P14, which runs only when this or max_files is set (there is no default cap). The lines of lockfiles, snapshots, *.generated.* files and coverage.exclude paths do not count (coverage.exclude paths do when the pull request edits the config or a workflow, unless the app policy sets the exclusions). Tighten: a cap, so the smaller limit wins: a policy file the pull request edits applies the smaller of its merge-base and head values, so it can lower the cap but never raise or remove it.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        }
+      }
+    },
+    "dependencies": {
+      "description": "Checks on newly added dependencies.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lookup": {
+          "description": "Whether the Action looks up newly added packages in the public npm and PyPI registries (D01-D03, since 0.8.0); true requires the lookups whatever the dependencies input says. Tighten: booleans, true wins.",
+          "type": "boolean"
+        },
+        "registries": {
+          "description": "Package ecosystems whose new dependencies are checked; each maps to a fixed host list in the Action, so this key never names a host (dependencies.allowed_hosts names the private registries a team runs). Tighten: dependencies.registries, intersection.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "type": "string", "enum": ["npm", "pypi"] }
+        },
+        "min_age_days": {
+          "description": "Minimum age in days of a newly added dependency version, an integer 0-3650. Tighten: dependencies.min_*, max wins.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3650
+        },
+        "min_weekly_downloads": {
+          "description": "Minimum weekly downloads of a newly added dependency, an integer 0-1000000000. Tighten: dependencies.min_*, max wins.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "allowed_hosts": {
+          "description": "Registry hosts a team runs (Artifactory, Nexus, a private PyPI index), besides the four public ones, whose URLs D05 accepts: exact host names matched case-insensitively, at most 50, each 1-253 characters of the letters A-Z and a-z, digits, . and -, with no scheme, path, port, user name or wildcard. A URL still has to be https with no user name, password or port. Tighten: an app policy's list replaces the dependency-allowed-hosts workflow input's, so an input host the list leaves out is ignored; a policy file may not set it (it is recorded and not applied), and .pharn/ci.yml may not set it either. The Action never calls an allowed host, and never looks up a package name resolved from one.",
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/host" }
+        }
+      }
+    },
+    "injection": {
+      "description": "Prompt-injection surface scan settings (PI01-PI05): the scan of the lines a pull request adds runs without this key, with PI01 at block and the others at warn.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exempt": {
+          "description": "GLOB patterns of files no PI signal reads, added to the built-in exemptions (fixtures, test data, test files). Applied from an app policy only: a policy file is carried by the pull request, so its exemptions are not-allowed and never applied. Tighten: not merged; the app policy's list applies.",
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/$defs/glob"
+          }
+        },
+        "phrases": {
+          "description": "Extra phrases (NAMEs, matched case-insensitively with white space normalized) that PI03 reports in added lines and PI02 in hidden Markdown, added to the built-in phrase list; a finding names a PX id, never the phrase. Tighten: union (a policy file's list is united with its merge-base list).",
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "signals": {
+          "description": "Per-signal severity overrides, keyed by signal id PI01-PI05; any other key is an error. An app policy replaces the default (PI01 block, PI02-PI05 warn; off switches a signal off); a policy file can only raise it. Tighten: per-signal severities, block > warn > info > off.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "PI01": {
+              "description": "Severity of signal PI01, invisible or bidirectional Unicode (default block). Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "PI02": {
+              "description": "Severity of signal PI02, hidden Markdown that addresses an agent (default warn). Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "PI03": {
+              "description": "Severity of signal PI03, known prompt-injection phrases (default warn). Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "PI04": {
+              "description": "Severity of signal PI04, a long base64 or hex blob in an agent instruction file (default warn). Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            },
+            "PI05": {
+              "description": "Severity of signal PI05, an agent instruction file added inside a vendored directory (default warn). Tighten: block > warn > info > off.",
+              "$ref": "#/$defs/severity"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "severity": {
+      "description": "SEV: block, warn, info or off.",
+      "type": "string",
+      "enum": ["block", "warn", "info", "off"]
+    },
+    "glob": {
+      "description": "GLOB: a repo-relative glob pattern (*, ** and ?), 1-512 characters: not starting with ./, / or !; not ending with /; no //; no .. segment; none of the characters \\ { } [ ]; no control character; no leading or trailing white space.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\s$)(?!\\./)(?![/!])(?![\\s\\S]*/$)(?![\\s\\S]*//)(?!(?:[\\s\\S]*/)?\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F\\\\{}\\[\\]]*$"
+    },
+    "root": {
+      "description": "ROOT: a normalized repo-relative directory, 1-512 characters; . is the repository root: no \\; not absolute (no leading /, no X: drive); no .. segment; not starting with - or ./; not ending with /; no //; no control character; no leading or trailing white space.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\s$)(?![/-])(?![A-Za-z]:)(?!\\./)(?![\\s\\S]*/$)(?![\\s\\S]*//)(?!(?:[\\s\\S]*/)?\\.\\.(?:/|$))[^\\u0000-\\u001F\\u007F\\\\]*$"
+    },
+    "permission": {
+      "description": "PERM: a permission rule such as Tool or Tool(pattern), 1-512 characters, no control character.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001F\\u007F])[A-Za-z][A-Za-z0-9_-]*(\\(.+\\))?$"
+    },
+    "name": {
+      "description": "NAME: a plain name, 1-128 characters, no control character, no leading or trailing white space.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\s$)[^\\u0000-\\u001F\\u007F]*$"
+    },
+    "nameOrGlob": {
+      "description": "NAME_OR_GLOB: a plain name or command glob, 1-512 characters, no control character, no leading or trailing white space.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\s$)[^\\u0000-\\u001F\\u007F]*$"
+    },
+    "label": {
+      "description": "LABEL: a pull request label, 1-50 characters, no control character, no leading or trailing white space.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 50,
+      "pattern": "^(?!\\s)(?![\\s\\S]*\\s$)[^\\u0000-\\u001F\\u007F]*$"
+    },
+    "login": {
+      "description": "LOGIN: a GitHub login (a letter or digit, then up to 38 letters, digits or -), optionally followed by [bot]; or an Enterprise Managed User login handle_shortcode (a letter or digit, then letters, digits or -, then one _ and a shortcode of 3 to 8 letters or digits; at most 39 characters, never with [bot]); at most 44 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 44,
+      "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9-]{0,38}(\\[bot\\])?|(?=[A-Za-z0-9_-]{1,39}$)[A-Za-z0-9][A-Za-z0-9-]*_[A-Za-z0-9]{3,8})$"
+    },
+    "host": {
+      "description": "HOST: a registry host name, 1-253 characters of the letters A-Z and a-z, digits, . and -; no scheme, path, port, user name or wildcard.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[A-Za-z0-9.-]+$"
+    },
+    "requiredHook": {
+      "description": "A hook that must exist: an event and an optional matcher.",
+      "type": "object",
+      "required": ["event"],
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "description": "Hook event name, letters only, 1-64 characters (for example PreToolUse); feeds P06. Tighten: part of required_hooks, union.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z]+$"
+        },
+        "matcher": {
+          "description": "Tool matcher the hook must cover, 1-512 characters, no control character, no leading or trailing white space; omitted means any tool; feeds P06. Tighten: part of required_hooks, union.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!\\s)(?![\\s\\S]*\\s$)[^\\u0000-\\u001F\\u007F]*$"
+        }
+      }
+    }
+  }
+}
