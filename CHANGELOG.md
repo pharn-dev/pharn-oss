@@ -51,6 +51,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-25: **Recorded the rest of CORE-371 part A's `/pharn-dev-ship` run (`.dev/features/core-371-user-docs/`):
+  `VERIFY.md`, `verify-report.json`, `REVIEW.md` and `SHIP.md`.** #490 merged at its head 1e277300, before verify's
+  second run, the review and the ship record were written. Verify run 1 was `FAIL` on `format:check`, caused only by
+  the unformatted file #489 fixed on `main`. Run 2, from a fresh `init` after that fix was merged, is `PASS`. The
+  review found 0 floor-gate and 2 minor advisory findings. Apparatus only: no `SKILLS_VERSION` bump.
 - 2026-11-25: **`skills-lock.json` now records the `security-audit` skill (`cloudflare/security-audit-skill`, pinned
   to commit `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8`), and the lock format moved to version 2.** The move to version
   2 also recomputed the five phargus skills' `computedHash` values. `security-audit` is installed in symlink mode:
