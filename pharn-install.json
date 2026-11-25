@@ -76,7 +76,7 @@
     {"path":"LICENSE","dest":"pharn/LICENSE","surface":"license","policy":"managed","sha256":"e2755429887162b697bc86e3c5fcb70937ed9ecaa944a4988e221ad95c29736e"},
     {"path":"pharn/ARCHITECTURE.md","dest":"pharn/ARCHITECTURE.md","surface":"trusted-doc","policy":"managed","sha256":"8566b4432ed6cc7035de5d925dafe3755086e23b12acacde0dcdda07a43a9167"},
     {"path":"pharn/CONSTITUTION.md","dest":"pharn/CONSTITUTION.md","surface":"trusted-doc","policy":"managed","sha256":"8f0c7cad7d2c7350da2bcb1674509f2a75955c5152fcf411db75db3730674104"},
-    {"path":"pharn/LIMITS.md","dest":"pharn/LIMITS.md","surface":"trusted-doc","policy":"managed","sha256":"8b0e6b30b135407526d09d21fd69bc8bb4f94a3fc48277c31a946e16e5304c28"},
+    {"path":"pharn/LIMITS.md","dest":"pharn/LIMITS.md","surface":"trusted-doc","policy":"managed","sha256":"a45065d52e8e4a1646c9115b2e7dd66cdf10bcab8ec313ee74811052ebccb1bf"},
     {"path":"pharn/THREAT-MODEL.md","dest":"pharn/THREAT-MODEL.md","surface":"trusted-doc","policy":"managed","sha256":"1940a6378b9c385418305f03abec63be4858cb975b9f7f03a7ab956337834976"},
     {"path":"pharn/features/README.md","dest":"pharn/features/README.md","surface":"features-readme","policy":"managed","sha256":"31295eed6b3c8310b987cf86150c37ec485aa7e30f419a4f4eb11d12fc9b0b23"},
     {"path":"pharn/floor/README.md","dest":"pharn/floor/README.md","surface":"floor","policy":"managed","sha256":"c0810ef8a37e0de40eb07b06b7cade7328734b067a683f8a6d9deb780ffa1cf7"},
