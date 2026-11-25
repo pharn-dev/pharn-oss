@@ -59,7 +59,8 @@ What it checks (all deterministic):
 2. every capability has non-empty `evals/cases` + `evals/expected` (P1)
 3. every `enforces` rule_id is produced by ≥1 eval fixture (P1, **fix #6** — semantic binding, not just namespace)
 4. finding templates separate enum-gated from free-text/untrusted fields (**fix #1**)
-5. no sibling reference in `reads:` across `pharn-stack-*` / `pharn-skills-*` modules (P3)
+5. no sibling reference in `reads:`: a capability may name no `pharn-<module>` other than its own and the base modules
+   `pharn-contracts` / `pharn-core` (P3)
 6. the four archetype maps agree, _if_ `pharn/pharn-contracts/archetype-maps.json` exists (**fix #5**)
 7. `applies` is present and its values are archetype-enum members (`ARCHITECTURE §5`)
 8. no capability-canon file cites a **relocated** floor checker — a literal `.dev/floor/<x>` where `pharn/floor/<x>` exists, which would ENOENT and silently degrade that command's deterministic sub-check (P6)
@@ -121,10 +122,13 @@ The default set is the four trusted spec docs (`pharn/CONSTITUTION.md`, `pharn/A
 surface**: both settings files that can wire the hooks (`.claude/settings.json` and
 `.claude/settings.local.json`) plus the four hook scripts
 (`protect-trusted-paths.cjs`, `enforce-writes-scope.cjs`, `set-writes-scope.cjs`,
-`require-loop-record.cjs`). Each hook is re-read
+`require-loop-record.cjs`), and the writes-scope guard's input, `pharn/.run/writes-scope.json`. Each hook is re-read
 fresh on every tool call, so a write to one would disarm that guard on the very next write. It also names
 the project's own SPEC template, `pharn/spec-template.md`, denied whether or not the file exists: its
-guidance comments are instructions `/pharn-spec` follows, so a human edits it directly. Extend the
+guidance comments are instructions `/pharn-spec` follows, so a human edits it directly. Two rooted subtrees are
+denied by separate rules: memory-bank canon (`pharn/memory-bank/**`, `.dev/memory-bank/**`) unless the active scope
+was set by a promotion command and names that one canon file, and, since 7.3.0, the delivery runs' state under
+`pharn/.run/pharn-{loop,ship,review}/**`, which only PHARN's CLIs write. Extend the
 set further with the `PHARN_PROTECTED` env var (comma-separated; an entry containing `/` is an exact
 repo-relative path, a bare name still matches that basename at any depth). Confirm it works:
 

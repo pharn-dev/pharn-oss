@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [7.25.3] - 2026-11-24
+## [7.25.3] - 2026-11-25
 
 ### Fixed
 
@@ -48,6 +48,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
     it.
   - The three trusted-doc edits were applied by a human from a reviewed patch script, as the write guard requires.
     Nothing in a checker or command changed. Record: `.dev/features/core-371-canon-docs/`.
+
+### Changed
+
+- 2026-11-25: **`skills-lock.json` now records the `security-audit` skill (`cloudflare/security-audit-skill`, pinned
+  to commit `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8`), and the lock format moved to version 2.** The move to version
+  2 also recomputed the five phargus skills' `computedHash` values. `security-audit` is installed in symlink mode:
+  the committed `.claude/skills/security-audit` is a link to `../../.agents/skills/security-audit`, and `/.agents/`
+  is gitignored, so the link dangles in a fresh clone and in CI until the skill is restored from the lock with the
+  skills CLI. The skill's own files are not committed. Once restored, markdownlint follows the link into the skill's
+  third-party markdown (48 errors, measured), so `.markdownlint-cli2.jsonc` now ignores `.claude/skills/security-audit`;
+  ESLint and Prettier do not reach the skill through the link. No `SKILLS_VERSION` bump: none of these paths is product
+  surface.
+- 2026-11-25: **Moved the pharn-ci action pin in `ci.yml` and `pharn-ci-comment.yml` from v0.11.0 to v0.12.0
+  (`a370515e32f8040771ccf4b6f737d3d25f62749f`).** v0.12.0's `action.yml` changes two input descriptions (`accept-label`
+  and `config`) and no input these workflows use. Its release notes list stricter checks, among them the pharn-ci
+  config read at the merge base (CORE-95) and a tracked coverage file now an error. Read against this repository,
+  neither applies: `ci.yml` checks out with `fetch-depth: 0` and no coverage report is tracked. That is a reading of
+  the notes, not a test. This pull request's own pharn-ci run is the check, and the notes' other new checks, such as
+  the test-integrity changes, were not evaluated. No `SKILLS_VERSION` bump: workflows are not product surface.
+
+## [7.25.2] - 2026-11-25
+
+### Fixed
+
+- **Fixed: hand-written user docs that no longer said what `main` does (CORE-371, part A).** A claim-by-claim check of
+  `README.md` (outside the generated block), `docs/guarantees.md`, `docs/install-manifest.md`, `docs/limitations.md`,
+  `docs/pipeline.md`, `CONTRIBUTING.md`, `SECURITY.md` and `pharn/floor/README.md` against `main` at 7.25.1 (about 200
+  claims, 9 false or stale) corrected:
+  - **`pharn/floor/README.md` (installed, so this patch bump):** validate's sibling-reference check is described as it
+    has worked since 3.0.5 (any `pharn-<module>` in `reads:` other than the capability's own and `pharn-contracts` /
+    `pharn-core`), and the protected-path list names `pharn/.run/writes-scope.json`, memory-bank canon and, since
+    7.3.0, the delivery runs' state under `pharn/.run/pharn-{loop,ship,review}/`.
+  - `docs/limitations.md`: a `supervise` entry in `models.stages` needs pharn-cli 0.18.3 or newer, which accepts it;
+    the doc said no release did. Since 7.24.0 a run blocked by another feature's open epoch stops at `/pharn-loop`
+    entry, or right after `/pharn-ship`'s spec approval, not at its build anchor.
+  - `docs/pipeline.md`: `/pharn-test`'s typecheck step (7.25.0) gives each typecheck gate a fixed 170 s, and its
+    `ac-tests-typecheck` refusal is listed among what the test stage needs from a project. A delivery run's verify
+    reuses the HEAD gate result regress recorded on the same inputs.
+  - `CONTRIBUTING.md`: the `check` job also runs `npm run test:coverage` and, on a pull request, the pharn-ci diff
+    coverage gate, which neither local command exercises.
+  - `SECURITY.md`: the two subagent definitions under `.claude/agents/` are part of the security surface.
+
+  Not covered: `CLAUDE.md`, the four trusted docs and `.dev/guides/**` (part B of CORE-371). The pharn-cli claim
+  rests on a read of its v0.21.5 source; another repository can change after it.
+
+- 2026-11-25: **`main`'s `npm run format:check` went red after the code-scanning autofix commits left one array in
+  `pharn/floor/stage-direct.test.mjs` unformatted, and this re-formats that test file to Prettier's output.** Test file
+  only: no `SKILLS_VERSION` bump.
 
 ### Added
 

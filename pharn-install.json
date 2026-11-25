@@ -79,7 +79,7 @@
     {"path":"pharn/LIMITS.md","dest":"pharn/LIMITS.md","surface":"trusted-doc","policy":"managed","sha256":"8b0e6b30b135407526d09d21fd69bc8bb4f94a3fc48277c31a946e16e5304c28"},
     {"path":"pharn/THREAT-MODEL.md","dest":"pharn/THREAT-MODEL.md","surface":"trusted-doc","policy":"managed","sha256":"1940a6378b9c385418305f03abec63be4858cb975b9f7f03a7ab956337834976"},
     {"path":"pharn/features/README.md","dest":"pharn/features/README.md","surface":"features-readme","policy":"managed","sha256":"31295eed6b3c8310b987cf86150c37ec485aa7e30f419a4f4eb11d12fc9b0b23"},
-    {"path":"pharn/floor/README.md","dest":"pharn/floor/README.md","surface":"floor","policy":"managed","sha256":"42c6adb392d5ecb8095a6703ea413883e113c52bc659f2a1e01af1d32f25dca8"},
+    {"path":"pharn/floor/README.md","dest":"pharn/floor/README.md","surface":"floor","policy":"managed","sha256":"c0810ef8a37e0de40eb07b06b7cade7328734b067a683f8a6d9deb780ffa1cf7"},
     {"path":"pharn/floor/ac-gate-core.mjs","dest":"pharn/floor/ac-gate-core.mjs","surface":"floor","policy":"managed","sha256":"65f19a721005ef75f82dac94094ccc4ea4df358b27c5f03eb39d7b36c4b002ab"},
     {"path":"pharn/floor/ac-style-core.mjs","dest":"pharn/floor/ac-style-core.mjs","surface":"floor","policy":"managed","sha256":"e0a0bcf75785f22736f40cd1f758fdde95572907a7cdd2f93e9cba1ea4507dae"},
     {"path":"pharn/floor/ac-test-infra-core.mjs","dest":"pharn/floor/ac-test-infra-core.mjs","surface":"floor","policy":"managed","sha256":"7fabbcba9b7477efc07b8668918c6551d62da2df258c235f9ed6e02b56aa4562"},
