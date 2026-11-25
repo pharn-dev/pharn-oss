@@ -1,0 +1,26 @@
+{
+  "feature": "core-371-user-docs",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "b2fe1dc9059a153221b1af031e539cbf4acb83065d53e4656b49b34bad1ff414",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "31614cdeb6ee7e8713c2c9954479f08e37ea0d4269f4b6cfa732b50cf8dad14d"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}
