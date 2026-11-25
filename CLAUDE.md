@@ -161,7 +161,7 @@ Packaging later = "ship root minus `.dev/`". `.dev/` (committed apparatus) is un
   have **zero runtime dependencies** (Node stdlib; Node 24). The repo carries **dev-only**
   devDependencies (ESLint, Prettier, markdownlint) wired as npm scripts: `npm run check`
   (`format:check` + `lint` + `lint:md` + `docs:check` + `check:markers` + `check:badge` +
-  `check:changelog` + `check:contributing` + `check:reconcile` + `test`) is the
+  `check:changelog` + `check:contributing` + `check:reconcile` + `check:archive` + `test`) is the
   aggregate gate, and `npm test` runs
   `node --test` over the hook, product-floor, and dev-floor suites (`.claude/hooks/*.test.cjs` +
   `pharn/floor/*.test.mjs` + `.dev/floor/*.test.mjs`) — **green** at this writing; read the count live

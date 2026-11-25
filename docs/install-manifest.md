@@ -169,10 +169,15 @@ guard, holds `name`, `role` and `applies` to its own allowlists, checks the `sha
 
 ## The source-archive contract
 
-**Status: advisory.** Nothing in this repository checks these rules yet. The floor check that will enforce them is
-planned as `.dev/floor/check-source-archive.mjs`, run by `npm run check:archive` (CORE-383); until it lands, the
-contract below is written down and nothing more (`pharn/CONSTITUTION.md` P0). The one part already on the floor is
-narrower: the generator refuses an installable path that is not a regular file (above).
+**Status: floor.** [`.dev/floor/check-source-archive.mjs`](../.dev/floor/check-source-archive.mjs) (`npm run
+check:archive`, in `npm run check` and in CI's `check` job, the "Source-archive check" step that `release.yml` waits
+for) builds `git archive` of the commit with a `pharn-oss-<sha>/` root and checks every entry against rules 1 to 7
+below, by type-flag membership, path patterns and integer compares (`pharn/CONSTITUTION.md` P0, an enum/regex check).
+A failure names each offending entry and the rule it breaks. What that check is not, stated so it is not read as more:
+it is a port of pharn-cli's extractor (pharn-cli main 51a96d29), not the CLI, so it drifts if the CLI changes its rules;
+it judges the committed tree, never the working tree; its compressed size is Node's gzip, not codeload's compressor; and
+it guards the release channel only, since a merge reaches pharn-cli's `main` channel before its checks finish
+(`pharn/LIMITS.md §11`). The generator separately refuses an installable path that is not a regular file (above).
 
 **What it covers: every entry of the archive, not only the installable paths.** pharn-cli downloads this repository
 as one codeload tarball (`codeload.github.com/<owner>/<repo>/tar.gz/<sha>`, written by `git archive`) and unpacks the

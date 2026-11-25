@@ -23,6 +23,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-25: **CI now fails a commit whose source archive pharn-cli cannot unpack, so `release.yml` never tags it
+  (CORE-383).** v7.25.3, v7.25.4 and v7.25.5 were tagged with 7 git symlinks under `.claude/skills/`, and pharn-cli
+  refuses the whole codeload tarball on its first non-file entry; the PRs touched apparatus paths only, so no check
+  looked. `.dev/floor/check-source-archive.mjs` (`npm run check:archive`, in `npm run check` and in CI's `check` job)
+  builds `git archive` of HEAD with codeload's `pharn-oss-<sha>/` root and walks it with a port of pharn-cli's
+  extractor rules at 51a96d29: entry types (only regular files and directories), paths that fit ustar (a pax `x` header
+  is refused), path characters (UTF-8, no control or format character, no `\` or `:`, no `..`, one root) and the
+  20,000-entry, 128 MiB and 32 MiB caps. A failure names each offending entry and its rule. Measured: RED on `v7.25.5`
+  (the 7 symlinks), GREEN on `v7.25.2` (4,898 entries). Bounds: it mirrors the CLI's rules and drifts if they change
+  (a later ticket runs the real CLI); it judges the committed tree, not the working tree; the compressed size is
+  Node's gzip, not codeload's compressor; it stays whole-archive while `MIN_CLI` admits CLIs that judge every entry.
+  `docs/install-manifest.md`'s "The source-archive contract" now cites it and is labeled floor. Apparatus, docs and
+  CI only: no `SKILLS_VERSION` bump.
+
 ## [7.25.6] - 2026-11-25
 
 ### Added
