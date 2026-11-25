@@ -1,0 +1,26 @@
+{
+  "feature": "core-381-skill-symlinks",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "cc99702434ab8cf59ffc4e8b1efcaf740aabe91dd8efa9aab8a94b89ec019e07",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "0e8af41546e21cc7de82ea5d762ca2c3e518d369174ac216f81947c7169331b6"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

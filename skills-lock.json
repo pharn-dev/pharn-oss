@@ -41,49 +41,56 @@
       "commit": "36ada26f27d0f8602c7bd86b48a53906ff1de165",
       "sourceType": "github",
       "skillPath": "plugins/pharn-ci/skills/pharn-ci-cover/SKILL.md",
-      "computedHash": "395568e1042a539bce6f4ccbdeda9b5088cbc11607b5b10d76492bbcb68d755a"
+      "computedHash": "395568e1042a539bce6f4ccbdeda9b5088cbc11607b5b10d76492bbcb68d755a",
+      "installMode": "copy"
     },
     "pharn-ci-explain": {
       "source": "pharn-dev/skills",
       "commit": "36ada26f27d0f8602c7bd86b48a53906ff1de165",
       "sourceType": "github",
       "skillPath": "plugins/pharn-ci/skills/pharn-ci-explain/SKILL.md",
-      "computedHash": "149f3889967429f4898754b19c1d8b52d35991f3c039dea1d1cf8efae95c8866"
+      "computedHash": "149f3889967429f4898754b19c1d8b52d35991f3c039dea1d1cf8efae95c8866",
+      "installMode": "copy"
     },
     "pharn-ci-fix": {
       "source": "pharn-dev/skills",
       "commit": "36ada26f27d0f8602c7bd86b48a53906ff1de165",
       "sourceType": "github",
       "skillPath": "plugins/pharn-ci/skills/pharn-ci-fix/SKILL.md",
-      "computedHash": "12e0ba9e0355c52d26c9c0513bca6bf9eb2c82e559ac7e43f08ae6bce217fb21"
+      "computedHash": "12e0ba9e0355c52d26c9c0513bca6bf9eb2c82e559ac7e43f08ae6bce217fb21",
+      "installMode": "copy"
     },
     "pharn-ci-install": {
       "source": "pharn-dev/skills",
       "commit": "36ada26f27d0f8602c7bd86b48a53906ff1de165",
       "sourceType": "github",
       "skillPath": "plugins/pharn-ci/skills/pharn-ci-install/SKILL.md",
-      "computedHash": "1169b40fd727ab7565eece90df0ab7cecb0e4b914a4799ad7ba8bf9573cd5db6"
+      "computedHash": "1169b40fd727ab7565eece90df0ab7cecb0e4b914a4799ad7ba8bf9573cd5db6",
+      "installMode": "copy"
     },
     "pharn-ci-policy": {
       "source": "pharn-dev/skills",
       "commit": "36ada26f27d0f8602c7bd86b48a53906ff1de165",
       "sourceType": "github",
       "skillPath": "plugins/pharn-ci/skills/pharn-ci-policy/SKILL.md",
-      "computedHash": "827a2b7a24eb38e76a2deaa036d63620fb47519ef20588a54e55c599d62b4125"
+      "computedHash": "827a2b7a24eb38e76a2deaa036d63620fb47519ef20588a54e55c599d62b4125",
+      "installMode": "copy"
     },
     "pharn-cli": {
       "source": "pharn-dev/skills",
       "commit": "36ada26f27d0f8602c7bd86b48a53906ff1de165",
       "sourceType": "github",
       "skillPath": "plugins/pharn/skills/pharn-cli/SKILL.md",
-      "computedHash": "0a6ed422dea0dd8b0ed4cb458b34b186a68985ada9e58be47cbcd22d04b5159c"
+      "computedHash": "0a6ed422dea0dd8b0ed4cb458b34b186a68985ada9e58be47cbcd22d04b5159c",
+      "installMode": "copy"
     },
     "security-audit": {
       "source": "cloudflare/security-audit-skill",
       "commit": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8",
       "sourceType": "github",
       "skillPath": "skills/security-audit/SKILL.md",
-      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5"
+      "computedHash": "8513eb3b2c39b8d05ef4f47b32ef4d18280b93a5efb91d8df6272f7435034af5",
+      "installMode": "copy"
     }
   }
 }
