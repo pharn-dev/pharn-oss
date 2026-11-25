@@ -193,11 +193,17 @@ archive on the first one (CORE-380). The manifest rules above passed, because th
 limits passed in by `src/lib/repo.ts`), read for this section at pharn-cli 0.21.5. This repository owns satisfying
 them, on every commit a CLI may fetch. When the two disagree, the code wins and this section is wrong.
 
-A later pharn-cli release narrows the extractor so that it judges only the entries an install needs (pharn-cli
-CORE-386). That does not retire this contract: older CLIs stay in use, so the rules keep binding as long as
-`MIN_CLI` admits any CLI version that judges every entry. Today `MIN_CLI` is `0.14.0`, and every release from it up to
-0.21.5 does. Those older releases differ from 0.21.5 in detail, so this section tracks the newest extractor; the
-refusals in rule 1 hold in all of them.
+pharn-cli 0.21.6 narrows the extractor: it unpacks only the paths `pharn-install.json` lists, plus the files it reads
+itself, and skips every other entry without judging it (pharn-cli CORE-386). pharn-cli 0.22.0 adds `pharn
+verify-archive <file.tar.gz>`, which runs that extraction over a local archive with no network, checks every listed
+file's sha256, builds the capability index and parses `MIN_CLI`. CI's `check` job runs it over HEAD's archive in the
+"Install check (pharn-cli verify-archive)" step, right after the "Source-archive check" step and pinned to 0.22.0
+exactly, so the paths an install receives are judged by the real CLI, not by the port above. Neither retires this
+contract: older CLIs stay in use, so the whole-archive rules keep binding as long as `MIN_CLI` admits any CLI version
+that judges every entry. Today `MIN_CLI` is `0.14.0`, and every release from it up to 0.21.5 does. A bad entry outside
+the manifest, such as a symlink under `.dev/`, passes verify-archive; only the source-archive check catches it. Those
+older releases differ from 0.21.5 in detail, so this section tracks 0.21.5, the newest extractor that judges every
+entry; the refusals in rule 1 hold in all of them.
 
 The rules, as pharn-cli 0.21.5 applies them. A break of any one refuses the whole archive, never just the entry:
 

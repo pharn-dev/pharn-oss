@@ -25,6 +25,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- 2026-11-25: **CI now runs the real pharn-cli over each commit's archive (CORE-384).** The "Source-archive check"
+  step judges the archive with a port of pharn-cli's rules, which can drift from the CLI. A new step in CI's `check`
+  job, right after it and under the same `if:`, "Install check (pharn-cli verify-archive)", builds
+  `git archive --prefix=pharn-oss/` of HEAD and runs `npx --yes @pharn-dev/pharn@0.22.0 verify-archive` over it with
+  `--expect-version` set to `SKILLS_VERSION`: the install's own extraction of the manifest-listed paths, every listed
+  file's sha256, the capability index and the `MIN_CLI` parse, offline, so `release.yml` never tags a commit that CLI
+  cannot install. The CLI is pinned to 0.22.0 exactly, the first release with `verify-archive`: `MIN_CLI` (0.14.0)
+  lacks the command, and `@latest` would let a CLI release change the verdict on an unchanged commit. The two steps
+  split the work: since 0.21.6 the CLI skips unlisted entries, so a symlink under `.dev/` passes `verify-archive` and
+  only the source-archive check fails it, which keeps binding while `MIN_CLI` admits CLIs that judge every entry.
+  `.dev/floor/ci-steps.test.mjs` pins the step's place, `if:`, exact commands and an exact pin at or above `MIN_CLI`,
+  and runs its block with a stub `npx` (one `pharn-oss/` root, the arguments, a CLI exit 1 fails the step); the stub
+  proves the wiring, not the CLI's verdict. `docs/install-manifest.md`'s "The source-archive contract" names the
+  released versions and the new step. Apparatus, docs and CI only: no `SKILLS_VERSION` bump.
 - 2026-11-25: **CI now fails a commit whose source archive pharn-cli cannot unpack, so `release.yml` never tags it
   (CORE-383).** v7.25.3, v7.25.4 and v7.25.5 were tagged with 7 git symlinks under `.claude/skills/`, and pharn-cli
   refuses the whole codeload tarball on its first non-file entry; the PRs touched apparatus paths only, so no check
