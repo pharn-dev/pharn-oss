@@ -22,8 +22,8 @@
 //
 // HONEST SCOPE (P0). Presence, bytes and set membership over committed text. NOT: that Claude Code parses the
 // frontmatter as intended (only the probe showed that, once), that it applies the tools list or omits CLAUDE.md in a
-// run, that an orchestrator follows the wiring, or that an install has the file (pharn-cli does not copy
-// `.claude/agents/` yet; follow-up `cli-install-agents`).
+// run, that an orchestrator follows the wiring, or that an install has the file (pharn-cli copies
+// `.claude/agents/pharn-*.md` since 0.20.0; an install made by an older pharn-cli has none).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

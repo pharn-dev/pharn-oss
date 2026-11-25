@@ -17,6 +17,11 @@ export default [
       // The markdownlint twin is `.markdownlint-cli2.jsonc`'s `.claude/worktrees` entry. Bound: it is tied to where
       // Claude Code places worktrees today. If that location moves, the entry silently matches nothing.
       ".claude/worktrees/**",
+      // Codex's "import from Claude Code" output: `.gitignore` excludes `/.agents/`, so this removes no repo file from
+      // lint coverage. Flat config does not read `.gitignore` or skip dot-directories, so a bare `lint` in a checkout
+      // holding the import linted its third-party scripts and went red. The markdownlint twin is
+      // `.markdownlint-cli2.jsonc`'s `.agents` entry. Bound: tied to where the importer writes today.
+      ".agents/**",
     ],
   },
   js.configs.recommended,
