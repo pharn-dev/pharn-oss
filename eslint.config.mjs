@@ -22,6 +22,11 @@ export default [
       // holding the import linted its third-party scripts and went red. The markdownlint twin is
       // `.markdownlint-cli2.jsonc`'s `.agents` entry. Bound: tied to where the importer writes today.
       ".agents/**",
+      // The security-audit skill, a byte-for-byte copy of cloudflare/security-audit-skill that `skills-lock.json` pins by
+      // `computedHash` (copy mode since 7.25.6; it was a symlink before). Third-party bytes: a fix would make the copy drift
+      // from its pin, and measured, its `validate-findings.cjs` fails `no-unused-vars` once. The markdownlint twin is
+      // `.markdownlint-cli2.jsonc`'s `.claude/skills/security-audit` entry. Bound: it names this one skill.
+      ".claude/skills/security-audit/**",
     ],
   },
   js.configs.recommended,

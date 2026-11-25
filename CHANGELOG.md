@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.25.6] - 2026-11-25
+
 ### Added
 
 - 2026-11-25: **CI now runs the real pharn-cli over each commit's archive (CORE-384).** The "Source-archive check"
@@ -62,6 +64,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   this repository satisfies them, and keeps them binding while `MIN_CLI` admits a CLI that judges every entry. It is
   labeled advisory: the floor check planned to enforce it (`.dev/floor/check-source-archive.mjs`, CORE-383) does not
   exist yet. Docs only, not on the product surface, so `SKILLS_VERSION` is unchanged.
+
+### Fixed
+
+- **v7.25.3, v7.25.4 and v7.25.5 cannot be installed, and 7.25.6 replaces them: the tree no longer holds a git symlink
+  (CORE-381).** Those three releases committed git symlinks (mode 120000) under `.claude/skills/` that point into the
+  gitignored `.agents/skills/`, so they dangle in every clone, and pharn-cli admits only regular files and directories
+  in the archive it downloads. `pharn init` and `pharn update` therefore refuse all three, whole. v7.25.3 carries one
+  link, `.claude/skills/security-audit` (#491); v7.25.4 and v7.25.5 carry seven, adding
+  `.claude/skills/pharn-ci-{cover,explain,fix,install,policy}` and `.claude/skills/pharn-cli` (#495). A pharn-cli on
+  the default release channel installs the newest release, so this release is what restores `init` and `update`.
+  Their tags are not moved.
+  - The seven skills are now real copies, the same as the `phargus-*` skills: `pharn-ci-*` and `pharn-cli` from
+    `pharn-dev/skills` at `36ada26`, `security-audit` from `cloudflare/security-audit-skill` at `c1c8a8c`, the commits
+    `skills-lock.json` pins. Each copy's skills-CLI `computedHash`, recomputed, equals its lock entry, and the seven
+    entries now say `"installMode": "copy"`, so a re-install makes copies instead of links. Measured on this tree:
+    `git ls-files -s` lists no mode-120000 entry, and `git archive` holds only regular files and directories.
+  - `eslint.config.mjs` ignores `.claude/skills/security-audit/**` beside the existing markdownlint entry, because the
+    vendored copy is now linted (one `no-unused-vars` in its third-party script) and must stay byte-identical to its
+    pin. The `package.json` test-glob note says `.claude/` now holds that skill's two tests, which `npm test` does not
+    run.
+  - No product-surface byte changes. The patch bump exists so `release.yml` tags an installable release. Nothing in
+    this repository yet stops another link from being committed: the floor check over the archive is CORE-383.
 
 ## [7.25.5] - 2026-11-25
 
