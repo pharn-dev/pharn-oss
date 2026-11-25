@@ -108,8 +108,8 @@ two floor checkers). Proceed directly from a GREEN Step 2b to Step 4's **quick**
 
 ## `--floor-only` mode (6.45.0) — `/pharn-grill <name> --floor-only`
 
-`/pharn-loop` invokes this form (inline) in its full mode: unattended, no stage reads the interrogation before the
-build. It is **`--quick` without Step 1b**: any SPEC kind; recognized only as the second argument, under the same
+No orchestrator invokes this form since 7.7.0: a full `/pharn-loop` routes the full grill, and a `--quick` run invokes
+`/pharn-grill <name> --quick` inline. It remains for a direct call. It is **`--quick` without Step 1b**: any SPEC kind; recognized only as the second argument, under the same
 ADVISORY rule as `--quick`; Steps 2 and 2b run exactly as written (a RED still writes the RED grill-log, whose header
 also records `mode: floor-only (/pharn-grill --floor-only)`); the interrogation (Step 3) and the model-driven grillers
 (Step 3b) are skipped. **On GREEN at both stops, run the five deterministic `scan-plan-*` scanners** — the grillers'

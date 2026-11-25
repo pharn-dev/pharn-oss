@@ -23,6 +23,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.25.4] - 2026-11-25
+
+### Fixed
+
+- **Five shipped files stop describing what `main` no longer does (CORE-371 follow-ups).** A patch bump: each fix
+  corrects text that already shipped, and no behaviour changes.
+  - **`/pharn-grill`'s `--floor-only` section** said `/pharn-loop` invokes that form in its full mode. Since 7.7.0 a
+    full `/pharn-loop` routes the full grill, and a `--quick` run invokes `/pharn-grill <name> --quick` inline, so no
+    orchestrator passes `--floor-only`. The section now says so and keeps the mode for a direct call. The presence pin
+    in `.dev/floor/command-hygiene.test.mjs` follows the new sentence.
+  - **`/pharn-review`** said pharn-cli does not copy `.claude/agents/` yet. pharn-cli has installed the
+    `.claude/agents/pharn-*.md` definitions since 0.20.0, so the note now names a pharn-cli older than 0.20.0.
+  - **`pharn/floor/check-regress.mjs`** comments credited `parseResults` to `per-test-results-core.mjs`. It is defined
+    in `per-test-results-formats.mjs`. Both comments are corrected.
+  - **The `.claude/settings.json` `_comment`** listed only part of what `protect-trusted-paths.cjs` denies. It now also
+    names `.claude/settings.local.json`, `pharn/.run/writes-scope.json`, `pharn/spec-template.md`, memory-bank canon
+    (writable only under a memory-promote command's one-file scope), the delivery runs' state
+    `pharn/.run/pharn-{loop,ship,review}/**`, and CODEOWNERS at `.github/` and `docs/` too. It says the scope guard's
+    fail-closed default holds in an installed project only while a PHARN run is open. It notes that
+    `PHARN_STOP_GUARD_MAX` overrides the Stop guard's default of 3 blocks per run. The edit reaches existing installs
+    only by hand: pharn-cli copies `settings.json` only when a project has none.
+  - **`.claude/hooks/set-writes-scope.cjs`** header comments said its control surface was `settings.json` plus the
+    four hook scripts. `CONTROL_SURFACE` holds both settings files and the four scripts, so the comments now say six
+    paths. A comment in `.claude/hooks/protect-trusted-paths.test.cjs` gets the same correction.
+
 - 2026-11-25: **A bare `npm run lint` no longer goes red in a checkout that holds Codex's `.agents/` skill import, and
   two test headers stop saying pharn-cli does not install `.claude/agents/`.** `eslint.config.mjs` ignores `.agents/**`
   (gitignored, already skipped by markdownlint; measured: lint exit 1 before, 0 after, in a checkout with the import).

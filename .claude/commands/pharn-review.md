@@ -399,7 +399,7 @@ which reduces to a floor primitive (`pharn/ARCHITECTURE.md §2`). Every guarante
   probed), a `tools:` entry cannot narrow `Bash` to one command, so a lens's shell call, which no write hook sees, meets only Claude Code's own
   permission settings. By its documentation (not probed), a subagent type is its frontmatter `name:`, so any
   `.claude/agents/*.md` named `pharn-review-lens` — in the reviewed tree or at user scope — sets the container every
-  group runs in, and in an install without the project file (pharn-cli does not copy `.claude/agents/` yet) a
+  group runs in, and in an install without the project file (a pharn-cli older than 0.20.0 does not copy `.claude/agents/`) a
   user-scope one is offered in place of the `general-purpose` fallback. The reviewed tree's
   `pharn/floor/lens-family-map.json` is the same kind of channel: it decides which lenses share a context. Nothing here
   detects either.

@@ -2720,9 +2720,10 @@ test("✧ QUICK MODE: pharn-grill.md pins its --spec-kind line and the skip lite
 });
 
 // ── FLOOR-ONLY GRILL (6.45.0, front-grill-concurrent) ───────────────────────────────────────────────
-// /pharn-loop's grill is `floor-only` in both columns (stage-agent-core.mjs ROUTE_POLICY; policy parity above holds that
-// it has no route line). These pins bind the two sides of its one invocation, `/pharn-grill <name> --floor-only`, and
-// hold /pharn-ship's grill verdict read BEFORE its grill agent. Presence and order only — never that a run executed them.
+// No orchestrator passes `--floor-only` since 7.7.0 (stage-agent-core.mjs ROUTE_POLICY: the full loop's grill cell is
+// `agent`; the quick cells of /pharn-loop and /pharn-ship are policy `floor-only` and run `/pharn-grill <name> --quick`).
+// These pins bind the mode's definition, kept for a direct call, and hold /pharn-ship's grill verdict read BEFORE its
+// grill agent. Presence and order only — never that a run executed them.
 const SHIP_GRILL_ROUTE = "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-grill --name '<name>'";
 const GRILL_STOP_LINES = [
   "node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md",
@@ -2743,12 +2744,12 @@ function shipGrillReadReasons(body) {
   return reasons;
 }
 
-test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, its skip literal, its invoker)", () => {
+test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, its skip literal, no orchestrator invokes it)", () => {
   const body = commandBody("pharn-grill.md");
   assert.match(body, /^## `--floor-only` mode \(6\.45\.0\) — `\/pharn-grill <name> --floor-only`$/m);
   assert.match(body, /`mode: floor-only \(\/pharn-grill --floor-only\)`/);
   assert.match(body, /`interrogation NOT performed — skipped by mode \(floor-only\)`/);
-  assert.match(body, /`\/pharn-loop` invokes this form \(inline\) in its full mode/);
+  assert.match(body, /No orchestrator invokes this form since 7\.7\.0/);
   // review R2: the deterministic scans run under --floor-only, as one pinned line whose stdout is copied verbatim.
   const pinned = fencedLines(body).map((f) => f.text.trim());
   assert.ok(pinned.includes("node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md"), "the grill-scan line is pinned");
