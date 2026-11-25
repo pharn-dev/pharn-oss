@@ -23,6 +23,66 @@ can copy what this repository declares instead of re-deriving it. The decision r
 - The `sha256` values let a consumer verify, after extraction, that each file it copies is the file the manifest
   describes. They do not authenticate the tarball: whoever can change the tarball can change the manifest with it.
 
+## The source-archive contract
+
+The manifest's rules cover the installable paths. pharn-cli judges **every entry of the tarball**, before it reads the
+manifest, and refuses the whole download on the first entry that breaks a rule. So one bad path anywhere in the tree
+(a contributor skill under `.claude/skills/`, a fixture under `.dev/`) blocks every `pharn init` and `pharn update` of
+that commit. That is why 7.25.3 to 7.25.5 cannot be installed: they carry git symlinks under `.claude/skills/` (one in
+7.25.3, seven from 7.25.4), and the CLI refuses the archive on the first one (CORE-380).
+
+**Who owns it.** The rule is pharn-cli's. Its extractor,
+[`src/lib/tar-extract.ts`](https://github.com/pharn-dev/pharn-cli/blob/main/src/lib/tar-extract.ts), with the limits in
+[`src/lib/repo.ts`](https://github.com/pharn-dev/pharn-cli/blob/main/src/lib/repo.ts), decides; this section restates
+it rule for rule, as of pharn-cli's `main` at commit `51a96d29` (2026-11-25). Keeping every installable commit inside it is this
+repository's job: every merge to `main` (the CLI's `main` channel installs it) and every release tag. Where this
+section and the extractor disagree, the extractor is what users meet, so correct the section.
+
+**Floor or advisory (P0).** On this side it is **advisory**: nothing in this repository checks it today, not
+`npm run check`, not CI, not `pharn/floor/validate.mjs`. The one enforcement is pharn-cli's refusal at install time,
+which fails closed (a tree that breaks the rule is not installed at all, never partly). **Planned** (CORE-383): a
+dev-floor check over `git archive HEAD` that makes the rule floor here. This section will name its script when it
+ships.
+
+Every entry of the archive must satisfy all of these:
+
+1. **Type.** A regular file (ustar typeflag `0` or NUL) or a directory (`5`). Everything else is refused: a symbolic
+   link (`2`), a hard link (`1`), a character or block device (`3`, `4`), a FIFO (`6`), typeflag `7`, a pax extended
+   header (`x`), a GNU long name or long link (`L`, `K`), and any unknown typeflag. The one exception is a pax
+   global header (`g`), which `git archive` writes first: it is skipped unread, and still counts toward the entry
+   limit. In git terms: commit no symbolic link (mode `120000`).
+2. **The path fits ustar.** Only the ustar `name` (100 bytes) and `prefix` (155 bytes) fields are read; a pax record is
+   never honoured. A path that does not fit is written by `git archive` into a pax `x` header, which rule 1 refuses.
+   `git archive` splits a path at one `/`, leaving at most 154 bytes before it and at most 100 after it, the archive's
+   top directory included (measured with git 2.50.1). So a file name over 100 bytes, a directory name over 99 (a
+   directory's entry carries a trailing `/`), or a path over 255 bytes counting the top directory cannot fit.
+3. **Characters.** The path (`prefix`, `/`, `name`) decodes as strict UTF-8 (invalid bytes are refused, never
+   replaced) and holds no character of pharn-cli's unsafe set (`src/lib/terminal-safe.ts`): no C0 or C1 control
+   (U+0000 to U+001F, U+007F to U+009F), no U+2028 or U+2029, and no Unicode format character (`\p{Cf}`: bidi
+   overrides, zero-width characters, a byte-order mark). It also holds no backslash (`\`) and no colon (`:`).
+4. **Shape.** The path is not empty and not absolute (no leading `/`), and no segment is `..`. Its first segment is
+   the archive's one top directory: the same for every entry and neither empty nor `.`, and an entry naming the top
+   directory alone must be a directory. Below it, no segment is empty (`a//b`) or `.`; a trailing `/` is accepted. The extractor strips
+   the top directory and writes each entry through `safeJoin` (`src/lib/validate.ts`), a lexical containment
+   backstop behind these rules.
+5. **Size.** At most 32 MiB (33,554,432 bytes) as downloaded, which is compressed; at most 128 MiB (134,217,728
+   bytes) once decompressed, which is the whole tar stream, headers and padding included; and at most 20,000 entries,
+   counting every pax global header and every entry below the top directory (the top directory's own entry is not
+   counted). These are `MAX_ARCHIVE_BYTES`, `MAX_EXTRACTED_BYTES` and `MAX_ENTRIES` in `src/lib/repo.ts`.
+6. **A well-formed stream.** The gzip decompresses; every header passes its checksum and carries the `ustar` magic;
+   its numeric fields are octal (GNU base-256 is refused); no entry runs past the end of the archive; and the archive
+   ends with a zero block followed by nothing but zero bytes. `git archive` output meets this by construction; it is
+   listed so the restatement is complete.
+
+After extraction the CLI refuses the download on more than the archive's shape: a release whose `SKILLS_VERSION`
+differs from its tag, a missing or invalid `pharn-install.json`, and a listed file whose `sha256` does not match (the
+sections above). Those are the manifest's rules, not this one.
+
+**Planned narrowing** (pharn-cli CORE-386, not released): pharn-cli is changing to unpack only the paths the manifest
+lists, which narrows this rule to the installable paths (already held by the generator, below) plus the download
+limits. A pharn-cli release without that change keeps the whole-archive rule above, so this section is updated when
+it ships and states which CLI versions it covers.
+
 ## Top level
 
 | Field           | Type    | Meaning                                                                                                    |
@@ -144,7 +204,9 @@ to the generator's output:
 
 - every `path` and `dest` is relative, `/`-separated, with no empty, `.` or `..` segment and no backslash, and every
   segment uses only `A-Z a-z 0-9 . _ -`; no `dest` segment below its first starts with `.` (pharn-cli's own path rules);
-- every installable path is a regular file (a symlink, a directory or a submodule is refused, never followed);
+- every installable path is a regular file (a symlink, a directory or a submodule is refused, never followed); the
+  rest of the tree is not checked here, though pharn-cli holds every entry to
+  [the source-archive contract](#the-source-archive-contract);
 - `files` is sorted by `path`; every `dest` is unique; `sha256` is 64 lowercase hex characters;
 - every `capability` names an entry of `capabilities`, and its file lies under that entry's `dir`;
 - every fixed surface and both capability roles contribute at least one entry;

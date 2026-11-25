@@ -23,6 +23,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Added
+
+- 2026-11-25: **`docs/install-manifest.md` now states the source-archive contract: what every entry of the tarball
+  pharn-cli downloads must satisfy, not only the installable paths, and that pharn-cli's extractor owns the rule.** It
+  restates `src/lib/tar-extract.ts` and the limits in `src/lib/repo.ts` rule for rule (entry types, the ustar path
+  fit, characters, shape, 32 MiB / 128 MiB / 20,000 entries), and why it matters: 7.25.3 to 7.25.5 carry git symlinks
+  under `.claude/skills/` and cannot be installed (CORE-380). Advisory on this side: nothing here checks it yet; a
+  dev-floor check over `git archive HEAD` is planned (CORE-383). Docs only (CORE-382): no `SKILLS_VERSION` bump.
+
 ## [7.25.5] - 2026-11-25
 
 ### Fixed
