@@ -23,6 +23,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+### Changed
+
+- 2026-11-25: Update the pharn-ci agent skills (`.claude/skills/pharn-ci-*`, `pharn-cli`) and `skills-lock.json` to
+  the pharn-ci 0.12.0 set. Apparatus only; no product-surface bytes change.
+
 ## [7.25.3] - 2026-11-25
 
 ### Fixed
