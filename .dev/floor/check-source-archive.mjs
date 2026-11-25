@@ -328,6 +328,13 @@ export function checkArchive(tar, limits = CLI_LIMITS) {
     const fullPath = prefix === "" ? name : `${prefix}/${name}`;
     const shown = carried !== null ? shownPath(carried) : shownPath(fullPath);
 
+    // The CLI judges the full path's characters before the type flag, so an `x` header with an unsafe name is refused
+    // for the characters, as it is here.
+    if (hasUnsafeChars(fullPath)) {
+      entries += 1;
+      add("UNSAFE_CHAR", shown);
+      continue;
+    }
     if (typeflag === "x") {
       // The CLI refuses `x` on its type flag. The entry it describes is named by its `path` record, for display only;
       // that following entry is then judged for its type but not by the path rules, which the CLI never reaches.
@@ -341,16 +348,15 @@ export function checkArchive(tar, limits = CLI_LIMITS) {
       continue;
     }
 
-    if (hasUnsafeChars(fullPath)) {
-      entries += 1;
-      add("UNSAFE_CHAR", shown);
-      continue;
-    }
     const isFile = typeflag === "0" || typeflag === "\0";
     const isDirectory = typeflag === "5";
     if (!isFile && !isDirectory) {
       entries += 1;
-      add("UNSUPPORTED_TYPE", shown, `type ${describeTypeflag(typeflag)}${TYPE_NAMES[typeflag] ? ` (${TYPE_NAMES[typeflag]})` : ""}`);
+      add(
+        "UNSUPPORTED_TYPE",
+        shown,
+        `type ${describeTypeflag(typeflag)}${Object.hasOwn(TYPE_NAMES, typeflag) ? ` (${TYPE_NAMES[typeflag]})` : ""}`
+      );
       continue;
     }
     if (carried !== null) {

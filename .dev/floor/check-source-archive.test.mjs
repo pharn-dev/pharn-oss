@@ -111,6 +111,32 @@ for (const [rule, label, bad, shown] of ENTRY_RULES) {
   });
 }
 
+test("a pax `x` header: other records before `path` are skipped; with no `path` record it is named by its own header", () => {
+  const long = `${ROOT}/${"q".repeat(120)}`;
+  const withMtime = Buffer.from(paxRecord("mtime", "1700000000") + paxRecord("path", long));
+  let res = checkArchive(tar(entry({ name: "m.paxheader", type: "x", data: withMtime }), entry({ name: "m.data" })));
+  assert.deepEqual(rules(res), ["PAX_EXTENDED_HEADER"]);
+  assert.equal(res.findings[0].entry, long);
+  // linkpath only: the path itself fits ustar, so the next entry is judged by every rule under its own name
+  const linkOnly = Buffer.from(paxRecord("linkpath", "x".repeat(150)));
+  res = checkArchive(tar(entry({ name: `${ROOT}/l.paxheader`, type: "x", data: linkOnly }), entry({ name: `${ROOT}/a:b` })));
+  assert.deepEqual(rules(res), ["PAX_EXTENDED_HEADER", "BACKSLASH_OR_COLON"]);
+  assert.equal(res.findings[0].entry, `${ROOT}/l.paxheader`);
+  assert.match(res.findings[0].detail, /no path record/);
+  assert.equal(res.findings[1].entry, `${ROOT}/a:b`);
+  // a malformed record (no length, or a length past the payload) yields no path, never a throw
+  for (const junk of ["garbage", "999 path=x\n"]) {
+    res = checkArchive(tar(entry({ name: `${ROOT}/j.paxheader`, type: "x", data: Buffer.from(junk) })));
+    assert.deepEqual(rules(res), ["PAX_EXTENDED_HEADER"]);
+    assert.match(res.findings[0].detail, /no path record/);
+  }
+});
+
+test("an `x` header whose own name holds a control character is refused for the characters first, as the CLI orders it", () => {
+  const res = checkArchive(tar(entry({ name: `${ROOT}/a\u0007.paxheader`, type: "x", data: Buffer.from(paxRecord("path", "p")) })));
+  assert.deepEqual(rules(res), ["UNSAFE_CHAR"]);
+});
+
 test("EMPTY_PATH → RED (a header whose name and prefix are both empty)", () => {
   const res = checkArchive(tar(entry({ name: "" })));
   assert.deepEqual(rules(res), ["EMPTY_PATH"]);
@@ -120,6 +146,7 @@ const FRAMING = [
   ["BAD_CHECKSUM", entry({ name: `${ROOT}/a`, checksum: "0000000 " })],
   ["BAD_MAGIC", entry({ name: `${ROOT}/a`, magic: "gnutar" })],
   ["NON_OCTAL", entry({ name: `${ROOT}/a`, size: "9999" })],
+  ["NON_OCTAL", entry({ name: `${ROOT}/a`, checksum: "abcdefg " })],
   ["TRUNCATED", entry({ name: `${ROOT}/a`, size: octal(4096, 12) })],
 ];
 for (const [rule, bad] of FRAMING) {
