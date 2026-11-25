@@ -25,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- 2026-11-25: **A bare `npm run lint` no longer goes red in a checkout that holds Codex's `.agents/` skill import, and
+  two test headers stop saying pharn-cli does not install `.claude/agents/`.** `eslint.config.mjs` ignores `.agents/**`
+  (gitignored, already skipped by markdownlint; measured: lint exit 1 before, 0 after, in a checkout with the import).
+  `stage-agent-type.test.mjs` and `review-lens-agent.test.mjs` now say pharn-cli copies `.claude/agents/pharn-*.md`
+  since 0.20.0. Follow-ups from the CORE-371 audit. Apparatus and repo-meta only: no `SKILLS_VERSION` bump.
 - 2026-11-25: Update the pharn-ci agent skills (`.claude/skills/pharn-ci-*`, `pharn-cli`) and `skills-lock.json` to
   the pharn-ci 0.12.0 set. Apparatus only; no product-surface bytes change.
 
