@@ -23,8 +23,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
-## [7.25.6] - 2026-11-25
-
 ### Added
 
 - 2026-11-25: **CI now fails a commit whose source archive pharn-cli cannot unpack, so `release.yml` never tags it
@@ -40,6 +38,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Node's gzip, not codeload's compressor; it stays whole-archive while `MIN_CLI` admits CLIs that judge every entry.
   `docs/install-manifest.md`'s "The source-archive contract" now cites it and is labeled floor. Apparatus, docs and
   CI only: no `SKILLS_VERSION` bump.
+
+## [7.25.6] - 2026-11-25
+
+### Added
+
 - 2026-11-25: **`docs/install-manifest.md` now states the source-archive contract: what every entry of the tarball
   pharn-cli downloads must satisfy, not only the installable paths.** pharn-cli unpacks the whole codeload archive
   before it installs anything, and its extractor (`src/lib/tar-extract.ts`, read at pharn-cli 0.21.5) refuses the

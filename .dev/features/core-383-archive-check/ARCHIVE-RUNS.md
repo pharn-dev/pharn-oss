@@ -32,7 +32,15 @@ SOURCE-ARCHIVE: GREEN — git archive v7.25.2 (6e79a2e58936ce8316e191acecfee2e20
 
 ## HEAD after CORE-381
 
-Recorded once CORE-381 (the symlink removal) is merged into this branch.
+`origin/main` with CORE-381 (pharn-oss #501, squash `df6dd144`, the symlinks replaced by regular files) merged into this
+branch as `6335c9f5`. `node .dev/floor/check-source-archive.mjs .` → exit 0
+
+```text
+SOURCE-ARCHIVE: GREEN — git archive HEAD (6335c9f514a6320abcf398177be97f17b393a04a) as codeload serves it: 5008 entries (cap 20000), tar 43939840 B (cap 134217728), gzip 11787384 B by Node's gzip (cap 33554432); pharn-cli 51a96d29's extractor rules accept every entry
+```
+
+Before that merge the same command on this branch's HEAD (`7a9cbba3`) was RED with the seven `UNSUPPORTED_TYPE`
+symlink lines, as on `v7.25.5`.
 
 ## What these runs show, and what they do not (P0)
 
