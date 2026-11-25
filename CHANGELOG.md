@@ -23,6 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-25: **Recorded the rest of CORE-371 part A's `/pharn-dev-ship` run (`.dev/features/core-371-user-docs/`):
+  `VERIFY.md`, `verify-report.json`, `REVIEW.md` and `SHIP.md`.** #490 merged at its head 1e277300, before verify's
+  second run, the review and the ship record were written. Verify run 1 was `FAIL` on `format:check`, caused only by
+  the unformatted file #489 fixed on `main`. Run 2, from a fresh `init` after that fix was merged, is `PASS`. The
+  review found 0 floor-gate and 2 minor advisory findings. Apparatus only: no `SKILLS_VERSION` bump.
+
 ## [7.25.2] - 2026-11-25
 
 ### Fixed
