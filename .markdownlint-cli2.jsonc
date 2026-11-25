@@ -25,6 +25,12 @@
     // linted clean and `/.codex/` held no markdown, so neither is listed. Bound: this matches only at the
     // root, as the `.gitignore` line does, and is tied to where the importer writes today.
     ".agents",
+    // The security-audit skill's symlink (`-> ../../.agents/skills/security-audit`, symlink mode in
+    // `skills-lock.json`). Unlike ESLint, this tool follows a linked directory, so in a checkout where the
+    // skill is restored the `.agents` entry above does not cover it: measured, 48 errors in the skill's
+    // third-party markdown. In CI and a fresh clone the link dangles and this matches nothing. Bound: it
+    // names this one link; another symlink-mode skill would need its own entry.
+    ".claude/skills/security-audit",
     "node_modules",
     ".dev/floor/test-fixtures",
     "pharn/floor/test-fixtures",

@@ -23,6 +23,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+- 2026-11-25: **`skills-lock.json` now records the `security-audit` skill (`cloudflare/security-audit-skill`, pinned
+  to commit `c1c8a8c1471069fb0e188eeaff69b8e8db6564a8`), and the lock format moved to version 2.** The move to version
+  2 also recomputed the five phargus skills' `computedHash` values. `security-audit` is installed in symlink mode:
+  the committed `.claude/skills/security-audit` is a link to `../../.agents/skills/security-audit`, and `/.agents/`
+  is gitignored, so the link dangles in a fresh clone and in CI until the skill is restored from the lock with the
+  skills CLI. The skill's own files are not committed. Once restored, markdownlint follows the link into the skill's
+  third-party markdown (48 errors, measured), so `.markdownlint-cli2.jsonc` now ignores `.claude/skills/security-audit`;
+  ESLint and Prettier do not reach the skill through the link. No `SKILLS_VERSION` bump: none of these paths is product
+  surface.
+- 2026-11-25: **Moved the pharn-ci action pin in `ci.yml` and `pharn-ci-comment.yml` from v0.11.0 to v0.12.0
+  (`a370515e32f8040771ccf4b6f737d3d25f62749f`).** v0.12.0's `action.yml` changes two input descriptions (`accept-label`
+  and `config`) and no input these workflows use. Its release notes list stricter checks, among them the pharn-ci
+  config read at the merge base (CORE-95) and a tracked coverage file now an error. Read against this repository,
+  neither applies: `ci.yml` checks out with `fetch-depth: 0` and no coverage report is tracked. That is a reading of
+  the notes, not a test. This pull request's own pharn-ci run is the check, and the notes' other new checks, such as
+  the test-integrity changes, were not evaluated. No `SKILLS_VERSION` bump: workflows are not product surface.
+
 ## [7.25.2] - 2026-11-25
 
 ### Fixed
