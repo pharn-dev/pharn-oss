@@ -1,0 +1,112 @@
+{
+  "base": "1755d6b8f7c261f3ac6bfe559edcb967fe775d23",
+  "inside": [
+    ".claude/skills/pharn-ci-cover",
+    ".claude/skills/pharn-ci-cover/SKILL.md",
+    ".claude/skills/pharn-ci-cover/references/report.md",
+    ".claude/skills/pharn-ci-cover/references/tests.md",
+    ".claude/skills/pharn-ci-cover/scripts/check-lines.mjs",
+    ".claude/skills/pharn-ci-explain",
+    ".claude/skills/pharn-ci-explain/SKILL.md",
+    ".claude/skills/pharn-ci-explain/references/codes.md",
+    ".claude/skills/pharn-ci-explain/references/policy.md",
+    ".claude/skills/pharn-ci-explain/references/report.md",
+    ".claude/skills/pharn-ci-fix",
+    ".claude/skills/pharn-ci-fix/SKILL.md",
+    ".claude/skills/pharn-ci-fix/references/kinds.md",
+    ".claude/skills/pharn-ci-fix/scripts/list-fixes.mjs",
+    ".claude/skills/pharn-ci-install",
+    ".claude/skills/pharn-ci-install/SKILL.md",
+    ".claude/skills/pharn-ci-install/references/coverage.md",
+    ".claude/skills/pharn-ci-install/references/workflows.md",
+    ".claude/skills/pharn-ci-install/scripts/check-coverage.mjs",
+    ".claude/skills/pharn-ci-policy",
+    ".claude/skills/pharn-ci-policy/SKILL.md",
+    ".claude/skills/pharn-ci-policy/references/enable.md",
+    ".claude/skills/pharn-ci-policy/references/keys.md",
+    ".claude/skills/pharn-ci-policy/scripts/check-policy.mjs",
+    ".claude/skills/pharn-ci-policy/scripts/policy.v1.json",
+    ".claude/skills/pharn-cli",
+    ".claude/skills/pharn-cli/SKILL.md",
+    ".claude/skills/pharn-cli/references/commands.md",
+    ".claude/skills/pharn-cli/references/json.md",
+    ".claude/skills/pharn-cli/references/text-flow.md",
+    ".claude/skills/security-audit",
+    ".claude/skills/security-audit/AI-AND-LLM.md",
+    ".claude/skills/security-audit/ATTACK-CLASSES.md",
+    ".claude/skills/security-audit/CLIENT-SIDE.md",
+    ".claude/skills/security-audit/CLOUD-AND-DEPLOYMENT.md",
+    ".claude/skills/security-audit/DATA-ISOLATION-AND-LIFECYCLE.md",
+    ".claude/skills/security-audit/DESKTOP-MOBILE-AND-LOCAL-IPC.md",
+    ".claude/skills/security-audit/HUNTING.md",
+    ".claude/skills/security-audit/MEMORY-SAFETY-AND-BINARY.md",
+    ".claude/skills/security-audit/PROTOCOLS-RPC-AND-MESSAGING.md",
+    ".claude/skills/security-audit/RECONNAISSANCE.md",
+    ".claude/skills/security-audit/RESOURCE-EXHAUSTION-AND-AVAILABILITY.md",
+    ".claude/skills/security-audit/SKILL.md",
+    ".claude/skills/security-audit/SUPPLY-CHAIN-AND-RELEASE.md",
+    ".claude/skills/security-audit/VALIDATION-AND-REPORTING.md",
+    ".claude/skills/security-audit/WEB-PROTOCOL-AND-AUTH.md",
+    ".claude/skills/security-audit/report-schema.json",
+    ".claude/skills/security-audit/validate-coverage-ledger.cjs",
+    ".claude/skills/security-audit/validate-coverage-ledger.test.cjs",
+    ".claude/skills/security-audit/validate-findings.cjs",
+    ".claude/skills/security-audit/validate-findings.test.cjs",
+    ".dev/features/core-381-skill-symlinks/GRILL.md",
+    ".dev/features/core-381-skill-symlinks/PLAN.md",
+    ".markdownlint-cli2.jsonc",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "eslint.config.mjs",
+    "package.json",
+    "pharn-install.json",
+    "skills-lock.json"
+  ],
+  "outside_gates": {
+    "format:check": {
+      "base": 0,
+      "head": 0
+    },
+    "lint": {
+      "base": 0,
+      "head": 0
+    },
+    "lint:md": {
+      "base": 0,
+      "head": 0
+    },
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 7134,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 7134,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}
