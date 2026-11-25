@@ -2720,10 +2720,50 @@ test("✧ QUICK MODE: pharn-grill.md pins its --spec-kind line and the skip lite
 });
 
 // ── FLOOR-ONLY GRILL (6.45.0, front-grill-concurrent) ───────────────────────────────────────────────
-// No orchestrator passes `--floor-only` since 7.7.0 (stage-agent-core.mjs ROUTE_POLICY: the full loop's grill cell is
-// `agent`; the quick cells of /pharn-loop and /pharn-ship are policy `floor-only` and run `/pharn-grill <name> --quick`).
 // These pins bind the mode's definition, kept for a direct call, and hold /pharn-ship's grill verdict read BEFORE its
 // grill agent. Presence and order only — never that a run executed them.
+//
+// WHO INVOKES `--floor-only` is DERIVED, never asserted (7.25.5, core-371-floor-only). pharn-grill.md's section opens
+// "No orchestrator invokes this form since 7.7.0"; the pin of the opposite sentence ("/pharn-loop invokes this form")
+// stayed green from 7.7.0 to 7.25.3 because it read only the sentence (L33, L43). So the test reads what would invoke
+// the mode — every ROUTE_POLICY command's family text (file + parts), the brief renderBrief prints for every routed
+// (`agent`) grill cell, and every shipped pharn/floor/*.mjs — and requires the sentence exactly while none of them holds
+// the literal `--floor-only`. A MENTION counts as an invocation (grill finding P5): the scan is the shortest invariant
+// substring, so a comment naming the flag in one of those files fails here too, and the message names its line.
+// Bounded: a flag assembled from parts, or a caller outside these files (a user's own script), is not seen.
+const FLOOR_ONLY_FLAG = "--floor-only";
+const FLOOR_ONLY_SENTENCE_RE = /No orchestrator invokes this form since 7\.7\.0/;
+const FLOOR_DIR = join(REPO_ROOT, "pharn", "floor");
+
+/** The texts that would invoke `/pharn-grill --floor-only`, by class: `[{cls, where, text}]`. */
+function floorOnlySources() {
+  const out = [];
+  for (const command of Object.keys(ROUTE_POLICY)) {
+    out.push({ cls: "orchestrator", where: `${command}.md (family)`, text: commandText(`${command}.md`) });
+    for (const mode of modesOf(command)) {
+      if (ROUTE_POLICY[command][mode]["pharn-grill"] !== AGENT) continue;
+      const brief = renderBrief({ command, mode, stage: "pharn-grill", name: "probe-feature" });
+      assert.ok(brief.ok, `renderBrief refused the routed grill cell ${command}/${mode}: ${brief.reason}`);
+      out.push({ cls: "brief", where: `brief ${command}/${mode}/pharn-grill`, text: brief.text });
+    }
+  }
+  for (const f of readdirSync(FLOOR_DIR).sort()) {
+    if (!f.endsWith(".mjs") || f.includes(".test.")) continue;
+    out.push({ cls: "floor", where: `pharn/floor/${f}`, text: readFileSync(join(FLOOR_DIR, f), "utf8") });
+  }
+  return out;
+}
+
+/** `where:line` for every line of `sources` holding the literal `--floor-only`. [] when nothing invokes it. */
+function floorOnlyInvokers(sources) {
+  const out = [];
+  for (const { where, text } of sources) {
+    text.split("\n").forEach((line, i) => {
+      if (line.includes(FLOOR_ONLY_FLAG)) out.push(`${where}:${i + 1}`);
+    });
+  }
+  return out;
+}
 const SHIP_GRILL_ROUTE = "node pharn/floor/stage-agent.mjs start --command pharn-ship --stage pharn-grill --name '<name>'";
 const GRILL_STOP_LINES = [
   "node pharn/floor/check-plan-spec-agree.mjs pharn/features/<name>/PLAN.md pharn/features/<name>/SPEC.md",
@@ -2744,12 +2784,49 @@ function shipGrillReadReasons(body) {
   return reasons;
 }
 
-test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, its skip literal, no orchestrator invokes it)", () => {
+test("✧ FLOOR-ONLY GRILL: pharn-grill.md says 'no orchestrator invokes this form' exactly while nothing routed passes --floor-only", () => {
+  const sources = floorOnlySources();
+  // L34: "nothing invokes it" over an empty source set is vacuous — every class must be present before it concludes.
+  for (const cls of ["orchestrator", "brief", "floor"]) {
+    const ofCls = sources.filter((s) => s.cls === cls);
+    assert.ok(ofCls.length > 0, `no ${cls} source was read — the derivation would pass vacuously`);
+    for (const s of ofCls) assert.ok(s.text.length > 0, `${s.where} read as empty`);
+  }
+  assert.deepEqual(
+    sources.filter((s) => s.cls === "orchestrator").map((s) => s.where),
+    ["pharn-ship.md (family)", "pharn-loop.md (family)"],
+    "the orchestrators are ROUTE_POLICY's commands"
+  );
+  const invokers = floorOnlyInvokers(sources);
+  const sentence = FLOOR_ONLY_SENTENCE_RE.test(commandBody("pharn-grill.md"));
+  assert.equal(
+    sentence,
+    invokers.length === 0,
+    invokers.length === 0
+      ? 'no orchestrator, routed brief or floor script passes --floor-only, so pharn-grill.md\'s `--floor-only` section must open with "No orchestrator invokes this form since 7.7.0" — restore that sentence'
+      : `--floor-only now appears in what could invoke it (${invokers.join(", ")}): routing changed, so update the opening sentence of pharn-grill.md's \`--floor-only\` section to name the invoker (and this test's sentence pin), or remove the flag from those lines`
+  );
+});
+
+test("✧ FLOOR-ONLY GRILL: the invoker derivation DISCRIMINATES — a planted --floor-only in an orchestrator family or a brief is flagged", () => {
+  // L60: one negative control per source kind the derivation reads, each on REAL text, so a scan that silently stopped
+  // matching (or a sources list that lost a class) cannot keep the sentence pin green.
+  const sources = floorOnlySources();
+  assert.deepEqual(floorOnlyInvokers(sources), [], "the live tree has no invoker (else the test above is already red)");
+  const loop = sources.find((s) => s.where === "pharn-loop.md (family)");
+  const brief = sources.find((s) => s.cls === "brief");
+  const plantedLoop = { ...loop, text: `${loop.text}\nthen invoke \`/pharn-grill <name> --floor-only\` yourself\n` };
+  assert.equal(floorOnlyInvokers([plantedLoop]).length, 1, "a planted orchestrator line is flagged");
+  const plantedBrief = { ...brief, text: brief.text.replace("/pharn-grill probe-feature", "/pharn-grill probe-feature --floor-only") };
+  assert.notEqual(plantedBrief.text, brief.text, "the brief names the grill invocation the plant edits");
+  assert.equal(floorOnlyInvokers([plantedBrief]).length, 1, "a planted brief invocation is flagged");
+});
+
+test("✧ FLOOR-ONLY GRILL: pharn-grill.md defines --floor-only (its mode line, its skip literal, its scans)", () => {
   const body = commandBody("pharn-grill.md");
   assert.match(body, /^## `--floor-only` mode \(6\.45\.0\) — `\/pharn-grill <name> --floor-only`$/m);
   assert.match(body, /`mode: floor-only \(\/pharn-grill --floor-only\)`/);
   assert.match(body, /`interrogation NOT performed — skipped by mode \(floor-only\)`/);
-  assert.match(body, /No orchestrator invokes this form since 7\.7\.0/);
   // review R2: the deterministic scans run under --floor-only, as one pinned line whose stdout is copied verbatim.
   const pinned = fencedLines(body).map((f) => f.text.trim());
   assert.ok(pinned.includes("node pharn/floor/grill-scan.mjs pharn/features/<name>/PLAN.md"), "the grill-scan line is pinned");

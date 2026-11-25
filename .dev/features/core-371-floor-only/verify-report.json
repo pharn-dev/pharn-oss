@@ -1,0 +1,26 @@
+{
+  "feature": "core-371-floor-only",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "2d135728498bfaeea8af28ab99da6275d8bea339053c48817a2226fb67333751",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "08cca46132b5193302992c0bc9156ecd0c191a43d8af9500344ebbab5960a5b3"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

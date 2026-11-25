@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.25.5] - 2026-11-25
+
+### Fixed
+
+- **`/pharn-grill`'s `--floor-only` section no longer tells an orchestrator what to do, and the test that pins its
+  "no orchestrator invokes this form" sentence now derives that fact instead of reading the sentence (CORE-371
+  follow-ups).** A patch bump: one sentence of a shipped command is removed, and no behaviour changes.
+  - The section's closing sentence, "Run inside an orchestrator, Step 4's "end your turn" does not apply: return to
+    it.", could not apply: since 7.7.0 no orchestrator passes `--floor-only` (the section's opening sentence, 7.25.4).
+    It is removed, so Step 4's "end your turn" plainly applies to the direct call.
+  - `.dev/floor/command-hygiene.test.mjs` read only the sentence, which is how the pin of the opposite claim stayed
+    green from 7.7.0 to 7.25.3. It now reads what could invoke the mode: the `/pharn-ship` and `/pharn-loop` command
+    families (parts included, the commands taken from `ROUTE_POLICY`), the brief `renderBrief` prints for each routed
+    grill cell, and every shipped `pharn/floor/*.mjs`. It requires the sentence exactly while none of them holds
+    `--floor-only`, and a failure names the lines and says to update the sentence. A mention counts as an invocation.
+    A control test plants the flag in real family and brief text. Measured in a scratch copy: a `--floor-only` line
+    added to `pharn-loop-quick.md`, the flag added to `/pharn-loop`'s full grill invocation in `stage-agent-core.mjs`,
+    and the sentence removed with no invoker each turn the test red, and the restored copy is green. It reads text, so
+    a flag assembled from parts or a caller outside those files is not seen.
+
 ## [7.25.4] - 2026-11-25
 
 ### Changed
