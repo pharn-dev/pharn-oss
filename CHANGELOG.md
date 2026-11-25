@@ -25,6 +25,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- 2026-11-25: **Lesson L86 in the dev memory-bank: an apparatus-only change can still break the download (CORE-385).**
+  pharn-cli unpacks the whole codeload tarball, so every tracked entry ships in the download whatever the dev/product
+  split says; #491 and #495 committed seven git symlinks under `.claude/skills/` without touching a product path, and
+  v7.25.3 to v7.25.5 could not be installed. The lesson points at the gate that now holds it, `npm run check:archive`
+  (CORE-383). Promoted through `/pharn-dev-memory-promote`; the accept was a model decision made under the
+  maintainer's delegation. `docs/lessons-index.md` is regenerated. Apparatus-only: no `SKILLS_VERSION` bump.
 - 2026-11-25: **CI now fails a commit whose source archive pharn-cli cannot unpack, so `release.yml` never tags it
   (CORE-383).** v7.25.3, v7.25.4 and v7.25.5 were tagged with 7 git symlinks under `.claude/skills/`, and pharn-cli
   refuses the whole codeload tarball on its first non-file entry; the PRs touched apparatus paths only, so no check
