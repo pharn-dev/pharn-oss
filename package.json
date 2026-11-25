@@ -45,7 +45,8 @@
     "check:instruction-growth": "node pharn/floor/check-instruction-files.mjs --growth --base-rule",
     "check:contributing": "node .dev/floor/check-contributing-gates.mjs .",
     "check:reconcile": "node pharn/floor/check-bash-reconcile.mjs --base .",
-    "check": "npm run format:check && npm run lint && npm run lint:md && npm run docs:check && npm run check:markers && npm run check:badge && npm run check:changelog && npm run check:contributing && npm run check:reconcile && npm test"
+    "check:archive": "node .dev/floor/check-source-archive.mjs .",
+    "check": "npm run format:check && npm run lint && npm run lint:md && npm run docs:check && npm run check:markers && npm run check:badge && npm run check:changelog && npm run check:contributing && npm run check:reconcile && npm run check:archive && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

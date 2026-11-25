@@ -778,6 +778,30 @@ node pharn/floor/render-review.mjs <name> [--root <dir>]
 node .dev/floor/check-contributing-gates.mjs [target-dir]
 ```
 
+## `check-source-archive.mjs` — the source archive pharn-cli unpacks
+
+```bash
+# RED when the archive of a commit holds an entry pharn-cli's extractor refuses (CORE-383; v7.25.3–v7.25.5 were tagged
+# with 7 git symlinks under .claude/skills/ and no install could unpack them). It builds `git archive --format=tar
+# --prefix=pharn-oss-<full sha>/ <sha>` (codeload's root for tar.gz/<sha>; export-ignore honoured) and walks the tar with
+# a hand port of pharn-cli src/lib/tar-extract.ts + the limits in src/lib/repo.ts at pharn-cli main 51a96d29.
+# FLOOR (enum/regex, primitive #3): type-flag set membership (only `0`/NUL and `5` accepted, `g` skipped and counted),
+# path regexes (strict UTF-8, no control or format character, not absolute, no `\` or `:`, no `..`, one root, no empty
+# or `.` segment, nothing at the root but its directory) and integer compares (20,000 entries, 128 MiB tar, 32 MiB gzip).
+# A pax `x` header (a path that does not fit ustar) is refused like the CLI refuses it and named by its `path` record.
+# One finding per offending entry, each `[RULE] entry — detail`; a framing failure stops the walk. Closed rule set:
+# RULES in the checker, every member with a test fixture. Exit 0 GREEN (prints entries and both sizes), 1 RED, 2
+# unusable input (not a repo, unresolvable ref, git archive failed).
+# BOUNDS: a PORT, not the CLI — it drifts if the CLI changes its rules (CORE-384 runs the real CLI later), and `\p{Cf}`
+# follows the running Node's Unicode version. WHOLE ARCHIVE on purpose: pharn-cli CORE-386 narrows the CLI to manifest-
+# listed paths, but MIN_CLI 0.14.0 admits CLIs that judge every entry. The gzip size is Node's zlib, not codeload's
+# compressor; the tar size and entry count are exact for git archive's bytes. It judges the COMMITTED ref, never the
+# working tree (on a PR, CI's HEAD is the test merge). It guards the release channel only (pharn/LIMITS.md §11).
+# Wired as `check:archive` in `npm run check` AND as ci.yml's "Source-archive check" step in the `check` job release.yml
+# waits for; both pinned by its test. Apparatus: no SKILLS_VERSION bump.
+node .dev/floor/check-source-archive.mjs [--ref <rev>] [repo-dir]
+```
+
 ## Write-guard hook self-test
 
 ```bash
