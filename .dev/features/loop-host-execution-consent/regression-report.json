@@ -1,0 +1,54 @@
+{
+  "base": "76188fa152ccca159811848bef3b3ed947ea521f",
+  "inside": [
+    ".claude/commands/pharn-loop-close.md",
+    ".claude/commands/pharn-loop.md",
+    ".dev/floor/command-hygiene.test.mjs",
+    "CHANGELOG.md",
+    "README.md",
+    "SKILLS_VERSION",
+    "pharn-install.json",
+    ".dev/features/loop-host-execution-consent/GRILL.md",
+    ".dev/features/loop-host-execution-consent/PLAN.md",
+    ".dev/features/loop-host-execution-consent/REGRESSION.md",
+    ".dev/features/loop-host-execution-consent/REVIEW.md",
+    ".dev/features/loop-host-execution-consent/SHIP.md",
+    ".dev/features/loop-host-execution-consent/VERIFY.md",
+    ".dev/features/loop-host-execution-consent/regression-report.json",
+    ".dev/features/loop-host-execution-consent/verify-report.json"
+  ],
+  "outside_gates": {
+    "structural:pharn/pharn-review/trust-fence/evals/expected/expected-injection-comment.json": {
+      "base": 0,
+      "head": 0
+    },
+    "tests": {
+      "base": 0,
+      "head": 0
+    },
+    "validate": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "per_test": {
+    "gate": "tests",
+    "base": {
+      "passed": 6893,
+      "failed": 0,
+      "skipped": 7,
+      "suite_errors": 0
+    },
+    "head": {
+      "passed": 6899,
+      "failed": 0,
+      "skipped": 1,
+      "suite_errors": 0
+    },
+    "new_failures": [],
+    "still_failing": 0
+  }
+}

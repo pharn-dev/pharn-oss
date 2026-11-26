@@ -232,7 +232,9 @@ Report, plainly and without asking anything:
   run needs from a person to continue (the row's trigger, in one sentence);
 - **the isolation line** (7.1.0), from the witness `pharn/.run/pharn-loop/<name>/isolation.json`: `isolation: <outcome>`,
   plus `(host execution accepted by operator)` when the flag was used, and its evidence codes. On an S15 stop, the
-  check's stderr reason code instead (or that it printed none) and the way out that reason's stderr line names. This
+  check's stderr reason code instead (or that it printed none) and the way out that reason's stderr line names — or,
+  when the flagged line was denied, `refused by Claude Code's permission settings; the check never ran` (a prompt
+  answer, a deny rule or auto mode's classifier: never name a person). This
   screen line is advisory; the run report and the commit message carry the same line from code, read from a witness
   the run itself can rewrite;
 - **the entry-context line** (7.13.0): when the witness `pharn/.run/pharn-loop/<name>/entry-context.txt` exists and

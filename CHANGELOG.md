@@ -23,6 +23,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.26.1] - 2026-11-26
+
+### Changed
+
+- 2026-11-26: **`/pharn-loop` now says which host-execution consent counts, and runs the isolation line at most
+  once per run (CORE-397).** In pharn-app (CORE-392, `/pharn-loop --quick --accept-host-execution`) the person typed
+  the flag and was then asked by Claude Code to approve the flagged isolation line. The command did not say which of
+  the two consents decides, or whether a run may run the line again after a refusal. Both consents stay. Step 1a now
+  says the typed flag only picks the line, and Claude Code's permission prompt, where it shows one, is the consent
+  that lets the line run. With no prompt (auto mode, or an allow rule of the person's) the typed flag alone lifts the
+  stop. A run runs at most one of the two isolation lines, once: it never switches to the flagged line, and never runs
+  either again after a refusal or a non-zero exit. So a run asks at most once, and a new run asks again, because an
+  approval covers only the run it was given in. Putting the flagged line back in `allowed-tools` would collapse the
+  two consents, so it stays out, and the 7.3.0 test still pins that. The S15 row and the close part's Step 7 summary
+  now name a refused flagged line as
+  `refused by Claude Code's permission settings; the check never ran`: a prompt answer, a deny rule and auto mode's
+  classifier look the same to the model, so the summary never names a person. Before this, a refused prompt read as
+  "the check printed no reason code". A new ✧ test in `.dev/floor/command-hygiene.test.mjs` pins the text, with a
+  negative control for each property. That a run obeys it is advisory. The matching sentence in `pharn/LIMITS.md §6`
+  is a human edit made after this change's verify.
+
 ## [7.26.0] - 2026-11-26
 
 ### Added

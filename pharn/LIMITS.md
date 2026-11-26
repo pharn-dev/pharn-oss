@@ -486,7 +486,10 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
     git-ignored `pharn/.run/` state. Since 7.3.0 the write tools are denied it (`protect-trusted-paths.cjs` refuses every
     Write/Edit/MultiEdit/NotebookEdit below `pharn/.run/pharn-loop/`), but a `Bash` write reaches it,
     and reconcile never sees it. So those lines name the flag faithfully only while nobody rewrites the witness, and
-    the record check's RED does not gate the commit. Agreement between files the run can write, never provenance.
+    the record check's RED does not gate the commit. Agreement between files the run can write, never provenance. Of
+    the two consents, the permission prompt is the one that counts where Claude Code shows one; the typed flag only
+    selects the line. A run runs at most one isolation line and never retries after a refusal, so each run asks at
+    most once, and an approval covers that run only (`/pharn-loop` Step 1a, 7.26.1; CORE-397).
   - **The lists are closed and partial.** A token in a project `.env`, a keychain, a cloud metadata endpoint, or a
     credential named nowhere on the list is not seen. A container the list does not recognize needs `PHARN_ISOLATED=1`.
   - **The agent's own model credential is always present.** `ANTHROPIC_API_KEY` (or the session's `~/.claude/` login)
