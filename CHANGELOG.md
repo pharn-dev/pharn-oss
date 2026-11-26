@@ -23,6 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.26.0] - 2026-11-26
+
 ### Added
 
 - 2026-11-25: **CI now runs the real pharn-cli over each commit's archive (CORE-384).** The "Source-archive check"
@@ -58,6 +60,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Node's gzip, not codeload's compressor; it stays whole-archive while `MIN_CLI` admits CLIs that judge every entry.
   `docs/install-manifest.md`'s "The source-archive contract" now cites it and is labeled floor. Apparatus, docs and
   CI only: no `SKILLS_VERSION` bump.
+
+### Changed
+
+- **`/pharn-loop` peeks at the entry gates before the spec stage, so a gate already red stops the run before the spec
+  stage spends requests (CORE-398).** In pharn-app (CORE-392, `/pharn-loop --quick`) `format:check` was red on the
+  base commit, yet the run stopped at S14 only at the peek after the spec stage, after 30 requests (18 of them
+  `pharn-spec`). Step 3 now opens with the same `entry-gates.mjs --peek` line and branch as the two later peeks
+  (`4` → S14, `6` → S14b, unless `--allow-red-entry`; every other exit goes on). A stop there precedes
+  `pharn/features/<name>/`, so there is no record, as for S14c; unlike S14c the entry-gate runner is still running, so
+  the stop goes through `## At the stop`, which aborts it first, and the close part's Step 7 summary names the peek's
+  `red` ids and `unmeasured` entries. The S14 and S14b rows, Step 1's flag text, Step 1a item 6 and the stop pointer name
+  the new read; `pharn/floor/entry-gates.mjs`'s header comment too (no behavior change). Bounded, and stated in the
+  command: a peek sees only gates that have finished, so a gate still running is found at the later peeks or the
+  final read; waiting for every gate before the spec stage would make the spec stage wait for the slowest gate, the
+  work the parallel run exists to avoid. Whether the new peek reaches a fast gate in time is not measured; a short
+  bounded wait inside the peek is the named follow-up `entry-peek-settle`, to be decided by a real run's timing (P7).
+  `/pharn-ship` keeps its single peek after the plan stage: no failure observed there, named follow-up
+  `ship-entry-peek-before-spec`. `pharn/floor/entry-gates.test.mjs`'s ★ PEEK_WIRING pins three loop sites in order,
+  the new one after the entry start and before the spec stage's start line; `.dev/floor/command-family.test.mjs` pins
+  the reworded close pointer.
 
 ## [7.25.6] - 2026-11-25
 

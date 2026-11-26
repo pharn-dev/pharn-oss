@@ -2559,3 +2559,18 @@ type: process · concepts: [source-archive, install-path, dev-product-boundary, 
 - commit: 918680e6dfe2a86020f3ec38296079789e9c0290
 - source: .dev/features/core-381-skill-symlinks/REVIEW.md § Proposed lesson; .dev/features/core-383-archive-check/PLAN.md § Trigger (P7); .dev/features/core-383-archive-check/ARCHIVE-RUNS.md § `v7.25.5` — RED and § `v7.25.2` — GREEN
 - promoted: 2026-11-25 via gated `/pharn-dev-memory-promote` (model-accepted under the maintainer's delegation).
+
+## L87 — A command sentence can be pinned verbatim by a test outside the plan's ## Files — before planning a command edit, match every sentence it changes against the test files
+
+type: process · concepts: [command-prose, pinned-text, plan-shape, test-blindspot, false-red]
+
+**Lesson.** CORE-398 (`loop-entry-peek-before-spec`) planned a third entry-gate peek in `/pharn-loop` and listed the command, its close part and the one test that pins the peek wiring (`entry-gates.test.mjs`). The build also reworded the close-part pointer sentence ("(Step 1a and Step 2 name them)" gained "Step 3's first peek"), an edit the plan did not list. `.dev/floor/command-family.test.mjs` pins that sentence verbatim in `POINTER_PINS`, and it was outside `## Files`, so the build could not fix it and nothing before regress looked: the run stopped at `/pharn-dev-regress` (`verdict: regressions`, one pass→fail flip) after a full build, and a re-plan added the test. The plan had grepped the PEEK wording it meant to change, by phrase, and so found the one pin it expected; the sentence it changed in passing was the one that was pinned elsewhere. Command prose is pinned word for word by many suites (`command-family`, `command-hygiene`, `entry-gates`, `stage-load-budget` and more), which are the floor's way of holding prose a model executes, so any reworded sentence can be another file's assertion. Remedy: before planning a command edit, list every sentence the edit will change (for a build already done, the `-` lines of `git diff -U0 -- .claude/commands`) and match each against the tracked `*.test.*` files, for example by 40-character windows; every test that holds one goes into `## Files` with the reason, or the sentence stays as it is. The re-plan did exactly that, and only the one pin turned up.
+
+**Why it matters.** Pinning prose word for word is how the floor holds text a model executes, so the set of suites that pin command prose grows with every increment, and none of them is visible from the command file. Distinct from [[L36]] (an enumeration's closure) and [[L69]] (parsing `## Files`): here the plan's file set was well formed and still missed a file that asserts on its text. **Trigger (P7):** one real STOP, caught by regress before merge; promoted at the human's explicit choice at the ship-stage lesson gate.
+
+**Provenance.**
+
+- feature: loop-entry-peek-before-spec
+- commit: 94347bc8c0d82e4ead431d0bb5d8f4ff12e895bd
+- source: .dev/features/loop-entry-peek-before-spec/REGRESSION.md § History — the first run of this plan (STOP); .dev/features/loop-entry-peek-before-spec/PLAN.md § Re-plan (2026-11-26, after a RED-verdict STOP at regress)
+- promoted: 2026-11-26 via gated `/pharn-dev-memory-promote` (human-approved).

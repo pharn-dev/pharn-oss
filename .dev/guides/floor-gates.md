@@ -751,6 +751,8 @@ node pharn/floor/check-entry-context.mjs --feature <name> [--session <id>] [--pr
 # Since 7.5.0 (entry-verdict-early-read) `--peek` reads once — no wait, no takeover, no write — after /pharn-loop's spec
 # and plan stages and /pharn-ship's plan stage: a finished result decided as --wait decides it, or a RED among the gates
 # finished so far (entry-gates-core.mjs `inProgressStampView`); anything else is `continue`, left to the final --wait.
+# Since 7.26.0 (CORE-398) /pharn-loop also peeks once before its spec stage, so a red already finished stops the run
+# (S14/S14b, before pharn/features/<name>/ exists: no record, the summary names the ids) before any spec request.
 # Since 7.16.0 --start uses the project's `gates.timeoutMs` in place of the pinned --timeout-ms when one is declared
 # (runner.json `timeout_ms`, the runner's argv, the cache inputs); below the pinned value → `unusable bad-gate-timeout`,
 # exit 2 (observation `init-refused`). With no declaration every record is byte-identical.

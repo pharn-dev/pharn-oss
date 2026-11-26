@@ -1413,13 +1413,19 @@ function entryStopSites(loop) {
   ];
 }
 
-// 7.5.0 (entry-verdict-early-read) — the PEEK line: twice in /pharn-loop (after the spec, after the plan), once in
-// /pharn-ship (after the plan), each with its branch. A copy-pair (L31): one table ranges over both commands.
+// 7.5.0 (entry-verdict-early-read) — the PEEK line: three times in /pharn-loop (before the spec stage since 7.26.0,
+// CORE-398; after the spec; after the plan), once in /pharn-ship (after the plan), each with its branch. A copy-pair
+// (L31): one table ranges over both commands; the ship copy has no pre-spec peek (no observed failure there, P7).
 const PEEK_LINE = "node pharn/floor/entry-gates.mjs --peek --feature '<name>'";
 const PEEK_WIRING = [
   {
     file: "pharn-loop.md",
     sites: [
+      {
+        // 7.26.0 (CORE-398): a red that already finished stops the run before the spec stage spends requests.
+        after: LINES.start,
+        before: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name '<name>'",
+      },
       {
         after: "node pharn/floor/check-spec-approved.mjs pharn/features/<name>/SPEC.md",
         before: "node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name '<name>'",
@@ -1563,13 +1569,11 @@ test("★ /pharn-loop names the gates.exclude remedy, its cost and --allow-red-e
 test("★ WIRING: /pharn-loop's S14 and S14b rows exist and the opt-in is part of both entry grammars", () => {
   const loop = commandFamilyText(COMMANDS_DIR, "pharn-loop.md");
   assert.match(loop, /^\| S14\s+\|/m);
-  // 7.5.0: the rows name every entry read (the two peeks and Step 4's final read).
-  assert.match(loop, /^\| S14\s+\| an entry read \(a peek after Step 3 or after the plan, or Step 4's final read\) exits `4`/m);
-  assert.match(
-    loop,
-    /^\| S14b\s+\| an entry read \(a peek after Step 3 or after the plan, or Step 4's final read\) exits `6`/m,
-    "6.75.0: the unmeasured stop row, on exit 6"
-  );
+  // 7.5.0: the rows name every entry read (the peeks and Step 4's final read); 7.26.0 (CORE-398) adds the peek before
+  // the spec stage.
+  const reads = String.raw`an entry read \(a peek before or after Step 3's spec stage or after the plan, or Step 4's final read\)`;
+  assert.match(loop, new RegExp(String.raw`^\| S14\s+\| ${reads} exits ` + "`4`", "m"));
+  assert.match(loop, new RegExp(String.raw`^\| S14b\s+\| ${reads} exits ` + "`6`", "m"), "6.75.0: the unmeasured stop row, on exit 6");
   // 7.1.0: `--accept-host-execution` joins both entry grammars, before the description; gate-evidence-cache adds
   // `--refresh-entry` beside `--allow-red-entry`.
   assert.ok(

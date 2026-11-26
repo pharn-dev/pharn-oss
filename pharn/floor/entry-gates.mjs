@@ -9,8 +9,9 @@
 //   node pharn/floor/entry-gates.mjs --wait --feature <name> --budget-ms <B>
 //   node pharn/floor/entry-gates.mjs --peek --feature <name>
 //   node pharn/floor/entry-gates.mjs --abort --feature <name>
-// /pharn-loop: `--start` is Step 1a's last line, `--peek` runs after the spec stage and after the plan stage, `--wait`
-// between the grill and the test stage, `--abort` first at every stop. /pharn-ship: `--start` after its pre-run snapshot,
+// /pharn-loop: `--start` is Step 1a's last line, `--peek` runs before and after the spec stage (the first since
+// 7.26.0) and after the plan stage, `--wait` between the grill and the test stage, `--abort` first at every stop
+// (the pre-spec stop included: the runner is still running there). /pharn-ship: `--start` after its pre-run snapshot,
 // `--peek` after the plan stage, the same `--wait` point, `--abort` at every STOP.
 //
 // --start  supersedes an earlier runner of this tree (one per tree, L38: `--abort` first; review R6 — an earlier pid

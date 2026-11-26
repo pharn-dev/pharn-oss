@@ -10,7 +10,7 @@ lessons to fetch; canon stays the source of truth and the floor's verification t
 applied, without fetching its full `## L<n>` entry from canon, is the P0 disease. "The index was
 consulted" never means "the relevant lessons were read".
 
-86 lessons · 86 tagged · 0 malformed · 0 untagged · ~59772 tokens total
+87 lessons · 87 tagged · 0 malformed · 0 untagged · ~60456 tokens total
 
 Columns: `id | type | concepts | title | promoted | ~tokens`. `-` is rendered in THREE columns
 and does NOT mean the same thing in each — read it against the column it sits in. In `type`/`concepts`:
@@ -110,4 +110,5 @@ L83 | process  | stage-seam,refusal-path,early-detection,writes-scope           
 L84 | floor    | safe-default,validator-reuse,test-blindspot,partial-state                                      | A feature whose only effect is a branch off a safe default needs a test that takes the branch on realistic input — the default makes a dead branch read as 'nothing to do yet' | 2026-11-10 | ~496
 L85 | scoping  | reconciliation,upstream-merge,re-anchor,reconcile-window,false-record                          | Re-anchoring after merging origin/main mid-ship drops the build's own writes out of reconcile's window — keep the anchor and let `merged` take upstream's bytes | 2026-11-24 | ~734
 L86 | process  | source-archive,install-path,dev-product-boundary,apparatus-only,non-file-entry                 | An apparatus-only change can still break the download — what decides whether a change can break installs is the archive's bytes, not the dev/product split | 2026-11-25 | ~887
+L87 | process  | command-prose,pinned-text,plan-shape,test-blindspot,false-red                                  | A command sentence can be pinned verbatim by a test outside the plan's ## Files — before planning a command edit, match every sentence it changes against the test files | 2026-11-26 | ~684
 ```

@@ -241,6 +241,8 @@ Report, plainly and without asking anything:
   line verbatim; a `within` line or no witness → nothing;
 - **the cached-evidence line** (7.14.0): on S14c, quote the `entry-gates: red on cached evidence …` line Step 1a's start
   printed — the red gates, the earlier run and its age — as DATA, then S14c's three ways out;
+- **the early entry stop** (7.26.0): on S14 or S14b at Step 3's first peek, no record holds the gates, so copy the
+  peek document's `red` ids and `unmeasured` entries as DATA (or say they were not kept), then that row's remedies;
 - **each stage's route** (6.27.0), one line per stage start — per iteration, and per re-plan round for the plan, grill
   and triage (7.8.0), and the supervisor's on an escalation (7.9.0), in the order they ran: the token its stage-start marker recorded
   (`agent:<alias>`, followed by `general-purpose (fallback)` when that stage's Agent call took the fallback, or
