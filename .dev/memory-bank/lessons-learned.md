@@ -2574,3 +2574,18 @@ type: process · concepts: [command-prose, pinned-text, plan-shape, test-blindsp
 - commit: 94347bc8c0d82e4ead431d0bb5d8f4ff12e895bd
 - source: .dev/features/loop-entry-peek-before-spec/REGRESSION.md § History — the first run of this plan (STOP); .dev/features/loop-entry-peek-before-spec/PLAN.md § Re-plan (2026-11-26, after a RED-verdict STOP at regress)
 - promoted: 2026-11-26 via gated `/pharn-dev-memory-promote` (human-approved).
+
+## L88 — L68 recurred with its remedy followed — a human-only patch script handed over before verify passes gets run at once, so the script must refuse until verify has passed
+
+type: process · concepts: [human-only-patch, reconciliation, trusted-docs, lesson-recurrence, sequencing]
+
+**Lesson.** CORE-397 (`loop-host-execution-consent`) needed one sentence in `pharn/LIMITS.md`, a human-only trusted doc. The PLAN followed [[L68]] to the letter: it said WHEN ("before build Step 0 or after verify"), and the human was told at GATE 1. After GATE 2 the human chose "fix review nits first" and asked for a patch script. The script was handed over while regress and verify were still to run, with "run it after verify" in the reply, and it was run at once. Verify run 3's `reconcile` then read `ESCAPE` on `pharn/LIMITS.md` (`denied_by: protect-trusted-paths.cjs`); committing the edit did not clear it, because reconcile judges the anchor→verify window and has no attribution. The repair cost a `git reset --soft`, a restore of the doc to main's bytes, a regenerated manifest, a fourth regress and a fourth verify, then a second hand-over of the script after PASS. L68's remedy is an instruction to people — plan the timing, tell the human — and a script that is ready to run is run when it arrives, whatever the message around it says. Remedy: a human-only patch script is handed over only after `/pharn-dev-verify` reads PASS, and the script itself refuses unless the feature's `verify-report.json` reads `PASS` (so an early run fails loudly instead of landing in the window); when a human asks for the script earlier, say it will come at PASS rather than handing over a runnable one.
+
+**Why it matters.** Each recurrence of L68 costs a full regress + verify cycle on a correct change, and the escape is a real floor verdict, so the only ways past it are a revert, a human-overridden FAIL, or the forbidden re-anchor. Distinct from [[L68]], which says to plan WHEN: here the timing was planned and stated, and the hand-over is what broke it. **Trigger (P7):** one real STOP (verify run 3 FAIL, `reconcile`), repaired by revert-and-reapply; promoted at the human's explicit choice at the ship-stage lesson gate.
+
+**Provenance.**
+
+- feature: loop-host-execution-consent
+- commit: 76188fa152ccca159811848bef3b3ed947ea521f
+- source: .dev/features/loop-host-execution-consent/REVIEW.md § Lesson candidate (proposed, not canon); .dev/features/loop-host-execution-consent/VERIFY.md § History — Run 3
+- promoted: 2026-11-26 via gated `/pharn-dev-memory-promote` (human-approved).

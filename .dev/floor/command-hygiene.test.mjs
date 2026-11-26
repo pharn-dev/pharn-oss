@@ -6770,6 +6770,70 @@ test("✧ 7.3.0 — no allowed-tools entry in any .claude/commands/pharn-*.md co
   );
 });
 
+// 7.26.1 (loop-host-execution-consent, CORE-397): the typed --accept-host-execution flag and Claude Code's permission
+// prompt for the flagged isolation line are two consents, both kept (the prompt is the one that counts; the 7.3.0 test
+// above keeps the line ungranted). Observed in pharn-app: the command never said which consent decides or whether a
+// run may run the line again, and the S15 summary could not tell a refused prompt from a check that printed nothing.
+// These pins hold the TEXT only — that a run obeys it is advisory (P0).
+const HOST_CONSENT_LOOP_PINS = Object.freeze([
+  "the typed flag only selects the line; Claude Code's permission prompt, where it shows one, is the consent that lets it run",
+  "With no prompt (auto mode, an allow rule of the person's) the typed flag alone lifts the stop",
+  "A run runs at most one of the two lines, once: never the second after the first, never either again after a refusal or a non-zero exit",
+  "a new run asks again, because an approval covers only the run it was given in",
+]);
+const HOST_CONSENT_S15_PIN = "or Claude Code's permission settings refused the flagged line";
+const HOST_CONSENT_CLOSE_PIN = "refused by Claude Code's permission settings; the check never ran";
+
+/** Reasons the loop and its close part do not state CORE-397's consent rule where it applies. [] when clean. */
+function hostConsentOffenders(loop, close) {
+  const flat = (s) => s.replace(/\s+/g, " ");
+  const out = [];
+  const at = loop.indexOf("**Then the isolation check** (7.1.0)");
+  const end = loop.indexOf("Non-zero → STOP, S15", at);
+  if (at < 0 || end < 0) return ["the isolation paragraph's anchors are missing"];
+  const para = flat(loop.slice(at, end));
+  for (const p of HOST_CONSENT_LOOP_PINS) if (!para.includes(p)) out.push(`isolation paragraph lacks: ${p}`);
+  // L29: the rule ranges over BOTH lines, so both must sit in the same paragraph as the rule.
+  for (const l of [
+    "node pharn/floor/check-run-isolation.mjs --feature '<name>'",
+    "node pharn/floor/check-run-isolation.mjs --accept-host-execution --feature '<name>'",
+  ])
+    if (!para.includes(l)) out.push(`isolation paragraph lacks the line: ${l}`);
+  const row = loop.split("\n").find((l) => /^\| S15\s+\|/.test(l)) ?? "";
+  if (!row.includes(HOST_CONSENT_S15_PIN)) out.push("S15 row lacks the refused-flagged-line trigger");
+  if (!/never name a person/.test(flat(close)) || !flat(close).includes(HOST_CONSENT_CLOSE_PIN))
+    out.push("close part's S15 summary lacks the permission-refusal wording");
+  return out;
+}
+
+test("✧ 7.26.1 — /pharn-loop states which host-execution consent counts, one isolation line per run, and the S15 refusal kind", () => {
+  const loop = readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8");
+  const close = readFileSync(join(COMMANDS_DIR, "pharn-loop-close.md"), "utf8");
+  assert.deepEqual(hostConsentOffenders(loop, close), []);
+  // Controls (L60), one per asserted property: each mutant must be caught.
+  const flatLoop = loop.replace(/\s+/g, " ");
+  const dropOnce = flatLoop.replace(HOST_CONSENT_LOOP_PINS[2], "");
+  assert.notEqual(dropOnce, flatLoop, "precondition: the at-most-one sentence was found");
+  assert.ok(
+    hostConsentOffenders(dropOnce, close).some((r) => r.includes("at most one")),
+    "a dropped once-rule is caught"
+  );
+  const dropCounts = flatLoop.replace(HOST_CONSENT_LOOP_PINS[0], "");
+  assert.ok(hostConsentOffenders(dropCounts, close).length > 0, "a dropped which-consent sentence is caught");
+  const dropRow = loop.replace(HOST_CONSENT_S15_PIN, "");
+  assert.ok(
+    hostConsentOffenders(dropRow, close).some((r) => r.startsWith("S15 row")),
+    "a dropped S15 trigger is caught"
+  );
+  const flatClose = close.replace(/\s+/g, " ");
+  const dropClose = flatClose.replace(HOST_CONSENT_CLOSE_PIN, "refused by the person");
+  assert.notEqual(dropClose, flatClose, "precondition: the close wording was found");
+  assert.ok(
+    hostConsentOffenders(loop, dropClose).some((r) => r.startsWith("close part")),
+    "a person-naming summary is caught"
+  );
+});
+
 test("✧ loop-no-prompts: /pharn-loop's allowed-tools covers every pinned line of its run, and no grant is unused", () => {
   const grants = allowedTools(readFileSync(join(COMMANDS_DIR, "pharn-loop.md"), "utf8"));
   assert.ok(Array.isArray(grants), "pharn-loop.md declares allowed-tools");
