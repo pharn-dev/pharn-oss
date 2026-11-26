@@ -191,7 +191,7 @@ const POINTER_PINS = Object.freeze({
   ],
   "pharn-loop-close.md": [
     "Read it once, when the run first reaches a stop — a `check-loop.mjs` decision (Step 5) or a blocked stop (Step 1a, Step 2) — and never earlier",
-    "Then follow it from Step 6a — or, for a stop before `pharn/features/<name>/` exists (Step 1a and Step 2 name them), from Step 7.",
+    "Then follow it from Step 6a — or, for a stop before `pharn/features/<name>/` exists (Step 1a, Step 2 and Step 3's first peek name them), from Step 7.", // 7.26.0 (CORE-398)
     "**If it does not load, the run can neither record nor commit.** Commit nothing, create no branch, write no `LOOP.md` — not from the contract alone either — and revert nothing.",
   ],
   "pharn-ship-quick.md": [
