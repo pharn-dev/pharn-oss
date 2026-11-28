@@ -1454,6 +1454,280 @@ test("✧ workTreeRoot() is byte-identical in ALL THREE hooks — the copy-set p
   }
 });
 
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+// THE SESSION'S DIRECTORY (worktree-session-root). Claude Code starts a hook in $CLAUDE_PROJECT_DIR, which is
+// not always Claude's current directory: measured 2026-11-28 in a desktop-app session working in
+// `<repo>/.claude/worktrees/<name>/`, the hook process ran in the main checkout and only the payload's `cwd`
+// named the worktree, so every write there was judged as `.claude/worktrees/<name>/…` and denied. Every case
+// below runs the hooks the way Claude Code did there: process cwd = the launch checkout, CLAUDE_PROJECT_DIR = the
+// launch checkout, and the session's directory in the payload.
+// ═════════════════════════════════════════════════════════════════════════════════════════════════════
+
+function launchPayload(filePath, sessionCwd) {
+  const p = { tool_name: "Write", tool_input: { file_path: filePath, content: "x" }, hook_event_name: "PreToolUse" };
+  if (sessionCwd !== undefined) p.cwd = sessionCwd;
+  return JSON.stringify(p);
+}
+
+// Run `script` from the launch checkout, the way Claude Code started it in the measured session.
+function hookFromLaunch(launch, sessionCwd, filePath, { projectDir = launch, script = HOOK } = {}) {
+  return spawnSync(process.execPath, [script], {
+    input: launchPayload(filePath, sessionCwd),
+    cwd: launch,
+    encoding: "utf8",
+    env: envWith(projectDir),
+  });
+}
+
+// A launch checkout holding one Claude Code worktree at `.claude/worktrees/w`, both in `posture`, with the two
+// guards installed in the launch checkout (the copies ${CLAUDE_PROJECT_DIR} names) and in the worktree.
+function sessionFixture(posture) {
+  const main = gitRepo();
+  const wt = join(main, ".claude", "worktrees", "w");
+  git(main, "worktree", "add", "-q", wt, "-b", `session-${posture}-${process.pid}-${Date.now()}`);
+  for (const root of [main, wt]) {
+    if (posture === "dev") seedDevRepo(root);
+    else seedInstalledProject(root);
+    installFix2(root);
+  }
+  return { main, wt, fix2: join(main, ".claude", "hooks", "protect-trusted-paths.cjs") };
+}
+
+const SESSION_ALLOWED = ["pharn/.run/feature-name/candidate.txt", "pharn/features/x/SPEC.md"];
+const SESSION_GUARDED = [
+  ".claude/hooks/enforce-writes-scope.cjs",
+  ".claude/hooks/protect-trusted-paths.cjs",
+  ".claude/settings.json",
+  ".claude/settings.local.json",
+];
+
+for (const posture of ["dev", "install"]) {
+  test(`✧ worktree session (${posture}): the worktree's pharn/.run/** and pharn/features/** are ALLOWED — judged as the worktree`, () => {
+    const { main, wt } = sessionFixture(posture);
+    for (const rel of SESSION_ALLOWED) {
+      const r = hookFromLaunch(main, wt, join(wt, rel));
+      assert.equal(r.status, 0, `${rel}: ${r.stderr}`);
+    }
+  });
+
+  test(`✧ worktree session (${posture}), NEGATIVE CONTROL: without the payload's cwd the same writes are denied as .claude/**`, () => {
+    const { main, wt } = sessionFixture(posture);
+    for (const rel of SESSION_ALLOWED) {
+      const r = hookFromLaunch(main, undefined, join(wt, rel));
+      assert.equal(r.status, 2, `${rel} must be denied when only the process cwd is known (the measured defect)`);
+      assert.match(r.stderr, /\.claude\/worktrees\/w\//, "judged relative to the launch checkout");
+    }
+  });
+
+  test(`✧ worktree session (${posture}): the worktree's own hooks and settings are DENIED — by protect, and by the composed pair`, () => {
+    const { main, wt, fix2 } = sessionFixture(posture);
+    for (const rel of SESSION_GUARDED) {
+      const p = hookFromLaunch(main, wt, join(wt, rel), { script: fix2 });
+      assert.equal(p.status, 2, `protect must guard the worktree's ${rel}`);
+      assert.equal(hookFromLaunch(main, wt, join(wt, rel)).status, 2, `enforce must deny the worktree's ${rel} too`);
+    }
+  });
+
+  test(`✧ worktree session (${posture}): an open run in the worktree holds the worktree fail-closed, and the launch checkout's run does not`, () => {
+    const { main, wt } = sessionFixture(posture);
+    writeMarker(wt, "pharn-loop", "demo");
+    assert.equal(hookFromLaunch(main, wt, join(wt, "pharn/.run/feature-name/candidate.txt")).status, 0);
+    assert.equal(hookFromLaunch(main, wt, join(wt, "src/app.ts")).status, 2, "a run open in the worktree narrows the worktree");
+  });
+}
+
+test("✧ worktree session (install): the WORKTREE's scope record is read, never the launch checkout's", () => {
+  const { main, wt } = sessionFixture("install");
+  setScope(main, ["src/main-only.ts"]);
+  setScope(wt, ["src/wt-only.ts"]);
+  assert.equal(hookFromLaunch(main, wt, join(wt, "src/wt-only.ts")).status, 0);
+  assert.equal(hookFromLaunch(main, wt, join(wt, "src/main-only.ts")).status, 2, "the launch checkout's scope must not reach in");
+});
+
+test("✧ worktree session: a launch-checkout path is OUT of the worktree's root — the move widens nothing there", () => {
+  const { main, wt } = sessionFixture("dev");
+  setScope(main, ["**"]); // the launch checkout's own record, at its widest
+  for (const rel of ["pharn/.run/x.txt", "pharn/floor/x.mjs", "README.md"]) {
+    assert.equal(hookFromLaunch(main, wt, join(main, rel)).status, 2, `${rel} in the launch checkout, from a worktree session`);
+  }
+});
+
+test("✧ a session tree that ENCLOSES the launch checkout never replaces it — its scope widens nothing inside", () => {
+  const outer = seedDevRepo(gitRepo());
+  const launch = join(outer, "vendor", "proj");
+  mkdirs(launch);
+  git(launch, "init", "-q");
+  seedDevRepo(launch);
+  setScope(outer, ["**"]);
+  for (const rel of ["pharn/floor/x.mjs", ".claude/commands/pharn-x.md", "README.md"]) {
+    assert.equal(hookFromLaunch(launch, outer, join(launch, rel)).status, 2, `${rel}: the launch tree's own rules must judge it`);
+  }
+  assert.equal(hookFromLaunch(launch, outer, join(launch, "pharn/.run/x.txt")).status, 0, "the launch tree's own default still allows");
+  assert.equal(rootOfFromLaunch(launch, outer), launch);
+});
+
+test("✧ a session directory in NO tree and under no project dir keeps the launch root (an added working directory)", () => {
+  const main = seedDevRepo(gitRepo());
+  const notes = fs.realpathSync(tmp());
+  assert.equal(hookFromLaunch(main, notes, join(main, "pharn/.run/x.txt")).status, 0);
+  assert.equal(hookFromLaunch(main, notes, join(main, "README.md")).status, 2);
+  assert.equal(rootOfFromLaunch(main, notes), main);
+});
+
+test("✧ a relative payload path means the SESSION's directory", () => {
+  const { main, wt } = sessionFixture("dev");
+  mkdirs(join(wt, "pharn", "features"));
+  const r = hookFromLaunch(main, join(wt, "pharn", "features"), "x/SPEC.md");
+  assert.equal(r.status, 0, r.stderr);
+  const d = hookFromLaunch(main, join(wt, "pharn", "features"), "../../README.md");
+  assert.equal(d.status, 2, "resolved against the session's directory, README.md is the worktree's — outside the default");
+  assert.match(d.stderr, /Blocked path : README\.md/, "and it is named relative to the worktree");
+});
+
+for (const [label, value] of [
+  ["absent", undefined],
+  ["relative", ".claude/worktrees/w"],
+  ["empty", ""],
+  ["a number", 7],
+  ["null", null],
+  ["a missing directory", "/nonexistent/pharn-session-probe"],
+  ["a file", "FILE"],
+  ["NUL-bearing", "/tmp\u0000/x"],
+]) {
+  test(`✧ an unusable payload cwd (${label}) is ignored — the launch root judges, exactly as before`, () => {
+    const { main, wt } = sessionFixture("dev");
+    const v = value === "FILE" ? join(wt, "pharn-cwd-file") : value;
+    if (value === "FILE") fs.writeFileSync(v, "x");
+    const r = spawnSync(process.execPath, [HOOK], {
+      input: JSON.stringify({
+        tool_name: "Write",
+        tool_input: { file_path: join(wt, SESSION_ALLOWED[0]) },
+        ...(v === undefined ? {} : { cwd: v }),
+      }),
+      cwd: main,
+      encoding: "utf8",
+      env: envWith(main),
+    });
+    assert.equal(r.status, 2, "judged at the launch checkout, the worktree path is .claude/**");
+    assert.match(r.stderr, /\.claude\/worktrees\/w\//);
+  });
+}
+
+// The root enforce computed for a session, read back from the message that prints it.
+function rootOfFromLaunch(launch, sessionCwd, projectDir = launch) {
+  const r = hookFromLaunch(launch, sessionCwd, join(os.tmpdir(), "pharn-root-probe.md"), { projectDir });
+  assert.equal(r.status, 2);
+  const m = /NOT INSIDE the repo root \(([^)]*)\)/.exec(r.stderr) || /not to the tree this guard judges \(([^)]*)\)/.exec(r.stderr);
+  assert.ok(m, `no message rendered the root: ${r.stderr}`);
+  return m[1];
+}
+
+// Review of worktree-session-root (measured): a NON-git launch directory under a temp root, holding an installed
+// tree of its own, had its own paths allowed as ordinary temp paths once ROOT moved into the nested tree.
+test("✧ a NON-git launch directory: its own paths stay denied when the session moves into a nested installed tree", () => {
+  const launch = seedInstalledProject(fs.realpathSync(tmp()));
+  const sub = join(launch, "sub");
+  mkdirs(sub);
+  git(sub, "init", "-q");
+  seedInstalledProject(sub);
+  for (const rel of ["pharn/floor/x.mjs", "pharn.config.json", ".claude/settings.json", "README.md"]) {
+    const r = hookFromLaunch(launch, sub, join(launch, rel));
+    assert.equal(r.status, 2, `${rel} is the launch directory's own: ${r.stderr}`);
+  }
+  assert.equal(
+    hookFromLaunch(launch, sub, join(sub, "pharn/features/x/SPEC.md")).status,
+    0,
+    "the nested tree's own paths follow its rules"
+  );
+});
+
+test("✧ a nested non-worktree tree (a vendored clone) judges its own paths, and the launch tree's stay denied", () => {
+  const main = seedDevRepo(gitRepo());
+  const vendored = join(main, "vendor", "lib");
+  mkdirs(vendored);
+  git(vendored, "init", "-q");
+  seedDevRepo(vendored);
+  assert.equal(hookFromLaunch(main, vendored, join(vendored, "pharn/.run/x.txt")).status, 0);
+  assert.equal(hookFromLaunch(main, vendored, join(main, "pharn/.run/x.txt")).status, 2, "the launch tree's own default-safe path");
+});
+
+test("✧ a session in a DIFFERENT repository: enforce denies the launch tree's paths and protect adds no root for it", () => {
+  const main = seedDevRepo(gitRepo());
+  installFix2(main);
+  const other = seedDevRepo(gitRepo());
+  assert.equal(hookFromLaunch(main, other, join(main, "pharn/.run/x.txt")).status, 2);
+  assert.equal(hookFromLaunch(main, other, join(other, "pharn/.run/x.txt")).status, 0, "judged by its own default");
+  const fix2 = join(main, ".claude", "hooks", "protect-trusted-paths.cjs");
+  assert.equal(hookFromLaunch(main, other, join(other, "pharn/LIMITS.md"), { script: fix2 }).status, 0, "not guarded");
+  assert.equal(hookFromLaunch(main, other, join(main, "pharn/LIMITS.md"), { script: fix2 }).status, 2, "the launch doc still is");
+});
+
+test("✧ worktree session: protect still guards the LAUNCH checkout's own trusted docs and control surface", () => {
+  const { main, wt, fix2 } = sessionFixture("dev");
+  for (const rel of ["pharn/LIMITS.md", ".claude/settings.json", ".claude/hooks/enforce-writes-scope.cjs"]) {
+    assert.equal(hookFromLaunch(main, wt, join(main, rel), { script: fix2 }).status, 2, rel);
+  }
+});
+
+// A case variant of an existing directory, on a volume that folds case (APFS by default). Skipped where it does not.
+function caseVariant(dir) {
+  const v = dir.replace(/[a-z]/, (c) => c.toUpperCase());
+  return v !== dir && fs.existsSync(v) ? v : null;
+}
+
+test("✧ a case-variant payload cwd of the launch checkout is the launch checkout — no availability regression", (t) => {
+  const main = seedDevRepo(gitRepo());
+  const v = caseVariant(main);
+  if (v === null) return t.skip("case-sensitive volume");
+  assert.equal(hookFromLaunch(main, v, join(main, "pharn/features/z.md")).status, 0);
+  assert.equal(rootOfFromLaunch(main, v), main);
+});
+
+test("✧ a case-variant payload cwd naming an ENCLOSING tree is still refused", (t) => {
+  const outer = seedDevRepo(gitRepo());
+  const launch = join(outer, "vendor", "proj");
+  mkdirs(launch);
+  git(launch, "init", "-q");
+  seedDevRepo(launch);
+  const v = caseVariant(outer);
+  if (v === null) return t.skip("case-sensitive volume");
+  setScope(outer, ["**"]);
+  assert.equal(rootOfFromLaunch(launch, v), launch);
+  assert.equal(hookFromLaunch(launch, v, join(launch, "pharn/floor/x.mjs")).status, 2);
+});
+
+test("✧ PARITY (worktree-session-root): over every row, the session's directory from the PAYLOAD gives the same roots as from the process", () => {
+  const rows = parityRows();
+  // One row differs, by design: a session directory in no tree keeps the launch root (here the hook's own repo),
+  // where a PROCESS cwd there has nothing else to fall back to.
+  const LAUNCH_STANDS = new Set(["non-git, no env (the fallback every hermetic test uses)"]);
+  assert.ok(
+    rows.some((r) => LAUNCH_STANDS.has(r.row)),
+    "the exception names a real row"
+  );
+  for (const { row, build } of rows) {
+    const f = build();
+    const want = LAUNCH_STANDS.has(row) ? f.hookRoot : f.expectRoot;
+    assert.equal(rootOfFromLaunch(f.hookRoot, f.cwd, f.projectDir), want, `enforce root for: ${row}`);
+    const status = spawnSync(process.execPath, [installFix2(f.hookRoot)], {
+      input: launchPayload(join(f.expectRoot, "pharn/LIMITS.md"), f.cwd),
+      cwd: f.hookRoot,
+      encoding: "utf8",
+      env: envWith(f.projectDir),
+    }).status;
+    assert.equal(status, f.guarded ? 2 : 0, `protect coverage of ${f.expectRoot}/LIMITS.md for: ${row}`);
+  }
+});
+
+test("✧ PIN (worktree-session-root): payloadCwd() is byte-equal in both guards (L31)", () => {
+  const body = (file) => {
+    const m = /^function payloadCwd\(input\) \{[\s\S]*?^\}$/m.exec(fs.readFileSync(file, "utf8"));
+    assert.ok(m, `${file} must declare a top-level payloadCwd(input)`);
+    return m[0];
+  };
+  assert.equal(body(FIX2), body(HOOK), "change both copies, or neither");
+});
+
 test("deny message: the extractor ignores PATH segments, so the tests above are not vacuous", () => {
   // Guards the extractor itself. Both messages embed paths (pharn/.run/writes-scope.json,
   // .claude/hooks/set-writes-scope.cjs); if the anchor were dropped, these would surface as bogus

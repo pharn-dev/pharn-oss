@@ -107,7 +107,8 @@ _current_ directory, so a relative `node .claude/hooks/…` stops starting after
 subdirectory: node exits 1, which Claude Code treats as a non-blocking error, and both guards go silently
 off (measured; the shipped form until `6.1.0`). Each guard then judges the **git working tree that contains
 Claude's current directory** — a subdirectory keeps the repo root, a session inside a worktree is judged as
-that worktree — and `pharn/LIMITS.md §7` states the bounds that remain. **`protect-trusted-paths.cjs` (fix #2)**
+that worktree — read from the hook payload's `cwd`, because Claude Code does not always start a hook there (a
+desktop-app worktree session started it in the main checkout; `7.26.2`), and `pharn/LIMITS.md §7` states the bounds that remain. **`protect-trusted-paths.cjs` (fix #2)**
 blocks any write to a protected path. Paths are matched **repo-relative and exact**, case-folded, against
 the guard's own location (plus the work tree Claude is in, when it belongs to the same repository) — never
 by bare basename, so a user's own `docs/ARCHITECTURE.md` stays writable. **Git metadata is denied too**: any

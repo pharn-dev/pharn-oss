@@ -118,6 +118,16 @@ CLIs write), whatever the scope; Bash still reaches them.
   wiring in `.claude/settings.json` anchors both guards on `${CLAUDE_PROJECT_DIR}` for the same reason:
   with the old relative command they did not **start** at all from a subdirectory (exit 1, which Claude
   Code treats as non-blocking — both guards silently off). `pharn/LIMITS.md §7` carries the bounds.
+- **"Claude's current directory" is the payload's `cwd` (7.26.2, worktree-session-root).** Claude Code starts a
+  hook in `$CLAUDE_PROJECT_DIR`, which in a desktop-app worktree session is the main checkout, and names Claude's
+  directory only in the payload. So both guards take it from `cwd` when that is an existing absolute directory,
+  else from their process directory. `enforce-writes-scope.cjs` starts from the launch tree (its process's) and
+  moves to the session's tree unless the session's directory is in no tree and under no project dir, or its tree
+  encloses the launch tree; `protect-trusted-paths.cjs` adds the session's tree as a guarded root under its usual
+  same-repository rule. A `Bash` `cd` moves `cwd`, and jurisdiction with it. Before 7.26.2 a worktree session's
+  writes were all denied as `.claude/worktrees/<name>/…`, and the worktree's own trusted docs and control surface
+  were unguarded from that session. To build in such a session on an older install, the workaround was a helper
+  that ran the worktree's own guards with that worktree as their directory and wrote only on exit 0.
 
 ## When a write is blocked — the five deny bodies
 

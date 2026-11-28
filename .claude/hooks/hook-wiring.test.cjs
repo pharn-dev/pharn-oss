@@ -1,8 +1,9 @@
 // .claude/hooks/hook-wiring.test.cjs — executes the REAL guard wiring in .claude/settings.json.
 //
 // WHY THIS FILE EXISTS (hook-cwd-anchoring). Every other hook suite spawns a hook by ABSOLUTE script path,
-// which is not how Claude Code runs it. Claude Code runs the `command` STRING from settings.json, in
-// Claude's CURRENT directory. The relative form `node .claude/hooks/<guard>.cjs` therefore could not start
+// which is not how Claude Code runs it. Claude Code runs the `command` STRING from settings.json, and it has
+// run it in Claude's CURRENT directory (a desktop-app worktree session started it in the main checkout instead;
+// the guards read Claude's directory from the payload's `cwd`, worktree-session-root). The relative form `node .claude/hooks/<guard>.cjs` therefore could not start
 // after a persisted `cd` into a subdirectory: node exits 1 (`Cannot find module`), which Claude Code treats
 // as a non-blocking error, so BOTH guards were silently off. protect-trusted-paths.test.cjs's "cwd is a
 // SUBDIRECTORY" test stayed green through all of it, because it never exercised the command string

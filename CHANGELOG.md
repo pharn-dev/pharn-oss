@@ -23,6 +23,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
      `npm run check:changelog` holds this file's shape; the CI step "CHANGELOG per-PR entry check" holds
      each PR's diff. Details and known costs: CONTRIBUTING.md, "CHANGELOG entries". -->
 
+## [7.26.2] - 2026-11-28
+
+### Fixed
+
+- 2026-11-28: **Both write guards now judge the git worktree a session is working in, so `/pharn-loop` and every
+  other write works in a Claude Code worktree session.** Claude Code starts a hook in `$CLAUDE_PROJECT_DIR`, and in
+  a desktop-app session working in `<repo>/.claude/worktrees/<name>/` that is the main checkout; Claude's own
+  directory reaches the hook only as the payload's `cwd`. Both guards judged their process directory, so
+  `enforce-writes-scope.cjs` denied every write in the worktree as `.claude/worktrees/<name>/…` (a pharn-ci
+  `/pharn-loop` stopped at its first write, Step 1a), and `protect-trusted-paths.cjs` did not guard the worktree's
+  own trusted docs, settings and hooks. Both now take Claude's directory from `cwd` when it names an existing
+  absolute directory. `enforce-writes-scope.cjs` moves from the tree it starts in to the session's tree, except for
+  a directory in no tree and under no project dir, and for a tree that encloses the one it starts in;
+  whenever it moves, every path of the tree it starts in stays denied. `protect-trusted-paths.cjs` only adds the
+  session's tree as a guarded root. A `Bash` `cd` moves `cwd`, and the
+  guards' jurisdiction with it (`pharn/LIMITS.md §7`). Not covered: the `/pharn-loop` Stop guard
+  (`require-loop-record.cjs`) still reads its marker from the tree it starts in, so in a worktree session it is
+  inert, which is its fail-open direction. Existing installs get the hooks with `pharn update`; `settings.json`
+  needs no change.
+
 ## [7.26.1] - 2026-11-26
 
 ### Changed
