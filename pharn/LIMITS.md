@@ -572,7 +572,8 @@ read off the wiring:
   tree by that tree's own scope record and posture, and denies the launch tree's paths as outside it until the
   session moves back. A move never puts a file of the launch tree's own working tree under another tree's
   rules: a tree nested below the launch root (a worktree, a submodule, a vendored checkout with its own `.git`)
-  judges only the paths inside it, and an enclosing tree is refused. A `.git` entry is what makes a directory a
+  judges only the paths inside it, an enclosing tree is refused, and every launch-tree path outside the session's
+  tree is denied, whether or not the launch directory is a git tree. A `.git` entry is what makes a directory a
   tree, and the write tools cannot create one (next bullet), so turning a directory of the launch tree into a
   tree with its own rules takes a `Bash` write, which reaches those files directly anyway (§6).
 - **A `.git` entry is trusted as a boundary.** Tool writes to git metadata — any `.git` path segment under a

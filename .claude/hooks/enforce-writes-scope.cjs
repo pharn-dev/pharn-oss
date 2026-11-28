@@ -140,8 +140,11 @@
 //     enclosing tree's rules — the one replacement that could widen what a write reaches there.
 // A tree below LAUNCH (a nested worktree, a submodule, a vendored checkout with its own `.git`) or beside it (a
 // sibling worktree, another repository) does replace it. Paths inside such a tree are that tree's own, so this
-// moves no file of the launch tree's own working tree under other rules; and with a nested ROOT every launch-tree
-// path outside it is out of root, so denied. The payload's `cwd` is the harness's, not the model's — a tool call
+// moves no file of the launch tree's own working tree under other rules; and whenever ROOT is not LAUNCH, every
+// path inside LAUNCH but outside ROOT is denied before any out-of-project allowance is read (insideLaunch()) —
+// whether or not LAUNCH is a git tree. Without that, a non-git launch directory under a temp root, holding an
+// installed tree of its own, had its own paths read as ordinary temp paths by the permissive posture (review of
+// worktree-session-root, measured: `pharn/floor/x.mjs` and `pharn.config.json` there went from exit 2 to 0). The payload's `cwd` is the harness's, not the model's — a tool call
 // sets only its own input — but a Bash `cd` moves it within the session's working directories, so jurisdiction
 // follows the session: after a `cd` into another tree the guard judges that tree, by that tree's scope record
 // and posture, and the launch tree's paths are out of root until it moves back (pharn/LIMITS.md §7).
@@ -273,7 +276,9 @@ const PROCESS_CWD = (() => {
 
 // The session's current directory as the hook payload names it (Claude Code's `cwd` field), symlink-resolved, or
 // null when the payload names none that is usable: not a JSON object, no string `cwd`, a relative or NUL-bearing
-// one, or one that is not an existing directory. It reads that one field, and never renders it in a message.
+// one, or one that is not an existing directory. Resolved NATIVELY, so it carries the on-disk spelling every target
+// is compared in (a case or Unicode variant of a directory would otherwise misread which tree encloses which). It is
+// a path, never a message: only the root derived from it is printed, quoted as data, as a process-cwd root was.
 // A DELIBERATE COPY in protect-trusted-paths.cjs, pinned byte-equal by a ✧ test (lessons-learned L31).
 function payloadCwd(input) {
   try {
@@ -281,7 +286,7 @@ function payloadCwd(input) {
     if (!p || typeof p !== "object" || Array.isArray(p)) return null;
     const c = p.cwd;
     if (typeof c !== "string" || c === "" || c.includes("\0") || !path.isAbsolute(c)) return null;
-    const real = fs.realpathSync(c);
+    const real = fs.realpathSync.native(c);
     return fs.statSync(real).isDirectory() ? real : null;
   } catch {
     return null;
@@ -337,15 +342,32 @@ function sessionRoot(launchRoot, sessionCwd) {
 // hook process starts in — outside any git tree and any project dir, the process directory itself (the
 // pre-change behavior, and the one every hermetic temp-dir test exercises). ROOT is the session's tree when it may
 // replace LAUNCH, else LAUNCH.
-const ROOT = (() => {
-  let launch = PROCESS_CWD;
+const LAUNCH = (() => {
   try {
-    launch = workTreeRoot(PROCESS_CWD) ?? PROCESS_CWD;
-    return sessionRoot(launch, SESSION_CWD);
+    return workTreeRoot(PROCESS_CWD) ?? PROCESS_CWD;
   } catch {
-    return launch;
+    return PROCESS_CWD;
   }
 })();
+const ROOT = (() => {
+  try {
+    return sessionRoot(LAUNCH, SESSION_CWD);
+  } catch {
+    return LAUNCH;
+  }
+})();
+
+// True iff ROOT moved off LAUNCH and `target` is LAUNCH or lies inside it — compared both as spelled and folded
+// (toKey(), as aliasesRoot() does), so a case or Unicode variant of the launch path counts too. Such a target is
+// the launch tree's own and no rule of the session's tree may allow it (see the header, THE SESSION'S DIRECTORY).
+function insideLaunch(target) {
+  if (LAUNCH === ROOT) return false;
+  const rel = path.relative(LAUNCH, target);
+  if (rel === "" || (rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel))) return true;
+  const key = toKey(target);
+  const launchKey = toKey(LAUNCH);
+  return key === launchKey || key.startsWith(launchKey.endsWith("/") ? launchKey : launchKey + "/");
+}
 
 // RESOLUTION (1) — the pre-6.24.0 resolution, unchanged (see the header, RESOLUTION). Canonicalize a
 // (possibly not-yet-existent) write target through symlinks: realpath the nearest existing ancestor —
@@ -1417,6 +1439,8 @@ if (isWrite) {
         // ALIASES OF THE PROJECT (see the header): in the install posture, another spelling of the project's own
         // path is denied as the project's own, before the out-of-project rules can read it as outside.
         if (install && fromRoot !== "" && aliasesRoot(real)) deny(shown(String(p)), scope, record, "in-repo", { ...ctx, alias: true });
+        // THE SESSION'S DIRECTORY (see the header): a launch-tree path stays out of reach of the session's tree.
+        if (insideLaunch(real)) deny(shown(String(p)), scope, record, "other-tree", ctx);
         const otherTree = fromRoot !== "" && insideSomeWorkTree(real);
         // TST-12: the dev and unsignalled postures admit THIS session's own scratchpad, by rule (2), in every mode —
         // and nothing else outside the project (THE OUT-OF-PROJECT PLACES).

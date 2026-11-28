@@ -197,7 +197,9 @@
 //   Claude Code starts this hook in $CLAUDE_PROJECT_DIR, so in a session working in a worktree only the
 //   payload names that worktree — measured 2026-11-28, before which the worktree's own trusted docs and
 //   control surface were writable from such a session. A payload `cwd` is shape-checked only (an existing
-//   absolute directory); it can only ADD a guarded root, so a forged one over-blocks at worst.
+//   absolute directory). As a root it can only be ADDED, so a forged one over-blocks at worst; it is also the
+//   directory a RELATIVE write path resolves against, as the session's own directory is by the payload's meaning
+//   (the write tools send absolute paths).
 // • GIT METADATA is denied on the TOOL surface only. The claim is "the write tools cannot re-point a
 //   `.git` entry or plant one", never "git metadata cannot be changed": a `Bash` write reaches `.git`
 //   exactly as it reaches every other guarded path, and re-pointing a worktree's `.git` that way removes
@@ -276,7 +278,9 @@ const PROCESS_CWD = (() => {
 
 // The session's current directory as the hook payload names it (Claude Code's `cwd` field), symlink-resolved, or
 // null when the payload names none that is usable: not a JSON object, no string `cwd`, a relative or NUL-bearing
-// one, or one that is not an existing directory. It reads that one field, and never renders it in a message.
+// one, or one that is not an existing directory. Resolved NATIVELY, so it carries the on-disk spelling every target
+// is compared in (a case or Unicode variant of a directory would otherwise misread which tree encloses which). It is
+// a path, never a message: only the root derived from it is printed, quoted as data, as a process-cwd root was.
 // A DELIBERATE COPY of enforce-writes-scope.cjs's, pinned byte-equal by a ✧ test there (lessons-learned L31).
 function payloadCwd(input) {
   try {
@@ -284,7 +288,7 @@ function payloadCwd(input) {
     if (!p || typeof p !== "object" || Array.isArray(p)) return null;
     const c = p.cwd;
     if (typeof c !== "string" || c === "" || c.includes("\0") || !path.isAbsolute(c)) return null;
-    const real = fs.realpathSync(c);
+    const real = fs.realpathSync.native(c);
     return fs.statSync(real).isDirectory() ? real : null;
   } catch {
     return null;
