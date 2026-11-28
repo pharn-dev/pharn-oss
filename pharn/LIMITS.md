@@ -514,8 +514,9 @@ and this section names which side PHARN is on.
 ## 7. The write guards act only when Claude Code starts them, and judge the tree Claude is in
 
 Every write-guard claim in this file, and `pharn/THREAT-MODEL.md §4` items 2 and 7, holds only while both
-`PreToolUse` hooks actually **run**. Claude Code runs a command hook in Claude's **current** directory, and
-treats a hook that exits with anything other than 0 or 2 — including one whose script cannot be found — as a
+`PreToolUse` hooks actually **run**. Claude Code has run a command hook in Claude's **current** directory (the
+probe below) and, in a desktop-app worktree session, in the project directory instead (measured 2026-11-28,
+below), and it treats a hook that exits with anything other than 0 or 2 — including one whose script cannot be found — as a
 non-blocking error, unless the hook sets `"onFailure": "block"` (Claude Code 2.1.295 or later), which both guards
 do since 7.3.0. Until `SKILLS_VERSION` 6.1.0 the shipped wiring was a relative `node .claude/hooks/…`,
 so after any persisted `cd` into a subdirectory **both guards silently stopped running**. Probed rather than
@@ -543,16 +544,37 @@ read off the wiring:
 - **The fix reaches an install only through its own `settings.json`.** `pharn update` never touches that
   file, so an install upgraded without editing it keeps the relative form and stays fail-open from every
   other directory. Upgrade the hooks first, then the two commands; roll back in the reverse order.
-- **"Current directory" is the hook process's.** When Claude's own directory no longer exists, Claude Code
-  runs hooks from the session-start directory, the project root, home or temp, and the guards judge that
-  directory instead.
+- **The guards judge the directory the payload names, not the one they start in (worktree-session-root).**
+  Claude Code passes Claude's current directory to every hook as the payload's `cwd`. Measured 2026-11-28 with
+  Claude Code 2.1.332, in a desktop-app session working in `<repo>/.claude/worktrees/<name>/`, the hook process
+  started in the main checkout. A guard that judged its own directory therefore read every write in the worktree
+  as `.claude/worktrees/<name>/…` and denied it, so `/pharn-loop` could not write its first file there, and
+  `protect-trusted-paths.cjs` did not guard the worktree's own trusted docs and control surface. Both guards now
+  take Claude's directory from `cwd` when it names an existing absolute directory, and from their own process
+  directory otherwise. When Claude's own directory no longer exists, `cwd` names nothing usable and the guards
+  judge the directory Claude Code started them in: the session-start directory, the project root, home or temp.
 - **A project path containing `"`, `` ` ``, `$` or `\` is unsupported.** The placeholder is substituted into
   a shell command, where such a character can make the command mis-expand — the guard then does not start —
   or run text taken from the directory name.
 - **Jurisdiction is the git working tree that contains Claude's current directory**, or `CLAUDE_PROJECT_DIR`
-  when the walk reaches that first. A session cannot write another worktree by path: that write is denied,
-  not unguarded. A launch-checkout session writing into a nested `.claude/worktrees/<name>/` is judged by
-  its own writes-scope, which could name that worktree's hooks if a plan declared them.
+  when the walk reaches that first. `enforce-writes-scope.cjs` starts from the tree its own process is in (the
+  launch tree) and moves to the tree that contains the payload's `cwd`, except in two cases, where the launch
+  tree keeps judging: a `cwd` in no git tree and under no project directory (an added working directory, say),
+  and a tree that encloses the launch tree, whose rules would otherwise reach the launch tree's own files.
+  `protect-trusted-paths.cjs` adds the tree that contains each of the two directories, its process's and the
+  payload's, as a guarded root when it shares the hook's repository; it never removes one. A session cannot
+  write another worktree by path: that write is denied, not unguarded. A launch-checkout session writing into a
+  nested `.claude/worktrees/<name>/` is judged by its own writes-scope, which could name that worktree's hooks
+  if a plan declared them.
+- **The payload's `cwd` moves with the session, and jurisdiction moves with it.** The harness sets `cwd`, not a
+  tool call, and the guards check only that it is an existing absolute directory. A `Bash` `cd` moves it within
+  the session's working directories. After a `cd` into another git tree, `enforce-writes-scope.cjs` judges that
+  tree by that tree's own scope record and posture, and denies the launch tree's paths as outside it until the
+  session moves back. A move never puts a file of the launch tree's own working tree under another tree's
+  rules: a tree nested below the launch root (a worktree, a submodule, a vendored checkout with its own `.git`)
+  judges only the paths inside it, and an enclosing tree is refused. A `.git` entry is what makes a directory a
+  tree, and the write tools cannot create one (next bullet), so turning a directory of the launch tree into a
+  tree with its own rules takes a `Bash` write, which reaches those files directly anyway (§6).
 - **A `.git` entry is trusted as a boundary.** Tool writes to git metadata — any `.git` path segment under a
   guarded root — are denied, because those entries decide jurisdiction. A `Bash` write still reaches them
   (§6), and re-pointing a worktree's `.git` through `Bash` removes the trusted-file guard from that worktree.

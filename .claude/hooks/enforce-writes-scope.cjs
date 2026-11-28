@@ -124,12 +124,35 @@
 // instead. .claude/settings.json now runs it through ${CLAUDE_PROJECT_DIR}, and ROOT is computed here.
 // A RELATIVE payload path still means the cwd (CWD below), never ROOT.
 //
+// THE SESSION'S DIRECTORY (worktree-session-root). The walk above used to start at the hook PROCESS's cwd, on
+// the belief that Claude Code starts a hook in Claude's current directory. It does not, always: measured
+// 2026-11-28 (Claude Code 2.1.332, a desktop-app session working in `<repo>/.claude/worktrees/<name>/`), the
+// hook process ran in $CLAUDE_PROJECT_DIR — the main checkout — and Claude's directory reached the hook only as
+// the payload's `cwd` field. So every write in that worktree read as `.claude/worktrees/<name>/…`, which every
+// default denies as `.claude/**`, and `/pharn-loop` could not write its first file. Now CWD is the payload's
+// `cwd` when it names an existing absolute directory, else the process's, and ROOT starts from the LAUNCH root
+// (the walk from the process cwd, as before) and is replaced by the session's tree — the walk from the payload's
+// `cwd` — unless one of three holds, in which case LAUNCH stands (sessionRoot()):
+//   - the payload names no usable directory (absent, relative, not a directory) — every pre-existing caller;
+//   - that directory lies in no git work tree and under no project dir (an added working directory such as a
+//     notes folder): the session is not working in a tree, so its project's rules keep judging;
+//   - the session's tree is a strict ANCESTOR of LAUNCH: that would read the launch tree's own files under an
+//     enclosing tree's rules — the one replacement that could widen what a write reaches there.
+// A tree below LAUNCH (a nested worktree, a submodule, a vendored checkout with its own `.git`) or beside it (a
+// sibling worktree, another repository) does replace it. Paths inside such a tree are that tree's own, so this
+// moves no file of the launch tree's own working tree under other rules; and with a nested ROOT every launch-tree
+// path outside it is out of root, so denied. The payload's `cwd` is the harness's, not the model's — a tool call
+// sets only its own input — but a Bash `cd` moves it within the session's working directories, so jurisdiction
+// follows the session: after a `cd` into another tree the guard judges that tree, by that tree's scope record
+// and posture, and the launch tree's paths are out of root until it moves back (pharn/LIMITS.md §7).
+//
 // workTreeRoot() is a DELIBERATE COPY of the function of the same name in protect-trusted-paths.cjs — a
 // shared module would be a new control-surface file. A ✧ test pins the two bodies byte-equal, and a
 // parity matrix executes both hooks over the same fixtures (lessons-learned L31). toKey() (new in 6.24.0)
 // is a SECOND such deliberate copy, from the same file, for the same reason. resolvePhysicalTarget() is a
 // THIRD, copied the other way (write-guard-narrowing), with its two constants; its only deliberate difference
-// is the realpathOr() each file's copy calls (this file's is native, protect's the JS realpath).
+// is the realpathOr() each file's copy calls (this file's is native, protect's the JS realpath). payloadCwd()
+// (worktree-session-root) is a FOURTH, pinned the same way.
 //
 // Bounds, stated rather than implied (P0): a `.git` entry is trusted as a boundary without being verified
 // to be a repository (protect-trusted-paths.cjs denies TOOL writes to git metadata; Bash still reaches it);
@@ -138,7 +161,9 @@
 // scope record than its setter wrote and falls back to the default-safe-set (fail-closed) — and, because
 // that root carries no `skillsVersion` of its own, it is judged in the unsignalled posture, so the
 // permissive default never applies there; when Claude's own directory no longer exists, Claude Code
-// starts hooks elsewhere and this file judges wherever it was started; the out-of-project places are read
+// starts hooks elsewhere and this file judges wherever it was started (the payload's `cwd` then names no
+// directory, so it is not used); a payload `cwd` naming an existing directory is trusted as the session's,
+// shape-checked only, like the session fields below; the out-of-project places are read
 // from the hook's environment (`CLAUDE_CONFIG_DIR`, `HOME`, `TMPDIR` through `os.tmpdir()`) and from the
 // payload's session fields, so an environment that points one of them at a broad directory widens it; and a
 // HARD link is not resolved by either resolution, so every posture judges it by its own name — under the
@@ -225,11 +250,16 @@ process.on("uncaughtException", () => {
   process.exit(2);
 });
 
-// Claude's current directory as this hook process sees it, with symlinks resolved so a canonicalized
-// target shares a common prefix with it (else a symlinked temp/CI dir — e.g. macOS /var -> /private/var —
-// would make every write look like it escapes). process.cwd() throws when the directory was deleted; the
-// filesystem root is the fallback, which is a jurisdiction no scope is written for, so it denies.
-const CWD = (() => {
+// The payload, read once and first: Claude's current directory comes from it (SESSION_CWD, below), and the root
+// every scope entry is relative to comes from that. readStdin() is a hoisted declaration. An unusable payload
+// still denies further down, before anything is judged.
+const raw = readStdin();
+
+// The hook PROCESS's directory, with symlinks resolved so a canonicalized target shares a common prefix with it
+// (else a symlinked temp/CI dir — e.g. macOS /var -> /private/var — would make every write look like it
+// escapes). process.cwd() throws when the directory was deleted; the filesystem root is the fallback, which is
+// a jurisdiction no scope is written for, so it denies.
+const PROCESS_CWD = (() => {
   try {
     return fs.realpathSync(process.cwd());
   } catch {
@@ -240,6 +270,28 @@ const CWD = (() => {
     }
   }
 })();
+
+// The session's current directory as the hook payload names it (Claude Code's `cwd` field), symlink-resolved, or
+// null when the payload names none that is usable: not a JSON object, no string `cwd`, a relative or NUL-bearing
+// one, or one that is not an existing directory. It reads that one field, and never renders it in a message.
+// A DELIBERATE COPY in protect-trusted-paths.cjs, pinned byte-equal by a ✧ test (lessons-learned L31).
+function payloadCwd(input) {
+  try {
+    const p = JSON.parse(input);
+    if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+    const c = p.cwd;
+    if (typeof c !== "string" || c === "" || c.includes("\0") || !path.isAbsolute(c)) return null;
+    const real = fs.realpathSync(c);
+    return fs.statSync(real).isDirectory() ? real : null;
+  } catch {
+    return null;
+  }
+}
+
+// Claude's current directory: the payload's when it names a usable one, else the hook process's (see the
+// header, JURISDICTION ROOT). A relative payload path means this directory.
+const SESSION_CWD = payloadCwd(raw);
+const CWD = SESSION_CWD ?? PROCESS_CWD;
 
 // The first directory — `dir` itself, then each ancestor — that holds an entry named `.git` (a file or a
 // directory) or equals realpath($CLAUDE_PROJECT_DIR). null when neither is found. Entry existence and
@@ -268,14 +320,30 @@ function workTreeRoot(dir) {
   }
 }
 
-// The jurisdiction every scope entry is relative to (see the header, JURISDICTION ROOT). Outside any git
-// tree and any project dir it is the cwd itself — exactly the pre-change behavior, and the one every
-// hermetic temp-dir test exercises.
+// The session's tree, or `launchRoot` when it may not replace it (see the header, JURISDICTION ROOT): when the
+// session names no usable directory, when that directory lies in no git work tree and under no project dir, and
+// when its tree is a strict ANCESTOR of the launch root — reading the launch tree's own files under an enclosing
+// tree's rules is the one replacement that would widen what a write can reach there.
+function sessionRoot(launchRoot, sessionCwd) {
+  if (sessionCwd === null) return launchRoot;
+  const tree = workTreeRoot(sessionCwd);
+  if (tree === null) return launchRoot;
+  const down = path.relative(tree, launchRoot);
+  const encloses = down !== "" && down !== ".." && !down.startsWith(".." + path.sep) && !path.isAbsolute(down);
+  return encloses ? launchRoot : tree;
+}
+
+// The jurisdiction every scope entry is relative to (see the header, JURISDICTION ROOT). LAUNCH is the tree the
+// hook process starts in — outside any git tree and any project dir, the process directory itself (the
+// pre-change behavior, and the one every hermetic temp-dir test exercises). ROOT is the session's tree when it may
+// replace LAUNCH, else LAUNCH.
 const ROOT = (() => {
+  let launch = PROCESS_CWD;
   try {
-    return workTreeRoot(CWD) ?? CWD;
+    launch = workTreeRoot(PROCESS_CWD) ?? PROCESS_CWD;
+    return sessionRoot(launch, SESSION_CWD);
   } catch {
-    return CWD;
+    return launch;
   }
 })();
 
@@ -1277,7 +1345,7 @@ function denyMalformedHookInput(detail) {
   process.exit(2);
 }
 
-const raw = readStdin();
+// `raw` was read at the top (SESSION_CWD needs it).
 // A PreToolUse hook is always handed a payload, so no input is not "nothing to judge": an unreadable stdin and an empty
 // one both deny (audit TST-4), with fixed text — never a value read from the input.
 if (raw === null) denyMalformedHookInput("stdin could not be read");
