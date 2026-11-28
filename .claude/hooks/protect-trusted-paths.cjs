@@ -193,7 +193,13 @@
 //   directory, or one whose common directory cannot be read (over-block). A DIFFERENT repository is still
 //   not guarded — the subpath posture above, unchanged — and a launch-checkout session writing INTO a
 //   nested `.claude/worktrees/<name>/` by path is judged by fix #7 and its own scope, not by this hook's
-//   worktree coverage.
+//   worktree coverage. The session's directory is read from the payload's `cwd` (worktree-session-root):
+//   Claude Code starts this hook in $CLAUDE_PROJECT_DIR, so in a session working in a worktree only the
+//   payload names that worktree — measured 2026-11-28, before which the worktree's own trusted docs and
+//   control surface were writable from such a session. A payload `cwd` is shape-checked only (an existing
+//   absolute directory). As a root it can only be ADDED, so a forged one over-blocks at worst; it is also the
+//   directory a RELATIVE write path resolves against, as the session's own directory is by the payload's meaning
+//   (the write tools send absolute paths).
 // • GIT METADATA is denied on the TOOL surface only. The claim is "the write tools cannot re-point a
 //   `.git` entry or plant one", never "git metadata cannot be changed": a `Bash` write reaches `.git`
 //   exactly as it reaches every other guarded path, and re-pointing a worktree's `.git` that way removes
@@ -254,16 +260,45 @@ function realpathOr(p) {
   }
 }
 
-// The directory a RELATIVE write path is relative to — the caller's cwd, by definition of the payload.
-// process.cwd() THROWS when the working directory has been deleted or made unreadable; unguarded that
-// exits 1, which is a non-blocking hook error, so the guard would fail OPEN on it.
-const CWD = (() => {
+// The payload, read once and first: Claude's current directory comes from it (SESSION_CWD, below), and the roots
+// this hook guards depend on that. readStdin() is a hoisted declaration. An unusable payload still denies
+// further down, before anything is judged.
+const raw = readStdin();
+
+// The hook PROCESS's directory — what process.argv[1] is relative to. process.cwd() THROWS when the working
+// directory has been deleted or made unreadable; unguarded that exits 1, which is a non-blocking hook error, so
+// the guard would fail OPEN on it.
+const PROCESS_CWD = (() => {
   try {
     return realpathOr(process.cwd());
   } catch {
     return ".";
   }
 })();
+
+// The session's current directory as the hook payload names it (Claude Code's `cwd` field), symlink-resolved, or
+// null when the payload names none that is usable: not a JSON object, no string `cwd`, a relative or NUL-bearing
+// one, or one that is not an existing directory. Resolved NATIVELY, so it carries the on-disk spelling every target
+// is compared in (a case or Unicode variant of a directory would otherwise misread which tree encloses which). It is
+// a path, never a message: only the root derived from it is printed, quoted as data, as a process-cwd root was.
+// A DELIBERATE COPY of enforce-writes-scope.cjs's, pinned byte-equal by a ✧ test there (lessons-learned L31).
+function payloadCwd(input) {
+  try {
+    const p = JSON.parse(input);
+    if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+    const c = p.cwd;
+    if (typeof c !== "string" || c === "" || c.includes("\0") || !path.isAbsolute(c)) return null;
+    const real = fs.realpathSync.native(c);
+    return fs.statSync(real).isDirectory() ? real : null;
+  } catch {
+    return null;
+  }
+}
+
+// Claude's current directory — the payload's when it names a usable one, else the hook process's — which is the
+// directory a RELATIVE write path is relative to, by definition of the payload.
+const SESSION_CWD = payloadCwd(raw);
+const CWD = SESSION_CWD ?? PROCESS_CWD;
 
 // The roots this hook guards, derived from the hook's OWN location: <root>/.claude/hooks/<this file>.
 // Deliberately NOT cwd (see the header, #2). BOTH spellings of that location are kept, because
@@ -272,7 +307,7 @@ const CWD = (() => {
 const ROOTS = (() => {
   const dirs = [__dirname];
   try {
-    if (typeof process.argv[1] === "string" && process.argv[1]) dirs.push(path.dirname(path.resolve(CWD, process.argv[1])));
+    if (typeof process.argv[1] === "string" && process.argv[1]) dirs.push(path.dirname(path.resolve(PROCESS_CWD, process.argv[1])));
   } catch {
     /* argv unavailable: __dirname alone still anchors the common case */
   }
@@ -294,7 +329,8 @@ const ROOTS = (() => {
 // launch checkout's and ROOTS above always name the launch checkout. Before that wiring, a session inside
 // a worktree ran the worktree's OWN copy, whose ROOTS guarded the worktree; keeping that coverage now
 // means ADDING the work tree that contains cwd — never substituting it, so header #2 still holds (cwd is
-// not an anchor on its own). A root is only ever added, so every error below can only over-block.
+// not an anchor on its own). A root is only ever added, so every error below can only over-block. "cwd" is
+// both the hook process's and the session's from the payload (worktree-session-root, below).
 //
 // workTreeRoot() is a DELIBERATE COPY of the function of the same name in enforce-writes-scope.cjs — a
 // shared module would be a new control-surface file. A ✧ test pins the two bodies byte-equal, and a parity
@@ -361,17 +397,20 @@ function gitCommonDir(tree) {
   }
 }
 
-// ADD the work tree containing cwd when it belongs to the same repository as a hook root, or when that
-// cannot be determined. A tree with no `.git` entry (the walk stopped at CLAUDE_PROJECT_DIR) is not a git
-// tree and adds nothing. A hook root with no `.git` entry of its own (PHARN installed at a subpath)
-// contributes no common directory, so a different repository around it is never added — the subpath
-// posture pinned by protect-trusted-paths.test.cjs holds. Must run before ROOT_PREFIXES and the inode sets
-// are derived from ROOTS below.
-(() => {
+// ADD the work tree containing each of the two current directories — the hook process's, and the session's
+// from the payload (worktree-session-root: Claude Code starts this hook in $CLAUDE_PROJECT_DIR, so in a
+// session working in `.claude/worktrees/<name>/` only the payload names that worktree) — when it belongs to
+// the same repository as a hook root, or when that cannot be determined. A tree with no `.git` entry (the walk
+// stopped at CLAUDE_PROJECT_DIR) is not a git tree and adds nothing. A hook root with no `.git` entry of its
+// own (PHARN installed at a subpath) contributes no common directory, so a different repository around it is
+// never added — the subpath posture pinned by protect-trusted-paths.test.cjs holds. Must run before
+// ROOT_PREFIXES and the inode sets are derived from ROOTS below.
+for (const start of [PROCESS_CWD, SESSION_CWD]) {
+  if (start === null) continue;
   let tree = null;
   try {
-    tree = workTreeRoot(CWD);
-    if (tree === null || ROOTS.includes(tree) || !hasGitEntry(tree)) return;
+    tree = workTreeRoot(start);
+    if (tree === null || ROOTS.includes(tree) || !hasGitEntry(tree)) continue;
     const common = gitCommonDir(tree);
     const hookCommons = ROOTS.filter(hasGitEntry)
       .map(gitCommonDir)
@@ -380,7 +419,7 @@ function gitCommonDir(tree) {
   } catch {
     if (tree !== null && !ROOTS.includes(tree)) ROOTS.push(tree);
   }
-})();
+}
 
 const DEFAULT_PROTECTED = [
   // The four trusted spec docs at their real repo-relative locations (anchored paths, never bare
@@ -853,7 +892,7 @@ function denyMalformedHookInput(detail) {
   process.exit(2);
 }
 
-const raw = readStdin();
+// `raw` was read at the top (SESSION_CWD needs it).
 // A PreToolUse hook is always handed a payload, so no input is not "nothing to judge": an unreadable stdin and an empty
 // one both deny (audit TST-4), with fixed text — never a value read from the input.
 if (raw === null) denyMalformedHookInput("stdin could not be read");

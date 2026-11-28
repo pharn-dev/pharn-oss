@@ -794,7 +794,7 @@ test("✧ MUTANT: dropping the argv[1] root leaves a symlinked hook install ungu
   const dotfiles = tmp();
   fs.mkdirSync(join(dotfiles, "hooks"), { recursive: true });
   const src = fs.readFileSync(HOOK, "utf8");
-  const anchor = "dirs.push(path.dirname(path.resolve(CWD, process.argv[1])));";
+  const anchor = "dirs.push(path.dirname(path.resolve(PROCESS_CWD, process.argv[1])));";
   assert.ok(src.includes(anchor), "mutant anchor: the as-invoked root");
   fs.writeFileSync(join(dotfiles, "hooks", "protect-trusted-paths.cjs"), src.replace(anchor, "void 0;"));
   const sb = tmp();

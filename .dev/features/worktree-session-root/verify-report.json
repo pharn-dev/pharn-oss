@@ -1,0 +1,26 @@
+{
+  "feature": "worktree-session-root",
+  "gates": {
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "lint:md": 0,
+    "reconcile": 0,
+    "test": 0,
+    "validate": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "7f72048fcd95b591efbd5c16dce8b33084dbc9a234192d5b295b93ff0a63c92c",
+    "source": "explicit",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/3+sha256",
+      "final": "d119f6e7c90aae01186894f0929cd943b35685a7a38604738906d3bbc0e83030"
+    }
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  }
+}

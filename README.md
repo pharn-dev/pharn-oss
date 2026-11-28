@@ -24,7 +24,7 @@ model or human judgment remains advisory.
 npx @pharn-dev/pharn@latest init
 ```
 
-[![pharn](https://img.shields.io/badge/pharn-7.26.1-blue)](./CHANGELOG.md)
+[![pharn](https://img.shields.io/badge/pharn-7.26.2-blue)](./CHANGELOG.md)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE)
 [![CI](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml/badge.svg)](https://github.com/pharn-dev/pharn-oss/actions/workflows/codeql.yml)
@@ -307,7 +307,8 @@ starting after any `cd` into a subdirectory: node exits 1. Without `onFailure`, 
 non-blocking error, and **both guards are then silently off**. That was the shipped form until `6.1.0`, and it is
 measured, not theorised. Upgrading an older install is ordered: run `pharn update` first, then change
 these two commands — the anchored wiring over pre-`6.1.0` hooks regresses both guards, so roll back in the
-reverse order. Each guard judges the git working tree that contains Claude's current directory;
+reverse order. Each guard judges the git working tree that contains Claude's current directory, which it reads
+from the hook payload's `cwd` (since 7.26.2: a desktop-app worktree session starts the hook in the main checkout);
 [`pharn/LIMITS.md` §7](./pharn/LIMITS.md) states the bounds that remain.
 
 Since `7.3.0` both guard entries also carry `"onFailure": "block"`. On Claude Code 2.1.295 or later, a write
